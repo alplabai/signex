@@ -37,7 +37,7 @@ fn ctrl_s_on_a_primitive_that_cannot_be_written_shows_the_save_failed_card() {
     open_footprint_editor(&mut app, &path);
     edit_description_via_panel(&mut app);
 
-    let _ = app.update(Message::File(FileMsg::Save));
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Save));
 
     let notice = app
         .document_state
@@ -185,7 +185,7 @@ fn panel_refresh_keeps_the_custom_theme_tokens() {
 
 // ---- parked-draft integrity ------------------------------------------------
 
-use signex_app::app::{EditMsg, ProjectCloseChoice, ProjectMsg, SymbolEditorState, WindowMsg};
+use signex_app::app::{EditMsg, ProjectCloseChoice, ProjectMsg, SymbolDocument, WindowMsg};
 use signex_app::library::messages::CloseLibraryChoice;
 use signex_library::{Symbol, SymbolFile};
 use std::path::Path;
@@ -202,7 +202,7 @@ fn open_symbol_tab(app: &mut Signex, path: &Path) {
     let file = SymbolFile::from_symbol(Symbol::empty("disk"));
     app.document_state.symbol_editors.insert(
         path.to_path_buf(),
-        SymbolEditorState::new(path.to_path_buf(), file),
+        SymbolDocument::new(path.to_path_buf(), file),
     );
     app.document_state.tabs.push(TabInfo {
         title: "sym".into(),
@@ -223,7 +223,10 @@ fn draft_name(app: &Signex, path: &Path) -> String {
 }
 
 fn reopen(app: &mut Signex, path: &Path) {
-    let _ = app.update(Message::File(FileMsg::Opened(Some(path.to_path_buf()))));
+    crate::settle_support::settle(
+        app,
+        Message::File(FileMsg::Opened(Some(path.to_path_buf()))),
+    );
 }
 
 #[test]
@@ -304,7 +307,7 @@ fn closing_a_symbol_tab_dirtied_by_undo_after_a_save_parks_the_draft() {
     editor.primitive_mut().name = "edited".into();
     editor.dirty = true;
     app.document_state.dirty_paths.insert(path.clone());
-    let _ = app.update(Message::File(FileMsg::Save));
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Save));
     assert!(!app.document_state.dirty_paths.contains(&path));
 
     // Undo re-dirties the editor; the panel refresh mirrors it into
@@ -346,9 +349,10 @@ fn a_parked_footprint_draft_is_written_by_quit_save_all() {
     close_tab(&mut app, 0);
 
     let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
-    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
-        ProjectCloseChoice::SaveAll,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    );
 
     let written = std::fs::read_to_string(&path).expect("Save All writes the parked draft");
     assert!(written.contains("edited"));

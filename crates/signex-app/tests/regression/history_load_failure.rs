@@ -11,22 +11,19 @@
 use std::path::PathBuf;
 
 use signex_app::app::{Message, Signex};
-use signex_app::panels::history::HistoryRenderMode;
+use signex_app::panels::history::{HistoryLoad, HistoryRenderMode};
 
 const WALK_ERROR: &str = "backend: git revwalk: corrupt object 4f21ac";
 
 /// The completion message the async loader would deliver, tagged with
 /// the generation the app is currently waiting on (a mismatched
 /// generation is dropped as stale before any of this runs).
-fn history_loaded(
-    app: &Signex,
-    result: Result<Vec<signex_widgets::HistoryEntry>, String>,
-) -> Message {
-    Message::HistoryLoaded {
+fn history_loaded(app: &Signex, result: Result<HistoryLoad, String>) -> Message {
+    Message::Ui(signex_app::app::UiMsg::HistoryLoaded {
         generation: app.document_state.history.generation,
         path: PathBuf::from("/projects/board/main.snxsch"),
         result,
-    }
+    })
 }
 
 #[test]
@@ -55,7 +52,7 @@ fn a_failed_history_walk_renders_as_an_error_not_an_empty_list() {
 fn a_successful_history_walk_is_still_ready() {
     // Arrange
     let (mut app, _boot) = Signex::new();
-    let message = history_loaded(&app, Ok(Vec::new()));
+    let message = history_loaded(&app, Ok(HistoryLoad::Entries(Vec::new())));
 
     // Act
     let _ = app.update(message);
@@ -88,5 +85,21 @@ fn a_failed_history_walk_reaches_the_messages_panel() {
         ),
         "the failure must be in the Messages panel snapshot; got {:?}",
         panel.iter().map(|e| &e.message).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn a_file_outside_any_repository_renders_as_no_repo() {
+    // Arrange — the off-thread load found no `.git/` above the file (#1107).
+    let (mut app, _boot) = Signex::new();
+    let message = history_loaded(&app, Ok(HistoryLoad::NoRepo));
+
+    // Act
+    let _ = app.update(message);
+
+    // Assert
+    assert_eq!(
+        app.document_state.panel_ctx.history.mode,
+        HistoryRenderMode::NoRepo
     );
 }

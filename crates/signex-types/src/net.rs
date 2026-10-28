@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::schematic::InstancePath;
+
 // ---------------------------------------------------------------------------
 // Net identity
 // ---------------------------------------------------------------------------
@@ -15,22 +17,9 @@ pub struct NetClassId(pub String);
 // Net class
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetClass {
-    pub name: String,
-    #[serde(default)]
-    pub clearance: f64,
-    #[serde(default)]
-    pub trace_width: f64,
-    #[serde(default)]
-    pub via_diameter: f64,
-    #[serde(default)]
-    pub via_drill: f64,
-    #[serde(default)]
-    pub diff_pair_gap: f64,
-    #[serde(default)]
-    pub diff_pair_width: f64,
-}
+// The net-class model lives in `net_class`; re-exported so existing
+// `signex_types::net::NetClass` paths keep working.
+pub use crate::net_class::NetClass;
 
 // ---------------------------------------------------------------------------
 // Differential pair
@@ -60,6 +49,20 @@ pub struct Terminal {
     pub symbol: Uuid,
     pub reference: String,
     pub pin: String,
+    /// The sheet occurrence this terminal sits on (empty for a root page), so
+    /// two placements of one symbol are distinct terminals even when both
+    /// carry the same `symbol` uuid.
+    #[serde(default)]
+    pub occurrence: InstancePath,
+}
+
+/// One placement of a sheet in the hierarchy a netlist was derived from: which
+/// sheet (an index into the caller's sheet list) and the occurrence path it was
+/// reached by. A sheet file placed twice has two placements.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SheetPlacement {
+    pub sheet_index: usize,
+    pub instance_path: InstancePath,
 }
 
 /// A logical net: a set of electrically-connected terminals derived from the

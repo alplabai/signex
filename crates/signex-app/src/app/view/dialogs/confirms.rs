@@ -39,9 +39,13 @@ impl Signex {
         let theme_id = self.ui_state.theme_id;
         let header_content: Element<'_, Message> = container(
             row![
-                text("Remove from Project")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
+                text(if st.unsaved_prompt {
+                    "Exclude from Project \u{2014} Unsaved Edits"
+                } else {
+                    "Remove from Project"
+                })
+                .size(MODAL_HEADER_TITLE_SIZE)
+                .color(text_c),
                 Space::new().width(Length::Fill),
                 close_x_button(Message::Remove(RemoveMsg::Close), theme_id, text_muted),
             ]
@@ -56,6 +60,11 @@ impl Signex {
             super::super::super::state::ModalId::RemoveDialog,
             self.interaction_state.last_mouse_pos,
         );
+
+        if st.unsaved_prompt {
+            let (body, can_discard) = self.exclude_dirty_prompt(st);
+            return Self::exclude_dirty_card(body, can_discard, header, tokens);
+        }
 
         let option_card =
             |title: &'static str, subtitle: &'static str, msg: Message| -> Element<'_, Message> {
@@ -123,18 +132,29 @@ impl Signex {
             .into()
         };
 
+        let mut prompt = column![
+            text(format!(
+                "Please choose how to remove file \"{}\"",
+                st.display_name
+            ))
+            .size(11)
+            .color(text_muted),
+        ]
+        .spacing(4);
+        // Library names can repeat across folders; the full path says which
+        // one is affected. Sheets and PCBs get no extra line.
+        if st.display_name.ends_with(".snxlib") {
+            prompt = prompt.push(
+                text(st.target_path.display().to_string())
+                    .size(10)
+                    .color(text_muted),
+            );
+        }
+
         let dialog = container(
             column![
                 header,
-                container(
-                    text(format!(
-                        "Please choose how to remove file \"{}\"",
-                        st.display_name
-                    ))
-                    .size(11)
-                    .color(text_muted)
-                )
-                .padding([14, 14]),
+                container(prompt).padding([14, 14]),
                 container(remove_options).padding([0, 14]),
                 container(row![
                     Space::new().width(Length::Fill),
@@ -152,6 +172,58 @@ impl Signex {
         .style(crate::styles::modal_card(tokens))
         .clip(true);
         dialog.into()
+    }
+
+    /// Unsaved-edits stage of the Remove modal (#738): Save / Discard / Cancel.
+    /// Cancel is `RemoveMsg::Close`, the same message Esc resolves to.
+    fn exclude_dirty_card<'a>(
+        body: String,
+        can_discard: bool,
+        header: Element<'a, Message>,
+        tokens: &signex_types::theme::ThemeTokens,
+    ) -> Element<'a, Message> {
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+        // Discard is withheld when another open project shares the target.
+        let mut buttons = row![
+            Space::new().width(Length::Fill),
+            secondary_button(
+                "Cancel",
+                Message::Remove(RemoveMsg::Close),
+                text_c,
+                border_c
+            ),
+        ]
+        .align_y(iced::Alignment::Center);
+        if can_discard {
+            buttons = buttons.push(Space::new().width(8)).push(secondary_button(
+                "Discard",
+                Message::Remove(RemoveMsg::ExcludeDirty(
+                    crate::app::ExcludeDirtyChoice::Discard,
+                )),
+                text_c,
+                border_c,
+            ));
+        }
+        buttons = buttons.push(Space::new().width(8)).push(primary_button(
+            "Save",
+            Some(Message::Remove(RemoveMsg::ExcludeDirty(
+                crate::app::ExcludeDirtyChoice::Save,
+            ))),
+            border_c,
+        ));
+        container(
+            column![
+                header,
+                container(text(body).size(11).color(text_muted)).padding([14, 14]),
+                container(buttons).padding([14, 14]),
+            ]
+            .width(560),
+        )
+        .style(crate::styles::modal_card(tokens))
+        .clip(true)
+        .into()
     }
 
     pub(in crate::app::view) fn view_project_close_confirm(&self) -> Element<'_, Message> {

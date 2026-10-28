@@ -4,7 +4,8 @@ use iced::widget::{Column, container, row, text};
 use iced::{Color, Element, Length};
 
 use super::super::{
-    ColorFieldProps, GraphicFieldId, GraphicKindSummary, GraphicSummary, PanelMsg, color_field,
+    ColorFieldProps, GraphicFieldId, GraphicKindSummary, GraphicSummary, NumericDraft,
+    NumericFieldKey, PanelMsg, color_field, numeric_input,
 };
 
 /// Per-shape numeric Properties rows for a placed graphic (corners /
@@ -12,6 +13,7 @@ use super::super::{
 pub(super) fn view_graphic_selection<'a>(
     mut col: Column<'a, PanelMsg>,
     g: &'a GraphicSummary,
+    draft: Option<&NumericDraft>,
     muted: Color,
     border_c: Color,
     fill_picker: Option<crate::app::GraphicFillPicker>,
@@ -26,18 +28,14 @@ pub(super) fn view_graphic_selection<'a>(
                         .size(10)
                         .color(muted)
                         .width(Length::FillPortion(2)),
-                    iced::widget::text_input("mm", &format!("{:.3}", value))
-                        .padding([2, 4])
-                        .size(11)
-                        .on_input(move |s| {
-                            let parsed = s.trim().parse::<f64>().unwrap_or(value);
-                            PanelMsg::SymEditorSetGraphicField {
-                                idx: g_idx,
-                                field,
-                                value: parsed,
-                            }
-                        })
-                        .width(Length::FillPortion(3)),
+                    numeric_input(
+                        "mm",
+                        NumericFieldKey::Graphic { idx: g_idx, field },
+                        value,
+                        draft,
+                    )
+                    .padding([2, 4])
+                    .size(11),
                 ]
                 .spacing(4)
                 .align_y(iced::Alignment::Center),

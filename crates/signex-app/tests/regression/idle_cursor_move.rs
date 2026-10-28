@@ -7,7 +7,7 @@
 //! the drain / diagnostics tests) pin behaviour that must keep holding; the
 //! mirror and history-dirty tests are the ones that reproduce the review bug.
 
-use signex_app::app::{DragTarget, FootprintEditorState, LoadedProject, Message, Signex, UiMsg};
+use signex_app::app::{DragTarget, FootprintDocument, LoadedProject, Message, Signex, UiMsg};
 use signex_app::diagnostics;
 use signex_app::library::messages::{LibraryMessage, PrimitiveEdit};
 use signex_app::menu_bar::MenuMessage;
@@ -99,7 +99,7 @@ fn open_footprint_editor(app: &mut Signex, path: &Path) {
     let file = FootprintFile::from_footprint(Footprint::empty("fp"));
     app.document_state.footprint_editors.insert(
         path.to_path_buf(),
-        FootprintEditorState::new(path.to_path_buf(), file),
+        FootprintDocument::new(path.to_path_buf(), file),
     );
 }
 
@@ -118,17 +118,27 @@ fn push_git_project(app: &mut Signex, dir: &Path) {
             active_variant: None,
             libraries: Vec::new(),
             enable_git: true,
+            net_classes: Vec::new(),
+            rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
 }
 
+/// Save, run the off-thread write, and hand its completion to `update` -
+/// the completion message is what queues the commit and logs the error.
 fn save_primitive(app: &mut Signex, path: &Path) {
-    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+    let task = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.to_path_buf(),
         msg: PrimitiveEdit::Save,
     }));
+    for message in crate::library_symbol_drift::run_task(task) {
+        let _ = app.update(message);
+    }
 }
 
 #[test]

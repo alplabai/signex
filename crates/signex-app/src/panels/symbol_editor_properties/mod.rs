@@ -10,7 +10,9 @@
 use iced::widget::{Column, container, row, scrollable, text};
 use iced::{Color, Element, Length};
 
-use super::{GraphicKindSummary, PanelMsg, SymbolEditorPanelContext, SymbolEditorSelection};
+use super::{
+    GraphicKindSummary, NumericDraft, PanelMsg, SymbolEditorPanelContext, SymbolEditorSelection,
+};
 
 mod graphic;
 mod pin;
@@ -20,6 +22,7 @@ mod symbol;
 /// tab. Mirrors Altium SchLib's right-dock Properties.
 pub(super) fn view_symbol_editor_properties<'a>(
     sym: &'a SymbolEditorPanelContext,
+    draft: Option<&NumericDraft>,
     muted: Color,
     primary: Color,
     border_c: Color,
@@ -52,10 +55,17 @@ pub(super) fn view_symbol_editor_properties<'a>(
             col = symbol::view_symbol_selection(col, sym, muted, primary, border_c);
         }
         SymbolEditorSelection::Pin(pin) => {
-            col = pin::view_pin_selection(col, pin, muted, primary, border_c);
+            col = pin::view_pin_selection(col, pin, draft, muted, primary, border_c);
         }
         SymbolEditorSelection::Graphic(g) => {
-            col = graphic::view_graphic_selection(col, g, muted, border_c, sym.graphic_fill_picker);
+            col = graphic::view_graphic_selection(
+                col,
+                g,
+                draft,
+                muted,
+                border_c,
+                sym.graphic_fill_picker,
+            );
         }
         SymbolEditorSelection::FieldReference => {
             col = col.push(prop_row_static(

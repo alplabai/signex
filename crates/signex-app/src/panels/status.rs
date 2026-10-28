@@ -23,6 +23,9 @@ pub struct ErcDiagnosticEntry {
     pub world_x: f64,
     pub world_y: f64,
     pub select: Option<signex_types::schematic::SelectedItem>,
+    /// False when the point is not in `sheet_path`'s own coordinates (a child
+    /// sheet that was not part of the run): shown, but never panned to.
+    pub locatable: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,7 +63,14 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     );
     col = col.push(separator(&ctx.tokens));
 
-    if ctx.erc_diagnostics.is_empty() {
+    if ctx.erc_running {
+        col = col.push(
+            text("Running…")
+                .size(10)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
+        );
+    }
+    if ctx.erc_diagnostics.is_empty() && !ctx.erc_running {
         col = col.push(
             text("No ERC diagnostics yet")
                 .size(10)
@@ -342,5 +352,3 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     container(col).width(Length::Fill).into()
 }
-
-// ─── Drawing properties editor (post-placement) ──────────────────

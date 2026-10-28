@@ -10,8 +10,8 @@ use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::widgets::{
-    close_x_button, draggable_header, os_title_bar_slot, primary_button, secondary_button,
-    wrap_modal,
+    close_x_button, draggable_header, fit_modal_size, os_title_bar_slot, primary_button,
+    secondary_button, secondary_button_maybe, wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
@@ -24,7 +24,18 @@ impl Signex {
             .get(&super::super::super::state::ModalId::ErcDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (1000.0, 600.0))
+        wrap_modal(
+            dialog,
+            offset,
+            self.ui_state.window_size,
+            self.erc_modal_size(),
+        )
+    }
+
+    /// The in-window ERC modal: 1000 x 600 where the window allows, capped
+    /// to the window otherwise (#1227).
+    pub(in crate::app::view) fn erc_modal_size(&self) -> (f32, f32) {
+        fit_modal_size(self.ui_state.window_size, (1000.0, 600.0))
     }
 
     pub(in crate::app::view) fn view_erc_dialog_body(&self) -> Element<'_, Message> {
@@ -77,16 +88,33 @@ impl Signex {
             .padding([4, 8]),
         ]
         .spacing(0);
+        // A project that stores its own rules shows (and edits) those; the
+        // machine preferences only back a project without a rule set.
+        let stored = self
+            .document_state
+            .active_document_project()
+            .and_then(|p| p.data.rules.as_ref())
+            .map(|rules| signex_erc::project_rules::resolve(&rules.erc));
+        let (severity_map, pin_map) = match &stored {
+            Some(resolved) => (&resolved.severity, &resolved.pin_matrix),
+            None => (
+                &self.ui_state.erc_severity_override,
+                &self.ui_state.pin_matrix_overrides,
+            ),
+        };
         for rule in &signex_erc::RuleKind::ALL {
-            let current = self
-                .ui_state
-                .erc_severity_override
+            let current = severity_map
                 .get(rule)
                 .copied()
                 .unwrap_or_else(|| rule.default_severity());
+            let label = if rule.is_on_off_only() {
+                format!("{} (on/off; severity per matrix cell)", rule.label())
+            } else {
+                rule.label().to_string()
+            };
             rule_rows = rule_rows.push(
                 row![
-                    text(rule.label())
+                    text(label)
                         .size(11)
                         .color(text_c)
                         .width(Length::FillPortion(3)),
@@ -97,13 +125,85 @@ impl Signex {
             );
         }
 
-        let footer = row![
-            Space::new().width(Length::Fill),
-            primary_button("Run ERC", Some(Message::Erc(ErcMsg::Run)), border_c),
-            Space::new().width(8),
-            secondary_button("Close", Message::Erc(ErcMsg::CloseDialog), text_c, border_c),
-        ]
-        .align_y(iced::Alignment::Center);
+        let history = self
+            .document_state
+            .active_document_project()
+            .and_then(|p| self.document_state.rules_history.get(&p.id));
+        let can_undo = history.is_some_and(|h| h.can_undo());
+        let can_redo = history.is_some_and(|h| h.can_redo());
+        let has_project = self.document_state.active_document_project().is_some();
+        let unreadable = self.active_project_has_unreadable_rules();
+        let scope_note = match (has_project, stored.is_some(), unreadable) {
+            (_, true, _) => "Editing the rules stored in this project.",
+            (true, false, true) => {
+                "This project's rule set is from a newer Signex and is kept unchanged; \
+                 editing this machine's preferences."
+            }
+            (true, false, false) => {
+                "Editing this machine's preferences; this project stores no rules."
+            }
+            (false, false, _) => "Editing this machine's preferences.",
+        };
+        let mut footer = row![text(scope_note).size(10).color(text_muted)]
+            .spacing(8)
+            .align_y(iced::Alignment::Center);
+        // A rule set from a newer Signex sits unread in the file; storing
+        // would replace it on save, so the action is not offered.
+        if has_project && stored.is_none() && !unreadable {
+            footer = footer.push(secondary_button(
+                "Store ERC rules in this project",
+                Message::Erc(ErcMsg::StoreRulesInProject),
+                text_c,
+                border_c,
+            ));
+        }
+        if stored.is_some() {
+            // The name is fixed to "<project> rules" until the dialog has a
+            // text field for it; a taken name gets the next free number.
+            footer = footer.push(secondary_button(
+                "Save as profile",
+                Message::Erc(ErcMsg::ProfileSaveRequested {
+                    name: self.default_profile_name(),
+                }),
+                text_c,
+                border_c,
+            ));
+            if self.active_project_has_profile() {
+                footer = footer.push(secondary_button(
+                    "Update from profile",
+                    Message::Erc(ErcMsg::ProfileUpdateRequested),
+                    text_c,
+                    border_c,
+                ));
+            }
+            footer = footer
+                .push(secondary_button_maybe(
+                    "Undo",
+                    can_undo.then_some(Message::Erc(ErcMsg::RulesUndone)),
+                    if can_undo { text_c } else { text_muted },
+                    border_c,
+                ))
+                .push(secondary_button_maybe(
+                    "Redo",
+                    can_redo.then_some(Message::Erc(ErcMsg::RulesRedone)),
+                    if can_redo { text_c } else { text_muted },
+                    border_c,
+                ));
+        }
+        let footer = footer
+            .push(Space::new().width(Length::Fill))
+            .push(primary_button(
+                "Run ERC",
+                Some(Message::Erc(ErcMsg::Run)),
+                border_c,
+            ))
+            .push(Space::new().width(8))
+            .push(secondary_button(
+                "Close",
+                Message::Erc(ErcMsg::CloseDialog),
+                text_c,
+                border_c,
+            ));
 
         // Two-column body: rules table on the left, pin-connection
         // matrix on the right. Matches Altium's ERC setup layout and
@@ -134,7 +234,7 @@ impl Signex {
                 .size(10)
                 .color(text_muted),
             Space::new().height(8),
-            container(pin_matrix_view(tokens, &self.ui_state.pin_matrix_overrides))
+            container(pin_matrix_view(tokens, pin_map))
                 .padding(8)
                 .width(Length::Fill)
                 .style(move |_: &Theme| container::Style {
@@ -152,21 +252,85 @@ impl Signex {
         let body =
             row![rules_pane, Space::new().width(16), matrix_pane,].align_y(iced::Alignment::Start);
 
+        // In-window: sized to the window-capped modal. Detached: the OS
+        // window owns the size, so fill it. The body scrolls; the footer
+        // holds the buttons and stays outside the scrollable (#1227).
+        let (modal_w, modal_h): (Length, Length) = if draggable {
+            let (w, h) = self.erc_modal_size();
+            (Length::Fixed(w), Length::Fixed(h))
+        } else {
+            (Length::Fill, Length::Fill)
+        };
         let dialog = container(
             column![
                 header,
-                container(body)
-                    .padding([14, 14])
-                    .width(Length::Fill)
-                    .height(Length::Fill),
+                container(iced::widget::scrollable(
+                    container(body).padding([14, 14]).width(Length::Fill)
+                ))
+                .width(Length::Fill)
+                .height(Length::Fill),
+                self.view_profile_update_panel(text_c, text_muted, border_c),
                 container(footer).padding([10, 14]),
             ]
-            .width(1000)
-            .height(600),
+            .width(modal_w)
+            .height(modal_h),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
         dialog.into()
+    }
+}
+
+impl Signex {
+    /// The diff an "Update from profile" would apply, with Apply / Cancel.
+    /// Empty space when no update is pending.
+    fn view_profile_update_panel(
+        &self,
+        text_c: Color,
+        text_muted: Color,
+        border_c: Color,
+    ) -> Element<'_, Message> {
+        let Some((name, lines)) = self.pending_profile_update_lines() else {
+            return Space::new().height(0).into();
+        };
+        let heading = if lines.is_empty() {
+            format!(
+                "Profile \"{name}\": rules already match; only the recorded hash is out of date."
+            )
+        } else {
+            format!(
+                "Update from profile \"{name}\" changes {} entries:",
+                lines.len()
+            )
+        };
+        let mut list = column![text(heading).size(11).color(text_c)].spacing(2);
+        for line in lines {
+            list = list.push(text(line).size(10).color(text_muted));
+        }
+        let buttons = row![
+            primary_button(
+                "Apply update",
+                Some(Message::Erc(ErcMsg::ProfileUpdateConfirmed)),
+                border_c,
+            ),
+            secondary_button(
+                "Cancel",
+                Message::Erc(ErcMsg::ProfileUpdateCancelled),
+                text_c,
+                border_c,
+            ),
+        ]
+        .spacing(8);
+        container(
+            column![
+                container(iced::widget::scrollable(list)).max_height(120),
+                buttons
+            ]
+            .spacing(6),
+        )
+        .padding([8, 14])
+        .width(Length::Fill)
+        .into()
     }
 }
 
@@ -180,7 +344,11 @@ fn severity_segmented(
                value: signex_erc::Severity,
                color: Color|
      -> Element<'static, Message> {
-        let selected = value == current;
+        let selected = if rule.is_on_off_only() && value != signex_erc::Severity::Off {
+            current != signex_erc::Severity::Off
+        } else {
+            value == current
+        };
         let bg = if selected {
             color
         } else {
@@ -201,6 +369,24 @@ fn severity_segmented(
             })
             .into()
     };
+    let off = seg(
+        "Off",
+        signex_erc::Severity::Off,
+        Color::from_rgb(0.35, 0.36, 0.42),
+    );
+    if rule.is_on_off_only() {
+        // Severity comes from the pin matrix per cell; the row only gates it.
+        return row![
+            seg(
+                "On",
+                rule.default_severity(),
+                Color::from_rgb(0.30, 0.60, 0.95)
+            ),
+            off
+        ]
+        .spacing(2)
+        .into();
+    }
     row![
         seg(
             "E",
@@ -217,11 +403,7 @@ fn severity_segmented(
             signex_erc::Severity::Info,
             Color::from_rgb(0.30, 0.60, 0.95)
         ),
-        seg(
-            "Off",
-            signex_erc::Severity::Off,
-            Color::from_rgb(0.35, 0.36, 0.42)
-        ),
+        off,
     ]
     .spacing(2)
     .into()
@@ -240,21 +422,9 @@ fn pin_matrix_view(
     let text_muted = crate::styles::ti(tokens.text_secondary);
     let border = crate::styles::ti(tokens.border);
 
-    // 6 primary pin types. Full 12-type Altium matrix lands when
-    // pin-type taxonomy is extended in rules.rs (Open Collector, Open
-    // Emitter, HiZ, Unspecified, etc.).
-    const TYPES: &[&str] = &["Input", "Output", "Bidir", "PowerIn", "PowerOut", "NC"];
-    // Same baseline as the PinMatrixCellCycled handler — keep in sync.
-    use signex_erc::Severity;
-    #[rustfmt::skip]
-    const BASELINE: [[Severity; 6]; 6] = [
-        [Severity::Off, Severity::Off,     Severity::Off,     Severity::Off,   Severity::Off,     Severity::Off],
-        [Severity::Off, Severity::Error,   Severity::Off,     Severity::Off,   Severity::Error,   Severity::Error],
-        [Severity::Off, Severity::Off,     Severity::Off,     Severity::Off,   Severity::Off,     Severity::Warning],
-        [Severity::Off, Severity::Off,     Severity::Off,     Severity::Off,   Severity::Off,     Severity::Error],
-        [Severity::Off, Severity::Error,   Severity::Off,     Severity::Off,   Severity::Error,   Severity::Error],
-        [Severity::Off, Severity::Error,   Severity::Warning, Severity::Error, Severity::Error,   Severity::Off],
-    ];
+    // Six axes; `PinAxis::of` documents how the 14 pin electrical types fold
+    // onto them. The baseline grid lives in `signex_erc::pin_matrix`.
+    use signex_erc::{PinAxis, Severity};
 
     let cell = |r: u8, c: u8, sev: Severity| -> Element<'static, Message> {
         let (bg, ch) = match sev {
@@ -304,18 +474,18 @@ fn pin_matrix_view(
     };
 
     let mut header = row![container(Space::new().width(80)).width(80)].spacing(0);
-    for t in TYPES {
-        header = header.push(col_label(t));
+    for axis in PinAxis::ALL {
+        header = header.push(col_label(axis.label()));
     }
 
     let mut body = column![header].spacing(0);
-    for (r, row_label) in TYPES.iter().enumerate() {
-        let mut rr = row![header_label(row_label)].spacing(0);
-        for (c, &baseline_sev) in BASELINE[r].iter().enumerate().take(TYPES.len()) {
+    for (r, row_axis) in PinAxis::ALL.iter().enumerate() {
+        let mut rr = row![header_label(row_axis.label())].spacing(0);
+        for c in 0..PinAxis::ALL.len() {
             let sev = overrides
                 .get(&(r as u8, c as u8))
                 .copied()
-                .unwrap_or(baseline_sev);
+                .unwrap_or_else(|| signex_erc::pin_matrix::baseline_cell(r as u8, c as u8));
             rr = rr.push(cell(r as u8, c as u8, sev));
         }
         body = body.push(rr);

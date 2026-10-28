@@ -25,20 +25,53 @@
 //! - `Explicit { names }` — uses `names[i]` if present; warns and
 //!   falls back to `format!("{i}")` otherwise.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use signex_library::primitive::footprint::Pad as LibPad;
 use signex_sketch::SketchError;
 use signex_sketch::array::ArrayKind;
-use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::unit::Quantity;
 
 mod grid;
 mod linear;
 mod numbering;
 mod polar;
+
+/// Most pad instances one array may expand to. Array counts come from
+/// user / file expressions and the bake runs on the editor's update
+/// thread, so an unbounded count (`=100000` by `=100000`) would freeze
+/// and then exhaust memory. Real packages (a 40x40 BGA) sit far below it.
+pub const MAX_ARRAY_INSTANCES: usize = 10_000;
+
+/// Whether an array expanding to `instances` pads (`None` when the count
+/// overflowed `usize`) stays within [`MAX_ARRAY_INSTANCES`]. Pushes a bake
+/// warning and returns `false` when it does not, so the caller skips the
+/// array.
+fn within_instance_cap(
+    label: &str,
+    source: signex_sketch::id::SketchEntityId,
+    instances: Option<usize>,
+    warnings: &mut Vec<String>,
+) -> bool {
+    match instances {
+        Some(n) if n <= MAX_ARRAY_INSTANCES => true,
+        Some(n) => {
+            warnings.push(format!(
+                "{label} array source {source}: {n} instances exceeds the limit of \
+                 {MAX_ARRAY_INSTANCES} — array skipped"
+            ));
+            false
+        }
+        None => {
+            warnings.push(format!(
+                "{label} array source {source}: instance count overflows, limit is \
+                 {MAX_ARRAY_INSTANCES} instances — array skipped"
+            ));
+            false
+        }
+    }
+}
 
 use grid::{GridSpec, bake_grid};
 use linear::bake_linear;
@@ -53,73 +86,83 @@ pub fn bake_arrays(
     out: &mut Vec<LibPad>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
-    let mut params_ast: BTreeMap<String, ExprNode> = BTreeMap::new();
-    for (name, value) in params_canonical {
-        params_ast.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
-    }
+    let params_ast = crate::params::params_ast(sketch, params_canonical);
 
     for array in &sketch.arrays {
-        match &array.kind {
-            ArrayKind::Linear {
-                source,
+        bake_one_array(array, &params_ast, sketch, solve, out, warnings)?;
+    }
+
+    Ok(())
+}
+
+/// Bake one array's instances into `out`.
+pub(crate) fn bake_one_array(
+    array: &signex_sketch::array::Array,
+    params_ast: &std::collections::BTreeMap<String, signex_sketch::expr::ast::ExprNode>,
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    out: &mut Vec<LibPad>,
+    warnings: &mut Vec<String>,
+) -> Result<(), SketchError> {
+    match &array.kind {
+        ArrayKind::Linear {
+            source,
+            count_expr,
+            dx_expr,
+            dy_expr,
+        } => {
+            bake_linear(
+                *source,
                 count_expr,
                 dx_expr,
                 dy_expr,
-            } => {
-                bake_linear(
-                    *source,
-                    count_expr,
-                    dx_expr,
-                    dy_expr,
-                    &array.numbering,
-                    &params_ast,
-                    sketch,
-                    solve,
-                    out,
-                    warnings,
-                )?;
-            }
-            ArrayKind::Grid {
-                source,
+                &array.numbering,
+                params_ast,
+                sketch,
+                solve,
+                out,
+                warnings,
+            )?;
+        }
+        ArrayKind::Grid {
+            source,
+            nx_expr,
+            ny_expr,
+            dx_expr,
+            dy_expr,
+            depopulation,
+        } => {
+            let spec = GridSpec {
                 nx_expr,
                 ny_expr,
                 dx_expr,
                 dy_expr,
-                depopulation,
-            } => {
-                let spec = GridSpec {
-                    nx_expr,
-                    ny_expr,
-                    dx_expr,
-                    dy_expr,
-                    depopulation: depopulation.as_ref(),
-                    numbering: &array.numbering,
-                };
-                bake_grid(*source, &spec, &params_ast, sketch, solve, out, warnings)?;
-            }
-            ArrayKind::Polar {
-                source,
-                center,
+                depopulation: depopulation.as_ref(),
+                numbering: &array.numbering,
+            };
+            bake_grid(*source, &spec, params_ast, sketch, solve, out, warnings)?;
+        }
+        ArrayKind::Polar {
+            source,
+            center,
+            count_expr,
+            sweep_angle_expr,
+            depopulation,
+        } => {
+            bake_polar(
+                *source,
+                *center,
                 count_expr,
                 sweep_angle_expr,
-                depopulation,
-            } => {
-                bake_polar(
-                    *source,
-                    *center,
-                    count_expr,
-                    sweep_angle_expr,
-                    depopulation.as_ref(),
-                    &array.numbering,
-                    &params_ast,
-                    sketch,
-                    solve,
-                    out,
-                    warnings,
-                )?;
-            }
+                depopulation.as_ref(),
+                &array.numbering,
+                params_ast,
+                sketch,
+                solve,
+                out,
+                warnings,
+            )?;
         }
     }
-
     Ok(())
 }

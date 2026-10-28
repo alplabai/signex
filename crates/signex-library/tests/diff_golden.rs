@@ -23,10 +23,13 @@ fn fixed_uuid(seed: u8) -> Uuid {
 fn row_with(symbol: PrimitiveRef, footprint: Option<PrimitiveRef>, mpn: &str) -> ComponentRow {
     let t = chrono::DateTime::from_timestamp(1_745_625_600, 0).unwrap();
     let mut r = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: fixed_uuid(1),
         internal_pn: InternalPn::new("R0805_10k"),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Released,
         symbol_ref: symbol,
         footprint_ref: footprint,
@@ -45,6 +48,7 @@ fn row_with(symbol: PrimitiveRef, footprint: Option<PrimitiveRef>, mpn: &str) ->
         created: t,
         updated: t,
         content_hash: [0u8; 32],
+        server_revision: None,
     };
     r.refresh_content_hash().unwrap();
     r

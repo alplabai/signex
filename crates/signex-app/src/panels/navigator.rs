@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 
 use signex_widgets::tree_view::{TreeIcon, TreeNode};
 
+use crate::app::sheet_hierarchy::CaseFold;
 use crate::app::sheet_hierarchy::{SheetHierarchy, SheetNode, SheetNodeKind, sheet_path_key};
 
 /// Two clicks on the same row within this window are a double-click — the same
@@ -92,15 +93,19 @@ impl NavigatorModel {
 
     fn rebuild_with(&mut self, active: Option<&Path>, open: &[PathBuf], collapsed: &[Vec<usize>]) {
         // Path keys are computed once per call, not once per node and tab.
-        let active_key = active.map(sheet_path_key);
-        let open_keys: HashSet<String> = open.iter().map(|p| sheet_path_key(p)).collect();
+        let fold = self
+            .hierarchy
+            .as_ref()
+            .map_or_else(CaseFold::host_default, |h| h.fold);
+        let active_key = active.map(|p| sheet_path_key(p, fold));
+        let open_keys: HashSet<String> = open.iter().map(|p| sheet_path_key(p, fold)).collect();
         self.tree = self
             .hierarchy
             .as_ref()
             .map(|h| {
                 let top: Vec<&SheetNode> = h.top_level().collect();
                 (0..top.len())
-                    .map(|i| tree_node(&top, i, active_key.as_deref(), &open_keys))
+                    .map(|i| tree_node(&top, i, active_key.as_deref(), &open_keys, fold))
                     .collect()
             })
             .unwrap_or_default();
@@ -168,6 +173,7 @@ fn tree_node(
     index: usize,
     active: Option<&str>,
     open: &HashSet<String>,
+    fold: CaseFold,
 ) -> TreeNode {
     let node = siblings[index];
     let label = match node.kind {
@@ -180,14 +186,14 @@ fn tree_node(
     };
     let kids: Vec<&SheetNode> = node.children.iter().collect();
     let children: Vec<TreeNode> = (0..kids.len())
-        .map(|i| tree_node(&kids, i, active, open))
+        .map(|i| tree_node(&kids, i, active, open, fold))
         .collect();
     let row = if children.is_empty() {
         TreeNode::leaf(label, TreeIcon::Sheet)
     } else {
         TreeNode::branch(label, TreeIcon::Sheet, children)
     };
-    let key = sheet_path_key(&node.path);
+    let key = sheet_path_key(&node.path, fold);
     // The file name rides along as the secondary text, the same pair
     // (name, file) the Properties panel shows for a selected sheet.
     row.with_key(sibling_key(siblings, index))
@@ -229,6 +235,7 @@ mod tests {
         SheetNode {
             name: name.to_string(),
             filename: file.to_string(),
+            placed_as: None,
             path: PathBuf::from("/proj").join(file),
             kind: SheetNodeKind::Present,
             detail: None,
@@ -239,6 +246,7 @@ mod tests {
     fn model() -> NavigatorModel {
         let mut m = NavigatorModel {
             hierarchy: Some(SheetHierarchy {
+                fold: Default::default(),
                 root: Some(node(
                     "root",
                     "root.snxsch",
@@ -323,6 +331,7 @@ mod tests {
 
     fn two_children(first: &str, second: &str) -> SheetHierarchy {
         SheetHierarchy {
+            fold: Default::default(),
             root: Some(node(
                 "root",
                 "root.snxsch",

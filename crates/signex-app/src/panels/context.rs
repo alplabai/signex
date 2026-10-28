@@ -14,11 +14,17 @@ pub struct PanelContext {
     pub has_schematic: bool,
     pub has_pcb: bool,
     pub paper_size: String,
+    /// Sheet-wide default font family of the active schematic (`None` is the
+    /// bundled default).
+    pub document_font_family: Option<String>,
     pub lib_symbol_count: usize,
     /// Library symbol names for Components panel.
     pub lib_symbol_names: Vec<String>,
     /// Placed symbols: (reference, value, footprint, lib_id).
     pub placed_symbols: Vec<(String, String, String, String)>,
+    /// `(engine instance, revision)` the two lists above were built from;
+    /// `refresh_panel_ctx` reuses them while it still matches (#1383).
+    pub symbol_lists_key: Option<(u64, u64)>,
     pub tokens: ThemeTokens,
     /// Active theme id. Feeds the icon registry so dock/panel SVGs tint
     /// to the theme's accent (see `crate::icons`).
@@ -55,6 +61,8 @@ pub struct PanelContext {
     /// Whether the canvas font picker popup is open.
     pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
+    /// Net Classes section of the General tab (#1042).
+    pub net_classes: NetClassPanel,
     // Components panel
     pub standard_libraries: Vec<String>,
     pub active_library: Option<String>,
@@ -93,6 +101,9 @@ pub struct PanelContext {
     pub selected_kind: Option<signex_types::schematic::SelectedKind>,
     /// Description of the selected item (for single selection).
     pub selection_info: Vec<(String, String)>,
+    /// The drawings the selected placed symbol's library row offers, when
+    /// it has alternates; empty otherwise (#1230).
+    pub symbol_choices: Vec<SymbolChoiceItem>,
     /// Transient numeric-input buffers for the drawing properties
     /// panel — keyed on DrawingFieldId. Keeps half-typed strings
     /// ("", "-", "2.") alive between rerenders so fields can be
@@ -125,17 +136,39 @@ pub struct PanelContext {
     /// numeric field. `None` means "show the live value formatted";
     /// `Some(s)` keeps half-typed strings between rerenders.
     pub child_sheet_stroke_width_buf: Option<String>,
+    /// Half-typed Name / File text for the selected sheet symbol, keyed by
+    /// the sheet it belongs to so it never leaks onto another selection.
+    /// Committed (or refused) on Enter; `None` shows the live value.
+    pub child_sheet_name_buf: Option<(uuid::Uuid, String)>,
+    pub child_sheet_file_buf: Option<(uuid::Uuid, String)>,
+    /// The active sheet's title-block fields (#1080), keyed as stored in
+    /// `SchematicSheet::title_block`.
+    pub title_block: std::collections::BTreeMap<String, String>,
+    /// Half-typed title-block fields, one per (sheet, field), each
+    /// committed on Enter. Moving to another field keeps the first one's
+    /// draft; switching sheets hides a sheet's drafts until it is active
+    /// again, so a draft can only ever be committed on its own sheet.
+    pub title_block_drafts: Vec<super::TitleBlockDraft>,
+    /// Half-typed custom paper width/height, one per (sheet, edge), each
+    /// committed on Enter as a single undoable `SetPaperSize`.
+    pub paper_edge_drafts: Vec<super::PaperEdgeDraft>,
+    /// Raw text of the plain numeric box being typed in.
+    pub numeric_draft: Option<super::NumericDraft>,
+    /// The sheet `title_block` and the shown drafts belong to.
+    pub title_block_sheet: Option<std::path::PathBuf>,
     /// Component search filter text.
     pub component_filter: String,
     /// Which sections are collapsed (by section name key).
     pub collapsed_sections: CollapsedSections,
     /// Pre-placement configuration (shown when Tab pressed during placement tool).
     pub pre_placement: Option<PrePlacementData>,
-    /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
     /// Flattened ERC diagnostics from the most recent Run-ERC pass.
     pub erc_diagnostics: Vec<ErcDiagnosticEntry>,
     /// Focused ERC diagnostic index used by prev/next navigation arrows.
     pub erc_focus_index: Option<usize>,
+    /// An ERC run is in flight (the panel shows "Running…").
+    pub erc_running: bool,
+    /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.
     pub diagnostics: Vec<crate::diagnostics::DiagnosticEntry>,
@@ -155,16 +188,10 @@ pub struct PanelContext {
     pub footprint_filter_presets: Vec<crate::active_bar::FootprintFilterPreset>,
     /// Page formatting mode (Template / Standard / Custom).
     pub page_format_mode: PageFormatMode,
-    /// Vertical page margin zones.
-    pub margin_vertical: u32,
-    /// Horizontal page margin zones.
-    pub margin_horizontal: u32,
+    /// The active sheet's frame settings: border, title block, zone counts.
+    pub sheet_frame: signex_types::schematic::SheetFrameSettings,
     /// Page coordinate origin.
     pub page_origin: PageOrigin,
-    /// Custom paper width in mm (only used when page_format_mode == Custom).
-    pub custom_paper_w_mm: f32,
-    /// Custom paper height in mm (only used when page_format_mode == Custom).
-    pub custom_paper_h_mm: f32,
     /// Sheet background colour.
     pub sheet_color: SheetColor,
     /// When the active tab is a `.snxsym` standalone editor, this carries
@@ -185,4 +212,15 @@ pub struct PanelContext {
     /// each refresh; the panel reads it directly without holding a
     /// borrow into the document state.
     pub history: history::HistoryPanelState,
+}
+
+/// One drawing a placed symbol can show: its row's default or an alternate.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SymbolChoiceItem {
+    /// `"<library uuid>:<symbol uuid>"` of the drawing.
+    pub lib_id: String,
+    /// "Default" or the alternate's label.
+    pub label: String,
+    /// The placed symbol currently shows this drawing.
+    pub selected: bool,
 }

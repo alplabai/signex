@@ -104,6 +104,7 @@ fn label_with_text(text: &str) -> Label {
         font_size: 1.27,
         justify: Default::default(),
         justify_v: Default::default(),
+        font_family: None,
     }
 }
 
@@ -115,11 +116,11 @@ fn non_finite_rotation_fails_the_write_instead_of_saving_an_unloadable_file() {
         sym.rotation = bad;
         sheet.symbols.push(sym);
         match SnxSchematic::new(sheet).write_string() {
-            Err(FormatError::TsvFieldWrite { field, row, .. }) => {
+            Err(FormatError::NonFiniteField { field, row, .. }) => {
                 assert_eq!(field, "rotation");
-                assert_eq!(row, 1);
+                assert_eq!(row, 0);
             }
-            other => panic!("rotation={bad}: expected TsvFieldWrite, got {other:?}"),
+            other => panic!("rotation={bad}: expected NonFiniteField, got {other:?}"),
         }
     }
 }
@@ -181,7 +182,7 @@ fn snxsch_survives_embedded_newline_in_label_text() {
 fn snxpcb_round_trip_empty() {
     let snx = SnxPcb::new(empty_board());
     let s = snx.write_string().expect("serialise");
-    assert!(s.contains("format = \"snxpcb/1\""));
+    assert!(s.contains(&format!("format = \"{SNXPCB_FORMAT_V1}\"")));
     let back = SnxPcb::parse(&s).expect("round-trip");
     assert_eq!(back.format, SNXPCB_FORMAT_V1);
 }
@@ -330,6 +331,7 @@ fn snxsch_round_trip_with_data() {
         font_size: 1.27,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
     });
 
     let snx = SnxSchematic::new(sheet.clone());
@@ -369,6 +371,28 @@ fn snxsch_round_trip_with_data() {
         serialised, re_serialised,
         "encode -> decode -> encode must be stable"
     );
+}
+
+#[test]
+fn snxsch_refuses_non_finite_extras_with_key_path() {
+    // #924 — TOML accepts `nan`/`inf`, writers refuse them, so a file
+    // carrying one must be refused at load with the key path named.
+    let good = SnxSchematic::new(empty_sheet())
+        .write_string()
+        .expect("serialise");
+    assert!(
+        SnxSchematic::parse(&good).is_ok(),
+        "finite file still loads"
+    );
+    for bad in ["nan", "inf", "-inf"] {
+        let text = format!("{good}\n[extras.probe]\nvalues = [1.0, {bad}]\n");
+        match SnxSchematic::parse(&text) {
+            Err(FormatError::NonFiniteNumber { path }) => {
+                assert_eq!(path, "extras.probe.values[1]")
+            }
+            other => panic!("{bad}: expected NonFiniteNumber, got {other:?}"),
+        }
+    }
 }
 
 /// A `.snxsch` written before issue #422 added `Junction::minted` never
@@ -676,6 +700,23 @@ fn extras_preserve_symbol_fields() {
     assert!(recovered.dnp);
 }
 
+/// #1080 — title-block values typed in the Properties panel may hold any
+/// text; tabs, newlines, quotes and backslashes survive a save and reload.
+#[test]
+fn title_block_values_with_tabs_newlines_and_quotes_round_trip() {
+    let mut sheet = empty_sheet();
+    for (key, value) in [
+        ("title", "Power \"supply\"\tboard"),
+        ("drawn_by", "A. Engineer\nB. Engineer"),
+        ("document_number", "DOC\\0042"),
+    ] {
+        sheet.title_block.insert(key.into(), value.into());
+    }
+    let written = SnxSchematic::new(sheet.clone()).write_string().unwrap();
+    let parsed = SnxSchematic::parse(&written).unwrap();
+    assert_eq!(parsed.sheet.title_block, sheet.title_block);
+}
+
 #[test]
 fn schematic_extras_are_byte_identical_after_parse() {
     let mut sheet = empty_sheet();
@@ -833,4 +874,27 @@ fn extras_default_matches_an_empty_serde_table() {
     assert!(fp.is_default() && FootprintExtras::default().is_default());
     let pad: PadExtras = toml::from_str("").expect("empty pad table");
     assert!(pad.is_default() && PadExtras::default().is_default());
+}
+
+#[test]
+fn snxpcb_refuses_non_finite_with_key_path() {
+    // #924 — same refusal for `.snxpcb`.
+    let good = SnxPcb::new(empty_board())
+        .write_string()
+        .expect("serialise");
+    assert!(SnxPcb::parse(&good).is_ok(), "finite file still loads");
+    for bad in ["nan", "inf", "-inf"] {
+        let text = format!(
+            "{good}
+[extras.probe]
+values = [1.0, {bad}]
+"
+        );
+        match SnxPcb::parse(&text) {
+            Err(FormatError::NonFiniteNumber { path }) => {
+                assert_eq!(path, "extras.probe.values[1]")
+            }
+            other => panic!("{bad}: expected NonFiniteNumber, got {other:?}"),
+        }
+    }
 }

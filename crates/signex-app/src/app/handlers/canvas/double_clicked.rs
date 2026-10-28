@@ -13,21 +13,25 @@ impl Signex {
         // navigates into the referenced schematic.
         let child_filename_to_open = if self.interaction_state.current_tool == Tool::Select
             && let Some(snapshot) = self.active_render_snapshot()
-            && let Some(hit) =
-                crate::schematic_runtime::hit_test::hit_test(snapshot, world_x, world_y)
+            && let Some(hit) = crate::schematic_runtime::hit_test::hit_test(
+                snapshot,
+                &self.interaction_state.active_canvas().designators,
+                world_x,
+                world_y,
+            )
             && hit.kind == signex_types::schematic::SelectedKind::ChildSheet
         {
             snapshot
                 .child_sheets
                 .iter()
                 .find(|c| c.uuid == hit.uuid)
-                .map(|child_sheet| child_sheet.filename.clone())
+                .map(|child_sheet| (child_sheet.uuid, child_sheet.filename.clone()))
         } else {
             None
         };
 
-        if let Some(child_filename) = child_filename_to_open {
-            self.open_or_focus_child_sheet(child_filename.as_str());
+        if let Some((sheet_symbol, child_filename)) = child_filename_to_open {
+            self.descend_through_sheet_symbol(sheet_symbol, child_filename.as_str());
             return Task::none();
         }
 
@@ -216,10 +220,12 @@ impl Signex {
             self.interaction_state.active_canvas_mut().drawing_mode = false;
         } else if let Some(snapshot) = self.active_render_snapshot() {
             use signex_types::schematic::SelectedKind;
-            if let Some(hit) =
-                crate::schematic_runtime::hit_test::hit_test(snapshot, world_x, world_y)
-            {
-                use crate::schematic_runtime::text::expand_char_escapes;
+            if let Some(hit) = crate::schematic_runtime::hit_test::hit_test(
+                snapshot,
+                &self.interaction_state.active_canvas().designators,
+                world_x,
+                world_y,
+            ) {
                 let edit_info =
                     match hit.kind {
                         SelectedKind::Label => snapshot
@@ -248,10 +254,7 @@ impl Signex {
                             }),
                         _ => None,
                     };
-                if let Some((raw_text, kind, wx, wy)) = edit_info {
-                    // Show the user the visible form (e.g. "/OE"), not
-                    // the Standard-escaped storage form ("{slash}OE").
-                    let display_text = expand_char_escapes(&raw_text);
+                if let Some((display_text, kind, wx, wy)) = edit_info {
                     self.interaction_state.editing_text = Some(TextEditState {
                         uuid: hit.uuid,
                         kind,

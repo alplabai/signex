@@ -11,11 +11,14 @@
 //! newly added [`EditorMsg`] variant is a compile error here until it is
 //! deliberately routed or ignored.
 
+mod alternate_symbols;
 mod datasheet;
 mod parameters;
 mod pin_map;
 mod sim;
 mod supply;
+
+pub(crate) use parameters::flush_edit_buffers;
 
 use crate::library::ComponentPreviewState;
 use crate::library::messages::EditorMsg;
@@ -36,9 +39,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         }
 
         // ── Datasheet ────────────────────────────────────────────────
-        EditorMsg::DatasheetSetMode(mode) => datasheet::set_mode(state, mode),
-        EditorMsg::DatasheetSetUrl(url) => datasheet::set_url(state, url),
-        EditorMsg::DatasheetUploadResult(payload) => datasheet::apply_upload_result(state, payload),
+        EditorMsg::Datasheet(msg) => datasheet::apply(state, msg),
 
         // ── Pin map ──────────────────────────────────────────────────
         EditorMsg::PinMapAutoMatchByNumber | EditorMsg::PinMapClearOverrides => {
@@ -52,6 +53,13 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         EditorMsg::PinMapAddOverride { pin, pad } => pin_map::add_override(state, pin, pad),
         EditorMsg::PinMapCancelOverrideEdit => pin_map::cancel_override_edit(state),
         EditorMsg::PinMapRemoveOverride { pin } => pin_map::remove_override(state, pin),
+
+        // ── Alternate symbols ────────────────────────────────────────
+        EditorMsg::AlternateSymbolRemoved { idx } => alternate_symbols::remove(state, idx),
+        EditorMsg::AlternateSymbolRelabeled { idx, label } => {
+            alternate_symbols::relabel(state, idx, label)
+        }
+        EditorMsg::AlternateSymbolMoved { from, to } => alternate_symbols::move_to(state, from, to),
 
         // ── Supply: primary part ─────────────────────────────────────
         EditorMsg::SupplyPrimarySetManufacturer(value) => {
@@ -98,7 +106,8 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         }
         EditorMsg::ParamSetBool { name, value } => parameters::set_bool(state, name, value),
         EditorMsg::ParamRemove { name } => parameters::remove(state, name),
-        EditorMsg::ParamAddCustom { name, kind } => parameters::add_custom(state, name, kind),
+        EditorMsg::ParamNewNameChanged(name) => state.new_param_name = name,
+        EditorMsg::ParamAddCustom { kind } => parameters::add_custom(state, kind),
 
         // ── Simulation ───────────────────────────────────────────────
         EditorMsg::SimSetEnabled(enabled) => sim::set_enabled(state, enabled),
@@ -115,6 +124,9 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         // reach the Component Preview inline surface but stay enumerated
         // so this match is exhaustive over `EditorMsg`.
         EditorMsg::CloseEditor
+        | EditorMsg::ReloadRequested
+        | EditorMsg::ReloadConfirmed
+        | EditorMsg::ReloadCancelled
         | EditorMsg::SaveDraft
         | EditorMsg::Commit
         | EditorMsg::SubmitForReview
@@ -123,7 +135,6 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::SubmitForReviewConfirm
         | EditorMsg::SubmitForReviewResult(_)
         | EditorMsg::OpenWhereUsedTab
-        | EditorMsg::DatasheetUploadDialog
         | EditorMsg::SaveSymbol(_, _)
         | EditorMsg::Footprint(_)
         | EditorMsg::SaveFootprint(_, _)

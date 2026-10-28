@@ -9,12 +9,15 @@
 //! `classes`, grid/row handlers in `grid`, and table handlers in
 //! `tables`; this `mod.rs` keeps the browser-tab handlers.
 
+mod cell_commit;
 mod classes;
 mod grid;
+mod modal_reload;
 mod param_commit;
 mod tables;
 
 use super::*;
+use crate::library::refresh::RefreshFollowUp;
 
 impl Signex {
     /// Open `.snxlib` at `path` as a Library Browser tab.
@@ -43,6 +46,15 @@ impl Signex {
             already_mounted = self.library.library_at(&path).is_some(),
             "open_library_browser: enter"
         );
+        // A mount of a library in a project whose folder is moving would
+        // read a path about to vanish.
+        if self.refuse_with_notice_while_project_moves(
+            &path,
+            "open",
+            crate::app::state::ErrorNotice::open,
+        ) {
+            return Task::none();
+        }
         match self
             .library
             .request_mount(&path, MountIntent::OpenBrowserTab)
@@ -174,6 +186,9 @@ impl Signex {
         library_path: std::path::PathBuf,
         table: Option<String>,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         let library_idx = match self
             .library
             .open_libraries
@@ -285,6 +300,9 @@ impl Signex {
         table: String,
         row_id: RowId,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         let internal_pn = self
             .library
             .library_at(&library_path)
@@ -310,6 +328,9 @@ impl Signex {
         table: String,
         row_id: RowId,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         let library_id = match self.library.library_at(&library_path) {
             Some(lib) => lib.library_id,
             None => {
@@ -332,7 +353,15 @@ impl Signex {
                 return Task::none();
             }
         };
-        match adapter.delete_row(&table, row_id, "delete row") {
+        // The revision the user saw: the server refuses the delete if the
+        // row has been saved by someone else since.
+        let base_revision = self
+            .library
+            .library_at(&library_path)
+            .and_then(|lib| lib.tables.get(&table))
+            .and_then(|rows| rows.iter().find(|r| RowId::from_uuid(r.row_id) == row_id))
+            .and_then(|row| row.server_revision);
+        match adapter.delete_row(&table, row_id, base_revision, "delete row") {
             Ok(_) => {
                 tracing::info!(
                     target: "signex::library",
@@ -341,14 +370,7 @@ impl Signex {
                     row = %row_id,
                     "browser delete: row removed"
                 );
-                if let Err(e) = self.library.refresh_components(&library_path) {
-                    tracing::warn!(
-                        target: "signex::library",
-                        path = %library_path.display(),
-                        error = %e,
-                        "browser delete: refresh_components failed"
-                    );
-                }
+                let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                     if state.selected_row == Some(row_id) {
                         state.selected_row = None;
@@ -357,21 +379,23 @@ impl Signex {
                     // Drop any cached cell-edit buffers for the gone row.
                     state.cell_edit.retain(|(rid, _), _| *rid != row_id);
                 }
+                refresh
             }
             Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %library_path.display(),
-                    table = %table,
-                    error = %e,
-                    "browser delete: delete_row failed"
-                );
+                crate::diagnostics::log_warning(format!(
+                    "Row {row_id} was not deleted: {e} (table {table}, {})",
+                    library_path.display()
+                ));
+                // The cache holds the revision the refusal was based on, so
+                // a retry would be refused again: re-read the rows.
+                let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
+                self.sync_diagnostics_panel_ctx();
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                     state.delete_confirm = None;
                 }
+                refresh
             }
         }
-        Task::none()
     }
 
     /// Open the Edit Component Details modal for a row. Loads the row
@@ -382,6 +406,9 @@ impl Signex {
         table: String,
         row_id: RowId,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         let row = self
             .library
             .library_at(&library_path)
@@ -411,6 +438,9 @@ impl Signex {
         library_path: std::path::PathBuf,
         msg: BrowserEditMsg,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         // Some variants need to fire follow-up tasks (open picker,
         // close modal). We collect those into `next` and return them
         // after releasing the borrow.
@@ -419,6 +449,8 @@ impl Signex {
         // borrow, run the adapter call, then resume.
         let mut save_request: Option<(EditorAddress, signex_library::ComponentRow)> = None;
         let mut close_modal = false;
+        // Replace the draft with the stored row once the borrow is released.
+        let mut reload_address: Option<EditorAddress> = None;
         if let Some(state) = self.library.library_browsers.get_mut(&library_path)
             && let Some(modal) = state.edit_modal.as_mut()
         {
@@ -435,8 +467,22 @@ impl Signex {
                     modal.draft.state = state_v;
                     modal.error = None;
                 }
+                BrowserEditMsg::SetDatasheetUrl(_)
+                    if !matches!(
+                        modal.draft.datasheet,
+                        signex_library::DatasheetRef::Url { .. }
+                    ) => {}
                 BrowserEditMsg::SetDatasheetUrl(s) => {
+                    // The modal shows no label: the primary keeps its
+                    // label while it points where it did when the modal
+                    // opened, and drops it once re-pointed (#1231).
                     modal.draft.datasheet = signex_library::DatasheetRef::url(s);
+                    let (opened, label) = &modal.opened_primary;
+                    modal.draft.datasheet_label = if modal.draft.datasheet == *opened {
+                        label.clone()
+                    } else {
+                        String::new()
+                    };
                     modal.error = None;
                 }
                 BrowserEditMsg::SetManufacturer(s) => {
@@ -463,26 +509,9 @@ impl Signex {
                 }
                 BrowserEditMsg::CommitParam { key } => {
                     if let Some((value, unit)) = modal.param_buf.get(&key).cloned() {
-                        let pv = if !unit.trim().is_empty() {
-                            // Try parse as f64 first, otherwise store as text.
-                            value
-                                .parse::<f64>()
-                                .ok()
-                                .map(|n| signex_library::ParamValue::Measurement {
-                                    value: n,
-                                    unit: unit.clone(),
-                                })
-                                .unwrap_or_else(|| {
-                                    signex_library::ParamValue::Text(format!("{value} {unit}"))
-                                })
-                        } else if let Ok(n) = value.parse::<f64>() {
-                            signex_library::ParamValue::Number(n)
-                        } else if value.eq_ignore_ascii_case("true") {
-                            signex_library::ParamValue::Bool(true)
-                        } else if value.eq_ignore_ascii_case("false") {
-                            signex_library::ParamValue::Bool(false)
-                        } else {
-                            signex_library::ParamValue::Text(value)
+                        // A refused entry leaves the draft untouched.
+                        let Some(pv) = param_commit::modal_param_value(value, &unit) else {
+                            return Task::none();
                         };
                         modal.draft.parameters.insert(key, pv);
                     }
@@ -528,6 +557,21 @@ impl Signex {
                     )));
                 }
                 BrowserEditMsg::Save => {
+                    // Typed-but-not-Entered parameter edits live only in
+                    // `param_buf`; commit them before the draft snapshot,
+                    // and refuse the save if one is invalid.
+                    match param_commit::uncommitted_param_edits(
+                        &modal.draft.parameters,
+                        &modal.param_buf,
+                    ) {
+                        Ok(edits) => modal.draft.parameters.extend(edits),
+                        Err(key) => {
+                            modal.error = Some(format!(
+                                "Parameter \"{key}\" has an invalid value; fix it before saving."
+                            ));
+                            return Task::none();
+                        }
+                    }
                     // Flush the tags buffer to `parameters["tags"]`
                     // before snapshotting the draft. Empty buffer drops
                     // the entry so we don't keep a dangling empty
@@ -546,11 +590,20 @@ impl Signex {
                 BrowserEditMsg::Cancel => {
                     close_modal = true;
                 }
+                BrowserEditMsg::ReloadRequested => modal.reload_confirming = true,
+                BrowserEditMsg::ReloadCancelled => modal.reload_confirming = false,
+                BrowserEditMsg::ReloadConfirmed => {
+                    reload_address = Some(modal.address.clone());
+                }
             }
         }
         if close_modal && let Some(state) = self.library.library_browsers.get_mut(&library_path) {
             state.edit_modal = None;
         }
+        if let Some(address) = reload_address {
+            self.reload_edit_modal_from_server(&library_path, address);
+        }
+        let mut refresh = Task::none();
         if let Some((address, mut draft)) = save_request {
             // Refresh content_hash before saving.
             match signex_library::hash_row_content(&draft) {
@@ -578,14 +631,10 @@ impl Signex {
             };
             match result {
                 Ok(_) => {
-                    if let Err(e) = self.library.refresh_components(&address.library_path) {
-                        tracing::warn!(
-                            target: "signex::library",
-                            path = %address.library_path.display(),
-                            error = %e,
-                            "browser edit: refresh_components failed"
-                        );
-                    }
+                    refresh = self.refresh_library_task(
+                        &address.library_path,
+                        RefreshFollowUp::CleanEditors(vec![address.row_id]),
+                    );
                     if let Some(state) =
                         self.library.library_browsers.get_mut(&address.library_path)
                     {
@@ -596,154 +645,14 @@ impl Signex {
                     if let Some(state) = self.library.library_browsers.get_mut(&library_path)
                         && let Some(modal) = state.edit_modal.as_mut()
                     {
+                        modal.stale_base =
+                            matches!(e, signex_library::LibraryError::RowChanged { .. });
                         modal.error = Some(e.to_string());
                     }
                 }
             }
         }
-        next.unwrap_or_else(Task::none)
-    }
-
-    /// Commit a per-cell inline edit to the row. Re-hashes + persists.
-    pub(super) fn handle_browser_cell_commit(
-        &mut self,
-        library_path: std::path::PathBuf,
-        table: String,
-        row_id: RowId,
-        column: String,
-    ) -> Task<Message> {
-        // Drop the buffer eagerly — if the save fails we re-insert below.
-        let buf = match self
-            .library
-            .library_browsers
-            .get_mut(&library_path)
-            .and_then(|s| s.cell_edit.remove(&(row_id, column.clone())))
-        {
-            Some(v) => v,
-            None => return Task::none(),
-        };
-        // Read the current row from the cache, mutate, re-hash, save.
-        let mut row = match self
-            .library
-            .library_at(&library_path)
-            .and_then(|lib| lib.tables.get(&table))
-            .and_then(|rows| rows.iter().find(|r| RowId::from_uuid(r.row_id) == row_id))
-            .cloned()
-        {
-            Some(r) => r,
-            None => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %library_path.display(),
-                    table = %table,
-                    row = %row_id,
-                    "browser cell commit: row not found in cache"
-                );
-                return Task::none();
-            }
-        };
-        match column.as_str() {
-            "internal_pn" => {
-                row.internal_pn = signex_library::InternalPn::new(buf.clone());
-            }
-            "manufacturer" => {
-                row.primary_mpn.manufacturer = buf.clone();
-            }
-            "mpn" => {
-                row.primary_mpn.mpn = buf.clone();
-            }
-            other if other.starts_with("parameters.") => {
-                let key = &other["parameters.".len()..];
-                // Preserve unit AND type on commit by reading the
-                // existing value. A typed cell that cannot read the
-                // buffer refuses the commit rather than retyping the
-                // parameter to text and dropping its unit (#599).
-                match param_commit::param_value_for_commit(row.parameters.get(key), &buf) {
-                    Ok(new_value) => {
-                        row.parameters.insert(key.to_string(), new_value);
-                    }
-                    Err(refusal) => {
-                        // Field order is load-bearing: the Messages
-                        // panel compacts a record to 160 characters
-                        // (`diagnostics::compact_message`), so the
-                        // diagnosis goes first and the long, low-value
-                        // fields (table, row, path) go last where a
-                        // truncation costs least.
-                        tracing::warn!(
-                            target: "signex::library",
-                            parameter = %key,
-                            typed = %buf,
-                            kept = %refusal.kept,
-                            expected = %refusal.expected,
-                            table = %table,
-                            row = %row_id,
-                            path = %library_path.display(),
-                            "browser cell commit refused; the stored value is kept"
-                        );
-                        if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
-                            state.cell_edit.insert((row_id, column), buf);
-                        }
-                        // This handler does not run `finish_update`, so
-                        // republish here or the refusal sits in the ring
-                        // buffer until some unrelated later message
-                        // happens to flush it.
-                        self.sync_diagnostics_panel_ctx();
-                        return Task::none();
-                    }
-                }
-            }
-            _ => {
-                tracing::warn!(
-                    target: "signex::library",
-                    column = %column,
-                    "browser cell commit: unknown column"
-                );
-                return Task::none();
-            }
-        }
-        match signex_library::hash_row_content(&row) {
-            Ok(h) => row.content_hash = h,
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    error = %e,
-                    "browser cell commit: hash failed; reverting buffer"
-                );
-                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
-                    state.cell_edit.insert((row_id, column), buf);
-                }
-                return Task::none();
-            }
-        }
-        let library_id = self
-            .library
-            .library_at(&library_path)
-            .map(|lib| lib.library_id);
-        let result = match library_id.and_then(|id| self.library.set.get(id)) {
-            Some(adapter) => adapter.update_row(&table, row, "edit cell"),
-            None => Err(signex_library::LibraryError::NotFound(
-                library_path.display().to_string(),
-            )),
-        };
-        if let Err(e) = result {
-            tracing::warn!(
-                target: "signex::library",
-                error = %e,
-                "browser cell commit: update_row failed"
-            );
-            if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
-                state.cell_edit.insert((row_id, column), buf);
-            }
-            return Task::none();
-        }
-        if let Err(e) = self.library.refresh_components(&library_path) {
-            tracing::warn!(
-                target: "signex::library",
-                error = %e,
-                "browser cell commit: refresh_components failed"
-            );
-        }
-        Task::none()
+        Task::batch([refresh, next.unwrap_or_else(Task::none)])
     }
 
     /// Open the Component Preview tab for `(library_path, table, row_id)`.

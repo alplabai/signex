@@ -8,7 +8,7 @@ use iced::{Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
-use crate::app::FootprintEditorState;
+use crate::app::FootprintDocument;
 use crate::library::editor::footprint::canvas::FootprintCanvas;
 use crate::library::editor::footprint::layers::FpLayer;
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -23,7 +23,7 @@ use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage, Pr
 /// view tree for them is reused via the Component Editor surface.
 /// Pure pad-layout standalone editing is what `.snxfpt` needs first.
 pub fn view_footprint<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
     _theme_id: signex_types::theme::ThemeId,
 ) -> Element<'a, LibraryMessage> {
@@ -113,7 +113,7 @@ pub fn view_footprint<'a>(
     reason = "standalone footprint chrome superseded by the Active Bar; kept for one migration cycle"
 )]
 fn view_footprint_top_strip<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
@@ -250,7 +250,7 @@ fn view_footprint_top_strip<'a>(
 /// editor; moving them below the canvas keeps the top compact and
 /// matches Altium's bottom-of-canvas layer tab pattern.
 fn view_footprint_layers_strip<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
@@ -336,7 +336,7 @@ fn view_footprint_layers_strip<'a>(
     reason = "standalone footprint chrome superseded by the Active Bar; kept for one migration cycle"
 )]
 fn view_footprint_sketch_toolbar<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
@@ -417,7 +417,7 @@ fn view_footprint_sketch_toolbar<'a>(
     reason = "standalone footprint chrome superseded by the Active Bar; kept for one migration cycle"
 )]
 fn view_footprint_toolbar<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
@@ -611,7 +611,7 @@ fn view_footprint_toolbar<'a>(
 }
 
 fn view_footprint_canvas<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
     bg: iced::Color,
     grid: iced::Color,
@@ -639,6 +639,7 @@ fn view_footprint_canvas<'a>(
         sketch: editor.primitive().sketch.as_ref(),
         silk_f: editor.primitive().silk_f.as_slice(),
         silk_b: editor.primitive().silk_b.as_slice(),
+        zoom_step: editor.zoom_step,
     };
     let canvas_widget: Element<'a, LibraryMessage> = iced::widget::canvas(prog)
         .width(Length::Fill)
@@ -702,7 +703,7 @@ fn translate_footprint_canvas_msg(msg: LibraryMessage, path: &Path) -> LibraryMe
 }
 
 fn view_footprint_footer<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);

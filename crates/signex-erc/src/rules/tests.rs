@@ -1,5 +1,7 @@
 use super::*;
-use crate::context::{ErcJunction, ErcLabel, ErcPin, ErcSymbol, ErcWire, PaperSize};
+use crate::context::{
+    ErcChildSheet, ErcJunction, ErcLabel, ErcPin, ErcSheetPin, ErcSymbol, ErcWire, PaperSize,
+};
 use signex_types::schematic::{LabelType, PinDirection, Point};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -130,6 +132,7 @@ fn ctx(
         child_sheets: Vec::new(),
         nets: Vec::new(),
         children: HashMap::new(),
+        key: None,
     }
 }
 
@@ -413,7 +416,11 @@ fn bus_ctx(buses: Vec<crate::context::ErcBus>, labels: Vec<ErcLabel>) -> ErcCont
 }
 
 fn bus(a: Point, b: Point) -> crate::context::ErcBus {
-    crate::context::ErcBus { start: a, end: b }
+    crate::context::ErcBus {
+        uuid: Uuid::nil(),
+        start: a,
+        end: b,
+    }
 }
 
 #[test]
@@ -428,7 +435,7 @@ fn bus_bit_width_mismatch_catches_mid_bus_range_labels() {
         net_label("D[0..3]", pt(7.0, 0.0)),
     ];
     let mut out = Vec::new();
-    bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+    width_rule(&bus_ctx(buses, labels), &mut out);
     assert_eq!(
         out.len(),
         1,
@@ -446,7 +453,7 @@ fn bus_bit_width_mismatch_still_catches_endpoint_range_labels() {
         net_label("D[0..3]", pt(10.0, 0.0)),
     ];
     let mut out = Vec::new();
-    bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+    width_rule(&bus_ctx(buses, labels), &mut out);
     assert_eq!(out.len(), 1, "endpoint mismatch still fires: {out:?}");
 }
 
@@ -461,7 +468,7 @@ fn bus_bit_width_mismatch_accepts_matching_mid_bus_widths() {
         net_label("D[0..7]", pt(7.0, 0.0)),
     ];
     let mut out = Vec::new();
-    bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+    width_rule(&bus_ctx(buses, labels), &mut out);
     assert!(
         out.is_empty(),
         "matching widths are not a mismatch: {out:?}"
@@ -482,7 +489,7 @@ fn bus_bit_width_mismatch_keeps_separate_buses_apart() {
         net_label("A[0..3]", pt(5.0, 50.0)),
     ];
     let mut out = Vec::new();
-    bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+    width_rule(&bus_ctx(buses, labels), &mut out);
     assert!(
         out.is_empty(),
         "unrelated buses must not be compared: {out:?}"
@@ -499,7 +506,7 @@ fn bus_bit_width_mismatch_ignores_a_label_off_every_bus() {
         net_label("D[0..3]", pt(5.0, 25.0)),
     ];
     let mut out = Vec::new();
-    bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+    width_rule(&bus_ctx(buses, labels), &mut out);
     assert!(
         out.is_empty(),
         "an off-bus label must not join the bundle: {out:?}"
@@ -655,6 +662,129 @@ fn power_port_short_ignores_same_origin_when_tips_differ() {
 }
 
 #[test]
+fn power_port_short_fires_when_a_wire_joins_two_rails() {
+    let c = ctx(
+        vec![wire(pt(0.0, 0.0), pt(30.0, 0.0))],
+        vec![],
+        vec![],
+        vec![
+            power_port_with_tip("+5V", pt(0.0, -2.0), pt(0.0, 0.0)),
+            power_port_with_tip("GND", pt(30.0, -2.0), pt(30.0, 0.0)),
+        ],
+    );
+    let mut out = Vec::new();
+    power_port_short(&c, &mut out);
+    assert_eq!(out.len(), 1, "{out:?}");
+    assert_eq!(out[0].rule_kind, RuleKind::PowerPortShort);
+    assert!(out[0].message.contains("+5V") && out[0].message.contains("GND"));
+}
+
+#[test]
+fn power_port_short_ignores_rails_on_separate_nets() {
+    let c = ctx(
+        vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(0.0, 20.0), pt(10.0, 20.0)),
+        ],
+        vec![],
+        vec![],
+        vec![
+            power_port_with_tip("+5V", pt(0.0, -2.0), pt(0.0, 0.0)),
+            power_port_with_tip("GND", pt(0.0, 22.0), pt(0.0, 20.0)),
+            power_port_with_tip("+5V", pt(10.0, -2.0), pt(10.0, 0.0)),
+        ],
+    );
+    let mut out = Vec::new();
+    power_port_short(&c, &mut out);
+    assert!(out.is_empty(), "{out:?}");
+}
+
+#[test]
+fn power_port_short_ignores_a_pwr_flag_on_a_rail() {
+    let mut flag = power_port_with_tip("PWR", pt(0.0, -2.0), pt(0.0, 0.0));
+    flag.lib_id = "power:PWR_FLAG".into();
+    let c = ctx(
+        vec![wire(pt(0.0, 0.0), pt(30.0, 0.0))],
+        vec![],
+        vec![],
+        vec![
+            flag,
+            power_port_with_tip("+5V", pt(30.0, -2.0), pt(30.0, 0.0)),
+        ],
+    );
+    let mut out = Vec::new();
+    power_port_short(&c, &mut out);
+    assert!(out.is_empty(), "{out:?}");
+}
+
+#[test]
+fn power_port_short_names_every_rail_on_a_three_way_short() {
+    let c = ctx(
+        vec![
+            wire(pt(0.0, 0.0), pt(30.0, 0.0)),
+            wire(pt(30.0, 0.0), pt(60.0, 0.0)),
+        ],
+        vec![],
+        vec![],
+        vec![
+            power_port_with_tip("+5V", pt(0.0, -2.0), pt(0.0, 0.0)),
+            power_port_with_tip("GND", pt(30.0, -2.0), pt(30.0, 0.0)),
+            power_port_with_tip("+3V3", pt(60.0, -2.0), pt(60.0, 0.0)),
+        ],
+    );
+    let mut out = Vec::new();
+    power_port_short(&c, &mut out);
+    assert_eq!(out.len(), 1, "{out:?}");
+    let m = &out[0].message;
+    assert!(
+        m.contains("+5V") && m.contains("GND") && m.contains("+3V3"),
+        "{m}"
+    );
+}
+
+fn child_sheet(filename: &str) -> ErcChildSheet {
+    ErcChildSheet {
+        uuid: Uuid::new_v4(),
+        name: "Sub".into(),
+        filename: filename.into(),
+        position: pt(0.0, 0.0),
+        pins: vec![ErcSheetPin {
+            uuid: Uuid::new_v4(),
+            name: "IN".into(),
+            position: pt(1.0, 1.0),
+        }],
+    }
+}
+
+#[test]
+fn bad_hier_sheet_pin_reports_a_child_file_that_did_not_load() {
+    let mut c = ctx(vec![], vec![], vec![], vec![]);
+    c.child_sheets.push(child_sheet("missing.snxsch"));
+    let mut out = Vec::new();
+    bad_hier_sheet_pin(&c, &mut out);
+    assert_eq!(out.len(), 1, "{out:?}");
+    assert_eq!(out[0].rule_kind, RuleKind::BadHierSheetPin);
+    assert!(
+        out[0].message.contains("missing.snxsch"),
+        "{}",
+        out[0].message
+    );
+}
+
+#[test]
+fn bad_hier_sheet_pin_does_not_report_a_missing_child_when_it_loaded() {
+    let mut c = with_child(vec![], vec![]);
+    c.child_sheets.push(child_sheet("child.snxsch"));
+    let mut out = Vec::new();
+    bad_hier_sheet_pin(&c, &mut out);
+    assert!(
+        out.iter()
+            .all(|d| !d.message.contains("could not be loaded")),
+        "{out:?}"
+    );
+}
+
+#[test]
 fn stacked_same_value_power_ports_are_not_reported_as_touching() {
     let tip = Point::new(10.0, 10.0);
     let c = ctx(
@@ -714,4 +844,270 @@ fn a_gnd_vcc_touch_is_one_diagnostic_across_both_port_rules() {
     pins_touch_not_connected::pins_touch_not_connected(&c, &mut out);
     assert_eq!(out.len(), 1, "{out:?}");
     assert_eq!(out[0].rule_kind, RuleKind::PowerPortShort);
+}
+
+#[test]
+fn net_label_conflict_checks_global_and_power_labels() {
+    let on_wire = |a: ErcLabel, b: ErcLabel| {
+        let c = ctx(
+            vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))],
+            Vec::new(),
+            vec![a, b],
+            Vec::new(),
+        );
+        let mut out = Vec::new();
+        net_label_conflict(&c, &mut out);
+        out.len()
+    };
+    assert_eq!(
+        on_wire(
+            global_label("A", pt(2.0, 0.0)),
+            global_label("B", pt(8.0, 0.0))
+        ),
+        1,
+        "two differently named Global labels on one net conflict"
+    );
+    assert_eq!(
+        on_wire(
+            power_label("VCC", pt(2.0, 0.0)),
+            net_label("SIG", pt(8.0, 0.0))
+        ),
+        1,
+        "a Net label on a Power-named net conflicts"
+    );
+    assert_eq!(
+        on_wire(
+            power_label("VCC", pt(2.0, 0.0)),
+            global_label("VCC", pt(8.0, 0.0))
+        ),
+        0,
+        "the same name through different label types is not a conflict"
+    );
+}
+
+#[test]
+fn unused_pin_skips_do_not_connect_but_flags_unclassified() {
+    for (dir, flagged) in [
+        (PinDirection::DoNotConnect, false),
+        (PinDirection::Unclassified, true),
+    ] {
+        let mut sym = symbol_with_pin("U1", pt(5.0, 0.0), false);
+        sym.pins[0].electrical_type = dir;
+        // Mirrors projection: neither type is `required`.
+        sym.pins[0].required = false;
+        let c = ctx(Vec::new(), Vec::new(), Vec::new(), vec![sym]);
+        let mut out = Vec::new();
+        unused_pin(&c, &mut out);
+        assert_eq!(out.len(), usize::from(flagged), "{dir:?}: {out:?}");
+    }
+}
+
+fn lib_symbol_ref(reference: &str, lib_id: &str, unit: u32) -> ErcSymbol {
+    let mut s = symbol_with_pin(reference, pt(0.0, 0.0), true);
+    s.lib_id = lib_id.into();
+    s.unit = unit;
+    s
+}
+
+fn with_child(top: Vec<ErcSymbol>, child: Vec<ErcSymbol>) -> ErcContext {
+    let mut c = ctx(Vec::new(), Vec::new(), Vec::new(), top);
+    let child = ctx(Vec::new(), Vec::new(), Vec::new(), child);
+    c.children
+        .insert("child.snxsch".into(), std::sync::Arc::new(child));
+    c
+}
+
+#[test]
+fn duplicate_ref_designator_flags_cross_sheet_duplicates() {
+    let c = with_child(
+        vec![lib_symbol_ref("R1", "Device:R", 1)],
+        vec![lib_symbol_ref("R1", "Device:R", 1)],
+    );
+    let mut out = Vec::new();
+    duplicate_ref_designator(&c, &mut out);
+    assert_eq!(out.len(), 2, "{out:?}");
+    assert!(out.iter().any(|d| d.message.contains("child.snxsch")));
+}
+
+#[test]
+fn duplicate_ref_designator_allows_units_of_one_part_across_sheets() {
+    let c = with_child(
+        vec![lib_symbol_ref("U1", "Amp:LM358", 1)],
+        vec![lib_symbol_ref("U1", "Amp:LM358", 2)],
+    );
+    let mut out = Vec::new();
+    duplicate_ref_designator(&c, &mut out);
+    assert!(out.is_empty(), "{out:?}");
+}
+
+#[test]
+fn duplicate_ref_designator_leaves_a_clash_inside_one_child_to_that_child() {
+    let c = with_child(
+        Vec::new(),
+        vec![
+            lib_symbol_ref("R1", "Device:R", 1),
+            lib_symbol_ref("R1", "Device:R", 1),
+        ],
+    );
+    let mut out = Vec::new();
+    duplicate_ref_designator(&c, &mut out);
+    assert!(out.is_empty(), "{out:?}");
+}
+
+#[test]
+fn duplicate_ref_designator_ignores_power_and_flag_symbols_across_sheets() {
+    let mut top_flag = lib_symbol_ref("#FLG01", "power:PWR_FLAG", 1);
+    top_flag.is_power = false; // `#` prefix alone must exclude it
+    let mut top_pwr = lib_symbol_ref("#PWR01", "power:GND", 1);
+    top_pwr.is_power = true;
+    let c = with_child(
+        vec![top_pwr, top_flag],
+        vec![
+            lib_symbol_ref("#PWR01", "power:GND", 1),
+            lib_symbol_ref("#FLG01", "power:PWR_FLAG", 1),
+        ],
+    );
+    let mut out = Vec::new();
+    duplicate_ref_designator(&c, &mut out);
+    assert!(out.is_empty(), "{out:?}");
+}
+
+/// The width rule alone, fed its own bus analysis.
+fn width_rule(ctx: &ErcContext, out: &mut Vec<crate::diagnostic::Diagnostic>) {
+    bus_bit_width_mismatch(ctx, &bus_analysis(ctx), out);
+}
+
+mod bus_hier_tests;
+mod bus_runs_tests;
+mod bus_tests;
+
+fn hier_label(text: &str, pos: Point) -> ErcLabel {
+    ErcLabel {
+        label_type: LabelType::Hierarchical,
+        ..net_label(text, pos)
+    }
+}
+
+fn run_multiple_names(c: &ErcContext) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    net_multiple_names(c, &mut out);
+    out
+}
+
+#[test]
+fn multiple_names_reports_a_hierarchical_and_a_local_name_with_both_locations() {
+    let c = ctx(
+        vec![wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0))],
+        vec![],
+        vec![
+            net_label("SDA", Point::new(0.0, 0.0)),
+            hier_label("I2C_SDA", Point::new(10.0, 0.0)),
+        ],
+        vec![],
+    );
+    let out = run_multiple_names(&c);
+    assert_eq!(out.len(), 1, "{out:?}");
+    assert_eq!(out[0].rule_kind, RuleKind::NetMultipleNames);
+    let m = &out[0].message;
+    assert!(m.contains("on this sheet, 'I2C_SDA' wins"), "{m}");
+    assert!(m.contains("'SDA' at (0.00, 0.00)"), "{m}");
+    assert!(m.contains("'I2C_SDA' at (10.00, 0.00)"), "{m}");
+}
+
+#[test]
+fn multiple_names_reports_two_power_ports_joined_by_a_wire() {
+    let c = ctx(
+        vec![wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0))],
+        vec![],
+        vec![],
+        vec![
+            power_port_with_tip("VDD", Point::new(0.0, 0.0), Point::new(0.0, 0.0)),
+            power_port_with_tip("+3V3", Point::new(10.0, 0.0), Point::new(10.0, 0.0)),
+        ],
+    );
+    let out = run_multiple_names(&c);
+    assert_eq!(out.len(), 1, "{out:?}");
+    assert!(
+        out[0].message.contains("on this sheet, '+3V3' wins"),
+        "{}",
+        out[0].message
+    );
+    assert!(out[0].message.contains("'VDD'"), "{}", out[0].message);
+}
+
+#[test]
+fn multiple_names_leaves_label_conflicts_to_net_label_conflict() {
+    // Local `SDA` + global `I2C_SDA`: `NetLabelConflict` reports it, this rule
+    // stays silent, so the user sees one finding, not two.
+    let c = ctx(
+        vec![wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0))],
+        vec![],
+        vec![
+            net_label("SDA", Point::new(0.0, 0.0)),
+            global_label("I2C_SDA", Point::new(10.0, 0.0)),
+        ],
+        vec![],
+    );
+    assert!(run_multiple_names(&c).is_empty());
+    let all = crate::engine::run_all(&c);
+    assert_eq!(all.len(), 1, "{all:?}");
+    assert_eq!(all[0].rule_kind, RuleKind::NetLabelConflict);
+}
+
+#[test]
+fn multiple_names_ignores_one_name_repeated() {
+    let c = ctx(
+        vec![wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0))],
+        vec![],
+        vec![
+            net_label("SDA", Point::new(0.0, 0.0)),
+            hier_label("SDA", Point::new(10.0, 0.0)),
+        ],
+        vec![],
+    );
+    assert!(run_multiple_names(&c).is_empty());
+}
+
+#[test]
+fn multiple_names_is_suppressed_by_a_no_erc_on_any_of_the_names() {
+    // `I2C_SDA` wins and carries the marker; the No-ERC sits on the loser.
+    let mut c = ctx(
+        vec![wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0))],
+        vec![],
+        vec![
+            net_label("SDA", Point::new(0.0, 0.0)),
+            hier_label("I2C_SDA", Point::new(10.0, 0.0)),
+        ],
+        vec![],
+    );
+    assert_eq!(run_multiple_names(&c).len(), 1);
+    c.no_erc_directives.push(crate::context::ErcNoErcDirective {
+        position: Point::new(0.0, 0.0),
+    });
+    assert!(run_multiple_names(&c).is_empty());
+}
+
+#[test]
+fn a_wire_on_a_bus_entrys_far_end_is_not_dangling() {
+    // The entry's bus end is (25.4, 12.7); its far end (27.94, 15.24) is where
+    // the wire attaches. The wire's other end carries a net label.
+    let mut c = ctx(
+        vec![wire(pt(27.94, 15.24), pt(40.64, 15.24))],
+        Vec::new(),
+        vec![ErcLabel {
+            uuid: Uuid::nil(),
+            text: "D0".into(),
+            position: pt(40.64, 15.24),
+            label_type: LabelType::Net,
+        }],
+        Vec::new(),
+    );
+    c.bus_entries.push(crate::context::ErcBusEntry {
+        uuid: Uuid::nil(),
+        position: pt(25.4, 12.7),
+        size: (2.54, 2.54),
+    });
+    let mut out = Vec::new();
+    dangling_wire(&c, &mut out);
+    assert!(out.is_empty(), "wire meets the entry's far end: {out:?}");
 }

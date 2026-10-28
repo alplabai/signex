@@ -22,5 +22,8 @@ pub use local_git::project as local_git_project;
 
 #[cfg(feature = "database")]
 pub mod database;
+#[cfg(feature = "database")]
+mod database_row_schema;
 
 pub mod library_set;
+pub mod read_only;

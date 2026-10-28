@@ -7,6 +7,8 @@ fn ctx() -> ExportContext {
         metadata: ProjectMetadata::default(),
         netlist: None,
         netlist_sheets: Vec::new(),
+        current_sheet: None,
+        netlist_placements: Vec::new(),
     }
 }
 
@@ -188,5 +190,58 @@ fn ran_but_clean_is_a_header_only_report() {
     assert_eq!(
         String::from_utf8(out.bytes).unwrap(),
         "ERC report: 0 violation(s)\n"
+    );
+}
+
+fn rule_set() -> ErcReportRuleSet {
+    ErcReportRuleSet {
+        profile_name: Some("Company".into()),
+        sha256: "ab12".into(),
+    }
+}
+
+#[test]
+fn text_header_records_profile_name_and_rule_set_hash() {
+    let mut o = opts(ErcReportFormat::Text);
+    o.rule_set = Some(rule_set());
+    let got = run(o);
+    let mut lines = got.lines();
+    assert_eq!(lines.next(), Some("ERC report: 3 violation(s)"));
+    assert_eq!(lines.next(), Some("Rule set: Company (sha256 ab12)"));
+}
+
+#[test]
+fn csv_header_records_profile_name_and_rule_set_hash() {
+    let mut o = opts(ErcReportFormat::Csv);
+    o.rule_set = Some(rule_set());
+    let got = run(o);
+    let lines: Vec<&str> = got.trim_start_matches('\u{feff}').lines().collect();
+    assert_eq!(lines[0], "# Rule set,Company,ab12");
+    assert_eq!(lines[1], "Sheet,Severity,Rule,Message,X,Y");
+}
+
+#[test]
+fn a_rule_set_without_a_profile_says_so() {
+    let mut o = opts(ErcReportFormat::Text);
+    o.rule_set = Some(ErcReportRuleSet {
+        profile_name: None,
+        sha256: "ff".into(),
+    });
+    assert!(run(o).contains("Rule set: no profile (sha256 ff)\n"));
+}
+
+#[test]
+fn csv_without_a_recorded_profile_is_byte_identical_to_no_rule_set() {
+    let plain = run(opts(ErcReportFormat::Csv));
+    let mut o = opts(ErcReportFormat::Csv);
+    o.rule_set = Some(ErcReportRuleSet {
+        profile_name: None,
+        sha256: "ff".into(),
+    });
+    let got = run(o);
+    assert_eq!(got, plain);
+    assert_eq!(
+        got.trim_start_matches('\u{feff}').lines().next(),
+        Some("Sheet,Severity,Rule,Message,X,Y")
     );
 }

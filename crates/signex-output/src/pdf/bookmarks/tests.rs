@@ -30,6 +30,7 @@ fn ctx_with_one_sheet() -> ExportContext {
         font_size: 0.0,
         justify: signex_types::schematic::HAlign::Center,
         justify_v: signex_types::schematic::VAlign::Bottom,
+        font_family: None,
     });
     ExportContext {
         sheets: vec![SheetSnapshot {
@@ -38,10 +39,13 @@ fn ctx_with_one_sheet() -> ExportContext {
             sheet_name: "Power".to_string(),
             sheet_number: 1,
             sheet_count: 1,
+            placement: Default::default(),
         }],
         metadata: ProjectMetadata::default(),
         netlist: None,
         netlist_sheets: Vec::new(),
+        current_sheet: None,
+        netlist_placements: Vec::new(),
     }
 }
 
@@ -84,6 +88,7 @@ fn default_opts() -> PdfOptions {
         include_component_parameters: false,
         global_bookmarks: false,
         palette: SchematicPalette::classic(),
+        net_class_styles: Default::default(),
     }
 }
 
@@ -213,10 +218,13 @@ fn pin_bookmarks_skipped_when_subtoggle_off() {
             sheet_name: "Sheet1".to_string(),
             sheet_number: 1,
             sheet_count: 1,
+            placement: Default::default(),
         }],
         metadata: ProjectMetadata::default(),
         netlist: None,
         netlist_sheets: Vec::new(),
+        current_sheet: None,
+        netlist_placements: Vec::new(),
     };
 
     let opts = PdfOptions {
@@ -262,6 +270,7 @@ fn multi_sheet_bookmarks_have_independent_groups() {
                 sheet_name: format!("Sheet{}", i + 1),
                 sheet_number: i + 1,
                 sheet_count: 3,
+                placement: Default::default(),
             });
         }
         ExportContext {
@@ -269,6 +278,8 @@ fn multi_sheet_bookmarks_have_independent_groups() {
             metadata: ProjectMetadata::default(),
             netlist: None,
             netlist_sheets: Vec::new(),
+            current_sheet: None,
+            netlist_placements: Vec::new(),
         }
     };
     let opts = PdfOptions {
@@ -296,4 +307,65 @@ fn multi_sheet_bookmarks_have_independent_groups() {
             assert_eq!(item.page_idx, n - 1, "{} jumped to wrong page", item.title);
         }
     }
+}
+
+#[test]
+fn pin_bookmarks_are_sorted_and_skip_power_symbols() {
+    let mut sheet = empty_sheet();
+    let mut sym = Symbol {
+        reference: "U1".to_string(),
+        ..Default::default()
+    };
+    for n in ["9", "3", "10", "1", "2", "7"] {
+        sym.pin_uuids.insert(n.to_string(), uuid::Uuid::nil());
+    }
+    sheet.symbols.push(sym);
+    let mut pwr = Symbol {
+        reference: "#PWR01".to_string(),
+        is_power: true,
+        ..Default::default()
+    };
+    pwr.pin_uuids.insert("1".to_string(), uuid::Uuid::nil());
+    sheet.symbols.push(pwr);
+    let ctx = ExportContext {
+        sheets: vec![SheetSnapshot {
+            path: std::path::PathBuf::from("a.standard_sch"),
+            schematic: sheet,
+            sheet_name: "Sheet1".to_string(),
+            sheet_number: 1,
+            sheet_count: 1,
+            placement: Default::default(),
+        }],
+        metadata: ProjectMetadata::default(),
+        netlist: None,
+        netlist_sheets: Vec::new(),
+        current_sheet: None,
+        netlist_placements: Vec::new(),
+    };
+    let opts = PdfOptions {
+        generate_nets_info: true,
+        bookmark_pins: true,
+        bookmark_net_labels: false,
+        bookmark_ports: false,
+        ..default_opts()
+    };
+    let items = build_bookmarks(&ctx, &opts, &[0], 297.0, 210.0, 595.0);
+    let pins: Vec<&str> = items
+        .iter()
+        .filter(|i| i.title.starts_with("pin "))
+        .map(|i| i.title.as_str())
+        .collect();
+    assert_eq!(
+        pins,
+        [
+            "pin U1.1",
+            "pin U1.10",
+            "pin U1.2",
+            "pin U1.3",
+            "pin U1.7",
+            "pin U1.9"
+        ]
+    );
+    // Sheet -> Nets group -> 6 pins: the sheet owns 7 descendants.
+    assert_eq!(descendant_count(&items, 0), 7);
 }

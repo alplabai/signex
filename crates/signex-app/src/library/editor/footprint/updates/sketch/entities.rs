@@ -14,11 +14,11 @@
 //! genuinely is a distinct concern (pad copper vs. sketch geometry), so
 //! that phase is its own [`propagate_line_drag_to_pad_bboxes`] helper.
 
-use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
+use crate::library::editor::footprint::state::FootprintEditorState;
 use crate::library::messages::FootprintEditorMsg;
 
 pub(in crate::library::editor::footprint::updates) fn apply(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     msg: FootprintEditorMsg,
 ) {
     match msg {
@@ -35,7 +35,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
     }
 }
 
-fn place_point(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64) {
+fn place_point(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
     use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
     use crate::library::editor::footprint::sketch_mode::SketchEdit;
     use signex_sketch::entity::{Entity, EntityKind};
@@ -69,15 +69,15 @@ fn place_point(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f
 }
 
 fn move_point(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     id: signex_sketch::id::SketchEntityId,
     dx: f64,
     dy: f64,
 ) {
-    use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
     use crate::library::editor::footprint::sketch_mode::SketchEdit;
+    use crate::library::editor::footprint::sketch_solve_task::apply_sketch_edit_deferred;
     editor.with_parts(|state, primitive| {
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::MovePoint { id, dx, dy });
+        apply_sketch_edit_deferred(state, primitive, SketchEdit::MovePoint { id, dx, dy });
     });
     // v0.16.0.1 fix — when the dragged Point is a pad's
     // centre, also translate that pad's outline-corner Points
@@ -93,7 +93,7 @@ fn move_point(
         if let Some(corners) = editor.state.pads[pad_idx].corner_entity_ids {
             for corner_id in corners {
                 editor.with_parts(|state, primitive| {
-                    apply_sketch_edit_with_warnings(
+                    apply_sketch_edit_deferred(
                         state,
                         primitive,
                         SketchEdit::MovePoint {
@@ -110,7 +110,7 @@ fn move_point(
         editor.state.pads[pad_idx].position_mm.0 += dx;
         editor.state.pads[pad_idx].position_mm.1 += dy;
         editor.with_parts(|state, primitive| {
-            CanvasState::sync_pads_to_primitive(state, primitive);
+            FootprintEditorState::sync_pads_to_primitive(state, primitive);
         });
     }
     // v0.16.1 fix — when the dragged Point is one of any
@@ -177,7 +177,7 @@ fn move_point(
             // the id of the corner Point it grabbed.
             remint_dragged_pad(editor, pad_idx, "Sketch corner drag");
             editor.with_parts(|state, primitive| {
-                CanvasState::sync_pads_to_primitive(state, primitive);
+                FootprintEditorState::sync_pads_to_primitive(state, primitive);
             });
         }
     }
@@ -192,13 +192,13 @@ fn move_point(
 // "one corner moved, the other didn't" state a two-message split would
 // produce.
 fn move_line(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     id: signex_sketch::id::SketchEntityId,
     dx: f64,
     dy: f64,
 ) {
-    use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
     use crate::library::editor::footprint::sketch_mode::SketchEdit;
+    use crate::library::editor::footprint::sketch_solve_task::apply_sketch_edit_deferred;
     use signex_sketch::entity::EntityKind;
     let endpoints = editor
         .primitive()
@@ -355,7 +355,7 @@ fn move_line(
         let end_delta = (end_target.0 - end_pos.0, end_target.1 - end_pos.1);
         if start_delta.0.abs() > 1e-9 || start_delta.1.abs() > 1e-9 {
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(
+                apply_sketch_edit_deferred(
                     state,
                     primitive,
                     SketchEdit::MovePoint {
@@ -368,7 +368,7 @@ fn move_line(
         }
         if end_delta.0.abs() > 1e-9 || end_delta.1.abs() > 1e-9 {
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(
+                apply_sketch_edit_deferred(
                     state,
                     primitive,
                     SketchEdit::MovePoint {
@@ -382,18 +382,14 @@ fn move_line(
     }
     for pid in arc_victims {
         editor.with_parts(|state, primitive| {
-            apply_sketch_edit_with_warnings(
-                state,
-                primitive,
-                SketchEdit::MovePoint { id: pid, dx, dy },
-            );
+            apply_sketch_edit_deferred(state, primitive, SketchEdit::MovePoint { id: pid, dx, dy });
         });
     }
     // v0.27 — propagate the edge drag to the literal pad bbox — see
     // `propagate_line_drag_to_pad_bboxes`.
     propagate_line_drag_to_pad_bboxes(editor, pre_drag_endpoints, dx, dy);
     editor.with_parts(|state, primitive| {
-        CanvasState::sync_pads_to_primitive(state, primitive);
+        FootprintEditorState::sync_pads_to_primitive(state, primitive);
     });
     editor.canvas_cache.clear();
     editor.dirty = true;
@@ -416,7 +412,7 @@ fn move_line(
 // rejects every edge and the propagation silently no-ops — the exact
 // "line moves, copper doesn't" failure this fn exists to prevent.
 fn propagate_line_drag_to_pad_bboxes(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     pre_drag_endpoints: Option<((f64, f64), (f64, f64))>,
     dx: f64,
     dy: f64,
@@ -516,11 +512,7 @@ fn propagate_line_drag_to_pad_bboxes(
     }
 }
 
-fn resize_round_pad(
-    editor: &mut crate::app::FootprintEditorState,
-    pad_idx: usize,
-    diameter_mm: f64,
-) {
+fn resize_round_pad(editor: &mut crate::app::FootprintDocument, pad_idx: usize, diameter_mm: f64) {
     // v0.27 — round-pad diameter handle drag. Update three
     // sources of truth in lockstep so the on-canvas handle
     // motion, the bake output, and the parameter table stay
@@ -569,7 +561,7 @@ fn resize_round_pad(
         }
     }
     editor.with_parts(|state, primitive| {
-        CanvasState::sync_pads_to_primitive(state, primitive);
+        FootprintEditorState::sync_pads_to_primitive(state, primitive);
     });
     editor.canvas_cache.clear();
     editor.dirty = true;
@@ -582,7 +574,7 @@ fn resize_round_pad(
 /// In place: the pointer holds the id of the entity the user grabbed
 /// for the whole drag and streams one message per cursor tick against
 /// it, so a drop-and-re-mint would freeze the drag one frame in.
-fn remint_dragged_pad(editor: &mut crate::app::FootprintEditorState, pad_idx: usize, op: &str) {
+fn remint_dragged_pad(editor: &mut crate::app::FootprintDocument, pad_idx: usize, op: &str) {
     editor.with_parts(|state, primitive| {
         use crate::library::editor::footprint::pad_to_sketch;
         let Some(pad) = state.pads.get_mut(pad_idx) else {

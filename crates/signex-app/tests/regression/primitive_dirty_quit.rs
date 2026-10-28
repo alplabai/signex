@@ -8,7 +8,7 @@
 //! straight away and the edits went out with the process.
 
 use signex_app::app::{
-    FootprintEditorState, LoadedProject, Message, ProjectCloseChoice, ProjectMsg, Signex, TabInfo,
+    FootprintDocument, LoadedProject, Message, ProjectCloseChoice, ProjectMsg, Signex, TabInfo,
     TabKind, WindowMsg,
 };
 use signex_app::dock::DockMessage;
@@ -29,7 +29,7 @@ pub(crate) fn open_footprint_editor(app: &mut Signex, path: &Path) {
     let file = FootprintFile::from_footprint(Footprint::empty("fp"));
     app.document_state.footprint_editors.insert(
         path.to_path_buf(),
-        FootprintEditorState::new(path.to_path_buf(), file),
+        FootprintDocument::new(path.to_path_buf(), file),
     );
     app.document_state.tabs.push(TabInfo {
         title: "fp".into(),
@@ -97,9 +97,10 @@ fn quit_save_all_writes_the_edited_footprint() {
     edit_description_via_panel(&mut app);
     request_quit(&mut app);
 
-    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
-        ProjectCloseChoice::SaveAll,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    );
 
     let written = std::fs::read_to_string(&path).expect("Save All must write the .snxfpt");
     assert!(written.contains("edited"), "the edit must be on disk");
@@ -131,9 +132,14 @@ fn push_project(app: &mut Signex, dir: &Path, name: &str) {
                 unknown: Default::default(),
             }],
             enable_git: false,
+            net_classes: Vec::new(),
+            rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
 }
 
@@ -173,10 +179,13 @@ fn project_close_keeps_an_edited_footprint_draft_it_cannot_prove_is_its_own() {
 
 fn preview_row() -> ComponentRow {
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: uuid::Uuid::new_v4(),
         internal_pn: InternalPn::new("TEST_PN"),
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(uuid::Uuid::new_v4(), uuid::Uuid::new_v4()),
         footprint_ref: None,
@@ -195,6 +204,7 @@ fn preview_row() -> ComponentRow {
         created: chrono::Utc::now(),
         updated: chrono::Utc::now(),
         content_hash: [0u8; 32],
+        server_revision: None,
     }
 }
 
@@ -248,9 +258,10 @@ fn quit_save_all_never_loses_a_row_it_cannot_save() {
     let mut app = app_with_preview_edit();
     request_quit(&mut app);
 
-    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
-        ProjectCloseChoice::SaveAll,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    );
 
     assert!(app.document_state.error_notice.is_some());
     assert!(app.library.editors.values().all(|s| s.dirty));
@@ -284,9 +295,10 @@ fn project_close_save_all_keeps_the_project_when_a_row_cannot_be_saved() {
     let mut app = preview_edit_in(app, tmp.path().join("lib.snxlib"));
     crate::close_support::close_first_project(&mut app);
 
-    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
-        ProjectCloseChoice::SaveAll,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::SaveAll)),
+    );
 
     assert_eq!(app.document_state.projects.len(), 1, "project stays open");
     assert!(app.document_state.error_notice.is_some());

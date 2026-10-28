@@ -16,6 +16,147 @@ impl Signex {
         }
     }
 
+    fn engine_undo_position(&self) -> usize {
+        self.document_state
+            .active_engine()
+            .map_or(0, |engine| engine.undo_position())
+    }
+
+    /// `engine`'s sheet slice of `overrides`: its wires and junctions, which
+    /// is what a net-colour flood colours. The map is app-wide, but a colour
+    /// step only owns the elements of its own sheet.
+    fn sheet_net_colors(
+        engine: &signex_engine::Engine,
+        overrides: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    ) -> std::collections::HashMap<uuid::Uuid, signex_types::theme::Color> {
+        let doc = engine.document();
+        doc.wires
+            .iter()
+            .map(|w| w.uuid)
+            .chain(doc.junctions.iter().map(|j| j.uuid))
+            .filter_map(|id| Some((id, *overrides.get(&id)?)))
+            .collect()
+    }
+
+    /// The active sheet's slice of `wire_color_overrides`.
+    pub(crate) fn active_sheet_net_colors(
+        &self,
+    ) -> std::collections::HashMap<uuid::Uuid, signex_types::theme::Color> {
+        self.document_state
+            .active_engine()
+            .map(|engine| Self::sheet_net_colors(engine, &self.ui_state.wire_color_overrides))
+            .unwrap_or_default()
+    }
+
+    /// Clear every sheet's net colours (the global "Clear All Net Colors"),
+    /// first pushing each sheet's own slice onto its document's undo stack,
+    /// stamped with that engine's timeline, so Ctrl+Z in a sheet restores
+    /// that sheet's colours only.
+    pub(crate) fn clear_all_net_colors_undoably(&mut self) {
+        let overrides = &self.ui_state.wire_color_overrides;
+        let steps: Vec<_> = self
+            .document_state
+            .engines
+            .iter()
+            .filter_map(|(path, engine)| {
+                let colors = Self::sheet_net_colors(engine, overrides);
+                (!colors.is_empty()).then(|| {
+                    let step = crate::app::state::NetColorStep {
+                        colors,
+                        at: engine.undo_position(),
+                    };
+                    (path.clone(), step)
+                })
+            })
+            .collect();
+        for (path, step) in steps {
+            self.ui_state.net_color_redo.remove(&path);
+            self.mark_net_colors_dirty(&path);
+            self.ui_state
+                .net_color_undo
+                .entry(path)
+                .or_default()
+                .push(step);
+        }
+        self.ui_state.wire_color_overrides.clear();
+    }
+
+    /// Drop a closing schematic's wire and junction colours from the map.
+    /// Call before its engine is removed.
+    pub(crate) fn forget_net_colors_of(&mut self, path: &std::path::Path) {
+        // The sheet's edit timeline ends with its engine, and so do the
+        // net-class picks stamped on it.
+        self.forget_net_class_picks_on(path);
+        let Some(engine) = self.document_state.engines.get(path) else {
+            return;
+        };
+        for id in Self::sheet_net_colors(engine, &self.ui_state.wire_color_overrides).into_keys() {
+            self.ui_state.wire_color_overrides.remove(&id);
+        }
+    }
+
+    /// Replace the active sheet's overrides with `colors`, leaving every
+    /// other sheet's untouched. Returns the overrides it displaced.
+    pub(crate) fn replace_active_sheet_net_colors(
+        &mut self,
+        colors: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    ) -> std::collections::HashMap<uuid::Uuid, signex_types::theme::Color> {
+        let displaced = self.active_sheet_net_colors();
+        for wire in displaced.keys() {
+            self.ui_state.wire_color_overrides.remove(wire);
+        }
+        self.ui_state.wire_color_overrides.extend(colors);
+        displaced
+    }
+
+    /// Record the active sheet's overrides as an undoable step, before a
+    /// net-colour change. A new colour action ends the redo branch.
+    pub(crate) fn record_net_color_undo(&mut self) {
+        let Some(path) = self.document_state.active_path.clone() else {
+            return;
+        };
+        let at = self.engine_undo_position();
+        let colors = self.active_sheet_net_colors();
+        self.ui_state.net_color_redo.remove(&path);
+        self.mark_net_colors_dirty(&path);
+        self.ui_state
+            .net_color_undo
+            .entry(path)
+            .or_default()
+            .push(crate::app::state::NetColorStep { colors, at });
+    }
+
+    /// Forget a document's colour steps, e.g. when its engine is replaced.
+    pub(crate) fn clear_net_color_steps(&mut self, path: &std::path::Path) {
+        self.ui_state.net_color_undo.remove(path);
+        self.ui_state.net_color_redo.remove(path);
+        self.forget_net_class_picks_on(path);
+    }
+
+    /// Install `step`'s colours, pushing the displaced ones onto the
+    /// opposite stack (`undoing` -> redo stack, else undo stack).
+    fn swap_net_colors(
+        &mut self,
+        path: std::path::PathBuf,
+        step: crate::app::state::NetColorStep,
+        undoing: bool,
+    ) {
+        let displaced = crate::app::state::NetColorStep {
+            colors: self.replace_active_sheet_net_colors(step.colors),
+            at: step.at,
+        };
+        self.mark_net_colors_dirty(&path);
+        let stack = if undoing {
+            &mut self.ui_state.net_color_redo
+        } else {
+            &mut self.ui_state.net_color_undo
+        };
+        stack.entry(path).or_default().push(displaced);
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
+    }
+
     pub(crate) fn handle_undo_requested(&mut self) {
         // If the active tab is a symbol editor, delegate undo to it.
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
@@ -44,14 +185,19 @@ impl Signex {
         }
 
         // Net-colour floods aren't persisted to the Standard document so
-        // they don't enter the engine's history. Check the app-level
-        // net_color_undo stack first; only fall through to the engine
-        // when no net-colour action is pending.
-        if let Some(prev) = self.ui_state.net_color_undo.pop() {
-            self.ui_state.wire_color_overrides = prev.clone();
-            self.interaction_state
-                .active_canvas_mut()
-                .clear_content_cache();
+        // they don't enter the engine's history. Each colour step is
+        // stamped with the engine's edit-timeline position; it is the
+        // newest action only while no engine edit has landed since.
+        let position = self.engine_undo_position();
+        if let Some(path) = self.document_state.active_path.clone()
+            && let Some(stack) = self.ui_state.net_color_undo.get_mut(&path)
+            && stack.last().is_some_and(|step| step.at >= position)
+            && let Some(step) = stack.pop()
+        {
+            self.swap_net_colors(path, step, true);
+            return;
+        }
+        if self.undo_net_class_pick() {
             return;
         }
         let undone = self.apply_engine_undo(true);
@@ -83,55 +229,24 @@ impl Signex {
             }
             return;
         }
+        // A colour step undone at `at` came after the `at`-th engine edit
+        // and before the next, so it is redone before that edit.
+        let position = self.engine_undo_position();
+        if let Some(path) = self.document_state.active_path.clone()
+            && let Some(stack) = self.ui_state.net_color_redo.get_mut(&path)
+            && stack.last().is_some_and(|step| step.at <= position)
+            && let Some(step) = stack.pop()
+        {
+            self.swap_net_colors(path, step, false);
+            return;
+        }
+        if self.redo_net_class_pick() {
+            return;
+        }
         let redone = self.apply_engine_redo(true);
 
         if redone {
             self.interaction_state.active_canvas_mut().selected.clear();
-        }
-    }
-
-    pub(crate) fn handle_selection_rotate_requested(&mut self) {
-        if let Some(engine) = self.document_state.active_engine()
-            && engine.selection_is_single_symbol(&self.interaction_state.active_canvas().selected)
-        {
-            self.apply_engine_command(
-                signex_engine::Command::RotateSelection {
-                    items: self.interaction_state.active_canvas().selected.clone(),
-                    angle_degrees: 90.0,
-                },
-                true,
-                true,
-            );
-        }
-    }
-
-    pub(crate) fn handle_selection_mirror_x_requested(&mut self) {
-        if let Some(engine) = self.document_state.active_engine()
-            && engine.selection_is_single_symbol(&self.interaction_state.active_canvas().selected)
-        {
-            self.apply_engine_command(
-                signex_engine::Command::MirrorSelection {
-                    items: self.interaction_state.active_canvas().selected.clone(),
-                    axis: signex_engine::MirrorAxis::Vertical,
-                },
-                true,
-                true,
-            );
-        }
-    }
-
-    pub(crate) fn handle_selection_mirror_y_requested(&mut self) {
-        if let Some(engine) = self.document_state.active_engine()
-            && engine.selection_is_single_symbol(&self.interaction_state.active_canvas().selected)
-        {
-            self.apply_engine_command(
-                signex_engine::Command::MirrorSelection {
-                    items: self.interaction_state.active_canvas().selected.clone(),
-                    axis: signex_engine::MirrorAxis::Horizontal,
-                },
-                true,
-                true,
-            );
         }
     }
 
@@ -324,3 +439,9 @@ fn norm_ccw(a: f64, b: f64) -> f64 {
     let d = b - a;
     if d < 0.0 { d + TAU } else { d }
 }
+
+mod net_color_persist;
+#[cfg(test)]
+mod net_color_persist_tests;
+#[cfg(test)]
+mod net_color_undo_order_tests;

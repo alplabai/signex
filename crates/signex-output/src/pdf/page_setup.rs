@@ -12,10 +12,10 @@ use thiserror::Error;
 use super::{Margins, Orientation, PageSize, PdfScale};
 
 /// Largest page edge a PDF viewer accepts (14 400 pt).
-pub const MAX_PAGE_EDGE_MM: f64 = 5080.0;
+pub const MAX_PAGE_EDGE_MM: f64 = signex_types::schematic::MAX_PAGE_EDGE_MM;
 /// Smallest Custom page edge. Below this the default margins would consume the
 /// whole page, so a Custom page is never allowed to get that small.
-pub const MIN_CUSTOM_EDGE_MM: f64 = 10.0;
+pub const MIN_CUSTOM_EDGE_MM: f64 = signex_types::schematic::MIN_CUSTOM_EDGE_MM;
 /// Largest accepted scale percentage.
 pub const MAX_SCALE_PERCENT: f64 = 10_000.0;
 /// Printable area every axis must keep after margins (matches the layout floor).
@@ -361,14 +361,14 @@ mod tests {
     }
 
     #[test]
-    fn from_standard_str_sizes_are_all_selectable() {
-        for paper in ["A0", "A1", "A2", "A3", "A4", "A5", "A", "B", "C", "D", "E"] {
-            let size = PageSize::from_standard_str(paper);
-            assert!(PageSizeKind::ALL.contains(&size.kind()), "{paper}");
+    fn sheet_sizes_are_all_selectable() {
+        for size in signex_types::schematic::SheetSize::PICKABLE {
+            let (page, _) = PageSize::from_sheet_size(
+                &size,
+                signex_types::schematic::SheetOrientation::Landscape,
+            );
+            assert!(PageSizeKind::ALL.contains(&page.kind()), "{size:?}");
         }
-        // Non-preset sheet papers arrive as Custom and stay selectable.
-        let tabloid = PageSize::from_standard_str("Tabloid");
-        assert_eq!(tabloid.kind(), PageSizeKind::Custom);
     }
 
     #[test]

@@ -12,9 +12,11 @@ use signex_renderer::schematic::{
     TextInput, ViewRenderer, WireInput,
 };
 use signex_renderer::theme::ResolvedTheme;
+use signex_types::net_class::NetLineStyle;
 use signex_types::schematic::{
     Aabb, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
     SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle, field_effective_style,
+    text_aabb_with_width, text_height_mm,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
@@ -22,13 +24,29 @@ use std::collections::{HashMap, HashSet};
 pub mod hit_test;
 pub mod label;
 pub mod overlay;
+mod scene_cache;
 pub mod selection;
 mod snapshot;
+mod symbol;
+pub(crate) use symbol::symbols_without_geometry;
 pub mod text;
+mod text_width;
+mod wire_style;
 
+pub use scene_cache::ContentSceneCache;
+pub(crate) use scene_cache::SceneInputs;
 pub use snapshot::build_renderer_snapshot;
+pub use wire_style::{
+    WireClassStyles, WireStyling, drawn_wire_width_mm, junction_color, wire_color,
+};
 
 pub type SchematicRenderSnapshot = SchematicSheet;
+
+/// The family a text item draws in: its own, else the sheet default, checked
+/// against the installed fonts (`None` is the bundled canvas default).
+fn resolve_family(item: Option<&str>, document: Option<&str>) -> Option<std::sync::Arc<str>> {
+    crate::fonts::resolve::resolve_installed(item, document)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RenderInvalidation(u32);
@@ -122,19 +140,59 @@ impl SchematicSheetExt for SchematicSheet {
 pub struct SchematicRenderCache {
     sheet: Option<SchematicSheet>,
     preview: Option<SchematicSheet>,
+    /// Engine `revision()` the snapshot was last brought level with; `0`
+    /// when unknown, which never matches a real revision.
+    revision: u64,
 }
 
 impl SchematicRenderCache {
+    /// Engine revision the snapshot was last brought level with (`0` when
+    /// unknown). Changes with every edit, undo and redo.
+    #[must_use]
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
     pub fn from_sheet(sheet: &SchematicSheet) -> Self {
+        Self::from_sheet_at(sheet, 0)
+    }
+
+    /// Snapshot `sheet` as it stood at engine revision `revision`.
+    pub fn from_sheet_at(sheet: &SchematicSheet, revision: u64) -> Self {
         Self {
             sheet: Some(sheet.clone()),
             preview: None,
+            revision,
         }
     }
 
-    pub fn update_from_sheet(&mut self, sheet: &SchematicSheet, _invalidation: RenderInvalidation) {
-        self.sheet = Some(sheet.clone());
+    /// Refresh the cached snapshot from `sheet`. Only the collections named by
+    /// `invalidation` are re-cloned, and only when the snapshot matched the
+    /// engine just before the edit (`base_revision`, the engine's
+    /// `base_revision()`). `FULL`, an empty cache, a different document
+    /// (uuid mismatch) or a stale snapshot (an engine edit that never
+    /// refreshed this slot) re-clones everything. `revision` is the engine's
+    /// current `revision()`.
+    pub fn update_from_sheet(
+        &mut self,
+        sheet: &SchematicSheet,
+        invalidation: RenderInvalidation,
+        base_revision: u64,
+        revision: u64,
+    ) {
         self.preview = None;
+        let in_step = self.revision == base_revision;
+        match self.sheet.as_mut() {
+            Some(cached)
+                if in_step
+                    && invalidation != RenderInvalidation::FULL
+                    && cached.uuid == sheet.uuid =>
+            {
+                copy_invalidated(cached, sheet, invalidation);
+            }
+            _ => self.sheet = Some(sheet.clone()),
+        }
+        self.revision = revision;
     }
 
     pub fn snapshot(&self) -> &SchematicSheet {
@@ -148,22 +206,56 @@ impl SchematicRenderCache {
     }
 }
 
-#[inline]
-pub fn instance_transform(symbol: &Symbol, local_point: &Point) -> (f64, f64) {
-    let x = local_point.x;
-    let y = -local_point.y;
-    let rad = -symbol.rotation.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let mut rx = x * cos - y * sin;
-    let mut ry = x * sin + y * cos;
-    if symbol.mirror_y {
-        rx = -rx;
+/// Copy the sheet collections selected by `invalidation` from `src` into `dst`.
+/// `unknown`, `version`, `generator` and `generator_version` are skipped: they are not drawn.
+fn copy_invalidated(
+    dst: &mut SchematicSheet,
+    src: &SchematicSheet,
+    invalidation: RenderInvalidation,
+) {
+    use RenderInvalidation as R;
+    if invalidation.intersects(R::SYMBOLS) {
+        dst.symbols.clone_from(&src.symbols);
     }
-    if symbol.mirror_x {
-        ry = -ry;
+    if invalidation.intersects(R::WIRES) {
+        dst.wires.clone_from(&src.wires);
     }
-    (rx + symbol.position.x, ry + symbol.position.y)
+    if invalidation.intersects(R::LABELS) {
+        dst.labels.clone_from(&src.labels);
+    }
+    if invalidation.intersects(R::TEXT_NOTES) {
+        dst.text_notes.clone_from(&src.text_notes);
+    }
+    if invalidation.intersects(R::BUSES) {
+        dst.buses.clone_from(&src.buses);
+    }
+    if invalidation.intersects(R::BUS_ENTRIES) {
+        dst.bus_entries.clone_from(&src.bus_entries);
+    }
+    if invalidation.intersects(R::JUNCTIONS) {
+        dst.junctions.clone_from(&src.junctions);
+    }
+    if invalidation.intersects(R::NO_CONNECTS) {
+        dst.no_connects.clone_from(&src.no_connects);
+    }
+    if invalidation.intersects(R::NO_ERC_DIRECTIVES) {
+        dst.no_erc_directives.clone_from(&src.no_erc_directives);
+    }
+    if invalidation.intersects(R::CHILD_SHEETS) {
+        dst.child_sheets.clone_from(&src.child_sheets);
+    }
+    if invalidation.intersects(R::DRAWINGS) {
+        dst.drawings.clone_from(&src.drawings);
+    }
+    if invalidation.intersects(R::LIB_SYMBOLS) {
+        dst.lib_symbols.clone_from(&src.lib_symbols);
+    }
+    if invalidation.intersects(R::PAPER) {
+        dst.paper_size.clone_from(&src.paper_size);
+        dst.title_block.clone_from(&src.title_block);
+        dst.root_sheet_page.clone_from(&src.root_sheet_page);
+        dst.frame = src.frame;
+    }
 }
 
 pub fn draw_power_port_preview(
@@ -171,9 +263,8 @@ pub fn draw_power_port_preview(
     symbol: &Symbol,
     transform: &ScreenTransform,
     color: Color,
+    colors: &CanvasColors,
 ) {
-    let half_w = screen_px_to_world_mm(7.0, transform.scale) as f32;
-    let half_h = screen_px_to_world_mm(4.0, transform.scale) as f32;
     let cx = symbol.position.x as f32;
     let cy = symbol.position.y as f32;
 
@@ -192,29 +283,46 @@ pub fn draw_power_port_preview(
             rotation_rad: 0.0,
             h_align: HAlign::Left,
             v_align: VAlign::Top,
+            family: None,
         });
     }
 
+    // The body is the placed port's own lowering, so the ghost shows the
+    // shape the click will commit.
+    let (primitives, bbox) = symbol::symbol_geometry_of(None, symbol);
+    let mut wires = Vec::new();
+    let mut arcs = Vec::new();
+    let mut polygons = Vec::new();
+    let style = symbol::SymbolStyle {
+        id: 0,
+        stroke: color,
+        fill: Color {
+            a: color.a * 0.24,
+            ..color
+        },
+        pin: color,
+        // The ghost keeps its own colour even for an unknown part.
+        missing: color,
+        scale: transform.scale,
+        family: None,
+    };
+    let mut sink = symbol::SymbolSink {
+        wires: &mut wires,
+        arcs: &mut arcs,
+        polygons: &mut polygons,
+        texts: &mut parameter_texts,
+    };
+    if primitives.is_empty() {
+        symbol::push_fallback_box(&bbox, &symbol.lib_id, &style, &mut sink);
+    } else {
+        symbol::push_primitives(&primitives, &style, &mut sink);
+    }
+
     let snapshot = RendererSnapshot {
-        wires: Vec::new(),
+        wires,
         junctions: Vec::new(),
-        arcs: Vec::new(),
-        polygons: vec![PolygonInput {
-            vertices: vec![
-                [cx - half_w, cy + half_h],
-                [cx - half_w, cy - half_h],
-                [cx + half_w, cy],
-            ],
-            fill_color: to_rgba(Color {
-                a: color.a * 0.24,
-                ..color
-            }),
-            stroke_color: Some(to_rgba(color)),
-            stroke_width_mm: stroke_world_mm(
-                signex_types::schematic::SCHEMATIC_RENDER_POWER_PORT_STROKE_PX,
-                transform.scale,
-            ),
-        }],
+        arcs,
+        polygons,
         labels: Vec::new(),
         pin_texts: Vec::new(),
         reference_value_texts: Vec::new(),
@@ -222,17 +330,40 @@ pub fn draw_power_port_preview(
         overlays: OverlayInputs::default(),
         erc_markers: Vec::new(),
         wire_color_overrides: HashMap::new(),
+        wire_line_styles: HashMap::new(),
     };
 
     draw_renderer_snapshot(
         frame,
         &snapshot,
-        &ResolvedTheme::from_canvas_colors(signex_types::theme::canvas_colors(
-            signex_types::theme::ThemeId::Signex,
-        )),
-        DirtyFlags::POLYGONS | DirtyFlags::TEXT,
+        &ResolvedTheme::from_canvas_colors(*colors),
+        DirtyFlags::LINES | DirtyFlags::POLYGONS | DirtyFlags::TEXT,
         transform,
     );
+}
+
+/// The widget rectangle in the frame's own space. `canvas::Program::draw`
+/// hands over the window-space layout rect (non-zero origin when a panel sits
+/// left of or above the canvas) but the frame is local, so culling must use
+/// the size alone.
+#[must_use]
+pub fn frame_local_bounds(bounds: Rectangle) -> Rectangle {
+    Rectangle::with_size(bounds.size())
+}
+
+/// Designators drawn in place of `reference`, by symbol uuid (#1151).
+pub type Designators = HashMap<uuid::Uuid, String>;
+
+/// What the drawn scene shows instead of the document's own values. Each
+/// map is keyed by item uuid; an item not in a map draws as stored.
+#[derive(Default, Clone, Copy)]
+pub struct SceneOverrides<'a> {
+    /// How wires and junctions are styled: the Active Bar pen colour, then
+    /// the net-class style, by wire / junction uuid.
+    pub wire_styling: Option<WireStyling<'a>>,
+    /// Designators of the placement the tab was opened through (#1151), by
+    /// symbol uuid; only those that differ from the symbol's `reference`.
+    pub designators: Option<&'a HashMap<uuid::Uuid, String>>,
 }
 
 pub fn render_schematic(
@@ -242,16 +373,16 @@ pub fn render_schematic(
     colors: &CanvasColors,
     bounds: Rectangle,
     focus_set: Option<&HashSet<uuid::Uuid>>,
-    wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+    overrides: SceneOverrides<'_>,
 ) {
     render_schematic_with_renderer(
         frame,
         snapshot,
         transform,
         colors,
-        bounds,
+        frame_local_bounds(bounds),
         focus_set,
-        wire_color_overrides,
+        overrides,
     );
 }
 
@@ -262,16 +393,27 @@ fn render_schematic_with_renderer(
     colors: &CanvasColors,
     bounds: Rectangle,
     focus_set: Option<&HashSet<uuid::Uuid>>,
-    wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+    overrides: SceneOverrides<'_>,
 ) {
-    let renderer_snapshot = build_renderer_snapshot(
-        snapshot,
-        transform,
-        colors,
-        bounds,
-        focus_set,
-        wire_color_overrides,
-    );
+    if let Some(scene) =
+        build_schematic_scene(snapshot, transform, colors, bounds, focus_set, overrides)
+    {
+        draw_built_scene(frame, &scene, transform);
+    }
+}
+
+/// Lower `snapshot` to a world-space [`Scene`]; `None` when nothing is drawn.
+/// Items outside `bounds` (screen space under `transform`) are culled.
+pub(crate) fn build_schematic_scene(
+    snapshot: &SchematicRenderSnapshot,
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    bounds: Rectangle,
+    focus_set: Option<&HashSet<uuid::Uuid>>,
+    overrides: SceneOverrides<'_>,
+) -> Option<Scene> {
+    let renderer_snapshot =
+        build_renderer_snapshot(snapshot, transform, colors, bounds, focus_set, overrides);
     if renderer_snapshot.wires.is_empty()
         && renderer_snapshot.junctions.is_empty()
         && renderer_snapshot.arcs.is_empty()
@@ -281,11 +423,11 @@ fn render_schematic_with_renderer(
         && renderer_snapshot.reference_value_texts.is_empty()
         && renderer_snapshot.parameter_texts.is_empty()
     {
-        return;
+        return None;
     }
 
-    draw_renderer_snapshot(
-        frame,
+    let mut scene = Scene::default();
+    SchematicRenderer::build_scene(
         &renderer_snapshot,
         &ResolvedTheme::from_canvas_colors(*colors),
         DirtyFlags::LINES
@@ -293,7 +435,33 @@ fn render_schematic_with_renderer(
             | DirtyFlags::ARCS
             | DirtyFlags::POLYGONS
             | DirtyFlags::TEXT,
-        transform,
+        &mut scene,
+    );
+    Some(scene)
+}
+
+/// Readability limits on schematic text, in logical pixels. The one source for
+/// the CPU replay below and for `scene_shader::SchematicSurface`, so the two
+/// paths clamp glyphs identically.
+pub(crate) const SCHEMATIC_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
+    signex_gfx::primitive::text::TextSizePolicy::new(6.0, 64.0);
+
+/// Replay a built scene through the live `transform`.
+pub(crate) fn draw_built_scene(
+    frame: &mut canvas::Frame,
+    scene: &Scene,
+    transform: &ScreenTransform,
+) {
+    crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
+        frame,
+        scene,
+        |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
+        crate::renderer_scene_canvas::SceneDrawOptions {
+            scale_px_per_mm: transform.scale,
+            min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
+            text_min_px: SCHEMATIC_TEXT_SIZE.min_px,
+            text_max_px: SCHEMATIC_TEXT_SIZE.max_px,
+        },
     );
 }
 
@@ -302,35 +470,13 @@ fn label_marker_polygon(
     stroke_color: Color,
     fill_color: [f32; 4],
     transform: &ScreenTransform,
+    document_family: Option<&str>,
 ) -> PolygonInput {
-    let size_mm = label
-        .font_size
-        .max(signex_types::schematic::SCHEMATIC_TEXT_MM) as f32;
-    let em_mm = size_mm / 0.72;
-    let glyph_w = (label.text.chars().count().max(1) as f32) * (em_mm * 0.58);
-    let half_h = em_mm * 0.62;
-    let point = em_mm * 0.52;
-    let w = glyph_w + em_mm * 0.65;
-    let local = [
-        (-point, 0.0_f32),
-        (0.0, -half_h),
-        (w, -half_h),
-        (w, half_h),
-        (0.0, half_h),
-    ];
-
-    let rad = (label.rotation as f32).to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let cx = label.position.x as f32;
-    let cy = label.position.y as f32;
-    let vertices = local
-        .iter()
-        .map(|(x, y)| [cx + x * cos - y * sin, cy + x * sin + y * cos])
-        .collect();
-
     PolygonInput {
-        vertices,
+        vertices: label::marker_vertices(label, document_family)
+            .iter()
+            .map(|&(x, y)| [x as f32, y as f32])
+            .collect(),
         fill_color,
         stroke_color: Some(to_rgba(stroke_color)),
         stroke_width_mm: stroke_world_mm(
@@ -353,17 +499,7 @@ fn draw_renderer_snapshot(
 ) {
     let mut scene = Scene::default();
     SchematicRenderer::build_scene(snapshot, theme, dirty, &mut scene);
-    crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
-        frame,
-        &scene,
-        |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
-        crate::renderer_scene_canvas::SceneDrawOptions {
-            scale_px_per_mm: transform.scale,
-            min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
-            text_min_px: 6.0,
-            text_max_px: 64.0,
-        },
-    );
+    draw_built_scene(frame, &scene, transform);
 }
 
 fn to_rgba(color: Color) -> [f32; 4] {
@@ -400,28 +536,50 @@ struct ItemBound {
     anchor: Point,
 }
 
-fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
+/// `designators` size each designator's box from the text the canvas draws
+/// (#1200), not the stored `reference`.
+fn collect_item_bounds(
+    snapshot: &SchematicRenderSnapshot,
+    designators: &Designators,
+) -> Vec<ItemBound> {
+    collect_item_bounds_with(snapshot, true, designators)
+}
+
+/// `symbol_bodies = false` leaves out the symbol body entries, which are the
+/// only ones that need the library lowering.
+fn collect_item_bounds_with(
+    snapshot: &SchematicRenderSnapshot,
+    symbol_bodies: bool,
+    designators: &Designators,
+) -> Vec<ItemBound> {
     let mut out = Vec::new();
+    let document_family = snapshot.font_family.as_deref();
 
     for symbol in &snapshot.symbols {
-        let item = SelectedItem::new(symbol.uuid, SelectedKind::Symbol);
-        out.push(ItemBound {
-            item,
-            bbox: symbol_body_aabb(symbol),
-            anchor: symbol.position,
-        });
+        if symbol_bodies {
+            out.push(ItemBound {
+                item: SelectedItem::new(symbol.uuid, SelectedKind::Symbol),
+                bbox: symbol::symbol_bounds(snapshot, symbol),
+                anchor: symbol.position,
+            });
+        }
 
         if let Some(ref_text) = symbol.ref_text.as_ref().filter(|p| !p.hidden) {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
-                bbox: text_prop_aabb(&symbol.reference, ref_text, symbol),
+                bbox: text_prop_aabb(
+                    designators.get(&symbol.uuid).unwrap_or(&symbol.reference),
+                    ref_text,
+                    symbol,
+                    document_family,
+                ),
                 anchor: ref_text.position,
             });
         }
         if let Some(val_text) = symbol.val_text.as_ref().filter(|p| !p.hidden) {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolValField),
-                bbox: text_prop_aabb(&symbol.value, val_text, symbol),
+                bbox: text_prop_aabb(&symbol.value, val_text, symbol, document_family),
                 anchor: val_text.position,
             });
         }
@@ -510,7 +668,7 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
     for label in &snapshot.labels {
         out.push(ItemBound {
             item: SelectedItem::new(label.uuid, SelectedKind::Label),
-            bbox: label_aabb(label),
+            bbox: label_aabb(label, document_family),
             anchor: label.position,
         });
     }
@@ -518,7 +676,7 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
     for note in &snapshot.text_notes {
         out.push(ItemBound {
             item: SelectedItem::new(note.uuid, SelectedKind::TextNote),
-            bbox: note_aabb(note),
+            bbox: note_aabb(note, document_family),
             anchor: note.position,
         });
     }
@@ -574,11 +732,46 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
     out
 }
 
-fn item_aabb(snapshot: &SchematicRenderSnapshot, item: &SelectedItem) -> Option<Aabb> {
-    collect_item_bounds(snapshot)
-        .into_iter()
-        .find(|entry| entry.item == *item)
-        .map(|entry| entry.bbox)
+/// The bounding box of each `selected` item, aligned with `selected`; `None`
+/// for an item the sheet no longer holds.
+///
+/// A symbol body is the only bound that costs a library lowering, so a
+/// selected symbol is looked up directly and no body is lowered for any other
+/// item. The other kinds share one pass over the sheet and each symbol index
+/// is built once, so the cost is the sheet size plus the selection size
+/// rather than their product.
+fn selected_aabbs(
+    snapshot: &SchematicRenderSnapshot,
+    selected: &[SelectedItem],
+    designators: &Designators,
+) -> Vec<Option<Aabb>> {
+    let symbols = std::cell::OnceCell::new();
+    let others = std::cell::OnceCell::new();
+    selected
+        .iter()
+        .map(|item| {
+            if item.kind == SelectedKind::Symbol {
+                let index: &HashMap<uuid::Uuid, &Symbol> = symbols.get_or_init(|| {
+                    let mut index = HashMap::with_capacity(snapshot.symbols.len());
+                    for symbol in &snapshot.symbols {
+                        index.entry(symbol.uuid).or_insert(symbol);
+                    }
+                    index
+                });
+                return index
+                    .get(&item.uuid)
+                    .map(|symbol| symbol::symbol_bounds(snapshot, symbol));
+            }
+            let index: &HashMap<SelectedItem, Aabb> = others.get_or_init(|| {
+                let mut index = HashMap::new();
+                for entry in collect_item_bounds_with(snapshot, false, designators) {
+                    index.entry(entry.item).or_insert(entry.bbox);
+                }
+                index
+            });
+            index.get(item).copied()
+        })
+        .collect()
 }
 
 fn label_color(label: &Label, colors: &CanvasColors) -> Color {
@@ -590,85 +783,72 @@ fn label_color(label: &Label, colors: &CanvasColors) -> Color {
     }
 }
 
-fn symbol_body_aabb(symbol: &Symbol) -> Aabb {
-    let half_w = 4.0;
-    let half_h = 2.8;
-    Aabb::new(
-        symbol.position.x - half_w,
-        symbol.position.y - half_h,
-        symbol.position.x + half_w,
-        symbol.position.y + half_h,
+fn text_prop_aabb(
+    text: &str,
+    prop: &TextProp,
+    symbol: &Symbol,
+    document_family: Option<&str>,
+) -> Aabb {
+    let (rot, h_align, v_align) = field_effective_style(prop, symbol);
+    drawn_text_aabb(
+        text,
+        resolve_family(prop.font_family.as_deref(), document_family).as_deref(),
+        prop.font_size,
+        (prop.position.x, prop.position.y),
+        rot,
+        h_align,
+        v_align,
     )
 }
 
-fn text_prop_aabb(text: &str, prop: &TextProp, symbol: &Symbol) -> Aabb {
+/// `text_aabb` for a text drawn in `family`: the box geometry is the shared
+/// `signex_types` one, only the width is measured in the drawn face.
+fn drawn_text_aabb(
+    text: &str,
+    family: Option<&str>,
+    font_size: f64,
+    anchor: (f64, f64),
+    rotation_deg: f64,
+    h_align: HAlign,
+    v_align: VAlign,
+) -> Aabb {
     let chars = text.chars().count().max(1) as f64;
-    let h = prop
-        .font_size
-        .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
-    let w = h * 0.6 * chars;
-    let (rot, h_align, v_align) = field_effective_style(prop, symbol);
-    // Mirror the renderer (`anchored_top_left_px`): the alignment offset is
-    // computed in the text's local frame, then rotated with the text about
-    // the anchor (y-down). `prop.position` is world-space (drag and the
-    // engine translate it directly), so it skips the symbol transform.
-    let ox = match h_align {
-        HAlign::Left => 0.0,
-        HAlign::Center => -w * 0.5,
-        HAlign::Right => -w,
-    };
-    let oy = match v_align {
-        VAlign::Top => 0.0,
-        VAlign::Center => -h * 0.5,
-        VAlign::Bottom => -h,
-    };
-    let (sin, cos) = rot.to_radians().sin_cos();
-    let mut bbox: Option<Aabb> = None;
-    for (lx, ly) in [(ox, oy), (ox + w, oy), (ox, oy + h), (ox + w, oy + h)] {
-        let x = prop.position.x + lx * cos - ly * sin;
-        let y = prop.position.y + lx * sin + ly * cos;
-        bbox = Some(match bbox {
-            None => Aabb::new(x, y, x, y),
-            Some(b) => Aabb::new(
-                b.min_x.min(x),
-                b.min_y.min(y),
-                b.max_x.max(x),
-                b.max_y.max(y),
-            ),
+    let h = text_height_mm(font_size);
+    let w = text_width::text_width_mm(text, family, h, h * 0.6 * chars);
+    text_aabb_with_width(w, font_size, anchor, rotation_deg, h_align, v_align)
+}
+
+fn note_aabb(note: &TextNote, document_family: Option<&str>) -> Aabb {
+    drawn_text_aabb(
+        &note.text,
+        resolve_family(note.font_family.as_deref(), document_family).as_deref(),
+        note.font_size,
+        (note.position.x, note.position.y),
+        note.rotation,
+        note.justify_h,
+        note.justify_v,
+    )
+}
+
+/// Hit/selection box of a label, derived from the same geometry the draw
+/// path uses so the two cannot disagree: the flag outline for global and
+/// hierarchical labels, the justified text box for the rest.
+fn label_aabb(label: &Label, document_family: Option<&str>) -> Aabb {
+    if label::is_flag(label) {
+        let mut verts = label::marker_vertices(label, document_family).into_iter();
+        let (x0, y0) = verts.next().expect("marker has vertices");
+        return verts.fold(Aabb::new(x0, y0, x0, y0), |b, (x, y)| {
+            b.union(&Aabb::new(x, y, x, y))
         });
     }
-    bbox.expect("four corners")
-}
-
-fn note_aabb(note: &TextNote) -> Aabb {
-    let h = note
-        .font_size
-        .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
-    let w = h * 0.6 * note.text.chars().count().max(1) as f64;
-    Aabb::new(
-        note.position.x - w * 0.5,
-        note.position.y - h * 0.5,
-        note.position.x + w * 0.5,
-        note.position.y + h * 0.5,
-    )
-}
-
-fn label_aabb(label: &Label) -> Aabb {
-    let h = label
-        .font_size
-        .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
-    let mut w = h * 0.6 * label.text.chars().count().max(1) as f64;
-    if matches!(
-        label.label_type,
-        LabelType::Global | LabelType::Hierarchical
-    ) {
-        w += h * 1.2;
-    }
-    Aabb::new(
-        label.position.x - w * 0.5,
-        label.position.y - h,
-        label.position.x + w * 0.5,
-        label.position.y + h,
+    drawn_text_aabb(
+        &label.text,
+        resolve_family(label.font_family.as_deref(), document_family).as_deref(),
+        label.font_size,
+        (label.position.x, label.position.y),
+        label.rotation,
+        label.justify,
+        label.justify_v,
     )
 }
 
@@ -752,18 +932,24 @@ fn line_visible(p0: iced::Point, p1: iced::Point, bounds: Rectangle) -> bool {
     let max_x = p0.x.max(p1.x);
     let min_y = p0.y.min(p1.y);
     let max_y = p0.y.max(p1.y);
-    !(max_x < -8.0 || max_y < -8.0 || min_x > bounds.width + 8.0 || min_y > bounds.height + 8.0)
+    !(max_x < bounds.x - 8.0
+        || max_y < bounds.y - 8.0
+        || min_x > bounds.x + bounds.width + 8.0
+        || min_y > bounds.y + bounds.height + 8.0)
 }
 
 fn rect_visible(min: iced::Point, size: iced::Size, bounds: Rectangle) -> bool {
-    !(min.x + size.width < -8.0
-        || min.y + size.height < -8.0
-        || min.x > bounds.width + 8.0
-        || min.y > bounds.height + 8.0)
+    !(min.x + size.width < bounds.x - 8.0
+        || min.y + size.height < bounds.y - 8.0
+        || min.x > bounds.x + bounds.width + 8.0
+        || min.y > bounds.y + bounds.height + 8.0)
 }
 
 fn point_visible(p: iced::Point, bounds: Rectangle, pad: f32) -> bool {
-    p.x >= -pad && p.y >= -pad && p.x <= bounds.width + pad && p.y <= bounds.height + pad
+    p.x >= bounds.x - pad
+        && p.y >= bounds.y - pad
+        && p.x <= bounds.x + bounds.width + pad
+        && p.y <= bounds.y + bounds.height + pad
 }
 
 /// Culls text by its extent, not just its anchor: the anchor may sit off
@@ -816,4 +1002,12 @@ pub fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
 }
 
 #[cfg(test)]
+mod font_geometry_tests;
+#[cfg(test)]
+mod scene_cache_tests;
+#[cfg(test)]
+mod selection_bounds_tests;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod wire_style_render_tests;

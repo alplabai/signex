@@ -39,8 +39,11 @@ For both `trunk` and `main`:
 
 ## Required CI checks
 
-Every PR to `trunk` or `main` must pass these (job names as they appear
-as status-check contexts):
+Every PR to `trunk` must pass all of these (job names as they appear as
+status-check contexts). `main` requires five of them: `check ·
+ubuntu-latest`, `test · workspace`, `deny · licenses + deps`, `PR-description
+self-declaration` and `No GPL-tool-shaped names anywhere in crates/`; the rest
+still run on every PR to `main` but do not block it.
 
 - `check · ubuntu-latest`, `check · macos-latest`, `check · windows-latest` —
   `cargo check --workspace` on all three release targets; all three are
@@ -49,7 +52,9 @@ as status-check contexts):
 - `test · workspace` — `cargo test --workspace` (headless GPU tests run on
   lavapipe).
 - `deny · licenses + deps` — `cargo deny check licenses` (no GPL transitive
-  deps). `sources` and `advisories` run in the same job but are advisory.
+  deps) and `cargo deny check bans` (the `[bans]` table in `deny.toml`, e.g.
+  the glyphon ban; duplicate versions only warn). `sources` and `advisories`
+  run in the same job but are advisory.
 - `PR-description self-declaration` — the license-compliance block is present
   and does not admit KiCad-derived source.
 - `No GPL-tool-shaped names anywhere in crates/` — the representative licence
@@ -132,7 +137,7 @@ are the importable sources for them.
 > If you change this section, change the JSON and re-apply it; see
 > [`.github/rulesets/README.md`](../.github/rulesets/README.md).
 
-### `trunk` (and `main`, same set)
+### `trunk` (and `main`, same set except the required checks)
 
 **Pull-request requirements**
 - ✅ Require a pull request before merging
@@ -145,9 +150,15 @@ are the importable sources for them.
 **Status-check requirements**
 - ✅ Require status checks to pass before merging
   - ✅ Require branches to be up to date before merging
-  - Required checks (all green): `check · ubuntu-latest`, `test · workspace`,
+  - Required checks on `trunk` (all green): `check · ubuntu-latest`,
+    `check · macos-latest`, `check · windows-latest`, `test · workspace`,
     `deny · licenses + deps`, `PR-description self-declaration`,
-    `No GPL-tool-shaped names anywhere in crates/`
+    `No GPL-tool-shaped names anywhere in crates/`, `fmt · rustfmt`,
+    `no god-files`, `no discarded tasks`, `lint lockstep`
+  - Required checks on `main` (see [Required CI checks](#required-ci-checks)):
+    `check · ubuntu-latest`, `test · workspace`, `deny · licenses + deps`,
+    `PR-description self-declaration`,
+    `No GPL-tool-shaped names anywhere in crates/`)
 
 **Merge gates**
 - ✅ Require conversation resolution before merging

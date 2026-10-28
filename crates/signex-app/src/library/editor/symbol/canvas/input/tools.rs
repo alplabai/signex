@@ -43,6 +43,7 @@ impl SymbolCanvas<'_> {
                 let sel = match target {
                     Some(PressTarget::Pin(idx)) => Some(state::SymbolSelection::Pin(idx)),
                     Some(PressTarget::Graphic(idx)) => Some(state::SymbolSelection::Graphic(idx)),
+                    Some(PressTarget::Field(key)) => Some(state::SymbolSelection::Field(key)),
                     _ => None,
                 };
                 if let Some(sel) = sel {
@@ -67,8 +68,9 @@ impl SymbolCanvas<'_> {
                     let is_delta = matches!(effective_sel, SymbolSelection::All);
                     state.dragging = true;
                     state.last_drag_world_pos = if is_delta { Some((wx, wy)) } else { None };
-                    state.drag_anchor_offset = selection_anchor(self.symbol, &effective_sel)
-                        .map(|(ax, ay)| (ax - wx, ay - wy));
+                    state.drag_anchor_offset =
+                        selection_anchor(self.symbol, &effective_sel, self.active_part)
+                            .map(|(ax, ay)| (ax - wx, ay - wy));
 
                     if self.selected.as_ref() == Some(&effective_sel) {
                         return Some(canvas::Action::capture());
@@ -223,7 +225,7 @@ impl SymbolCanvas<'_> {
 
     /// Click-collect gesture for the `PlacePolygon` tool. The vertex
     /// stash itself (`self.polygon_vertices`) lives on
-    /// `SymbolEditorState`, not this Program's `CanvasState` — a
+    /// `SymbolDocument`, not this Program's `CanvasState` — a
     /// document-scoped Vec, not per-widget-slot ephemeral state, so a
     /// tab switch mid-placement can't leak an in-flight vertex list
     /// into a different document (see `CanvasAction::PolygonClick`'s

@@ -11,13 +11,24 @@
 
 pub mod uf;
 
+mod net_class;
+pub use net_class::{assign_net_classes, element_class_styles, element_net_names, wire_at_point};
+
 mod build;
+mod bus;
 pub use build::{
     ConnectedPoints, FloodElements, SheetConnectivity, SheetPinContacts, best_net_name_of,
-    build_netlist, flood_net_elements, point_on_segment, pt_key,
+    build_netlist, connected_points, flood_net_elements, is_power_flag, name_carrying_ports,
+    point_on_segment, pt_key,
 };
+pub use bus::{BusAnalysis, BusGeometry, BusGroup, BusLabelName, EntryAttachment, analyse_buses};
+
+mod signature;
+pub use signature::{NetSignature, net_members, net_signatures, net_signatures_at};
 
 mod project;
 pub use project::{
-    ProjectGraph, ProjectNetlist, ProjectRoot, SheetKey, StitchIssue, build_project_netlist,
+    MultiNamedNet, NetNameSource, NumberingIssue, ProjectGraph, ProjectNetlist, ProjectRoot,
+    SheetKey, SheetNumbering, SheetOccurrence, SheetPage, StitchIssue, build_project_netlist,
+    instance_entry_designators, multi_named_nets, project_occurrences, sheet_numbering,
 };

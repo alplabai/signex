@@ -40,6 +40,8 @@ pub enum Message {
     /// Debounced search-box persistence loop (#859), routed to
     /// `dispatch_search_prefs_message`.
     SearchPrefs(crate::persist::SearchPrefsMsg),
+    /// Opt-in autosave loop (#104), routed to `dispatch_autosave_message`.
+    Autosave(crate::autosave::AutosaveMsg),
     /// UI / chrome message family (ADR-0001 D3). Theme, unit + grid
     /// toggles, the grid picker, layout drag, window resize, and the
     /// status-bar request enum. Routed to `dispatch_ui_message`.
@@ -69,6 +71,9 @@ pub enum Message {
     /// `Message::Edit` and routed to `dispatch_edit_message`.
     Edit(EditMsg),
     Selection(SelectionRequest),
+    /// Keyboard-input family (ADR-0001 D3): Esc, unclaimed keys, and the
+    /// footprint-editor mode shortcut. Routed to `dispatch_input_message`.
+    Input(InputMsg),
     /// Overlay / modal-chrome message family (ADR-0001 D3). Panel-list
     /// toggle, panel open, find/replace open, keyboard-shortcuts and
     /// first-run-tour dismiss, modal drag, canvas focus-at, auto-focus
@@ -118,17 +123,6 @@ pub enum Message {
     /// Parameter Manager dialog family (ADR-0001 D3). Bulk parameter
     /// editor. Routed to `dispatch_parameter_manager_message`.
     ParameterManager(ParameterManagerMsg),
-    /// Cycle Altium's rubber-band selection mode
-    /// Inside → Outside → TouchingLine → Inside. Bound to Shift+S.
-    CycleSelectionMode,
-    /// Close the in-flight lasso polygon (Enter key). Commits the
-    /// selection if >= 3 vertices, otherwise cancels.
-    LassoCommit,
-    /// Apply an edit to a placed SchDrawing. Dispatched from the
-    /// post-placement Properties panel (Line / Rect / Circle / Arc /
-    /// Polygon editable rows). Engine replaces the stored drawing by
-    /// uuid with full undo.
-    UpdateDrawingField(uuid::Uuid, DrawingFieldEdit),
     /// Export subsystem message family — namespaced (ADR-0001 D3).
     /// PDF / netlist / BOM export lifecycle plus the export-error
     /// modal dismiss. Routed to `dispatch_export_message`.
@@ -148,63 +142,14 @@ pub enum Message {
     /// `Message::CommandPalette` and routed to
     /// `dispatch_command_palette_message`.
     CommandPalette(CommandPaletteMsg),
-    /// Async result of a per-file Git history load issued by the
-    /// right-dock History panel. `generation` is the value of
-    /// `DocumentState.history.generation` at the time the load was
-    /// kicked off; the handler discards stale results whose
-    /// generation no longer matches the current counter (the user
-    /// has switched tabs since). `path` is the file the load
-    /// targeted, surfaced for diagnostic logging only — the
-    /// generation token is the authoritative staleness check.
-    HistoryLoaded {
-        generation: u32,
-        path: std::path::PathBuf,
-        result: Result<Vec<signex_widgets::HistoryEntry>, String>,
-    },
-    /// v0.14.2 — keyboard shortcut for footprint editor mode switch.
-    /// Routed from the global `1` / `2` / `3` key handler in
-    /// `bootstrap.rs::subscription`. The dispatcher checks whether
-    /// the active tab is a footprint editor; if yes, sets the mode;
-    /// otherwise no-op so the keys don't steal text input on other
-    /// tabs.
-    FootprintModeShortcut(crate::library::editor::footprint::state::EditorMode),
-    /// v0.15 — Esc-key tool cancel routed through the dispatcher.
-    /// If the active tab is a footprint editor, fires
-    /// `FootprintToolEscape` (resets PadsTool + SketchTool +
-    /// tool_pending); otherwise falls back to the schematic
-    /// `Tool::Select` reset.
-    EscapePressed {
-        /// Which OS window the key was pressed in (#547).
-        ///
-        /// `keyboard::listen()` drops this — `iced_futures-0.14.0`'s
-        /// filter matches `subscription::Event::Interaction { .. }` and
-        /// the `..` swallows the `window` field — so every Esc used to
-        /// look identical no matter which window produced it, and an Esc
-        /// typed into a detached modal's own window reset the MAIN
-        /// window's canvas tool. The subscription now goes through
-        /// `event::listen_with`, which hands the window id to its filter.
-        ///
-        /// `None` means the Esc was synthesised rather than typed — the
-        /// `cancel_current_tool` command id arriving from the palette or
-        /// a keymap binding (`app/command/bridge.rs`). It resolves
-        /// exactly as a main-window Esc does.
-        window: Option<iced::window::Id>,
-    },
-    /// A keyboard event no widget wanted, with the window it landed in
-    /// (#557 phase 1).
-    ///
-    /// The keyboard subscription is a pure transport: it filters
-    /// `Status::Ignored` keyboard events and forwards them unexamined.
-    /// Which app-level consumer owns the event is decided in
-    /// `app/dispatch/input.rs` against live state — those branches used
-    /// to live in the subscription closure, resolving against a snapshot
-    /// baked one update earlier and blind to which window produced the
-    /// key.
-    KeyInput {
-        window: iced::window::Id,
-        event: iced::keyboard::Event,
-    },
-    Noop,
+}
+
+impl Message {
+    /// The do-nothing message: widgets and async tasks that must produce
+    /// a `Message` but have nothing to say.
+    pub fn noop() -> Self {
+        Message::Ui(UiMsg::Noop)
+    }
 }
 
 mod dialogs;
@@ -214,3 +159,26 @@ mod state;
 pub use dialogs::*;
 pub use messages::*;
 pub use state::*;
+
+#[cfg(test)]
+mod tests {
+    /// ADR-0001 D3: the root `Message` stays a thin router over namespaced
+    /// sub-enums. A new flat leaf must join a family instead.
+    #[test]
+    fn root_message_stays_namespaced() {
+        let src = include_str!("mod.rs");
+        let start = src.find("pub enum Message {").expect("Message enum");
+        let body = &src[start..];
+        let end = body.find("\n}\n").expect("enum end");
+        let variants = body[..end]
+            .lines()
+            .filter(|l| {
+                l.starts_with("    ") && l[4..].starts_with(|c: char| c.is_ascii_uppercase())
+            })
+            .count();
+        assert!(
+            variants <= 40,
+            "root Message has {variants} variants (max 40)"
+        );
+    }
+}

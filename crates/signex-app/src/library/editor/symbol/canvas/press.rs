@@ -12,19 +12,21 @@ pub(in crate::library::editor::symbol::canvas) enum PressTarget {
     Pin(usize),
     /// A resize handle of an already-selected graphic.
     Handle(usize, state::GraphicHandle),
+    /// The designator or value text.
+    Field(state::FieldKey),
     /// A graphic body.
     Graphic(usize),
 }
 
 impl SymbolCanvas<'_> {
     /// Priority: a pin by its tip or line, then a resize handle of a
-    /// selected graphic (the only handles drawn), then a graphic body, and
-    /// last a pin by its name/number label. The label comes last because
-    /// labels sit inside the body: ranking them first would let a pin's
-    /// text box swallow every press in the body next to it. Every step
-    /// honours the selection filter. The pin's line zone is narrow (see
-    /// [`state::PIN_LINE_GRAB_MM`]), so a graphic that touches a pin's
-    /// base stays clickable.
+    /// selected graphic (the only handles drawn), then the designator /
+    /// value text, then a graphic body, and last a pin by its name/number
+    /// label. The label comes last because labels sit inside the body:
+    /// ranking them first would let a pin's text box swallow every press
+    /// in the body next to it. Every step honours the selection filter.
+    /// The pin's line zone is narrow (see [`state::PIN_LINE_GRAB_MM`]), so
+    /// a graphic that touches a pin's base stays clickable.
     pub(in crate::library::editor::symbol::canvas) fn press_target(
         &self,
         x: f64,
@@ -51,6 +53,11 @@ impl SymbolCanvas<'_> {
             &self.selection_filter,
         ) {
             return Some(PressTarget::Handle(idx, handle));
+        }
+        if let Some(key) =
+            state::hit_test_field(self.symbol, x, y, self.active_part, &self.selection_filter)
+        {
+            return Some(PressTarget::Field(key));
         }
         state::hit_test_graphic(self.symbol, x, y, self.active_part, &self.selection_filter)
             .map(PressTarget::Graphic)

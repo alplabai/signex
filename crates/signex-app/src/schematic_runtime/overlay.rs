@@ -18,6 +18,7 @@ pub fn draw_erc_markers(
     frame: &mut canvas::Frame,
     markers: &[ErcMarker],
     transform: &ScreenTransform,
+    colors: &CanvasColors,
 ) {
     if markers.is_empty() {
         return;
@@ -89,14 +90,13 @@ pub fn draw_erc_markers(
         overlays,
         erc_markers: Vec::new(),
         wire_color_overrides: HashMap::new(),
+        wire_line_styles: HashMap::new(),
     };
 
     draw_renderer_snapshot(
         frame,
         &snapshot,
-        &ResolvedTheme::from_canvas_colors(signex_types::theme::canvas_colors(
-            signex_types::theme::ThemeId::Signex,
-        )),
+        &ResolvedTheme::from_canvas_colors(*colors),
         DirtyFlags::OVERLAY,
         transform,
     );

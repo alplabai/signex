@@ -38,8 +38,8 @@ pub use context_menu::{
 };
 pub use mode::{EditorMode, FpActiveBarMenu, PadStackTab};
 pub use pad::{
-    AlignOp, CourtyardRect, EditorPad, NextPadDefaults, PadPassthrough, PadSide, PadStackUi,
-    ShapeParamMap,
+    AlignOp, CourtyardRect, DEFAULT_THROUGH_HOLE_DRILL_MM, EditorPad, NextPadDefaults,
+    PadPassthrough, PadSide, PadStackUi, ShapeParamMap,
 };
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
 pub use selection_filter::{FpSelectionMode, SelectionFilter, SelectionFilterKind};
@@ -66,13 +66,30 @@ pub struct MoveByModal {
     pub dy_buf: String,
 }
 
+/// What Confirm on the [`MoveByModal`] should do with its buffers.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MoveByInput {
+    /// Both buffers are finite numbers, in mm.
+    Offset(f64, f64),
+    /// A buffer is not a number at all: nothing moves and the dialog closes.
+    NotANumber,
+    /// A buffer holds `nan` / `inf` / an overflow (#828), already reported
+    /// to the Messages panel: nothing moves and the dialog stays open.
+    Refused,
+}
+
 impl MoveByModal {
-    /// Parse both buffers as mm. `None` if either fails to parse.
-    pub fn parsed(&self) -> Option<(f64, f64)> {
-        Some((
-            self.dx_buf.trim().parse().ok()?,
-            self.dy_buf.trim().parse().ok()?,
-        ))
+    /// Classify both buffers as mm. Both are read, so a refusal on either
+    /// axis is reported, before anything moves.
+    pub fn parsed(&self) -> MoveByInput {
+        use crate::numeric_field::{FieldNumber, parse_named_field_number};
+        let dx = parse_named_field_number("Move Selection By X", &self.dx_buf);
+        let dy = parse_named_field_number("Move Selection By Y", &self.dy_buf);
+        match (dx, dy) {
+            (FieldNumber::Number(dx), FieldNumber::Number(dy)) => MoveByInput::Offset(dx, dy),
+            (FieldNumber::Refused, _) | (_, FieldNumber::Refused) => MoveByInput::Refused,
+            _ => MoveByInput::NotANumber,
+        }
     }
 }
 
@@ -166,8 +183,18 @@ pub struct FootprintEditorState {
     pub sketch_solver: signex_sketch::solver::Solver,
     /// Output of the most recent solve.
     pub last_solve: Option<signex_sketch::solver::FullSolveOutput>,
+    /// Bookkeeping for the off-thread drag solve (#1047).
+    pub sketch_solve: super::sketch_solve_task::SketchSolveSlot,
     /// Last solve's audit / over-constraint warnings.
     pub solve_warnings: Vec<String>,
+    /// Bake warnings already sent to the Messages panel, so a re-solve
+    /// during a drag does not repeat the same line on every frame.
+    pub logged_solve_warnings: Vec<String>,
+    /// #1073 — set on open when every sketch pad carries the pre-#1052
+    /// all-false pad stack, so the Properties panel offers to restore it.
+    /// Cleared when the user dismisses the offer; whether the offer still
+    /// applies is re-derived from the sketch, so an undo brings it back.
+    pub legacy_pad_stack_offered: bool,
     /// Constraints the last rejected edit conflicted with (painted red).
     pub conflict: conflict::ConflictHighlight,
     /// v0.22 Phase E3+E4 → v0.23 — `Some(id)` when the user is hovering
@@ -269,7 +296,14 @@ impl FootprintEditorState {
         // Rebuild the sketch link from the sketch — `from_pad` cannot,
         // and without it every mirror early-returns after a reopen.
         pad::relink_pads_to_sketch(&mut pads, fp);
+        if let Some(sketch) = fp.sketch.as_ref() {
+            super::pad_to_sketch::seed_pads_from_sketch_attrs(&mut pads, sketch);
+        }
         let mut s = Self::with_pads(pads);
+        s.legacy_pad_stack_offered = fp
+            .sketch
+            .as_ref()
+            .is_some_and(|sketch| !super::pad_stack_check::legacy_default_pads(sketch).is_empty());
         s.recompute_courtyard();
         s
     }
@@ -305,7 +339,10 @@ impl FootprintEditorState {
             mode: EditorMode::Normal,
             sketch_solver: signex_sketch::solver::Solver::default(),
             last_solve: None,
+            sketch_solve: super::sketch_solve_task::SketchSolveSlot::default(),
             solve_warnings: Vec::new(),
+            logged_solve_warnings: Vec::new(),
+            legacy_pad_stack_offered: false,
             conflict: conflict::ConflictHighlight::default(),
             conflicts_row_hovered: None,
             active_tool: SketchTool::default(),
@@ -668,6 +705,9 @@ impl FootprintEditorState {
         // was itself `None` after a reopen, or one whose number is
         // ambiguous — is relinked from the sketch.
         pad::relink_pads_to_sketch(&mut new_pads, fp);
+        if let Some(sketch) = fp.sketch.as_ref() {
+            super::pad_to_sketch::seed_pads_from_sketch_attrs(&mut new_pads, sketch);
+        }
         self.pads = new_pads;
         if let Some(idx) = self.selected_pad
             && idx >= self.pads.len()

@@ -194,6 +194,33 @@ impl LocalGitAdapter {
         message: &str,
         fallback_message: &str,
     ) -> Result<(), LibraryError> {
+        self.commit_change(None, rel_path, message, fallback_message)
+    }
+
+    /// Like [`commit_path`](Self::commit_path), but also drops
+    /// `removed_rel_path` from the index, so a file moved to `rel_path` is
+    /// recorded as a rename rather than left tracked at its old name.
+    pub(super) fn commit_change(
+        &self,
+        removed_rel_path: Option<&str>,
+        rel_path: &str,
+        message: &str,
+        fallback_message: &str,
+    ) -> Result<(), LibraryError> {
+        self.commit_change_with(removed_rel_path, rel_path, &[], message, fallback_message)
+    }
+
+    /// [`commit_change`](Self::commit_change) that also commits
+    /// `extra_rel_paths` (files already written beside the library, such as
+    /// a pinned datasheet) in the same commit.
+    pub(super) fn commit_change_with(
+        &self,
+        removed_rel_path: Option<&str>,
+        rel_path: &str,
+        extra_rel_paths: &[String],
+        message: &str,
+        fallback_message: &str,
+    ) -> Result<(), LibraryError> {
         if !self.root_dir.join(".git").exists() {
             return Ok(());
         }
@@ -214,26 +241,49 @@ impl LocalGitAdapter {
         } else {
             message.to_string()
         };
+        let extras: Vec<&Path> = extra_rel_paths.iter().map(Path::new).collect();
         retry_on_git_lock(repo.path(), || {
-            stage_and_commit(&repo, Path::new(rel_path), &sig, &commit_message)
+            stage_and_commit_with(
+                &repo,
+                removed_rel_path.map(Path::new),
+                Path::new(rel_path),
+                &extras,
+                &sig,
+                &commit_message,
+            )
         })
         .map_err(|e| LibraryError::Backend(format!("git commit {rel_path}: {e}")))?;
         Ok(())
     }
 
-    // ── Table helpers ──────────────────────────────────────────────────────
-
-    fn snxlib_rel_path(&self) -> Result<String, LibraryError> {
-        file_name_str(&self.file_path)
+    /// Refuse an asset path that is not a pinned-datasheet file already
+    /// written beside this library: only `assets/datasheets/<hash>.pdf`
+    /// is ever committed with a row, whatever the caller passes.
+    pub(super) fn check_datasheet_assets(&self, rels: &[String]) -> Result<(), LibraryError> {
+        for rel in rels {
+            let hash = rel
+                .strip_prefix(crate::datasheet_asset::DATASHEET_ASSET_DIR)
+                .and_then(|r| r.strip_prefix('/'))
+                .and_then(|r| r.strip_suffix(".pdf"));
+            let named = hash.and_then(crate::datasheet_asset::datasheet_asset_rel_path);
+            if named.as_deref() != Some(rel.as_str()) {
+                return Err(LibraryError::Backend(format!(
+                    "{rel} is not a pinned datasheet path"
+                )));
+            }
+            if !self.root_dir.join(rel).is_file() {
+                return Err(LibraryError::Backend(format!(
+                    "pinned datasheet {rel} is not on disk"
+                )));
+            }
+        }
+        Ok(())
     }
 
-    /// Persist the in-memory `library_file` to disk. Caller already holds
-    /// the appropriate read/write lock.
-    fn persist_library_file(&self, lf: &LibraryFile) -> Result<(), LibraryError> {
-        let text = lf.write()?;
-        // HI-6: atomic write — never half-write the manifest.
-        signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
-        self.note_own_write(&text)
+    // ── Table helpers ──────────────────────────────────────────────────────
+
+    pub(super) fn snxlib_rel_path(&self) -> Result<String, LibraryError> {
+        file_name_str(&self.file_path)
     }
 
     /// Mutate the in-memory `library_file`, persist it, and commit the
@@ -269,6 +319,60 @@ impl LocalGitAdapter {
     where
         F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
     {
+        self.mutate_library_file_with_assets(f, &[], message, fallback)
+    }
+
+    /// [`Self::mutate_library_file_if_changed`] whose commit also takes the
+    /// working-tree files `asset_rel_paths` (already written).
+    pub(super) fn mutate_library_file_with_assets<F>(
+        &self,
+        f: F,
+        asset_rel_paths: &[String],
+        message: &str,
+        fallback: &str,
+    ) -> Result<(), LibraryError>
+    where
+        F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
+    {
+        self.save_edit(
+            |lf, _| {
+                if !f(lf)? {
+                    return Ok(None);
+                }
+                // Cached prices follow their rows: a deleted row, or a SKU
+                // edited away, takes its prices with it in this same save.
+                super::helpers::prune_stale_pricing(lf);
+                // Rebased, so what this save removed is gone from the text
+                // later saves start from.
+                let text = lf.write_and_rebase()?;
+                // Lines of rows this edit replaced or removed go now, not
+                // at the next row write.
+                self.row_lines().retain_rows(lf);
+                Ok(Some(text))
+            },
+            asset_rel_paths,
+            message,
+            fallback,
+        )
+    }
+
+    /// The one save protocol of the `.snxlib`: under both write locks,
+    /// reload, edit a clone, write it atomically, then let memory take it
+    /// and commit, with `asset_rel_paths` and every pinned PDF not yet in
+    /// HEAD (#1471). `edit` changes the clone and returns its encoded text,
+    /// or `None` when nothing changed (no write, no commit). Its flag says
+    /// whether memory holds this adapter's own last write (see
+    /// `holds_own_write`).
+    pub(super) fn save_edit<F>(
+        &self,
+        edit: F,
+        asset_rel_paths: &[String],
+        message: &str,
+        fallback: &str,
+    ) -> Result<(), LibraryError>
+    where
+        F: FnOnce(&mut LibraryFile, bool) -> Result<Option<String>, LibraryError>,
+    {
         self.ensure_commit_identity()?;
         // Another Signex process could otherwise reload and write between
         // our reload and our write (see `write_lock`). Taken before the
@@ -281,12 +385,78 @@ impl LocalGitAdapter {
         // An external edit must be merged in, not overwritten by a stale
         // copy; an unreadable file refuses the edit (see `disk_sync`).
         self.reload_if_stale(&mut guard, super::disk_sync::Verify::Content)?;
-        if !f(&mut guard)? {
-            return Ok(());
-        }
-        self.persist_library_file(&guard)?;
+        // Resolve the manifest path before any write: nothing after the
+        // atomic write below may return an error.
         let rel = self.snxlib_rel_path()?;
-        self.commit_path(&rel, message, fallback)
+        // #831: edit a clone. An encode or write failure discards it, so
+        // memory and the `.snxlib` on disk stay exactly as they were. Rows
+        // are shared, so the clone is cheap (#416).
+        let mut candidate = guard.clone();
+        let Some(text) = edit(&mut candidate, self.holds_own_write())? else {
+            return Ok(());
+        };
+        // Every row's pins are in `text`, so every pinned PDF that is on
+        // disk and not yet in HEAD goes into this commit, whichever row the
+        // edit was about (#1471). Read under the write lock.
+        let asset_rel_paths = &self.pinned_assets_to_commit(&candidate, asset_rel_paths);
+        // A commit that carries assets must not fail silently (a later
+        // commit would stage the `.snxlib` but not the files), so the write
+        // is undone then: keep the bytes it replaces.
+        let previous = if asset_rel_paths.is_empty() {
+            None
+        } else {
+            Some((std::fs::read(&self.file_path)?, guard.clone()))
+        };
+        // HI-6: atomic write — never half-write the manifest.
+        signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
+        // Disk now holds the edit, so memory takes it too. Memory and disk
+        // stay equal whatever happens next: a failed commit without assets
+        // leaves both on the edit, one with assets restores both.
+        *guard = candidate;
+        // A failed stamp only costs one extra reload on the next access.
+        if let Err(stamp_err) = self.note_own_write(&text) {
+            tracing::warn!(
+                target: "signex::library",
+                path = %self.file_path.display(),
+                "saved, but the disk stamp could not be recorded: {stamp_err}"
+            );
+        }
+        if let Err(commit_err) =
+            self.commit_change_with(None, &rel, asset_rel_paths, message, fallback)
+        {
+            let Some((previous, previous_file)) = previous else {
+                self.record_commit_warning(&commit_err);
+                return Ok(());
+            };
+            // The row would otherwise be saved with a pinned PDF that no
+            // commit holds. Put the previous file back, so the caller keeps
+            // its edit and can save again.
+            return Err(self.undo_asset_commit(
+                &mut guard,
+                previous,
+                previous_file,
+                commit_err,
+                signex_types::atomic_io::atomic_write,
+            ));
+        }
+        Ok(())
+    }
+
+    /// The edit is saved but its commit failed (a commit without assets;
+    /// one with assets is undone and returns an error instead). Nothing
+    /// is rolled back on disk or in memory. `stage_and_commit` builds the
+    /// commit from HEAD's tree and touches the on-disk index only after the commit succeeded,
+    /// so the index still equals HEAD. The next commit of the `.snxlib`
+    /// re-reads it from disk and picks the edit up; a commit of any other
+    /// library file does not. Surfaced to the Messages panel via the log
+    /// bridge.
+    fn record_commit_warning(&self, commit_err: &LibraryError) {
+        tracing::warn!(
+            target: "signex::library",
+            path = %self.file_path.display(),
+            "saved, but the git commit failed: {commit_err}; \
+             the next commit of this library file will include it"
+        );
     }
 
     /// Read the table named `table` as a snapshot of [`ComponentRow`]s,
@@ -309,7 +479,9 @@ impl LocalGitAdapter {
         validate_legacy_header(name, &table.columns)?;
         let mut out = Vec::with_capacity(table.rows.len());
         for row in &table.rows {
-            out.push(library_row_to_component(row)?);
+            let mut component = library_row_to_component(row)?;
+            component.server_revision = Some(row_base(row));
+            out.push(component);
         }
         Ok(out)
     }
@@ -566,9 +738,16 @@ impl LocalGitAdapter {
                 continue;
             };
             let bytes = fs::read(path)?;
+            let name = match primitive_name_in_envelope(kind, &bytes, name)? {
+                Ok(n) => n,
+                Err(e) => {
+                    self.warn_footprint_skipped_once(path, &e);
+                    continue;
+                }
+            };
             out.push(PrimitiveSummary {
                 uuid,
-                name: primitive_name_in_envelope(kind, &bytes, name)?,
+                name,
                 kind,
                 used_by_count: 0,
             });
@@ -576,9 +755,35 @@ impl LocalGitAdapter {
         out.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(out)
     }
+
+    /// Warn about a skipped `.snxfpt` once per (path, mtime): listings run
+    /// on every library refresh and must not repeat the same line.
+    /// Returns whether this call was the first for that file version.
+    pub(super) fn warn_footprint_skipped_once(&self, path: &std::path::Path, err: &str) -> bool {
+        let mtime = fs::metadata(path)
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::UNIX_EPOCH);
+        let first = self
+            .skipped_footprints
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert((path.to_path_buf(), mtime));
+        if first {
+            tracing::warn!(
+                "Skipped unreadable footprint {} (left untouched): {err}",
+                path.display()
+            );
+        }
+        first
+    }
 }
 
 /// Name of the first primitive inside a `.snxfpt` / `.snxsim` envelope.
+///
+/// #924 — like #690 for symbols, a `.snxfpt` that fails to parse (e.g. a
+/// `nan`/`inf` value) affects only itself: the inner `Err` carries the
+/// parse error so the caller can skip and warn. `.snxsim` stays strict —
+/// a parse failure is an outer `Err`, as before.
 ///
 /// `file_name` is diagnostic only — it names the offending file in the
 /// error text, which is what the user sees when a container is corrupt.
@@ -596,17 +801,19 @@ fn primitive_name_in_envelope(
     kind: PrimitiveKind,
     bytes: &[u8],
     file_name: &str,
-) -> Result<String, LibraryError> {
+) -> Result<Result<String, String>, LibraryError> {
     match kind {
         PrimitiveKind::Footprint => {
-            let file = crate::primitive::FootprintFile::from_bytes(bytes)
-                .map_err(|e| LibraryError::Backend(format!("list primitive {file_name}: {e}")))?;
+            let file = match crate::primitive::FootprintFile::from_bytes(bytes) {
+                Ok(f) => f,
+                Err(e) => return Ok(Err(e.to_string())),
+            };
             let fp = file
                 .footprints
                 .into_iter()
                 .next()
                 .ok_or_else(|| LibraryError::Backend(format!("empty .snxfpt {file_name}")))?;
-            Ok(fp.name)
+            Ok(Ok(fp.name))
         }
         PrimitiveKind::Sim => {
             let file = SimFile::from_bytes(bytes)
@@ -616,7 +823,7 @@ fn primitive_name_in_envelope(
                 .into_iter()
                 .next()
                 .ok_or_else(|| LibraryError::Backend(format!("empty .snxsim {file_name}")))?;
-            Ok(model.name)
+            Ok(Ok(model.name))
         }
         PrimitiveKind::Symbol => {
             debug_assert!(

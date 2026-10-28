@@ -32,17 +32,6 @@ fn preview_tab_labels_are_short_and_distinct() {
 }
 
 #[test]
-fn new_component_state_defaults_to_generic_class() {
-    let nc = NewComponentState::default();
-    assert!(nc.internal_pn.is_empty());
-    assert!(nc.library_idx.is_none());
-    // Table starts unset until the user picks one in the modal.
-    assert!(nc.table.is_none());
-    assert_eq!(nc.class, ComponentClass::generic());
-    assert!(nc.category.is_empty());
-}
-
-#[test]
 fn library_set_mount_unmount_is_symmetric() {
     let mut set = LibrarySet::new();
     assert!(set.is_empty());
@@ -67,6 +56,8 @@ fn open_library_total_rows_sums_tables() {
         cached_sims: Vec::new(),
         cached_classes: Vec::new(),
         observed_stamp: None,
+        dangling: Default::default(),
+        pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     };
@@ -86,15 +77,18 @@ fn open_library_total_rows_sums_tables() {
 /// The full row schema lives in `signex_library`'s tests.
 fn fixture_row(pn: &str) -> ComponentRow {
     use signex_library::{
-        DatasheetRef, InternalPn, LifecycleState, ManufacturerPart, ParamMap, PinPadOverride,
-        PlmReserved,
+        ComponentClass, DatasheetRef, InternalPn, LifecycleState, ManufacturerPart, ParamMap,
+        PinPadOverride, PlmReserved,
     };
     let _ = (PinPadOverride::new("1", "1"),); // module touch
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::new_v4(),
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::new_v4()),
         footprint_ref: None,
@@ -113,6 +107,7 @@ fn fixture_row(pn: &str) -> ComponentRow {
         created: chrono::Utc::now(),
         updated: chrono::Utc::now(),
         content_hash: [0u8; 32],
+        server_revision: None,
     }
 }
 
@@ -192,10 +187,13 @@ fn edit_row_modal_state_seeds_tags_buffer() {
         ParamValue::Text("low-noise, RoHS".to_string()),
     );
     let row = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::new_v4(),
         internal_pn: InternalPn::new("R0805_10k"),
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::new_v4()),
         footprint_ref: None,
@@ -214,6 +212,7 @@ fn edit_row_modal_state_seeds_tags_buffer() {
         created: chrono::Utc::now(),
         updated: chrono::Utc::now(),
         content_hash: [0u8; 32],
+        server_revision: None,
     };
     let address = EditorAddress::new(
         PathBuf::from("/tmp/x.snxlib"),
@@ -240,6 +239,8 @@ fn library_with_cached_primitives(root: &Path, library_id: Uuid) -> OpenLibrary 
         cached_sims: vec![cached_summary("BC547.lib")],
         cached_classes: Vec::new(),
         observed_stamp: None,
+        dangling: Default::default(),
+        pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     }
@@ -326,5 +327,49 @@ fn a_failed_listing_reaches_the_messages_panel() {
             .iter()
             .all(|entry| entry.level == crate::diagnostics::DiagnosticLevel::Warning),
         "a kept cache is a degraded path that continued, not a lost edit"
+    );
+}
+
+/// #1356 -- a primitive ref resolves through its own `library_id`, not the
+/// row's library; an unopened library yields no path.
+#[test]
+fn primitive_file_resolves_through_the_ref_library_id() {
+    use signex_library::PrimitiveRef;
+    let (lib_a, lib_b) = (Uuid::new_v4(), Uuid::new_v4());
+    let mut state = LibraryState::default();
+    for (id, root) in [(lib_a, "/tmp/a/A.snxlib"), (lib_b, "/tmp/b/B.snxlib")] {
+        state.open_libraries.push(OpenLibrary {
+            root: std::path::PathBuf::from(root),
+            display_name: String::new(),
+            library_id: id,
+            tables: Default::default(),
+            cached_components: Vec::new(),
+            cached_symbols: Vec::new(),
+            cached_footprints: Vec::new(),
+            cached_sims: Vec::new(),
+            cached_classes: Vec::new(),
+            observed_stamp: None,
+            dangling: Default::default(),
+            pricing: Default::default(),
+            own_edit_stamp: None,
+            display: Default::default(),
+        });
+    }
+    let prim = Uuid::new_v4();
+    let path = state
+        .primitive_file(&PrimitiveRef::new(lib_b, prim), "symbols", "snxsym")
+        .unwrap();
+    assert_eq!(
+        path,
+        std::path::Path::new("/tmp/b/symbols").join(format!("{prim}.snxsym"))
+    );
+    assert!(
+        state
+            .primitive_file(
+                &PrimitiveRef::new(Uuid::new_v4(), prim),
+                "symbols",
+                "snxsym"
+            )
+            .is_none()
     );
 }

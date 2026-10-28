@@ -19,6 +19,7 @@ use iced::Task;
 use super::super::*;
 use crate::library::commands;
 use crate::library::component_preview::apply_inline_edit;
+use crate::library::editor::footprint::sketch_solve_task::dispatch_pending;
 use crate::library::editor::footprint::updates::{
     apply_footprint_clipboard_op, apply_footprint_primitive_edit,
 };
@@ -28,25 +29,36 @@ use crate::library::messages::{
 };
 use crate::library::state::{
     CloseLibraryConfirmState, ComponentPreviewState, DeleteConfirmState, DocumentOptionsModalState,
-    EditRowModalState, EditorAddress, LibraryCreateOptionsState, NewComponentState, PickerState,
-    PreviewTab, PrimitivePickerState, PrimitivePickerTarget,
+    EditRowModalState, EditorAddress, LibraryCreateOptionsState, PickerState, PreviewTab,
+    PrimitivePickerState, PrimitivePickerTarget,
 };
 use signex_library::{PrimitiveKind, PrimitiveRef, RowId};
 
+mod alternate_symbols;
 mod browser;
 mod component_preview;
 mod components_panel;
+mod datasheet_save;
 mod document_options;
+#[cfg(test)]
+mod edit_modal_tests;
 mod editor;
 mod external_edits;
 mod lifecycle;
 mod new_component;
+mod pricing;
+#[cfg(test)]
+mod pricing_tests;
 mod primitive_picker;
+mod read_only;
 mod recovery;
+mod refresh;
 mod registration;
 mod settings;
 #[cfg(test)]
 mod settings_tests;
+#[cfg(test)]
+mod stale_row_tests;
 mod updates;
 
 use recovery::{
@@ -87,6 +99,7 @@ impl Signex {
             LibraryMessage::CloseLibrary(path) => self.handle_close_library(path),
             LibraryMessage::OpenPicker => {
                 self.library.picker = Some(PickerState::default());
+                self.library.sync_view_caches();
                 Task::none()
             }
             LibraryMessage::ClosePicker => {
@@ -101,26 +114,9 @@ impl Signex {
             // fills in the PN inline in the table and picks the
             // symbol / footprint via the Properties panel.
             //
-            // When no library is open OR no table exists, fall back
-            // to the legacy modal path so the user gets a clear
-            // picker UI (the modal handles "no library" + table
-            // selection edge cases).
+            // When no library is open OR no table exists, nothing can
+            // be appended; the handler tells the Messages panel why.
             LibraryMessage::NewComponent => self.handle_new_component(),
-            LibraryMessage::CloseNewComponent => {
-                self.library.new_component = None;
-                Task::none()
-            }
-            LibraryMessage::NewComponentSetInternalPn(s) => {
-                self.handle_new_component_set_internal_pn(s)
-            }
-            LibraryMessage::NewComponentSetLibrary(idx) => {
-                self.handle_new_component_set_library(idx)
-            }
-            LibraryMessage::NewComponentSetClass(class) => {
-                self.handle_new_component_set_class(class)
-            }
-            LibraryMessage::NewComponentSetTable(name) => self.handle_new_component_set_table(name),
-            LibraryMessage::NewComponentSetCategory(s) => self.handle_new_component_set_category(s),
             LibraryMessage::BrowserBeginAddTable { library_path } => {
                 self.handle_browser_begin_add_table(library_path)
             }
@@ -192,22 +188,6 @@ impl Signex {
             LibraryMessage::BrowserConfirmAddTable { library_path } => {
                 self.handle_browser_confirm_add_table(library_path)
             }
-            LibraryMessage::NewComponentToggleAdvanced => {
-                self.handle_new_component_toggle_advanced()
-            }
-            LibraryMessage::NewComponentBeginCreateTable => {
-                self.handle_new_component_begin_create_table()
-            }
-            LibraryMessage::NewComponentSetNewTableName(name) => {
-                self.handle_new_component_set_new_table_name(name)
-            }
-            LibraryMessage::NewComponentCancelCreateTable => {
-                self.handle_new_component_cancel_create_table()
-            }
-            LibraryMessage::NewComponentConfirmCreateTable => {
-                self.handle_new_component_confirm_create_table()
-            }
-            LibraryMessage::NewComponentSubmit => self.handle_new_component_submit(),
 
             LibraryMessage::ToggleLibraryTreeNode(idx) => self.handle_toggle_library_tree_node(idx),
             LibraryMessage::OpenComponentRow {
@@ -242,6 +222,32 @@ impl Signex {
                 table,
                 row_id,
             } => self.handle_place_library_component(library_path, table, row_id),
+            LibraryMessage::DriftChecked(report) => self.handle_library_drift_checked(*report),
+            LibraryMessage::LibraryUpdateSymbolsRead(read) => {
+                self.handle_library_update_symbols_read(*read)
+            }
+            LibraryMessage::LibraryComponentResolved {
+                target_sheet,
+                library_path,
+                result,
+            } => self.handle_library_component_resolved(target_sheet, library_path, result),
+            LibraryMessage::SymbolChoiceResolved {
+                target_sheet,
+                engine_instance,
+                symbol_id,
+                request,
+                label,
+                result,
+            } => self.handle_symbol_choice_resolved(
+                crate::app::handlers::library_symbol_choice::SwitchContext {
+                    target_sheet,
+                    engine_instance,
+                    symbol_id,
+                    request,
+                    label,
+                },
+                result,
+            ),
             LibraryMessage::CreateLibraryAt(project_root) => {
                 self.handle_create_library_for_project(project_root)
             }
@@ -262,12 +268,17 @@ impl Signex {
             LibraryMessage::LibraryCreateOptionsConfirm => {
                 self.handle_library_create_options_confirm()
             }
-            LibraryMessage::AddLibrarySymbolFilePicked(path) => {
-                self.handle_add_library_symbol_file_picked(path)
+            LibraryMessage::AddLibrarySymbolFilePicked { project_id, path } => {
+                self.handle_add_library_symbol_file_picked(project_id, path)
             }
-            LibraryMessage::AddLibraryFootprintFilePicked(path) => {
-                self.handle_add_library_footprint_file_picked(path)
+            LibraryMessage::AddLibraryFootprintFilePicked { project_id, path } => {
+                self.handle_add_library_footprint_file_picked(project_id, path)
             }
+            LibraryMessage::AddLibraryFileWritten {
+                project_id,
+                path,
+                result,
+            } => self.handle_add_library_file_written(project_id, path, result),
             LibraryMessage::ComponentPreviewOpened {
                 path,
                 table,
@@ -280,6 +291,14 @@ impl Signex {
             LibraryMessage::OpenLibraryBrowser(path) => self.handle_open_library_browser(path),
             LibraryMessage::MountFinished { path, prepared } => {
                 self.handle_mount_finished(path, prepared)
+            }
+            LibraryMessage::RefreshFinished {
+                path,
+                generation,
+                snapshot,
+            } => {
+                self.handle_refresh_finished(path, generation, snapshot);
+                Task::none()
             }
             LibraryMessage::BrowserSelectTable {
                 library_path,
@@ -385,13 +404,11 @@ impl Signex {
             LibraryMessage::LibraryUpdatesToggleSelection(symbol_uuid) => {
                 self.handle_library_updates_toggle_selection(symbol_uuid)
             }
-            LibraryMessage::LibraryUpdatesApply => {
-                self.handle_library_updates_apply();
-                Task::none()
-            }
+            LibraryMessage::LibraryUpdatesApply => self.handle_library_updates_apply(),
             LibraryMessage::LibraryUpdatesSkipAll => self.handle_library_updates_skip_all(),
             LibraryMessage::LibraryUpdatesCancel => {
                 self.library.library_updates = None;
+                self.show_next_queued_updates();
                 Task::none()
             }
 
@@ -421,6 +438,10 @@ impl Signex {
             LibraryMessage::ExternalEditsPolled(changed) => {
                 self.handle_external_edits_polled(changed)
             }
+            LibraryMessage::PricingRefreshFinished {
+                library_path,
+                outcome,
+            } => self.handle_pricing_refresh_finished(library_path, outcome),
         }
     }
 }

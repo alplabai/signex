@@ -177,10 +177,23 @@ impl Signex {
         let mut thumbs: iced::widget::Column<'_, Message> = column![].spacing(4).padding(8);
         for (i, page) in preview.pages.iter().enumerate() {
             let selected = i == preview.selected;
-            let thumb = image(preview.page_handles[i].clone())
-                .content_fit(iced::ContentFit::Contain)
-                .width(120)
-                .height(85);
+            // A page not drawn yet shows an empty frame: it is rasterised when
+            // the user navigates to it.
+            let thumb: Element<'_, Message> = match page.handle() {
+                Some(handle) => image(handle.clone())
+                    .content_fit(iced::ContentFit::Contain)
+                    .width(120)
+                    .height(85)
+                    .into(),
+                None => container(Space::new())
+                    .width(120)
+                    .height(85)
+                    .style(move |_: &iced::Theme| container::Style {
+                        background: Some(iced::Color::WHITE.into()),
+                        ..container::Style::default()
+                    })
+                    .into(),
+            };
             let card_bg = if selected { hover_c } else { panel_bg };
             let card_border = if selected { accent_c } else { border_c };
             let card = container(
@@ -215,9 +228,11 @@ impl Signex {
         // scrollbars, just drag-to-pan + wheel-zoom.
         let viewport: Element<'_, Message> = if preview.pages.is_empty() {
             container(
-                text("No files selected — toggle files in Settings → Files.")
-                    .size(12)
-                    .color(text_muted),
+                text(preview.range_note.clone().unwrap_or_else(|| {
+                    "No files selected — toggle files in Settings → Files.".to_string()
+                }))
+                .size(12)
+                .color(text_muted),
             )
             .center_x(Length::Fill)
             .center_y(Length::Fill)
@@ -239,18 +254,19 @@ impl Signex {
             // At zoom ≤ 1 we want the page to fill the viewport
             // preserving aspect; above 1× we render at exact scaled
             // pixels and let the user pan around.
-            let img_el: Element<'_, Message> = if zoom <= 1.0 {
-                image(preview.page_handles[preview.selected].clone())
+            // Until the selected page is drawn the viewport stays blank white.
+            let img_el: Element<'_, Message> = match selected_page.handle() {
+                None => Space::new().width(Length::Fill).height(Length::Fill).into(),
+                Some(handle) if zoom <= 1.0 => image(handle.clone())
                     .content_fit(iced::ContentFit::Contain)
                     .width(Length::Fill)
                     .height(Length::Fill)
-                    .into()
-            } else {
-                image(preview.page_handles[preview.selected].clone())
+                    .into(),
+                Some(handle) => image(handle.clone())
                     .content_fit(iced::ContentFit::Fill)
                     .width(Length::Fixed(scaled_w))
                     .height(Length::Fixed(scaled_h))
-                    .into()
+                    .into(),
             };
             // Position the image at the pan offset. Below 1× the pan
             // is forced to (0, 0) (see the zoom handler) so the
@@ -305,7 +321,7 @@ impl Signex {
             text(format!(
                 "Page {} of {} — {}×{} px · {:.0}%",
                 selected_page.page_number,
-                preview.pages.len(),
+                selected_page.sheet_count,
                 selected_page.width_px,
                 selected_page.height_px,
                 zoom * 100.0,

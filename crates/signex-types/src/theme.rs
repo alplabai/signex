@@ -55,6 +55,28 @@ impl Color {
         };
         Self { r, g, b, a }
     }
+
+    /// Parse exactly `#RRGGBB` or `#RRGGBBAA`; `None` for anything else.
+    /// Unlike [`Color::from_hex`] it never indexes past a short string and
+    /// never reads a bad digit as zero, so it is safe on file input.
+    pub fn parse_hex(hex: &str) -> Option<Self> {
+        let digits = hex.strip_prefix('#')?;
+        if !matches!(digits.len(), 6 | 8) || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let channel = |at: usize| u8::from_str_radix(&digits[at..at + 2], 16).ok();
+        Some(Self {
+            r: channel(0)?,
+            g: channel(2)?,
+            b: channel(4)?,
+            a: if digits.len() == 8 { channel(6)? } else { 255 },
+        })
+    }
+
+    /// `#RRGGBBAA`, lower-case; the inverse of [`Color::parse_hex`].
+    pub fn to_hex(self) -> String {
+        format!("#{:02x}{:02x}{:02x}{:02x}", self.r, self.g, self.b, self.a)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -90,7 +112,7 @@ impl ThemeId {
         ThemeId::Nord,
     ];
 
-    #[deprecated = "Use ThemeId::BUILTINS; ThemeId::ALL now includes Custom"]
+    #[deprecated = "ThemeId::ALL is the same slice as ThemeId::BUILTINS; use BUILTINS"]
     pub const ALL: &[ThemeId] = Self::BUILTINS;
 
     pub fn label(self) -> &'static str {

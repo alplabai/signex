@@ -17,7 +17,7 @@ use signex_sketch::solver::FullSolveOutput;
 use crate::pad::bake_one_pad;
 
 use super::numbering::derive_pad_number;
-use super::numbering::strip_eq_prefix;
+use crate::eval_util::strip_eq_prefix;
 
 /// v0.22 Phase B4 — bake `ArrayKind::Polar`. Walks `i in 0..count`,
 /// per-instance position is the source rotated by
@@ -102,6 +102,9 @@ pub(super) fn bake_polar(
         return Ok(());
     }
     let count = count as usize;
+    if !super::within_instance_cap("polar", source, Some(count), warnings) {
+        return Ok(());
+    }
 
     // Sweep angle is an Altium-style degrees-or-radians value via the
     // expression's unit family. We expect rad here (the parser

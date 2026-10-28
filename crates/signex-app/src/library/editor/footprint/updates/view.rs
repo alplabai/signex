@@ -7,10 +7,10 @@
 use super::align_pads;
 use crate::library::editor::footprint::layers::FpLayer;
 use crate::library::editor::footprint::pad_to_sketch;
-use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
+use crate::library::editor::footprint::state::FootprintEditorState;
 use crate::library::messages::FootprintEditorMsg;
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
+pub(super) fn apply(editor: &mut crate::app::FootprintDocument, msg: FootprintEditorMsg) {
     match msg {
         FootprintEditorMsg::ToggleLayer(name) => toggle_layer(editor, name),
         FootprintEditorMsg::ToggleAutoFit => toggle_auto_fit(editor),
@@ -32,23 +32,23 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
     }
 }
 
-fn toggle_layer(editor: &mut crate::app::FootprintEditorState, name: String) {
+fn toggle_layer(editor: &mut crate::app::FootprintDocument, name: String) {
     if let Some(layer) = FpLayer::from_standard_name(&name) {
         editor.state.layer_visibility.toggle(layer);
         editor.canvas_cache.clear();
     }
 }
 
-fn toggle_auto_fit(editor: &mut crate::app::FootprintEditorState) {
+fn toggle_auto_fit(editor: &mut crate::app::FootprintDocument) {
     editor.state.toggle_auto_fit();
     editor.with_parts(|state, primitive| {
-        CanvasState::sync_pads_to_primitive(state, primitive);
+        FootprintEditorState::sync_pads_to_primitive(state, primitive);
     });
     editor.canvas_cache.clear();
 }
 
 fn set_mode(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     mode: crate::library::editor::footprint::state::EditorMode,
 ) {
     use crate::library::editor::footprint::state::EditorMode;
@@ -93,17 +93,17 @@ fn set_mode(
     editor.dirty = true;
 }
 
-fn toggle_placement_pause(editor: &mut crate::app::FootprintEditorState) {
+fn toggle_placement_pause(editor: &mut crate::app::FootprintDocument) {
     editor.state.placement_paused = !editor.state.placement_paused;
     editor.canvas_cache.clear();
 }
 
-fn fit_consumed(editor: &mut crate::app::FootprintEditorState) {
+fn fit_consumed(editor: &mut crate::app::FootprintDocument) {
     editor.state.fit_pending = false;
 }
 
 fn set_pads_tool(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     tool: crate::library::editor::footprint::state::PadsTool,
 ) {
     editor.state.pads_tool = tool;
@@ -173,7 +173,7 @@ fn set_pads_tool(
     editor.canvas_cache.clear();
 }
 
-fn tool_escape(editor: &mut crate::app::FootprintEditorState) {
+fn tool_escape(editor: &mut crate::app::FootprintDocument) {
     // Esc unwinds the deepest thing first — the same ladder
     // `bootstrap::subscription` walks for modals, and what the
     // symbol editor already does. With the right-click menu
@@ -217,7 +217,7 @@ fn tool_escape(editor: &mut crate::app::FootprintEditorState) {
 }
 
 fn align_pads_action(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     op: crate::library::editor::footprint::state::AlignOp,
 ) {
     // v0.14 — active-bar Align/Distribute/Spacing. Operates on
@@ -260,7 +260,7 @@ fn align_pads_action(
             for snapshot in &moved {
                 pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
             }
-            CanvasState::sync_pads_to_primitive(state, primitive);
+            FootprintEditorState::sync_pads_to_primitive(state, primitive);
         });
         editor.canvas_cache.clear();
         editor.dirty = true;
@@ -268,7 +268,7 @@ fn align_pads_action(
     editor.state.active_bar_menu = None;
 }
 
-fn set_name(editor: &mut crate::app::FootprintEditorState, new_name: String) {
+fn set_name(editor: &mut crate::app::FootprintDocument, new_name: String) {
     // Rename the ACTIVE internal footprint. The .snxfpt
     // envelope holds N footprints; only the user-selected one
     // mutates. Empty names are accepted but treated as
@@ -278,7 +278,7 @@ fn set_name(editor: &mut crate::app::FootprintEditorState, new_name: String) {
     editor.canvas_cache.clear();
 }
 
-fn recompute_courtyard_outline(editor: &mut crate::app::FootprintEditorState) {
+fn recompute_courtyard_outline(editor: &mut crate::app::FootprintDocument) {
     // v0.27 — outline-following courtyard. Pure read-write
     // on the editor state; the new polygon lands on
     // `state.courtyard_outline_mm` and the canvas draws it

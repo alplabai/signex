@@ -17,7 +17,7 @@ impl Signex {
     /// Read-only sibling of [`active_footprint_editor_mut`].
     /// v0.18.11 — used by the Grid Properties modal open handler
     /// to seed the dialog buffers from the live snap step.
-    pub(crate) fn active_footprint_editor(&self) -> Option<&crate::app::FootprintEditorState> {
+    pub(crate) fn active_footprint_editor(&self) -> Option<&crate::app::FootprintDocument> {
         let path = self
             .document_state
             .tabs
@@ -31,7 +31,7 @@ impl Signex {
 
     pub(crate) fn active_footprint_editor_mut(
         &mut self,
-    ) -> Option<&mut crate::app::FootprintEditorState> {
+    ) -> Option<&mut crate::app::FootprintDocument> {
         let path = self
             .document_state
             .tabs
@@ -54,7 +54,7 @@ impl Signex {
 
     pub(crate) fn fp_editor_set_next_pad_size_x(&mut self, value: String) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut()
-            && let Ok(parsed) = value.trim().parse::<f64>()
+            && let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
             && parsed > 0.0
         {
             editor.state.next_pad_defaults.size_x_mm = parsed;
@@ -65,7 +65,7 @@ impl Signex {
 
     pub(crate) fn fp_editor_set_next_pad_size_y(&mut self, value: String) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut()
-            && let Ok(parsed) = value.trim().parse::<f64>()
+            && let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
             && parsed > 0.0
         {
             editor.state.next_pad_defaults.size_y_mm = parsed;
@@ -87,7 +87,7 @@ impl Signex {
 
     pub(crate) fn fp_editor_set_next_pad_rotation(&mut self, value: String) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut()
-            && let Ok(parsed) = value.trim().parse::<f64>()
+            && let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
         {
             editor.state.next_pad_defaults.rotation_deg = parsed;
         }
@@ -101,7 +101,7 @@ impl Signex {
         value: String,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut()
-            && let Ok(parsed) = value.trim().parse::<f64>()
+            && let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
         {
             editor.record_edit(Some(("pad_rotation", idx as u128)), |editor| {
                 if editor.state.pads.get(idx).is_none() {
@@ -463,7 +463,14 @@ impl Signex {
                 LayerId::new("B.Mask"),
             ],
         };
-        self.with_selected_pad(idx, |pad| pad.layers = layers);
+        let default_drill = self
+            .active_footprint_editor_mut()
+            .and_then(|editor| editor.state.next_pad_defaults.drill_diameter_mm)
+            .unwrap_or(crate::library::editor::footprint::state::DEFAULT_THROUGH_HOLE_DRILL_MM);
+        self.with_selected_pad(idx, |pad| {
+            pad.layers = layers;
+            pad.apply_side_drill(side, default_drill);
+        });
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_shape(
@@ -483,7 +490,7 @@ impl Signex {
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_size_x(&mut self, idx: usize, value: String) -> bool {
-        if let Ok(parsed) = value.trim().parse::<f64>()
+        if let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
             && parsed > 0.0
         {
             self.with_selected_pad_field(idx, Some("pad_size_x"), |pad| pad.size_mm.0 = parsed);
@@ -491,7 +498,7 @@ impl Signex {
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_size_y(&mut self, idx: usize, value: String) -> bool {
-        if let Ok(parsed) = value.trim().parse::<f64>()
+        if let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
             && parsed > 0.0
         {
             self.with_selected_pad_field(idx, Some("pad_size_y"), |pad| pad.size_mm.1 = parsed);

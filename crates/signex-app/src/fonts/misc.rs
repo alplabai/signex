@@ -131,3 +131,147 @@ impl crate::persist::DebouncedStore<crate::persist::SearchPrefsChange> for Prefs
         })
     }
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Wheel-zoom speed (percent per notch)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read the wheel-zoom speed, in percent per notch. Defaults to 10 (a
+/// x1.10 notch) when the key is missing or not a number; a number outside
+/// 5..=50 is clamped into range.
+pub fn read_zoom_step_percent_pref() -> u8 {
+    read_zoom_step_percent_pref_at(&prefs_path())
+}
+
+pub fn read_zoom_step_percent_pref_at(path: &Path) -> u8 {
+    read_prefs_json(path)
+        .and_then(|json| json["zoom_step_percent"].as_f64())
+        .filter(|v| v.is_finite())
+        .map(|v| crate::canvas::Camera::clamp_zoom_step_percent(v.round() as i64))
+        .unwrap_or(crate::canvas::Camera::ZOOM_STEP_PERCENT_DEFAULT)
+}
+
+pub fn write_zoom_step_percent_pref(percent: u8) {
+    write_zoom_step_percent_pref_at(&prefs_path(), percent)
+}
+
+pub fn write_zoom_step_percent_pref_at(path: &Path, percent: u8) {
+    update_prefs_json(path, "zoom_step_percent", |prefs| {
+        prefs.insert("zoom_step_percent".to_string(), serde_json::json!(percent));
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Annotate undo scope
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read the "Annotate undo" preference. A missing or unknown value is the
+/// default, one step for the whole project.
+pub fn read_annotate_undo_pref() -> crate::annotate_undo::AnnotateUndo {
+    read_annotate_undo_pref_at(&prefs_path())
+}
+
+pub fn read_annotate_undo_pref_at(path: &Path) -> crate::annotate_undo::AnnotateUndo {
+    read_prefs_json(path)
+        .and_then(|json| json["annotate_undo"].as_str().map(str::to_string))
+        .map(|token| crate::annotate_undo::AnnotateUndo::from_token(&token))
+        .unwrap_or_default()
+}
+
+pub fn write_annotate_undo_pref(scope: crate::annotate_undo::AnnotateUndo) {
+    write_annotate_undo_pref_at(&prefs_path(), scope)
+}
+
+pub fn write_annotate_undo_pref_at(path: &Path, scope: crate::annotate_undo::AnnotateUndo) {
+    update_prefs_json(path, "annotate_undo", |prefs| {
+        prefs.insert(
+            "annotate_undo".to_string(),
+            serde_json::Value::String(scope.token().to_string()),
+        );
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Keep wires connected when moving
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read "Keep wires connected when moving" (rubber-band moves, #963).
+/// Defaults to on when the key is missing or not a boolean.
+pub fn read_move_keeps_wires_pref() -> bool {
+    read_move_keeps_wires_pref_at(&prefs_path())
+}
+
+pub fn read_move_keeps_wires_pref_at(path: &Path) -> bool {
+    read_prefs_json(path)
+        .and_then(|json| json["move_keeps_wires"].as_bool())
+        .unwrap_or(true)
+}
+
+pub fn write_move_keeps_wires_pref(enabled: bool) {
+    write_move_keeps_wires_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_move_keeps_wires_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, "move_keeps_wires", |prefs| {
+        prefs.insert("move_keeps_wires".to_string(), serde_json::json!(enabled));
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Autosave recovery copies (#104)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read the opt-in "Autosave recovery copies" toggle. Off when the key is
+/// missing or not a boolean: nothing is written unless the user asked.
+pub fn read_autosave_enabled_pref() -> bool {
+    read_autosave_enabled_pref_at(&prefs_path())
+}
+
+pub fn read_autosave_enabled_pref_at(path: &Path) -> bool {
+    read_prefs_json(path)
+        .and_then(|json| json["autosave_enabled"].as_bool())
+        .unwrap_or(false)
+}
+
+pub fn write_autosave_enabled_pref(enabled: bool) {
+    write_autosave_enabled_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_autosave_enabled_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, "autosave_enabled", |prefs| {
+        prefs.insert("autosave_enabled".to_string(), serde_json::json!(enabled));
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Interface scale (#1228)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read the interface scale. Missing is 1.0; an out-of-range value is
+/// clamped and a malformed one falls back to 1.0, both reported to the
+/// Messages panel.
+pub fn read_ui_scale_pref() -> f32 {
+    read_ui_scale_pref_at(&prefs_path())
+}
+
+pub fn read_ui_scale_pref_at(path: &Path) -> f32 {
+    let json = read_prefs_json(path);
+    let read = crate::ui_scale::parse_ui_scale(json.as_ref().and_then(|j| j.get("ui_scale")));
+    if let Some(problem) = &read.problem {
+        crate::diagnostics::log_warning(format!("{}: {problem}", path.display()));
+    }
+    read.scale
+}
+
+pub fn write_ui_scale_pref(scale: f32) {
+    write_ui_scale_pref_at(&prefs_path(), scale)
+}
+
+pub fn write_ui_scale_pref_at(path: &Path, scale: f32) {
+    update_prefs_json(path, "ui_scale", |prefs| {
+        prefs.insert(
+            "ui_scale".to_string(),
+            serde_json::json!(crate::ui_scale::scale_for_file(scale)),
+        );
+    })
+}

@@ -11,13 +11,17 @@ use tiny_skia::Color;
 
 use crate::pdf::ColourMode;
 
+#[cfg(test)]
+mod bus_entry_tests;
 mod document;
 mod drawings;
+mod family;
 mod geometry;
 mod labels;
 mod markers;
 mod symbols;
 mod text;
+mod wire_style;
 
 #[derive(Debug, Clone, Copy)]
 pub enum SvgTextAlign {
@@ -79,6 +83,8 @@ pub struct SvgRenderContext {
     pub height: f32,
     pub elements: Vec<SvgElement>,
     pub svg_document: String,
+    /// The theme's paper colour, which Black & White maps against.
+    pub paper: (f32, f32, f32),
 }
 
 pub struct SvgEvaluatorInputs<'a> {
@@ -119,28 +125,60 @@ fn rgb_to_color(r: f32, g: f32, b: f32) -> Color {
         .unwrap_or(Color::BLACK)
 }
 
-fn map_colour_mode(rgb: (f32, f32, f32), mode: ColourMode) -> (f32, f32, f32) {
-    let (r, g, b) = rgb;
+/// Rec.601 luma — the one luminance the preview and the PDF both use.
+pub(crate) fn luma((r, g, b): (f32, f32, f32)) -> f32 {
+    0.299 * r + 0.587 * g + 0.114 * b
+}
+
+/// How far a colour's luma may sit from the paper's and still print as
+/// paper in Black & White.
+pub(crate) const BW_PAPER_TOLERANCE: f32 = 0.25;
+
+/// Black & White is black ink on white paper whatever the theme (#1342).
+/// A colour close to the theme's paper tone prints as paper (white) and
+/// anything else is ink (black). Measuring against the paper rather than a
+/// fixed mid-grey cut keeps a dark theme's page white and its light marks
+/// solid.
+pub(crate) fn map_black_and_white(rgb: (f32, f32, f32), paper: (f32, f32, f32)) -> (f32, f32, f32) {
+    if (luma(rgb) - luma(paper)).abs() < BW_PAPER_TOLERANCE {
+        (1.0, 1.0, 1.0)
+    } else {
+        (0.0, 0.0, 0.0)
+    }
+}
+
+fn map_colour_mode(
+    rgb: (f32, f32, f32),
+    mode: ColourMode,
+    paper: (f32, f32, f32),
+) -> (f32, f32, f32) {
     match mode {
-        ColourMode::Colour => (r, g, b),
+        ColourMode::Colour => rgb,
         ColourMode::Grayscale => {
-            let y = 0.299 * r + 0.587 * g + 0.114 * b;
+            let y = luma(rgb);
             (y, y, y)
         }
-        ColourMode::BlackAndWhite => {
-            let y = 0.299 * r + 0.587 * g + 0.114 * b;
-            if y >= 0.5 {
-                (1.0, 1.0, 1.0)
-            } else {
-                (0.0, 0.0, 0.0)
-            }
-        }
+        ColourMode::BlackAndWhite => map_black_and_white(rgb, paper),
+    }
+}
+
+/// Strokes and text: Black & White draws them black whatever the colour,
+/// exactly as the PDF does (`ColourMap::map_stroke_bw`), so a light ink on a
+/// light paper stays visible in the preview (#1403). Fills keep the shared
+/// paper-relative mapping; the other modes map as for any colour.
+fn map_ink_mode(rgb: (f32, f32, f32), mode: ColourMode, paper: (f32, f32, f32)) -> (f32, f32, f32) {
+    match mode {
+        ColourMode::BlackAndWhite => (0.0, 0.0, 0.0),
+        _ => map_colour_mode(rgb, mode, paper),
     }
 }
 
 fn pt(x: f32, y: f32) -> SvgPoint {
     SvgPoint { x, y }
 }
+
+#[cfg(test)]
+mod net_class_tests;
 
 #[cfg(test)]
 mod tests {
@@ -163,6 +201,80 @@ mod tests {
             sheet_name: "Sheet1".to_string(),
             sheet_number: 1,
             sheet_count: 1,
+            placement: Default::default(),
+        }
+    }
+
+    fn ink_ctx(paper: (f32, f32, f32), ink: (f32, f32, f32)) -> SvgRenderContext {
+        let line = vec![
+            SvgPathCommand::MoveTo(pt(2.0, 10.0)),
+            SvgPathCommand::LineTo(pt(38.0, 10.0)),
+        ];
+        let elements = vec![
+            SvgElement::Path {
+                commands: line,
+                style: SvgStyle {
+                    stroke_rgb: Some(ink),
+                    fill_rgb: None,
+                    stroke_width: 6.0,
+                },
+            },
+            SvgElement::Text {
+                x: 2.0,
+                y: 30.0,
+                font_alias: "F1",
+                size_pt: 16.0,
+                align: SvgTextAlign::Left,
+                v_align: SvgTextVAlign::Center,
+                rotation_deg: 0.0,
+                fill_rgb: ink,
+                text: "HHHH".to_string(),
+            },
+        ];
+        SvgRenderContext {
+            width: 40.0,
+            height: 40.0,
+            elements,
+            svg_document: String::new(),
+            paper,
+        }
+    }
+
+    /// #1403 - on a light paper a light stroke or text (luma ~0.8, within
+    /// the paper tolerance) must still print black in Black & White, as the
+    /// PDF does, not vanish as paper.
+    #[test]
+    fn black_and_white_preview_draws_light_ink_black_on_light_paper() {
+        let paper = (
+            0xEE as f32 / 255.0,
+            0xE8 as f32 / 255.0,
+            0xD5 as f32 / 255.0,
+        );
+        let ink = (0.8, 0.8, 0.8);
+        assert!((luma(ink) - luma(paper)).abs() < BW_PAPER_TOLERANCE);
+        let px = ink_ctx(paper, ink)
+            .rasterize_rgba_with_colour_mode(40, 40, ColourMode::BlackAndWhite)
+            .expect("rasterized");
+        let at = |x: usize, y: usize| &px[(y * 40 + x) * 4..(y * 40 + x) * 4 + 3];
+        assert_eq!(at(20, 10), [0, 0, 0], "stroke must be black");
+        let text_has_black = (0..12).any(|row| (0..40).any(|x| at(x, 24 + row) == [0, 0, 0]));
+        assert!(text_has_black, "text must be black");
+    }
+
+    /// #1403 - a symbol's body tint prints as paper (white) in Black & White
+    /// on every built-in theme; a theme whose tint drifted outside the paper
+    /// tolerance would print its symbol bodies solid black.
+    #[test]
+    fn every_builtin_theme_body_fill_prints_as_paper_in_black_and_white() {
+        use crate::pdf::SchematicPalette;
+        use signex_types::theme::{ThemeId, canvas_colors};
+        for id in ThemeId::BUILTINS {
+            let palette = SchematicPalette::from(&canvas_colors(*id));
+            assert_eq!(
+                map_black_and_white(palette.symbol_fill, palette.paper),
+                (1.0, 1.0, 1.0),
+                "{id:?} body_fill would print black"
+            );
         }
     }
 
@@ -183,6 +295,48 @@ mod tests {
         assert!(svg.svg_document.contains("</svg>"));
     }
 
+    /// The note drawn by the exporter's rasterizer, which is where the face
+    /// is chosen (the SVG text carries no family).
+    fn pixels_of_note_in(family: Option<&str>) -> Vec<u8> {
+        let mut sheet = empty_sheet_snapshot();
+        sheet
+            .schematic
+            .text_notes
+            .push(signex_types::schematic::TextNote {
+                uuid: Uuid::from_u128(1),
+                text: "Wiggle 0123".to_string(),
+                position: Point::new(30.0, 30.0),
+                rotation: 0.0,
+                font_size: 2.0,
+                font_family: family.map(str::to_string),
+                justify_h: Default::default(),
+                justify_v: Default::default(),
+            });
+        let opts = PdfOptions::default();
+        let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);
+        SvgRenderContext::from_sheet(&sheet, &opts, w_mm, h_mm, 96.0 / 25.4, None)
+            .rasterize_rgba((w_mm * 96.0 / 25.4) as u32, (h_mm * 96.0 / 25.4) as u32)
+            .expect("rasterized")
+    }
+
+    /// #510 - the export can only outline the bundled faces, so a family it
+    /// cannot embed exports in Iosevka, the same face the canvas falls back
+    /// to, and a bundled family exports in its own face.
+    #[test]
+    fn export_text_follows_a_bundled_family_and_falls_back_to_iosevka() {
+        let unset = pixels_of_note_in(None);
+        let iosevka = pixels_of_note_in(Some("Iosevka"));
+        let unembeddable = pixels_of_note_in(Some("Fira Mono"));
+        let roboto = pixels_of_note_in(Some("Roboto"));
+
+        assert!(unembeddable == iosevka, "fallback is the bundled default");
+        assert!(iosevka != unset, "an unset note keeps its existing face");
+        assert!(
+            roboto == unset,
+            "notes were Roboto before they could name a family"
+        );
+    }
+
     #[test]
     fn can_rasterize_context() {
         let sheet = empty_sheet_snapshot();
@@ -191,5 +345,56 @@ mod tests {
         let svg = SvgRenderContext::from_sheet(&sheet, &opts, w_mm, h_mm, 96.0 / 25.4, None);
         let rgba = svg.rasterize_rgba((w_mm * 96.0 / 25.4) as u32, (h_mm * 96.0 / 25.4) as u32);
         assert!(rgba.is_some());
+    }
+
+    fn texts(sheet: &SheetSnapshot) -> Vec<String> {
+        let opts = PdfOptions::default();
+        let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);
+        SvgRenderContext::from_sheet(sheet, &opts, w_mm, h_mm, 72.0 / 25.4, None)
+            .elements
+            .into_iter()
+            .filter_map(|e| match e {
+                SvgElement::Text { text, .. } => Some(text),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// One file, two placements: each page copy prints the designator its
+    /// placement resolves to, not the file's own.
+    #[test]
+    fn page_copies_print_their_placements_designator() {
+        use signex_types::schematic::{InstancePath, Symbol, SymbolInstance, TextProp};
+        let at = |n: u128| InstancePath::from_chain(vec![Uuid::from_u128(n)]);
+        let entry = |n: u128, reference: &str| SymbolInstance {
+            project: String::new(),
+            path: at(n).to_string(),
+            reference: reference.to_string(),
+            unit: 1,
+        };
+        let mut base = empty_sheet_snapshot();
+        base.schematic.symbols.push(Symbol {
+            uuid: Uuid::from_u128(7),
+            reference: "R1".to_string(),
+            ref_text: Some(TextProp {
+                position: Point::new(10.0, 10.0),
+                rotation: 0.0,
+                font_size: 1.27,
+                justify_h: Default::default(),
+                justify_v: Default::default(),
+                hidden: false,
+                font_family: None,
+            }),
+            instances: vec![entry(1, "R1"), entry(2, "R101")],
+            ..Default::default()
+        });
+        let a = base.clone().for_placement(at(1), "A");
+        let b = base.clone().for_placement(at(2), "B");
+        assert!(texts(&a).contains(&"R1".to_string()), "{:?}", texts(&a));
+        assert!(!texts(&a).contains(&"R101".to_string()));
+        assert!(texts(&b).contains(&"R101".to_string()), "{:?}", texts(&b));
+        assert!(!texts(&b).contains(&"R1".to_string()));
+        assert_eq!(b.sheet_name, "Sheet1 (B)");
+        assert_eq!(b.placement, at(2));
     }
 }

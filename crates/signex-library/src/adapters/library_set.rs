@@ -43,10 +43,12 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use uuid::Uuid;
 
 use crate::adapter::{LibraryAdapter, LibraryError};
+use crate::adapters::read_only::ReadOnlyAdapter;
 use crate::primitive::{Footprint, PrimitiveRef, SimModel, Symbol};
 
 /// Mount key for an adapter inside a [`LibrarySet`].
@@ -77,7 +79,7 @@ impl MountKey {
 /// `Default` constructs an empty set; call [`Self::mount`] to add adapters.
 #[derive(Default)]
 pub struct LibrarySet {
-    libs: HashMap<MountKey, Box<dyn LibraryAdapter>>,
+    libs: HashMap<MountKey, Arc<dyn LibraryAdapter>>,
 }
 
 impl LibrarySet {
@@ -107,16 +109,29 @@ impl LibrarySet {
                 ),
             }));
         }
-        self.libs.insert(key, lib);
+        self.libs.insert(key, Arc::from(lib));
         Ok(())
+    }
+
+    /// Mount a library read-only: every write through the mounted
+    /// adapter fails with [`LibraryError::ReadOnly`] regardless of the
+    /// filesystem's permissions. Same conflict rules as [`Self::mount`].
+    pub fn mount_read_only(&mut self, lib: Box<dyn LibraryAdapter>) -> Result<(), LibraryError> {
+        self.mount(Box::new(ReadOnlyAdapter::new(lib)))
+    }
+
+    /// True when the file-backed mount at `path` is read-only. An
+    /// unmounted path is not read-only (there is nothing to guard).
+    pub fn is_read_only_path(&self, path: &Path) -> bool {
+        self.get_by_path(path).is_some_and(|a| a.is_read_only())
     }
 
     /// Replace whatever adapter is mounted at `lib`'s mount key with
     /// `lib`. Drops the previous adapter and returns it (or `None` if
     /// no previous mount existed).
-    pub fn remount(&mut self, lib: Box<dyn LibraryAdapter>) -> Option<Box<dyn LibraryAdapter>> {
+    pub fn remount(&mut self, lib: Box<dyn LibraryAdapter>) -> Option<Arc<dyn LibraryAdapter>> {
         let key = MountKey::for_adapter(lib.as_ref());
-        self.libs.insert(key, lib)
+        self.libs.insert(key, Arc::from(lib))
     }
 
     /// Unmount the first adapter matching `library_id` and return it
@@ -125,14 +140,55 @@ impl LibrarySet {
     /// When two file-backed adapters share an id, the "first match"
     /// is unspecified — callers needing a specific mount should use
     /// [`Self::unmount_by_path`].
-    pub fn unmount(&mut self, library_id: Uuid) -> Option<Box<dyn LibraryAdapter>> {
+    pub fn unmount(&mut self, library_id: Uuid) -> Option<Arc<dyn LibraryAdapter>> {
         let key = self.find_key_for_id(library_id)?;
         self.libs.remove(&key)
     }
 
     /// Unmount the file-backed adapter at `path`, returning it.
-    pub fn unmount_by_path(&mut self, path: &Path) -> Option<Box<dyn LibraryAdapter>> {
+    pub fn unmount_by_path(&mut self, path: &Path) -> Option<Arc<dyn LibraryAdapter>> {
         self.libs.remove(&MountKey::Path(path.to_path_buf()))
+    }
+
+    /// Re-key the file-backed adapter mounted at `old` to `new` after the
+    /// `.snxlib` was renamed on disk, telling the adapter its new path.
+    ///
+    /// Atomic: on any failure (`NotFound` for an unmounted `old`,
+    /// `Conflict` when `new` is already mounted, the adapter refusing)
+    /// the mount at `old` is left exactly as it was.
+    pub fn relocate(&mut self, old: &Path, new: &Path) -> Result<(), LibraryError> {
+        let old_key = MountKey::Path(old.to_path_buf());
+        let new_key = MountKey::Path(new.to_path_buf());
+        if self.libs.contains_key(&new_key) {
+            return Err(LibraryError::Conflict(format!(
+                "library at {} is already mounted",
+                new.display()
+            )));
+        }
+        let mut adapter = self
+            .libs
+            .remove(&old_key)
+            .ok_or_else(|| LibraryError::NotFound(old.display().to_string()))?;
+        // An off-thread read (`get_shared`) may still hold the adapter for
+        // the few milliseconds a table scan takes; relocating needs
+        // exclusive access, so report it busy and leave the mount alone.
+        let Some(exclusive) = Arc::get_mut(&mut adapter) else {
+            self.libs.insert(old_key, adapter);
+            return Err(LibraryError::Conflict(format!(
+                "library at {} is being read; try again in a moment",
+                old.display()
+            )));
+        };
+        match exclusive.relocate_library_file(new) {
+            Ok(()) => {
+                self.libs.insert(new_key, adapter);
+                Ok(())
+            }
+            Err(e) => {
+                self.libs.insert(old_key, adapter);
+                Err(e)
+            }
+        }
     }
 
     /// Number of mounted libraries.
@@ -159,6 +215,14 @@ impl LibrarySet {
     pub fn get(&self, library_id: Uuid) -> Option<&dyn LibraryAdapter> {
         let key = self.find_key_for_id(library_id)?;
         self.libs.get(&key).map(|b| b.as_ref())
+    }
+
+    /// A shared handle on the first mounted adapter exposing `library_id`,
+    /// for work that must leave the UI thread (a table scan in a
+    /// `Task`). Reads through it see exactly what [`Self::get`] sees.
+    pub fn get_shared(&self, library_id: Uuid) -> Option<Arc<dyn LibraryAdapter>> {
+        let key = self.find_key_for_id(library_id)?;
+        self.libs.get(&key).map(Arc::clone)
     }
 
     /// Borrow the file-backed adapter mounted at `path`, if any.

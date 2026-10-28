@@ -64,7 +64,7 @@ shrink.
 | `mirror_x` | Mirror along X-axis | modify | `X` | `X` |
 | `mirror_y` | Mirror along Y-axis | modify | `Y` | `Y` |
 | `move_object` | Move object | modify | `M M` | — |
-| `move_selection` | Move | modify | — | `M` |
+| `move_selection` | Move selection | modify | — | `M` |
 | `new_document` | New | file | — | `Ctrl+N` |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |
@@ -205,8 +205,8 @@ shrink.
 | `previous_highlighted_net_item` | Previous item on highlighted net | select | — | `Shift+Tab` |
 | `previous_sheet` | Previous sheet | navigation | — | `PageUp` |
 | `reset_schematic_designators` | Reset schematic designators | design | `T A E` | — |
-| `rotate_selection` | Rotate selection | modify | — | — |
-| `rotate_selection_cw` | Rotate selection c w | modify | — | — |
+| `rotate_selection` | Rotate selection counter-clockwise | modify | — | — |
+| `rotate_selection_cw` | Rotate selection clockwise | modify | — | — |
 | `run_erc` | Run electrical rules check | validation | `F8` | `F8` |
 | `select_connection` | Select connection | select | — | — |
 | `send_to_back` | Send to back | modify | — | — |

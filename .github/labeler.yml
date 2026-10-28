@@ -33,7 +33,7 @@
 "area: schematic":
   - changed-files:
       - any-glob-to-any-file:
-          - "crates/signex-app/src/schematic_runtime.rs"
+          - "crates/signex-app/src/schematic_runtime/**"
           - "crates/signex-app/src/find_replace.rs"
           - "crates/signex-app/src/canvas/**"
 
@@ -93,6 +93,7 @@
   - changed-files:
       - any-glob-to-any-file:
           - "crates/signex-engine/**"
+          - "crates/signex-net/**"
 
 "area: widgets":
   - changed-files:
@@ -106,15 +107,16 @@
           - "crates/signex-app/src/app/**"
           - "crates/signex-app/src/app.rs"
           - "crates/signex-app/src/main.rs"
-          - "crates/signex-app/src/menu_bar.rs"
+          - "crates/signex-app/src/menu_bar/**"
           - "crates/signex-app/src/toolbar.rs"
-          - "crates/signex-app/src/active_bar.rs"
+          - "crates/signex-app/src/active_bar/**"
           - "crates/signex-app/src/tab_bar.rs"
           - "crates/signex-app/src/status_bar.rs"
           - "crates/signex-app/src/dock/**"
           - "crates/signex-app/src/chrome.rs"
-          - "crates/signex-app/src/preferences.rs"
-          - "crates/signex-app/src/undo.rs"
+          - "crates/signex-app/src/preferences/**"
+          - "crates/signex-app/src/panels/**"
+          - "crates/signex-app/src/keymap/**"
           # Catch-all so no signex-app test change lands untriaged. The
           # more specific globs above add their own area on top; a PR can
           # carry several.
@@ -127,7 +129,8 @@
           - "deny.toml"
           - "Cargo.toml"
           - "Cargo.lock"
-          - "rustfmt.toml"
+          - "rust-toolchain.toml"
+          - "fuzz/**"
 
 "area: docs":
   - changed-files:

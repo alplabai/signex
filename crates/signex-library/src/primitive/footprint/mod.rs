@@ -19,6 +19,7 @@ use crate::param::ParamMap;
 
 mod load_repair;
 mod pad;
+mod pad_columns;
 mod serde_tsv;
 #[cfg(test)]
 mod tests;
@@ -44,6 +45,18 @@ pub enum FpGraphicKind {
         center: [f64; 2],
         radius: f64,
     },
+    /// Circular arc about `center`.
+    ///
+    /// **Sweep convention:** the arc runs from `start_deg` to `end_deg` in
+    /// the direction of *increasing* angle (angles measured from +X with
+    /// `atan2(dy, dx)`; CCW in a y-up frame, which reads clockwise on the
+    /// y-down footprint canvas), wrapping through 360 when `start_deg > end_deg`.
+    /// So `300 -> 60` is the 120 degree arc through 0, not the 240 degree
+    /// one; `10 -> 80` is the 70 degree arc. Angles may be given outside
+    /// `[0, 360)` (the placement tool stores `atan2` output in
+    /// `(-180, 180]`). A sweep of 360 or more (`|end - start| >= 360`) is a
+    /// full circle and equal angles are a zero-length arc; see
+    /// [`FpGraphicKind::arc_sweep_deg`].
     Arc {
         center: [f64; 2],
         radius: f64,
@@ -65,6 +78,23 @@ pub enum FpGraphicKind {
     Polygon {
         vertices: Vec<[f64; 2]>,
     },
+}
+
+impl FpGraphicKind {
+    /// CCW sweep in degrees of an [`FpGraphicKind::Arc`], in `[0, 360]`.
+    ///
+    /// `0.0` for a degenerate zero-length arc, `360.0` for a full circle
+    /// (`|end - start| >= 360`), otherwise `(end - start).rem_euclid(360)`.
+    pub fn arc_sweep_deg(start_deg: f64, end_deg: f64) -> f64 {
+        let raw = (end_deg - start_deg).abs();
+        if raw < 1e-6 {
+            0.0
+        } else if raw >= 359.999 {
+            360.0
+        } else {
+            (end_deg - start_deg).rem_euclid(360.0)
+        }
+    }
 }
 
 /// One footprint silkscreen / fab graphic.
@@ -498,9 +528,10 @@ pub struct FootprintFile {
 
 const FOOTPRINT_FILE_FORMAT_TOKEN: &str = "snxfpt/1";
 
-/// Stable column layout for the per-footprint `pads_tsv` block.
-/// Adding or reordering columns is a wire-format break — bump
-/// [`FOOTPRINT_FILE_FORMAT_TOKEN`].
+/// Base column layout for the per-footprint `pads_tsv` block; these
+/// lead every header. Reordering them is a wire-format break — bump
+/// [`FOOTPRINT_FILE_FORMAT_TOKEN`]. The remaining `Pad` fields are
+/// optional trailing columns, see `pad_columns`.
 const PAD_TSV_COLUMNS: &[&str] = &[
     "number",
     "kind",
@@ -638,7 +669,7 @@ impl FootprintFile {
     /// to [`FOOTPRINT_FILE_FORMAT_TOKEN`]; mismatched files surface
     /// [`FootprintFileError::UnsupportedFormat`].
     pub fn from_toml_str(text: &str) -> Result<Self, FootprintFileError> {
-        let wire: FootprintFileWire = toml::from_str(text)?;
+        let wire: FootprintFileWire = signex_types::numeric::parse_toml_finite(text)?;
         if wire.format != FOOTPRINT_FILE_FORMAT_TOKEN {
             return Err(FootprintFileError::UnsupportedFormat { got: wire.format });
         }
@@ -738,6 +769,13 @@ impl FootprintFile {
             updated: self.updated,
             footprints: wire_footprints,
         };
+        // #828: graphics, pours and parameters are written by serde, and
+        // TOML spells NaN / infinity `nan` / `inf`; refuse them by key path.
+        if let Some(field) = signex_types::numeric::first_non_finite_path(&wire)
+            .map_err(FootprintFileError::TomlSerialize)?
+        {
+            return Err(FootprintFileError::NonFiniteField { field });
+        }
         let mut out = toml::to_string_pretty(&wire).map_err(FootprintFileError::TomlSerialize)?;
         for (idx, payload) in tsv_payloads.iter().enumerate() {
             let needle = format!("\"{PADS_TSV_PLACEHOLDER_PREFIX}{idx}__\"");

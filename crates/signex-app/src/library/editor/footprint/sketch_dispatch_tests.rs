@@ -662,7 +662,7 @@ mod tests {
     #[test]
     fn solver_errors_surface_in_solve_warnings_not_silently_swallowed() {
         // v0.22 — every SolveError variant (including the previously
-        // silently-swallowed Timeout) now propagates as
+        // silently-swallowed budget exhaustion) now propagates as
         // SketchError::SolveFailed. The _with_warnings wrapper writes
         // it into state.solve_warnings so the inspector can show it.
         // We force the broader SketchError::Expr path by injecting a
@@ -705,7 +705,7 @@ mod tests {
     // entities and their endpoints — rather than the raw entity total.
     // ----------------------------------------------------------------
 
-    /// Build an `app::FootprintEditorState` holding a single sketch
+    /// Build an `app::FootprintDocument` holding a single sketch
     /// Line from `p_start` to `p_end`, armed with the Break Track tool.
     /// Returns the editor plus the start / end Point ids and the Line
     /// id so tests can assert against the pre-split identities.
@@ -713,7 +713,7 @@ mod tests {
         p_start: (f64, f64),
         p_end: (f64, f64),
     ) -> (
-        crate::app::FootprintEditorState,
+        crate::app::FootprintDocument,
         SketchEntityId,
         SketchEntityId,
         SketchEntityId,
@@ -762,7 +762,7 @@ mod tests {
         });
         let file = FootprintFile::from_footprint(fp);
         let mut editor =
-            crate::app::FootprintEditorState::new(PathBuf::from("break-track.snxfpt"), file);
+            crate::app::FootprintDocument::new(PathBuf::from("break-track.snxfpt"), file);
         editor.state.active_tool = SketchTool::BreakTrack;
         (editor, sid, eid, lid)
     }
@@ -770,7 +770,7 @@ mod tests {
     /// `(line_id, start_id, end_id)` for every `Line` in the active
     /// footprint's sketch.
     fn sketch_lines(
-        editor: &crate::app::FootprintEditorState,
+        editor: &crate::app::FootprintDocument,
     ) -> Vec<(SketchEntityId, SketchEntityId, SketchEntityId)> {
         editor
             .primitive()
@@ -787,7 +787,7 @@ mod tests {
     }
 
     /// Coordinates of the Point `id` in the active footprint's sketch.
-    fn point_xy(editor: &crate::app::FootprintEditorState, id: SketchEntityId) -> (f64, f64) {
+    fn point_xy(editor: &crate::app::FootprintDocument, id: SketchEntityId) -> (f64, f64) {
         editor
             .primitive()
             .sketch
@@ -988,9 +988,9 @@ mod tests {
     // #467 — 3-point Edge Arc (start -> end -> point-on-arc).
     // ------------------------------------------------------------
 
-    /// Build an `app::FootprintEditorState` with an empty sketch,
+    /// Build an `app::FootprintDocument` with an empty sketch,
     /// armed with the Edge Arc tool.
-    fn edge_arc_editor() -> crate::app::FootprintEditorState {
+    fn edge_arc_editor() -> crate::app::FootprintDocument {
         use crate::library::editor::footprint::state::SketchTool;
         use signex_library::primitive::footprint::FootprintFile;
         use std::path::PathBuf;
@@ -1005,8 +1005,7 @@ mod tests {
             ..SketchData::default()
         });
         let file = FootprintFile::from_footprint(fp);
-        let mut editor =
-            crate::app::FootprintEditorState::new(PathBuf::from("edge-arc.snxfpt"), file);
+        let mut editor = crate::app::FootprintDocument::new(PathBuf::from("edge-arc.snxfpt"), file);
         editor.state.active_tool = SketchTool::EdgeArc;
         editor
     }
@@ -1014,7 +1013,7 @@ mod tests {
     /// `(arc_id, center_id, start_id, end_id, sweep_ccw)` for every
     /// `Arc` in the active footprint's sketch.
     fn sketch_arcs(
-        editor: &crate::app::FootprintEditorState,
+        editor: &crate::app::FootprintDocument,
     ) -> Vec<(
         SketchEntityId,
         SketchEntityId,
@@ -1041,7 +1040,7 @@ mod tests {
             .collect()
     }
 
-    fn click(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64) {
+    fn click(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
         crate::library::editor::footprint::updates::apply_footprint_primitive_edit(
             editor,
             crate::library::messages::FootprintEditorMsg::SketchToolClick {
@@ -1251,8 +1250,7 @@ mod tests {
         });
         let before = fp.sketch.clone();
         let file = FootprintFile::from_footprint(fp);
-        let mut editor =
-            crate::app::FootprintEditorState::new(PathBuf::from("cascade.snxfpt"), file);
+        let mut editor = crate::app::FootprintDocument::new(PathBuf::from("cascade.snxfpt"), file);
         editor.state.mode = crate::library::editor::footprint::state::EditorMode::Sketch;
         editor.state.selected_sketch = Some(a);
 

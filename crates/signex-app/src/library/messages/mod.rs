@@ -12,8 +12,8 @@
 use std::path::PathBuf;
 
 use signex_library::{
-    AlternateStatus, BodyShape, ComponentClass, ComponentSummary, DistributorSource,
-    LifecycleState, PrimitiveRef, SimKind, SimModel,
+    AlternateStatus, BodyShape, ComponentClass, DistributorSource, LifecycleState, PrimitiveRef,
+    SimKind, SimModel,
 };
 use uuid::Uuid;
 
@@ -26,8 +26,10 @@ use super::state::PreviewTab;
 pub type ComponentId = Uuid;
 pub type Version = u32;
 
+mod datasheet;
 mod library_message;
-pub use library_message::LibraryMessage;
+pub use datasheet::{DatasheetMsg, PickedFile, PickedPdf};
+pub use library_message::{LibraryMessage, ResolvedPlacement, ResolvedSymbolChoice};
 
 /// User choice from the close-library confirmation modal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,17 +67,17 @@ pub enum EditorMsg {
     OpenWhereUsedTab,
     /// User dismissed the preview tab (Close X or Ctrl+W).
     CloseEditor,
+    /// User pressed "Reload saved version": asks to replace the working copy
+    /// with the stored row (confirms first when there are unsaved edits).
+    ReloadRequested,
+    /// User confirmed discarding the working copy for the stored row.
+    ReloadConfirmed,
+    /// User kept their working copy instead of reloading.
+    ReloadCancelled,
 
     // ── Datasheet tab ────────────────────────────────────────
-    /// Switch the datasheet picker between URL / Pinned PDF modes.
-    DatasheetSetMode(crate::library::editor::datasheet_picker::DatasheetMode),
-    /// Live edit of the URL field on the Datasheet tab.
-    DatasheetSetUrl(String),
-    /// Open the Pinned-PDF upload dialog.
-    DatasheetUploadDialog,
-    /// Async result of the Pinned-PDF upload — `Some((bytes, filename))`
-    /// on pick, `None` on cancel.
-    DatasheetUploadResult(Option<(Vec<u8>, String)>),
+    /// An edit of the row's document list (#1231).
+    Datasheet(DatasheetMsg),
 
     // ── Component-level setters ─────────────────────────────
     /// Set the row's lifecycle state from the Preview tab header.
@@ -114,6 +116,20 @@ pub enum EditorMsg {
     /// entry from `Revision::pin_map_overrides`.
     PinMapRemoveOverride {
         pin: String,
+    },
+    /// The alternate symbol at `idx` was removed from the row (#1230).
+    AlternateSymbolRemoved {
+        idx: usize,
+    },
+    /// The alternate symbol at `idx` was relabelled.
+    AlternateSymbolRelabeled {
+        idx: usize,
+        label: String,
+    },
+    /// The alternate symbol at `from` was moved to position `to`.
+    AlternateSymbolMoved {
+        from: usize,
+        to: usize,
     },
     /// Fire-and-forget save of the active symbol primitive — typically
     /// chained off SaveDraft via the dispatcher. Boxed so the
@@ -248,9 +264,11 @@ pub enum EditorMsg {
     ParamRemove {
         name: String,
     },
-    /// Add a custom parameter row with an empty value of the chosen kind.
+    /// Live edit of the "Add custom parameter" name input.
+    ParamNewNameChanged(String),
+    /// Add a custom parameter row, named by the "Add custom parameter"
+    /// input, with an empty value of the chosen kind.
     ParamAddCustom {
-        name: String,
         kind: ParamKindMsg,
     },
     // ── Simulation tab ────────────────────────────────────────
@@ -516,6 +534,7 @@ pub enum SymbolContextTargetMsg {
     Empty,
     Pin(usize),
     Graphic(usize),
+    Field(crate::library::editor::symbol::state::FieldKey),
 }
 
 /// Which context-menu submenu is accordion-expanded — pure-data alias
@@ -550,8 +569,10 @@ pub enum PrimitiveEdit {
 /// Picker modal interaction sub-message tree.
 #[derive(Debug, Clone)]
 pub enum PickerMsg {
+    /// Left-dock library panel search box edited.
+    PanelSearchChanged(String),
     FilterChanged(String),
-    SelectComponent(ComponentSummary),
+    SelectComponent(uuid::Uuid),
     PlaceSelected,
 }
 
@@ -601,6 +622,12 @@ pub enum BrowserEditMsg {
     Save,
     /// Dismiss the modal without saving.
     Cancel,
+    /// User pressed "Reload saved version" after a stale-row refusal.
+    ReloadRequested,
+    /// User confirmed replacing the draft with the stored row.
+    ReloadConfirmed,
+    /// User kept the draft.
+    ReloadCancelled,
 }
 
 /// Primitive picker modal sub-messages.

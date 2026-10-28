@@ -7,12 +7,24 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use crate::library::external_poll;
+use crate::library::refresh::RefreshFollowUp;
 
 impl Signex {
     /// Timer tick: start the off-thread `stat` pass, unless the previous
     /// one is still running (or stuck past its timeout) or nothing is
     /// mounted.
     pub(super) fn handle_external_edits_poll_ticked(&mut self) -> Task<Message> {
+        // The only clock `view` gets (ages of cached prices).
+        self.library.clock = chrono::Utc::now();
+        // The same tick re-checks the project tree's `(missing)` marks (#111).
+        let stat_pass = self.start_library_stat_pass();
+        match self.start_project_fs_probe(true) {
+            Some(probe) => Task::batch([stat_pass, probe]),
+            None => stat_pass,
+        }
+    }
+
+    fn start_library_stat_pass(&mut self) -> Task<Message> {
         let stat_running = &self.library.external_poll_stat_running;
         if self.library.external_poll_in_flight || stat_running.load(Ordering::SeqCst) {
             return Task::none();
@@ -67,42 +79,34 @@ impl Signex {
         if stalled || failed {
             crate::diagnostics::log_info("[library] external-edit checks resumed");
         }
-        let mut refreshed = false;
+        let mut tasks = Vec::new();
         for (path, stamp) in &changed {
             let Some(lib) = self.library.library_at(path) else {
                 continue;
             };
+            // A refresh of this library is already on its way: its caches
+            // are about to change, and what the stamp shows may be the
+            // app's own write.
+            if self.library.refresh_in_flight(path) {
+                continue;
+            }
             // The caches were refilled under this exact stamp while the pass
             // ran (an in-app write): the result is stale, nothing to do.
             if lib.observed_stamp == Some(*stamp) {
                 continue;
             }
-            let name = lib.display_name.clone();
             // Quiet only when the file is exactly what the app's own class
             // write left; any later external edit changes the stamp and is
             // reported as usual.
             let own_edit = lib.own_edit_stamp == Some(*stamp);
-            refreshed = true;
-            match self.library.refresh_components(path) {
-                Ok(()) if own_edit => {}
-                Ok(()) => crate::diagnostics::log_info(format!(
-                    "[library] {name} changed on disk; reloaded"
-                )),
-                Err(error) => {
-                    crate::diagnostics::log_warning(format!(
-                        "[library] {name} changed on disk but could not be reloaded: {error}"
-                    ));
-                    // Re-stamp so a persistent failure is reported once,
-                    // not on every tick.
-                    if let Some(lib) = self.library.library_at_mut(path) {
-                        lib.observed_stamp = Some(*stamp);
-                    }
-                }
-            }
+            tasks.push(self.refresh_library_task(
+                path,
+                RefreshFollowUp::ExternalEdit {
+                    stamp: *stamp,
+                    own_edit,
+                },
+            ));
         }
-        if refreshed {
-            self.refresh_panel_ctx();
-        }
-        Task::none()
+        Task::batch(tasks)
     }
 }

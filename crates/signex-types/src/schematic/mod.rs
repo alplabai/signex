@@ -280,9 +280,9 @@ impl SymbolTransform {
         Point::new(rx + self.origin.x, ry + self.origin.y)
     }
 
-    /// Compose a child rotation (degrees, clockwise positive in
-    /// schematic-screen space) with the parent's rotation + mirror so
-    /// the rendered angle ends up correct.
+    /// Compose a child rotation (degrees, counter-clockwise positive on
+    /// screen, the same convention as `Symbol::rotation`) with the parent's
+    /// rotation + mirror so the rendered angle ends up correct.
     #[must_use]
     pub fn apply_angle(&self, child_deg: f64) -> f64 {
         let mut r = self.rotation_deg + child_deg;
@@ -413,11 +413,16 @@ pub enum LabelType {
 // Text property (for reference/value fields)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TextProp {
     pub position: Point,
     pub rotation: f64,
     pub font_size: f64,
+    /// Font family the author chose for this text, `None` to inherit the
+    /// sheet default (see [`crate::font`]). Never rewritten when the family
+    /// is not installed: resolution happens at render time only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
     #[serde(default)]
     pub justify_h: HAlign,
     #[serde(default)]
@@ -426,7 +431,7 @@ pub struct TextProp {
     pub hidden: bool,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct SymbolInstance {
     #[serde(default)]
     pub project: String,
@@ -438,7 +443,7 @@ pub struct SymbolInstance {
     pub unit: u32,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct SheetInstance {
     #[serde(default)]
     pub project: String,
@@ -632,7 +637,7 @@ pub struct Pin {
 // Symbol instance
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Symbol {
     pub uuid: Uuid,
     pub lib_id: String,
@@ -769,12 +774,31 @@ impl Default for Symbol {
 
 // ---------------------------------------------------------------------------
 // Wiring primitives
+mod bus_entry;
+pub use bus_entry::*;
+mod bus_name;
+pub use bus_name::*;
 mod field_style;
-pub use field_style::field_effective_style;
+mod instance_path;
+pub use field_style::{field_effective_style, readable_text_style};
+pub use instance_path::InstancePath;
 mod parts;
 pub use parts::*;
 mod sheet;
 pub use sheet::*;
+mod sheet_frame;
+pub use sheet_frame::{MAX_ZONES, SheetFrameSettings};
+mod sheet_size;
+pub use sheet_size::{MAX_PAGE_EDGE_MM, MIN_CUSTOM_EDGE_MM, SheetOrientation, SheetSize};
+mod hotspot;
+pub use hotspot::{SCHEMATIC_HOTSPOT_RADIUS_MM, hotspot_capture_radius, snap_to_hotspot};
+mod power_port_symbol;
+pub use power_port_symbol::{PowerPortStyle, power_port_graphics, power_port_lib_symbol};
+mod symbol_geometry;
+pub use symbol_geometry::{
+    SymbolPrimitive, arc_polyline, instance_pins, lower_placed_symbol, lower_symbol, pin_direction,
+    primitives_bounds, text_aabb, text_aabb_with_width, text_height_mm,
+};
 
 #[cfg(test)]
 mod default_tests;

@@ -7,10 +7,10 @@
 use super::align_pads;
 use super::footprint_nudge_selection;
 use crate::library::editor::footprint::pad_to_sketch;
-use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
+use crate::library::editor::footprint::state::FootprintEditorState;
 use crate::library::messages::FootprintEditorMsg;
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
+pub(super) fn apply(editor: &mut crate::app::FootprintDocument, msg: FootprintEditorMsg) {
     match msg {
         FootprintEditorMsg::ToggleActiveBarMenu(menu) => toggle_active_bar_menu(editor, menu),
         FootprintEditorMsg::CloseActiveBarMenu => close_active_bar_menu(editor),
@@ -50,7 +50,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
 }
 
 fn toggle_active_bar_menu(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     menu: crate::library::editor::footprint::state::FpActiveBarMenu,
 ) {
     editor.state.active_bar_menu = match editor.state.active_bar_menu {
@@ -59,11 +59,11 @@ fn toggle_active_bar_menu(
     };
 }
 
-fn close_active_bar_menu(editor: &mut crate::app::FootprintEditorState) {
+fn close_active_bar_menu(editor: &mut crate::app::FootprintDocument) {
     editor.state.active_bar_menu = None;
 }
 
-fn active_bar_stub(editor: &mut crate::app::FootprintEditorState, label: &'static str) {
+fn active_bar_stub(editor: &mut crate::app::FootprintDocument, label: &'static str) {
     crate::diagnostics::log_info(format!(
         "Active bar: {label} — coming soon (footprint Altium parity)"
     ));
@@ -74,7 +74,7 @@ fn active_bar_stub(editor: &mut crate::app::FootprintEditorState, label: &'stati
 // persisted list. Re-read from disk on every apply so a
 // preset captured in a different tab/session is picked up
 // without needing an in-memory refresh.
-fn apply_filter_preset(editor: &mut crate::app::FootprintEditorState, idx: usize) {
+fn apply_filter_preset(editor: &mut crate::app::FootprintDocument, idx: usize) {
     let presets = crate::fonts::read_footprint_filter_presets();
     if let Some(preset) = presets.get(idx) {
         crate::library::editor::footprint::filter_presets::apply_preset(&mut editor.state, preset);
@@ -84,7 +84,7 @@ fn apply_filter_preset(editor: &mut crate::app::FootprintEditorState, idx: usize
 }
 
 // Task 6 — Filter dropdown's "All - On / All - Off" chip.
-fn toggle_all_filters(editor: &mut crate::app::FootprintEditorState) {
+fn toggle_all_filters(editor: &mut crate::app::FootprintDocument) {
     let all_on = crate::library::editor::footprint::state::SelectionFilterKind::ALL
         .iter()
         .all(|&k| editor.state.selection_filter.get(k));
@@ -97,7 +97,7 @@ fn toggle_all_filters(editor: &mut crate::app::FootprintEditorState) {
 // rename UI yet (deferred — see filter_presets.rs). Silently
 // ignores the capture once `CUSTOM_FILTER_PRESET_LIMIT` slots
 // are full rather than evicting an existing preset.
-fn capture_filter_preset(editor: &mut crate::app::FootprintEditorState) {
+fn capture_filter_preset(editor: &mut crate::app::FootprintDocument) {
     let mut presets = crate::fonts::read_footprint_filter_presets();
     if presets.len() < crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT {
         let name = format!("Filter {}", presets.len() + 1);
@@ -110,7 +110,7 @@ fn capture_filter_preset(editor: &mut crate::app::FootprintEditorState) {
 }
 
 fn active_bar_toggle_snap(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     flag: crate::panels::SnapOptionFlag,
 ) {
     use crate::panels::SnapOptionFlag;
@@ -142,7 +142,7 @@ fn active_bar_toggle_snap(
 }
 
 fn active_bar_set_snapping_mode(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     mode: crate::library::editor::footprint::state::SnappingMode,
 ) {
     editor.state.snapping_mode = mode;
@@ -150,7 +150,7 @@ fn active_bar_set_snapping_mode(
 }
 
 fn active_bar_set_snap_sub_tab(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     sub: crate::library::editor::footprint::state::SnapSubTab,
 ) {
     editor.state.snap_subtab = sub;
@@ -166,7 +166,7 @@ fn active_bar_set_snap_sub_tab(
 // snapshots here itself — exactly once, and only when the selection is
 // non-empty, so a no-op transform never stacks undo history or dirties
 // the document.
-fn active_bar_rotate_selection(editor: &mut crate::app::FootprintEditorState) {
+fn active_bar_rotate_selection(editor: &mut crate::app::FootprintDocument) {
     // #146 + #433 — snapshot + dirty only when at least one pad is
     // selected (a no-op rotate must not stack undo history or dirty
     // the document), then rotate EVERY selected pad (#390 multi-select)
@@ -184,7 +184,7 @@ fn active_bar_rotate_selection(editor: &mut crate::app::FootprintEditorState) {
                     pad_to_sketch::warn_profile_pad_untransformed("Rotate", &pad.number);
                 }
             }
-            CanvasState::sync_pads_to_primitive(state, primitive);
+            FootprintEditorState::sync_pads_to_primitive(state, primitive);
         });
         editor.canvas_cache.clear();
         editor.dirty = true;
@@ -192,7 +192,7 @@ fn active_bar_rotate_selection(editor: &mut crate::app::FootprintEditorState) {
     editor.state.active_bar_menu = None;
 }
 
-fn active_bar_flip_selection(editor: &mut crate::app::FootprintEditorState) {
+fn active_bar_flip_selection(editor: &mut crate::app::FootprintDocument) {
     // #146 + #433 — gate history + dirty on a real selection (see
     // rotate), then flip EVERY selected pad in place (#390 multi-
     // select). Flipping to the other side mirrors the pad's copper
@@ -217,7 +217,7 @@ fn active_bar_flip_selection(editor: &mut crate::app::FootprintEditorState) {
                     pad_to_sketch::warn_profile_pad_untransformed("Flip", &pad.number);
                 }
             }
-            CanvasState::sync_pads_to_primitive(state, primitive);
+            FootprintEditorState::sync_pads_to_primitive(state, primitive);
         });
         editor.canvas_cache.clear();
         editor.dirty = true;
@@ -225,7 +225,7 @@ fn active_bar_flip_selection(editor: &mut crate::app::FootprintEditorState) {
     editor.state.active_bar_menu = None;
 }
 
-fn active_bar_nudge_selection(editor: &mut crate::app::FootprintEditorState) {
+fn active_bar_nudge_selection(editor: &mut crate::app::FootprintDocument) {
     // v0.14 — "Move Selection by X, Y…" one-step nudge: the
     // combined selection by one active grid step in +X and +Y.
     // Shares geometry + sketch-mirror + history with the
@@ -235,31 +235,40 @@ fn active_bar_nudge_selection(editor: &mut crate::app::FootprintEditorState) {
     editor.state.active_bar_menu = None;
 }
 
-fn move_by_open(editor: &mut crate::app::FootprintEditorState) {
+fn move_by_open(editor: &mut crate::app::FootprintDocument) {
     editor.state.move_by_modal = Some(Default::default());
     editor.state.active_bar_menu = None;
 }
 
-fn move_by_set_x(editor: &mut crate::app::FootprintEditorState, v: String) {
+fn move_by_set_x(editor: &mut crate::app::FootprintDocument, v: String) {
     if let Some(m) = editor.state.move_by_modal.as_mut() {
         m.dx_buf = v;
     }
 }
 
-fn move_by_set_y(editor: &mut crate::app::FootprintEditorState, v: String) {
+fn move_by_set_y(editor: &mut crate::app::FootprintDocument, v: String) {
     if let Some(m) = editor.state.move_by_modal.as_mut() {
         m.dy_buf = v;
     }
 }
 
-fn move_by_confirm(editor: &mut crate::app::FootprintEditorState) {
-    if let Some((dx, dy)) = editor.state.move_by_modal.as_ref().and_then(|m| m.parsed()) {
-        footprint_nudge_selection(editor, dx, dy);
+fn move_by_confirm(editor: &mut crate::app::FootprintDocument) {
+    use crate::library::editor::footprint::state::MoveByInput;
+    let Some(modal) = editor.state.move_by_modal.as_ref() else {
+        return;
+    };
+    match modal.parsed() {
+        MoveByInput::Offset(dx, dy) => footprint_nudge_selection(editor, dx, dy),
+        // #828 — an `inf` offset would send the pads to infinity and every
+        // later save would fail. Move nothing and keep the dialog open so
+        // the user can fix the box the Messages panel names.
+        MoveByInput::Refused => return,
+        MoveByInput::NotANumber => {}
     }
     editor.state.move_by_modal = None;
 }
 
-fn move_by_cancel(editor: &mut crate::app::FootprintEditorState) {
+fn move_by_cancel(editor: &mut crate::app::FootprintDocument) {
     editor.state.move_by_modal = None;
 }
 
@@ -267,13 +276,13 @@ fn move_by_cancel(editor: &mut crate::app::FootprintEditorState) {
 // transient `align_modal` state; Confirm composes the chosen
 // per-axis ops over the SAME `align_pads` helper the concrete
 // `AlignPads` rows use, under exactly one history snapshot.
-fn align_open(editor: &mut crate::app::FootprintEditorState) {
+fn align_open(editor: &mut crate::app::FootprintDocument) {
     editor.state.align_modal = Some(Default::default());
     editor.state.active_bar_menu = None;
 }
 
 fn align_set_horizontal(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     op: Option<crate::library::editor::footprint::state::AlignOp>,
 ) {
     if let Some(m) = editor.state.align_modal.as_mut() {
@@ -282,7 +291,7 @@ fn align_set_horizontal(
 }
 
 fn align_set_vertical(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     op: Option<crate::library::editor::footprint::state::AlignOp>,
 ) {
     if let Some(m) = editor.state.align_modal.as_mut() {
@@ -290,7 +299,7 @@ fn align_set_vertical(
     }
 }
 
-fn align_confirm(editor: &mut crate::app::FootprintEditorState) {
+fn align_confirm(editor: &mut crate::app::FootprintDocument) {
     use crate::library::editor::footprint::state::AlignOp;
 
     // Read the two chosen ops before mutating anything.
@@ -360,7 +369,7 @@ fn align_confirm(editor: &mut crate::app::FootprintEditorState) {
             for snapshot in &moved {
                 pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
             }
-            CanvasState::sync_pads_to_primitive(state, primitive);
+            FootprintEditorState::sync_pads_to_primitive(state, primitive);
         });
         editor.canvas_cache.clear();
         editor.dirty = true;
@@ -368,11 +377,11 @@ fn align_confirm(editor: &mut crate::app::FootprintEditorState) {
     editor.state.align_modal = None;
 }
 
-fn align_cancel(editor: &mut crate::app::FootprintEditorState) {
+fn align_cancel(editor: &mut crate::app::FootprintDocument) {
     editor.state.align_modal = None;
 }
 
-fn active_bar_align_selection_to_grid(editor: &mut crate::app::FootprintEditorState) {
+fn active_bar_align_selection_to_grid(editor: &mut crate::app::FootprintDocument) {
     // #146 + #433 — gate history + dirty on a real selection (see
     // rotate), then snap EVERY selected pad to the grid (#390 multi-
     // select) and mirror each snap into the sketch so the construction
@@ -393,7 +402,7 @@ fn active_bar_align_selection_to_grid(editor: &mut crate::app::FootprintEditorSt
             for snapshot in &snapshots {
                 pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
             }
-            CanvasState::sync_pads_to_primitive(state, primitive);
+            FootprintEditorState::sync_pads_to_primitive(state, primitive);
         });
         editor.canvas_cache.clear();
         editor.dirty = true;
@@ -401,7 +410,7 @@ fn active_bar_align_selection_to_grid(editor: &mut crate::app::FootprintEditorSt
     editor.state.active_bar_menu = None;
 }
 
-fn active_bar_move_origin_to_grid(editor: &mut crate::app::FootprintEditorState) {
+fn active_bar_move_origin_to_grid(editor: &mut crate::app::FootprintDocument) {
     // #146 — snapshot + dirty only when there is at least one
     // pad to move; an empty footprint must stay clean.
     if !editor.state.pads.is_empty() {
@@ -420,7 +429,7 @@ fn active_bar_move_origin_to_grid(editor: &mut crate::app::FootprintEditorState)
             for snapshot in &snapshots {
                 pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
             }
-            CanvasState::sync_pads_to_primitive(state, primitive);
+            FootprintEditorState::sync_pads_to_primitive(state, primitive);
         });
         editor.canvas_cache.clear();
         editor.dirty = true;
@@ -428,7 +437,7 @@ fn active_bar_move_origin_to_grid(editor: &mut crate::app::FootprintEditorState)
     editor.state.active_bar_menu = None;
 }
 
-fn active_bar_select_all(editor: &mut crate::app::FootprintEditorState) {
+fn active_bar_select_all(editor: &mut crate::app::FootprintDocument) {
     // v0.27 — Altium-parity: Select All multi-selects every
     // pad in Pads mode; Sketch mode still picks the first
     // entity (sketch-side multi-select is a v0.28 follow-up).
@@ -455,7 +464,7 @@ fn active_bar_select_all(editor: &mut crate::app::FootprintEditorState) {
     editor.state.active_bar_menu = None;
 }
 
-fn active_bar_clear_selection(editor: &mut crate::app::FootprintEditorState) {
+fn active_bar_clear_selection(editor: &mut crate::app::FootprintDocument) {
     editor.state.selected_pad = None;
     editor.state.selected_pads_extra.clear();
     editor.state.selected_sketch = None;
@@ -467,7 +476,7 @@ fn active_bar_clear_selection(editor: &mut crate::app::FootprintEditorState) {
 }
 
 fn active_bar_set_sketch_tool(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     tool: crate::library::editor::footprint::state::SketchTool,
 ) {
     // Switch to Sketch mode if not already there, then arm the

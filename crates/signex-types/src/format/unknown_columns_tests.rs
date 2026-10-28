@@ -53,6 +53,7 @@ fn two_row_sheet() -> SchematicSheet {
             font_size: 1.27,
             justify: HAlign::Left,
             justify_v: VAlign::Bottom,
+            font_family: None,
         });
     }
     sheet
@@ -562,4 +563,113 @@ fn deserialising_an_invalid_unknown_columns_is_refused() {
     assert!(serde_json::from_value::<UnknownColumns>(serde_json::json!(long)).is_err());
     let dup = vec![("a", "1"), ("a", "2")];
     assert!(serde_json::from_value::<UnknownColumns>(serde_json::json!(dup)).is_err());
+}
+
+// ---------------------------------------------------------------------------
+// #768: actionable over-cap save error, bounded header-mismatch message
+// ---------------------------------------------------------------------------
+
+#[test]
+fn over_cap_write_error_names_the_objects_carrying_the_excess_columns() {
+    // Row 1 carries c0..c128, row 2 carries c129..c256: only row 2 holds
+    // a column past the cap (c256).
+    let rows = vec![
+        with_foreign(junction_row(1), &names(0..129)),
+        with_foreign(junction_row(2), &names(129..257)),
+    ];
+    let err = write_tsv_block("t", &rows).unwrap_err();
+    let text = err.to_string();
+    assert!(text.contains(&uuid_n(2).to_string()), "{text}");
+    assert!(!text.contains(&uuid_n(1).to_string()), "{text}");
+}
+
+#[test]
+fn over_cap_write_error_says_how_many_more_objects_there_are() {
+    // 300 rows each with its own unique name: rows 257..=300 are over
+    // the cap (44 objects), only the first few are named.
+    let rows: Vec<_> = (0..300u32)
+        .map(|n| with_foreign(junction_row(n + 1), &names(n as usize..n as usize + 1)))
+        .collect();
+    let err = write_tsv_block("t", &rows).unwrap_err();
+    let text = err.to_string();
+    assert!(text.contains("and 36 more"), "{text}");
+    assert!(text.len() < 2000, "error must stay bounded: {}", text.len());
+    // Rows 256..=263 (0-based) are the first 8 over the cap, in row order.
+    assert!(text.contains(&uuid_n(257).to_string()), "{text}");
+    assert!(text.contains(&uuid_n(264).to_string()), "{text}");
+    assert!(!text.contains(&uuid_n(265).to_string()), "{text}");
+}
+
+#[test]
+fn described_row_with_a_long_ref_stays_short() {
+    let long_ref = "R".repeat(500);
+    let row = |n: u32, range: std::ops::Range<usize>| SchComponentRow {
+        uuid: uuid_n(n),
+        ref_des: long_ref.clone(),
+        library: String::new(),
+        pos_x: 0,
+        pos_y: 0,
+        rotation: 0.0,
+        value: String::new(),
+        mpn: String::new(),
+        unknown_columns: foreign_cols(&names(range)),
+    };
+    let rows = vec![row(1, 0..200), row(2, 200..400)];
+    let err = write_tsv_block("t", &rows).unwrap_err();
+    let FormatError::TsvTooManyForeignColumns { objects, .. } = err else {
+        panic!("{err}");
+    };
+    assert_eq!(objects.len(), 1);
+    assert!(
+        objects[0].contains(&uuid_n(2).to_string()),
+        "{}",
+        objects[0]
+    );
+    assert!(objects[0].len() < 100, "{}", objects[0].len());
+}
+
+#[test]
+fn huge_header_missing_a_known_column_gives_a_short_error() {
+    // 200 legal-length multibyte names (within the foreign cap), no
+    // known column: the mismatch error must not echo them all.
+    let name = "\u{20ac}".repeat(80);
+    let header: Vec<String> = (0..200).map(|i| format!("{name}{i}")).collect();
+    let text = format!("{}\n", header.join("  "));
+    let err = parse_tsv_block::<SchJunctionRow>("t", &text).unwrap_err();
+    match &err {
+        FormatError::TsvHeaderMismatch { got, got_count, .. } => {
+            assert_eq!(*got_count, 200);
+            assert!(got.len() <= 16, "{}", got.len());
+            assert!(got.iter().all(|n| n.chars().count() <= 32));
+        }
+        other => panic!("{other}"),
+    }
+    assert!(err.to_string().len() < 2500, "{}", err.to_string().len());
+}
+
+#[test]
+fn mismatched_header_over_the_caps_reports_the_cap_error_first() {
+    // 10k long names and no known column: the caps run before the
+    // known-column lookup, and the message stays short.
+    let long = "x".repeat(200);
+    let header: Vec<String> = (0..10_000).map(|i| format!("{i}{long}")).collect();
+    let text = format!("{}\n", header.join("  "));
+    let err = parse_tsv_block::<SchJunctionRow>("t", &text).unwrap_err();
+    assert!(
+        matches!(err, FormatError::TsvTooManyForeignColumns { .. }),
+        "{err}"
+    );
+    assert!(err.to_string().len() < 1500, "{}", err.to_string().len());
+}
+
+#[test]
+fn duplicate_column_error_truncates_a_huge_name() {
+    let long = "y".repeat(100_000);
+    let text = format!("{long}  {long}\n");
+    let err = parse_tsv_block::<SchJunctionRow>("t", &text).unwrap_err();
+    assert!(
+        matches!(err, FormatError::TsvDuplicateColumn { .. }),
+        "{err}"
+    );
+    assert!(err.to_string().len() < 500, "{}", err.to_string().len());
 }

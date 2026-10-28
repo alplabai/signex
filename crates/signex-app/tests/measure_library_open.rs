@@ -214,6 +214,8 @@ fn blank_open_library(snxlib: &Path, adapter: &LocalGitAdapter) -> OpenLibrary {
         cached_sims: Vec::new(),
         cached_classes: Vec::new(),
         observed_stamp: None,
+        dangling: Default::default(),
+        pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     }
@@ -241,6 +243,9 @@ fn write_project(dir: &Path, name: &str, libs: &[PathBuf]) -> PathBuf {
             })
             .collect(),
         enable_git: false,
+        net_classes: Vec::new(),
+        rules: None,
+        annotation: None,
         unknown: Default::default(),
     };
     signex_types::project::write_project(&path, &data).expect("write_project");

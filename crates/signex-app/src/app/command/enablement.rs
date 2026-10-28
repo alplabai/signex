@@ -23,7 +23,7 @@ use crate::keymap::AppCommandId;
 use super::super::*;
 
 /// The facts the enablement predicates read, for one window.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub(crate) struct CommandContext {
     /// The main window's active tab is a schematic sheet.
     pub has_schematic: bool,
@@ -43,6 +43,9 @@ pub(crate) struct CommandContext {
     pub has_footprint_editor: bool,
     /// The main window's schematic canvas has a selection.
     pub has_selection: bool,
+    /// A wire or polyline draw has uncommitted vertices, which
+    /// Backspace / Delete pops even with nothing selected.
+    pub drawing: bool,
     /// Undo has something to undo: the symbol or footprint editor's own
     /// history in an editor tab, else a net-colour change or the
     /// schematic engine's history.
@@ -64,9 +67,19 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         "undo" => ctx.can_undo,
         "redo" => ctx.can_redo,
         "cut" | "copy" | "duplicate" => ctx.has_selection,
+        // E edits the selected object in the schematic and in the
+        // footprint / symbol editors, whose selections `has_selection`
+        // does not read, so a keystroke must not be dropped there.
+        "edit_selected_object_properties" => {
+            ctx.has_selection || ctx.has_footprint_editor || ctx.has_symbol_editor
+        }
+        // The Export menu row is gated on `has_schematic`; without an
+        // engine the handler does nothing.
+        "report_manager_bom" => ctx.has_schematic,
         // The footprint editor deletes its own selection, which is not the
         // schematic canvas's; with none it is a no-op.
-        "delete_selection" | "remove_last_vertex" => ctx.has_selection || ctx.has_footprint_editor,
+        "delete_selection" => ctx.has_selection || ctx.has_footprint_editor,
+        "remove_last_vertex" => ctx.has_selection || ctx.has_footprint_editor || ctx.drawing,
         "print"
         | "paste"
         | "smart_paste"
@@ -79,10 +92,9 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         | "open_components_panel"
         | "place_symbol" => ctx.has_schematic,
         // These assemble the project's sheets, not only the active tab's.
-        "annotate_schematic_quietly"
-        | "force_annotate_all_schematics"
-        | "run_erc"
-        | "update_pcb_from_schematic" => ctx.has_schematic || ctx.has_sheets,
+        "annotate_schematic_quietly" | "force_annotate_all_schematics" | "run_erc" => {
+            ctx.has_schematic || ctx.has_sheets
+        }
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => {
             ctx.has_schematic || ctx.has_pcb || ctx.undocked_has_canvas
         }
@@ -122,7 +134,11 @@ impl Signex {
     pub(crate) fn command_context(&self, window: Option<iced::window::Id>) -> CommandContext {
         let document = &self.document_state;
         let active_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
-        let (can_undo, can_redo) = self.history_available(active_kind);
+        let (can_undo, can_redo) = if self.erc_dialog_takes_input(window) {
+            self.rules_history_available()
+        } else {
+            self.history_available(active_kind)
+        };
         CommandContext {
             has_schematic: document.active_engine().is_some(),
             has_pcb: self.has_active_pcb(),
@@ -131,6 +147,8 @@ impl Signex {
             has_symbol_editor: matches!(active_kind, Some(TabKind::SymbolEditor(_))),
             has_footprint_editor: matches!(active_kind, Some(TabKind::FootprintEditor(_))),
             has_selection: !self.interaction_state.active_canvas().selected.is_empty(),
+            drawing: self.interaction_state.wire_drawing
+                || !self.interaction_state.polyline_points.is_empty(),
             can_undo,
             can_redo,
             project_dirty: self.active_project_is_dirty(),
@@ -152,6 +170,25 @@ impl Signex {
         })
     }
 
+    /// Whether a stroke typed in `window` belongs to the ERC dialog, which
+    /// always opens in its own OS window. A stroke in the main window while
+    /// the dialog is open belongs to the sheet.
+    pub(crate) fn erc_dialog_takes_input(&self, window: Option<iced::window::Id>) -> bool {
+        use crate::app::dispatch::input::InputTarget;
+        use crate::app::state::ModalId;
+        self.ui_state.erc_dialog_open
+            && self.input_target(window) == InputTarget::DetachedModal(ModalId::ErcDialog)
+    }
+
+    /// `(can_undo, can_redo)` of the active project's stored rule set.
+    fn rules_history_available(&self) -> (bool, bool) {
+        let document = &self.document_state;
+        document
+            .active_document_project()
+            .and_then(|p| document.rules_history.get(&p.id))
+            .map_or((false, false), |h| (h.can_undo(), h.can_redo()))
+    }
+
     /// `(can_undo, can_redo)` for the active tab: an editor tab's own
     /// history, else net-colour changes and the schematic engine.
     fn history_available(&self, active_kind: Option<&TabKind>) -> (bool, bool) {
@@ -171,10 +208,20 @@ impl Signex {
                 }),
             _ => {
                 let engine = document.active_engine();
+                let has_steps = |steps: &std::collections::HashMap<_, Vec<_>>| {
+                    document
+                        .active_path
+                        .as_ref()
+                        .and_then(|p| steps.get(p))
+                        .is_some_and(|s| !s.is_empty())
+                };
                 (
-                    !self.ui_state.net_color_undo.is_empty()
+                    has_steps(&self.ui_state.net_color_undo)
+                        || self.has_net_class_pick(true)
                         || engine.is_some_and(|e| e.can_undo()),
-                    engine.is_some_and(|e| e.can_redo()),
+                    has_steps(&self.ui_state.net_color_redo)
+                        || self.has_net_class_pick(false)
+                        || engine.is_some_and(|e| e.can_redo()),
                 )
             }
         }
@@ -237,7 +284,7 @@ mod tests {
         let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s"));
         app.document_state
             .symbol_editors
-            .insert(path.clone(), SymbolEditorState::new(path.clone(), file));
+            .insert(path.clone(), SymbolDocument::new(path.clone(), file));
         push_tab(&mut app, &path, TabKind::SymbolEditor(path.clone()));
         (app, path)
     }
@@ -249,7 +296,7 @@ mod tests {
             signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("f"));
         app.document_state
             .footprint_editors
-            .insert(path.clone(), FootprintEditorState::new(path.clone(), file));
+            .insert(path.clone(), FootprintDocument::new(path.clone(), file));
         push_tab(&mut app, &path, TabKind::FootprintEditor(path.clone()));
         (app, path)
     }
@@ -311,9 +358,14 @@ mod tests {
     #[test]
     fn a_net_colour_change_enables_undo() {
         let (mut app, _task) = Signex::new();
-        app.ui_state
-            .net_color_undo
-            .push(std::collections::HashMap::new());
+        let path = std::path::PathBuf::from("colour.snxsch");
+        app.document_state.active_path = Some(path.clone());
+        app.ui_state.net_color_undo.entry(path).or_default().push(
+            crate::app::state::NetColorStep {
+                colors: std::collections::HashMap::new(),
+                at: 0,
+            },
+        );
         assert!(enabled(&app, "undo"));
     }
 
@@ -335,9 +387,14 @@ mod tests {
                 active_variant: None,
                 libraries: Vec::new(),
                 enable_git: false,
+                net_classes: Vec::new(),
+                rules: None,
+                annotation: None,
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
         });
         app.document_state.active_project = Some(project);
         assert!(!enabled(&app, "save_document"));
@@ -495,6 +552,32 @@ mod tests {
 
     /// #907 review: Save As and Print explain in the Messages panel why
     /// they did nothing, so the keystroke still reaches them.
+    /// #1152 review: E must still reach the footprint / symbol editors,
+    /// whose selection `has_selection` does not see.
+    #[test]
+    fn edit_properties_keystroke_stays_enabled_in_the_editors() {
+        let (start, _task) = Signex::new();
+        assert!(!enabled(&start, "edit_selected_object_properties"));
+        assert!(enabled(
+            &with_footprint_editor().0,
+            "edit_selected_object_properties"
+        ));
+        assert!(enabled(
+            &with_symbol_editor().0,
+            "edit_selected_object_properties"
+        ));
+    }
+
+    /// #1152 review: Bill of Materials needs an active schematic, as its
+    /// Export menu row does.
+    #[test]
+    fn bill_of_materials_needs_a_schematic() {
+        let (start, _task) = Signex::new();
+        assert!(!enabled(&start, "report_manager_bom"));
+        assert!(!enabled(&with_footprint_editor().0, "report_manager_bom"));
+        assert!(enabled(&with_schematic(), "report_manager_bom"));
+    }
+
     #[test]
     fn save_as_and_print_still_explain_why_they_did_nothing() {
         assert!(explains_when_unavailable(&id("save_document_as")));

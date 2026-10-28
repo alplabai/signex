@@ -1,14 +1,13 @@
-//! Rename flows for the project-navigation dock — file rename and
-//!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
+//! Rename flows for the project-navigation dock — file rename and project rename.
 
 use super::*;
 
 impl Signex {
     pub(super) fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {
         let Some(target_path) = self.tree_path_to_file_path(&tree_path) else {
+            crate::diagnostics::log_warning(
+                "Rename cancelled: the selected project-tree row no longer resolves to a file.",
+            );
             return;
         };
         let filename = target_path
@@ -29,8 +28,7 @@ impl Signex {
 
     /// Open the rename modal seeded with the project name (the `.snxprj`
     /// file stem). On submit, [`handle_rename_submit`] sees
-    /// `is_project_rename = true` and renames the trio
-    /// `<old>.snxprj` / `<old>.snxsch` / `<old>.snxpcb` together.
+    /// `is_project_rename = true` and renames the project (see `project_rename`).
     pub(crate) fn open_project_rename_dialog(&mut self, tree_path: Vec<usize>) {
         let Some(&project_idx) = tree_path.first() else {
             return;
@@ -96,12 +94,6 @@ impl Signex {
             self.set_rename_error(&msg);
             return iced::Task::none();
         }
-        if self.is_project_library_path(&state) {
-            self.set_rename_error(
-                "Libraries are referenced by path and cannot be renamed from the project tree.",
-            );
-            return iced::Task::none();
-        }
         let parent = match state.target_path.parent() {
             Some(p) => p,
             None => {
@@ -119,6 +111,44 @@ impl Signex {
             self.set_rename_error("A file with that name already exists.");
             return iced::Task::none();
         }
+        // An open still reading this file would land on the old path after
+        // the move, and a save of that tab would recreate it (#1096).
+        if let Some(opening) = self
+            .pending_open_under(&state.target_path)
+            .or_else(|| self.recovery_check_under(&state.target_path))
+        {
+            crate::diagnostics::log_warning(format!(
+                "Rename of {} refused: {} is still opening.",
+                state.target_path.display(),
+                opening.display()
+            ));
+            self.set_rename_error("This file is still opening; rename it once it has opened.");
+            return iced::Task::none();
+        }
+        // A restore still running would rewrite the old path after the move,
+        // recreating the file the user just renamed.
+        if let Some(restoring) = self
+            .document_state
+            .pending_restores
+            .find_under(&state.target_path)
+        {
+            let label = restoring.file_name().map_or_else(
+                || restoring.display().to_string(),
+                |name| name.to_string_lossy().into_owned(),
+            );
+            crate::diagnostics::log_warning(format!(
+                "Rename refused: a History restore of {label} is still running."
+            ));
+            self.set_rename_error(
+                "A History restore of this file is still running; rename it once the restore has finished.",
+            );
+            return iced::Task::none();
+        }
+        // A project library moves its entry, mount and open documents
+        // together once the file rename lands (#739).
+        if self.project_library_kind(&state).is_some() {
+            return self.begin_library_rename(&state, new_path);
+        }
 
         // Find every parent sheet that references this file BEFORE it
         // moves, while the hierarchy walk can still reach it.
@@ -132,6 +162,10 @@ impl Signex {
             .map(|&idx| self.plan_reference_rewrites(idx, &state.target_path, new_name))
             .unwrap_or_default();
 
+        // A write still running for this sheet would recreate the old file
+        // (or land after the move); let it finish first. Same bounded wait
+        // as Save All's `try_save_dirty_path`.
+        self.document_state.document_saves.barrier().wait();
         if let Err(e) = std::fs::rename(&state.target_path, &new_path) {
             self.set_rename_error(&format!("Rename failed: {e}"));
             return iced::Task::none();
@@ -196,25 +230,7 @@ impl Signex {
 
         self.ui_state.rename_dialog = None;
         self.refresh_panel_ctx();
-        iced::Task::none()
-    }
-
-    /// True when the dialog target is one of its owning project's
-    /// `libraries` entries (matched relative to the project dir or absolute).
-    fn is_project_library_path(&self, state: &crate::app::RenameDialogState) -> bool {
-        let Some(loaded) = state
-            .tree_path
-            .first()
-            .and_then(|&idx| self.document_state.projects.get(idx))
-        else {
-            return false;
-        };
-        let dir = std::path::Path::new(&loaded.data.dir);
-        loaded
-            .data
-            .libraries
-            .iter()
-            .any(|e| dir.join(&e.path) == state.target_path || e.path == state.target_path)
+        self.autosave_flush_moves()
     }
 
     /// Move every path-keyed record of an open document from `old_path`
@@ -223,7 +239,11 @@ impl Signex {
     /// symbol/footprint editor maps and any undocked window. Missing one
     /// leaves a key no engine backs, so closing the tab drops unsaved
     /// edits and Save All fails on the stale path.
-    fn rekey_open_document(&mut self, old_path: &std::path::Path, new_path: &std::path::Path) {
+    pub(crate) fn rekey_open_document(
+        &mut self,
+        old_path: &std::path::Path,
+        new_path: &std::path::Path,
+    ) {
         let new_title = new_path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -271,7 +291,38 @@ impl Signex {
                 .dirty_paths
                 .insert(new_path.to_path_buf());
         }
+        // A failure or queued save names the file by its old path.
+        self.document_state
+            .document_saves
+            .forget_where(|p| p == old_path);
+        // A PCB's save revision is keyed by path (#1040); without the move
+        // every later save would compare against a missing key.
+        if let Some(revision) = self.document_state.pcb_revisions.remove(old_path) {
+            self.document_state
+                .pcb_revisions
+                .insert(new_path.to_path_buf(), revision);
+        }
+        self.document_state.autosave.rekey(old_path, new_path);
+        self.rekey_page_setup(old_path, new_path);
+        // Renaming does not rewrite the parents' sheet symbols, so the
+        // placement no longer reaches this file.
+        self.document_state.tab_placements.forget(old_path);
         self.rekey_undocked_windows(old_path, new_path);
+    }
+
+    /// Carry the remembered PDF page setup (and an open preview's source)
+    /// over to the document's new path.
+    pub(crate) fn rekey_page_setup(
+        &mut self,
+        old_path: &std::path::Path,
+        new_path: &std::path::Path,
+    ) {
+        crate::app::state::rekey_page_setup(
+            &mut self.document_state.page_setup_memory,
+            self.document_state.preview.as_mut(),
+            old_path,
+            new_path,
+        );
     }
 
     /// Point undocked-tab windows at the renamed path so the window keeps
@@ -290,97 +341,26 @@ impl Signex {
         }
     }
 
-    fn set_rename_error(&mut self, msg: &str) {
+    /// A file at or under `target` whose recovery check has not reported:
+    /// renaming it now would lose the copy the check finds (#1323).
+    fn recovery_check_under(&self, target: &std::path::Path) -> Option<std::path::PathBuf> {
+        use crate::app::state::scope::path_is_under;
+        let ds = &self.document_state;
+        let owner = ds
+            .projects
+            .iter()
+            .find(|p| path_is_under(target, p.dir(), p.case_fold));
+        let fold = crate::app::state::project_case::fold_of(owner);
+        ds.recovery_check_due
+            .iter()
+            .chain(ds.autosave.checking_paths())
+            .find(|p| path_is_under(p, target, fold))
+            .cloned()
+    }
+
+    pub(super) fn set_rename_error(&mut self, msg: &str) {
         if let Some(d) = self.ui_state.rename_dialog.as_mut() {
             d.error = Some(msg.to_string());
         }
-    }
-
-    /// Project-root rename — `state.target_path` is the project's
-    /// `.snxprj`; the buffer is the new *stem*. We rename ONLY the
-    /// `.snxprj` file and update the project's in-memory `name`.
-    /// Companion schematic / pcb files keep their existing filenames —
-    /// they're independent entities, possibly shared across workflows
-    /// or referenced from version control with their original names.
-    /// The `.snxprj`'s `schematic_root` / `pcb_file` are filename
-    /// strings that continue to point at the unchanged sheet files.
-    fn handle_project_rename_submit(
-        &mut self,
-        state: &crate::app::RenameDialogState,
-    ) -> iced::Task<Message> {
-        let new_stem = state.buffer.trim();
-        if new_stem.is_empty() {
-            self.set_rename_error("Name cannot be empty.");
-            return iced::Task::none();
-        }
-        if new_stem.contains(['/', '\\', '.']) {
-            self.set_rename_error("Name cannot contain '/', '\\', or '.'.");
-            return iced::Task::none();
-        }
-        let dir = match state.target_path.parent() {
-            Some(d) => d.to_path_buf(),
-            None => {
-                self.set_rename_error("Project file has no parent directory.");
-                return iced::Task::none();
-            }
-        };
-        let old_stem = match state.target_path.file_stem().and_then(|s| s.to_str()) {
-            Some(s) => s.to_string(),
-            None => {
-                self.set_rename_error("Project file has no stem.");
-                return iced::Task::none();
-            }
-        };
-        if new_stem == old_stem {
-            self.ui_state.rename_dialog = None;
-            return iced::Task::none();
-        }
-        let new_prj = dir.join(format!("{new_stem}.snxprj"));
-        if new_prj.exists() {
-            self.set_rename_error("A project with that name already exists.");
-            return iced::Task::none();
-        }
-
-        // Rename only the .snxprj. Schematic / PCB files keep their
-        // original filenames; the project's `schematic_root` /
-        // `pcb_file` references continue to point at them.
-        if let Err(e) = std::fs::rename(&state.target_path, &new_prj) {
-            self.set_rename_error(&format!("Rename failed: {e}"));
-            return iced::Task::none();
-        }
-
-        // Update the in-memory project record + any tab / engine that
-        // referenced the .snxprj path itself.
-        let owner_idx = state.tree_path.first().copied();
-        if let Some(idx) = owner_idx
-            && let Some(loaded) = self.document_state.projects.get_mut(idx)
-        {
-            loaded.path = new_prj.clone();
-            loaded.data.name = new_stem.to_string();
-        }
-
-        let from = state.target_path.clone();
-        let to = new_prj.clone();
-        for tab in self.document_state.tabs.iter_mut() {
-            if tab.path == from {
-                tab.path = to.clone();
-                if let Some(stem) = to.file_stem().and_then(|s| s.to_str()) {
-                    tab.title = stem.to_string();
-                }
-            }
-        }
-        if let Some(engine) = self.document_state.engines.remove(&from) {
-            self.document_state.engines.insert(to.clone(), engine);
-        }
-        if self.document_state.active_path.as_ref() == Some(&from) {
-            self.document_state.active_path = Some(to.clone());
-        }
-        if self.document_state.dirty_paths.remove(&from) {
-            self.document_state.dirty_paths.insert(to.clone());
-        }
-
-        self.ui_state.rename_dialog = None;
-        self.refresh_panel_ctx();
-        iced::Task::none()
     }
 }

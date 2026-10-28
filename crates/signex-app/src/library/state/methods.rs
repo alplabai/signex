@@ -15,22 +15,34 @@ use super::*;
 ///
 /// The failure itself reaches the Messages panel at `warn` — the same
 /// treatment `refresh_components` gives a failed `read_table`.
-fn apply_primitive_listing(
+pub(super) fn apply_primitive_listing(
     cache: &mut Vec<PrimitiveSummary>,
     listing: Result<Vec<PrimitiveSummary>, LibraryError>,
     library: &str,
     kind: &str,
-) {
+) -> bool {
     match listing {
-        Ok(entries) => *cache = entries,
-        Err(error) => tracing::warn!(
-            target: "signex::library",
-            library = %library,
-            listing = kind,
-            error = %error,
-            "primitive listing failed; previous cache kept"
-        ),
+        Ok(entries) => {
+            *cache = entries;
+            true
+        }
+        Err(error) => {
+            tracing::warn!(
+                target: "signex::library",
+                library = %library,
+                listing = kind,
+                error = %error,
+                "primitive listing failed; previous cache kept"
+            );
+            false
+        }
     }
+}
+
+/// True when every listing succeeded and the symbol listing is not
+/// missing unreadable containers: only then can absence be reported.
+pub(super) fn listings_complete(ok: [bool; 3], symbols_partial: bool) -> bool {
+    ok.iter().all(|listed| *listed) && !symbols_partial
 }
 
 impl Default for LibraryState {
@@ -40,6 +52,8 @@ impl Default for LibraryState {
         // `<config_dir>/signex/distributors.toml`.
         settings.preferred_order = super::super::settings::persistence::load_preferred_order();
         Self {
+            drift: Default::default(),
+            symbol_choice_requests: Default::default(),
             set: LibrarySet::new(),
             open_libraries: Vec::new(),
             editors: HashMap::new(),
@@ -48,7 +62,6 @@ impl Default for LibraryState {
             settings,
             expanded: Vec::new(),
             panel_search: String::new(),
-            new_component: None,
             close_library_confirm: None,
             template_registry: Arc::new(TemplateRegistry::new_with_builtins()),
             library_browsers: HashMap::new(),
@@ -57,15 +70,24 @@ impl Default for LibraryState {
             recovery: None,
             create_options: None,
             library_updates: None,
+            queued_library_updates: Vec::new(),
             skipped_updates_for: std::collections::HashSet::new(),
             installed_libraries: Vec::new(),
             global_libraries: Vec::new(),
+            stock_library: None,
             components_panel: ComponentsPanelState::default(),
             pending_mounts: HashMap::new(),
             external_poll_in_flight: false,
             external_poll_stat_running: Default::default(),
             external_poll_stall_reported: false,
             external_poll_failure_reported: false,
+            pricing_refresh: None,
+            clock: chrono::Utc::now(),
+            refresh_generations: HashMap::new(),
+            refresh_generation_counter: 0,
+            refresh_in_flight: HashMap::new(),
+            pending_follow_ups: HashMap::new(),
+            data_version: 0,
         }
     }
 }
@@ -74,6 +96,22 @@ impl LibraryState {
     /// Look up an open library by its on-disk root path.
     pub fn library_at(&self, path: &Path) -> Option<&OpenLibrary> {
         self.open_libraries.iter().find(|lib| lib.root == path)
+    }
+
+    /// On-disk file of the primitive `r` names, looked up in the open
+    /// library `r.library_id` (`<dir>/<uuid>.<ext>`). `None` when that
+    /// library is not open.
+    pub fn primitive_file(
+        &self,
+        r: &signex_library::PrimitiveRef,
+        dir: &str,
+        ext: &str,
+    ) -> Option<PathBuf> {
+        let lib = self
+            .open_libraries
+            .iter()
+            .find(|lib| lib.library_id == r.library_id)?;
+        Some(lib.root_dir()?.join(dir).join(format!("{}.{ext}", r.uuid)))
     }
 
     pub fn library_at_mut(&mut self, path: &Path) -> Option<&mut OpenLibrary> {
@@ -116,6 +154,40 @@ impl LibraryState {
     /// entries are left empty — one bad table doesn't sink the open
     /// flow.
     pub fn open_library(&mut self, root: PathBuf) -> Result<(), LibraryError> {
+        self.open_library_marked(root, false)
+    }
+
+    /// Mount the library at `root` read-only — the stock library that
+    /// ships with Signex. Every write through the mounted adapter fails
+    /// with `LibraryError::ReadOnly` whatever the install directory's
+    /// permissions are. Idempotent like [`Self::open_library`].
+    pub fn open_library_read_only(&mut self, root: PathBuf) -> Result<(), LibraryError> {
+        self.open_library_marked(root, true)
+    }
+
+    /// True when the library mounted at `root` is read-only.
+    pub fn is_read_only(&self, root: &Path) -> bool {
+        self.set.is_read_only_path(root)
+    }
+
+    /// Display name of the read-only library whose directory contains
+    /// `path`, or `None` when `path` is outside every read-only mount.
+    pub fn read_only_library_name_containing(&self, path: &Path) -> Option<String> {
+        // Compared on resolved paths: a symlinked, differently cased or
+        // `..` spelling of a file inside the mount must not slip past.
+        let path = resolved_path(path);
+        self.open_libraries
+            .iter()
+            .find(|lib| {
+                self.is_read_only(&lib.root)
+                    && lib
+                        .root_dir()
+                        .is_some_and(|dir| path.starts_with(resolved_path(dir)))
+            })
+            .map(|lib| lib.display_name.clone())
+    }
+
+    fn open_library_marked(&mut self, root: PathBuf, read_only: bool) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
             return Ok(());
         }
@@ -139,7 +211,11 @@ impl LibraryState {
         // can still resolve to whichever copy wins. Detecting and
         // surfacing that collision is the Components Panel's job at
         // presentation time.
-        self.set.mount(Box::new(adapter))?;
+        if read_only {
+            self.set.mount_read_only(Box::new(adapter))?;
+        } else {
+            self.set.mount(Box::new(adapter))?;
+        }
         let mut entry = OpenLibrary {
             root,
             display_name,
@@ -151,6 +227,8 @@ impl LibraryState {
             cached_sims: Vec::new(),
             cached_classes: Vec::new(),
             observed_stamp: None,
+            dangling: Default::default(),
+            pricing: Default::default(),
             own_edit_stamp: None,
             display: LibraryDisplaySettings::default(),
         };
@@ -166,13 +244,36 @@ impl LibraryState {
         }
         self.open_libraries.push(entry);
         self.expanded.push(true);
+        self.touch_data();
+        self.sweep_dangling_refs();
         Ok(())
+    }
+
+    /// Stop the Refresh All Pricing walk, if any, wherever it is. The walk
+    /// checks the flag between rows and again before it saves, so nothing is
+    /// written after this returns. Used on app quit.
+    pub fn cancel_pricing_refresh(&self) {
+        if let Some(run) = &self.pricing_refresh {
+            run.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    /// Stop the walk if it is for one of `libraries` (a library
+    /// unmounting).
+    pub fn cancel_pricing_refresh_of(&self, libraries: &[PathBuf]) {
+        if let Some(run) = &self.pricing_refresh
+            && libraries.contains(&run.library_path)
+        {
+            run.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
     }
 
     /// Drop the library backing `root` — unmounts from `set` and drops
     /// every editor pointing at it. (TODO(v0.9): unsaved-edits prompt
     /// is wired from the dispatcher via `dirty_editors_for_library`.)
     pub fn close_library(&mut self, root: &Path) {
+        // A pricing walk of this library must not write after it is closed.
+        self.cancel_pricing_refresh_of(&[root.to_path_buf()]);
         // Cancel any mount still being prepared off-thread for this path
         // (#99 part 2c). `pending_mounts` doubles as the cancellation
         // tombstone: `take_mount_intent` returns `None` for a path that
@@ -182,97 +283,21 @@ impl LibraryState {
         // a preparation is in flight, and closing a library that was
         // mounted synchronously simply has nothing to remove.
         self.pending_mounts.remove(root);
+        self.refresh_generations.remove(root);
+        self.refresh_in_flight
+            .retain(|_, in_flight| in_flight.as_path() != root);
+        self.pending_follow_ups.remove(root);
         if let Some(idx) = self.open_libraries.iter().position(|lib| lib.root == root) {
             let entry = self.open_libraries.remove(idx);
+            self.touch_data();
             self.set.unmount(entry.library_id);
             if idx < self.expanded.len() {
                 self.expanded.remove(idx);
             }
             self.editors.retain(|key, _| key.library_path != root);
+            // Names, drift rows and Update must not use an unmounted library.
+            self.drift.check_pending = true;
         }
-    }
-
-    /// Refresh the cached table contents for a library — re-reads every
-    /// TSV via the mounted adapter's `list_tables` + `read_table`.
-    ///
-    /// Returns `LibraryError::NotFound` when the library at `root`
-    /// isn't mounted, otherwise the underlying adapter error. The
-    /// cached `Vec<ComponentSummary>` is rebuilt alongside `tables`
-    /// so the picker (summary tier) and the panel grid (row tier)
-    /// stay coherent.
-    pub fn refresh_components(&mut self, root: &Path) -> Result<(), LibraryError> {
-        let library_id = self
-            .library_at(root)
-            .map(|lib| lib.library_id)
-            .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?;
-        // Snapshot the table data through the adapter, then move it
-        // onto the OpenLibrary entry. Two passes keep the borrow
-        // checker happy — `set.get` and `library_at_mut` both
-        // straddle `&self`/`&mut self`.
-        let adapter = self
-            .set
-            .get(library_id)
-            .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?;
-        let stamp = signex_library::DiskStamp::of(root).ok();
-        let names = adapter.list_tables()?;
-        let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
-        let mut summaries: Vec<ComponentSummary> = Vec::new();
-        for name in names {
-            match adapter.read_table(&name) {
-                Ok(rows) => {
-                    for row in &rows {
-                        summaries.push(ComponentSummary {
-                            row_id: row.row_id,
-                            internal_pn: row.internal_pn.clone(),
-                            mpn: row.primary_mpn.mpn.clone(),
-                            state: row.state,
-                            description: String::new(),
-                        });
-                    }
-                    tables.insert(name, rows);
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        table = %name,
-                        error = %e,
-                        "refresh_components: read_table failed; entry left empty"
-                    );
-                    tables.insert(name, Vec::new());
-                }
-            }
-        }
-        // Snapshot primitive listings before the second mut borrow so
-        // we don't have to call adapter methods while `library_at_mut`
-        // holds &mut self.
-        let symbols = adapter.list_symbols();
-        let footprints = adapter.list_footprints();
-        let sims = adapter.list_sims();
-        let classes = adapter.library_classes();
-        if let Some(lib) = self.library_at_mut(root) {
-            lib.tables = tables;
-            lib.cached_components = summaries;
-            lib.cached_classes = classes;
-            lib.observed_stamp = stamp;
-            lib.own_edit_stamp = None;
-            // A failed listing keeps the previous cache and warns —
-            // blanking it here would render a mounted library as
-            // empty. See `apply_primitive_listing`.
-            apply_primitive_listing(
-                &mut lib.cached_symbols,
-                symbols,
-                &lib.display_name,
-                "symbols",
-            );
-            apply_primitive_listing(
-                &mut lib.cached_footprints,
-                footprints,
-                &lib.display_name,
-                "footprints",
-            );
-            apply_primitive_listing(&mut lib.cached_sims, sims, &lib.display_name, "sims");
-        }
-        Ok(())
     }
 
     /// Each open library with the stamp its caches were filled under — the
@@ -314,6 +339,15 @@ impl LibraryState {
             }
         }
         out
+    }
+
+    /// The table of the open library at `root` that holds `row_id`.
+    pub fn table_of_row(&self, root: &Path, row_id: Uuid) -> Option<String> {
+        let lib = self.library_at(root)?;
+        lib.tables
+            .iter()
+            .find(|(_, rows)| rows.iter().any(|r| r.row_id == row_id))
+            .map(|(name, _)| name.clone())
     }
 
     /// Replace the Where-Used entries for one `(project, sheet)` with
@@ -385,6 +419,9 @@ impl LibraryState {
     ) -> ComponentsMountSource {
         if project_paths.iter().any(|p| p == path) {
             return ComponentsMountSource::Project;
+        }
+        if self.stock_library.as_deref() == Some(path) {
+            return ComponentsMountSource::Stock;
         }
         if self.installed_libraries.iter().any(|p| p == path) {
             return ComponentsMountSource::Installed;
@@ -476,6 +513,13 @@ pub struct OpenLibrary {
     /// same grid / unit / background colour). In-memory only as
     /// of v0.9; v0.9.x can persist to `library.toml`.
     pub display: LibraryDisplaySettings,
+    /// Rows whose symbol / footprint / sim binding resolves to nothing,
+    /// from the last [`LibraryState::sweep_dangling_refs`].
+    pub dangling: crate::library::dangling::DanglingSweep,
+    /// Cached distributor prices by `row_id`, as the last
+    /// [`LibraryState::refresh_components`] read them. `view` reads this;
+    /// it never asks the adapter.
+    pub pricing: HashMap<Uuid, signex_library::RowPricing>,
 }
 
 /// Per-library canvas + UI defaults shared across every primitive
@@ -592,21 +636,16 @@ impl OpenLibrary {
     /// failure as an empty library.
     pub fn reload_primitives(&mut self, adapter: &dyn LibraryAdapter) {
         let symbols = adapter.list_symbols();
+        let symbols_partial = adapter.symbol_listing_is_partial();
         let footprints = adapter.list_footprints();
         let sims = adapter.list_sims();
-        apply_primitive_listing(
-            &mut self.cached_symbols,
-            symbols,
-            &self.display_name,
-            "symbols",
-        );
-        apply_primitive_listing(
-            &mut self.cached_footprints,
-            footprints,
-            &self.display_name,
-            "footprints",
-        );
-        apply_primitive_listing(&mut self.cached_sims, sims, &self.display_name, "sims");
+        let name = &self.display_name;
+        let ok = [
+            apply_primitive_listing(&mut self.cached_symbols, symbols, name, "symbols"),
+            apply_primitive_listing(&mut self.cached_footprints, footprints, name, "footprints"),
+            apply_primitive_listing(&mut self.cached_sims, sims, name, "sims"),
+        ];
+        self.dangling.listings_complete = listings_complete(ok, symbols_partial);
     }
 
     /// Total number of rows across every cached table.
@@ -624,5 +663,44 @@ impl std::fmt::Debug for OpenLibrary {
             .field("tables_len", &self.tables.len())
             .field("total_rows", &self.total_rows())
             .finish()
+    }
+}
+
+/// `path` with symlinks, `..` and case differences resolved. A path
+/// that does not exist yet (a save target) resolves through its deepest
+/// existing ancestor, with the remaining components appended after
+/// folding `.` and `..` lexically.
+pub(crate) fn resolved_path(path: &Path) -> PathBuf {
+    if let Ok(real) = path.canonicalize() {
+        return real;
+    }
+    let mut missing: Vec<std::ffi::OsString> = Vec::new();
+    let mut base = path.to_path_buf();
+    loop {
+        if let Ok(real) = base.canonicalize() {
+            let mut out = real;
+            for part in missing.iter().rev() {
+                if part == ".." {
+                    out.pop();
+                } else if part != "." {
+                    out.push(part);
+                }
+            }
+            return out;
+        }
+        match (base.file_name(), base.parent()) {
+            (Some(name), Some(parent)) => {
+                missing.push(name.to_os_string());
+                base = parent.to_path_buf();
+            }
+            _ => {
+                if base.file_name().is_none() && base.ends_with("..") {
+                    missing.push("..".into());
+                    base = base.parent().map(Path::to_path_buf).unwrap_or_default();
+                    continue;
+                }
+                return path.to_path_buf();
+            }
+        }
     }
 }

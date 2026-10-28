@@ -29,6 +29,8 @@ struct OpenOverlays {
     kbd_shortcuts_open: bool,
     about_open: bool,
     first_run_tour_open: bool,
+    /// The recovery-copy prompt (#1164).
+    autosave_recovery_open: bool,
     prefs_open: bool,
     annotate_open: bool,
     erc_open: bool,
@@ -72,6 +74,9 @@ struct OpenOverlays {
     /// `Subscription::with` as a `Copy` type, which is why this modal was
     /// the one documented hole in the ladder (#514, #526).
     delete_confirm: Option<std::path::PathBuf>,
+    /// The `.snxlib` whose Library Browser has the Edit Component
+    /// Details modal open, if any. Per-library, like `delete_confirm`.
+    edit_row_modal: Option<std::path::PathBuf>,
 }
 
 // `KeyContext` used to live here — the slice of modal state the
@@ -231,6 +236,12 @@ impl OpenOverlays {
             OverlayId::FirstRunTour => self
                 .first_run_tour_open
                 .then(|| Message::Overlay(OverlayMsg::DismissFirstRunTour)),
+            // "Decide later": Esc must neither load nor delete the copy.
+            OverlayId::AutosaveRecovery => self.autosave_recovery_open.then(|| {
+                Message::Autosave(crate::autosave::AutosaveMsg::Recovery(
+                    crate::autosave::RecoveryChoice::Later,
+                ))
+            }),
             OverlayId::RenameDialog => self.rename_open.then(|| Message::Rename(RenameMsg::Close)),
             OverlayId::RemoveDialog => self.remove_open.then(|| Message::Remove(RemoveMsg::Close)),
             OverlayId::ProjectCloseConfirm => self
@@ -269,13 +280,13 @@ impl OpenOverlays {
             OverlayId::LibraryPicker => self
                 .library_picker_open
                 .then(|| Message::Library(crate::library::messages::LibraryMessage::ClosePicker)),
-            // Two known gaps, both pre-dating #535 and neither closed
-            // here: the New Component modal has no `OpenOverlays` field
-            // at all (one of the modals `every_modal_claims_escape` still
-            // allows through), and the Edit Component Details modal is
-            // gated dead behind `EDIT_MODAL_ENABLED = false` — it needs a
-            // rung the day it is re-enabled, not before.
-            OverlayId::NewComponent | OverlayId::EditRowModal => None,
+            // Addressed to ONE library, like `DeleteConfirm`.
+            OverlayId::EditRowModal => self.edit_row_modal.clone().map(|library_path| {
+                Message::Library(crate::library::messages::LibraryMessage::BrowserEdit {
+                    library_path,
+                    msg: crate::library::messages::BrowserEditMsg::Cancel,
+                })
+            }),
             // The one rung carrying owned data, and the reason the ladder
             // moved out of the subscription in part 1: this Cancel is
             // addressed to ONE library, and a `PathBuf` could not ride
@@ -447,6 +458,7 @@ impl Signex {
             kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open,
             about_open: self.ui_state.about_open,
             first_run_tour_open: self.ui_state.first_run_tour_open,
+            autosave_recovery_open: self.document_state.autosave.current_offer().is_some(),
             prefs_open: self.ui_state.preferences_open
                 && !modal_detached(crate::app::state::ModalId::Preferences),
             annotate_open: self.ui_state.annotate_dialog_open
@@ -509,6 +521,14 @@ impl Signex {
                 .iter()
                 .find(|(_, browser)| browser.delete_confirm.is_some())
                 .map(|(path, _)| path.clone()),
+            // MUST mirror `edit_row_modal_overlay`'s pick: first browser
+            // with an open edit modal.
+            edit_row_modal: self
+                .library
+                .library_browsers
+                .iter()
+                .find(|(_, browser)| browser.edit_modal.is_some())
+                .map(|(path, _)| path.clone()),
         }
     }
 
@@ -561,7 +581,7 @@ impl Signex {
         // for the process lifetime.
         let kbd = iced::event::listen_with(|event, status, window| match (event, status) {
             (iced::Event::Keyboard(event), iced::event::Status::Ignored) => {
-                Some(Message::KeyInput { window, event })
+                Some(Message::Input(InputMsg::KeyInput { window, event }))
             }
             _ => None,
         });
@@ -586,7 +606,7 @@ impl Signex {
                 // the window id so we can drop non-main resizes. If
                 // we also forwarded the raw event here, a detached
                 // modal's resize would clobber the main window's size.
-                _ => Message::Noop,
+                _ => Message::noop(),
             })
         } else if drag_active {
             iced::event::listen().map(|event| match event {
@@ -604,7 +624,7 @@ impl Signex {
                 // the window id so we can drop non-main resizes. If
                 // we also forwarded the raw event here, a detached
                 // modal's resize would clobber the main window's size.
-                _ => Message::Noop,
+                _ => Message::noop(),
             })
         } else {
             // Always track the cursor so `last_mouse_pos` is fresh when the
@@ -623,7 +643,7 @@ impl Signex {
                 // the window id so we can drop non-main resizes. If
                 // we also forwarded the raw event here, a detached
                 // modal's resize would clobber the main window's size.
-                _ => Message::Noop,
+                _ => Message::noop(),
             })
         };
         // Window-close events from winit: routed so Phase 2/3 can drop
@@ -681,15 +701,25 @@ impl Signex {
                 .hover_started_at
                 .is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(900));
         let hover_tooltip_tick = if symbol_hover_active {
-            iced::time::every(std::time::Duration::from_millis(80)).map(|_| Message::Noop)
+            iced::time::every(std::time::Duration::from_millis(80)).map(|_| Message::noop())
         } else {
             Subscription::none()
         };
 
         // External `.snxlib` edits (#531): a slow timer whose handler stats
         // the mounted files off-thread; `view` only reads the caches.
-        let library_poll =
-            crate::library::external_poll::subscription(&self.library).map(Message::Library);
+        let library_poll = crate::library::external_poll::subscription(
+            &self.library,
+            self.document_state.project_fs.is_watching(),
+        )
+        .map(Message::Library);
+
+        // Opt-in autosave timer (#104); empty while the preference is off.
+        let autosave_tick = crate::autosave::subscription(
+            self.ui_state.autosave_enabled,
+            self.document_state.autosave.has_owed_moves(),
+        )
+        .map(Message::Autosave);
 
         Subscription::batch([
             kbd,
@@ -700,6 +730,7 @@ impl Signex {
             hover_tick,
             hover_tooltip_tick,
             library_poll,
+            autosave_tick,
         ])
     }
 }
@@ -854,10 +885,9 @@ mod tests {
     /// forces that. Documented modals that are deliberately NOT fields —
     /// so NOT covered by this test — are: the command palette and the
     /// keymap chord recorder (`palette_and_keymap_recorder_are_not_on_the_ladder`,
-    /// both swallow input earlier), the Edit Component Details modal
-    /// (dead behind `EDIT_MODAL_ENABLED = false`), and the per-browser
-    /// delete-confirm modal (its Cancel message needs a `library_path`
-    /// this `Copy` struct can't carry).
+    /// both swallow input earlier). The per-library rungs (`delete_confirm`,
+    /// `edit_row_modal`) carry an owned `library_path` and are covered by
+    /// `every_ladder_field_claims_escape` and the ranking tests instead.
     #[test]
     fn every_modal_claims_escape() {
         assert!(matches!(
@@ -873,6 +903,12 @@ mod tests {
         assert!(matches!(
             only(|o| o.first_run_tour_open = true),
             Some(Message::Overlay(OverlayMsg::DismissFirstRunTour))
+        ));
+        assert!(matches!(
+            only(|o| o.autosave_recovery_open = true),
+            Some(Message::Autosave(crate::autosave::AutosaveMsg::Recovery(
+                crate::autosave::RecoveryChoice::Later
+            )))
         ));
         assert!(matches!(
             only(|o| o.erc_open = true),
@@ -1414,6 +1450,7 @@ mod tests {
             kbd_shortcuts_open,
             about_open,
             first_run_tour_open,
+            autosave_recovery_open,
             prefs_open,
             annotate_open,
             erc_open,
@@ -1440,6 +1477,7 @@ mod tests {
             bom_preview_open,
             net_color_custom_open,
             delete_confirm,
+            edit_row_modal,
         ];
 
         type EscapeSetter = fn(&mut OpenOverlays);
@@ -1452,6 +1490,9 @@ mod tests {
             ("kbd_shortcuts_open", |o| o.kbd_shortcuts_open = true),
             ("about_open", |o| o.about_open = true),
             ("first_run_tour_open", |o| o.first_run_tour_open = true),
+            ("autosave_recovery_open", |o| {
+                o.autosave_recovery_open = true
+            }),
             ("erc_open", |o| o.erc_open = true),
             ("annotate_open", |o| o.annotate_open = true),
             ("prefs_open", |o| o.prefs_open = true),
@@ -1509,6 +1550,9 @@ mod tests {
             // message the rung resolves to, not on the path's value.
             ("delete_confirm", |o| {
                 o.delete_confirm = Some(std::path::PathBuf::from("fixture.snxlib"))
+            }),
+            ("edit_row_modal", |o| {
+                o.edit_row_modal = Some(std::path::PathBuf::from("fixture.snxlib"))
             }),
         ];
 

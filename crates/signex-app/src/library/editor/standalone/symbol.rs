@@ -6,12 +6,12 @@ use iced::{Border, Element, Length, Theme};
 use signex_types::coord::Unit;
 use signex_widgets::theme_ext;
 
-use crate::app::SymbolEditorState;
+use crate::app::SymbolDocument;
 use crate::library::editor::symbol::canvas::{self as sym_canvas, SymbolCanvas};
 use crate::library::editor::symbol::state as sym_state;
 use crate::library::messages::{
     GraphicHandleMsg, LibraryMessage, PrimitiveEdit, SymbolEditorMsg, SymbolRotatePivotMsg,
-    SymbolSelectionMsg,
+    SymbolSelectionMsg, SymbolToolMsg,
 };
 use crate::library::state::LibraryDisplaySettings;
 use crate::panels::PanelContext;
@@ -26,7 +26,7 @@ use crate::panels::PanelContext;
 /// sees the same Properties surface whether editing a schematic or
 /// a symbol library — single source of truth, no duplicated panes.
 pub fn view_symbol<'a>(
-    editor: &'a SymbolEditorState,
+    editor: &'a SymbolDocument,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
     path: &'a std::path::Path,
@@ -66,7 +66,7 @@ pub fn view_symbol<'a>(
 /// status bar so a user editing a symbol library has the same
 /// metadata at the same place on screen.
 fn view_symbol_status<'a>(
-    editor: &'a SymbolEditorState,
+    editor: &'a SymbolDocument,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
     path: &'a std::path::Path,
@@ -164,7 +164,7 @@ fn format_coord(x_mm: f64, y_mm: f64, unit: Unit) -> String {
 }
 
 fn view_symbol_toolbar<'a>(
-    editor: &'a SymbolEditorState,
+    editor: &'a SymbolDocument,
     panel_ctx: &'a PanelContext,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
@@ -237,7 +237,7 @@ fn symbol_tool_button_style(
 }
 
 fn view_symbol_canvas<'a>(
-    editor: &'a SymbolEditorState,
+    editor: &'a SymbolDocument,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
 ) -> Element<'a, LibraryMessage> {
@@ -250,7 +250,7 @@ fn view_symbol_canvas<'a>(
         editor.active_part,
         editor.context_menu.is_some(),
         &editor.camera,
-        display.grid_size_mm as f64,
+        crate::canvas::grid::pitch_mm_exact(display.grid_size_mm),
         display.grid_visible,
         panel_ctx.symbol_grid_style,
         display.pin_selection.allows_label_grab(),
@@ -363,6 +363,7 @@ pub(crate) fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -
             target: symbol_context_target_to_msg(target),
         },
         CanvasAction::CloseContextMenu => SymbolEditorMsg::CloseContextMenu,
+        CanvasAction::LeaveTool => SymbolEditorMsg::SetTool(SymbolToolMsg::Select),
     }
 }
 
@@ -375,6 +376,7 @@ fn symbol_context_target_to_msg(
         SymbolContextTarget::Empty => SymbolContextTargetMsg::Empty,
         SymbolContextTarget::Pin(idx) => SymbolContextTargetMsg::Pin(idx),
         SymbolContextTarget::Graphic(idx) => SymbolContextTargetMsg::Graphic(idx),
+        SymbolContextTarget::Field(key) => SymbolContextTargetMsg::Field(key),
     }
 }
 

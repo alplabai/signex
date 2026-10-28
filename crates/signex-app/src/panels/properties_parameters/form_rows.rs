@@ -7,6 +7,14 @@
 use super::super::*;
 use iced::widget::column;
 
+/// Value-text colour for an input drawn on `bg`: white whenever it
+/// reaches 4.5:1 against `bg`, otherwise whichever of black / white
+/// contrasts more. These row builders receive resolved colours rather
+/// than `ThemeTokens`, so the input background decides.
+fn text_on(bg: Color) -> Color {
+    crate::styles::tokens::readable_on(bg)
+}
+
 /// Thin 1px separator line. `pub(super)` so sibling modules
 /// (footprint_editor_properties, symbol_editor_properties, etc.)
 /// extracted from this file can share the single implementation.
@@ -53,7 +61,7 @@ pub fn form_input_row<'a, M: 'a>(
                 container(
                     text(value.to_string())
                         .size(11)
-                        .color(Color::WHITE)
+                        .color(text_on(input_bg))
                         .wrapping(iced::widget::text::Wrapping::None),
                 )
                 .width(Length::Fill)
@@ -79,68 +87,52 @@ pub fn form_input_row<'a, M: 'a>(
     .into()
 }
 
-/// Form row: label | integer text_input (no spinner buttons).
-pub fn form_int_edit_row<'a>(
-    label: &str,
-    value: u32,
-    on_change: impl Fn(u32) -> PanelMsg + 'a + Clone,
-    label_c: Color,
-    input_bg: Color,
-    input_border: Color,
-) -> Element<'a, PanelMsg> {
-    let text_value = value.to_string();
-    let on_change_cl = on_change.clone();
-    container(
-        row![
-            property_label(label.to_string(), label_c),
-            iced::widget::text_input("", &text_value)
-                .on_input(move |s| {
-                    let parsed: u32 = s.trim().parse().unwrap_or(0);
-                    (on_change_cl)(parsed.min(99))
-                })
-                .size(11)
-                .padding([3, 6])
-                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-                .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                    background: Background::Color(input_bg),
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: input_border,
-                    },
-                    icon: Color::TRANSPARENT,
-                    placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
-                    value: Color::WHITE,
-                    selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
-                }),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
+/// A typed mm value clamped to 1..=MAX_PAGE_EDGE_MM. Refused or half-typed
+/// text keeps `current`: `clamp` passes NaN through, so a typed `nan` would
+/// otherwise reach the canvas paper size (#828). The sheet-size model then
+/// raises it to the smallest custom edge.
+pub fn typed_mm(text: &str, current: f32) -> f32 {
+    crate::numeric_field::parse_field_f64(text)
+        .map_or(current, |v| v as f32)
+        .clamp(1.0, signex_types::schematic::MAX_PAGE_EDGE_MM as f32)
+}
+
+/// Which custom paper edge a draft belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaperEdge {
+    Width,
+    Height,
+}
+
+/// A half-typed custom paper edge, tied to the sheet it was typed on. It is
+/// committed as one undoable edit on Enter, so partial input such as the `4`
+/// of `400` is never clamped to the minimum edge mid-typing.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PaperEdgeDraft {
+    pub sheet: std::path::PathBuf,
+    pub edge: PaperEdge,
+    pub text: String,
 }
 
 /// Form row: label | floating-point mm text_input (no spinner buttons).
+/// Shows `draft` while one is being typed, else the model `value`; typing
+/// only reports the text, and Enter commits it.
 pub fn form_mm_edit_row<'a>(
     label: &str,
     value: f32,
-    on_change: impl Fn(f32) -> PanelMsg + 'a + Clone,
+    draft: Option<&str>,
+    edge: PaperEdge,
     label_c: Color,
     input_bg: Color,
     input_border: Color,
 ) -> Element<'a, PanelMsg> {
-    let text_value = format!("{value:.1}");
-    let on_change_cl = on_change.clone();
+    let text_value = draft.map_or_else(|| format!("{value:.1}"), str::to_string);
     container(
         row![
             property_label(label.to_string(), label_c),
             iced::widget::text_input("", &text_value)
-                .on_input(move |s| {
-                    let parsed: f32 = s.trim().parse().unwrap_or(0.0);
-                    (on_change_cl)(parsed.clamp(1.0, 2000.0))
-                })
+                .on_input(move |s| PanelMsg::CustomPaperEdgeTyping(edge, s))
+                .on_submit(PanelMsg::CommitCustomPaperEdge(edge))
                 .size(11)
                 .padding([3, 6])
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
@@ -153,7 +145,7 @@ pub fn form_mm_edit_row<'a>(
                     },
                     icon: Color::TRANSPARENT,
                     placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
-                    value: Color::WHITE,
+                    value: text_on(input_bg),
                     selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
                 }),
         ]
@@ -192,29 +184,6 @@ where
     .into()
 }
 
-/// Form row: label | custom widget.
-#[expect(
-    dead_code,
-    reason = "form-row builder kept for panels still being migrated to the shared rows"
-)]
-pub fn form_label_row<'a>(
-    label: &str,
-    control: Row<'a, PanelMsg>,
-    label_c: Color,
-) -> Element<'a, PanelMsg> {
-    container(
-        row![
-            property_label(label.to_string(), label_c),
-            container(control).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
 /// Checkbox form row.
 pub fn form_check_row<'a>(
     label: &str,
@@ -241,50 +210,6 @@ pub fn form_check_row<'a>(
         .align_y(iced::Alignment::Center),
     )
     .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Form row: label | pick_list for grid size presets (2.54 mm multiples).
-#[expect(
-    dead_code,
-    reason = "grid-size preset row kept for panels still being migrated to the shared rows"
-)]
-pub fn form_grid_size_row(current_mm: f32, label_c: Color) -> Element<'static, PanelMsg> {
-    use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZES_MM};
-    // Find the label that matches the current value (fallback to first).
-    let selected: Option<&'static str> = GRID_SIZES_MM
-        .iter()
-        .zip(GRID_SIZE_LABELS.iter())
-        .find(|(sz, _)| (**sz - current_mm).abs() < 1e-4)
-        .map(|(_, lbl)| *lbl);
-    container(
-        row![
-            container(
-                text("Visible Grid".to_string())
-                    .size(11)
-                    .color(label_c)
-                    .wrapping(iced::widget::text::Wrapping::None),
-            )
-            .width(LABEL_W)
-            .clip(true),
-            iced::widget::pick_list(GRID_SIZE_LABELS, selected, |lbl: &'static str| {
-                // Map label back to mm value
-                let mm = GRID_SIZES_MM
-                    .iter()
-                    .zip(GRID_SIZE_LABELS.iter())
-                    .find(|(_, l)| **l == lbl)
-                    .map(|(v, _)| *v)
-                    .unwrap_or(2.54);
-                PanelMsg::SetGridSize(mm)
-            },)
-            .text_size(11)
-            .width(Length::Fill),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, 8])
     .width(Length::Fill)
     .into()
 }
@@ -544,45 +469,6 @@ pub fn canvas_font_popup<'a>(
     .into()
 }
 
-/// Form row: label | NumberInput (iced_aw) with step/bounds.
-#[expect(
-    dead_code,
-    reason = "NumberInput row kept for panels still being migrated to the shared rows"
-)]
-fn form_number_row<'a, T>(
-    label: &str,
-    value: T,
-    bounds: impl std::ops::RangeBounds<T> + 'a,
-    step: T,
-    on_change: impl Fn(T) -> PanelMsg + 'static + Clone,
-    label_c: Color,
-) -> Element<'a, PanelMsg>
-where
-    T: num_traits::Num
-        + num_traits::NumAssignOps
-        + PartialOrd
-        + std::fmt::Display
-        + std::str::FromStr
-        + Clone
-        + num_traits::Bounded
-        + 'static,
-{
-    container(
-        row![
-            property_label(label.to_string(), label_c),
-            NumberInput::new(&value, bounds, on_change)
-                .step(step)
-                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-                .padding(4),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
 /// Form row: label | editable text_input that emits a PanelMsg on input.
 pub fn form_edit_row<'a>(
     label: &str,
@@ -668,4 +554,55 @@ pub fn font_style_row<'a>(
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn text_on_each_builtin_selection_is_the_expected_readable_colour() {
+        use crate::styles::tokens::contrast_ratio;
+        use signex_types::theme::{ThemeId, theme_tokens};
+        let expected = |id: ThemeId| match id {
+            // GitHubDark #388BFD and SolarizedLight #268BD2: white < 4.5:1.
+            ThemeId::GitHubDark | ThemeId::SolarizedLight => Color::BLACK,
+            ThemeId::Signex
+            | ThemeId::Alplab
+            | ThemeId::VsCodeDark
+            | ThemeId::CatppuccinMocha
+            | ThemeId::Nord => Color::WHITE,
+            ThemeId::Custom => unreachable!("BUILTINS excludes Custom"),
+        };
+        for &id in ThemeId::BUILTINS {
+            let bg = crate::styles::ti(theme_tokens(id).selection);
+            let got = text_on(bg);
+            assert_eq!(got, expected(id), "{id:?}");
+            assert!(contrast_ratio(got, bg) >= 3.0, "{id:?}");
+        }
+    }
+
+    #[test]
+    fn text_on_follows_background_lightness() {
+        assert_eq!(text_on(Color::from_rgb(0.12, 0.13, 0.16)), Color::WHITE);
+        assert_eq!(text_on(Color::from_rgb(0.99, 0.96, 0.89)), Color::BLACK);
+    }
+
+    /// #828 — `f32::clamp(NaN)` is NaN, so a typed `nan` must be refused
+    /// before the clamp, not by it.
+    #[test]
+    fn typed_mm_keeps_the_current_value_on_refused_or_half_typed_text() {
+        for bad in ["nan", "NaN", "inf", "-inf", "1e999", "", "-", "1,5"] {
+            assert_eq!(typed_mm(bad, 297.0), 297.0, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn typed_mm_clamps_a_finite_value() {
+        assert_eq!(typed_mm(" 210 ", 297.0), 210.0);
+        assert_eq!(typed_mm("0", 297.0), 1.0);
+        assert_eq!(typed_mm("9000", 297.0), 5080.0);
+        // Finite as f64 but infinite as f32: the clamp still bounds it.
+        assert_eq!(typed_mm("1e300", 297.0), 5080.0);
+    }
 }

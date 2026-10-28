@@ -6,6 +6,7 @@
 //! pure code motion, zero behaviour change.
 
 use super::*;
+use crate::library::refresh::RefreshFollowUp;
 use crate::library::resolve::{ResolvedKind, report_read_failure};
 
 impl Signex {
@@ -16,6 +17,15 @@ impl Signex {
         kind: PrimitiveKind,
         target: PrimitivePickerTarget,
     ) -> Task<Message> {
+        // Every pick except the New Component form ends in an
+        // `update_row` on the target's library; a read-only mount
+        // refuses up front with the plain-language card instead of
+        // opening a picker whose result could only fail silently.
+        if let Some(library_path) = target.library_path()
+            && self.refuse_read_only_write(library_path)
+        {
+            return Task::none();
+        }
         self.library.primitive_picker = Some(PrimitivePickerState {
             kind,
             target,
@@ -83,9 +93,14 @@ impl Signex {
         let Some(picker) = self.library.primitive_picker.take() else {
             return Task::none();
         };
+        if let Some(library_path) = picker.target.library_path()
+            && self.refuse_read_only_write(library_path)
+        {
+            return Task::none();
+        }
         match picker.target {
             PrimitivePickerTarget::PreviewRow(address) => {
-                self.apply_primitive_pick_to_preview(address, picker.kind, primitive_ref);
+                return self.apply_primitive_pick_to_preview(address, picker.kind, primitive_ref);
             }
             PrimitivePickerTarget::EditRowModal(address) => {
                 if let Some(state) = self.library.library_browsers.get_mut(&address.library_path)
@@ -94,7 +109,7 @@ impl Signex {
                 {
                     match picker.kind {
                         PrimitiveKind::Symbol => {
-                            modal.draft.symbol_ref = primitive_ref;
+                            modal.draft.bind_default_symbol(primitive_ref);
                         }
                         PrimitiveKind::Footprint => {
                             modal.draft.footprint_ref = Some(primitive_ref);
@@ -107,23 +122,15 @@ impl Signex {
                     modal.error = None;
                 }
             }
-            PrimitivePickerTarget::NewComponentForm => {
-                if let Some(nc) = self.library.new_component.as_mut() {
-                    match picker.kind {
-                        PrimitiveKind::Symbol => {
-                            nc.symbol_ref = Some(primitive_ref);
-                        }
-                        PrimitiveKind::Footprint => {
-                            nc.footprint_ref = Some(primitive_ref);
-                        }
-                        PrimitiveKind::Sim => { /* nothing today */ }
-                        _ => {}
-                    }
-                    nc.error = None;
-                }
-            }
             PrimitivePickerTarget::BrowserRow(address) => {
-                self.apply_primitive_pick_to_browser_row(address, picker.kind, primitive_ref);
+                return self.apply_primitive_pick_to_browser_row(
+                    address,
+                    picker.kind,
+                    primitive_ref,
+                );
+            }
+            PrimitivePickerTarget::PreviewAlternate(address) => {
+                self.add_alternate_symbol_from_pick(address, primitive_ref);
             }
         }
         Task::none()
@@ -135,12 +142,12 @@ impl Signex {
     /// Preview tab open (the user picked from the inline preview /
     /// Properties area). Updates the row, re-hashes, persists via
     /// `adapter.update_row`, refreshes the cache.
-    fn apply_primitive_pick_to_browser_row(
+    pub(super) fn apply_primitive_pick_to_browser_row(
         &mut self,
         address: EditorAddress,
         kind: PrimitiveKind,
         primitive_ref: PrimitiveRef,
-    ) {
+    ) -> Task<Message> {
         // 1. Read the row from the library cache.
         let mut row = match self
             .library
@@ -161,15 +168,15 @@ impl Signex {
                     row_id = %address.row_id,
                     "primitive pick: row not found in cache"
                 );
-                return;
+                return Task::none();
             }
         };
         // 2. Apply.
         match kind {
-            PrimitiveKind::Symbol => row.symbol_ref = primitive_ref,
+            PrimitiveKind::Symbol => row.bind_default_symbol(primitive_ref),
             PrimitiveKind::Footprint => row.footprint_ref = Some(primitive_ref),
             PrimitiveKind::Sim => row.sim_ref = Some(primitive_ref),
-            _ => return,
+            _ => return Task::none(),
         }
         // 3. Re-hash.
         match signex_library::hash_row_content(&row) {
@@ -180,7 +187,7 @@ impl Signex {
                     error = %e,
                     "browser-row primitive pick: hash failed"
                 );
-                return;
+                return Task::none();
             }
         }
         // 4. Persist via adapter.
@@ -201,37 +208,47 @@ impl Signex {
             )),
         };
         if let Err(e) = result {
-            tracing::warn!(
-                target: "signex::library",
-                error = %e,
-                "browser-row primitive pick: update_row failed"
-            );
-            return;
+            crate::diagnostics::log_warning(format!(
+                "Primitive binding for row {} was not saved: {e}",
+                address.row_id
+            ));
+            // A refused write leaves the cache on the stale base, so every
+            // retry would be refused again: re-read the rows.
+            let refresh =
+                self.refresh_library_task(&address.library_path, RefreshFollowUp::Nothing);
+            self.sync_diagnostics_panel_ctx();
+            return refresh;
         }
         // 5. Refresh cache.
-        if let Err(e) = self.library.refresh_components(&address.library_path) {
-            tracing::warn!(
-                target: "signex::library",
-                error = %e,
-                "browser-row primitive pick: refresh_components failed"
-            );
-        }
+        self.refresh_library_task(
+            &address.library_path,
+            RefreshFollowUp::CleanEditors(vec![address.row_id]),
+        )
     }
 
     /// Component Preview tab — apply a freshly-picked primitive ref to
     /// the row, resolve through the LibrarySet, save via update_row.
-    fn apply_primitive_pick_to_preview(
+    pub(super) fn apply_primitive_pick_to_preview(
         &mut self,
         address: EditorAddress,
         kind: PrimitiveKind,
         primitive_ref: PrimitiveRef,
-    ) {
+    ) -> Task<Message> {
         let Some(state) = self.library.editors.get_mut(&address) else {
-            return;
+            return Task::none();
         };
+        if state.saving_row.is_some() {
+            // The bind would move the row's revision under the running
+            // save and fail it as stale: ask for it again afterwards.
+            crate::diagnostics::log_warning(
+                "The primitive was not bound: this row is being saved. Bind it again once the save has finished.",
+            );
+            self.sync_diagnostics_panel_ctx();
+            return Task::none();
+        }
         match kind {
             PrimitiveKind::Symbol => {
-                state.row.symbol_ref = primitive_ref;
+                state.row.bind_default_symbol(primitive_ref);
                 state.symbol = report_read_failure(
                     self.library.set.resolve_symbol(&primitive_ref),
                     ResolvedKind::Symbol,
@@ -257,24 +274,16 @@ impl Signex {
                     "primitive pick",
                 );
             }
-            _ => return,
+            _ => return Task::none(),
         }
-        // Refresh content_hash + save.
-        let mut row = state.row.clone();
-        match signex_library::hash_row_content(&row) {
-            Ok(h) => {
-                row.content_hash = h;
-                state.row.content_hash = h;
-            }
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    error = %e,
-                    "primitive pick: hash failed"
-                );
-                return;
-            }
-        }
+        // Only the bound field is persisted: the working copy may pin a
+        // datasheet PDF that is staged and not on disk yet (#1332), and the
+        // preview's other unsaved edits are saved by its own Save. The
+        // stored row keeps the editor's base revision, so a row that moved
+        // on is still refused as stale.
+        let base_revision = state.row.server_revision;
+        let table = address.table.clone();
+        let row_id = address.row_id;
         let library_id = self
             .library
             .library_at(&address.library_path)
@@ -286,26 +295,46 @@ impl Signex {
             _ => "bind primitive",
         };
         let result = match library_id.and_then(|id| self.library.set.get(id)) {
-            Some(adapter) => adapter.update_row(&address.table, row, msg),
+            Some(adapter) => adapter.read_row(&table, row_id).and_then(|mut stored| {
+                match kind {
+                    PrimitiveKind::Symbol => stored.bind_default_symbol(primitive_ref),
+                    PrimitiveKind::Footprint => stored.footprint_ref = Some(primitive_ref),
+                    _ => stored.sim_ref = Some(primitive_ref),
+                }
+                stored.server_revision = base_revision;
+                stored.refresh_content_hash().map_err(|e| {
+                    signex_library::LibraryError::Backend(format!("hash row content: {e}"))
+                })?;
+                adapter.update_row(&table, stored, msg)
+            }),
             None => Err(signex_library::LibraryError::NotFound(
                 address.library_path.display().to_string(),
             )),
         };
-        if let Err(e) = result {
-            tracing::warn!(
-                target: "signex::library",
-                error = %e,
-                "primitive pick: update_row failed"
-            );
-            return;
+        match result {
+            // Keep the editor's base revision current, or its next save
+            // would be refused as stale.
+            Ok(revision) => {
+                if let Some(state) = self.library.editors.get_mut(&address) {
+                    state.row.server_revision = revision;
+                }
+            }
+            Err(e) => {
+                // Offer "Reload saved version" when the row moved on.
+                if matches!(e, signex_library::LibraryError::RowChanged { .. })
+                    && let Some(state) = self.library.editors.get_mut(&address)
+                {
+                    state.stale_base = true;
+                }
+                crate::diagnostics::log_warning(format!(
+                    "Primitive binding for row {} was not saved: {e}",
+                    address.row_id
+                ));
+                self.sync_diagnostics_panel_ctx();
+                return Task::none();
+            }
         }
-        if let Err(e) = self.library.refresh_components(&address.library_path) {
-            tracing::warn!(
-                target: "signex::library",
-                error = %e,
-                "primitive pick: refresh_components failed"
-            );
-        }
+        self.refresh_library_task(&address.library_path, RefreshFollowUp::Nothing)
     }
 
     /// Filesystem-picked primitive — auto-mount the containing

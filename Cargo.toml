@@ -1,5 +1,7 @@
 [workspace]
 resolver = "2"
+# cargo-fuzz crate: standalone (own [workspace]), needs nightly to run.
+exclude = ["fuzz"]
 members = [
     "crates/signex-app",
     "crates/signex-engine",
@@ -66,6 +68,9 @@ iced_aw = { version = "0.13", default-features = false, features = [
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 toml = "0.8"
+# Format-preserving edit of a .snxlib that holds unknown keys (#1435). Same
+# version and features `toml` already builds, so it adds no crate.
+toml_edit = "0.22"
 
 # Identity
 uuid = { version = "1.23.1", features = ["v4", "v7", "serde"] }
@@ -120,7 +125,7 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-r
 pdf-extract = "0.12"
 tower-http = { version = "0.6", features = ["cors", "trace", "auth", "validate-request", "limit"] }
 # Per-IP rate limiting for the library server (HI-2). Closes the DoS surface
-# on `/locks` (unbounded acquire) + mutating routes. `governor` is the
+# on the mutating routes. `governor` is the
 # underlying token-bucket impl.
 tower_governor = "0.4"
 # Constant-time bearer-token comparison in the library server (already a

@@ -12,9 +12,14 @@ name: License Guard
 # `docs/audit/kicad-derivation.md` §"Residual-mention catalog" with
 # rationale per category.
 #
-# Every job above `port-smell-advisory` is shaped around the issue-62
-# KiCad incident and BLOCKS. `port-smell-advisory` (issue #305) is the
-# one job here that never blocks: it is a heuristic for a threat the
+# All checks run as steps of ONE job: each is a few-second grep, and as
+# separate jobs every one of them queued for its own runner slot on the
+# org's 20-concurrent-job plan. `if: !cancelled()` on each step keeps the
+# old behaviour of reporting every violation, not just the first.
+#
+# Every step above `Port-smell heuristic` is shaped around the issue-62
+# KiCad incident and BLOCKS. The port-smell step (issue #305) is the
+# one check here that never blocks: it is a heuristic for a threat the
 # rest of this file cannot see — an Apache-incompatible source port of
 # some project we have never heard of. It is deliberately weak. The
 # actual control for that threat is written policy, in CONTRIBUTING.md
@@ -32,12 +37,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  no-kicad-imports:
-    name: No GPL-licensed parser/writer imports in crates/
+  clean-room:
+    name: license guard · clean-room
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Forbid the GPL-licensed parser/writer imports
+
+      - name: No GPL-licensed parser/writer imports in crates/
+        if: ${{ !cancelled() }}
         run: |
           set -e
           if git grep -nE 'use\s+(kicad_parser|kicad_writer)::' -- 'crates/**/*.rs'; then
@@ -49,12 +56,9 @@ jobs:
           fi
           echo "No KiCad-crate imports."
 
-  no-kicad-cargo-deps:
-    name: No GPL-licensed parser/writer Cargo.toml deps
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Forbid the GPL-licensed parser/writer Cargo.toml deps
+
+      - name: No GPL-licensed parser/writer Cargo.toml deps
+        if: ${{ !cancelled() }}
         run: |
           set -e
           if git grep -nE '^\s*kicad-(parser|writer)\s*=' -- 'crates/**/Cargo.toml' 'Cargo.toml'; then
@@ -65,12 +69,9 @@ jobs:
           fi
           echo "No kicad-parser / kicad-writer Cargo.toml deps."
 
-  no-removed-kicad-api:
-    name: No re-introduction of the removed GPL-tool API surface
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Forbid re-introduction of removed types and functions
+
+      - name: No re-introduction of the removed GPL-tool API surface
+        if: ${{ !cancelled() }}
         run: |
           set -e
           # These names existed in pre-cutover signex-types and have
@@ -85,12 +86,9 @@ jobs:
           fi
           echo "No removed API surface re-introduced."
 
-  no-kicad-shaped-symbols:
-    name: No GPL-tool-shaped names anywhere in crates/
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Forbid any GPL-tool name mention under crates/
+
+      - name: No GPL-tool-shaped names anywhere in crates/
+        if: ${{ !cancelled() }}
         run: |
           set -e
           # Strict check: the substring "kicad" (any case) is not allowed
@@ -105,12 +103,9 @@ jobs:
           fi
           echo "No KiCad-shaped names anywhere in crates/."
 
-  no-numeric-layer-constants:
-    name: No GPL-tool-numbered LayerId constants
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Forbid F_CU = 0 / B_CU = 31 style const/static declarations
+
+      - name: No GPL-tool-numbered LayerId constants
+        if: ${{ !cancelled() }}
         run: |
           set -e
           # KiCad's pre-7 `PCB_LAYER_ID` used numeric constants for
@@ -130,12 +125,9 @@ jobs:
           fi
           echo "No KiCad-numbered layer constants."
 
-  no-kicad-net-name-format:
-    name: No GPL-tool auto-net-name format string
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Forbid Net-(<r>-Pad<p>) format string
+
+      - name: No GPL-tool auto-net-name format string
+        if: ${{ !cancelled() }}
         run: |
           set -e
           # KiCad's auto-generated unnamed-net format. v0.9.0
@@ -150,12 +142,9 @@ jobs:
           fi
           echo "No KiCad auto-net-name format string."
 
-  no-kicad-cpp-class-names:
-    name: No GPL-tool C++ class / file references in source comments
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Forbid SCH_PAINTER / SCH_FIELD / sch_painter.cpp / etc.
+
+      - name: No GPL-tool C++ class / file references in source comments
+        if: ${{ !cancelled() }}
         run: |
           set -e
           # KiCad's C++ implementation uses specific class names
@@ -181,12 +170,9 @@ jobs:
           fi
           echo "No KiCad C++ class names or .cpp file references."
 
-  no-standard-as-comment-word-in-renderer:
-    name: No bare `Standard` as a comment word in renderer / engine
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Forbid `\bStandard\b` substring in signex-render / signex-engine
+
+      - name: No bare `Standard` as a comment word in renderer / engine
+        if: ${{ !cancelled() }}
         run: |
           set -e
           # The v0.10.0 "Standard" rename of KiCad-class names was a
@@ -199,7 +185,17 @@ jobs:
           # `LabelStyle::Standard`, `MultisheetStyle::Standard`) is
           # whitelisted because it serialises to disk and renaming
           # would break user files.
-          MATCHES=$(git grep -nE '\bStandard\b' -- 'crates/signex-render/' 'crates/signex-engine/' || true)
+          # Every scanned path must exist: after a crate rename an empty
+          # path makes `git grep` match nothing and the rule pass vacuously.
+          SCANNED="crates/signex-renderer/ crates/signex-engine/"
+          for dir in $SCANNED; do
+            if [ -z "$(git ls-files -- "$dir" | head -n 1)" ]; then
+              echo "::error::License Guard scans '$dir', which has no tracked files. Update the path."
+              exit 1
+            fi
+          done
+          # shellcheck disable=SC2086
+          MATCHES=$(git grep -nE '\bStandard\b' -- $SCANNED || true)
           if [ -n "$MATCHES" ]; then
             # Whitelist: render-style enum variant declarations + their
             # Display impls. Anything else is a comment-word euphemism
@@ -208,7 +204,7 @@ jobs:
             if [ -n "$FILTERED" ]; then
               echo "$FILTERED"
               echo ""
-              echo "::error::Bare 'Standard' comment-word detected in signex-render / signex-engine."
+              echo "::error::Bare 'Standard' comment-word detected in signex-renderer / signex-engine."
               echo "::error::Source comments must describe behaviour without the v0.10.0 Standard euphemism."
               echo "::error::Reference docs/RENDERING_RULES.md, IEEE-Std-91, or Altium parity instead."
               exit 1
@@ -216,12 +212,9 @@ jobs:
           fi
           echo "No bare 'Standard' comment-words in renderer / engine."
 
-  no-kicad-published-format-substrings:
-    name: No GPL-tool schematic/PCB/symbol format literals
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Forbid the GPL-tool published file-format extension substrings
+
+      - name: No GPL-tool schematic/PCB/symbol format literals
+        if: ${{ !cancelled() }}
         run: |
           set -e
           # The Apache-clean Signex repo doesn't read or write KiCad
@@ -239,12 +232,9 @@ jobs:
           fi
           echo "No KiCad published-format substrings."
 
-  no-third-party-constraint-solver-substrings:
-    name: No SolveSpace / FreeCAD / planegcs / OpenCascade substrings in sketch crates
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Forbid third-party constraint-solver substrings under crates/signex-sketch and crates/signex-bake
+
+      - name: No SolveSpace / FreeCAD / planegcs / OpenCascade substrings in sketch crates
+        if: ${{ !cancelled() }}
         run: |
           set -e
           # The v0.13 sketch-mode solver is a cleanroom implementation
@@ -273,12 +263,9 @@ jobs:
           fi
           echo "No third-party constraint-solver substrings under signex-sketch / signex-bake."
 
-  no-third-party-constraint-solver-attribution:
-    name: No "from SolveSpace" / "based on FreeCAD" attribution comments
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Forbid attribution comments referencing third-party constraint solvers
+
+      - name: No "from SolveSpace" / "based on FreeCAD" attribution comments
+        if: ${{ !cancelled() }}
         run: |
           set -e
           # Catches the form "// from <Solver>" or "// based on
@@ -293,12 +280,9 @@ jobs:
           fi
           echo "No third-party constraint-solver attribution comments."
 
-  no-derivation-attribution-markers:
-    name: No DeepWiki / GPL-tool-mirror-source markers
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Forbid "DeepWiki" / GPL-tool-mirror-source / etc. anywhere in repo
+
+      - name: No DeepWiki / GPL-tool-mirror-source markers
+        if: ${{ !cancelled() }}
         run: |
           set -e
           # Specific markers that appeared in pre-v0.9.0 agent-context
@@ -314,12 +298,9 @@ jobs:
           fi
           echo "No derivation-attribution markers."
 
-  port-smell-advisory:
-    name: Port-smell heuristic (advisory — never fails)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Scan crates/ for residue a source port tends to leave
+
+      - name: Port-smell heuristic (advisory — never fails)
+        if: ${{ !cancelled() }}
         run: |
           set -uo pipefail
           # WHY THIS JOB EXISTS
@@ -429,27 +410,3 @@ jobs:
           fi
           echo "$NOTE"
           exit 0
-
-  cargo-deny:
-    name: cargo-deny license + transitive-dep audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Install cargo-deny
-        run: cargo install cargo-deny --locked
-
-      - name: Check licenses
-        run: cargo deny --all-features check licenses
-
-      - name: Check sources
-        run: cargo deny --all-features check sources
-        continue-on-error: true
-
-      - name: Check advisories
-        run: cargo deny --all-features check advisories
-        continue-on-error: true

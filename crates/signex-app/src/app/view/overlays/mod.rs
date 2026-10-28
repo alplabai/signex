@@ -84,7 +84,10 @@ impl Signex {
         };
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(4);
-        rows.push(field("Designator", symbol.reference.clone()));
+        rows.push(field(
+            "Designator",
+            self.shown_designator(symbol).to_string(),
+        ));
         if !symbol.value.is_empty() {
             rows.push(field("Value", symbol.value.clone()));
         }
@@ -92,7 +95,10 @@ impl Signex {
             rows.push(field("Footprint", symbol.footprint.clone()));
         }
         if !symbol.lib_id.is_empty() {
-            rows.push(field("Library", symbol.lib_id.clone()));
+            rows.push(field(
+                "Library",
+                self.library.drift.display_name(&symbol.lib_id).to_owned(),
+            ));
         }
 
         let card = container(column(rows).spacing(3))
@@ -140,9 +146,7 @@ impl Signex {
     /// below the chrome strip; scoring + ranking happens in the
     /// `command_palette` module so this view stays a thin renderer.
     pub(super) fn view_command_palette_dropdown(&self) -> Element<'_, Message> {
-        use crate::app::command_palette::{
-            CommandSource, MAX_RESULTS, build_catalog, rank_results,
-        };
+        use crate::app::command_palette::{CommandSource, MAX_RESULTS};
         use iced::widget::{Space, button, column, container, row, scrollable, text};
         use iced::{Alignment, Background, Border, Color};
 
@@ -154,9 +158,9 @@ impl Signex {
         let accent_c = crate::styles::ti(tokens.accent);
         let hover_c = crate::styles::ti(tokens.hover);
 
-        let catalog = build_catalog(self);
-        let ranked = rank_results(&catalog, &self.ui_state.command_palette.query);
-        let total = ranked.len();
+        // Ranked in `update` (`refresh_command_palette_results`), read here.
+        let results = &self.ui_state.command_palette.results;
+        let total = self.ui_state.command_palette.total_matches;
         let selected = self
             .ui_state
             .command_palette
@@ -164,8 +168,7 @@ impl Signex {
             .min(total.saturating_sub(1));
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(MAX_RESULTS.min(total));
-        for (display_idx, &(catalog_idx, _score)) in ranked.iter().take(MAX_RESULTS).enumerate() {
-            let entry = &catalog[catalog_idx];
+        for (display_idx, entry) in results.iter().enumerate() {
             let is_active = display_idx == selected;
             let row_bg = if is_active {
                 Some(Background::Color(hover_c))
@@ -334,15 +337,16 @@ impl Signex {
         )
         .map(Message::ActiveBar);
         let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
-        // Bar: MENU_BAR_HEIGHT + tabs + 4 top-margin + bar-height ≈ bottom of bar.
-        // Bar-height = 28 button + 6 vertical padding + 2 border = 36, plus 4
-        // top margin = 40. Add a small gap so the dropdown visually touches.
+        // Bar bottom: MENU_BAR_HEIGHT + tabs + top margin + bar height,
+        // plus a small gap so the dropdown visually touches.
         let ab_y: f32 = crate::menu_bar::MENU_BAR_HEIGHT
             + if document.tabs.is_empty() { 0.0 } else { 28.0 }
-            + 40.0;
-        let bar_w: f32 = crate::active_bar::BAR_WIDTH_PX;
+            + crate::active_bar::BAR_TOP_MARGIN_PX
+            + crate::active_bar::BAR_HEIGHT_PX
+            + crate::active_bar::BAR_DROPDOWN_GAP_PX;
         let (ww, _) = ui.window_size;
-        let adjusted_x = x_off + (ww - bar_w) / 2.0;
+        let adjusted_x =
+            x_off + crate::active_bar::bar_left_in_window(interaction.current_tool, ww);
         vec![
             Self::dismiss_layer(Message::ActiveBar(
                 crate::active_bar::ActiveBarMsg::CloseMenus,

@@ -8,7 +8,7 @@
 //! panel.
 
 use signex_app::app::{
-    FileMsg, FootprintEditorState, Message, Signex, SymbolEditorState, TabInfo, TabKind,
+    FileMsg, FootprintDocument, Message, Signex, SymbolDocument, TabInfo, TabKind,
 };
 use signex_library::{Footprint, FootprintFile, Symbol, SymbolFile};
 use std::path::Path;
@@ -18,7 +18,7 @@ fn open_symbol_tab(app: &mut Signex, path: &Path) {
     let file = SymbolFile::from_symbol(Symbol::empty("sym"));
     app.document_state.symbol_editors.insert(
         path.to_path_buf(),
-        SymbolEditorState::new(path.to_path_buf(), file),
+        SymbolDocument::new(path.to_path_buf(), file),
     );
     push_tab(app, path, TabKind::SymbolEditor(path.to_path_buf()));
 }
@@ -27,7 +27,7 @@ fn open_footprint_tab(app: &mut Signex, path: &Path) {
     let file = FootprintFile::from_footprint(Footprint::empty("fp"));
     app.document_state.footprint_editors.insert(
         path.to_path_buf(),
-        FootprintEditorState::new(path.to_path_buf(), file),
+        FootprintDocument::new(path.to_path_buf(), file),
     );
     push_tab(app, path, TabKind::FootprintEditor(path.to_path_buf()));
 }
@@ -85,7 +85,7 @@ fn symbol_save_as_writes_symbol_file_and_rekeys_tab() {
     let (mut app, _t) = Signex::new();
     open_symbol_tab(&mut app, &old);
 
-    let _ = app.update(primitive_save_as(&old, &new));
+    crate::settle_support::settle(&mut app, primitive_save_as(&old, &new));
 
     let text = std::fs::read_to_string(&new).expect("Save As must write the new file");
     SymbolFile::from_toml_str(&text).expect("new file must be a valid .snxsym");
@@ -112,7 +112,7 @@ fn footprint_save_as_writes_footprint_file_and_rekeys_tab() {
     let (mut app, _t) = Signex::new();
     open_footprint_tab(&mut app, &old);
 
-    let _ = app.update(primitive_save_as(&old, &new));
+    crate::settle_support::settle(&mut app, primitive_save_as(&old, &new));
 
     let text = std::fs::read_to_string(&new).expect("Save As must write the new file");
     FootprintFile::from_toml_str(&text).expect("new file must be a valid .snxfpt");
@@ -145,7 +145,7 @@ fn switching_tabs_while_the_dialog_is_open_still_saves_the_source_document() {
     push_tab(&mut app, &other, TabKind::Pcb);
     assert_eq!(app.document_state.active_tab, 1, "other tab is active");
 
-    let _ = app.update(primitive_save_as(&sym, &picked));
+    crate::settle_support::settle(&mut app, primitive_save_as(&sym, &picked));
 
     let text = std::fs::read_to_string(&picked).expect("the symbol must be written");
     SymbolFile::from_toml_str(&text).expect("picked file is the symbol, a valid .snxsym");
@@ -189,7 +189,7 @@ fn failed_save_as_write_rolls_the_rekey_back() {
     open_symbol_tab(&mut app, &old);
     app.document_state.tabs[0].title = "keep me".into();
 
-    let _ = app.update(primitive_save_as(&old, &new));
+    crate::settle_support::settle(&mut app, primitive_save_as(&old, &new));
 
     let ds = &app.document_state;
     assert!(ds.symbol_editors.contains_key(&old), "editor back at old");
@@ -253,7 +253,7 @@ fn saving_outside_any_snxlib_logs_to_the_messages_panel() {
     let (mut app, _t) = Signex::new();
     open_symbol_tab(&mut app, &old);
 
-    let _ = app.update(primitive_save_as(&old, &new));
+    crate::settle_support::settle(&mut app, primitive_save_as(&old, &new));
 
     assert!(new.exists());
     assert!(

@@ -226,7 +226,9 @@ pub fn run_blocking(
 /// How long the accepted callback connection may stall a read or write.
 /// A browser sends the request line immediately; a peer that connects and
 /// says nothing must not hold the flow (and the Cancel button) hostage.
-const ACCEPTED_STREAM_IO_TIMEOUT: Duration = Duration::from_secs(10);
+/// Kept short: the settings panel's busy flag blocks Connect for this long
+/// after a silent peer.
+const ACCEPTED_STREAM_IO_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Make the accepted connection safe to read synchronously.
 ///
@@ -340,7 +342,32 @@ where
         );
         return None;
     }
+    if is_stray_request(&req_line) {
+        // A favicon probe or another local client: not the redirect, so
+        // answer 404 and keep waiting rather than end the flow.
+        std::io::Write::write_all(
+            &mut stream,
+            b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        )
+        .ignore("courtesy 404; the stray peer may already be gone");
+        stream
+            .shutdown(std::net::Shutdown::Both)
+            .ignore("stray connection; abandoned either way");
+        return None;
+    }
     Some(finish_callback(stream, cancel, req_line, exchange))
+}
+
+/// True when a request line was read but its path is not `/callback`. A read
+/// error is not stray: it stays on the failure path so it is reported.
+fn is_stray_request(req_line: &Result<String, std::io::Error>) -> bool {
+    match req_line {
+        Ok(line) => {
+            let target = line.split_whitespace().nth(1).unwrap_or("");
+            target.split('?').next() != Some("/callback")
+        }
+        Err(_) => false,
+    }
 }
 
 /// A read that produced no request: it timed out (Unix reports `WouldBlock`,
@@ -578,6 +605,17 @@ mod tests {
         let got = parse_callback(line).expect("parses");
         assert_eq!(got.0, "a+b");
         assert_eq!(got.1, "q w");
+    }
+
+    #[test]
+    fn stray_connections_are_not_the_callback() {
+        let ok = |l: &str| Ok::<String, std::io::Error>(l.to_string());
+        assert!(!is_stray_request(&ok(
+            "GET /callback?code=a&state=b HTTP/1.1"
+        )));
+        assert!(is_stray_request(&ok("GET /favicon.ico HTTP/1.1")));
+        let reset = Err(std::io::Error::from(std::io::ErrorKind::ConnectionReset));
+        assert!(!is_stray_request(&reset));
     }
 
     #[test]

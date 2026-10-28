@@ -1,4 +1,4 @@
-format = "snxpcb/1"
+format = "snxpcb/1.2"
 pcb_id = "00000000-0000-0000-0000-000000000000"
 version = 1
 generator = "signex-test"
@@ -21,8 +21,8 @@ uuid                                  ref  library              pos_x     pos_y 
 
 [pads]
 content = """
-uuid                                  footprint_ref  pin  pos_x     pos_y     size_x   size_y   pad_type  shape   layers                  drill   net_number  net_name  roundrect_ratio
-0192a8c0-0000-7000-8000-000000002001  R1             1    11000000  20000000  1600000  1000000  thru      circle  TopCopper,BottomCopper  800000  1           VCC       0
+uuid                                  footprint_ref                         pin  pos_x     pos_y     size_x   size_y   pad_type  shape   layers                  drill   net_number  net_name  roundrect_ratio
+0192a8c0-0000-7000-8000-000000002001  0192a8c0-0000-7000-8000-000000001001  1    11000000  20000000  1600000  1000000  thru      circle  TopCopper,BottomCopper  800000  1           VCC       0
 """
 
 [tracks]

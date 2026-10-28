@@ -513,6 +513,9 @@ impl FootprintCanvas<'_> {
         let dx_mm = world.0 - drag.last_world.0;
         let dy_mm = world.1 - drag.last_world.1;
         drag.last_world = world;
+        if is_no_motion(dx_mm, dy_mm) {
+            return None;
+        }
         self.cache.clear();
         Some(canvas::Action::publish(LibraryMessage::EditorEvent {
             library_path: self.address.library_path.clone(),
@@ -589,6 +592,9 @@ impl FootprintCanvas<'_> {
         // Advance last_world by the CONSTRAINED delta so the cursor's
         // parallel motion accumulates.
         drag.last_world = (drag.last_world.0 + dx_mm, drag.last_world.1 + dy_mm);
+        if is_no_motion(dx_mm, dy_mm) {
+            return None;
+        }
         self.cache.clear();
         Some(canvas::Action::publish(LibraryMessage::EditorEvent {
             library_path: self.address.library_path.clone(),
@@ -649,4 +655,11 @@ impl FootprintCanvas<'_> {
             }),
         }))
     }
+}
+
+/// A sketch-drag tick that moves nothing (cursor motion along a line's own
+/// direction projects to zero) is not an edit: no message, no undo step.
+fn is_no_motion(dx_mm: f64, dy_mm: f64) -> bool {
+    const NO_MOTION_MM: f64 = 1e-12;
+    dx_mm.abs() <= NO_MOTION_MM && dy_mm.abs() <= NO_MOTION_MM
 }

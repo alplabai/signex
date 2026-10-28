@@ -74,6 +74,13 @@ impl LocalGitProjectAdapter {
         }
         let dot_git = project_root.join(".git");
         if !dot_git.exists() {
+            // A copied project with no `.git` on the Desktop must not turn
+            // the Desktop into a repository on the next save (#1205).
+            if let Some(reason) =
+                crate::vcs_target_guard::system_version_control_refusal(&project_root, None)
+            {
+                return Err(LibraryError::VersionControlRefused(reason));
+            }
             git2::Repository::init(&project_root)
                 .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
         } else {
@@ -102,20 +109,45 @@ impl LocalGitProjectAdapter {
         rel_path: &Path,
         message: &str,
     ) -> Result<Option<git2::Oid>, LibraryError> {
+        self.commit_staged(None, rel_path, message)
+    }
+
+    /// Commit `rel_path` and drop `removed_rel_path` from the tree and the
+    /// index in the same commit, so a file moved from `removed_rel_path`
+    /// to `rel_path` is recorded as a rename and leaves no unstaged
+    /// deletion behind. Both paths are project-relative. `None` when the
+    /// resulting tree matches HEAD's.
+    pub fn commit_rename(
+        &self,
+        removed_rel_path: &Path,
+        rel_path: &Path,
+        message: &str,
+    ) -> Result<Option<git2::Oid>, LibraryError> {
+        self.commit_staged(Some(removed_rel_path), rel_path, message)
+    }
+
+    fn commit_staged(
+        &self,
+        removed_rel_path: Option<&Path>,
+        rel_path: &Path,
+        message: &str,
+    ) -> Result<Option<git2::Oid>, LibraryError> {
         // v0.23 — reject obviously dangerous `rel_path`. Internal
         // callers strip-prefix from absolute paths so this guards
         // against future callers that forget. Both absolute paths
         // and `..` components could land git2 outside the project
         // root, breaking the repo invariants.
-        if rel_path.is_absolute()
-            || rel_path
-                .components()
-                .any(|c| matches!(c, std::path::Component::ParentDir))
-        {
-            return Err(LibraryError::Backend(format!(
-                "rel_path must be project-relative without `..`: {}",
-                rel_path.display()
-            )));
+        for path in std::iter::once(rel_path).chain(removed_rel_path) {
+            if path.is_absolute()
+                || path
+                    .components()
+                    .any(|c| matches!(c, std::path::Component::ParentDir))
+            {
+                return Err(LibraryError::Backend(format!(
+                    "rel_path must be project-relative without `..`: {}",
+                    path.display()
+                )));
+            }
         }
         // Poison errors are recovered with `into_inner` because the
         // mutex protects only `.git/index.lock` ordering — a panic
@@ -135,7 +167,13 @@ impl LocalGitProjectAdapter {
             message.to_string()
         };
         super::helpers::retry_on_git_lock(repo.path(), || {
-            super::helpers::stage_and_commit(&repo, rel_path, &sig, &final_message)
+            super::helpers::stage_and_commit(
+                &repo,
+                removed_rel_path,
+                rel_path,
+                &sig,
+                &final_message,
+            )
         })
         .map_err(|e| LibraryError::Backend(format!("git commit {}: {e}", rel_path.display())))
     }
@@ -255,9 +293,10 @@ impl LocalGitProjectAdapter {
     /// Signex process saving into it cannot interleave with the restore
     /// (#906).
     ///
-    /// Does NOT create a new commit — that's the app layer's call
-    /// (it'll observe the dirty file on next save and commit through
-    /// [`commit_path`] with a "Restore from <sha>" message).
+    /// Does NOT create a new commit — that's the app layer's call, and it
+    /// differs per kind: a schematic is left dirty and commits on the next
+    /// Save; a PCB, footprint or symbol commits "Restore X" through
+    /// [`commit_path`] at once.
     pub fn restore_at(&self, rel_path: &Path, commit_oid: git2::Oid) -> Result<(), LibraryError> {
         let repo = git2::Repository::open(&self.project_root)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
@@ -311,56 +350,25 @@ impl LocalGitProjectAdapter {
         self.restore_at(rel_path, oid)
     }
 
-    /// Write the project's `.gitattributes` file with the v0.22 spec:
+    /// Bring the project's `.gitattributes` up to the v0.22 spec as a
+    /// Signex-managed block:
     /// - `text eol=lf` for every `.snx*` extension so git stays
     ///   line-ending stable across Windows / macOS / Linux
     ///   collaborators.
     /// - `binary` for `.step` / `.wrl` / `.png` / `.pdf` so git
     ///   doesn't try to diff or merge them.
-    /// - `filter=lfs diff=lfs merge=lfs -text` for everything under
-    ///   `assets/3d-models/**` when `use_lfs` is on. Skipped when
-    ///   off — the user can opt in later via the migration modal.
+    /// - When `use_lfs` is on, `filter=lfs` for the 3D model extensions,
+    ///   `assets/3d-models/**` and the raster assets (`assets/*.png`, ...).
     ///
-    /// **Destructive — overwrites any existing `.gitattributes`
-    /// without merging.** Callers (today: the Enable Version Control
-    /// modal in `app/handlers/dock/project_navigation.rs`) gate this
-    /// behind explicit user action. Manual edits between Enable VC
-    /// invocations are clobbered. Future v0.x can read+merge if
-    /// the user demands it; today's contract is "Enable VC rewrites
-    /// the file from scratch".
+    /// An existing file is merged, not replaced: only the lines between the
+    /// managed markers change, every other byte is the user's. Duplicate or
+    /// unbalanced markers return an error and leave the file untouched.
     ///
     /// The file is staged + committed by the migration flow's
     /// initial-commit step; callers don't need a separate commit.
     pub fn write_gitattributes(&self, use_lfs: bool) -> Result<(), LibraryError> {
-        let path = self.project_root.join(".gitattributes");
-        let mut text = String::new();
-        text.push_str("# Generated by Signex when version control was enabled for this project.\n");
-        text.push_str(
-            "# Re-running \"Enable Version Control\" rewrites this file from scratch —\n",
-        );
-        text.push_str("# manual edits will be lost. Hand-edit only if you're not planning to\n");
-        text.push_str("# re-run the modal.\n\n");
-        text.push_str(
-            "# Native Signex formats are line-based UTF-8 — keep LF endings everywhere\n",
-        );
-        text.push_str("# so cross-platform collaborators don't churn the diff with CRLF flips.\n");
-        for ext in [
-            "snxsch", "snxpcb", "snxprj", "snxmat", "snxnet", "snxbom", "snxout", "snxsym",
-            "snxfpt", "snxlib", "snxmod",
-        ] {
-            text.push_str(&format!("*.{ext}\ttext eol=lf\n"));
-        }
-        text.push_str("\n# Binary attachments — git shouldn't diff or merge them.\n");
-        for ext in ["step", "stp", "wrl", "iges", "png", "jpg", "jpeg", "pdf"] {
-            text.push_str(&format!("*.{ext}\tbinary\n"));
-        }
-        if use_lfs {
-            text.push_str("\n# 3D models opt-in via Git LFS so the working tree doesn't bloat.\n");
-            text.push_str("assets/3d-models/**\tfilter=lfs diff=lfs merge=lfs -text\n");
-        }
-        signex_types::atomic_io::atomic_write(&path, text.as_bytes())
-            .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))?;
-        Ok(())
+        signex_types::project_vcs_files::ensure_gitattributes(&self.project_root, use_lfs)
+            .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))
     }
 }
 

@@ -3,9 +3,10 @@
 //! they stay independent from renderer internals.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use signex_net::{ConnectedPoints, SheetConnectivity, best_net_name_of, pt_key};
-use signex_types::schematic::SchematicSheet;
+use signex_types::schematic::{InstancePath, SchematicSheet};
 use signex_types::schematic::{LabelType, PinDirection, Point, SymbolTransform};
 use uuid::Uuid;
 
@@ -13,38 +14,35 @@ use uuid::Uuid;
 // Paper size
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PaperSize {
-    A4,
-    A3,
-    A2,
-    A1,
-    A0,
+/// Sheet extent in millimetres, resolved from the sheet's `paper_size` token
+/// through the same [`SheetSize`](signex_types::schematic::SheetSize) parser
+/// the canvas uses, so Letter / Legal / Tabloid / B5 / custom sizes and
+/// portrait orientation are honoured instead of collapsing to A4.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PaperSize {
+    width_mm: f64,
+    height_mm: f64,
 }
 
 impl PaperSize {
-    /// Returns `(width_mm, height_mm)` for **landscape** orientation
-    /// (long side first). LO-5: schematic ERC currently treats every
-    /// sheet as landscape; if the schema ever grows an explicit
-    /// orientation flag (e.g. `A4_L` vs `A4`), the consumer should
-    /// swap the tuple instead of expecting this method to do it.
+    pub const A4: PaperSize = PaperSize {
+        width_mm: 297.0,
+        height_mm: 210.0,
+    };
+
+    /// Returns `(width_mm, height_mm)` in the sheet's own orientation.
     pub fn dimensions_mm(self) -> (f64, f64) {
-        match self {
-            PaperSize::A4 => (297.0, 210.0),
-            PaperSize::A3 => (420.0, 297.0),
-            PaperSize::A2 => (594.0, 420.0),
-            PaperSize::A1 => (841.0, 594.0),
-            PaperSize::A0 => (1189.0, 841.0),
-        }
+        (self.width_mm, self.height_mm)
     }
 
+    /// Resolve a stored paper-size token; an unrecognised one is A4
+    /// landscape, matching what the canvas draws for it.
     fn parse(s: &str) -> Self {
-        match s {
-            "A3" => PaperSize::A3,
-            "A2" => PaperSize::A2,
-            "A1" => PaperSize::A1,
-            "A0" => PaperSize::A0,
-            _ => PaperSize::A4,
+        let (size, orientation) = signex_types::schematic::SheetSize::parse(s);
+        let (width_mm, height_mm) = size.dimensions_mm(orientation);
+        PaperSize {
+            width_mm,
+            height_mm,
         }
     }
 }
@@ -107,6 +105,7 @@ pub struct ErcWire {
 
 #[derive(Debug, Clone, Copy)]
 pub struct ErcBus {
+    pub uuid: Uuid,
     pub start: Point,
     pub end: Point,
 }
@@ -145,7 +144,10 @@ pub struct ErcNoErcDirective {
 
 #[derive(Debug, Clone, Copy)]
 pub struct ErcBusEntry {
+    pub uuid: Uuid,
     pub position: Point,
+    /// Stub extent: it runs from `position` to `position + size`.
+    pub size: (f64, f64),
 }
 
 #[derive(Debug, Clone)]
@@ -168,18 +170,46 @@ pub struct ErcSheetPin {
 // ErcNet  (derived — not directly from the snapshot)
 // ---------------------------------------------------------------------------
 
+/// A pin on an [`ErcNet`], with enough identity to point a diagnostic at it.
+#[derive(Debug, Clone)]
+pub struct ErcNetPin {
+    /// The symbol that owns the pin.
+    pub symbol: Uuid,
+    /// The sheet occurrence the pin sits on (empty for a root page): two
+    /// placements of one sheet file carry the same `symbol` uuid, and are
+    /// still two parts.
+    pub occurrence: InstancePath,
+    /// That symbol's reference designator, for messages.
+    pub reference: String,
+    /// World-space position of the pin tip.
+    pub position: Point,
+    pub direction: PinDirection,
+    /// `true` when the owning symbol is a power flag (`PWR_FLAG`), not an
+    /// ordinary power port. A flag declares a rail driven without naming it,
+    /// so its pin says nothing about two real drivers sharing the rail.
+    pub is_power_flag: bool,
+}
+
 /// A logical net: the set of pins and labels connected by wires/junctions.
 /// Derived during projection via union-find over wire endpoints.
 #[derive(Debug, Clone)]
 pub struct ErcNet {
     /// Net name from the highest-priority label on this net (empty = unnamed).
     pub name: String,
+    /// Every distinct name on this net (labels and power-port values), sorted,
+    /// including the winner in `name`. DSL: `net.names` (any-match), so a rule
+    /// keyed on an alias still fires when another name wins.
+    pub names: Vec<String>,
     /// First word of `name` before `_`, lowercased. E.g. `"i2c"` from
     /// `"I2C_SDA"`. Equals the full lowercased name when no `_` is present.
     /// DSL: `net.class == "i2c"`.
     pub class: String,
     /// Electrical types of every pin on this net. DSL: `has_pin_kind(...)`.
+    /// Always the `direction` of each entry of [`ErcNet::pins`], in order.
     pub pin_types: Vec<PinDirection>,
+    /// The same pins with the symbol and position that make a finding on one
+    /// of them locatable.
+    pub pins: Vec<ErcNetPin>,
     /// `true` if any pin is Output / PowerOutput / ThreeStatable /
     /// OpenDrainLow / OpenDrainHigh. DSL: `has_driver()`.
     pub has_driver: bool,
@@ -211,7 +241,11 @@ pub struct ErcContext {
     pub nets: Vec<ErcNet>,
     /// Child sheet contexts keyed by filename. Only populated when built via
     /// [`from_snapshot_with_children`].
-    pub children: HashMap<String, ErcContext>,
+    pub children: HashMap<String, Arc<ErcContext>>,
+    /// This sheet's project key, when built by [`from_snapshot_with_children`].
+    /// Lets cross-sheet rules count a file once however many parents
+    /// reference it.
+    pub key: Option<signex_net::SheetKey>,
 }
 
 impl ErcContext {
@@ -228,30 +262,33 @@ impl ErcContext {
         Self::project(snapshot, HashMap::new())
     }
 
-    /// `resolved` is THIS sheet's own resolution submap — `cs.filename ->
-    /// SheetKey` — not a project-wide map; `sheets` is the shared
-    /// `SheetKey -> SchematicSheet` table every sheet's submap is looked up
-    /// against. Keying `resolved` per-sheet (rather than a single project-wide
-    /// filename map) is what keeps this in step with
+    /// Build a context whose `children` are filled recursively from the
+    /// project's per-parent resolution table: `resolutions[parent_key]` is
+    /// that sheet's own `cs.filename -> SheetKey` submap (the shape of
+    /// `signex_net::ProjectGraph::resolved`), looked up against the shared
+    /// `sheets` table. `own_key` is this sheet's key (`None` for a sheet with
+    /// no place in the project, which then has no children). Per-parent
+    /// submaps, not one project-wide filename map, keep this in step with
     /// `signex_net::build_project_netlist` when two parents in different
     /// directories reference a child by the same filename string (#466).
+    ///
+    /// A child that is already an ancestor (a reference cycle) is still
+    /// attached, so a direct-child lookup finds it, but is not expanded
+    /// further — that is what bounds the recursion. A sheet reached through
+    /// several paths is projected once (see `HierarchyMemo`).
     pub fn from_snapshot_with_children(
         snapshot: &SchematicSheet,
-        resolved: &HashMap<String, signex_net::SheetKey>,
+        own_key: Option<&signex_net::SheetKey>,
+        resolutions: &HashMap<signex_net::SheetKey, HashMap<String, signex_net::SheetKey>>,
         sheets: &HashMap<signex_net::SheetKey, SchematicSheet>,
     ) -> Self {
-        let child_ctxs = resolved
-            .iter()
-            .filter_map(|(filename, key)| {
-                sheets
-                    .get(key)
-                    .map(|s| (filename.clone(), Self::from_snapshot(s)))
-            })
-            .collect();
-        Self::project(snapshot, child_ctxs)
+        crate::hierarchy::HierarchyMemo::new().context_for(snapshot, own_key, resolutions, sheets)
     }
 
-    fn project(snapshot: &SchematicSheet, children: HashMap<String, ErcContext>) -> Self {
+    pub(crate) fn project(
+        snapshot: &SchematicSheet,
+        children: HashMap<String, Arc<ErcContext>>,
+    ) -> Self {
         // --- Step 1: geometry primitives (no symbols yet) -----------------
         let wires: Vec<ErcWire> = snapshot
             .wires
@@ -267,6 +304,7 @@ impl ErcContext {
             .buses
             .iter()
             .map(|b| ErcBus {
+                uuid: b.uuid,
                 start: b.start,
                 end: b.end,
             })
@@ -311,6 +349,8 @@ impl ErcContext {
             .bus_entries
             .iter()
             .map(|be| ErcBusEntry {
+                uuid: be.uuid,
+                size: be.size,
                 position: be.position,
             })
             .collect();
@@ -343,7 +383,7 @@ impl ErcContext {
             .symbols
             .iter()
             .filter_map(|sym| {
-                let lib_sym = snapshot.lib_symbols.get(&sym.lib_id)?;
+                let lib_sym = snapshot.resolve_lib_symbol(sym)?;
                 let pins = lib_sym
                     .pins
                     .iter()
@@ -408,6 +448,7 @@ impl ErcContext {
             child_sheets,
             nets,
             children,
+            key: None,
         }
     }
 }
@@ -419,6 +460,44 @@ impl ErcContext {
 // ---------------------------------------------------------------------------
 // Net summaries for the DSL
 // ---------------------------------------------------------------------------
+
+/// The sheet's net membership as `build_netlist` derives it, plus the
+/// power-port pins `(position, value)` that name nets. Every root must be read
+/// only after this returns: a union can re-point a class representative.
+///
+/// Layers, in order: the physical [`SheetConnectivity`] (wire-endpoint union +
+/// junction T-merge); the logical same-name label merge, which also anchors a
+/// label dropped mid-span to its wire (issues #396, #404); then power-port
+/// symbols, which are implicit global name carriers (issue #675). Shared by
+/// [`summarize_nets`] and the `NetMultipleNames` rule so neither re-derives it.
+pub(crate) fn merged_connectivity<'a>(
+    wires: &[ErcWire],
+    labels: &[ErcLabel],
+    junctions: &[ErcJunction],
+    symbols: &'a [ErcSymbol],
+) -> (SheetConnectivity, Vec<(Point, &'a str)>) {
+    let segments: Vec<(Point, Point)> = wires.iter().map(|w| (w.start, w.end)).collect();
+    let junction_pts: Vec<Point> = junctions.iter().map(|j| j.position).collect();
+    let mut conn = SheetConnectivity::from_segments(&segments, &junction_pts);
+    let label_iter = || {
+        labels
+            .iter()
+            .map(|l| (l.position, l.label_type, l.text.as_str()))
+    };
+    conn.merge_named_labels(label_iter(), &segments);
+    let power_pins: Vec<(Point, &str)> = symbols
+        .iter()
+        .filter(|s| s.is_power && !s.value.is_empty() && !signex_net::is_power_flag(&s.lib_id))
+        .flat_map(|s| s.pins.iter().map(|p| (p.world_pos, s.value.as_str())))
+        .collect();
+    conn.merge_power_ports(
+        power_pins.iter().copied(),
+        label_iter(),
+        &segments,
+        &junction_pts,
+    );
+    (conn, power_pins)
+}
 
 /// Summarise each geometric net into the flat [`ErcNet`] the ERC DSL reads:
 /// its highest-priority label name, a coarse class, and the electrical types of
@@ -436,47 +515,7 @@ fn summarize_nets(
     junctions: &[ErcJunction],
     symbols: &[ErcSymbol],
 ) -> Vec<ErcNet> {
-    let segments: Vec<(Point, Point)> = wires.iter().map(|w| (w.start, w.end)).collect();
-    let junction_pts: Vec<Point> = junctions.iter().map(|j| j.position).collect();
-    let mut conn = SheetConnectivity::from_segments(&segments, &junction_pts);
-
-    // Apply the *logical* layer `build_netlist` applies on top of the geometry.
-    // It anchors every label to the wire it sits on — endpoint *or* interior;
-    // a label dropped mid-span is not a wire endpoint, so an unanchored
-    // `root_of` hands it a singleton root and its name never reaches the net
-    // (issue #396, the DSL-facing half of #388). It then merges nets carrying
-    // the same Global/Power/Net label name: two disjoint wires each labelled
-    // `VCC` are ONE net to `build_netlist`, and ERC used to hand the DSL two
-    // `VCC` fragments with the driver on only one of them (issue #404).
-    //
-    // This is a separate pass because a union can re-point a class
-    // representative, changing a root recorded earlier. Every root below is
-    // therefore read only after the last union — the merge-then-read split
-    // `merged_sheet_parent` relies on too.
-    conn.merge_named_labels(
-        labels
-            .iter()
-            .map(|l| (l.position, l.label_type, l.text.as_str())),
-        &segments,
-    );
-
-    // Power-port symbols are implicit global name carriers: same-value ports
-    // are ONE net, and a port joins a same-name Global/Power label — the
-    // stitcher's name-bucket rule, applied by the same shared method
-    // `build_netlist` calls (issue #675).
-    let power_pins: Vec<(Point, &str)> = symbols
-        .iter()
-        .filter(|s| s.is_power && !s.value.is_empty())
-        .flat_map(|s| s.pins.iter().map(|p| (p.world_pos, s.value.as_str())))
-        .collect();
-    conn.merge_power_ports(
-        power_pins.iter().copied(),
-        labels
-            .iter()
-            .map(|l| (l.position, l.label_type, l.text.as_str())),
-        &segments,
-        &junction_pts,
-    );
+    let (mut conn, power_pins) = merged_connectivity(wires, labels, junctions, symbols);
 
     // Group labels by net root.
     let mut net_labels: HashMap<(i64, i64), Vec<&ErcLabel>> = HashMap::new();
@@ -487,7 +526,7 @@ fn summarize_nets(
 
     // Group connected (non-no-connect) pins by net root.
     // No-connect pins are skipped — they're isolated by design.
-    let mut net_pins: HashMap<(i64, i64), Vec<PinDirection>> = HashMap::new();
+    let mut net_pins: HashMap<(i64, i64), Vec<ErcNetPin>> = HashMap::new();
     for sym in symbols {
         for pin in &sym.pins {
             // Only wire- or label-connected pins belong to a logical net.
@@ -499,7 +538,14 @@ fn summarize_nets(
             // re-probing, so we include everything that's "connected" — the
             // no-connect case creates a small singleton net that harms nothing.
             let root = conn.root_of(&pin.world_pos);
-            net_pins.entry(root).or_default().push(pin.electrical_type);
+            net_pins.entry(root).or_default().push(ErcNetPin {
+                symbol: sym.uuid,
+                occurrence: InstancePath::root(),
+                reference: sym.reference.clone(),
+                position: pin.world_pos,
+                direction: pin.electrical_type,
+                is_power_flag: sym.is_power && signex_net::is_power_flag(&sym.lib_id),
+            });
         }
     }
 
@@ -522,6 +568,8 @@ fn summarize_nets(
         PinDirection::OpenDrainHigh,
     ];
 
+    let mut all_roots: Vec<(i64, i64)> = all_roots.into_iter().collect();
+    all_roots.sort_unstable();
     all_roots
         .into_iter()
         .map(|root| {
@@ -537,18 +585,31 @@ fn summarize_nets(
             .map(|(_, text)| text)
             .unwrap_or_default();
 
+            let mut names: Vec<String> = lbls
+                .iter()
+                .map(|l| l.text.as_str())
+                .chain(power_values.iter().copied())
+                .filter(|t| !t.is_empty())
+                .map(str::to_string)
+                .collect();
+            names.sort();
+            names.dedup();
+
             let class = name
                 .find('_')
                 .map(|i| name[..i].to_ascii_lowercase())
                 .unwrap_or_else(|| name.to_ascii_lowercase());
 
-            let has_driver = pins.iter().any(|t| DRIVING.contains(t));
-            let has_pullup = pins.contains(&PinDirection::Passive);
+            let pin_types: Vec<PinDirection> = pins.iter().map(|p| p.direction).collect();
+            let has_driver = pin_types.iter().any(|t| DRIVING.contains(t));
+            let has_pullup = pin_types.contains(&PinDirection::Passive);
 
             ErcNet {
                 name,
+                names,
                 class,
-                pin_types: pins.to_vec(),
+                pin_types,
+                pins: pins.to_vec(),
                 has_driver,
                 has_pullup,
             }
@@ -594,6 +655,15 @@ mod tests {
             pins,
             attrs: HashMap::new(),
         }
+    }
+
+    #[test]
+    fn pt_key_buckets_at_one_micron() {
+        // #113 item 1: the ERC point key is a 1 um round, so 0.4 um folds into
+        // the origin bucket while 0.6 um and a full 1 um do not.
+        assert_eq!(pt_key(&pt(0.0004, 0.0)), pt_key(&pt(0.0, 0.0)));
+        assert_ne!(pt_key(&pt(0.0006, 0.0)), pt_key(&pt(0.0, 0.0)));
+        assert_ne!(pt_key(&pt(0.0, 0.001)), pt_key(&pt(0.0, 0.0)));
     }
 
     #[test]
@@ -855,6 +925,48 @@ mod tests {
         assert_eq!(
             nets[0].name, "SYS",
             "Global outranks Net when naming the merged net"
+        );
+    }
+
+    #[test]
+    fn net_names_lists_the_winner_and_every_alias() {
+        // `+3V3` (Power) wins, but the Net label alias stays readable so a
+        // rule keyed on `I2C_PWR` can still find the net.
+        let wires = vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let labels = vec![
+            label(pt(0.0, 0.0), "I2C_PWR", LabelType::Net),
+            label(pt(10.0, 0.0), "+3V3", LabelType::Power),
+        ];
+        let syms = vec![symbol(vec![pin(pt(0.0, 0.0), PinDirection::Output)])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        assert_eq!(nets[0].name, "+3V3");
+        assert_eq!(nets[0].names, ["+3V3", "I2C_PWR"]);
+    }
+
+    #[test]
+    fn paper_size_resolves_every_app_sheet_size() {
+        let dims = |t: &str| PaperSize::parse(t).dimensions_mm();
+        assert_eq!(dims("A4"), (297.0, 210.0));
+        assert_eq!(dims("A5"), (210.0, 148.0));
+        assert_eq!(dims("Tabloid"), (431.8, 279.4));
+        assert_eq!(dims("Legal"), (355.6, 215.9));
+        assert_eq!(dims("Bogus"), (297.0, 210.0));
+        assert_eq!(dims("A4 portrait"), (210.0, 297.0));
+        assert_eq!(dims("Custom 300x200"), (300.0, 200.0));
+    }
+
+    #[test]
+    fn named_sizes_beyond_a4_use_their_own_extent() {
+        assert_eq!(PaperSize::parse("A3").dimensions_mm(), (420.0, 297.0));
+        let (w, h) = PaperSize::parse("Letter").dimensions_mm();
+        assert!(
+            (w - 279.4).abs() < 0.1 && (h - 215.9).abs() < 0.1,
+            "{w}x{h}"
+        );
+        assert_ne!(
+            PaperSize::parse("Tabloid").dimensions_mm(),
+            PaperSize::A4.dimensions_mm()
         );
     }
 }

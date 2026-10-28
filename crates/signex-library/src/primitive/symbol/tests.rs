@@ -42,6 +42,8 @@ fn symbol_json_roundtrip() {
         schematic_params: ParamMap::new(),
         designator: "U?".into(),
         comment: "*".into(),
+        designator_pos: None,
+        comment_pos: None,
         description: String::new(),
         component_type: ComponentType::Standard,
         mirrored: false,
@@ -57,6 +59,22 @@ fn symbol_json_roundtrip() {
     let json = serde_json::to_string(&s).unwrap();
     let back: Symbol = serde_json::from_str(&json).unwrap();
     assert_eq!(s, back);
+}
+
+/// #924 — a `nan`/`inf` in a `.snxsym` is refused at load, naming the key.
+#[test]
+fn from_toml_str_refuses_non_finite_with_key_path() {
+    let good = SymbolFile::from_symbol(Symbol::empty("S"))
+        .to_toml_string()
+        .expect("serialise");
+    assert!(SymbolFile::from_toml_str(&good).is_ok());
+    for bad in ["nan", "inf"] {
+        let text = format!("{good}\n[probe]\nx = {bad}\n");
+        match SymbolFile::from_toml_str(&text) {
+            Err(SymbolFileError::NonFiniteNumber { path }) => assert_eq!(path, "probe.x"),
+            other => panic!("{bad}: expected NonFiniteNumber, got {other:?}"),
+        }
+    }
 }
 
 /// `SymbolFile::upsert` replaces a matching-uuid symbol in-place
@@ -700,5 +718,152 @@ fn arc_near_full_turn_stays_an_arc_on_load() {
     assert!(matches!(
         back.symbols[0].graphics[0].kind,
         SymbolGraphicKind::Arc { .. }
+    ));
+}
+
+/// An untouched symbol carries no field positions: the keys are absent
+/// from the file, so pre-#170 `.snxsym` bytes round-trip unchanged.
+#[test]
+fn field_positions_absent_by_default_and_not_serialised() {
+    let file = SymbolFile::from_symbol(Symbol::empty("NO-FIELDS"));
+    let text = file.to_toml_string().expect("serialise");
+    assert!(!text.contains("designator_pos"), "{text}");
+    assert!(!text.contains("comment_pos"), "{text}");
+
+    let back = SymbolFile::from_toml_str(&text).expect("parse");
+    assert_eq!(back.symbols[0].designator_pos, None);
+    assert_eq!(back.symbols[0].comment_pos, None);
+    assert_eq!(back.to_toml_string().expect("re-serialise"), text);
+}
+
+/// Explicit field positions survive a save/load cycle.
+#[test]
+fn field_positions_roundtrip_when_set() {
+    let mut s = Symbol::empty("WITH-FIELDS");
+    s.designator_pos = Some([1.27, 5.08]);
+    s.comment_pos = Some([-1.27, -5.08]);
+    let text = SymbolFile::from_symbol(s)
+        .to_toml_string()
+        .expect("serialise");
+    let back = SymbolFile::from_toml_str(&text).expect("parse");
+    assert_eq!(back.symbols[0].designator_pos, Some([1.27, 5.08]));
+    assert_eq!(back.symbols[0].comment_pos, Some([-1.27, -5.08]));
+}
+
+const NON_FINITE: [f64; 3] = [f64::NAN, f64::INFINITY, f64::NEG_INFINITY];
+
+/// A column name and the edit that puts a number in that column.
+type PinSetter = (&'static str, fn(&mut SymbolPin, f64));
+
+fn assert_non_finite_names(result: Result<String, SymbolFileError>, needles: &[&str]) {
+    match result {
+        Err(SymbolFileError::NonFiniteField { field }) => {
+            for needle in needles {
+                assert!(field.contains(needle), "{field:?} must name {needle:?}");
+            }
+        }
+        other => panic!("expected NonFiniteField, got {other:?}"),
+    }
+}
+
+/// #828 -- a non-finite pin cell is a save error naming pin and column.
+/// Before the guard a release build wrote an empty cell (the value reset
+/// silently on reopen) and a debug build panicked in `debug_assert!`.
+#[test]
+fn pins_to_tsv_refuses_a_non_finite_cell() {
+    let setters: [PinSetter; 5] = [
+        ("pos_x", |p, v| p.position[0] = v),
+        ("pos_y", |p, v| p.position[1] = v),
+        ("length", |p, v| p.length = v),
+        ("pin_package_length", |p, v| p.pin_package_length = Some(v)),
+        ("propagation_delay_ns", |p, v| {
+            p.propagation_delay_ns = Some(v)
+        }),
+    ];
+    for (column, set) in setters {
+        for bad in NON_FINITE {
+            let mut pin = SymbolPin::new("7", "name");
+            set(&mut pin, bad);
+            assert_non_finite_names(pins_to_tsv(&[pin]), &[column, "\"7\""]);
+        }
+    }
+}
+
+/// #828 -- the TOML-carried numbers (graphics, parameters) are guarded
+/// too, and the error names the key path.
+#[test]
+fn to_toml_string_refuses_a_non_finite_graphic() {
+    for bad in NON_FINITE {
+        let mut sym = Symbol::empty("G");
+        sym.graphics.push(SymbolGraphic {
+            kind: SymbolGraphicKind::Line {
+                from: [bad, 0.0],
+                to: [1.0, 0.0],
+            },
+            stroke_width: 0.0,
+            fill: None,
+            part_number: 0,
+        });
+        assert_non_finite_names(
+            SymbolFile::from_symbol(sym).to_toml_string(),
+            &["symbols[0].graphics[0]"],
+        );
+    }
+}
+
+#[test]
+fn a_finite_symbol_still_saves() {
+    let mut sym = Symbol::empty("OK");
+    sym.pins.push(SymbolPin::new("1", "A"));
+    assert!(SymbolFile::from_symbol(sym).to_toml_string().is_ok());
+}
+
+/// A `.snxsym` written before this change: `pin.function` is `|`-joined with
+/// backslashes literal. Trunk loaded `RESET\|GPIO` as `RESET\` + `GPIO`
+/// and must keep doing so, and a re-save must write the same bytes.
+#[test]
+fn legacy_pin_function_cell_loads_with_literal_backslashes() {
+    let mut pin = SymbolPin::new("1", "A");
+    pin.function = vec!["LEGACYCELL".into()];
+    let mut sym = Symbol::empty("L");
+    sym.pins.push(pin);
+    let written = SymbolFile::from_symbol(sym).to_toml_string().expect("save");
+    assert!(written.contains("LEGACYCELL"));
+    let legacy = written.replace("LEGACYCELL", "RESET\\|GPIO|a\\\\b");
+    assert!(legacy.contains("RESET\\|GPIO|a\\\\b"));
+
+    let loaded = SymbolFile::from_toml_str(&legacy).expect("legacy file loads");
+    assert_eq!(
+        loaded.symbols[0].pins[0].function,
+        vec![
+            "RESET\\".to_string(),
+            "GPIO".to_string(),
+            "a\\\\b".to_string()
+        ]
+    );
+    assert_eq!(loaded.to_toml_string().expect("re-save"), legacy);
+}
+
+/// A function item holding `|` cannot be told from two items on reload, so
+/// the save is refused and no text is produced to write.
+#[test]
+fn saving_a_pin_function_containing_a_pipe_is_refused() {
+    let mut pin = SymbolPin::new("1", "A");
+    pin.function = vec!["SPI|MOSI".into()];
+    match pins_to_tsv(std::slice::from_ref(&pin)) {
+        Err(e @ SymbolFileError::PipeInPinFunction { .. }) => {
+            let text = e.to_string();
+            assert!(
+                text.contains("SPI|MOSI") && text.contains("'|'"),
+                "the error names the item and the reason: {text}"
+            );
+        }
+        other => panic!("expected PipeInPinFunction, got {other:?}"),
+    }
+    let mut sym = Symbol::empty("P");
+    sym.pins.push(pin);
+    assert!(matches!(
+        SymbolFile::from_symbol(sym).to_toml_string(),
+        Err(SymbolFileError::PipeInPinFunction { .. })
     ));
 }

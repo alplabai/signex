@@ -19,7 +19,7 @@ use signex_sketch::id::SketchEntityId;
 type TangentArcPick = ((f64, f64), (f64, f64), Option<(SketchEntityId, (f64, f64))>);
 
 pub(super) fn apply(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     ctx: &ToolClickCtx,
     tool: SketchTool,
 ) {
@@ -36,12 +36,12 @@ pub(super) fn apply(
     }
 }
 
-fn select_or_point(editor: &mut crate::app::FootprintEditorState) {
+fn select_or_point(editor: &mut crate::app::FootprintDocument) {
     // Select: ignore (no add). Point: already added above.
     editor.state.tool_pending = ToolPending::Idle;
 }
 
-fn line(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
+fn line(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
     match editor.state.tool_pending {
         ToolPending::Idle => {
             editor.state.tool_pending = ToolPending::LineFirst {
@@ -135,7 +135,7 @@ fn line(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
     }
 }
 
-fn circle(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
+fn circle(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
     match editor.state.tool_pending {
         ToolPending::Idle => {
             editor.state.tool_pending = ToolPending::CircleCenter {
@@ -187,7 +187,7 @@ fn circle(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
     }
 }
 
-fn rounded_rectangle(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
+fn rounded_rectangle(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
     match editor.state.tool_pending {
         ToolPending::Idle => {
             editor.state.tool_pending = ToolPending::RoundedRectangleFirst {
@@ -235,8 +235,10 @@ fn rounded_rectangle(editor: &mut crate::app::FootprintEditorState, ctx: &ToolCl
                     .chain(editor.state.placement_input_others.iter().map(Some))
                     .flatten()
                     .find(|p| p.kind == PlacementInputKind::RRectRadius)
-                    .and_then(|p| p.buffer.parse::<f64>().ok())
-                    .or_else(|| editor.state.dimension_input.trim().parse::<f64>().ok())
+                    .and_then(|p| crate::numeric_field::parse_field_f64(&p.buffer))
+                    .or_else(|| {
+                        crate::numeric_field::parse_field_f64(&editor.state.dimension_input)
+                    })
                     .unwrap_or(0.5);
                 let r_max = half_w.min(half_h).max(0.05);
                 let r = r_input.clamp(0.05, r_max);
@@ -337,7 +339,7 @@ fn rounded_rectangle(editor: &mut crate::app::FootprintEditorState, ctx: &ToolCl
     }
 }
 
-fn rectangle(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
+fn rectangle(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
     match editor.state.tool_pending {
         ToolPending::Idle => {
             editor.state.tool_pending = ToolPending::RectangleFirst {
@@ -431,7 +433,7 @@ fn rectangle(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) 
     }
 }
 
-fn arc(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
+fn arc(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
     match editor.state.tool_pending {
         ToolPending::Idle => {
             editor.state.tool_pending = ToolPending::ArcCenter {
@@ -474,7 +476,7 @@ fn arc(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
 // *derived* — not clicked — from the circumcircle of the three picks,
 // reusing the shared solver (#461/#483) instead of re-deriving the
 // geometry here.
-fn edge_arc(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
+fn edge_arc(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
     match editor.state.tool_pending {
         ToolPending::Idle => {
             editor.state.tool_pending = ToolPending::EdgeArcStart {
@@ -591,7 +593,7 @@ fn edge_arc(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
 // tangency reference) and publishes a warning via `solve_warnings`. The
 // Arc still appears in the sketch so the user can constrain it manually
 // if desired.
-fn tangent_arc(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
+fn tangent_arc(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
     use signex_sketch::constraint::{Constraint, ConstraintKind};
     use signex_sketch::id::ConstraintId;
 

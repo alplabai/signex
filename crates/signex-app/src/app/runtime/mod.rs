@@ -1,11 +1,17 @@
 use super::*;
 
+mod designators;
+#[cfg(test)]
+mod designators_tests;
 mod footprint_ctx;
 mod footprint_summaries;
 mod history;
+mod label_class_pick;
 mod navigator_ctx;
+mod net_class_styles;
 mod panel_ctx;
 mod primitive_dirty;
+mod sheet_frame;
 mod symbol_ctx;
 
 impl Signex {
@@ -45,11 +51,34 @@ impl Signex {
         for canvas in self.interaction_state.all_pcb_canvases_mut() {
             canvas.set_grid(visible, visible_grid_mm);
         }
+        self.sync_zoom_step();
+    }
+
+    /// Push the effective "Zoom speed" into the canvases that hold their
+    /// own copy: every PCB canvas and the symbol / footprint editor tabs
+    /// (the schematic reads it per frame through `CanvasViewPrefs`). Also
+    /// called from the Preferences draft / discard paths, which do not run
+    /// `finish_update`.
+    pub(in crate::app) fn sync_zoom_step(&mut self) {
+        let zoom_step = self.ui_state.effective_zoom_step();
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.zoom_step = zoom_step;
+        }
+        for editor in self.document_state.symbol_editors.values_mut() {
+            editor.zoom_step = zoom_step;
+        }
+        for editor in self.document_state.footprint_editors.values_mut() {
+            editor.zoom_step = zoom_step;
+        }
     }
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
         self.sync_panel_ctx_mirrors();
+        self.library.sync_view_caches();
+        let class_styles = self.refresh_net_class_styles();
+        self.sync_label_class_pick();
         self.sync_diagnostics_panel_ctx();
+        self.refresh_command_palette_if_stale();
 
         // Re-resolve the History panel's active path; on change, bump
         // the generation counter and kick off an async load. Stale
@@ -61,7 +90,23 @@ impl Signex {
         // in the status bar reads from `inflight_git_commits` until
         // each Task::perform completion fires `ProjectGitCommitDone`.
         let commits = self.drain_pending_git_commits();
-        Task::batch([history, commits])
+        let drift = self.drain_pending_drift_check();
+        // Reload the Annotate preview if the documents changed under an open
+        // dialog (a no-op while it is closed or already current).
+        let annotate_preview = self.refresh_annotate_preview();
+        let instance_note = if std::mem::take(&mut self.document_state.instance_note_due) {
+            self.begin_instance_note()
+        } else {
+            Task::none()
+        };
+        Task::batch([
+            history,
+            commits,
+            drift,
+            annotate_preview,
+            instance_note,
+            class_styles,
+        ])
     }
 
     /// Republish the diagnostics ring buffer into the Messages panel.
@@ -105,9 +150,12 @@ impl Signex {
             .and_then(|t| t.project_id)
         {
             self.document_state.active_project = Some(pid);
+            self.drop_pending_profile_update_for_other_project();
         }
 
         self.sync_visible_document_from_active_tab();
+        // A move armed or floating on the previous tab must not drop here.
+        self.cancel_move_pick();
         // A half-placed two-click shape belongs to the tab it was started in.
         self.clear_shape_anchors();
         // ERC results are cached per-sheet. On tab switch, repoint the visible
@@ -151,6 +199,7 @@ impl Signex {
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();
+        self.document_state.panel_ctx.symbol_choices.clear();
         self.document_state.panel_ctx.selected_uuid = None;
         self.document_state.panel_ctx.selected_kind = None;
         self.document_state.panel_ctx.selected_drawing = None;
@@ -178,6 +227,75 @@ impl Signex {
             self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
             self.document_state.panel_ctx.selected_kind = Some(details.selected_kind);
             self.document_state.panel_ctx.selection_info = details.info;
+            // A tab opened through a placement shows, and edits, that
+            // placement's designator (#1151).
+            if let Some(designator) = self
+                .interaction_state
+                .active_canvas()
+                .designators
+                .get(&details.selected_uuid)
+            {
+                let is_ref_field =
+                    details.selected_kind == signex_types::schematic::SelectedKind::SymbolRefField;
+                for (key, value) in &mut self.document_state.panel_ctx.selection_info {
+                    use signex_engine::info_keys;
+                    if key == info_keys::REFERENCE || (is_ref_field && key == info_keys::TEXT) {
+                        value.clone_from(designator);
+                    }
+                }
+            }
+            // The drawings a placed symbol's row offers (#1230).
+            let choices = engine
+                .document()
+                .symbols
+                .iter()
+                .find(|s| s.uuid == details.selected_uuid)
+                .map(|s| self.symbol_choices_for(s))
+                .unwrap_or_default();
+            self.document_state.panel_ctx.symbol_choices = choices;
+            // Library name + drift for a placed library symbol (#912).
+            if let Some(lib_id) = self
+                .document_state
+                .panel_ctx
+                .selection_info
+                .iter()
+                .find(|(k, _)| k == "Library ID")
+                .map(|(_, v)| v.clone())
+            {
+                let drift = &self.library.drift;
+                if let Some(name) = drift.names.get(&lib_id) {
+                    self.document_state
+                        .panel_ctx
+                        .selection_info
+                        .push(("Library".into(), name.clone()));
+                }
+                if drift.is_drifted(&path, &lib_id) {
+                    self.document_state
+                        .panel_ctx
+                        .selection_info
+                        .push(("Library Drift".into(), "Yes".into()));
+                }
+            }
+            // The library row's documents for a placed symbol (#1231).
+            if details.selected_kind == signex_types::schematic::SelectedKind::Symbol
+                && let Some(symbol) = engine
+                    .document()
+                    .symbols
+                    .iter()
+                    .find(|s| s.uuid == details.selected_uuid)
+            {
+                // One equal to the symbol's own Datasheet field is already
+                // shown as that field.
+                let own = symbol.datasheet.trim();
+                let rows = crate::library::row_documents::document_rows(
+                    &self.library.open_libraries,
+                    symbol.library_id,
+                    symbol.row_id,
+                )
+                .into_iter()
+                .filter(|(_, value)| value != own);
+                self.document_state.panel_ctx.selection_info.extend(rows);
+            }
             // Cache the live SchDrawing for the Properties preview
             // widget — only when the single selection is a drawing.
             if matches!(
@@ -276,12 +394,20 @@ impl Signex {
             theme_paper: crate::render_config::to_iced(&colors.paper),
             canvas_colors: colors,
             snap_enabled: self.ui_state.snap_enabled,
-            snap_grid_mm: self.ui_state.grid_size_mm as f64,
+            snap_grid_mm: crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
+            snap_hotspots: self.ui_state.snap_hotspots,
+            wire_tool_active: self.interaction_state.current_tool == crate::app::Tool::Wire,
             visible_grid_mm: self.ui_state.visible_grid_mm as f64,
             grid_style: self.ui_state.preferences_draft_grid_style,
             auto_focus: self.ui_state.auto_focus,
+            zoom_step: self.ui_state.effective_zoom_step(),
+            move_keeps_wires: self.ui_state.move_keeps_wires,
             draw_mode: self.interaction_state.draw_mode,
+            current_tool: self.interaction_state.current_tool,
+            window_width: self.ui_state.window_size.0,
             wire_color_overrides: &self.ui_state.wire_color_overrides,
+            wire_class_styles: self.ui_state.net_class_styles.styles(),
+            selection_filters: &self.interaction_state.selection_filters,
         }
     }
 
@@ -303,15 +429,39 @@ impl Signex {
             canvas.canvas_colors = colors;
             canvas.clear_content_cache();
         }
-        self.interaction_state
-            .active_canvas_mut()
-            .clear_content_cache();
+        for canvas in self.interaction_state.all_schematic_canvases_mut() {
+            canvas.clear_content_cache();
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #1350 - theme, grid and net-colour changes reach undocked schematic
+    /// canvases, not just the main one.
+    #[test]
+    fn appearance_changes_invalidate_undocked_schematic_canvases() {
+        let (mut app, _t) = Signex::new();
+        let win = iced::window::Id::unique();
+        app.interaction_state
+            .canvases
+            .insert(win, crate::canvas::CanvasSlot::new());
+
+        app.update_canvas_theme();
+        let _ = app.update(Message::Ui(UiMsg::GridToggle));
+
+        let slot = &app.interaction_state.canvases[&win];
+        assert_eq!(slot.content_cache_clears, 1);
+        assert_eq!(slot.bg_cache_clears, 1);
+
+        let _ = app.update(Message::NetColor(NetColorMsg::Set {
+            net: "N1".into(),
+            color: None,
+        }));
+        assert_eq!(app.interaction_state.canvases[&win].content_cache_clears, 2);
+    }
 
     /// #682 — bootstrap seeds the PCB canvas from the loaded grid state, so
     /// a saved grid-off (or a non-default size) holds before any update.

@@ -27,6 +27,26 @@ impl LibraryAdapter for LocalGitAdapter {
         Some(&self.file_path)
     }
 
+    fn relocate_library_file(&mut self, new_file: &Path) -> Result<(), LibraryError> {
+        Self::validate_file_path(new_file)?;
+        let new_root = parent_dir(new_file)?;
+        if new_root == self.root_dir {
+            // Record the rename in the library's own history before the
+            // adapter moves, so a failed commit leaves it on the old path.
+            let old_rel = self.snxlib_rel_path()?;
+            let new_rel = file_name_str(new_file)?;
+            self.commit_change(
+                Some(&old_rel),
+                &new_rel,
+                "",
+                &format!("rename {old_rel} to {new_rel}"),
+            )?;
+        }
+        self.root_dir = new_root;
+        self.file_path = new_file.to_path_buf();
+        Ok(())
+    }
+
     // ── Tables ─────────────────────────────────────────────────────────────
 
     fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
@@ -73,8 +93,8 @@ impl LibraryAdapter for LocalGitAdapter {
                         "table {new_owned:?} already exists"
                     )));
                 }
-                let entry = lf.tables.remove(&old_owned).expect("contains_key checked");
-                lf.tables.insert(new_owned, entry);
+                // Through the file, so the table keeps its unknown keys (#1435).
+                lf.rename_table(&old_owned, &new_owned);
                 Ok(())
             },
             msg,
@@ -197,12 +217,8 @@ impl LibraryAdapter for LocalGitAdapter {
                         new_entry.key
                     )));
                 }
-                for c in lf.manifest.classes.iter_mut() {
-                    if c.key == owned_old {
-                        *c = new_entry.clone();
-                        break;
-                    }
-                }
+                // Through the file, so the class keeps its unknown keys (#1435).
+                lf.rename_class(&owned_old, new_entry.clone());
                 Ok(())
             },
             msg,
@@ -243,6 +259,7 @@ impl LibraryAdapter for LocalGitAdapter {
                         columns: legacy_columns(),
                         rows: Vec::new(),
                         column_types: std::collections::BTreeMap::new(),
+                        pricing: Default::default(),
                     },
                 );
                 Ok(())
@@ -291,8 +308,9 @@ impl LibraryAdapter for LocalGitAdapter {
         let row_id = row.row_id;
         let lib_row = component_to_library_row(&row)?;
         let fallback = format!("insert row {row_id} into {table_owned}");
-        self.mutate_library_file(
-            move |lf| {
+        self.save_row_edit(
+            table,
+            |lf| {
                 let entry = lf
                     .tables
                     .entry(table_owned.clone())
@@ -300,55 +318,95 @@ impl LibraryAdapter for LocalGitAdapter {
                         columns: legacy_columns(),
                         rows: Vec::new(),
                         column_types: std::collections::BTreeMap::new(),
+                        pricing: Default::default(),
                     });
                 validate_legacy_header(&table_owned, &entry.columns)?;
-                entry.rows.push(lib_row);
-                Ok(())
+                declare_alternate_symbols_column(&mut entry.columns, &lib_row);
+                entry.rows.push(Arc::new(lib_row));
+                Ok(RowChange::Wrote(entry.rows.len() - 1))
             },
+            &[],
             msg,
             &fallback,
         )
     }
 
-    fn update_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
+    fn update_row(
+        &self,
+        table: &str,
+        row: ComponentRow,
+        msg: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        self.update_row_with_assets(table, row, msg, &[])
+    }
+
+    fn update_row_with_assets(
+        &self,
+        table: &str,
+        row: ComponentRow,
+        msg: &str,
+        asset_rel_paths: &[String],
+    ) -> Result<Option<u64>, LibraryError> {
+        self.check_datasheet_assets(asset_rel_paths)?;
         let table_owned = table.to_string();
         let row_id = row.row_id;
+        let base = row.server_revision;
         let lib_row = component_to_library_row(&row)?;
+        let new_base = row_base(&lib_row);
         let fallback = format!("update row {row_id} in {table_owned}");
-        self.mutate_library_file(
-            move |lf| {
+        self.save_row_edit(
+            table,
+            |lf| {
                 let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
                     LibraryError::NotFound(format!("table {table_owned} not in library"))
                 })?;
                 validate_legacy_header(&table_owned, &entry.columns)?;
                 let row_id_s = row_id.to_string();
-                let target = entry.rows.iter_mut().find(|r| {
-                    r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(row_id_s.as_str())
-                });
-                match target {
-                    Some(slot) => {
-                        *slot = lib_row;
-                        Ok(())
-                    }
-                    None => Err(LibraryError::NotFound(format!(
-                        "row {row_id} in table {table_owned}"
-                    ))),
-                }
+                let index = entry
+                    .rows
+                    .iter()
+                    .position(|r| {
+                        r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str)
+                            == Some(row_id_s.as_str())
+                    })
+                    .ok_or_else(|| {
+                        LibraryError::NotFound(format!("row {row_id} in table {table_owned}"))
+                    })?;
+                // Checked against the row as it is on disk now (the write
+                // path just re-read it), not a cache.
+                check_row_base(&entry.rows[index], base)?;
+                declare_alternate_symbols_column(&mut entry.columns, &lib_row);
+                entry.rows[index] = Arc::new(lib_row);
+                Ok(RowChange::Wrote(index))
             },
+            asset_rel_paths,
             msg,
             &fallback,
-        )
+        )?;
+        Ok(Some(new_base))
     }
 
-    fn delete_row(&self, table: &str, row_id: RowId, msg: &str) -> Result<(), LibraryError> {
+    fn delete_row(
+        &self,
+        table: &str,
+        row_id: RowId,
+        base_revision: Option<u64>,
+        msg: &str,
+    ) -> Result<(), LibraryError> {
         let table_owned = table.to_string();
         let fallback = format!("delete row {row_id} from {table_owned}");
-        self.mutate_library_file(
-            move |lf| {
+        self.save_row_edit(
+            table,
+            |lf| {
                 let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
                     LibraryError::NotFound(format!("table {table_owned} not in library"))
                 })?;
                 let target = row_id.as_uuid().to_string();
+                if let Some(stored) = entry.rows.iter().find(|r| {
+                    r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(target.as_str())
+                }) {
+                    check_row_base(stored, base_revision)?;
+                }
                 let before = entry.rows.len();
                 entry.rows.retain(|r| {
                     r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) != Some(target.as_str())
@@ -358,11 +416,69 @@ impl LibraryAdapter for LocalGitAdapter {
                         "row {row_id} in table {table_owned}"
                     )));
                 }
-                Ok(())
+                // A deleted row's cached prices go with it.
+                entry.pricing.remove(&target);
+                Ok(RowChange::Removed(target))
             },
+            &[],
             msg,
             &fallback,
         )
+    }
+
+    fn table_pricing(
+        &self,
+        table: &str,
+    ) -> Result<std::collections::BTreeMap<Uuid, crate::pricing::RowPricing>, LibraryError> {
+        self.refresh_for_read();
+        let guard = self
+            .library_file
+            .read()
+            .map_err(|_| LibraryError::Backend("library_file read lock poisoned".into()))?;
+        let Some(entry) = guard.tables.get(table) else {
+            return Ok(Default::default());
+        };
+        Ok(entry
+            .pricing
+            .iter()
+            .filter_map(|(id, p)| Uuid::parse_str(id).ok().map(|id| (id, p.clone())))
+            .collect())
+    }
+
+    fn store_pricing(
+        &self,
+        updates: Vec<crate::pricing::PricingUpdate>,
+        cancel: &std::sync::atomic::AtomicBool,
+        msg: &str,
+    ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
+        let mut outcome = crate::pricing::StoreOutcome::default();
+        let fallback = format!("refresh pricing for {} rows", updates.len());
+        // Every update is checked against the row as it is under the write
+        // lock, after the reload, so a fetch that raced an edit cannot
+        // attach a price to a SKU the row no longer has.
+        self.mutate_library_file_if_changed(
+            |lf| {
+                // Last chance to stop: the lock is held, the write is next.
+                if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Ok(false);
+                }
+                for update in updates {
+                    match apply_pricing_update(lf, &update) {
+                        Ok(()) => outcome.stored += 1,
+                        Err(reason) => outcome.dropped.push(crate::pricing::DroppedUpdate {
+                            table: update.table,
+                            row_id: update.row_id,
+                            distributor: update.distributor,
+                            reason,
+                        }),
+                    }
+                }
+                Ok(outcome.stored > 0)
+            },
+            msg,
+            &fallback,
+        )?;
+        Ok(outcome)
     }
 
     fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
@@ -433,12 +549,62 @@ impl LibraryAdapter for LocalGitAdapter {
         Ok(out)
     }
 
+    fn symbol_listing_is_partial(&self) -> bool {
+        !self.symbol_file_problems().is_empty()
+    }
+
     fn list_footprints(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
         self.list_primitive_summaries(PrimitiveKind::Footprint)
     }
 
     fn list_sims(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
         self.list_primitive_summaries(PrimitiveKind::Sim)
+    }
+
+    fn bind_row_primitive_version(
+        &self,
+        table: &str,
+        row_id: RowId,
+        save: &crate::cascade::PrimitiveSave,
+        message: &str,
+    ) -> Result<bool, LibraryError> {
+        let table_owned = table.to_string();
+        let target = row_id.as_uuid().to_string();
+        let fallback = format!("bind row {row_id} in {table} to v{}", save.version);
+        let mut changed = false;
+        // The row is found and rewritten under the write lock, after the
+        // reload, so a field another writer changed since the caller read
+        // the row is kept.
+        self.save_row_edit(
+            table,
+            |lf| {
+                let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
+                    LibraryError::NotFound(format!("table {table_owned} not in library"))
+                })?;
+                validate_legacy_header(&table_owned, &entry.columns)?;
+                let index = entry
+                    .rows
+                    .iter()
+                    .position(|r| {
+                        r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(target.as_str())
+                    })
+                    .ok_or_else(|| {
+                        LibraryError::NotFound(format!("row {target} in table {table_owned}"))
+                    })?;
+                let mut row = library_row_to_component(&entry.rows[index])?;
+                if !crate::cascade::needs_bump(&row, save) {
+                    return Ok(RowChange::None);
+                }
+                crate::cascade::apply_cascade_bump(&mut row, save);
+                entry.rows[index] = Arc::new(component_to_library_row(&row)?);
+                changed = true;
+                Ok(RowChange::Wrote(index))
+            },
+            &[],
+            message,
+            &fallback,
+        )?;
+        Ok(changed)
     }
 
     fn root_path(&self) -> Option<PathBuf> {

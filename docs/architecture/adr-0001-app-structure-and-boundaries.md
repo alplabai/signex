@@ -138,6 +138,7 @@ Cargo blocks the big violations (a domain crate physically cannot import Iced �
 
 - Slice internals are `pub(super)` / `pub(crate)`. A slice **never** imports a sibling slice's internals, `views`, or `widgets`.
 - Add a CI arch-guard (same mechanism as the existing KiCad-surface guards) that grep-fails on (a) cross-slice imports between `library/<a>/` and `library/<b>/`, and (b) domain-shaped algorithms surfacing in the app crate. A boundary that is not machine-checked erodes.
+- The crate-level half is machine-checked: `scripts/check_arch_guard.sh` (CI job `arch guard`, #664) fails on a workspace dependency edge missing from `scripts/arch-edges.txt` and on a domain crate depending on the UI/GPU stack. The in-crate cross-slice guard above is still to do.
 
 ### D6. Reusable views/widgets use three tiers with promotion-by-need
 
@@ -184,30 +185,17 @@ CRUD/microservice- or OO-shaped patterns that do **not** fit signex. Noted so th
 
 ## Appendix — current state (evidence)
 
-**Framework:** Iced `0.14` (retained-mode Elm/MVU) — `iced::daemon(Signex::new, Signex::update, Signex::view)` (`main.rs:23`). No egui/eframe anywhere. Custom GPU rendering via `signex-gfx`/`signex-renderer` + `canvas::Program` impls renders *through* Iced, complementing MVU.
+> Re-measured against the tree on 2026-10-27. The numbers the decisions above were first written against (a 10,861-line `app/dispatch/library.rs`, a 5,828-line `app/view/mod.rs`, a 4,583-line `panels/mod.rs`, a ~223-leaf root `Message`) are gone: those files were split into folders and the root enum was namespaced.
 
-**Crate graph (16 members, acyclic):** apex `signex-app` (out-degree 11, in-degree 0); foundation `signex-types` (in-degree 11, out-degree 0). Layers: L0 `{types, bom, gfx, 3d-model-importer}` → L1 `{engine, erc, sketch, widgets, erc-dsl, output, renderer}` → L2 `{library}` → L3 `{bake, library-server}` → apex `{app, chrome-catalog}`. Domain crates are UI-pure (zero `iced` imports; the 4 hits in `signex-library` are comments). `signex-types` = 15 modules (~7,415 LoC), data types plus the `Rotatable2d` and `SnxTable` contract traits.
+**Framework:** Iced `0.14` (retained-mode Elm/MVU) — `iced::daemon(Signex::new, Signex::update, Signex::view)`. No egui/eframe anywhere. Custom GPU rendering via `signex-gfx`/`signex-renderer` + `canvas::Program` impls renders *through* Iced, complementing MVU.
 
-**`signex-app`:** 179 files, ~109,324 lines. Hybrid — `app/` is horizontal (`dispatch/`, `view/`, `handlers/`), `library/` is vertical (per-surface slices). Largest files:
+**Crate graph (17 members, acyclic):** apex `signex-app`; foundation `signex-types`. Layers: L0 `{types, bom, gfx, 3d-model-importer}` → L1 `{engine, erc, erc-dsl, sketch, output, renderer, widgets, net}` → L2 `{library}` → L3 `{bake, library-server}` → apex `{app, chrome-catalog}`. Domain crates are UI-pure (Cargo-enforced).
 
-| File | Lines |
-|---|---|
-| `app/dispatch/library.rs` | 10,861 |
-| `app/view/mod.rs` | 5,828 |
-| `panels/mod.rs` | 4,583 |
-| `app/view/dialogs.rs` | 3,525 |
-| `app/handlers/dock/sch_library.rs` | 3,088 |
-| `library/editor/footprint/canvas/mod.rs` | 3,073 |
-| `canvas/mod.rs` | 2,144 |
-| `library/browser.rs` | 2,065 |
-| `panels/element_properties.rs` | 2,020 |
-| `library/editor/footprint/canvas/draw_sketch.rs` | 2,016 |
+**`signex-app`:** `app/dispatch/library.rs` no longer exists; `app/view/mod.rs` is 687 lines and `panels/mod.rs` 271. Run `bash scripts/check_file_size.sh` for the live over-cap list rather than trusting a table here, which goes stale.
 
-**Messages:** root `Message` (`app/contracts.rs`) ~223 variants, ~20 namespaced + ~200 flat leaves. `EditorMsg` (`library/messages.rs`) ~140 variants, flat, prefix-namespaced only; parallel `PrimitiveEditorMsg` ~134 variants owns the real symbol/footprint editing while `EditorMsg::Symbol*/Footprint*` are inert.
+**Messages:** the root `Message` is namespaced sub-enums (D3); do not add flat leaves.
 
-**Domain leaks — status:** (1) union-find net-connectivity in `app/handlers/canvas.rs` (~L500–565) — still present, handled by A3.1. (2) World-space geometry primitives (`point_in_polygon` / point-to-segment) were triplicated across `footprint/canvas/geometry.rs`, `schematic_runtime.rs`, and `symbol/state.rs` — **consolidated** into `signex_sketch::geom` (D4). (3) `find_closed_loops` in `draw_sketch.rs` was mis-flagged as a `trace_closed_profile` duplicate — it is a distinct UI concern (see D4), left in place.
-
-**Schematic↔PCB seam (A3.1):** no authoritative `Netlist` contract today — `signex-output::NetlistExporter` → `NetlistOutput { bytes }` is a stub (`NotImplemented`; the Standard emitter moved to a GPL companion repo under #62); schematic connectivity is the ad-hoc union-find above; the PCB side carries only `NetDef { number, name }` (`signex-types/pcb.rs`). Terminology is otherwise correct: `Wire` (electrical) in `schematic.rs`, `Net`/`NetClass` in `net.rs`, `Line` reserved for geometry.
+**Domain leaks — status:** the union-find net-connectivity that lived in `app/handlers/canvas.rs` was replaced by the authoritative `signex-net` contract (ADR-0002). World-space geometry primitives were consolidated into `signex_sketch::geom` (D4). `find_closed_loops` in `draw_sketch.rs` is a distinct UI concern (see D4), left in place.
 
 **Best-decomposed reference in-tree:** `library/editor/footprint/` (state in 8 files, canvas split by concern). Least: `library/editor/symbol/` (`state.rs` 1,522, `canvas.rs` 1,980 — still flat).
 

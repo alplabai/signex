@@ -4,7 +4,8 @@
 //! from the active tab + the last loaded vec of entries + a
 //! "loading" generation counter to discard stale async results.
 //!
-//! Phase 0 (this module) wires the read-only view; the load path
+//! The panel renders the history cards and a per-row restore button
+//! (`PanelMsg::HistoryRestoreClicked`); the load path
 //! is driven by `signex_app`'s dispatcher via
 //! [`crate::app::Message::HistoryLoaded`] (a `Message` variant
 //! threads each result back to the panel context with a generation
@@ -57,8 +58,17 @@ pub struct HistoryPanelState {
     pub pending_restore: Option<String>,
 }
 
-/// What the panel should render when `entries` is non-empty
-/// doesn't unambiguously cover the case (e.g. the file isn't even
+/// What the History panel's off-thread load found for the active file.
+#[derive(Debug, Clone, PartialEq)]
+pub enum HistoryLoad {
+    /// No `.git/` above the file: version control is not enabled here.
+    NoRepo,
+    /// The file's commits, newest first (empty for a fresh repo).
+    Entries(Vec<signex_widgets::HistoryEntry>),
+}
+
+/// What the panel should render. Needed because `entries` alone
+/// doesn't unambiguously cover every case (e.g. the file isn't even
 /// version-controlled).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum HistoryRenderMode {
@@ -125,7 +135,7 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 col = col.push(working_tree_card(primary, muted, border, panel_bg));
             }
 
-            // v0.22 Phase 8.5 — render rows inline so each card can
+            // Render rows inline so each card can
             // carry a "Restore this version" button. Bypasses the
             // signex_widgets::history_pane (which is render-only) so
             // the panel can dispatch PanelMsg::HistoryRestoreClicked

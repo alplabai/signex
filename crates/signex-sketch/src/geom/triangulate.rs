@@ -1,14 +1,29 @@
 //! Polygon triangulation via ear-clipping.
 //!
-//! Time complexity: O(n²) for the basic form; with holes
-//! pre-merged via the bridge-edge technique it stays O((n+h)²)
-//! where h is the total hole-vertex count. Typical sketch closed
-//! loops have ≤ ~64 vertices (rounded rect = 8 + 4·arc_segments),
+//! Time complexity: each pass rescans for an ear from the start of
+//! the ring and each ear test is O(n), so a pass costs O(n) when an
+//! early vertex is an ear and O(n²) in the worst case; the full
+//! clip is O(n²) to O(n³). With holes pre-merged via the bridge-edge
+//! technique n becomes the total vertex count including holes.
+//! Typical sketch closed loops have ≤ ~64 vertices (rounded rect = 8 + 4·arc_segments),
 //! where the basic form's constant factors beat the more
 //! sophisticated O(n log n) variants.
 
 use super::Point2;
 use super::predicates::{Sign, orient2d, signed_area};
+
+fn is_finite(p: &Point2) -> bool {
+    p.x.is_finite() && p.y.is_finite()
+}
+
+/// Report a skipped polygon: callers get no triangles back and have no error
+/// channel, so this log record is how the skip becomes visible.
+fn warn_non_finite() {
+    tracing::warn!(
+        target: "signex::sketch",
+        "polygon has a non-finite coordinate; triangulation skipped"
+    );
+}
 
 /// Triangulate a simple polygon. Returns a list of triangles, each
 /// as a triple of indices into the original `polygon` slice.
@@ -26,6 +41,10 @@ use super::predicates::{Sign, orient2d, signed_area};
 /// every candidate degenerate.
 pub fn ear_clip(polygon: &[Point2]) -> Vec<[usize; 3]> {
     if polygon.len() < 3 {
+        return Vec::new();
+    }
+    if !polygon.iter().all(is_finite) {
+        warn_non_finite();
         return Vec::new();
     }
 
@@ -192,6 +211,12 @@ pub fn ear_clip_with_holes(
     if outer.len() < 3 {
         return (Vec::new(), Vec::new());
     }
+    // A NaN or infinite coordinate has no place in the bridging or the
+    // spatial indexes; there is no polygon to fill, so produce no triangles.
+    if !outer.iter().chain(holes.iter().flatten()).all(is_finite) {
+        warn_non_finite();
+        return (Vec::new(), Vec::new());
+    }
     if holes.is_empty() {
         return (outer.to_vec(), ear_clip(outer));
     }
@@ -224,7 +249,7 @@ pub fn ear_clip_with_holes(
     // Bridge the holes in descending rightmost-x order and clip the merged
     // ring with the degeneracy-tolerant clipper (see `holes`).
     let merged = super::holes::merge_holes(outer_pts, hole_pts);
-    let triangles = super::holes::clip_ears_tolerant(&merged);
+    let triangles = super::tolerant_clip::clip_ears_tolerant(&merged);
     (merged, triangles)
 }
 
@@ -234,6 +259,30 @@ mod tests {
 
     fn p(x: f64, y: f64) -> Point2 {
         Point2::new(x, y)
+    }
+
+    #[test]
+    fn non_finite_coordinates_give_no_triangles() {
+        let square = vec![p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(0.0, 10.0)];
+        let hole = vec![p(4.0, 4.0), p(4.0, 6.0), p(6.0, 6.0), p(6.0, 4.0)];
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let mut in_hole = hole.clone();
+            in_hole[1].y = bad;
+            assert!(ear_clip_with_holes(&square, &[in_hole]).1.is_empty());
+            let mut in_outer = square.clone();
+            in_outer[2].x = bad;
+            assert!(
+                ear_clip_with_holes(&in_outer, std::slice::from_ref(&hole))
+                    .1
+                    .is_empty()
+            );
+        }
+        assert!(!ear_clip_with_holes(&square, &[hole]).1.is_empty());
+        // No holes: the plain clipper path refuses too.
+        let mut bad = square.clone();
+        bad[1].x = f64::NAN;
+        assert!(ear_clip_with_holes(&bad, &[]).1.is_empty());
+        assert!(ear_clip(&bad).is_empty());
     }
 
     #[test]

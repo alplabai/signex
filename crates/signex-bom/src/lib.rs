@@ -3,6 +3,12 @@ use std::collections::{BTreeMap, HashMap};
 use serde::{Deserialize, Serialize};
 use signex_types::designator::compare_references;
 
+mod pricing;
+pub use pricing::{
+    BomPrice, MPN_FIELDS, PriceBook, PriceQuote, apply_prices, library_row_key, mpn_key,
+    price_totals, round_cents,
+};
+
 /// Input context for BOM generation.
 #[derive(Debug, Clone)]
 pub struct BomContext {
@@ -33,6 +39,10 @@ pub struct BomComponent {
     /// non-empty values. Empty for a single-unit part. The BOM keeps the first
     /// unit's value; [`BomRule::UnitFieldConflict`] reports each field here.
     pub unit_conflicts: Vec<String>,
+    /// The library row the part was placed from ([`library_row_key`]), when
+    /// the symbol records one. Not part of the grouping: it only says where
+    /// a line's cached price comes from.
+    pub library_row: Option<String>,
 }
 
 impl BomComponent {
@@ -43,10 +53,25 @@ impl BomComponent {
         include_dnp || !self.dnp || self.variant_fitted == Some(true)
     }
 
+    /// The fitted state, which drives `fitted_qty` and purchasing: never for
+    /// a part left out of the BOM or off the board (even with an explicit
+    /// fitted field), otherwise the variant override, else the base fields,
+    /// else "fitted unless the part is marked DNP". It is only a quantity;
+    /// which parts are listed is decided by [`BomEngineOptions::admits`].
     pub fn is_fitted(&self) -> bool {
-        self.variant_fitted
-            .or(self.base_fitted)
-            .unwrap_or(!self.dnp && self.in_bom && self.on_board)
+        self.in_bom
+            && self.on_board
+            && self
+                .variant_fitted
+                .or(self.base_fitted)
+                .unwrap_or(!self.dnp)
+    }
+
+    /// Whether a variant override or base field explicitly marks the part as
+    /// not fitted (as opposed to only the `dnp` flag, which `include_dnp`
+    /// governs).
+    fn is_explicitly_not_fitted(&self) -> bool {
+        self.variant_fitted.or(self.base_fitted) == Some(false)
     }
 }
 
@@ -78,6 +103,20 @@ pub struct BomEngineOptions {
     pub include_not_fitted: bool,
     pub include_excluded_from_bom: bool,
     pub include_not_on_board: bool,
+}
+
+impl BomEngineOptions {
+    /// Whether `component` is listed. Each exclusion is gated by its own
+    /// flag: `dnp` by `include_dnp` (a variant override of "fitted" lets a DNP
+    /// part through), an explicit not-fitted state by `include_not_fitted`,
+    /// `in_bom == false` by `include_excluded_from_bom` and
+    /// `on_board == false` by `include_not_on_board`.
+    pub fn admits(&self, component: &BomComponent) -> bool {
+        component.passes_dnp_filter(self.include_dnp)
+            && (self.include_not_fitted || !component.is_explicitly_not_fitted())
+            && (self.include_excluded_from_bom || component.in_bom)
+            && (self.include_not_on_board || component.on_board)
+    }
 }
 
 impl Default for BomEngineOptions {
@@ -251,6 +290,14 @@ pub struct BomRow {
     pub lib_ref: String,
     pub description: String,
     pub custom: BTreeMap<String, String>,
+    /// The library row the line's parts were placed from, when every one of
+    /// them records the same row; otherwise `None` and the line is priced by
+    /// MPN.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub library_row: Option<String>,
+    /// The cached price, once [`apply_prices`] has run and found one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub price: Option<BomPrice>,
 }
 
 /// Generated BOM table.
@@ -296,15 +343,22 @@ impl GroupKey {
     }
 }
 
+/// The library row shared by every part of a line, or `None` when they
+/// record none or differ (#1023).
+fn shared_library_row(components: &[&BomComponent]) -> Option<String> {
+    let (first, rest) = components.split_first()?;
+    let row = first.library_row.as_ref()?;
+    rest.iter()
+        .all(|c| c.library_row.as_ref() == Some(row))
+        .then(|| row.clone())
+}
+
 /// Build a BOM table from a normalized BOM context.
 pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
     let mut components = ctx
         .components
         .iter()
-        .filter(|component| component.passes_dnp_filter(opts.include_dnp))
-        .filter(|component| opts.include_not_fitted || component.is_fitted())
-        .filter(|component| opts.include_excluded_from_bom || component.in_bom)
-        .filter(|component| opts.include_not_on_board || component.on_board)
+        .filter(|component| opts.admits(component))
         .cloned()
         .collect::<Vec<_>>();
 
@@ -354,6 +408,8 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                         lib_ref,
                         description,
                         custom,
+                        library_row: shared_library_row(&grouped_components),
+                        price: None,
                     }
                 })
                 .collect::<Vec<_>>();
@@ -375,6 +431,8 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                     lib_ref: component.lib_ref.clone(),
                     description: component.description.clone(),
                     custom: component.custom.clone(),
+                    library_row: component.library_row.clone(),
+                    price: None,
                 })
                 .collect::<Vec<_>>();
 
@@ -508,7 +566,32 @@ mod tests {
             base_fitted: None,
             custom: BTreeMap::new(),
             unit_conflicts: Vec::new(),
+            library_row: None,
         }
+    }
+
+    /// #1023 — the library row a part was placed from does not split a line
+    /// (it is not a visible column); a line keeps a row only when every part
+    /// on it shares that row, and is priced by MPN otherwise.
+    #[test]
+    fn library_rows_do_not_split_lines_and_a_line_keeps_only_a_shared_row() {
+        let mut a = component("R1", "10k", "R_0603");
+        let mut b = component("R2", "10k", "R_0603");
+        let mut c = component("R3", "22k", "R_0603");
+        let mut d = component("R4", "22k", "R_0603");
+        a.library_row = Some("lib/row-a".into());
+        b.library_row = Some("lib/row-b".into());
+        c.library_row = Some("lib/row-c".into());
+        d.library_row = Some("lib/row-c".into());
+        let ctx = BomContext {
+            components: vec![a, b, c, d],
+            metadata: BomMetadata::default(),
+        };
+        let table = build_table(&ctx, &BomEngineOptions::default());
+        assert_eq!(table.rows.len(), 2);
+        assert_eq!(table.rows[0].references, vec!["R1", "R2"]);
+        assert_eq!(table.rows[0].library_row, None, "two rows: price by MPN");
+        assert_eq!(table.rows[1].library_row.as_deref(), Some("lib/row-c"));
     }
 
     #[test]
@@ -740,7 +823,7 @@ mod tests {
 
         for (include_dnp, include_not_fitted, expected_refs, not_fitted_qty) in [
             (false, false, vec!["R1", "R5", "R6"], 0),
-            (true, false, vec!["R1", "R5", "R6"], 0),
+            (true, false, vec!["R1", "R2", "R5", "R6"], 1),
             (false, true, vec!["R1", "R3", "R5", "R6"], 1),
             (true, true, vec!["R1", "R2", "R3", "R4", "R5", "R6"], 3),
         ] {
@@ -779,6 +862,36 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn include_dnp_alone_lists_dnp_parts() {
+        let mut dnp = component("R2", "10k", "R_0603");
+        dnp.dnp = true;
+        let ctx = BomContext {
+            components: vec![component("R1", "10k", "R_0603"), dnp],
+            metadata: BomMetadata::default(),
+        };
+        let table = build_table(
+            &ctx,
+            &BomEngineOptions {
+                grouping: BomGrouping::Flat,
+                include_dnp: true,
+                ..BomEngineOptions::default()
+            },
+        );
+        let rows = table
+            .rows
+            .iter()
+            .map(|row| {
+                (
+                    row.references[0].as_str(),
+                    row.fitted_qty,
+                    row.not_fitted_qty,
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(rows, vec![("R1", 1, 0), ("R2", 0, 1)]);
     }
 
     #[test]
@@ -829,8 +942,10 @@ mod tests {
             );
             assert_eq!(table.rows.len(), 1);
             assert_eq!(table.rows[0].references, vec!["R5"]);
-            assert_eq!(table.rows[0].fitted_qty, 1);
-            assert_eq!(table.rows[0].not_fitted_qty, 0);
+            // Listed, but never fitted (so never purchased) despite the
+            // explicit variant override.
+            assert_eq!(table.rows[0].fitted_qty, 0);
+            assert_eq!(table.rows[0].not_fitted_qty, 1);
         }
     }
 

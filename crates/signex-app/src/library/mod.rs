@@ -15,23 +15,31 @@
 //! * the **Distributor APIs settings** panel
 //!   (`settings/distributor_apis.rs`).
 
+pub mod bom_prices;
 pub mod browser;
 pub mod close_prompt;
 pub mod commands;
 pub mod component_preview;
 pub mod create_options;
+pub mod dangling;
 pub mod document_options;
+pub mod drift;
 pub mod edit_row_modal;
 pub mod editor;
 pub mod external_poll;
 pub mod messages;
+pub(crate) mod modal_chrome;
 pub mod mount;
-pub mod new_component;
 pub mod panel;
 pub mod picker;
+pub mod place;
+pub mod preview_refresh;
+pub mod pricing;
 pub mod primitive_picker;
 pub mod recovery;
+pub mod refresh;
 pub mod resolve;
+pub mod row_documents;
 pub mod settings;
 pub mod state;
 #[cfg(test)]

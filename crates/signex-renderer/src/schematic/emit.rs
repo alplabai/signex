@@ -25,9 +25,18 @@ pub(super) fn emit_wires(snapshot: &SchematicSnapshot, theme: &ResolvedTheme, sc
             p1: wire.p1,
             width: wire.width_mm,
             color: resolve_wire_color(wire, snapshot, theme),
-            style: 0,
+            style: line_style_bits(snapshot.wire_line_styles.get(&wire.id)),
             _pad: 0,
         });
+    }
+}
+
+/// The `LineSegment::style` bits for a net line style; absent means solid.
+fn line_style_bits(style: Option<&NetLineStyle>) -> u32 {
+    match style.copied().unwrap_or_default() {
+        NetLineStyle::Solid => 0,
+        NetLineStyle::Dashed => LineSegment::STYLE_DASHED,
+        NetLineStyle::Dotted => LineSegment::STYLE_DOTTED,
     }
 }
 
@@ -86,6 +95,7 @@ pub(super) fn emit_text_bucket(texts: &[TextInput], output: &mut Vec<TextItem>) 
             color: text.color,
             bold: text.bold,
             italic: text.italic,
+            family: text.family.clone(),
             rotation: text.rotation_rad,
             h_align: to_text_h_align(text.h_align),
             v_align: to_text_v_align(text.v_align),

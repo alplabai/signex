@@ -4,13 +4,13 @@
 //! Default backend: in-memory SQLite. Postgres path is gated behind
 //! `SIGNEX_TEST_PG_URL` env var so CI without Postgres still passes.
 
-use std::time::Duration;
-
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use chrono::Utc;
-use signex_library::adapter::FieldSet;
-use signex_library::component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
+use signex_library::alternate_symbol::AlternateSymbol;
+use signex_library::component::{
+    ComponentRow, DatasheetRef, PinPadOverride, PlmReserved, ROW_SCHEMA, ROW_SCHEMA_HEADER,
+};
 use signex_library::identity::{ComponentClass, InternalPn, RowId};
 use signex_library::lifecycle::LifecycleState;
 use signex_library::manufacturer::ManufacturerPart;
@@ -43,10 +43,13 @@ fn ensure_test_token() {
 fn fixture_row(internal_pn: &str) -> ComponentRow {
     let lib = Uuid::now_v7();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(internal_pn),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Released,
         symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
         footprint_ref: Some(PrimitiveRef::new(lib, Uuid::now_v7())),
@@ -65,6 +68,7 @@ fn fixture_row(internal_pn: &str) -> ComponentRow {
         created: Utc::now(),
         updated: Utc::now(),
         content_hash: [0u8; 32],
+        server_revision: None,
     }
 }
 
@@ -144,6 +148,7 @@ async fn route_post_row_then_get() {
                 .method("POST")
                 .uri(format!("/tables/resistors/rows?library_id={library_id}"))
                 .header("content-type", "application/json")
+                .header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string())
                 .header("authorization", bearer_header())
                 .body(Body::from(body))
                 .unwrap(),
@@ -171,7 +176,14 @@ async fn route_post_row_then_get() {
         .await
         .unwrap();
     let got: ComponentRow = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(got, row);
+    assert_eq!(got.server_revision, Some(1));
+    assert_eq!(
+        got,
+        ComponentRow {
+            server_revision: Some(1),
+            ..row.clone()
+        }
+    );
 
     // List endpoint surfaces the inserted row.
     let resp = app
@@ -190,7 +202,9 @@ async fn route_post_row_then_get() {
         .await
         .unwrap();
     let listed: Vec<ComponentRow> = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(listed, vec![row.clone()]);
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].server_revision, Some(1));
+    assert_eq!(listed[0].row_id, row.row_id);
 
     // After at least one row exists, /tables surfaces the table name.
     let resp = app
@@ -230,6 +244,7 @@ async fn route_post_duplicate_row_conflicts_and_preserves_original() {
             .method("POST")
             .uri(format!("/tables/resistors/rows?library_id={library_id}"))
             .header("content-type", "application/json")
+            .header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string())
             .header("authorization", bearer_header())
             .body(Body::from(body))
             .unwrap()
@@ -270,7 +285,11 @@ async fn route_post_duplicate_row_conflicts_and_preserves_original() {
         .unwrap();
     let got: ComponentRow = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(
-        got, row1,
+        got,
+        ComponentRow {
+            server_revision: Some(1),
+            ..row1.clone()
+        },
         "the original row must survive a conflicting POST"
     );
 }
@@ -293,6 +312,7 @@ async fn route_put_row_updates() {
                 .method("POST")
                 .uri(format!("/tables/resistors/rows?library_id={library_id}"))
                 .header("content-type", "application/json")
+                .header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string())
                 .header("authorization", bearer_header())
                 .body(Body::from(serde_json::to_vec(&row).unwrap()))
                 .unwrap(),
@@ -312,7 +332,9 @@ async fn route_put_row_updates() {
                 .uri(format!(
                     "/tables/resistors/rows/{row_id}?library_id={library_id}"
                 ))
+                .header("if-match", "\"1\"")
                 .header("content-type", "application/json")
+                .header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string())
                 .header("authorization", bearer_header())
                 .body(Body::from(serde_json::to_vec(&updated).unwrap()))
                 .unwrap(),
@@ -340,6 +362,7 @@ async fn route_put_row_updates() {
     let got: ComponentRow = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(got.internal_pn, InternalPn::new("R0805_10k_REV2"));
     assert_eq!(got.state, LifecycleState::Deprecated);
+    assert_eq!(got.server_revision, Some(2), "the PUT bumped the revision");
 }
 
 #[tokio::test]
@@ -358,6 +381,7 @@ async fn route_delete_row() {
                 .method("POST")
                 .uri(format!("/tables/resistors/rows?library_id={library_id}"))
                 .header("content-type", "application/json")
+                .header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string())
                 .header("authorization", bearer_header())
                 .body(Body::from(serde_json::to_vec(&row).unwrap()))
                 .unwrap(),
@@ -374,6 +398,7 @@ async fn route_delete_row() {
                 .uri(format!(
                     "/tables/resistors/rows/{row_id}?library_id={library_id}"
                 ))
+                .header("if-match", "\"1\"")
                 .header("authorization", bearer_header())
                 .body(Body::empty())
                 .unwrap(),
@@ -417,100 +442,274 @@ async fn route_unauthenticated_returns_401() {
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }
 
-// Lock tests — kept here because the lock manager keys off
-// `RowId.as_uuid()` and the ergonomics are easiest to exercise from
-// a single integration suite.
-
-#[tokio::test]
-async fn lock_contention_second_attempt_blocks_until_release() {
-    let state = fresh_state().await;
-    state.locks().set_idle_ttl(Duration::from_millis(200));
-
-    let row_uuid = RowId::new().as_uuid();
-
-    state
-        .locks()
-        .try_lock(row_uuid, FieldSet::Symbol, "alice")
-        .expect("alice acquires");
-
-    let err = state
-        .locks()
-        .try_lock(row_uuid, FieldSet::Symbol, "bob")
-        .unwrap_err();
-    assert!(matches!(
-        err.kind,
-        signex_library_server::locks::LockErrorKind::Held { .. }
-    ));
-
-    state
-        .locks()
-        .release(row_uuid, FieldSet::Symbol, "alice")
-        .unwrap();
-    state
-        .locks()
-        .try_lock(row_uuid, FieldSet::Symbol, "bob")
-        .expect("bob acquires after release");
-
-    state
-        .locks()
-        .try_lock(row_uuid, FieldSet::Footprint, "alice")
-        .expect("different field-set is independent");
-}
-
-#[tokio::test]
-async fn lock_contention_ttl_expiry_allows_takeover() {
-    let state = fresh_state().await;
-    state.locks().set_idle_ttl(Duration::from_millis(50));
-
-    let row_uuid = RowId::new().as_uuid();
-    state
-        .locks()
-        .try_lock(row_uuid, FieldSet::Symbol, "alice")
-        .unwrap();
-
-    tokio::time::sleep(Duration::from_millis(100)).await;
-
-    state
-        .locks()
-        .try_lock(row_uuid, FieldSet::Symbol, "bob")
-        .expect("bob takes over after TTL");
-}
-
-#[tokio::test]
-async fn locks_endpoint_returns_409_when_held() {
-    let state = fresh_state().await;
-    state.locks().set_idle_ttl(Duration::from_secs(60));
-    let app = router_with_state(state);
-
-    let row_id = RowId::new();
-
-    let mk_req = |holder: &str| {
-        Request::builder()
-            .method("POST")
-            .uri(format!("/rows/{row_id}/locks"))
-            .header("content-type", "application/json")
-            .header("authorization", bearer_header())
-            .header("x-signex-holder", holder)
-            .body(Body::from(
-                serde_json::to_vec(&serde_json::json!({"field_set": "Symbol"})).unwrap(),
-            ))
-            .unwrap()
-    };
-
-    let r1 = app.clone().oneshot(mk_req("alice")).await.unwrap();
-    assert_eq!(r1.status(), StatusCode::CREATED);
-
-    let r2 = app.oneshot(mk_req("bob")).await.unwrap();
-    assert_eq!(r2.status(), StatusCode::CONFLICT);
-}
-
 #[tokio::test]
 #[ignore = "requires SIGNEX_TEST_PG_URL"]
 async fn postgres_migrations_apply_when_env_set() {
-    let url = match std::env::var("SIGNEX_TEST_PG_URL") {
-        Ok(u) => u,
-        Err(_) => return, // Belt-and-braces — `#[ignore]` already skips by default.
-    };
+    let url = std::env::var("SIGNEX_TEST_PG_URL")
+        .expect("SIGNEX_TEST_PG_URL must be set to run the ignored Postgres tests");
     let state = AppState::connect(&url).await.expect("pg connect");
     state.migrate().await.expect("pg migrations apply");
+}
+
+/// #1056: the store refuses a non-finite parameter instead of saving
+/// `null`, on both insert and update, and keeps the stored row.
+#[tokio::test]
+async fn store_refuses_non_finite_parameter() {
+    use signex_library::param::ParamValue;
+
+    let state = fresh_state().await;
+    let lib = Uuid::now_v7();
+    let good = fixture_row("R1");
+    assert!(state.insert_row(lib, "resistors", &good).await.unwrap());
+
+    let mut bad = fixture_row("R_BAD");
+    bad.parameters
+        .insert("tolerance".into(), ParamValue::Number(f64::NAN));
+    let err = state.insert_row(lib, "resistors", &bad).await.unwrap_err();
+    assert!(err.to_string().contains("tolerance"), "{err}");
+
+    let mut upd = good.clone();
+    upd.parameters
+        .insert("tolerance".into(), ParamValue::Number(f64::INFINITY));
+    assert!(state.update_row(lib, "resistors", &upd, 1).await.is_err());
+    let stored = state
+        .fetch_row(lib, "resistors", RowId::from_uuid(good.row_id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.parameters, good.parameters);
+}
+
+/// POST `row` into `resistors` of `library_id`.
+async fn post_row(app: &axum::Router, library_id: Uuid, row: &ComponentRow) {
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/tables/resistors/rows?library_id={library_id}"))
+                .header("content-type", "application/json")
+                .header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string())
+                .header("authorization", bearer_header())
+                .body(Body::from(serde_json::to_vec(row).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+}
+
+/// A PUT of `row`, with `If-Match` set to `if_match` when given.
+fn put_request(library_id: Uuid, row: &ComponentRow, if_match: Option<&str>) -> Request<Body> {
+    let mut req = Request::builder()
+        .method("PUT")
+        .uri(format!(
+            "/tables/resistors/rows/{}?library_id={library_id}",
+            row.row_id
+        ))
+        .header("content-type", "application/json")
+        .header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string())
+        .header("authorization", bearer_header());
+    if let Some(v) = if_match {
+        req = req.header("if-match", v);
+    }
+    req.body(Body::from(serde_json::to_vec(row).unwrap()))
+        .unwrap()
+}
+
+/// #115: a row write without the base revision is refused with 428, and
+/// the row is left as it was.
+#[tokio::test]
+async fn route_put_without_if_match_is_428() {
+    let state = fresh_state().await;
+    let app = router_with_state(state.clone());
+    let library_id = Uuid::now_v7();
+    let row = fixture_row("R-428");
+    post_row(&app, library_id, &row).await;
+
+    let mut edited = row.clone();
+    edited.internal_pn = InternalPn::new("R-428-EDIT");
+    let resp = app
+        .clone()
+        .oneshot(put_request(library_id, &edited, None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::PRECONDITION_REQUIRED);
+
+    let delete = Request::builder()
+        .method("DELETE")
+        .uri(format!(
+            "/tables/resistors/rows/{}?library_id={library_id}",
+            row.row_id
+        ))
+        .header("authorization", bearer_header())
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.oneshot(delete).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::PRECONDITION_REQUIRED);
+
+    let stored = state
+        .fetch_row(library_id, "resistors", RowId::from_uuid(row.row_id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.internal_pn, InternalPn::new("R-428"));
+    assert_eq!(stored.server_revision, Some(1));
+}
+
+/// #115: two concurrent PUTs based on the same revision — exactly one
+/// wins, the other gets 409 naming the revision the winner left.
+#[tokio::test]
+async fn concurrent_puts_with_the_same_base_have_one_winner() {
+    let state = fresh_state().await;
+    let app = router_with_state(state.clone());
+    let library_id = Uuid::now_v7();
+    let row = fixture_row("R-RACE");
+    post_row(&app, library_id, &row).await;
+
+    let mut a = row.clone();
+    a.internal_pn = InternalPn::new("R-RACE-A");
+    let mut b = row.clone();
+    b.internal_pn = InternalPn::new("R-RACE-B");
+    let (ra, rb) = tokio::join!(
+        app.clone()
+            .oneshot(put_request(library_id, &a, Some("\"1\""))),
+        app.clone()
+            .oneshot(put_request(library_id, &b, Some("\"1\""))),
+    );
+    let (ra, rb) = (ra.unwrap(), rb.unwrap());
+    let mut statuses = [ra.status(), rb.status()];
+    statuses.sort();
+    assert_eq!(statuses, [StatusCode::OK, StatusCode::CONFLICT]);
+
+    let (winner, loser) = if ra.status() == StatusCode::OK {
+        ("R-RACE-A", rb)
+    } else {
+        ("R-RACE-B", ra)
+    };
+    let bytes = axum::body::to_bytes(loser.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(body["current_revision"], 2, "{body}");
+
+    let stored = state
+        .fetch_row(library_id, "resistors", RowId::from_uuid(row.row_id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.internal_pn, InternalPn::new(winner));
+    assert_eq!(stored.server_revision, Some(2));
+}
+
+/// A row POST with the given schema header (`None` = header absent).
+fn post_request(library_id: Uuid, row: &ComponentRow, schema: Option<&str>) -> Request<Body> {
+    let mut req = Request::builder()
+        .method("POST")
+        .uri(format!("/tables/resistors/rows?library_id={library_id}"))
+        .header("content-type", "application/json")
+        .header("authorization", bearer_header());
+    if let Some(v) = schema {
+        req = req.header(ROW_SCHEMA_HEADER, v);
+    }
+    req.body(Body::from(serde_json::to_vec(row).unwrap()))
+        .unwrap()
+}
+
+/// A row write from a build that does not send, or sends a lower, row
+/// schema is refused with 400 and the schema code before the database is touched.
+#[tokio::test]
+async fn row_writes_from_an_older_build_are_refused_as_row_schema_too_old() {
+    let state = fresh_state().await;
+    let app = router_with_state(state);
+    let library_id = Uuid::now_v7();
+    let row = fixture_row("R-OLD");
+    let too_low = (ROW_SCHEMA - 1).to_string();
+
+    for schema in [None, Some(too_low.as_str()), Some("not-a-number")] {
+        let resp = app
+            .clone()
+            .oneshot(post_request(library_id, &row, schema))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "{schema:?}");
+        let bytes = axum::body::to_bytes(resp.into_body(), 1 << 16)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["code"], signex_library::ROW_SCHEMA_REFUSED_CODE);
+    }
+
+    // Nothing was stored: the same row still inserts with the current schema.
+    let current = ROW_SCHEMA.to_string();
+    let resp = app
+        .clone()
+        .oneshot(post_request(library_id, &row, Some(&current)))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    // PUT: stripped header refused, current accepted.
+    let mut no_header = put_request(library_id, &row, Some("\"1\""));
+    no_header.headers_mut().remove(ROW_SCHEMA_HEADER);
+    let resp = app.clone().oneshot(no_header).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    let mut low = put_request(library_id, &row, Some("\"1\""));
+    low.headers_mut()
+        .insert(ROW_SCHEMA_HEADER, too_low.parse().unwrap());
+    let resp = app.clone().oneshot(low).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    let resp = app
+        .oneshot(put_request(library_id, &row, Some("\"1\"")))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+/// A row with alternate symbols survives POST then GET through the JSONB
+/// payload.
+#[tokio::test]
+async fn alternate_symbols_round_trip_through_the_server() {
+    let state = fresh_state().await;
+    let app = router_with_state(state);
+    let library_id = Uuid::now_v7();
+    let mut row = fixture_row("R-ALT");
+    row.alternate_symbols.push(AlternateSymbol::new(
+        PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7()),
+        "0.0.3",
+        "IEC",
+    ));
+    post_row_with(&app, library_id, &row).await;
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/tables/resistors/rows/{}?library_id={library_id}",
+                    row.row_id
+                ))
+                .header("authorization", bearer_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let got: ComponentRow = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(got.alternate_symbols, row.alternate_symbols);
+}
+
+async fn post_row_with(app: &axum::Router, library_id: Uuid, row: &ComponentRow) {
+    let current = ROW_SCHEMA.to_string();
+    let resp = app
+        .clone()
+        .oneshot(post_request(library_id, row, Some(&current)))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
 }

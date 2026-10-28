@@ -1,6 +1,7 @@
 //! Pin TSV codec + token conversions for the symbol wire format.
 
 use super::*;
+use crate::primitive::tsv_cell::fmt_f64;
 
 // ---- Pin TSV codec --------------------------------------------------
 
@@ -110,36 +111,24 @@ pub(super) fn pin_symbol_kind_from_token(s: &str) -> Result<PinSymbolKind, Symbo
     })
 }
 
-/// Format an `f64` for a TSV cell. `0.0` emits literally as `"0"` so
-/// the most common default is short; non-zero values use the
-/// shortest precision-preserving form via `Display`. Cells must be
-/// re-parseable by `f64::from_str`.
-///
-/// HI-10: non-finite values (NaN / ±Inf) silently become `"NaN"` /
-/// `"inf"` strings via `Display`, which fail to re-parse. Surface as
-/// an empty cell — round-trip lands on `parse_f64_cell`'s "invalid
-/// numeric" error rather than corrupting the file.
-fn fmt_f64(v: f64) -> String {
-    if v == 0.0 {
-        "0".to_string()
-    } else if !v.is_finite() {
-        // Don't write NaN / inf — caller's invariant is broken.
-        debug_assert!(v.is_finite(), "fmt_f64 called with non-finite {v}");
-        String::new()
-    } else {
-        format!("{v}")
+/// An optional cell: `None` is an empty cell, a non-finite value is the
+/// error case reported by the caller.
+fn fmt_opt_f64(v: Option<f64>) -> Option<String> {
+    match v {
+        None => Some(String::new()),
+        Some(v) => fmt_f64(v),
     }
 }
 
-fn fmt_opt_f64(v: Option<f64>) -> String {
-    v.map(fmt_f64).unwrap_or_default()
-}
-
 fn parse_f64_cell(col: &'static str, s: &str) -> Result<f64, SymbolFileError> {
-    s.parse().map_err(|_| SymbolFileError::InvalidNumericCell {
-        column: col,
-        value: s.to_string(),
-    })
+    // #678: reject `NaN` / `inf` (and `1e999`, which overflows to inf).
+    s.parse::<f64>()
+        .ok()
+        .filter(|v| v.is_finite())
+        .ok_or_else(|| SymbolFileError::InvalidNumericCell {
+            column: col,
+            value: s.to_string(),
+        })
 }
 
 fn parse_opt_f64_cell(col: &'static str, s: &str) -> Result<Option<f64>, SymbolFileError> {
@@ -162,19 +151,30 @@ fn parse_bool_cell(col: &'static str, s: &str) -> Result<bool, SymbolFileError> 
 }
 
 fn pin_to_tsv_row(pin: &SymbolPin) -> Result<String, SymbolFileError> {
+    // The cell is `|`-separated with no escaping (the layout every
+    // `.snxsym` on disk uses, backslashes literal), so an item holding `|`
+    // would reload as two items. Refuse it at save instead.
+    if let Some(bad) = pin.function.iter().find(|f| f.contains('|')) {
+        return Err(SymbolFileError::PipeInPinFunction { value: bad.clone() });
+    }
     let function_str = pin.function.join("|");
+    let non_finite = |column: &str| SymbolFileError::NonFiniteField {
+        field: format!("pin {:?} {column}", pin.number),
+    };
+    let num = |v: f64, column: &str| fmt_f64(v).ok_or_else(|| non_finite(column));
+    let opt = |v: Option<f64>, column: &str| fmt_opt_f64(v).ok_or_else(|| non_finite(column));
     let cells: [String; 20] = [
         pin.number.clone(),
         pin.name.clone(),
         pin_direction_token(pin.electrical).to_string(),
-        fmt_f64(pin.position[0]),
-        fmt_f64(pin.position[1]),
+        num(pin.position[0], "pos_x")?,
+        num(pin.position[1], "pos_y")?,
         pin_orientation_token(pin.orientation).to_string(),
-        fmt_f64(pin.length),
+        num(pin.length, "length")?,
         pin.description.clone(),
         function_str,
-        fmt_opt_f64(pin.pin_package_length),
-        fmt_opt_f64(pin.propagation_delay_ns),
+        opt(pin.pin_package_length, "pin_package_length")?,
+        opt(pin.propagation_delay_ns, "propagation_delay_ns")?,
         pin.designator_visible.to_string(),
         pin.name_visible.to_string(),
         pin_symbol_kind_token(pin.inside_symbol).to_string(),
@@ -283,4 +283,25 @@ fn pin_from_tsv_row(cells: &[&str]) -> Result<SymbolPin, SymbolFileError> {
         locked: parse_bool_cell("locked", cells[18])?,
         part_number,
     })
+}
+
+#[cfg(test)]
+mod non_finite_cell_tests {
+    use super::*;
+
+    /// #678: `f64::from_str` accepts `NaN` / `inf` and overflows `1e999`;
+    /// a numeric cell must reject all of them.
+    #[test]
+    fn numeric_cell_rejects_non_finite() {
+        for bad in ["NaN", "nan", "inf", "-inf", "infinity", "1e999"] {
+            assert!(
+                matches!(
+                    parse_f64_cell("col", bad),
+                    Err(SymbolFileError::InvalidNumericCell { .. })
+                ),
+                "{bad:?} must be rejected"
+            );
+        }
+        assert_eq!(parse_f64_cell("col", "1.5").unwrap(), 1.5);
+    }
 }

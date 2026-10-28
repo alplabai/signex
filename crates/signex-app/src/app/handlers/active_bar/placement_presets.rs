@@ -30,11 +30,21 @@ impl Signex {
             ActiveBarAction::PlacePowerMinus5 => {
                 follow = self.set_pending_power_port("-5V", "power:-5V");
             }
-            ActiveBarAction::PlacePowerArrow
-            | ActiveBarAction::PlacePowerWave
-            | ActiveBarAction::PlacePowerBar
-            | ActiveBarAction::PlacePowerCircle => {
-                follow = self.set_pending_power_port("PWR", "power:PWR_FLAG");
+            // Styled ports carry the style keyword the built-in power renderer
+            // recognizes. They must never use `power:PWR_FLAG`: a flag does not
+            // name a net, so a styled port with that lib_id would stop merging
+            // by value in the netlist and ERC.
+            ActiveBarAction::PlacePowerArrow => {
+                follow = self.set_pending_power_port("PWR", "power:arrow");
+            }
+            ActiveBarAction::PlacePowerWave => {
+                follow = self.set_pending_power_port("PWR", "power:wave");
+            }
+            ActiveBarAction::PlacePowerBar => {
+                follow = self.set_pending_power_port("PWR", "power:bar");
+            }
+            ActiveBarAction::PlacePowerCircle => {
+                follow = self.set_pending_power_port("PWR", "power:circle");
             }
             ActiveBarAction::PlacePowerSignalGND => {
                 follow = self.set_pending_power_port("GNDREF", "power:GNDREF");
@@ -60,6 +70,7 @@ impl Signex {
                         font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                         justify: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::Bottom,
+                        font_family: None,
                     });
             }
             ActiveBarAction::PlaceOffSheetConnector => {
@@ -80,6 +91,7 @@ impl Signex {
                         font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                         justify: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::Bottom,
+                        font_family: None,
                     });
             }
             ActiveBarAction::PlaceBusEntry => {
@@ -132,25 +144,14 @@ impl Signex {
                 );
             }
             ActiveBarAction::PlaceParameterSet => {
-                // Parameter Set — attaches named params to a net. Arm a
-                // label-tool ghost with a "PARAM=VALUE" default so the
-                // user drops + edits inline. Bulk edits go through the
-                // Parameter Manager (Design menu).
-                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
-                self.interaction_state.pending_port = None;
-                self.interaction_state.active_canvas_mut().ghost_label =
-                    Some(signex_types::schematic::Label {
-                        unknown_columns: Default::default(),
-                        uuid: uuid::Uuid::new_v4(),
-                        text: "PARAM=VALUE".to_string(),
-                        position: signex_types::schematic::Point::new(0.0, 0.0),
-                        rotation: 0.0,
-                        label_type: signex_types::schematic::LabelType::Net,
-                        shape: String::new(),
-                        font_size: 1.8,
-                        justify: signex_types::schematic::HAlign::Left,
-                        justify_v: signex_types::schematic::VAlign::Bottom,
-                    });
+                // #1248 — a Parameter Set is a rule directive and must never
+                // change connectivity. It used to arm a `LabelType::Net`
+                // ghost, which renames nets and joins same-text sheets. Until
+                // a non-electrical directive object exists the tool places
+                // nothing (the menu row is greyed too).
+                crate::diagnostics::log_info(
+                    "Parameter Set is planned: it needs a directive type that never enters the netlist",
+                );
             }
             ActiveBarAction::PlaceDiffPair => {
                 // DiffPair directive — attaches a differential-pair rule.
@@ -166,6 +167,7 @@ impl Signex {
                         font_size: 1.8,
                         justify_h: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::default(),
+                        font_family: None,
                     });
             }
             ActiveBarAction::PlaceBlanket | ActiveBarAction::PlaceCompileMask => {
@@ -240,15 +242,11 @@ impl Signex {
                 crate::diagnostics::log_info("Click a wire to clear its net-color override");
             }
             ActiveBarAction::ClearAllNetColors => {
-                if !self.ui_state.wire_color_overrides.is_empty() {
-                    self.ui_state
-                        .net_color_undo
-                        .push(self.ui_state.wire_color_overrides.clone());
-                }
                 // #631 — clearing `ui_state` is the whole operation now;
                 // the canvas reads that map through `CanvasViewPrefs`
-                // instead of keeping a cleared-in-parallel copy.
-                self.ui_state.wire_color_overrides.clear();
+                // instead of keeping a cleared-in-parallel copy. #1005 —
+                // each sheet keeps its own undo step for what this removes.
+                self.clear_all_net_colors_undoably();
                 self.ui_state.pending_net_color = None;
                 self.interaction_state.active_canvas_mut().pending_net_color = None;
                 self.interaction_state

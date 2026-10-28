@@ -31,9 +31,23 @@ pub fn view<'a>(
     let body = column![
         header_row(state, tokens),
         Space::new().height(10),
-        render_panes(state, tokens, &address),
+        render_panes(
+            state,
+            library_state,
+            tokens,
+            &address,
+            library_state.is_read_only(&state.library_path),
+        ),
         Space::new().height(10),
-        pin_map_subsection(state, tokens, &address),
+        super::inert::unless_read_only(
+            library_state.is_read_only(&state.library_path),
+            pin_map_subsection(state, tokens, &address),
+        ),
+        Space::new().height(10),
+        super::inert::unless_read_only(
+            library_state.is_read_only(&state.library_path),
+            super::alternate_symbols::view(state, tokens, &address),
+        ),
         Space::new().height(10),
         where_used_footer(state, library_state, tokens),
     ]
@@ -75,55 +89,80 @@ fn header_row<'a>(
 
 fn render_panes<'a>(
     state: &'a ComponentPreviewState,
+    library_state: &LibraryState,
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
+    read_only: bool,
 ) -> Element<'a, LibraryMessage> {
+    // Binding a primitive writes the row, so a read-only mount (the
+    // stock library) renders the Pick buttons disabled.
     // When the symbol_ref is the nil sentinel ("unbound") the user
     // hasn't picked a symbol yet — surface "Pick Symbol" instead of
     // "Open Symbol Editor". Same shape for footprint.
-    let symbol_unbound = state.row.symbol_ref.uuid.is_nil();
-    let (symbol_msg, symbol_btn_label): (Option<LibraryMessage>, &'static str) = if symbol_unbound {
-        (
-            Some(LibraryMessage::OpenPrimitivePicker {
-                kind: signex_library::PrimitiveKind::Symbol,
-                target: super::super::state::PrimitivePickerTarget::PreviewRow(address.clone()),
-            }),
-            "Pick Symbol",
-        )
-    } else {
-        (
-            Some(LibraryMessage::OpenPrimitiveEditor {
-                path: symbol_path(state),
-            }),
-            "Open Symbol Editor",
-        )
-    };
+    let symbol_unbound = state.row.is_symbol_unbound();
+    let footprint_unbound = state.row.is_footprint_unbound();
+    let (mut symbol_msg, symbol_btn_label): (Option<LibraryMessage>, &'static str) =
+        if symbol_unbound {
+            (
+                Some(LibraryMessage::OpenPrimitivePicker {
+                    kind: signex_library::PrimitiveKind::Symbol,
+                    target: super::super::state::PrimitivePickerTarget::PreviewRow(address.clone()),
+                }),
+                "Pick Symbol",
+            )
+        } else {
+            (
+                symbol_path(state, library_state)
+                    .map(|path| LibraryMessage::OpenPrimitiveEditor { path }),
+                "Open Symbol Editor",
+            )
+        };
 
-    let (footprint_msg, footprint_btn_label): (Option<LibraryMessage>, &'static str) =
+    let (mut footprint_msg, footprint_btn_label): (Option<LibraryMessage>, &'static str) =
         match state.row.footprint_ref.as_ref() {
-            None => (
+            _ if footprint_unbound => (
                 Some(LibraryMessage::OpenPrimitivePicker {
                     kind: signex_library::PrimitiveKind::Footprint,
                     target: super::super::state::PrimitivePickerTarget::PreviewRow(address.clone()),
                 }),
                 "Pick Footprint",
             ),
-            Some(_) => (
-                footprint_path(state).map(|p| LibraryMessage::OpenPrimitiveEditor { path: p }),
+            _ => (
+                footprint_path(state, library_state)
+                    .map(|p| LibraryMessage::OpenPrimitiveEditor { path: p }),
                 "Open Footprint Editor",
             ),
         };
 
+    if read_only {
+        if symbol_unbound {
+            symbol_msg = None;
+        }
+        if state.row.footprint_ref.is_none() {
+            footprint_msg = None;
+        }
+    }
+
     let symbol_pane = render_pane(
         "Symbol",
-        symbol_summary_text(state.symbol.as_ref()),
+        if symbol_unbound {
+            "No symbol bound".to_string()
+        } else {
+            symbol_summary_text(state.symbol.as_ref())
+        },
+        symbol_unbound,
         symbol_msg,
         symbol_btn_label,
         tokens,
     );
     let footprint_pane = render_pane(
         "Footprint",
-        footprint_summary_text(state.footprint.as_ref()),
+        if footprint_unbound {
+            "No footprint bound".to_string()
+        } else {
+            footprint_summary_text(state.footprint.as_ref())
+        },
+        footprint_unbound,
         footprint_msg,
         footprint_btn_label,
         tokens,
@@ -145,11 +184,16 @@ fn render_panes<'a>(
 fn render_pane<'a>(
     label: &'a str,
     summary: String,
+    unbound: bool,
     open_msg: Option<LibraryMessage>,
     button_label: &'a str,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
+    let text_c = if unbound {
+        theme_ext::warning_color(tokens)
+    } else {
+        theme_ext::text_primary(tokens)
+    };
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
 
@@ -288,21 +332,21 @@ fn open_btn<'a>(
         .into()
 }
 
-fn symbol_path(state: &ComponentPreviewState) -> std::path::PathBuf {
-    state
-        .library_path
-        .join("symbols")
-        .join(format!("{}.snxsym", state.row.symbol_ref.uuid))
+/// The `.snxsym` a row's symbol ref points at, resolved through the
+/// library named by `PrimitiveRef.library_id` (it may not be the row's own
+/// library). `None` when that library is not open.
+fn symbol_path(
+    state: &ComponentPreviewState,
+    library_state: &LibraryState,
+) -> Option<std::path::PathBuf> {
+    library_state.primitive_file(&state.row.symbol_ref, "symbols", "snxsym")
 }
 
-fn footprint_path(state: &ComponentPreviewState) -> Option<std::path::PathBuf> {
-    let fp_ref = state.row.footprint_ref.as_ref()?;
-    Some(
-        state
-            .library_path
-            .join("footprints")
-            .join(format!("{}.snxfpt", fp_ref.uuid)),
-    )
+fn footprint_path(
+    state: &ComponentPreviewState,
+    library_state: &LibraryState,
+) -> Option<std::path::PathBuf> {
+    library_state.primitive_file(state.row.footprint_ref.as_ref()?, "footprints", "snxfpt")
 }
 
 fn pin_map_subsection<'a>(

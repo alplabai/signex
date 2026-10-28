@@ -332,10 +332,13 @@ mod tests {
     fn fixture_editor() -> ComponentPreviewState {
         let lib_id = Uuid::new_v4();
         let row = ComponentRow {
+            alternate_symbols: Vec::new(),
             row_id: Uuid::new_v4(),
             internal_pn: InternalPn::new("TEST_PN"),
             class: ComponentClass::generic(),
             datasheet: DatasheetRef::default(),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(lib_id, Uuid::new_v4()),
             footprint_ref: None,
@@ -354,6 +357,7 @@ mod tests {
             created: chrono::Utc::now(),
             updated: chrono::Utc::now(),
             content_hash: [0u8; 32],
+            server_revision: None,
         };
         ComponentPreviewState::from_row(PathBuf::from("/tmp/test.snxlib"), "generics".into(), row)
     }

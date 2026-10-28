@@ -46,9 +46,12 @@ impl Signex {
     }
 
     /// `sheetN` not used as a name or file by the children of any open sheet
-    /// in the active document's project, or by any sheet the project lists.
+    /// in the active document's project, by any sheet the project lists, or
+    /// by a `.snxsch` already sitting in the sheet's or the project's folder
+    /// (#876) — an unlisted file there would otherwise be adopted silently.
     fn unused_child_sheet_stem(&self) -> String {
-        let mut taken: Vec<&str> = Vec::new();
+        let on_disk = self.sheet_files_on_disk();
+        let mut taken: Vec<&str> = on_disk.iter().map(String::as_str).collect();
         for engine in self.document_state.engines_in_active_document_project() {
             for child in &engine.document().child_sheets {
                 taken.push(&child.name);
@@ -61,5 +64,31 @@ impl Signex {
             }
         }
         signex_engine::unused_sheet_stem(taken)
+    }
+
+    /// File names of the `.snxsch` files in the active sheet's folder and the
+    /// project folder. Read-only; an unreadable folder contributes nothing.
+    fn sheet_files_on_disk(&self) -> Vec<String> {
+        let mut dirs: Vec<std::path::PathBuf> = Vec::new();
+        if let Some(path) = self.active_tab_path()
+            && let Some(parent) = path.parent()
+        {
+            dirs.push(parent.to_path_buf());
+        }
+        if let Some(project_dir) = self
+            .document_state
+            .active_loaded_project()
+            .and_then(|p| p.path.parent())
+        {
+            dirs.push(project_dir.to_path_buf());
+        }
+        dirs.dedup();
+        dirs.iter()
+            .filter_map(|dir| std::fs::read_dir(dir).ok())
+            .flatten()
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.to_ascii_lowercase().ends_with(".snxsch"))
+            .collect()
     }
 }

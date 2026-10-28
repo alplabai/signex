@@ -95,3 +95,63 @@ fn unrecognised_format_token_is_refused() {
     );
     assert!(parse_project(&path).is_err());
 }
+
+fn retarget_fixture(dir: &Path, libraries: Value) -> PathBuf {
+    let body = json!({
+        "name": "Proj", "dir": "", "schematic_root": "Proj.snxsch", "pcb_file": null,
+        "libraries": libraries,
+        "future_top_scalar": 7
+    });
+    write_raw(dir, &body.to_string())
+}
+
+#[test]
+fn retarget_keeps_unknown_root_and_entry_keys() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = retarget_fixture(
+        dir.path(),
+        json!([{"path": "L.snxlib", "kind": "project_local", "library_id": null,
+                "future_lib_key": "pinned"}]),
+    );
+    let old = parse_project(&path).unwrap();
+    let old_lib = old.resolve_library_path(&old.libraries[0]);
+
+    let out = retarget_library_entry(&path, &old_lib, "M.snxlib".as_ref()).unwrap();
+
+    assert_eq!(out, LibraryRetarget::Patched);
+    let after = saved_json(&path);
+    assert_eq!(after["libraries"][0]["path"], json!("M.snxlib"));
+    assert_eq!(after["libraries"][0]["future_lib_key"], json!("pinned"));
+    assert_eq!(after["future_top_scalar"], json!(7));
+}
+
+#[test]
+fn retarget_repoints_every_duplicate_entry() {
+    let dir = tempfile::tempdir().unwrap();
+    let entry = json!({"path": "L.snxlib", "kind": "project_local", "library_id": null});
+    let path = retarget_fixture(dir.path(), json!([entry, entry]));
+    let old = parse_project(&path).unwrap();
+    let old_lib = old.resolve_library_path(&old.libraries[0]);
+
+    retarget_library_entry(&path, &old_lib, "M.snxlib".as_ref()).unwrap();
+
+    let after = saved_json(&path);
+    assert_eq!(after["libraries"][0]["path"], json!("M.snxlib"));
+    assert_eq!(after["libraries"][1]["path"], json!("M.snxlib"));
+}
+
+#[test]
+fn retarget_reports_a_shared_disk_entry_without_writing() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = dir.path().join("L.snxlib");
+    let path = retarget_fixture(
+        dir.path(),
+        json!([{"path": lib, "kind": "shared", "library_id": null}]),
+    );
+    let before = std::fs::read(&path).unwrap();
+
+    let out = retarget_library_entry(&path, &lib, "M.snxlib".as_ref()).unwrap();
+
+    assert_eq!(out, LibraryRetarget::ListedAsDifferentKind);
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+}

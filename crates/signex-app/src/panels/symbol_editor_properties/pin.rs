@@ -3,7 +3,7 @@
 use iced::widget::{Column, column, container, row, text};
 use iced::{Color, Element, Length};
 
-use super::super::{PanelMsg, SymbolPinSummary};
+use super::super::{NumericDraft, NumericFieldKey, PanelMsg, SymbolPinSummary, numeric_input};
 
 /// IEEE-symbol pick_list row used four times (Inside / Inside Edge /
 /// Outside Edge / Outside) on the pin Properties surface. `slot`
@@ -75,6 +75,7 @@ fn view_pin_symbol_picker<'a>(
 pub(super) fn view_pin_selection<'a>(
     mut col: Column<'a, PanelMsg>,
     pin: &'a SymbolPinSummary,
+    draft: Option<&NumericDraft>,
     muted: Color,
     primary: Color,
     border_c: Color,
@@ -188,17 +189,9 @@ pub(super) fn view_pin_selection<'a>(
                 .size(10)
                 .color(muted)
                 .width(Length::FillPortion(2)),
-            iced::widget::text_input("mm", &format!("{:.3}", pos_x))
+            numeric_input("mm", NumericFieldKey::PinX(pin_idx), pos_x, draft)
                 .padding([2, 4])
-                .size(11)
-                .on_input(move |s| {
-                    let parsed = s.trim().parse::<f64>().unwrap_or(pos_x);
-                    PanelMsg::SymEditorSetPinX {
-                        pin_idx,
-                        value: parsed,
-                    }
-                })
-                .width(Length::FillPortion(3)),
+                .size(11),
         ]
         .spacing(4)
         .align_y(iced::Alignment::Center),
@@ -214,17 +207,9 @@ pub(super) fn view_pin_selection<'a>(
                 .size(10)
                 .color(muted)
                 .width(Length::FillPortion(2)),
-            iced::widget::text_input("mm", &format!("{:.3}", pos_y))
+            numeric_input("mm", NumericFieldKey::PinY(pin_idx), pos_y, draft)
                 .padding([2, 4])
-                .size(11)
-                .on_input(move |s| {
-                    let parsed = s.trim().parse::<f64>().unwrap_or(pos_y);
-                    PanelMsg::SymEditorSetPinY {
-                        pin_idx,
-                        value: parsed,
-                    }
-                })
-                .width(Length::FillPortion(3)),
+                .size(11),
         ]
         .spacing(4)
         .align_y(iced::Alignment::Center),
@@ -291,17 +276,9 @@ pub(super) fn view_pin_selection<'a>(
                 .size(10)
                 .color(muted)
                 .width(Length::FillPortion(2)),
-            iced::widget::text_input("mm", &format!("{:.3}", pin.length))
+            numeric_input("mm", NumericFieldKey::PinLength(pin_idx), pin.length, draft)
                 .padding([2, 4])
-                .size(11)
-                .on_input(move |s| {
-                    let parsed = s.trim().parse::<f64>().unwrap_or(0.0);
-                    PanelMsg::SymEditorSetPinLength {
-                        pin_idx,
-                        value: parsed,
-                    }
-                })
-                .width(Length::FillPortion(3)),
+                .size(11),
         ]
         .spacing(4)
         .align_y(iced::Alignment::Center),

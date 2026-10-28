@@ -60,8 +60,7 @@ impl Signex {
             }
             OverlayMsg::DismissFirstRunTour => {
                 self.ui_state.first_run_tour_open = false;
-                crate::fonts::write_first_run_tour_dismissed(true);
-                Task::none()
+                dismiss_first_run_tour_task()
             }
             OverlayMsg::ModalDragStart { modal, x, y } => self.handle_modal_drag_start(modal, x, y),
             OverlayMsg::ModalDragEnd => self.handle_modal_drag_end(),
@@ -84,26 +83,48 @@ impl Signex {
             ProjectMsg::CloseRefsResolved { project_id, result } => {
                 self.handle_close_refs_resolved(project_id, result)
             }
+            ProjectMsg::CaseProbed {
+                project_id,
+                outcome,
+            } => self.handle_case_probed(project_id, outcome),
+            ProjectMsg::FsFactsProbed(generation, facts) => {
+                self.handle_project_fs_probed(generation, facts)
+            }
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
+            ProjectMsg::DesignatorStandardPicked(standard) => {
+                self.handle_designator_standard_picked(standard);
+                Task::none()
+            }
             ProjectMsg::CloseOptions => {
                 self.ui_state.project_options = None;
                 Task::none()
             }
-            ProjectMsg::AddExistingFilePicked { project_idx, paths } => {
-                self.handle_add_existing_file_picked(project_idx, paths);
+            ProjectMsg::AddExistingFilePicked { project_id, paths } => {
+                self.handle_add_existing_file_picked(project_id, paths)
+            }
+            ProjectMsg::AddExistingFilesCopied {
+                project_id,
+                project_dir,
+                results,
+            } => self.handle_add_existing_files_copied(project_id, &project_dir, results),
+            ProjectMsg::AddNewSchematicWritten {
+                project_id,
+                path,
+                result,
+            } => {
+                self.handle_add_new_schematic_written(project_id, path, result);
                 Task::none()
             }
-            ProjectMsg::AddNewSchematicPicked { project_idx, path } => {
-                self.handle_add_new_schematic_picked(project_idx, path);
-                Task::none()
+            ProjectMsg::AddNewSchematicPicked { project_id, path } => {
+                self.handle_add_new_schematic_picked(project_id, path)
             }
             ProjectMsg::GitCommitDone {
                 project_root,
                 rel_path,
                 result,
-            } => {
-                self.handle_project_git_commit_done(project_root, rel_path, result);
-                Task::none()
+            } => self.handle_project_git_commit_done(project_root, rel_path, result),
+            ProjectMsg::ProjectFolderRenamed { job, result } => {
+                self.handle_project_folder_renamed(&job, result)
             }
         }
     }
@@ -151,6 +172,7 @@ impl Signex {
                     || self.interaction_state.pending_port.is_some()
                     || self.ui_state.pending_net_color.is_some()
                     || self.ui_state.reorder_picker.is_some()
+                    || self.ui_state.move_pick.is_some()
                     || self.ui_state.lasso_polygon.is_some();
                 if placement_active {
                     self.clear_transient_schematic_tool_state();
@@ -159,6 +181,7 @@ impl Signex {
                     self.ui_state.pending_net_color = None;
                     self.interaction_state.active_canvas_mut().pending_net_color = None;
                     self.ui_state.reorder_picker = None;
+                    self.ui_state.move_pick = None;
                     self.interaction_state
                         .active_canvas_mut()
                         .clear_overlay_cache();
@@ -324,7 +347,7 @@ impl Signex {
                         self.handle_canvas_interaction_event(CanvasEvent::FitAll)
                     }
                     ContextAction::RotateSelected => {
-                        self.dispatch_edit_message(EditMsg::RotateSelected)
+                        self.dispatch_edit_message(EditMsg::RotateSelectedCounterclockwise)
                     }
                     ContextAction::MirrorX => self.dispatch_edit_message(EditMsg::MirrorSelectedY),
                     ContextAction::MirrorY => self.dispatch_edit_message(EditMsg::MirrorSelectedX),
@@ -339,8 +362,31 @@ impl Signex {
     /// Annotate dialog family handler (namespaced, ADR-0001 D3).
     pub(crate) fn dispatch_annotate_message(&mut self, msg: AnnotateMsg) -> Task<Message> {
         match msg {
-            AnnotateMsg::Run(mode) => self.handle_annotate(mode),
-            AnnotateMsg::OpenDialog => self.handle_open_annotate_dialog(),
+            AnnotateMsg::Run(_) | AnnotateMsg::SetAllLocked(_)
+                if self.annotate_preview_is_loading() =>
+            {
+                // The dialog's rows are being reloaded; acting now would use
+                // a lock set built from a list that is out of date. The
+                // buttons are disabled meanwhile.
+                Task::none()
+            }
+            AnnotateMsg::Run(mode) => {
+                // The action can rewrite unopened sheets on disk, which the
+                // in-memory fingerprint cannot see: force a reload.
+                let task = self.handle_annotate(mode);
+                self.invalidate_annotate_preview();
+                Task::batch([task, self.refresh_annotate_preview()])
+            }
+            AnnotateMsg::OpenDialog => {
+                // A fresh session always re-reads the project from disk.
+                self.invalidate_annotate_preview();
+                let task = self.handle_open_annotate_dialog();
+                Task::batch([task, self.refresh_annotate_preview()])
+            }
+            AnnotateMsg::PreviewLoaded { generation, result } => {
+                self.handle_annotate_preview_loaded(generation, &result);
+                Task::none()
+            }
             AnnotateMsg::CloseDialog => self.handle_close_annotate_dialog(),
             AnnotateMsg::OrderChanged(order) => self.handle_annotate_order_changed(order),
             AnnotateMsg::OpenResetConfirm => self.handle_open_annotate_reset_confirm(),
@@ -351,6 +397,7 @@ impl Signex {
                 } else {
                     self.ui_state.annotate_locked.insert(uuid);
                 }
+                self.recompute_annotate_entries();
                 Task::none()
             }
             AnnotateMsg::SetAllLocked(lock) => {
@@ -360,6 +407,7 @@ impl Signex {
                 } else {
                     self.ui_state.annotate_locked.clear();
                 }
+                self.recompute_annotate_entries();
                 Task::none()
             }
         }
@@ -381,88 +429,68 @@ impl Signex {
             ErcMsg::OpenDialog => self.handle_open_erc_dialog(),
             ErcMsg::CloseDialog => self.handle_close_erc_dialog(),
             ErcMsg::SeverityChanged(rule, sev) => self.handle_erc_severity_changed(rule, sev),
-            ErcMsg::PinMatrixCellCycled { row, col } => {
-                use signex_erc::Severity;
-                // Baseline defaults must match the `MATRIX` constant in
-                // `pin_matrix_view` so "clearing" an override drops back
-                // to the same severity the user sees in the UI.
-                const BASELINE: [[Severity; 6]; 6] = [
-                    [
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                    ],
-                    [
-                        Severity::Off,
-                        Severity::Error,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Error,
-                        Severity::Error,
-                    ],
-                    [
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Warning,
-                    ],
-                    [
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Error,
-                    ],
-                    [
-                        Severity::Off,
-                        Severity::Error,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Error,
-                        Severity::Error,
-                    ],
-                    [
-                        Severity::Off,
-                        Severity::Error,
-                        Severity::Warning,
-                        Severity::Error,
-                        Severity::Error,
-                        Severity::Off,
-                    ],
-                ];
-                let key = (row, col);
-                let baseline = BASELINE
-                    .get(row as usize)
-                    .and_then(|r| r.get(col as usize))
-                    .copied()
-                    .unwrap_or(Severity::Off);
-                let current = self
-                    .ui_state
-                    .pin_matrix_overrides
-                    .get(&key)
-                    .copied()
-                    .unwrap_or(baseline);
-                let next = match current {
-                    Severity::Error => Severity::Warning,
-                    Severity::Warning => Severity::Info,
-                    Severity::Info => Severity::Off,
-                    Severity::Off => Severity::Error,
-                };
-                if next == baseline {
-                    self.ui_state.pin_matrix_overrides.remove(&key);
-                } else {
-                    self.ui_state.pin_matrix_overrides.insert(key, next);
-                }
-                crate::fonts::write_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides);
+            ErcMsg::RunFinished { generation, result } => {
+                self.handle_erc_run_finished(generation, &result)
+            }
+            ErcMsg::StoreRulesInProject => self.handle_store_erc_rules_in_project(),
+            ErcMsg::ProfileSaveRequested { name } => self.handle_profile_save_requested(name),
+            ErcMsg::ProfileSaved { project, result } => self.handle_profile_saved(project, &result),
+            ErcMsg::ProfileUpdateRequested => self.handle_profile_update_requested(),
+            ErcMsg::ProfileLoadedForUpdate { project, result } => {
+                self.handle_profile_loaded_for_update(project, &result)
+            }
+            ErcMsg::ProfileUpdateConfirmed => self.handle_profile_update_confirmed(),
+            ErcMsg::ProfileUpdateCancelled => self.handle_profile_update_cancelled(),
+            ErcMsg::ProfileDriftChecked { project, result } => {
+                self.handle_profile_drift_checked(project, &result)
+            }
+            ErcMsg::DefaultProfileMigrated(result) => {
+                Self::handle_default_profile_migrated(&result)
+            }
+            ErcMsg::RulesUndone => {
+                self.undo_project_rules();
                 Task::none()
             }
+            ErcMsg::RulesRedone => {
+                self.redo_project_rules();
+                Task::none()
+            }
+            ErcMsg::PinMatrixCellCycled { row, col } => {
+                self.handle_pin_matrix_cell_cycled(row, col)
+            }
         }
+    }
+
+    /// Cycle one pin-matrix cell Error -> Warning -> Info -> Off -> Error and
+    /// persist the result. A pair of pin types is unordered, so the mirrored
+    /// cell is written with it: the dialog then never shows two different
+    /// verdicts for the same pair. A value equal to the baseline drops the
+    /// override instead of storing it.
+    pub(crate) fn handle_pin_matrix_cell_cycled(&mut self, row: u8, col: u8) -> Task<Message> {
+        use signex_erc::pin_matrix::baseline_cell;
+        if self.edit_project_erc_rules(|rules| {
+            signex_erc::project_rules::cycle_pin_cell(rules, row, col)
+        }) {
+            return Task::none();
+        }
+        let current = self
+            .ui_state
+            .pin_matrix_overrides
+            .get(&(row, col))
+            .copied()
+            .unwrap_or_else(|| baseline_cell(row, col));
+        let next = current.cycled();
+        for key in [(row, col), (col, row)] {
+            if next == baseline_cell(key.0, key.1) {
+                self.ui_state.pin_matrix_overrides.remove(&key);
+            } else {
+                self.ui_state.pin_matrix_overrides.insert(key, next);
+            }
+        }
+        let overrides = self.ui_state.pin_matrix_overrides.clone();
+        crate::fonts::background_pref_write("pin_matrix", move || {
+            crate::fonts::write_pin_matrix_overrides(&overrides)
+        })
     }
 
     /// Preferences modal family handler (namespaced, ADR-0001 D3).
@@ -481,6 +509,9 @@ impl Signex {
         // several actions after it happened is worse than useless: it
         // attaches the message to the wrong action.
         self.sync_diagnostics_panel_ctx();
+        // Same reason: the draft, discard and Save paths change the zoom
+        // speed the PCB / symbol / footprint canvases hold a copy of.
+        self.sync_zoom_step();
         task
     }
 
@@ -490,26 +521,35 @@ impl Signex {
         msg: EnableVersionControlMsg,
     ) -> Task<Message> {
         match msg {
+            // A run in flight has already read the choices; edits are ignored.
             EnableVersionControlMsg::ToggleLfs => {
-                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
+                if let Some(s) = self.ui_state.enable_version_control.as_mut()
+                    && !s.working
+                {
                     s.use_lfs = !s.use_lfs;
                 }
                 Task::none()
             }
             EnableVersionControlMsg::ToggleItem(idx) => {
                 if let Some(s) = self.ui_state.enable_version_control.as_mut()
+                    && !s.working
                     && let Some(item) = s.items.get_mut(idx)
                 {
                     item.tracked = !item.tracked;
                 }
                 Task::none()
             }
-            EnableVersionControlMsg::Confirm => {
-                self.handle_enable_version_control_confirm();
+            EnableVersionControlMsg::Confirm => self.handle_enable_version_control_confirm(),
+            EnableVersionControlMsg::Finished {
+                scope,
+                project_dir,
+                outcome,
+            } => {
+                self.handle_enable_version_control_finished(scope, project_dir, outcome);
                 Task::none()
             }
             EnableVersionControlMsg::Close => {
-                self.ui_state.enable_version_control = None;
+                self.close_enable_version_control_dialog();
                 Task::none()
             }
         }
@@ -527,6 +567,11 @@ impl Signex {
             }
             RenameMsg::Submit => self.handle_rename_submit(),
             RenameMsg::Close => {
+                // A folder move in flight reports its result into this
+                // dialog; closing it would hide that outcome.
+                if !self.document_state.project_folder_renames.is_empty() {
+                    return Task::none();
+                }
                 self.ui_state.rename_dialog = None;
                 Task::none()
             }
@@ -537,6 +582,7 @@ impl Signex {
     pub(crate) fn dispatch_remove_message(&mut self, msg: RemoveMsg) -> Task<Message> {
         match msg {
             RemoveMsg::Confirm(choice) => self.handle_remove_confirm(choice),
+            RemoveMsg::ExcludeDirty(choice) => self.handle_exclude_dirty_choice(choice),
             RemoveMsg::Close => {
                 self.ui_state.remove_dialog = None;
                 Task::none()
@@ -561,4 +607,12 @@ impl Signex {
             self.interaction_state.submenu_unhovered_since = Some(std::time::Instant::now());
         }
     }
+}
+
+/// Persist the first-run tour dismissal on a blocking worker, never in
+/// `update` (#1469).
+pub(super) fn dismiss_first_run_tour_task() -> Task<Message> {
+    crate::fonts::background_pref_write("first_run_tour_dismissed", || {
+        crate::fonts::write_first_run_tour_dismissed(true)
+    })
 }

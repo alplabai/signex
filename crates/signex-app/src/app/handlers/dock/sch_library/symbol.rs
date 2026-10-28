@@ -1,13 +1,25 @@
 //! Symbol-editor + SCH-library-panel state mutators — the helper
 //! methods behind the `SchLibrary*` and `SymEditor*` dock-panel
 //! messages. Each resolves the active `.snxsym` tab, mutates its
-//! `SymbolEditorState`, marks the tab dirty, and clears the canvas
+//! `SymbolDocument`, marks the tab dirty, and clears the canvas
 //! cache; the dispatcher in `mod.rs` routes the panel messages here.
 //!
 //! Pure code motion out of the former `sch_library.rs` god-file
 //! (ADR-0001 #163); zero behaviour change.
 
 use super::*;
+
+/// Guard a typed Properties value: `nan` / `inf` never reaches geometry.
+/// A refusal is reported to the Messages panel and the edit is dropped.
+pub(super) fn finite_or_refuse(value: f64, what: &str) -> bool {
+    if value.is_finite() {
+        return true;
+    }
+    crate::diagnostics::log_warning(format!(
+        "{what} edit refused: {value} is not a finite number"
+    ));
+    false
+}
 
 impl Signex {
     /// Resolve the active `.snxsym` tab → its containing `.snxlib`,
@@ -41,20 +53,27 @@ impl Signex {
     }
 
     /// Run `edit` on the active Symbol editor as one recorded undo step
-    /// (coalesced per `key`, see `SymbolEditorState::record_edit`), then
+    /// (coalesced per `key`, see `SymbolDocument::record_edit`), then
     /// run the standard dirty / refresh cycle. `edit` returns whether it
     /// changed anything. Silently no-ops when no Symbol editor is active,
     /// so callers need no match of their own.
     fn sym_editor_record_edit(
         &mut self,
         key: Option<crate::app::documents::FieldEditKey>,
-        edit: impl FnOnce(&mut crate::app::SymbolEditorState) -> bool,
+        edit: impl FnOnce(&mut crate::app::SymbolDocument) -> bool,
     ) -> bool {
         let Some(editor) = self.active_symbol_editor_mut() else {
             return true;
         };
         let applied = editor.record_edit(key, |editor| {
+            let before = editor.primitive().clone();
             if !edit(editor) {
+                return false;
+            }
+            // An edit that left the symbol as it was (the same value typed
+            // again, or a keystroke that was refused) is not an edit: no
+            // undo step, no dirty flag.
+            if *editor.primitive() == before {
                 return false;
             }
             editor.dirty = true;
@@ -338,10 +357,16 @@ impl Signex {
     }
 
     pub(super) fn sym_editor_set_pin_x(&mut self, pin_idx: usize, value: f64) -> bool {
+        if !finite_or_refuse(value, "Pin X") {
+            return true;
+        }
         self.sym_editor_mutate_pin(pin_idx, Some("pin_x"), |pin| pin.position[0] = value)
     }
 
     pub(super) fn sym_editor_set_pin_y(&mut self, pin_idx: usize, value: f64) -> bool {
+        if !finite_or_refuse(value, "Pin Y") {
+            return true;
+        }
         self.sym_editor_mutate_pin(pin_idx, Some("pin_y"), |pin| pin.position[1] = value)
     }
 
@@ -354,11 +379,28 @@ impl Signex {
     }
 
     pub(super) fn sym_editor_set_pin_length(&mut self, pin_idx: usize, value: f64) -> bool {
+        if !finite_or_refuse(value, "Pin length") {
+            return true;
+        }
         // Clamp to a sane minimum so a user dragging through 0
         // doesn't produce a degenerate stub. 0.1 mm matches the
         // smallest grid step Altium allows for pins.
         self.sym_editor_mutate_pin(pin_idx, Some("pin_length"), |pin| {
             pin.length = value.max(0.1)
+        })
+    }
+
+    pub(super) fn sym_editor_set_graphic_field(
+        &mut self,
+        idx: usize,
+        field: crate::panels::GraphicFieldId,
+        value: f64,
+    ) -> bool {
+        if !finite_or_refuse(value, "Graphic field") {
+            return true;
+        }
+        self.sym_editor_mutate_graphic(idx, Some(("graphic_field", field as u128)), |g| {
+            super::apply_graphic_field(g, field, value)
         })
     }
 
@@ -506,10 +548,10 @@ impl Signex {
         true
     }
 
-    /// Borrow-mut the active tab's `SymbolEditorState`, if the
+    /// Borrow-mut the active tab's `SymbolDocument`, if the
     /// active tab is a Symbol editor. Returns `None` for any other
     /// tab kind so the SCH Library handlers can exit fast.
-    fn active_symbol_editor_mut(&mut self) -> Option<&mut crate::app::SymbolEditorState> {
+    fn active_symbol_editor_mut(&mut self) -> Option<&mut crate::app::SymbolDocument> {
         let path = self
             .document_state
             .tabs

@@ -1,6 +1,8 @@
 #[derive(Debug, Clone)]
 pub enum SelectionRequest {
     SelectAll,
+    /// Empty the selection (`unselect_all`).
+    ClearAll,
     StoreSlot {
         slot: usize,
     },
@@ -28,4 +30,10 @@ pub enum SelectionRequest {
     /// lands on an already-selected item — used for the Active Bar "Drag"
     /// action. Cleared on Escape or after the next click commits.
     ArmDrag,
+    /// Cycle the rubber-band selection mode (Inside / Touching). Bound
+    /// to Shift+S.
+    CycleMode,
+    /// Enter key: commit the armed multi-click buffer (polyline or
+    /// lasso polygon).
+    LassoCommit,
 }

@@ -179,7 +179,7 @@ const SELECT_MODE: &[EntrySpec] = &[
 
 const SELECT: &[EntrySpec] = &[
     EntrySpec::item(ic::icon_dd_drag, "Drag", ActiveBarAction::Drag),
-    EntrySpec::item(ic::icon_dd_move, "Move", ActiveBarAction::MoveSelection),
+    EntrySpec::item(ic::icon_dd_move, "Move", ActiveBarAction::Move),
     EntrySpec::item(
         ic::icon_dd_move_sel,
         "Move Selection",
@@ -202,7 +202,7 @@ const SELECT: &[EntrySpec] = &[
     ),
     EntrySpec::item(
         ic::icon_dd_rotate,
-        "Rotate Selection",
+        "Rotate Selection Counter-Clockwise",
         ActiveBarAction::RotateSelection,
     ),
     EntrySpec::item(
@@ -530,6 +530,7 @@ fn net_color_entries(
     nc: bool,
 ) -> Vec<DropdownEntry<ActiveBarMsg>> {
     let ac = AbColors::from_tokens(tokens);
+    let swatch_border = ac.sep;
     let color_item =
         |label: &str, color: Color, action: ActiveBarAction| -> Element<'static, ActiveBarMsg> {
             // The 14×14 swatch sits inside a 20×20 slot so the label column
@@ -543,7 +544,7 @@ fn net_color_entries(
                     border: Border {
                         width: 1.0,
                         radius: 2.0.into(),
-                        color: Color::from_rgb(0.3, 0.3, 0.35),
+                        color: swatch_border,
                     },
                     ..container::Style::default()
                 });
@@ -653,12 +654,17 @@ fn filter_entry(
     let chip_border = styles::ti(tokens.accent);
     let chip_radius = 2.0_f32;
     let all_on = filters.len() == SelectionFilter::ALL.len();
+    // Chip fills and off-state text come from the theme, so the chips
+    // read on light themes as well as dark.
+    let chip_on_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Pressed);
+    let chip_off_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Faint);
+    let chip_off_text = styles::tokens::muted_text(tokens);
     let tag = |filter: SelectionFilter, enabled: bool| -> Element<'static, ActiveBarMsg> {
         let label = filter.label();
-        let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-        let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
+        let active_bg = chip_on_bg;
+        let inactive_bg = chip_off_bg;
         let text_on = text_primary;
-        let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
+        let text_off = chip_off_text;
         button(
             text(label.to_string())
                 .size(11)
@@ -686,9 +692,9 @@ fn filter_entry(
     };
     let all_label = if all_on { "All - On" } else { "All - Off" };
     // All-On/Off as a real toggle button (matches chip styling).
-    let all_active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-    let all_inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
-    let all_text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
+    let all_active_bg = chip_on_bg;
+    let all_inactive_bg = chip_off_bg;
+    let all_text_off = chip_off_text;
     let all_toggle = button(text(all_label.to_string()).size(11).color(if all_on {
         text_primary
     } else {
@@ -734,7 +740,7 @@ fn filter_entry(
             .style(move |_: &Theme, status: button::Status| {
                 let bg = match status {
                     button::Status::Hovered => Background::Color(hover_c),
-                    _ => Background::Color(Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0)),
+                    _ => Background::Color(chip_off_bg),
                 };
                 button::Style {
                     background: Some(bg),
@@ -867,36 +873,7 @@ fn dropdown_min_width(menu: ActiveBarMenu) -> Option<f32> {
 
 /// Horizontal offset (in px) to align dropdown below a given button index.
 pub fn dropdown_x_offset(menu: ActiveBarMenu) -> f32 {
-    // Bar layout (`view_bar`), in the widget's own constants so the
-    // pixel geometry has one home. Advancing past one button costs
-    // BTN_SIZE + ROW_SPACING; past one separator, SEP_W + ROW_SPACING.
-    //
-    // The index map below is still hand-maintained, unlike the
-    // footprint bar's — converting it needs `view_bar` split into a
-    // `bar_items()` the offsets can be measured from, which is its own
-    // change. It is correct today: the bar's only Custom slot (the
-    // draw-mode pill) is appended after all thirteen triggers.
-    use signex_widgets::active_bar::{BAR_PADDING, BTN_SIZE, ROW_SPACING, SEP_W};
-    // Layout: [Filter][Move] | [Select][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
-    //  btn:     0      1    s    2      3     s   4      5    s    6      7     8    9    s  10     11     12
-    let btn = BTN_SIZE + ROW_SPACING;
-    let s = SEP_W + ROW_SPACING;
-    let pad = BAR_PADDING;
-    pad + match menu {
-        ActiveBarMenu::Filter => 0.0,
-        ActiveBarMenu::Select => btn,
-        ActiveBarMenu::SelectMode => 2.0 * btn + s,
-        ActiveBarMenu::Align => 3.0 * btn + s,
-        ActiveBarMenu::Wiring => 4.0 * btn + 2.0 * s,
-        ActiveBarMenu::Power => 5.0 * btn + 2.0 * s,
-        ActiveBarMenu::Harness => 6.0 * btn + 3.0 * s,
-        ActiveBarMenu::SheetSymbol => 7.0 * btn + 3.0 * s,
-        ActiveBarMenu::Port => 8.0 * btn + 3.0 * s,
-        ActiveBarMenu::Directives => 9.0 * btn + 3.0 * s,
-        ActiveBarMenu::TextTools => 10.0 * btn + 4.0 * s,
-        ActiveBarMenu::Shapes => 11.0 * btn + 4.0 * s,
-        ActiveBarMenu::NetColor => 12.0 * btn + 4.0 * s,
-    }
+    super::layout::trigger_left(menu)
 }
 
 fn dd_btn_style_f(
@@ -924,6 +901,14 @@ mod tests {
     use super::*;
 
     const TID: ThemeId = ThemeId::CatppuccinMocha;
+
+    /// #1248 - a fresh session's Directives button must be clickable.
+    #[test]
+    fn default_directives_button_is_enabled() {
+        use super::super::{DIRECTIVES_DEFAULT_ACTION, is_planned};
+        assert!(!is_planned(&DIRECTIVES_DEFAULT_ACTION));
+        assert!(action_enabled(&DIRECTIVES_DEFAULT_ACTION, false, false));
+    }
 
     fn items(entries: &[DropdownEntry<ActiveBarMsg>]) -> Vec<(String, bool)> {
         entries
@@ -1142,12 +1127,12 @@ mod tests {
             false,
             &[
                 "ITEM:Drag|disabled=true|icon=true|checked=false|shortcut=None",
-                "ITEM:Move|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Move|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Move Selection|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Move Selection by X, Y...|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Drag Selection|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Move To Front|disabled=true|icon=true|checked=false|shortcut=None",
-                "ITEM:Rotate Selection|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection Counter-Clockwise|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Rotate Selection Clockwise|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Bring To Front|disabled=true|icon=true|checked=false|shortcut=None",
@@ -1165,12 +1150,12 @@ mod tests {
             true,
             &[
                 "ITEM:Drag|disabled=true|icon=true|checked=false|shortcut=None",
-                "ITEM:Move|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Move|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Move Selection|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Move Selection by X, Y...|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Drag Selection|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Move To Front|disabled=true|icon=true|checked=false|shortcut=None",
-                "ITEM:Rotate Selection|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection Counter-Clockwise|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Rotate Selection Clockwise|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Bring To Front|disabled=true|icon=true|checked=false|shortcut=None",
@@ -1193,7 +1178,7 @@ mod tests {
                 "ITEM:Move Selection by X, Y...|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Drag Selection|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Move To Front|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Rotate Selection|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection Counter-Clockwise|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Rotate Selection Clockwise|disabled=false|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Bring To Front|disabled=false|icon=true|checked=false|shortcut=None",
@@ -1216,7 +1201,7 @@ mod tests {
                 "ITEM:Move Selection by X, Y...|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Drag Selection|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Move To Front|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Rotate Selection|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection Counter-Clockwise|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Rotate Selection Clockwise|disabled=false|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Bring To Front|disabled=false|icon=true|checked=false|shortcut=None",
@@ -1549,7 +1534,7 @@ mod tests {
             false,
             false,
             &[
-                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
@@ -1561,7 +1546,7 @@ mod tests {
             false,
             true,
             &[
-                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
@@ -1573,7 +1558,7 @@ mod tests {
             true,
             false,
             &[
-                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
@@ -1585,7 +1570,7 @@ mod tests {
             true,
             true,
             &[
-                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",

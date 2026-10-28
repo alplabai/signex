@@ -4,10 +4,12 @@ use crate::patch::{DocumentPatch, PatchPair, SemanticPatch};
 
 use std::collections::{HashMap, HashSet};
 
-use signex_types::schematic::{ProjectParts, Symbol, annotation_order};
+use signex_types::designator::{alphabetic_prefix, split_reference};
+use signex_types::schematic::{AnnotateOrder, ProjectParts, Symbol, annotation_order};
 use uuid::Uuid;
 
 use super::Engine;
+use crate::history::UndoGroupId;
 
 /// Where one sheet sits in a project-wide annotation pass. The parts are
 /// grouped across every sheet before the first sheet is touched, so units of
@@ -19,6 +21,9 @@ pub struct AnnotateScope<'a> {
     pub sheet: usize,
     /// Symbols the pass must leave alone.
     pub locked: &'a HashSet<Uuid>,
+    /// When set, the undo entry this sheet records is stamped with the id so
+    /// the whole pass undoes and redoes as one step across sheets.
+    pub undo_group: Option<UndoGroupId>,
 }
 
 impl Engine {
@@ -28,13 +33,15 @@ impl Engine {
         &mut self,
         mode: AnnotateMode,
         next_by_prefix: &mut HashMap<String, u32>,
+        order: AnnotateOrder,
     ) -> Result<bool, EngineError> {
         let locked = HashSet::new();
-        let parts = ProjectParts::new(&[&self.document.symbols], &locked);
+        let parts = ProjectParts::new(&[&self.document.symbols], &locked, order);
         let scope = AnnotateScope {
             parts: &parts,
             sheet: 0,
             locked: &locked,
+            undo_group: None,
         };
         self.annotate_in_project(mode, next_by_prefix, scope, &mut HashMap::new())
     }
@@ -52,16 +59,21 @@ impl Engine {
         scope: AnnotateScope<'_>,
         assigned: &mut HashMap<usize, String>,
     ) -> Result<bool, EngineError> {
+        self.bump_revision();
+        // A designator names the nets nothing else names, so renumbering can
+        // rename a net.
+        self.bump_connectivity_revision();
         let before = self.document.clone();
         let AnnotateScope {
             parts,
             sheet,
             locked,
+            undo_group,
         } = scope;
         let is_designator_target = |sym: &Symbol| -> bool {
             !sym.is_power && !sym.reference.starts_with('#') && !locked.contains(&sym.uuid)
         };
-        let order = annotation_order(&self.document.symbols);
+        let order = annotation_order(&self.document.symbols, parts.order());
         // Set by every phase that rewrites a designator, so each rewrite gets
         // an undo step and a dirty mark (#829).
         let mut changed = false;
@@ -105,7 +117,7 @@ impl Engine {
                 semantic: SemanticPatch::SymbolFieldsUpdated,
                 document: DocumentPatch::SYMBOLS,
             };
-            self.record_history(before, patch_pair);
+            self.record_grouped_history(before, patch_pair, undo_group);
             return Ok(true);
         }
 
@@ -115,12 +127,12 @@ impl Engine {
             if !is_designator_target(symbol) {
                 continue;
             }
-            let prefix = alphabetic_prefix(&symbol.reference);
+            let (prefix, number) = split_reference(&symbol.reference);
             if prefix.is_empty() {
                 continue;
             }
-            if let Ok(n) = symbol.reference[prefix.len()..].parse::<u32>() {
-                let entry = next_by_prefix.entry(prefix).or_insert(0);
+            if let Some(n) = number {
+                let entry = next_by_prefix.entry(prefix.to_owned()).or_insert(0);
                 if n > *entry {
                     *entry = n;
                 }
@@ -148,13 +160,19 @@ impl Engine {
                 changed = true;
                 continue;
             }
-            let prefix = alphabetic_prefix(&symbol.reference);
+            let prefix = alphabetic_prefix(&symbol.reference).to_owned();
             if prefix.is_empty() {
                 continue;
             }
             let next = next_by_prefix.entry(prefix.clone()).or_insert(0);
-            *next += 1;
-            symbol.reference = format!("{prefix}{next}");
+            let Some(issued) = next.checked_add(1) else {
+                // Wrapping would re-issue a designator that already exists
+                // (and panics in debug). Undo this pass's partial renumber.
+                self.document = before;
+                return Err(EngineError::DesignatorOverflow { prefix });
+            };
+            *next = issued;
+            symbol.reference = format!("{prefix}{issued}");
             if let Some(part) = part {
                 assigned.insert(part, symbol.reference.clone());
             }
@@ -177,16 +195,9 @@ impl Engine {
             semantic: SemanticPatch::SymbolFieldsUpdated,
             document: DocumentPatch::SYMBOLS,
         };
-        self.record_history(before, patch_pair);
+        self.record_grouped_history(before, patch_pair, undo_group);
         Ok(true)
     }
-}
-
-fn alphabetic_prefix(reference: &str) -> String {
-    reference
-        .chars()
-        .take_while(|c| c.is_ascii_alphabetic())
-        .collect()
 }
 
 #[cfg(test)]
@@ -195,6 +206,16 @@ mod tests {
     use crate::test_support::test_sheet;
     use signex_types::schematic::{Point, Symbol};
     use std::collections::HashMap;
+
+    fn symbol(reference: &str, x: f64) -> Symbol {
+        Symbol {
+            uuid: uuid::Uuid::new_v4(),
+            lib_id: "Device:R".to_string(),
+            reference: reference.to_string(),
+            position: Point::new(x, 0.0),
+            ..Default::default()
+        }
+    }
 
     fn unit(reference: &str, lib_id: &str, unit: u32, y: f64) -> Symbol {
         Symbol {
@@ -207,12 +228,76 @@ mod tests {
         }
     }
 
+    /// #678 - `R4294967295` seeds the counter at `u32::MAX`; the next
+    /// `+= 1` panicked in debug builds and wrapped to `R0`/`R1` in release
+    /// (re-issuing a designator that already exists).
+    #[test]
+    fn annotating_past_u32_max_is_an_error_not_a_wrap() {
+        let mut sheet = test_sheet();
+        sheet.symbols.push(symbol("R4294967295", 0.0));
+        sheet.symbols.push(symbol("R?", 1.0));
+        sheet.symbols.push(symbol("R?", 2.0));
+        let mut engine = Engine::new(sheet).unwrap();
+        let mut counters = HashMap::new();
+
+        let result = engine.annotate_with_seed(
+            AnnotateMode::Incremental,
+            &mut counters,
+            AnnotateOrder::default(),
+        );
+
+        assert!(
+            matches!(result, Err(EngineError::DesignatorOverflow { ref prefix }) if prefix == "R"),
+            "got {result:?}"
+        );
+        let refs: Vec<_> = engine
+            .document()
+            .symbols
+            .iter()
+            .map(|s| s.reference.as_str())
+            .collect();
+        assert_eq!(
+            refs,
+            ["R4294967295", "R?", "R?"],
+            "a failed annotate must leave the sheet untouched"
+        );
+    }
+
+    #[test]
+    fn annotating_below_the_limit_still_numbers_symbols() {
+        let mut sheet = test_sheet();
+        sheet.symbols.push(symbol("R?", 1.0));
+        sheet.symbols.push(symbol("R?", 2.0));
+        let mut engine = Engine::new(sheet).unwrap();
+        let mut counters = HashMap::new();
+
+        assert!(
+            engine
+                .annotate_with_seed(
+                    AnnotateMode::Incremental,
+                    &mut counters,
+                    AnnotateOrder::default()
+                )
+                .unwrap()
+        );
+        let mut refs: Vec<_> = engine
+            .document()
+            .symbols
+            .iter()
+            .map(|s| s.reference.clone())
+            .collect();
+        refs.sort();
+        assert_eq!(refs, ["R1", "R2"]);
+    }
+
     fn annotated(mode: AnnotateMode, symbols: Vec<Symbol>) -> Vec<String> {
         let mut document = test_sheet();
         document.symbols = symbols;
         let mut engine = Engine::new(document).unwrap();
         let mut seed = HashMap::new();
-        engine.annotate_with_seed(mode, &mut seed).unwrap();
+        engine
+            .annotate_with_seed(mode, &mut seed, AnnotateOrder::default())
+            .unwrap();
         engine
             .document
             .symbols
@@ -286,7 +371,7 @@ mod tests {
             .iter()
             .map(|e| e.document.symbols.as_slice())
             .collect();
-        let parts = ProjectParts::new(&sheets, locked);
+        let parts = ProjectParts::new(&sheets, locked, AnnotateOrder::default());
         let mut seed = HashMap::new();
         let mut assigned = HashMap::new();
         for (sheet, engine) in engines.iter_mut().enumerate() {
@@ -294,6 +379,7 @@ mod tests {
                 parts: &parts,
                 sheet,
                 locked,
+                undo_group: None,
             };
             engine
                 .annotate_in_project(mode, &mut seed, scope, &mut assigned)

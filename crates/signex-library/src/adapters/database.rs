@@ -1,9 +1,10 @@
 //! `LibraryAdapter` over the HTTP API exposed by `signex-library-server`.
 //!
 //! Synchronous facade for the trait. Row CRUD speaks to the
-//! `/tables` / `/rows` routes; primitive (`/symbols` / `/footprints`
-//! / `/sims`) wiring is unchanged because primitives stay
-//! file-shaped under the DBLib model.
+//! `/tables` / `/rows` routes; primitives (`/symbols` / `/footprints`
+//! / `/sims`) are created with `POST` and replaced with `PUT` +
+//! `If-Match`, the same revision scheme as rows. The base revision travels
+//! with the caller's copy ([`Versioned`]), never in a cache on the adapter.
 //!
 //! Routes are addressed by a `library_id` query parameter — the
 //! adapter sources its own from `manifest().library.library_id`.
@@ -18,8 +19,9 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
-use crate::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
-use crate::component::ComponentRow;
+use super::database_row_schema::{RowSchemaGuard, schema_refusal};
+use crate::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary, Versioned};
+use crate::component::{ComponentRow, ROW_SCHEMA, ROW_SCHEMA_HEADER};
 use crate::identity::{InternalPn, RowId};
 use crate::library_file::SnxlibManifest;
 use crate::manifest::{LibraryMeta, LibraryMode, Manifest};
@@ -41,11 +43,9 @@ pub struct DatabaseAdapter {
     /// Bearer token sent via `Authorization: Bearer <token>`. Static
     /// credential for now; OIDC lands later.
     token: Option<String>,
-    /// Caller-facing string used for advisory locks — defaults to the
-    /// bearer token's caller identity. When OIDC lands this becomes the
-    /// JWT `sub`.
-    holder: String,
     client: reqwest::blocking::Client,
+    /// Row-schema write guard; see `database_row_schema`.
+    row_schema: RowSchemaGuard,
 }
 
 /// Manifest `auth` prefix that names an OS-keychain item instead of a token.
@@ -100,9 +100,81 @@ fn redirect_policy(has_token: bool) -> reqwest::redirect::Policy {
     })
 }
 
+/// A server built before labelled documents (#1231) stores the row without
+/// them and echoes it back that way. Say so instead of reporting a save
+/// that silently lost them.
+fn refuse_lost_documents(
+    sent: &ComponentRow,
+    stored: &ComponentRow,
+    table: &str,
+) -> Result<(), LibraryError> {
+    if sent.documents_lost_in(stored) {
+        return Err(LibraryError::Backend(format!(
+            "{table}/{}: the library server is too old to store document labels or more \
+             than one datasheet; the row was saved without them. Upgrade the library server.",
+            sent.row_id
+        )));
+    }
+    Ok(())
+}
+
+/// Attach the row's base revision as `If-Match: "<revision>"`. Without one
+/// the server answers 428, which [`write_error`] reports.
+fn with_base_revision(
+    req: reqwest::blocking::RequestBuilder,
+    base_revision: Option<u64>,
+) -> reqwest::blocking::RequestBuilder {
+    match base_revision {
+        Some(revision) => req.header(reqwest::header::IF_MATCH, format!("\"{revision}\"")),
+        None => req,
+    }
+}
+
+/// Map a refused row or primitive write to a [`LibraryError`]. A 409
+/// carrying `current_revision` means the stored copy moved on since it was
+/// read. `subject` names what was written (`row <table>/<id>`,
+/// `symbol <uuid>`).
+fn write_error(
+    resp: reqwest::blocking::Response,
+    op: &str,
+    subject: &str,
+    row_schema: &RowSchemaGuard,
+) -> LibraryError {
+    match resp.status() {
+        reqwest::StatusCode::NOT_FOUND => LibraryError::NotFound(subject.to_string()),
+        reqwest::StatusCode::CONFLICT => {
+            let body: serde_json::Value = resp.json().unwrap_or_default();
+            match body["current_revision"].as_u64() {
+                Some(current_revision) => LibraryError::RowChanged { current_revision },
+                None => LibraryError::Conflict(format!(
+                    "{op} {subject}: {}",
+                    body["error"].as_str().unwrap_or("refused by the server")
+                )),
+            }
+        }
+        reqwest::StatusCode::BAD_REQUEST => {
+            let body: serde_json::Value = resp.json().unwrap_or_default();
+            if let Some(refusal) = schema_refusal(&body) {
+                // The server changed under a cached check: re-read /version.
+                row_schema.forget();
+                return refusal;
+            }
+            LibraryError::Backend(format!(
+                "{op} {subject}: {}",
+                body["error"].as_str().unwrap_or("400 Bad Request")
+            ))
+        }
+        reqwest::StatusCode::PRECONDITION_REQUIRED => LibraryError::Backend(format!(
+            "{op} {subject}: the server requires the revision this copy was read at (If-Match); \
+             reload it and save again"
+        )),
+        other => LibraryError::Backend(format!("{op} {subject}: {other}")),
+    }
+}
+
 impl DatabaseAdapter {
     /// Construct from a manifest. The manifest's `auth` field is treated as
-    /// the bearer token; the holder is derived from it.
+    /// the bearer token.
     pub fn new(manifest: Manifest) -> Result<Self, LibraryError> {
         let (base_url, auth) = match &manifest.mode {
             LibraryMode::Database { url, auth } => {
@@ -117,7 +189,7 @@ impl DatabaseAdapter {
         if auth.starts_with(KEYCHAIN_SIGIL) {
             return Err(LibraryError::Backend(format!(
                 "library auth `{KEYCHAIN_SIGIL}...` is not resolved by the database adapter yet; \
-             refusing to send the sigil as a bearer token"
+             refusing to send the sigil as a bearer token (OS keychain resolution: #976)"
             )));
         }
         check_transport_security(&base_url, !auth.is_empty())?;
@@ -128,22 +200,12 @@ impl DatabaseAdapter {
             .build()
             .map_err(|e| LibraryError::Backend(format!("reqwest client: {e}")))?;
         let token = if auth.is_empty() { None } else { Some(auth) };
-        // CRIT-3: never use the bearer token as `holder`. The `holder` is
-        // sent in the `x-signex-holder` request header AND echoed in
-        // server error bodies (`"lock held by {holder}"`), so identifying
-        // the caller via the credential leaks it through both surfaces.
-        // Derive a non-secret label from the library identity instead.
-        let holder = format!(
-            "{}@{}",
-            manifest.library.name,
-            manifest.library.library_id.simple()
-        );
         Ok(Self {
             manifest,
             base_url,
             token,
-            holder,
             client,
+            row_schema: RowSchemaGuard::default(),
         })
     }
 
@@ -201,8 +263,8 @@ impl DatabaseAdapter {
             manifest,
             base_url,
             token,
-            holder,
             client,
+            row_schema: RowSchemaGuard::default(),
         })
     }
 
@@ -211,9 +273,11 @@ impl DatabaseAdapter {
         &self.base_url
     }
 
-    /// Borrow the holder identity (logged but never the bearer secret).
-    pub fn holder(&self) -> &str {
-        &self.holder
+    /// A row write that never got an answer: forget the cached schema
+    /// check, the server behind the connection may have changed.
+    fn row_write_transport_error(&self, e: reqwest::Error) -> LibraryError {
+        self.row_schema.forget();
+        LibraryError::Backend(e.to_string())
     }
 
     fn url(&self, path: &str) -> String {
@@ -248,14 +312,16 @@ impl DatabaseAdapter {
     }
 
     /// Generic GET → JSON for a primitive at `/{collection}/{uuid}` in this
-    /// library. `collection` is percent-encoded; `uuid` is hex (Display) so it
-    /// is already URL-safe.
+    /// library, with the revision from its `ETag`. `collection` is
+    /// percent-encoded; `uuid` is hex (Display) so it is already URL-safe.
     fn get_primitive_json<T: DeserializeOwned>(
         &self,
         collection: &str,
         uuid: Uuid,
         kind_label: &str,
-    ) -> Result<T, LibraryError> {
+    ) -> Result<Versioned<T>, LibraryError> {
+        self.row_schema
+            .check_primitives(&self.client, &self.url("/version"))?;
         let coll = Self::encode_segment(collection);
         let resp = self
             .auth(
@@ -263,11 +329,19 @@ impl DatabaseAdapter {
                     .get(self.url(&format!("/{coll}/{uuid}?{}", self.library_id_query()))),
             )
             .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+            .map_err(|e| self.row_write_transport_error(e))?;
         match resp.status() {
-            s if s.is_success() => resp
-                .json::<T>()
-                .map_err(|e| LibraryError::Backend(e.to_string())),
+            s if s.is_success() => {
+                let revision =
+                    primitive_revision(&resp, "get", kind_label, uuid, &self.row_schema)?;
+                let value = resp
+                    .json::<T>()
+                    .map_err(|e| LibraryError::Backend(e.to_string()))?;
+                Ok(Versioned {
+                    value,
+                    revision: Some(revision),
+                })
+            }
             reqwest::StatusCode::NOT_FOUND => {
                 Err(LibraryError::NotFound(format!("{kind_label} {uuid}")))
             }
@@ -275,36 +349,54 @@ impl DatabaseAdapter {
         }
     }
 
-    /// Generic POST primitive JSON to `/{collection}` with the supplied
-    /// commit message in the `x-signex-message` header. The server reads the
-    /// owning library from a top-level `library_id` beside the primitive's
-    /// own fields.
-    fn post_primitive_json<T: Serialize>(
+    /// Save a primitive and return the revision it now has. With the `base`
+    /// the caller's copy was read at, it replaces the primitive with `PUT` +
+    /// `If-Match`, refused with [`LibraryError::PrimitiveChanged`] when someone
+    /// saved it since. Without one it creates it with `POST`, refused with
+    /// [`LibraryError::Conflict`] when the uuid already exists. The body
+    /// carries the owning library beside the primitive's own fields, and the
+    /// commit message goes in `x-signex-message`.
+    fn save_primitive_json<T: Serialize>(
         &self,
         collection: &str,
+        kind_label: &str,
+        uuid: Uuid,
         body: &T,
+        base: Option<u64>,
         message: &str,
-    ) -> Result<(), LibraryError> {
+    ) -> Result<u64, LibraryError> {
+        self.row_schema
+            .check_primitives(&self.client, &self.url("/version"))?;
         let coll = Self::encode_segment(collection);
+        let payload = InLibrary {
+            library_id: self.manifest.library.library_id,
+            primitive: body,
+        };
+        let req = match base {
+            Some(_) => {
+                with_base_revision(self.client.put(self.url(&format!("/{coll}/{uuid}"))), base)
+            }
+            None => self.client.post(self.url(&format!("/{coll}"))),
+        };
         let resp = self
-            .auth(
-                self.client
-                    .post(self.url(&format!("/{coll}")))
-                    .header("x-signex-message", message)
-                    .json(&InLibrary {
-                        library_id: self.manifest.library.library_id,
-                        primitive: body,
-                    }),
-            )
+            .auth(req.header("x-signex-message", message).json(&payload))
             .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+            .map_err(|e| self.row_write_transport_error(e))?;
         if !resp.status().is_success() {
-            return Err(LibraryError::Backend(format!(
-                "save {collection}: {}",
-                resp.status()
-            )));
+            let subject = format!("{kind_label} {uuid}");
+            return Err(
+                match write_error(resp, "save", &subject, &self.row_schema) {
+                    LibraryError::RowChanged { current_revision } => {
+                        LibraryError::PrimitiveChanged {
+                            subject,
+                            current_revision,
+                        }
+                    }
+                    other => other,
+                },
+            );
         }
-        Ok(())
+        primitive_revision(&resp, "save", kind_label, uuid, &self.row_schema)
     }
 
     /// Generic GET → list at `/{collection}` returning this library's
@@ -353,6 +445,42 @@ impl DatabaseAdapter {
     }
 }
 
+/// The revision a successful primitive reply carries in its `ETag`. A
+/// server that sends none predates primitive revisions and treats a `POST`
+/// as an upsert, so a save through it could silently replace someone
+/// else's version: refuse to go on, as the row-schema guard does for rows.
+fn primitive_revision(
+    resp: &reqwest::blocking::Response,
+    op: &str,
+    kind_label: &str,
+    uuid: Uuid,
+    guard: &RowSchemaGuard,
+) -> Result<u64, LibraryError> {
+    etag_revision(resp).ok_or_else(|| {
+        // The cached capability answer is stale: re-read /version next time.
+        guard.forget();
+        LibraryError::Backend(format!(
+            "{op} {kind_label} {uuid}: the library server is too old for this signex (it sends \
+             no primitive revision); this request had already reached it, so a save may have \
+             gone through and overwritten another copy; upgrade signex and the library server \
+             together"
+        ))
+    })
+}
+
+/// The revision in a response's `ETag: "<revision>"` header, if any.
+fn etag_revision(resp: &reqwest::blocking::Response) -> Option<u64> {
+    resp.headers()
+        .get(reqwest::header::ETAG)?
+        .to_str()
+        .ok()?
+        .trim()
+        .strip_prefix('"')?
+        .strip_suffix('"')?
+        .parse()
+        .ok()
+}
+
 /// One row of the server's primitive list (`GET /{collection}`).
 #[derive(Deserialize)]
 struct ListedPrimitive {
@@ -361,7 +489,7 @@ struct ListedPrimitive {
 }
 
 /// A primitive's JSON with the owning library beside its fields — the body
-/// the server's primitive `POST` routes expect.
+/// the server's primitive `POST` and `PUT` routes expect.
 #[derive(Serialize)]
 struct InLibrary<'a, T> {
     library_id: Uuid,
@@ -478,6 +606,8 @@ impl LibraryAdapter for DatabaseAdapter {
     }
 
     fn insert_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
+        crate::validate_row_for_write(&row)?;
+        self.row_schema.check(&self.client, &self.url("/version"))?;
         // The DB backend has no commit log — surface the audit message at
         // the `tracing` layer so it shows up in operator logs even before
         // the planned `audit_log` table lands.
@@ -497,20 +627,36 @@ impl LibraryAdapter for DatabaseAdapter {
                 self.client
                     .post(url)
                     .header("x-signex-message", msg)
+                    .header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string())
                     .json(&row),
             )
             .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+            .map_err(|e| self.row_write_transport_error(e))?;
         if !resp.status().is_success() {
+            let status = resp.status();
+            let body: serde_json::Value = resp.json().unwrap_or_default();
+            if let Some(refusal) = schema_refusal(&body) {
+                self.row_schema.forget();
+                return Err(refusal);
+            }
             return Err(LibraryError::Backend(format!(
-                "insert_row {table}: {}",
-                resp.status()
+                "insert_row {table}: {status}"
             )));
         }
-        Ok(())
+        let stored = resp
+            .json::<ComponentRow>()
+            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+        refuse_lost_documents(&row, &stored, table)
     }
 
-    fn update_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
+    fn update_row(
+        &self,
+        table: &str,
+        row: ComponentRow,
+        msg: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        crate::validate_row_for_write(&row)?;
+        self.row_schema.check(&self.client, &self.url("/version"))?;
         tracing::info!(
             target: "signex_library::database",
             library_id = %self.manifest.library.library_id,
@@ -526,27 +672,42 @@ impl LibraryAdapter for DatabaseAdapter {
             "/tables/{t}/rows/{row_id}?{}",
             self.library_id_query()
         ));
+        let req = self
+            .client
+            .put(url)
+            .header("x-signex-message", msg)
+            .header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string());
         let resp = self
-            .auth(
-                self.client
-                    .put(url)
-                    .header("x-signex-message", msg)
-                    .json(&row),
-            )
+            .auth(with_base_revision(req, row.server_revision).json(&row))
             .send()
+            .map_err(|e| self.row_write_transport_error(e))?;
+        if !resp.status().is_success() {
+            return Err(write_error(
+                resp,
+                "update_row",
+                &format!("row {table}/{row_id}"),
+                &self.row_schema,
+            ));
+        }
+        let stored = resp
+            .json::<ComponentRow>()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        match resp.status() {
-            s if s.is_success() => Ok(()),
-            reqwest::StatusCode::NOT_FOUND => {
-                Err(LibraryError::NotFound(format!("row {table}/{row_id}")))
-            }
-            other => Err(LibraryError::Backend(format!(
-                "update_row {table}/{row_id}: {other}"
+        refuse_lost_documents(&row, &stored, table)?;
+        match stored.server_revision {
+            Some(revision) => Ok(Some(revision)),
+            None => Err(LibraryError::Backend(format!(
+                "update_row {table}/{row_id}: the server reply carries no revision"
             ))),
         }
     }
 
-    fn delete_row(&self, table: &str, row_id: RowId, msg: &str) -> Result<(), LibraryError> {
+    fn delete_row(
+        &self,
+        table: &str,
+        row_id: RowId,
+        base_revision: Option<u64>,
+        msg: &str,
+    ) -> Result<(), LibraryError> {
         tracing::info!(
             target: "signex_library::database",
             library_id = %self.manifest.library.library_id,
@@ -560,46 +721,93 @@ impl LibraryAdapter for DatabaseAdapter {
             "/tables/{t}/rows/{row_id}?{}",
             self.library_id_query()
         ));
+        let req = self.client.delete(url).header("x-signex-message", msg);
         let resp = self
-            .auth(self.client.delete(url).header("x-signex-message", msg))
+            .auth(with_base_revision(req, base_revision))
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        match resp.status() {
-            s if s.is_success() => Ok(()),
-            reqwest::StatusCode::NOT_FOUND => {
-                Err(LibraryError::NotFound(format!("row {table}/{row_id}")))
-            }
-            other => Err(LibraryError::Backend(format!(
-                "delete_row {table}/{row_id}: {other}"
-            ))),
+        if !resp.status().is_success() {
+            return Err(write_error(
+                resp,
+                "delete_row",
+                &format!("row {table}/{row_id}"),
+                &self.row_schema,
+            ));
         }
+        Ok(())
     }
 
     fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
-        self.get_primitive_json::<Symbol>("symbols", uuid, "symbol")
+        self.get_symbol_versioned(uuid).map(|read| read.value)
     }
 
     fn get_footprint(&self, uuid: Uuid) -> Result<Footprint, LibraryError> {
-        let mut footprint =
-            self.get_primitive_json::<Footprint>("footprints", uuid, "footprint")?;
-        footprint.repair_stored_sketch();
-        Ok(footprint)
+        self.get_footprint_versioned(uuid).map(|read| read.value)
     }
 
     fn get_sim(&self, uuid: Uuid) -> Result<SimModel, LibraryError> {
-        self.get_primitive_json::<SimModel>("sims", uuid, "sim")
+        self.get_sim_versioned(uuid).map(|read| read.value)
     }
 
+    fn get_symbol_versioned(&self, uuid: Uuid) -> Result<Versioned<Symbol>, LibraryError> {
+        self.get_primitive_json("symbols", uuid, "symbol")
+    }
+
+    fn get_footprint_versioned(&self, uuid: Uuid) -> Result<Versioned<Footprint>, LibraryError> {
+        let mut read = self.get_primitive_json::<Footprint>("footprints", uuid, "footprint")?;
+        read.value.repair_stored_sketch();
+        Ok(read)
+    }
+
+    fn get_sim_versioned(&self, uuid: Uuid) -> Result<Versioned<SimModel>, LibraryError> {
+        self.get_primitive_json("sims", uuid, "sim")
+    }
+
+    /// Creates the symbol; to replace one, read it with
+    /// [`get_symbol_versioned`](LibraryAdapter::get_symbol_versioned) and
+    /// save with its revision.
     fn save_symbol(&self, sym: Symbol, message: &str) -> Result<(), LibraryError> {
-        self.post_primitive_json("symbols", &sym, message)
+        self.save_symbol_versioned(sym, None, message).map(drop)
     }
 
+    /// Creates the footprint; see [`Self::save_symbol`].
     fn save_footprint(&self, fp: Footprint, message: &str) -> Result<(), LibraryError> {
-        self.post_primitive_json("footprints", &fp, message)
+        self.save_footprint_versioned(fp, None, message).map(drop)
     }
 
+    /// Creates the sim model; see [`Self::save_symbol`].
     fn save_sim(&self, sm: SimModel, message: &str) -> Result<(), LibraryError> {
-        self.post_primitive_json("sims", &sm, message)
+        self.save_sim_versioned(sm, None, message).map(drop)
+    }
+
+    fn save_symbol_versioned(
+        &self,
+        sym: Symbol,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        self.save_primitive_json("symbols", "symbol", sym.uuid, &sym, base, message)
+            .map(Some)
+    }
+
+    fn save_footprint_versioned(
+        &self,
+        fp: Footprint,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        self.save_primitive_json("footprints", "footprint", fp.uuid, &fp, base, message)
+            .map(Some)
+    }
+
+    fn save_sim_versioned(
+        &self,
+        sm: SimModel,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        self.save_primitive_json("sims", "sim", sm.uuid, &sm, base, message)
+            .map(Some)
     }
 
     fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
@@ -638,184 +846,4 @@ fn synthesize_legacy_manifest(snx: SnxlibManifest) -> Manifest {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn token_over_cleartext_non_loopback_is_refused() {
-        assert!(DatabaseAdapter::with_token("http://lib.example.com", "t", "h").is_err());
-        assert!(DatabaseAdapter::with_token("http://10.0.0.5:3535", "t", "h").is_err());
-        assert!(DatabaseAdapter::with_token("https://lib.example.com", "t", "h").is_ok());
-        assert!(DatabaseAdapter::with_token("http://127.0.0.1:3535", "t", "h").is_ok());
-        assert!(DatabaseAdapter::with_token("http://localhost:3535", "t", "h").is_ok());
-        assert!(DatabaseAdapter::with_token("http://[::1]:3535", "t", "h").is_ok());
-        // No credential, nothing to leak.
-        assert!(DatabaseAdapter::with_token("http://lib.example.com", "", "h").is_ok());
-    }
-
-    #[test]
-    fn keychain_sigil_is_rejected_with_the_sigil_error() {
-        let manifest = Manifest {
-            library: LibraryMeta {
-                name: "remote".into(),
-                library_id: Uuid::nil(),
-                description: None,
-            },
-            mode: LibraryMode::Database {
-                url: "https://lib.example.com".into(),
-                auth: "@signex-keychain:x".into(),
-            },
-            workflow: Default::default(),
-            users: Default::default(),
-            tables: Vec::new(),
-        };
-        let err = DatabaseAdapter::new(manifest)
-            .err()
-            .expect("sigil must be refused");
-        assert!(err.to_string().contains("not resolved"), "{err}");
-    }
-
-    #[test]
-    fn redirect_downgrade_to_cleartext_is_refused() {
-        let u = |s: &str| url::Url::parse(s).unwrap();
-        assert!(!redirect_hop_allowed(
-            &u("http://lib.example.com:8443/x"),
-            true
-        ));
-        assert!(redirect_hop_allowed(
-            &u("https://lib.example.com:8443/x"),
-            true
-        ));
-        assert!(redirect_hop_allowed(&u("http://127.0.0.1:3535/x"), true));
-    }
-
-    #[test]
-    fn tokenless_client_may_follow_same_origin_cleartext_redirect() {
-        let u = url::Url::parse("http://lib.example.com/tables/").unwrap();
-        assert!(redirect_hop_allowed(&u, false));
-        assert!(!redirect_hop_allowed(&u, true));
-    }
-
-    #[test]
-    fn refusal_error_does_not_leak_userinfo() {
-        let err =
-            DatabaseAdapter::with_token("http://alice:hunter2@lib.example.com:8080", "t", "h")
-                .err()
-                .expect("must refuse");
-        let msg = err.to_string();
-        assert!(!msg.contains("hunter2") && !msg.contains("alice"), "{msg}");
-        assert!(msg.contains("http://lib.example.com:8080"), "{msg}");
-    }
-
-    #[test]
-    fn keychain_sigil_reported_before_transport_error() {
-        let manifest = Manifest {
-            library: LibraryMeta {
-                name: "remote".into(),
-                library_id: Uuid::nil(),
-                description: None,
-            },
-            mode: LibraryMode::Database {
-                url: "http://lib.example.com".into(),
-                auth: "@signex-keychain:x".into(),
-            },
-            workflow: Default::default(),
-            users: Default::default(),
-            tables: Vec::new(),
-        };
-        let err = DatabaseAdapter::new(manifest).err().expect("refused");
-        assert!(err.to_string().contains("not resolved"), "{err}");
-    }
-
-    use crate::library_file::{FORMAT_TOKEN, LibrarySection};
-    use crate::manifest::{UsersConfig, WorkflowConfig};
-
-    /// `from_snxlib` mirrors `LocalGitAdapter::init`'s manifest API
-    /// shape. The DB adapter requires `LibraryMode::Database`; passing
-    /// the default `LocalGit` mode must fail loudly so a misconfigured
-    /// project doesn't silently bring up a remote-shaped adapter
-    /// pointed at nothing.
-    #[test]
-    fn from_snxlib_round_trips_database_mode() {
-        let manifest = SnxlibManifest {
-            format: FORMAT_TOKEN.into(),
-            library_id: Uuid::nil(),
-            library: LibrarySection {
-                name: "Remote".into(),
-                description: None,
-            },
-            mode: LibraryMode::Database {
-                url: "https://example.com/api".into(),
-                auth: "remote-token".into(),
-            },
-            workflow: WorkflowConfig::default(),
-            users: UsersConfig::default(),
-            classes: Vec::new(),
-        };
-        let adapter = DatabaseAdapter::from_snxlib(manifest).unwrap();
-        assert_eq!(adapter.base_url(), "https://example.com/api");
-        assert_eq!(adapter.manifest().library.name, "Remote");
-    }
-
-    #[test]
-    fn from_snxlib_rejects_non_database_mode() {
-        let manifest = SnxlibManifest {
-            format: FORMAT_TOKEN.into(),
-            library_id: Uuid::nil(),
-            library: LibrarySection {
-                name: "OopsLocalGit".into(),
-                description: None,
-            },
-            mode: LibraryMode::default(), // LocalGit — wrong for DB adapter
-            workflow: WorkflowConfig::default(),
-            users: UsersConfig::default(),
-            classes: Vec::new(),
-        };
-        match DatabaseAdapter::from_snxlib(manifest) {
-            Err(LibraryError::Backend(_)) => {}
-            Err(other) => panic!("expected Backend error, got {other:?}"),
-            Ok(_) => panic!("non-database mode should have been rejected"),
-        }
-    }
-
-    #[test]
-    fn with_token_round_trips_holder_and_url() {
-        let adapter = DatabaseAdapter::with_token(
-            "https://example.com/api/",
-            "secret-bearer",
-            "alice@example",
-        )
-        .unwrap();
-        assert_eq!(adapter.base_url(), "https://example.com/api");
-        assert_eq!(adapter.holder(), "alice@example");
-    }
-
-    #[test]
-    fn encode_segment_passes_through_unreserved() {
-        assert_eq!(
-            DatabaseAdapter::encode_segment("Discrete-Passives_v2.0~final"),
-            "Discrete-Passives_v2.0~final"
-        );
-    }
-
-    #[test]
-    fn encode_segment_escapes_path_breakers() {
-        // Spaces, slashes, query separators, anchors — every byte that
-        // could reshape the URL has to come back percent-encoded.
-        assert_eq!(
-            DatabaseAdapter::encode_segment("Discrete Passives"),
-            "Discrete%20Passives"
-        );
-        assert_eq!(
-            DatabaseAdapter::encode_segment("resistors?evil"),
-            "resistors%3Fevil"
-        );
-        assert_eq!(DatabaseAdapter::encode_segment("a/b#c"), "a%2Fb%23c");
-    }
-
-    #[test]
-    fn encode_segment_handles_utf8() {
-        // Multi-byte UTF-8 must escape every byte.
-        assert_eq!(DatabaseAdapter::encode_segment("π"), "%CF%80");
-    }
-}
+mod tests;

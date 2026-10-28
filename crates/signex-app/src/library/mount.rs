@@ -101,7 +101,7 @@ impl PreparedMount {
 pub struct PreparedMountCell(Arc<Mutex<Option<Result<PreparedMount, String>>>>);
 
 impl PreparedMountCell {
-    fn new(result: Result<PreparedMount, String>) -> Self {
+    pub(crate) fn new(result: Result<PreparedMount, String>) -> Self {
         Self(Arc::new(Mutex::new(Some(result))))
     }
 
@@ -141,6 +141,17 @@ impl std::fmt::Debug for PreparedMountCell {
 /// [`LibraryError`] is not — the same reason `read_and_parse_schematic`
 /// returns `Result<_, String>`.
 pub fn prepare_mount(path: &Path) -> Result<PreparedMount, String> {
+    prepare_mount_marked(path, false)
+}
+
+/// [`prepare_mount`] for the stock library: the prepared adapter is
+/// wrapped read-only, so the mount that lands on [`LibraryState`] refuses
+/// every write with `LibraryError::ReadOnly`.
+pub fn prepare_mount_read_only(path: &Path) -> Result<PreparedMount, String> {
+    prepare_mount_marked(path, true)
+}
+
+fn prepare_mount_marked(path: &Path, read_only: bool) -> Result<PreparedMount, String> {
     let adapter = LocalGitAdapter::open(path).map_err(|e: LibraryError| e.to_string())?;
     let manifest = adapter.manifest();
     let mut entry = OpenLibrary {
@@ -154,6 +165,8 @@ pub fn prepare_mount(path: &Path) -> Result<PreparedMount, String> {
         cached_sims: Vec::new(),
         cached_classes: Vec::new(),
         observed_stamp: None,
+        dangling: Default::default(),
+        pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     };
@@ -169,7 +182,11 @@ pub fn prepare_mount(path: &Path) -> Result<PreparedMount, String> {
         );
     }
     Ok(PreparedMount {
-        adapter: Box::new(adapter),
+        adapter: if read_only {
+            Box::new(signex_library::ReadOnlyAdapter::new(Box::new(adapter)))
+        } else {
+            Box::new(adapter)
+        },
         entry,
     })
 }
@@ -263,6 +280,8 @@ impl LibraryState {
         self.set.mount(prepared.adapter)?;
         self.open_libraries.push(prepared.entry);
         self.expanded.push(true);
+        self.touch_data();
+        self.sweep_dangling_refs();
         Ok(())
     }
 }
@@ -276,4 +295,22 @@ pub async fn prepare_mount_off_thread(path: PathBuf) -> PreparedMountCell {
         .await
         .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")));
     PreparedMountCell::new(result)
+}
+
+/// One off-thread prepare per path, all in flight at once, each completing as
+/// [`LibraryMessage::MountFinished`](super::LibraryMessage::MountFinished).
+///
+/// The caller has already recorded every path as pending through
+/// `request_mount`, so no path spawns twice. Shared by the project-open
+/// fan-out and Add Existing so the two cannot drift.
+pub fn spawn_pending_mounts(paths: Vec<PathBuf>) -> iced::Task<crate::app::Message> {
+    iced::Task::batch(paths.into_iter().map(|path| {
+        let completion_path = path.clone();
+        iced::Task::perform(prepare_mount_off_thread(path), move |prepared| {
+            crate::app::Message::Library(super::LibraryMessage::MountFinished {
+                path: completion_path.clone(),
+                prepared,
+            })
+        })
+    }))
 }

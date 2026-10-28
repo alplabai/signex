@@ -43,16 +43,18 @@ mod empty_state;
 mod grid;
 mod header;
 mod preview;
+mod price;
 mod sidebar;
 mod sort;
+mod view_cache;
 
 use action_row::view_action_row;
-use columns::{derive_columns, row_matches_filter};
 use empty_state::view_empty_state;
 use grid::view_grid;
 use header::view_header;
 use sidebar::view_table_sidebar;
-use sort::sort_by_cell_key;
+pub use view_cache::BrowserViewCache;
+use view_cache::active_table;
 
 const BROWSER_TEXT_SIZE: f32 = 11.0;
 const BROWSER_HEADER_SIZE: f32 = 10.0;
@@ -108,73 +110,82 @@ pub fn view<'a>(
         }
     };
 
+    // Read-only mount (the stock library): write affordances render
+    // disabled instead of failing on click.
+    let read_only = library_state.is_read_only(library_path);
+
     // Empty library — no tables yet. Show a centred CTA card.
     if lib.tables.is_empty() {
-        return view_empty_state(library_path, lib, tokens);
+        return view_empty_state(library_path, lib, tokens, read_only);
     }
 
     // Master-detail layout: left pane lists tables (vertical), right
     // pane = filters/search + grid + actions + preview. Mirrors a DB
     // browser so users can scan their library inventory at a glance
     // and pivot between tables without horizontal scrolling.
-    let table_sidebar = view_table_sidebar(library_path, lib, browser, tokens);
-    let header = view_header(library_path, lib, browser, tokens);
+    let table_sidebar = view_table_sidebar(library_path, lib, browser, tokens, read_only);
+    let header = view_header(library_path, lib, browser, tokens, read_only);
 
     // Body — left grid, right preview pane.
-    let active_table = browser.active_table.as_deref().unwrap_or_else(|| {
-        // Fall back to first sorted table name when active_table is
-        // unset — matches the open-tab handler's seeding logic.
-        let mut names: Vec<&String> = lib.tables.keys().collect();
-        names.sort();
-        names.first().map(|s| s.as_str()).unwrap_or("")
-    });
-
+    let active_table = active_table(lib, browser);
     let rows: &[ComponentRow] = lib
         .tables
         .get(active_table)
         .map(|v| v.as_slice())
         .unwrap_or(&[]);
 
-    let needle = browser.search.trim().to_lowercase();
-    let lifecycle_filter = browser.lifecycle_filter;
-    let class_filter = browser.class_filter.as_deref();
-    let mut visible: Vec<&ComponentRow> = rows
-        .iter()
-        .filter(|r| lifecycle_filter.allows(r.state))
-        .filter(|r| class_filter.is_none_or(|cls| r.class.as_str() == cls))
-        .filter(|r| needle.is_empty() || row_matches_filter(r, &needle))
-        .collect();
-
-    let columns = derive_columns(
-        rows,
-        lib.library_id,
-        &library_state.template_registry,
-        active_table,
+    // The filtered + sorted rows and the derived columns come from the
+    // cache `update` keeps current; a miss (a path that skipped the sync)
+    // recomputes for this frame only.
+    let rebuilt;
+    let cache = match browser.view_cache.as_ref().filter(|c| {
+        c.matches(
+            library_state.data_version,
+            library_state.clock,
+            active_table,
+            browser,
+        )
+    }) {
+        Some(cache) => cache,
+        None => {
+            rebuilt = BrowserViewCache::build(
+                lib,
+                &library_state.template_registry,
+                library_state.clock,
+                library_state.data_version,
+                browser,
+            );
+            &rebuilt
+        }
+    };
+    let visible: Vec<&ComponentRow> = cache.visible.iter().filter_map(|&i| rows.get(i)).collect();
+    let prices = price::PriceView::with_main_currency(
+        &lib.pricing,
+        library_state.clock,
+        &cache.main_currency,
     );
-
-    // Stage 8: apply the user's sort selection to the visible rows
-    // before grid rendering. The grid view is a pure projection of
-    // `visible`, so sorting here doesn't ripple into the render path.
-    if let Some(sort) = browser.sort_by.as_ref()
-        && let Some(column) = columns.iter().find(|c| c.kind.sort_key() == sort.key)
-    {
-        sort_by_cell_key(
-            &mut visible,
-            |row| column.kind.cell_value(row),
-            sort.descending,
-        );
-    }
 
     let grid = view_grid(
         library_path,
         active_table,
         &visible,
-        &columns,
+        &cache.columns,
         browser,
+        grid::GridCaches {
+            dangling: &lib.dangling,
+            prices: &prices,
+        },
         tokens,
+        read_only,
     );
 
-    let actions = view_action_row(library_path, active_table, browser.selected_row, tokens);
+    let actions = view_action_row(
+        library_path,
+        active_table,
+        browser.selected_row,
+        tokens,
+        read_only,
+    );
 
     let left = container(
         column![grid, actions]

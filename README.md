@@ -10,7 +10,7 @@
 <p align="center">
   <a href="https://github.com/alplabai/signex/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
   <a href="https://github.com/alplabai/signex/releases/latest"><img src="https://img.shields.io/github/v/release/alplabai/signex?label=version" alt="Latest release"></a>
-  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.88%2B-orange.svg" alt="Rust"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.97%2B-orange.svg" alt="Rust"></a>
   <a href="docs/USER_GUIDE.md"><img src="https://img.shields.io/badge/docs-user%20guide-blueviolet.svg" alt="User guide"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
 </p>
@@ -40,6 +40,14 @@ companion tool (GPL-3.0-or-later, distributed independently) converts
 formats one-way. Run it once against your project; open the resulting
 `.snxprj` in Signex.
 
+**Migrating from Altium?** Install the optional
+[signex-altium-import](https://github.com/alplabai/signex-altium-import)
+companion (Apache-2.0, clean-room). Then **File › Import › Altium Project…**
+converts a `.PrjPcb`, `.SchDoc`, `.PcbDoc`, `.SchLib` or `.PcbLib` into a sibling
+`<name>-signex/` folder and opens it. The import lists everything it had to
+approximate or skip; review that list before you fabricate an imported
+board.
+
 **Two editions from one codebase:**
 
 - **Signex Community** (Apache-2.0, free forever) — full schematic + PCB
@@ -47,9 +55,12 @@ formats one-way. Run it once against your project; open the resulting
 - **Signex Pro** (subscription) — adds Signal AI (Claude-powered design
   copilot), real-time collaboration, and Signex 365 cloud PLM
 
-> **Status:** Early development — **v0.14.0 shipped** — the **Footprint
-> Editor** milestone. The `.snxfpt` pad + parametric-sketch editor is
-> now enabled: place pads, draw a parametric sketch driven by an
+> **Status:** Early development — **v0.15.0 shipped** — the **Editor
+> Fixes** milestone: footprint- and symbol-editor correctness, an
+> order-independent netlist derivation that ERC and BOM read from, crash-safe
+> persistence, and a pinned Rust 1.97.0 toolchain with enforced rustfmt and
+> god-file gates. The v0.14 **Footprint Editor** carries forward: the
+> `.snxfpt` pad + parametric-sketch editor is enabled: place pads, draw a parametric sketch driven by an
 > Apache-clean Newton-LM constraint solver (19 constraint kinds), and
 > bake to pads / silk / courtyard. v0.14 completes the active-bar tooling
 > (Align / Distribute, Move / Drag, Fill / Region, Text Frame, the
@@ -61,7 +72,7 @@ formats one-way. Run it once against your project; open the resulting
 
 ## Features
 
-**What works today (v0.1–v0.14):**
+**What works today (v0.1–v0.15):**
 
 - Open native Signex schematics (`.snxsch`, `.snxsym`, `.snxprj`); migrate
   legacy KiCad files via the [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
@@ -92,8 +103,8 @@ formats one-way. Run it once against your project; open the resulting
   line-diffable, ~5× smaller than JSON, single file per design
 - 60fps pan/zoom on schematics with 500+ components
 - **Output (v0.8)** — PDF export with bookmarks + theme palette, Altium-spec
-  BOM preview with column/variant pickers and CSV/HTML/XLSX export, KiCad
-  netlist export, unified Print Preview / Export PDF modal
+  BOM preview with column/variant pickers and CSV/HTML/XLSX export,
+  unified Print Preview / Export PDF modal
 - **Multi-project workspaces (v0.8)** — multiple projects open side-by-side,
   per-tab project scoping, accent-tinted active project root
 - **Altium-style dirty tracking (v0.8)** — closing tabs never prompts;
@@ -122,8 +133,9 @@ formats one-way. Run it once against your project; open the resulting
   net-flood, and export; same-name labels + T-junctions merge correctly
 - **Configurable keyboard-shortcut profiles (v0.14)** — grouped, searchable
   in-app editor; menu labels sourced from the command table
-- **GPU schematic render path (v0.14)** — `signex-gfx` aligned to iced's
-  wgpu 27; schematic render module via the shader widget (feature-gated)
+- **GPU render alignment (v0.14)** — `signex-gfx` aligned to iced's wgpu 27;
+  the PCB editor draws through the shader widget. The schematic editor still
+  draws on the CPU canvas — its GPU adapter is not mounted yet
 
 **What's next:**
 
@@ -200,17 +212,18 @@ provides these packages:
 |---|---|---|---|
 | Windows | `signex-setup-<arch>-<version>.exe` | x86_64, ARM64 (`aarch64`) | Run for a guided installation |
 | Windows | `signex-windows-<arch>-<version>.zip` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
-| macOS | `signex-macos-aarch64-<version>.dmg` | Apple silicon (ARM64) | Open and drag Signex to Applications |
-| Linux | `signex_<version>_amd64.deb` | x86_64 | Debian or Ubuntu: `sudo apt install ./signex_<version>_amd64.deb` |
-| Linux | `Signex-<version>-x86_64.AppImage` | x86_64 | Most distributions: make executable with `chmod +x`, then run |
-| Linux | `signex-linux-x86_64-<version>.tar.gz` | x86_64 | Extract and run without installing |
-
-There is currently no Intel macOS or ARM64 Linux build.
+| macOS | `signex-macos-universal-<version>.dmg` | Apple silicon and Intel | Open and drag Signex to Applications |
+| Linux | `signex_<version>_<arch>.deb` | x86_64 (`amd64`), ARM64 (`arm64`) | Debian or Ubuntu: `sudo apt install ./signex_<version>_<arch>.deb` |
+| Linux | `Signex-<version>-<arch>.AppImage` | x86_64, ARM64 (`aarch64`) | Most distributions: make executable with `chmod +x`, then run |
+| Linux | `signex-linux-<arch>-<version>.tar.gz` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
+| All | `signex-<version>.cdx.json` | n/a | CycloneDX SBOM: the `signex` binary's dependencies for every platform (a superset of any one build), with version and licence |
+| All | `SHA256SUMS.txt` | n/a | SHA-256 checksums of every file above |
 
 ### First launch
 
-The current packages do not yet carry a trusted publisher or developer
-signature:
+Until release signing is enabled (see
+[docs/RELEASE_SIGNING.md](docs/RELEASE_SIGNING.md)), packages do not carry a
+trusted publisher or developer signature:
 
 - **Windows:** Microsoft Defender SmartScreen may appear. Select **More info**,
   then **Run anyway**.
@@ -240,7 +253,7 @@ grep -F "  $file" SHA256SUMS.txt | sha256sum -c -
 macOS (set `file` to the exact filename you downloaded):
 
 ```bash
-file='signex-macos-aarch64-<version>.dmg'
+file='signex-macos-universal-<version>.dmg'
 grep -F "  $file" SHA256SUMS.txt | shasum -a 256 -c -
 ```
 
@@ -275,7 +288,7 @@ git clone https://github.com/alplabai/signex.git
 cd signex
 cargo run -p signex-app          # Run
 cargo test --workspace           # Test
-cargo clippy --workspace -- -D warnings  # Lint
+cargo clippy --workspace --all-targets --all-features -- -D warnings  # Lint
 ```
 
 ## Roadmap
@@ -295,6 +308,8 @@ cargo clippy --workspace -- -D warnings  # Lint
 | Library & Polish — full DBLib model, SCH Library editor, Component Preview, picker + auto-mount, distributor adapters | v0.11 | Done |
 | Symbol & Library — clean-room schematic renderer, unified Active Bar in symbol editor, `.snxsym` TOML envelope | v0.13 | Done |
 | Footprint Editor — `.snxfpt` pad + parametric-sketch editor, Newton-LM solver (19 constraints), Align/Distribute/Move/Fill/Text tooling | v0.14 | Done |
+| Editor Fixes — footprint/symbol editor correctness, order-independent netlist, crash-safe persistence, pinned toolchain | v0.15 | Done |
+| Command Registry & Symbol Units | v0.16 | In progress |
 | **Community Preview** — schematic-only editor | **v1.0** | |
 | PCB Viewer — GPU rendering, layers, cross-probe | v2.0 | |
 | PCB Routing + DRC + Output | v2.1–v2.2 | |

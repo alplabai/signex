@@ -6,6 +6,21 @@
 //! line-count cap while preserving the exact arm-to-body mapping.
 
 mod batch;
+mod designator_in;
 mod edits;
+mod font_family;
+pub(crate) mod pin_changes;
 mod place;
+mod replace_lib_symbol;
 mod structure;
+
+#[cfg(test)]
+mod designator_in_tests;
+#[cfg(test)]
+mod font_family_tests;
+#[cfg(test)]
+mod patch_exactness_tests;
+#[cfg(test)]
+mod register_lib_symbol_tests;
+#[cfg(test)]
+mod replace_lib_symbol_tests;

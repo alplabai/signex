@@ -65,13 +65,12 @@ impl Signex {
             // coords can land a full grid cell off the nearest
             // wire — the visible pen snaps, but the hit target
             // was being missed.
-            let (hit_x, hit_y) =
-                if self.ui_state.snap_enabled && (self.ui_state.grid_size_mm as f64) > 0.0 {
-                    let g = self.ui_state.grid_size_mm as f64;
-                    ((world_x / g).round() * g, (world_y / g).round() * g)
-                } else {
-                    (world_x, world_y)
-                };
+            let (hit_x, hit_y) = if self.ui_state.snap_enabled && self.ui_state.grid_size_mm > 0.0 {
+                let g = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
+                ((world_x / g).round() * g, (world_y / g).round() * g)
+            } else {
+                (world_x, world_y)
+            };
             // Compute the net's wire uuids while only holding an
             // immutable snapshot borrow, then release it before
             // mutating ui_state.
@@ -162,9 +161,7 @@ impl Signex {
                     }
                 }
                 if diff {
-                    self.ui_state
-                        .net_color_undo
-                        .push(self.ui_state.wire_color_overrides.clone());
+                    self.record_net_color_undo();
                     for uuid in net_wire_uuids {
                         if pending.a == 0 {
                             self.ui_state.wire_color_overrides.remove(&uuid);
@@ -192,7 +189,12 @@ impl Signex {
         // Altium's "click the object to reference" convention.
         if let Some(picker) = self.ui_state.reorder_picker {
             if let Some(snapshot) = self.active_render_snapshot() {
-                let hit = crate::schematic_runtime::hit_test::hit_test(snapshot, world_x, world_y);
+                let hit = crate::schematic_runtime::hit_test::hit_test(
+                    snapshot,
+                    &self.interaction_state.active_canvas().designators,
+                    world_x,
+                    world_y,
+                );
                 if let Some(reference) = hit {
                     let direction = match picker {
                         super::super::super::state::ReorderPicker::Above => {
@@ -235,18 +237,17 @@ impl Signex {
         // IDEs (Escape cancels, click elsewhere confirms).
         if let Some(state) = self.interaction_state.editing_text.take() {
             if state.text != state.original_text {
-                let stored = crate::schematic_runtime::text::escape_for_standard(&state.text);
                 let cmd = match state.kind {
                     signex_types::schematic::SelectedKind::Label => {
                         Some(signex_engine::Command::UpdateText {
                             target: signex_engine::TextTarget::Label(state.uuid),
-                            value: stored,
+                            value: state.text,
                         })
                     }
                     signex_types::schematic::SelectedKind::TextNote => {
                         Some(signex_engine::Command::UpdateText {
                             target: signex_engine::TextTarget::TextNote(state.uuid),
-                            value: stored,
+                            value: state.text,
                         })
                     }
                     _ => None,
@@ -257,7 +258,11 @@ impl Signex {
             }
             return Task::none();
         }
-        let (wx, wy) = self.snap_to_grid(world_x, world_y);
+        let (wx, wy) = if self.interaction_state.current_tool == Tool::Wire {
+            self.snap_wire_point(world_x, world_y)
+        } else {
+            self.snap_to_grid(world_x, world_y)
+        };
 
         match self.interaction_state.current_tool {
             Tool::Wire => {
@@ -345,6 +350,7 @@ impl Signex {
                             justify_h: signex_types::schematic::HAlign::Center,
                             justify_v: signex_types::schematic::VAlign::default(),
                             hidden: false,
+                            font_family: None,
                         }),
                         fields_autoplaced: true,
                         fields_user_placed: false,
@@ -361,11 +367,7 @@ impl Signex {
                         row_id: None,
                         library_version: String::new(),
                     };
-                    self.apply_engine_command(
-                        signex_engine::Command::PlaceSymbol { symbol: sym },
-                        false,
-                        false,
-                    );
+                    self.apply_engine_commands(signex_engine::place_power_port(sym), false, false);
                 }
             }
             Tool::Component => {
@@ -394,10 +396,24 @@ impl Signex {
                 );
             }
             Tool::BusEntry => {
+                // The bus end snaps onto the nearest bus within one grid step
+                // of the click; off a bus the entry lands on the grid point.
+                let at = signex_types::schematic::Point::new(wx, wy);
+                let position = self
+                    .document_state
+                    .active_engine()
+                    .and_then(|engine| {
+                        signex_types::schematic::snap_to_bus(
+                            &engine.document().buses,
+                            at,
+                            crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
+                        )
+                    })
+                    .unwrap_or(at);
                 let be = signex_types::schematic::BusEntry {
                     uuid: uuid::Uuid::new_v4(),
-                    position: signex_types::schematic::Point::new(wx, wy),
-                    size: (2.54, 2.54),
+                    position,
+                    size: self.interaction_state.bus_entry_size,
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceBusEntry { bus_entry: be },
@@ -579,6 +595,7 @@ impl Signex {
                     font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                     justify_h: signex_types::schematic::HAlign::Left,
                     justify_v: signex_types::schematic::VAlign::default(),
+                    font_family: None,
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceTextNote { text_note: tn },
@@ -646,6 +663,7 @@ impl Signex {
                     font_size: pp_fs_mm,
                     justify: pp_justify_h,
                     justify_v: pp_justify_v,
+                    font_family: None,
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceLabel { label },

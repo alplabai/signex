@@ -170,3 +170,129 @@ fn writing_the_library_twice_is_byte_identical_and_never_inits_git() {
     assert!(!dir.path().join(".git").exists(), "no git init in the tree");
     assert!(dir.path().join("symbols").is_dir());
 }
+
+fn symbols_dir() -> PathBuf {
+    stock_root().join("symbols")
+}
+
+#[test]
+fn committed_stock_symbols_match_the_generator() {
+    let rendered = stock_gen::symbols::render_all().expect("render symbols");
+    assert_eq!(rendered.len(), 38, "20 passives, 11 connectors, 7 logic");
+    let mut committed: Vec<String> = std::fs::read_dir(symbols_dir())
+        .expect("read symbols dir")
+        .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
+        .collect();
+    committed.sort();
+    let mut expected: Vec<String> = rendered.iter().map(|r| r.file_name.clone()).collect();
+    expected.sort();
+    assert_eq!(
+        committed, expected,
+        "symbols/ holds exactly the generated set"
+    );
+    for sym in &rendered {
+        assert_eq!(
+            read_lf(&symbols_dir().join(&sym.file_name)),
+            sym.text,
+            "{} is stale: rerun `cargo run --example build_stock_library -p signex-app`",
+            sym.file_name
+        );
+    }
+}
+
+#[test]
+fn every_committed_symbol_round_trips_byte_identical() {
+    use signex_library::primitive::symbol::SymbolFile;
+    for sym in stock_gen::symbols::render_all().expect("render symbols") {
+        let text = read_lf(&symbols_dir().join(&sym.file_name));
+        let parsed = SymbolFile::from_toml_str(&text).expect("parse");
+        assert_eq!(
+            parsed.to_toml_string().expect("write"),
+            text,
+            "{} does not round-trip",
+            sym.file_name
+        );
+    }
+}
+
+#[test]
+fn every_stock_symbol_pin_is_on_the_schematic_grid_and_converts() {
+    use signex_library::primitive::symbol::{PinDirection, SymbolFile};
+    let grid = stock_gen::symbols::GRID_MM;
+    for sym in stock_gen::symbols::render_all().expect("render symbols") {
+        let file = SymbolFile::from_toml_str(&sym.text).expect("parse");
+        let symbol = &file.symbols[0];
+        assert!(!symbol.pins.is_empty(), "{} has no pins", symbol.name);
+        for pin in &symbol.pins {
+            for v in pin.position {
+                let steps = v / grid;
+                assert!(
+                    (steps - steps.round()).abs() < 1e-6,
+                    "{} pin {} at {:?} is off the {grid} mm grid",
+                    symbol.name,
+                    pin.number,
+                    pin.position
+                );
+            }
+        }
+        let lib = symbol.to_lib_symbol(symbol.name.clone());
+        assert_eq!(
+            lib.pins.len(),
+            symbol.pins.len(),
+            "{} pins lost",
+            symbol.name
+        );
+        assert!(!lib.graphics.is_empty(), "{} has no body", symbol.name);
+        if symbol.designator == "#PWR?" {
+            assert_eq!(symbol.pins.len(), 1);
+            assert_eq!(symbol.pins[0].electrical, PinDirection::Power);
+        }
+    }
+}
+
+#[test]
+fn logic_packages_are_14_pin_with_power_on_7_and_14() {
+    use signex_library::primitive::symbol::{PinDirection, SymbolFile};
+    let mut seen = 0;
+    for sym in stock_gen::symbols::render_all().expect("render symbols") {
+        if !sym.symbol_name.starts_with("74HC") {
+            continue;
+        }
+        seen += 1;
+        let file = SymbolFile::from_toml_str(&sym.text).expect("parse");
+        let pins = &file.symbols[0].pins;
+        let mut numbers: Vec<u32> = pins.iter().map(|p| p.number.parse().unwrap()).collect();
+        numbers.sort();
+        assert_eq!(numbers, (1..=14).collect::<Vec<_>>(), "{}", sym.symbol_name);
+        let find = |n: &str| pins.iter().find(|p| p.number == n).unwrap();
+        assert_eq!(find("7").name, "GND");
+        assert_eq!(find("7").electrical, PinDirection::Power);
+        assert_eq!(find("14").name, "VCC");
+        assert_eq!(find("14").electrical, PinDirection::Power);
+        assert_eq!(sym.designator, "U?");
+    }
+    assert_eq!(seen, 7);
+}
+
+#[test]
+fn connector_pin_count_matches_name() {
+    use signex_library::primitive::symbol::{PinDirection, SymbolFile};
+    let mut seen = 0;
+    for sym in stock_gen::symbols::render_all().expect("render symbols") {
+        let Some((kind, dims)) = sym.symbol_name.split_once('_') else {
+            continue;
+        };
+        if kind != "Conn" && kind != "Screw" {
+            continue;
+        }
+        seen += 1;
+        let (rows, cols) = dims.split_once('x').unwrap();
+        let expected = rows.parse::<usize>().unwrap() * cols.parse::<usize>().unwrap();
+        let file = SymbolFile::from_toml_str(&sym.text).expect("parse");
+        let pins = &file.symbols[0].pins;
+        assert_eq!(pins.len(), expected, "{}", sym.symbol_name);
+        assert_eq!(sym.designator, "J?");
+        assert!(pins.iter().all(|p| p.electrical == PinDirection::Passive));
+    }
+    assert_eq!(seen, 11);
+}

@@ -204,6 +204,7 @@ impl Engine {
             return false;
         }
 
+        let stale: std::collections::HashSet<uuid::Uuid> = stale.into_iter().collect();
         self.document
             .junctions
             .retain(|junction| !stale.contains(&junction.uuid));
@@ -433,24 +434,39 @@ impl Engine {
         }
     }
 
+    /// Apply `edit` to one symbol, then re-run field autoplace against the
+    /// pre-edit document. Only that symbol is cloned (not the whole sheet).
+    fn edit_symbol_and_autoplace(
+        &mut self,
+        uuid: uuid::Uuid,
+        edit: impl FnOnce(&mut signex_types::schematic::Symbol),
+    ) -> bool {
+        let Some(index) = self.document.symbols.iter().position(|s| s.uuid == uuid) else {
+            return false;
+        };
+        let mut symbol = self.document.symbols[index].clone();
+        edit(&mut symbol);
+        if let Some(lib) = self.document.lib_symbols.get(&symbol.lib_id) {
+            autoplace_fields(&mut symbol, lib, &self.document);
+        }
+        self.document.symbols[index] = symbol;
+        true
+    }
+
     pub(super) fn rotate_selected_item(&mut self, item: &SelectedItem, angle_degrees: f64) -> bool {
         match item.kind {
-            SelectedKind::Symbol => {
-                let lib_symbols = self.document.lib_symbols.clone();
-                let document_snapshot = self.document.clone();
-                self.document
-                    .symbols
-                    .iter_mut()
-                    .find(|symbol| symbol.uuid == item.uuid)
-                    .map(|symbol| {
-                        symbol.rotation = normalize_degrees(symbol.rotation + angle_degrees);
-                        if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
-                            autoplace_fields(symbol, lib, &document_snapshot);
-                        }
-                        true
-                    })
-                    .unwrap_or(false)
-            }
+            SelectedKind::Symbol => self.edit_symbol_and_autoplace(item.uuid, |symbol| {
+                // The render path rotates and then mirrors, so with exactly
+                // one mirror axis set a positive stored angle turns the
+                // symbol clockwise on screen. Negate the delta there so
+                // `angle_degrees` always means counter-clockwise on screen.
+                let on_screen_delta = if symbol.mirror_x != symbol.mirror_y {
+                    -angle_degrees
+                } else {
+                    angle_degrees
+                };
+                symbol.rotation = normalize_degrees(symbol.rotation + on_screen_delta);
+            }),
             SelectedKind::SymbolRefField => self
                 .document
                 .symbols
@@ -486,6 +502,7 @@ impl Engine {
                     }
                 })
                 .unwrap_or(false),
+            SelectedKind::BusEntry => self.rotate_bus_entry(item, angle_degrees),
             _ => false,
         }
     }
@@ -493,24 +510,12 @@ impl Engine {
     pub(super) fn mirror_selected_item(&mut self, item: &SelectedItem, axis: MirrorAxis) -> bool {
         match item.kind {
             SelectedKind::Symbol => {
-                let lib_symbols = self.document.lib_symbols.clone();
-                let document_snapshot = self.document.clone();
-                self.document
-                    .symbols
-                    .iter_mut()
-                    .find(|symbol| symbol.uuid == item.uuid)
-                    .map(|symbol| {
-                        match axis {
-                            MirrorAxis::Horizontal => symbol.mirror_y = !symbol.mirror_y,
-                            MirrorAxis::Vertical => symbol.mirror_x = !symbol.mirror_x,
-                        }
-                        if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
-                            autoplace_fields(symbol, lib, &document_snapshot);
-                        }
-                        true
-                    })
-                    .unwrap_or(false)
+                self.edit_symbol_and_autoplace(item.uuid, |symbol| match axis {
+                    MirrorAxis::Horizontal => symbol.mirror_y = !symbol.mirror_y,
+                    MirrorAxis::Vertical => symbol.mirror_x = !symbol.mirror_x,
+                })
             }
+            SelectedKind::BusEntry => self.mirror_bus_entry(item, axis),
             _ => false,
         }
     }
@@ -522,7 +527,10 @@ fn normalize_degrees(angle_degrees: f64) -> f64 {
         .rem_euclid(360.0)
 }
 
+mod about_centre;
 mod autoplace;
+mod bus_entry;
+pub(crate) mod rubber_band;
 use autoplace::autoplace_fields;
 
 // ---------------------------------------------------------------------------

@@ -23,12 +23,27 @@ impl Signex {
                 Some(self.handle_open_recent_project(path.clone()))
             }
             MenuMessage::ClearRecentProjects => Some(self.handle_clear_recent_projects()),
+            MenuMessage::ImportAltium => Some(Task::perform(
+                async {
+                    rfd::AsyncFileDialog::new()
+                        .set_title("Import Altium Project")
+                        .add_filter("Altium Design", &["PrjPcb", "SchDoc", "PcbDoc"])
+                        .add_filter("Altium Library", &["SchLib", "PcbLib"])
+                        .add_filter("All files", &["*"])
+                        .pick_file()
+                        .await
+                        .map(|file| file.path().to_path_buf())
+                },
+                |p| Message::File(FileMsg::AltiumImportPicked(p)),
+            )),
             MenuMessage::Save => Some(self.update(Message::File(FileMsg::Save))),
             MenuMessage::SaveAs => Some(self.save_as_dialog_for_active_tab()),
             MenuMessage::NewProject => Some(Task::perform(
                 async {
                     rfd::AsyncFileDialog::new()
-                        .set_title("New Signex Project")
+                        .set_title(
+                            "New Signex Project (a folder named after the project is created)",
+                        )
                         .set_file_name("Untitled.snxprj")
                         .add_filter("Signex Project", &["snxprj"])
                         .save_file()
@@ -38,9 +53,6 @@ impl Signex {
                 |p| Message::File(FileMsg::NewProject(p)),
             )),
             MenuMessage::OpenSampleProject => Some(self.handle_open_sample_project()),
-            MenuMessage::PrintPreview => {
-                Some(self.update(Message::PrintPreview(PrintPreviewMsg::Requested)))
-            }
             MenuMessage::ExportPdf => Some(self.update(Message::Export(ExportMsg::PdfOpenDialog))),
             MenuMessage::ExportNetlist => self.handle_export_netlist_requested(),
             MenuMessage::ExportBom => Some(self.handle_bom_preview_open()),
@@ -52,9 +64,6 @@ impl Signex {
             MenuMessage::LibraryPlaceComponent => {
                 Some(self.update(Message::Library(crate::library::LibraryMessage::OpenPicker)))
             }
-            MenuMessage::LibraryNewComponent => Some(self.update(Message::Library(
-                crate::library::LibraryMessage::NewComponent,
-            ))),
             MenuMessage::AddComponentLibrary => {
                 let path = self.document_state.active_project.and_then(|id| {
                     self.document_state
@@ -243,7 +252,7 @@ impl Signex {
                                 to_path,
                             })
                         })
-                        .unwrap_or(Message::Noop)
+                        .unwrap_or(Message::noop())
                     },
                 )
             }

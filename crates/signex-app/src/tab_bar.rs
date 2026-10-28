@@ -1,6 +1,7 @@
 //! Document tab bar — tabs for open schematic sheets and PCB.
 
-use iced::widget::{Row, container, mouse_area, row, text};
+use iced::widget::scrollable::{Direction, RelativeOffset, Scrollbar};
+use iced::widget::{Row, container, mouse_area, row, scrollable, text, tooltip};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
@@ -26,11 +27,34 @@ pub enum TabMessage {
     ContextMenu(usize),
 }
 
+/// Stable id of the tab strip's scrollable, so the active tab can be
+/// scrolled into view from `update`.
+const TAB_STRIP_ID: &str = "document-tab-strip";
+
+/// Relative scroll offset that brings tab `active` of `count` into view.
+/// Tab widths vary with their titles, so this is the index's proportional
+/// position along the strip: exact at both ends (newly appended tab =
+/// end), close enough in between for a tab to land on screen.
+fn reveal_offset(active: usize, count: usize) -> RelativeOffset {
+    let x = if count < 2 {
+        0.0
+    } else {
+        active.min(count - 1) as f32 / (count - 1) as f32
+    };
+    RelativeOffset { x, y: 0.0 }
+}
+
+/// Task scrolling the tab strip so tab `active` (of `count`) is visible.
+pub fn reveal_active_tab<M: Send + 'static>(active: usize, count: usize) -> iced::Task<M> {
+    iced::widget::operation::snap_to(TAB_STRIP_ID, reveal_offset(active, count))
+}
+
 pub fn view<'a>(
     tabs: &[TabInfo],
     active: usize,
     dragging: Option<usize>,
     visible_paths: &std::collections::HashSet<std::path::PathBuf>,
+    dirty_paths: &std::collections::HashSet<std::path::PathBuf>,
     tokens: &ThemeTokens,
 ) -> Element<'a, TabMessage> {
     // Tabs sit flush against each other — Altium parity. The active
@@ -54,11 +78,10 @@ pub fn view<'a>(
 
     for &i in &visible_indices {
         let tab = &tabs[i];
-        // Tab title — no dirty indicator here. The unsaved-changes
-        // marker now lives on the corresponding row in the Projects
-        // tree (red dot to the right of the file name) so the user
-        // sees dirty state without it competing with tab close-X.
-        let label = tab.title.clone();
+        // Tab title. A document with unsaved changes also gets a dot
+        // (the Projects tree row keeps its own); there is no close-X on
+        // the tab any more, so the two no longer compete.
+        let label = ellipsize_title(&tab.title, MAX_TAB_TITLE_CHARS);
 
         let is_active = i == active;
         let is_dragging = dragging == Some(i);
@@ -87,12 +110,14 @@ pub fn view<'a>(
             // rounded top corners + accent stripe at the bottom.
             accent_position: AccentPosition::Bottom,
         };
-        let inner = container(
-            row![text(label).size(11).color(text_c)]
-                .spacing(6.0)
-                .align_y(iced::Alignment::Center),
-        )
-        .padding([4, 10]);
+        let mut content = row![]
+            .spacing(TAB_FONT_SIZE * 0.5)
+            .align_y(iced::Alignment::Center);
+        if tab_is_dirty(tab, dirty_paths) {
+            content = content.push(dirty_dot(tokens));
+        }
+        let inner =
+            container(content.push(text(label).size(TAB_FONT_SIZE).color(text_c))).padding([4, 10]);
         // Cursor: default Pointer on hover so the bar reads as
         // "clickable tabs", switching to Grabbing only while a tab
         // is in flight so the drag-to-reorder / drag-to-undock
@@ -109,6 +134,14 @@ pub fn view<'a>(
             .on_right_press(TabMessage::ContextMenu(i))
             .interaction(cursor)
             .into();
+        // The pill shows an ellipsized title; hovering names the full path.
+        let tab_el: Element<'_, TabMessage> = tooltip(
+            tab_el,
+            container(text(tab.path.display().to_string()).size(TAB_FONT_SIZE)).padding([2, 6]),
+            tooltip::Position::Bottom,
+        )
+        .style(styles::context_menu(tokens))
+        .into();
         bar = bar.push(tab_el);
     }
 
@@ -126,7 +159,18 @@ pub fn view<'a>(
             ..iced::widget::container::Style::default()
         });
     container(iced::widget::column![
-        container(bar).width(Length::Fill).padding(iced::Padding {
+        // More tabs than fit scroll sideways (wheel / thin scrollbar) rather
+        // than being clipped off the right edge.
+        container(
+            scrollable(bar)
+                .id(TAB_STRIP_ID)
+                .direction(Direction::Horizontal(
+                    Scrollbar::new().width(3).scroller_width(3),
+                ))
+                .width(Length::Fill),
+        )
+        .width(Length::Fill)
+        .padding(iced::Padding {
             top: 2.0,
             right: 6.0,
             bottom: 0.0,
@@ -137,6 +181,86 @@ pub fn view<'a>(
     .width(Length::Fill)
     .style(styles::toolbar_strip(tokens))
     .into()
+}
+
+/// Tab label font size; the dirty dot is sized from it.
+const TAB_FONT_SIZE: f32 = 11.0;
+
+/// Dirty dot diameter as a fraction of the tab font size.
+const DIRTY_DOT_EM: f32 = 0.6;
+
+/// Dirty dot diameter for a tab label of `font_size`.
+fn dirty_dot_diameter(font_size: f32) -> f32 {
+    font_size * DIRTY_DOT_EM
+}
+
+/// Whether `tab` has unsaved changes: its own flag, or its path is in
+/// `dirty_paths`. A Component Preview tab has a synthetic path that is
+/// never in the app-wide set, so callers pass the set from
+/// [`dirty_tab_paths`], which adds those tabs.
+pub(crate) fn tab_is_dirty(
+    tab: &TabInfo,
+    dirty_paths: &std::collections::HashSet<std::path::PathBuf>,
+) -> bool {
+    tab.dirty || dirty_paths.contains(&tab.path)
+}
+
+/// The app-wide dirty set plus the paths of Component Preview tabs whose
+/// editor (in `library.editors`) has unsaved edits. Those tabs are keyed
+/// by row, not file, so only the library state knows they are dirty.
+pub(crate) fn dirty_tab_paths(
+    tabs: &[TabInfo],
+    dirty_paths: &std::collections::HashSet<std::path::PathBuf>,
+    library: &crate::library::state::LibraryState,
+) -> std::collections::HashSet<std::path::PathBuf> {
+    let mut out = dirty_paths.clone();
+    for tab in tabs {
+        if let crate::app::TabKind::ComponentEditor(ce) = &tab.kind {
+            let address = crate::library::state::EditorAddress::new(
+                ce.library_path.clone(),
+                ce.table.clone(),
+                ce.row_id,
+            );
+            if library
+                .editors
+                .get(&address)
+                .is_some_and(|e| e.has_unsaved_edits())
+            {
+                out.insert(tab.path.clone());
+            }
+        }
+    }
+    out
+}
+
+/// Round dot in the theme's error colour, shown before a dirty tab's title.
+fn dirty_dot<'a>(tokens: &ThemeTokens) -> Element<'a, TabMessage> {
+    let colour = styles::ti(tokens.error);
+    let d = dirty_dot_diameter(TAB_FONT_SIZE);
+    container(iced::widget::Space::new())
+        .width(d)
+        .height(d)
+        .style(move |_: &iced::Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(colour)),
+            border: iced::Border {
+                radius: (d / 2.0).into(),
+                ..iced::Border::default()
+            },
+            ..iced::widget::container::Style::default()
+        })
+        .into()
+}
+
+/// Longest tab title drawn in full; longer ones are cut and end in `…`.
+const MAX_TAB_TITLE_CHARS: usize = 28;
+
+/// `title` cut to at most `max` characters, ending in `…` when cut.
+fn ellipsize_title(title: &str, max: usize) -> String {
+    if title.chars().count() <= max {
+        return title.to_owned();
+    }
+    let kept: String = title.chars().take(max.saturating_sub(1)).collect();
+    format!("{kept}…")
 }
 
 /// Resolve the pill bg fill for the current state. Altium parity:
@@ -157,5 +281,128 @@ fn pill_fill(tokens: &ThemeTokens, is_active: bool, is_dragging: bool) -> iced::
             a: tab_active.a * 0.35,
             ..tab_active
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        dirty_dot_diameter, dirty_tab_paths, ellipsize_title, reveal_active_tab, reveal_offset,
+        tab_is_dirty,
+    };
+    use crate::app::{TabInfo, TabKind};
+    use std::collections::HashSet;
+    use std::path::PathBuf;
+
+    fn tab(path: &str, dirty: bool) -> TabInfo {
+        TabInfo {
+            title: path.to_owned(),
+            path: PathBuf::from(path),
+            cached_document: None,
+            dirty,
+            project_id: None,
+            kind: TabKind::Schematic,
+        }
+    }
+
+    #[test]
+    fn a_tab_is_dirty_when_its_path_is_in_dirty_paths_or_its_flag_is_set() {
+        let dirty: HashSet<PathBuf> = [PathBuf::from("a.snxsch")].into();
+        assert!(tab_is_dirty(&tab("a.snxsch", false), &dirty));
+        assert!(tab_is_dirty(&tab("b.snxsch", true), &dirty));
+        assert!(!tab_is_dirty(&tab("b.snxsch", false), &dirty));
+    }
+
+    fn preview(lib: &std::path::Path) -> crate::library::state::ComponentPreviewState {
+        use signex_library::{
+            ComponentClass, ComponentRow, DatasheetRef, InternalPn, LifecycleState,
+            ManufacturerPart, ParamMap, PlmReserved, PrimitiveRef,
+        };
+        use uuid::Uuid;
+        let row = ComponentRow {
+            alternate_symbols: Vec::new(),
+            row_id: Uuid::new_v4(),
+            internal_pn: InternalPn::new("TEST_PN"),
+            class: ComponentClass::generic(),
+            datasheet: DatasheetRef::default(),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
+            state: LifecycleState::Draft,
+            symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
+            footprint_ref: None,
+            sim_ref: None,
+            pin_map_overrides: Vec::new(),
+            primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),
+            alternates: Vec::new(),
+            supply: Vec::new(),
+            parameters: ParamMap::new(),
+            plm: PlmReserved::default(),
+            version: "0.0.1".into(),
+            released: false,
+            symbol_version: String::new(),
+            footprint_version: String::new(),
+            sim_version: String::new(),
+            created: chrono::Utc::now(),
+            updated: chrono::Utc::now(),
+            content_hash: [0u8; 32],
+            server_revision: None,
+        };
+        crate::library::state::ComponentPreviewState::from_row(
+            lib.to_path_buf(),
+            "parts".into(),
+            row,
+        )
+    }
+
+    #[test]
+    fn a_component_preview_tab_with_unsaved_edits_gets_the_dot() {
+        use crate::app::ComponentEditorTab;
+        use crate::library::state::{EditorAddress, LibraryState};
+        let lib = PathBuf::from("lib.snxlib");
+        let editor = preview(&lib);
+        let row_id = signex_library::RowId(editor.row.row_id);
+        let mut t = tab("lib.snxlib/parts.tsv#row", false);
+        t.kind = TabKind::ComponentEditor(ComponentEditorTab {
+            library_path: lib.clone(),
+            table: "parts".to_owned(),
+            row_id,
+        });
+        let mut library = LibraryState::default();
+        let address = EditorAddress::new(lib, "parts".to_owned(), row_id);
+        library.editors.insert(address.clone(), editor);
+        let none = HashSet::new();
+        let clean = dirty_tab_paths(std::slice::from_ref(&t), &none, &library);
+        assert!(!tab_is_dirty(&t, &clean));
+        library.editors.get_mut(&address).unwrap().mark_dirty();
+        let dirty = dirty_tab_paths(std::slice::from_ref(&t), &none, &library);
+        assert!(tab_is_dirty(&t, &dirty));
+    }
+
+    #[test]
+    fn the_dirty_dot_scales_with_the_font_and_stays_smaller_than_it() {
+        assert!(dirty_dot_diameter(22.0) > dirty_dot_diameter(11.0));
+        assert!(dirty_dot_diameter(11.0) < 11.0);
+    }
+
+    #[test]
+    fn reveal_offset_is_exact_at_both_ends_and_proportional_between() {
+        assert_eq!(reveal_offset(0, 1).x, 0.0);
+        assert_eq!(reveal_offset(0, 5).x, 0.0);
+        assert_eq!(reveal_offset(4, 5).x, 1.0);
+        assert_eq!(reveal_offset(2, 5).x, 0.5);
+        assert_eq!(reveal_offset(9, 5).x, 1.0);
+    }
+
+    #[test]
+    fn revealing_a_tab_emits_a_scroll_task() {
+        assert_eq!(reveal_active_tab::<()>(1, 3).units(), 1);
+    }
+
+    #[test]
+    fn short_titles_are_untouched_and_long_ones_end_in_an_ellipsis() {
+        assert_eq!(ellipsize_title("power.snxsch", 28), "power.snxsch");
+        let cut = ellipsize_title("a_very_long_sheet_name_that_overflows.snxsch", 10);
+        assert_eq!(cut.chars().count(), 10);
+        assert!(cut.ends_with('…'));
     }
 }

@@ -74,6 +74,7 @@ pub(crate) enum OverlayId {
     About,
     PassiveCalculator,
     FirstRunTour,
+    AutosaveRecovery,
     RenameDialog,
     RemoveDialog,
     ProjectCloseConfirm,
@@ -88,7 +89,6 @@ pub(crate) enum OverlayId {
 
     // Library modals.
     LibraryPicker,
-    NewComponent,
     EditRowModal,
     DeleteConfirm,
     PrimitivePicker,
@@ -147,6 +147,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 51] = [
     OverlayId::About,
     OverlayId::PassiveCalculator,
     OverlayId::FirstRunTour,
+    OverlayId::AutosaveRecovery,
     OverlayId::RenameDialog,
     OverlayId::RemoveDialog,
     OverlayId::ProjectCloseConfirm,
@@ -159,7 +160,6 @@ pub(crate) const PAINT_ORDER: [OverlayId; 51] = [
     OverlayId::AnnotateResetConfirm,
     OverlayId::ErcDialog,
     OverlayId::LibraryPicker,
-    OverlayId::NewComponent,
     OverlayId::EditRowModal,
     OverlayId::DeleteConfirm,
     OverlayId::PrimitivePicker,
@@ -247,6 +247,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::About
         | OverlayId::PassiveCalculator
         | OverlayId::FirstRunTour
+        | OverlayId::AutosaveRecovery
         | OverlayId::RenameDialog
         | OverlayId::RemoveDialog
         | OverlayId::ProjectCloseConfirm
@@ -259,7 +260,6 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::AnnotateResetConfirm
         | OverlayId::ErcDialog
         | OverlayId::LibraryPicker
-        | OverlayId::NewComponent
         | OverlayId::EditRowModal
         | OverlayId::DeleteConfirm
         | OverlayId::PrimitivePicker
@@ -329,6 +329,7 @@ impl Signex {
             OverlayId::About => layers.extend(self.about_overlay()),
             OverlayId::PassiveCalculator => layers.extend(self.passive_calculator_overlay()),
             OverlayId::FirstRunTour => layers.extend(self.first_run_tour_overlay()),
+            OverlayId::AutosaveRecovery => layers.extend(self.autosave_recovery_overlay()),
             OverlayId::RenameDialog => layers.extend(self.rename_dialog_overlay()),
             OverlayId::RemoveDialog => layers.extend(self.remove_dialog_overlay()),
             OverlayId::ProjectCloseConfirm => layers.extend(self.project_close_confirm_overlay()),
@@ -343,7 +344,6 @@ impl Signex {
             OverlayId::AnnotateResetConfirm => layers.extend(self.annotate_reset_confirm_overlay()),
             OverlayId::ErcDialog => layers.extend(self.erc_dialog_overlay()),
             OverlayId::LibraryPicker => layers.extend(self.library_picker_overlay()),
-            OverlayId::NewComponent => layers.extend(self.new_component_overlay()),
             OverlayId::EditRowModal => layers.extend(self.edit_row_modal_overlay()),
             OverlayId::DeleteConfirm => layers.extend(self.delete_confirm_overlay()),
             OverlayId::PrimitivePicker => layers.extend(self.primitive_picker_overlay()),

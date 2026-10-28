@@ -26,6 +26,11 @@ impl SchematicCanvas<'_> {
             let wx = world.x as f64;
             let wy = world.y as f64;
 
+            // Click-click Move / Move Selection: pick or drop (#271).
+            if let Some(action) = self.update_move_pick_press(state, wx, wy) {
+                return Some(action);
+            }
+
             // Double-click detection (300ms, 5px threshold)
             let now = std::time::Instant::now();
             if let (Some(last_time), Some(last_pos)) =
@@ -59,9 +64,13 @@ impl SchematicCanvas<'_> {
             // should immediately select-and-drag in one gesture.
             let (on_selected, on_unselected_item) = if !self.drawing_mode {
                 if let Some(snapshot) = self.active_snapshot() {
-                    if let Some(hit) =
-                        crate::schematic_runtime::hit_test::hit_test(snapshot, wx, wy)
-                    {
+                    if let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
+                        snapshot,
+                        &self.designators,
+                        wx,
+                        wy,
+                        self.prefs.wire_class_styles,
+                    ) {
                         let sel = self.selected.iter().any(|s| s.uuid == hit.uuid);
                         (sel, !sel)
                     } else {
@@ -140,6 +149,13 @@ impl SchematicCanvas<'_> {
         &self,
         state: &mut CanvasState,
     ) -> Option<canvas::Action<Message>> {
+        self.drop_stale_float(state);
+        // A click-click move keeps floating through the picking press's
+        // release; only the next press drops it.
+        if state.is_floating() {
+            return Some(canvas::Action::capture());
+        }
+
         // Case 1: Drag-to-move in progress → commit the move
         if state.move_dragging {
             if let (Some(origin), Some(current)) = (state.move_origin, state.move_current) {
@@ -201,24 +217,36 @@ impl SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
-        // Abort an in-progress drag — matches Altium / Esc behavior.
+        // Abort a floating move or in-progress drag — matches Altium / Esc.
+        // `pan_moved` makes the matching right-release read as a drag, so the
+        // press that cancelled does not also open the context menu.
+        if state.is_floating() {
+            state.clear_move();
+            state.pan_moved = true;
+            return Some(canvas::Action::capture());
+        }
         if state.move_dragging || state.click_on_selected {
             state.move_dragging = false;
             state.click_on_selected = false;
             state.move_origin = None;
             state.move_current = None;
+            state.pan_moved = true;
             return Some(canvas::Action::capture());
         }
         if let Some(pos) = cursor.position_in(bounds) {
-            // Active Bar zone: top ~46px, centered (bar 36px + 4 top margin + slack)
-            if pos.y < 46.0 {
+            // Active Bar zone: top margin + bar height + slack, centered.
+            if pos.y < crate::active_bar::BAR_ZONE_HEIGHT_PX {
                 // Calculate which Active Bar button was right-clicked
-                let bar_width: f32 = crate::active_bar::BAR_WIDTH_PX;
-                let bar_x = (bounds.width - bar_width) / 2.0;
+                let tool = self.prefs.current_tool;
+                let bar_width = crate::active_bar::bar_width_for(tool);
+                // The bar is centred on the window; `bounds.x` is this
+                // canvas's window-space left edge.
+                let bar_x =
+                    crate::active_bar::bar_left_in_window(tool, self.prefs.window_width) - bounds.x;
                 let rel_x = pos.x - bar_x;
                 if rel_x >= 0.0
                     && rel_x < bar_width
-                    && let Some(menu) = active_bar_hit(rel_x)
+                    && let Some(menu) = crate::active_bar::menu_at(tool, rel_x)
                 {
                     return Some(canvas::Action::publish(Message::ActiveBar(
                         crate::active_bar::ActiveBarMsg::ToggleMenu(menu),
@@ -296,6 +324,7 @@ impl SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
+        self.drop_stale_float(state);
         if let Some(cursor_pos) = cursor.position_in(bounds) {
             // Pan if right/middle button held
             if state.panning {
@@ -330,7 +359,7 @@ impl SchematicCanvas<'_> {
             }
 
             // Track drag-to-move (selected items)
-            if state.click_on_selected {
+            if state.click_on_selected || state.is_floating() {
                 let world = self.camera().screen_to_world(cursor_pos, bounds);
                 let wx = world.x as f64;
                 let wy = world.y as f64;
@@ -385,6 +414,70 @@ impl SchematicCanvas<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::canvas::tests::test_prefs_styled;
+    use signex_types::net_class::{NetClassStyle, NetLineStyle};
+    use signex_types::schematic::{Point as SheetPoint, SchematicSheet, Wire};
+
+    const WIRE: uuid::Uuid = uuid::Uuid::from_u128(11);
+
+    fn slot_with_wire() -> CanvasSlot {
+        let sheet = SchematicSheet {
+            wires: vec![Wire {
+                uuid: WIRE,
+                start: SheetPoint::new(10.0, 10.0),
+                end: SheetPoint::new(30.0, 10.0),
+                stroke_width: 0.15,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let mut slot = CanvasSlot::new();
+        slot.set_render_cache(Some(
+            crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
+        ));
+        slot
+    }
+
+    /// Press the left button at world `(20, 11.5)`, 1.5 mm off the wire, with
+    /// `styles` as the canvas's net-class styles. Returns whether the press
+    /// landed on an item and so armed a drag.
+    fn press_lands_on_an_item(styles: &crate::schematic_runtime::WireClassStyles) -> bool {
+        let slot = slot_with_wire();
+        let (ox, oy, scale) = slot.live_camera();
+        let at = iced::Point::new(20.0 * scale + ox, 11.5 * scale + oy);
+        let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
+        let (overrides, filters) = Default::default();
+        let view = SchematicCanvas::new(&slot, test_prefs_styled(&overrides, &filters, styles));
+        let mut state = CanvasState::default();
+
+        let _ = view.update_left_pressed(&mut state, bounds, mouse::Cursor::Available(at));
+
+        state.click_on_selected
+    }
+
+    #[test]
+    fn a_press_is_hit_at_the_width_the_wire_is_drawn_at() {
+        let no_styles = crate::schematic_runtime::WireClassStyles::new();
+        assert!(
+            !press_lands_on_an_item(&no_styles),
+            "1.5 mm off a 0.15 mm wire is empty space"
+        );
+
+        let mut wide = crate::schematic_runtime::WireClassStyles::new();
+        wide.insert(
+            WIRE,
+            NetClassStyle {
+                color: None,
+                wire_width_mm: Some(2.0),
+                line: NetLineStyle::Solid,
+            },
+        );
+        assert!(
+            press_lands_on_an_item(&wide),
+            "the class width widens what a press can grab"
+        );
+    }
 
     #[test]
     fn threshold_is_in_screen_pixels() {

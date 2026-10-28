@@ -60,6 +60,19 @@ pub enum ArcScreenSpan {
     },
 }
 
+/// [`arc_screen_span`] with the handedness probed from the caller's own
+/// world→screen map, the way `draw_arc_bucket` does it.
+///
+/// For anything drawing an arc outside the scene replay — the in-progress
+/// placement preview — so that a preview and the arc it is about to commit
+/// cannot disagree about which way the curve bulges.
+pub fn arc_screen_span_for<F>(start_angle: f32, end_angle: f32, world_to_screen: F) -> ArcScreenSpan
+where
+    F: Fn([f32; 2]) -> Point,
+{
+    arc_screen_span(start_angle, end_angle, world_is_y_up(world_to_screen))
+}
+
 /// Map an arc's world angles onto the screen angles lyon will sweep between.
 ///
 /// Arc angles are world-space radians measured from +X, and the sweep is
@@ -81,19 +94,6 @@ pub enum ArcScreenSpan {
 /// convention)" — true of the Symbol Editor, whose map flips Y, and false of
 /// the schematic, whose map does not. Both share this replay, so the fix for
 /// one silently mirrored the other (#645).
-/// [`arc_screen_span`] with the handedness probed from the caller's own
-/// world→screen map, the way `draw_arc_bucket` does it.
-///
-/// For anything drawing an arc outside the scene replay — the in-progress
-/// placement preview — so that a preview and the arc it is about to commit
-/// cannot disagree about which way the curve bulges.
-pub fn arc_screen_span_for<F>(start_angle: f32, end_angle: f32, world_to_screen: F) -> ArcScreenSpan
-where
-    F: Fn([f32; 2]) -> Point,
-{
-    arc_screen_span(start_angle, end_angle, world_is_y_up(world_to_screen))
-}
-
 pub fn arc_screen_span(start_angle: f32, end_angle: f32, world_is_y_up: bool) -> ArcScreenSpan {
     if signex_gfx::primitive::arc::arc_is_full_turn_rad(start_angle, end_angle) {
         return ArcScreenSpan::FullTurn;
@@ -118,13 +118,18 @@ pub fn arc_screen_span(start_angle: f32, end_angle: f32, world_is_y_up: bool) ->
     }
 }
 
+/// Smallest a circle may render, in logical pixels. Shared with
+/// [`crate::scene_shader::SchematicSurface`] so the CPU replay and the GPU path
+/// floor radii identically.
+pub const MIN_RADIUS_PX: f32 = 0.5;
+
 impl SceneDrawOptions {
     fn stroke_px(self, width_mm: f32) -> f32 {
         (width_mm * self.scale_px_per_mm).max(self.min_stroke_px)
     }
 
     fn radius_px(self, radius_mm: f32) -> f32 {
-        (radius_mm * self.scale_px_per_mm).max(0.5)
+        (radius_mm * self.scale_px_per_mm).max(MIN_RADIUS_PX)
     }
 
     fn text_px(self, size_mm: f32) -> f32 {
@@ -140,7 +145,14 @@ fn color_from_rgba(rgba: [f32; 4]) -> Color {
     Color::from_rgba(rgba[0], rgba[1], rgba[2], rgba[3])
 }
 
-fn draw_dashed_line(frame: &mut canvas::Frame, p0: Point, p1: Point, width: f32, color: Color) {
+pub(crate) fn draw_dashed_line(
+    frame: &mut canvas::Frame,
+    p0: Point,
+    p1: Point,
+    width: f32,
+    color: Color,
+    (dash, gap): (f32, f32),
+) {
     let dx = p1.x - p0.x;
     let dy = p1.y - p0.y;
     let length = (dx * dx + dy * dy).sqrt();
@@ -148,8 +160,6 @@ fn draw_dashed_line(frame: &mut canvas::Frame, p0: Point, p1: Point, width: f32,
         return;
     }
 
-    let dash = 8.0;
-    let gap = 5.0;
     let ux = dx / length;
     let uy = dy / length;
     let mut dist = 0.0;
@@ -183,8 +193,8 @@ fn draw_line_bucket<F>(
         let width = options.stroke_px(line.width);
         let color = color_from_rgba(line.color);
 
-        if (line.style & 1) == 1 {
-            draw_dashed_line(frame, p0, p1, width, color);
+        if let Some(pattern) = line.pattern_px() {
+            draw_dashed_line(frame, p0, p1, width, color, pattern);
         } else {
             let path = canvas::Path::line(p0, p1);
             frame.stroke(
@@ -334,22 +344,77 @@ fn to_text_v_align(align: TextVAlign) -> alignment::Vertical {
 
 /// The canvas face for one item. `bold` used to be ignored here while the GPU
 /// pipeline honoured it, so the same item rendered at two weights (#645).
-/// `italic` stays upright on both sides — see `signex_gfx`'s `attrs_for_item`
-/// for why mapping it without a bundled italic face changes the typeface.
+/// `italic` maps the same way on both sides; it needs the italic Iosevka
+/// faces in `fonts::bundled`, or the request leaves the family (#654).
 fn canvas_font(text: &TextItem) -> iced::Font {
-    if text.bold {
-        iced::Font {
-            weight: iced::font::Weight::Bold,
-            ..crate::render_config::IOSEVKA
-        }
-    } else {
+    // `family_or` is the same call the GPU pipeline's `attrs_for_item` makes,
+    // so an item's own family reaches both replays through one rule.
+    let family = text.family_or(crate::render_config::CANVAS_FONT_FAMILY);
+    let mut font = if family == crate::render_config::CANVAS_FONT_FAMILY {
         crate::render_config::IOSEVKA
+    } else {
+        crate::fonts::iced_font_for_family(family)
+    };
+    if text.bold {
+        font.weight = iced::font::Weight::Bold;
     }
+    if text.italic {
+        font.style = iced::font::Style::Italic;
+    }
+    font
+}
+
+/// Translate-then-rotate placement for a rotated label: the text is drawn at
+/// the local origin so its h/v alignment pivots around the anchor. `None` for
+/// axis-aligned items, which are placed directly.
+fn rotated_text_transform(
+    text: &TextItem,
+    position: Point,
+) -> Option<(iced::Vector, iced::Radians)> {
+    (!text.is_axis_aligned()).then(|| {
+        (
+            iced::Vector::new(position.x, position.y),
+            iced::Radians(text.rotation),
+        )
+    })
 }
 
 fn draw_text_bucket<F>(
     frame: &mut canvas::Frame,
     texts: &[TextItem],
+    world_to_screen: F,
+    options: SceneDrawOptions,
+) where
+    F: Fn([f32; 2]) -> Point + Copy,
+{
+    draw_text_items(frame, texts.iter(), world_to_screen, options);
+}
+
+/// The texts of `scene` the GPU glyph atlas cannot draw: every item that is
+/// not [`TextItem::is_axis_aligned`], the same predicate the GPU text pipeline
+/// stages by. Together with the axis-aligned rest they are exactly
+/// `scene.texts`.
+pub fn rotated_texts(scene: &Scene) -> impl Iterator<Item = &TextItem> {
+    scene.texts.iter().filter(|text| !text.is_axis_aligned())
+}
+
+/// CPU fallback for a scene whose axis-aligned text draws on the GPU: paints
+/// only the rotated items, through the same path as the full replay so they
+/// match it pixel for pixel.
+pub fn draw_rotated_texts<F>(
+    frame: &mut canvas::Frame,
+    scene: &Scene,
+    world_to_screen: F,
+    options: SceneDrawOptions,
+) where
+    F: Fn([f32; 2]) -> Point + Copy,
+{
+    draw_text_items(frame, rotated_texts(scene), world_to_screen, options);
+}
+
+fn draw_text_items<'a, F>(
+    frame: &mut canvas::Frame,
+    texts: impl Iterator<Item = &'a TextItem>,
     world_to_screen: F,
     options: SceneDrawOptions,
 ) where
@@ -375,18 +440,18 @@ fn draw_text_bucket<F>(
             ..canvas::Text::default()
         };
 
-        if text.is_axis_aligned() {
-            let mut placed = draw_text;
-            placed.position = position;
-            frame.fill_text(placed);
-            continue;
+        match rotated_text_transform(text, position) {
+            None => {
+                let mut placed = draw_text;
+                placed.position = position;
+                frame.fill_text(placed);
+            }
+            Some((translation, angle)) => frame.with_save(|inner| {
+                inner.translate(translation);
+                inner.rotate(angle);
+                inner.fill_text(draw_text);
+            }),
         }
-
-        frame.with_save(|inner| {
-            inner.translate(iced::Vector::new(position.x, position.y));
-            inner.rotate(iced::Radians(text.rotation));
-            inner.fill_text(draw_text);
-        });
     }
 }
 
@@ -558,5 +623,246 @@ mod arc_span_tests {
             let (us, ue) = span(a, b, true);
             assert!(((de - ds).abs() - (ue - us).abs()).abs() < 1e-5);
         }
+    }
+}
+
+#[cfg(test)]
+mod canvas_font_tests {
+    use super::*;
+    use crate::fonts::bundled::BUNDLED_FONTS;
+
+    /// Which bundled face `canvas_font` selects for an item, resolved the
+    /// way cosmic-text does: only faces whose style equals the request are
+    /// candidates, nearest weight wins. `None` means no bundled face has
+    /// that style, so the shaper would leave the family for a system face.
+    fn bundled_face_of(item: &TextItem) -> Option<String> {
+        let mut db = fontdb::Database::new();
+        for font in BUNDLED_FONTS {
+            db.load_font_data(font.to_vec());
+        }
+        let font = canvas_font(item);
+        let iced::font::Family::Name(family) = font.family else {
+            panic!("the canvas font names its family: {font:?}");
+        };
+        let style = match font.style {
+            iced::font::Style::Normal => fontdb::Style::Normal,
+            iced::font::Style::Italic => fontdb::Style::Italic,
+            iced::font::Style::Oblique => fontdb::Style::Oblique,
+        };
+        let weight = match font.weight {
+            iced::font::Weight::Normal => fontdb::Weight::NORMAL,
+            iced::font::Weight::Bold => fontdb::Weight::BOLD,
+            other => panic!("canvas_font only picks Normal or Bold, got {other:?}"),
+        };
+        let id = db.query(&fontdb::Query {
+            families: &[fontdb::Family::Name(family)],
+            weight,
+            stretch: fontdb::Stretch::Normal,
+            style,
+        })?;
+        let face = db.face(id)?;
+        (face.style == style).then(|| face.post_script_name.clone())
+    }
+
+    fn bundled_face_for(bold: bool, italic: bool) -> Option<String> {
+        bundled_face_of(&TextItem {
+            content: "R1".to_string(),
+            size_mm: 1.0,
+            color: [1.0; 4],
+            bold,
+            italic,
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn every_bold_and_italic_combination_selects_its_own_bundled_iosevka_face() {
+        assert_eq!(bundled_face_for(false, false).as_deref(), Some("Iosevka"));
+        assert_eq!(
+            bundled_face_for(true, false).as_deref(),
+            Some("Iosevka-Bold")
+        );
+        assert_eq!(
+            bundled_face_for(false, true).as_deref(),
+            Some("Iosevka-Italic"),
+            "an italic item must draw in a bundled italic Iosevka, not upright \
+             and not in a system italic"
+        );
+        assert_eq!(
+            bundled_face_for(true, true).as_deref(),
+            Some("Iosevka-Bold-Italic")
+        );
+    }
+
+    /// #510 end to end, from the document to the face: an installed family
+    /// reaches the canvas replay (and, through the shared `family_or`, the
+    /// GPU pipeline), and a family this machine lacks falls back to the
+    /// bundled Iosevka rather than to the sheet default or a system face.
+    #[test]
+    fn a_text_items_family_survives_the_scene_and_a_missing_one_falls_back_to_iosevka() {
+        use signex_gfx::scene::DirtyFlags;
+        use signex_renderer::schematic::SchematicRenderer;
+        use signex_renderer::schematic::ViewRenderer;
+        use signex_types::schematic::{Label, LabelType, Point as SchPoint, SchematicSheet};
+
+        let label = |text: &str, family: Option<&str>| Label {
+            uuid: uuid::Uuid::new_v4(),
+            text: text.to_string(),
+            position: SchPoint { x: 10.0, y: 10.0 },
+            rotation: 0.0,
+            label_type: LabelType::Net,
+            shape: String::new(),
+            font_size: 1.27,
+            font_family: family.map(str::to_string),
+            justify: Default::default(),
+            justify_v: Default::default(),
+            unknown_columns: Default::default(),
+        };
+        // Roboto is bundled, so it is installed on every machine and the
+        // result does not depend on the fonts of the machine running this.
+        let sheet = SchematicSheet {
+            font_family: Some("Roboto".to_string()),
+            labels: vec![
+                label("INHERITS", None),
+                label("OWN", Some("Roboto")),
+                label("MISSING", Some("Surely Not Installed 510")),
+                label("DEFAULT", Some("Iosevka")),
+            ],
+            ..Default::default()
+        };
+
+        let transform = crate::schematic_runtime::ScreenTransform {
+            offset_x: 0.0,
+            offset_y: 0.0,
+            scale: 4.0,
+        };
+        let colors =
+            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+        let bounds = iced::Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
+        let snapshot = crate::schematic_runtime::build_renderer_snapshot(
+            &sheet,
+            &transform,
+            &colors,
+            bounds,
+            None,
+            Default::default(),
+        );
+        let mut scene = Scene::default();
+        SchematicRenderer::build_scene(
+            &snapshot,
+            &signex_renderer::theme::ResolvedTheme::from_canvas_colors(colors),
+            DirtyFlags::TEXT,
+            &mut scene,
+        );
+
+        let face = |content: &str| {
+            let item = scene
+                .texts
+                .iter()
+                .find(|item| item.content == content)
+                .unwrap_or_else(|| panic!("{content} was emitted"));
+            // The one rule both replays share.
+            let family = item.family_or(crate::render_config::CANVAS_FONT_FAMILY);
+            let iced::font::Family::Name(canvas_family) = canvas_font(item).family else {
+                panic!("the canvas font names its family");
+            };
+            assert_eq!(
+                canvas_family, family,
+                "{content}: canvas and shared rule agree"
+            );
+            bundled_face_of(item)
+        };
+        assert_eq!(face("INHERITS").as_deref(), Some("Roboto-Regular"));
+        assert_eq!(face("OWN").as_deref(), Some("Roboto-Regular"));
+        assert_eq!(
+            face("MISSING").as_deref(),
+            Some("Iosevka"),
+            "a missing family falls back to the bundled default"
+        );
+        assert_eq!(face("DEFAULT").as_deref(), Some("Iosevka"));
+    }
+}
+
+#[cfg(test)]
+mod rotated_text_tests {
+    use super::*;
+    use signex_gfx::primitive::text::{TextHAlign, TextVAlign};
+    use std::f32::consts::FRAC_PI_2;
+
+    fn item(rotation: f32) -> TextItem {
+        TextItem {
+            content: "PIN1".to_string(),
+            position: [0.0, 0.0],
+            size_mm: 1.0,
+            color: [1.0, 1.0, 1.0, 1.0],
+            bold: false,
+            italic: false,
+            rotation,
+            h_align: TextHAlign::Right,
+            v_align: TextVAlign::Bottom,
+            family: None,
+        }
+    }
+
+    fn text(content: &str, rotation: f32) -> TextItem {
+        TextItem {
+            content: content.to_string(),
+            size_mm: 1.27,
+            color: [1.0; 4],
+            rotation,
+            ..Default::default()
+        }
+    }
+
+    /// The GPU stages `is_axis_aligned` items and this fallback draws the rest,
+    /// so a text is never lost and never drawn twice (#199 S1).
+    #[test]
+    fn gpu_staged_plus_fallback_is_exactly_the_scene_texts() {
+        let scene = Scene {
+            texts: vec![
+                text("horizontal", 0.0),
+                text("vertical", std::f32::consts::FRAC_PI_2),
+                text("negative-zero", -0.0),
+                text("arbitrary", 0.61),
+                text("vertical-down", -std::f32::consts::FRAC_PI_2),
+                text("flipped", std::f32::consts::PI),
+            ],
+            ..Scene::default()
+        };
+
+        let staged: Vec<&str> = scene
+            .texts
+            .iter()
+            .filter(|t| t.is_axis_aligned())
+            .map(|t| t.content.as_str())
+            .collect();
+        let fallback: Vec<&str> = rotated_texts(&scene).map(|t| t.content.as_str()).collect();
+
+        assert_eq!(staged, ["horizontal", "negative-zero"]);
+        assert_eq!(
+            fallback,
+            ["vertical", "arbitrary", "vertical-down", "flipped"]
+        );
+        assert!(staged.iter().all(|c| !fallback.contains(c)), "disjoint");
+        let mut all: Vec<&str> = staged.iter().chain(&fallback).copied().collect();
+        let mut expected: Vec<&str> = scene.texts.iter().map(|t| t.content.as_str()).collect();
+        all.sort_unstable();
+        expected.sort_unstable();
+        assert_eq!(all, expected, "nothing missed, nothing duplicated");
+    }
+
+    #[test]
+    fn quarter_turn_labels_pivot_on_the_anchor_with_their_own_sign() {
+        let anchor = Point::new(100.0, 50.0);
+        for angle in [FRAC_PI_2, -FRAC_PI_2, 3.0 * FRAC_PI_2] {
+            let (shift, rot) = rotated_text_transform(&item(angle), anchor).expect("rotated");
+            assert_eq!((shift.x, shift.y), (100.0, 50.0));
+            assert_eq!(rot.0, angle);
+        }
+    }
+
+    #[test]
+    fn axis_aligned_labels_are_placed_directly() {
+        assert!(rotated_text_transform(&item(0.0), Point::ORIGIN).is_none());
     }
 }

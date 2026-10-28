@@ -37,6 +37,20 @@ fn dispatch(app: &mut Signex, path: &Path, msg: FootprintEditorMsg) {
     }));
 }
 
+/// Resolve the drag solve a tick left owed, the way the runtime's `Task`
+/// would: solve the snapshot, feed the answer back as `SketchSolved`.
+fn settle_solves(app: &mut Signex, path: &Path) {
+    use signex_app::library::editor::footprint::sketch_solve_task::{run_solve, snapshot_request};
+    for _ in 0..4 {
+        let editor = app.document_state.footprint_editors.get(path).unwrap();
+        if !editor.state.sketch_solve.is_solve_owed() {
+            return;
+        }
+        let request = snapshot_request(editor).expect("a sketch is being solved");
+        dispatch(app, path, run_solve(request));
+    }
+}
+
 /// The exact repro from issue #390: a Chamfered 2×1 mm pad at the
 /// origin with the chamfer on the top-right corner.
 fn chamfered_repro_pad() -> EditorPad {
@@ -59,7 +73,7 @@ fn chamfered_repro_pad() -> EditorPad {
 /// has already been minted, plus the tab wiring `Message::Edit` needs
 /// to resolve the active editor.
 fn editor_with_minted_pad(stem: &str, mut pad: EditorPad) -> (Signex, PathBuf) {
-    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::app::{FootprintDocument, TabInfo, TabKind};
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_library::{Footprint, FootprintFile};
 
@@ -68,7 +82,7 @@ fn editor_with_minted_pad(stem: &str, mut pad: EditorPad) -> (Signex, PathBuf) {
     mirror_add_pad_to_sketch(&mut pad, &mut fp);
 
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
 
@@ -702,6 +716,7 @@ fn sketch_centre_drag_carries_the_chamfer_anchor_with_it() {
             dy: 3.0,
         },
     );
+    settle_solves(&mut app, &path);
 
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     let pad = &editor.state.pads[0];

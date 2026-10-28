@@ -18,6 +18,7 @@ impl Signex {
             ComponentsMountSource::Project => p.collapsed_project = !p.collapsed_project,
             ComponentsMountSource::Installed => p.collapsed_installed = !p.collapsed_installed,
             ComponentsMountSource::Global => p.collapsed_global = !p.collapsed_global,
+            ComponentsMountSource::Stock => p.collapsed_stock = !p.collapsed_stock,
         }
         Task::none()
     }
@@ -94,7 +95,8 @@ impl Signex {
                     Err(e) => self.report_global_libraries_save_failure("add library", &e),
                 }
             }
-            ComponentsMountSource::Project => {}
+            // Neither section has an add button; nothing to record.
+            ComponentsMountSource::Project | ComponentsMountSource::Stock => {}
         }
         Task::none()
     }
@@ -157,10 +159,8 @@ impl Signex {
         table: String,
         row_id: RowId,
     ) -> Task<Message> {
-        // Stage 9 stub — the full ghost-component drag is polish
-        // work. Dispatch through the existing place handler so
-        // the row at least lands on the canvas via the picker
-        // path until ghost-drag ships.
+        // Same drop-at-view-centre placement as the picker; a ghost drag
+        // is not wired on trunk.
         Task::done(Message::Library(LibraryMessage::PlaceLibraryComponent {
             library_path,
             table,

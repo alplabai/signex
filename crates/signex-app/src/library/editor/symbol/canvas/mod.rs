@@ -42,6 +42,7 @@ use std::collections::HashMap;
 use super::state::{self, SymbolSelection};
 
 mod draw;
+mod fields;
 mod geometry;
 mod input;
 mod pins;
@@ -71,7 +72,7 @@ pub struct SymbolCanvas<'a> {
     pub selected: Option<SymbolSelection>,
     pub tool: SymbolTool,
     /// Click-collect vertex stash for the `PlacePolygon` tool —
-    /// owned by [`crate::app::SymbolEditorState::polygon_vertices`],
+    /// owned by [`crate::app::SymbolDocument::polygon_vertices`],
     /// not this Program's ephemeral `CanvasState`, so it can't survive
     /// a tab switch and mis-commit into a different document (see the
     /// commit that introduced this field for the cross-tab-corruption
@@ -85,14 +86,14 @@ pub struct SymbolCanvas<'a> {
     /// only. Defaults to `1` (single-part components).
     pub active_part: u8,
     /// Whether the right-click context menu is currently open (see
-    /// `SymbolEditorState::context_menu`). The context menu and a pan
+    /// `SymbolDocument::context_menu`). The context menu and a pan
     /// can't coexist — once an in-flight right-drag crosses the pan
     /// motion threshold while this is `true`, the pointer handler
     /// closes the menu instead of publishing that frame's pan (mirrors
     /// the footprint canvas's `pan_on_cursor_moved`).
     pub context_menu_open: bool,
     /// Pan/zoom state owned by the editor tab — see
-    /// [`crate::app::SymbolEditorState::camera`].
+    /// [`crate::app::SymbolDocument::camera`].
     pub camera: &'a crate::canvas::Camera,
     /// Visible grid spacing in mm — sourced from
     /// `panel_ctx.grid_size_mm` so the schematic + library editors
@@ -133,7 +134,7 @@ pub struct SymbolCanvas<'a> {
 
 impl<'a> SymbolCanvas<'a> {
     /// Construct the per-frame canvas with the inputs from
-    /// `SymbolEditorState` + the active theme + global grid/unit
+    /// `SymbolDocument` + the active theme + global grid/unit
     /// settings. See module-level docs for the parity rationale.
     #[expect(
         clippy::too_many_arguments,
@@ -521,15 +522,6 @@ impl<'a> SymbolCanvas<'a> {
         scale: f32,
     ) {
         let snapshot = self.build_symbol_renderer_snapshot(selected, scale);
-        if snapshot.wires.is_empty()
-            && snapshot.junctions.is_empty()
-            && snapshot.arcs.is_empty()
-            && snapshot.polygons.is_empty()
-            && snapshot.labels.is_empty()
-            && snapshot.pin_texts.is_empty()
-        {
-            return;
-        }
 
         let mut scene = Scene::default();
         SchematicRenderer::build_scene(
@@ -680,6 +672,7 @@ impl<'a> SymbolCanvas<'a> {
                         rotation_rad: 0.0,
                         h_align: HAlign::Left,
                         v_align: VAlign::Top,
+                        family: None,
                     });
                 }
                 SymbolGraphicKind::Polygon { vertices } => {
@@ -776,6 +769,7 @@ impl<'a> SymbolCanvas<'a> {
                 rotation_rad: geom.text_rotation,
                 h_align: HAlign::Center,
                 v_align: VAlign::Bottom,
+                family: None,
             });
 
             pin_texts.push(signex_renderer::schematic::TextInput {
@@ -795,6 +789,7 @@ impl<'a> SymbolCanvas<'a> {
                 rotation_rad: geom.text_rotation,
                 h_align: geom.name_h_align,
                 v_align: VAlign::Center,
+                family: None,
             });
         }
 
@@ -805,14 +800,17 @@ impl<'a> SymbolCanvas<'a> {
             polygons,
             labels,
             pin_texts,
-            reference_value_texts: Vec::new(),
+            reference_value_texts: self.field_texts(selected),
             parameter_texts: Vec::new(),
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
             wire_color_overrides: HashMap::new(),
+            wire_line_styles: HashMap::new(),
         }
     }
 }
 
+#[cfg(test)]
+mod rotate_keys_tests;
 #[cfg(test)]
 mod tests;

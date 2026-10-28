@@ -2,12 +2,22 @@ use serde::{Deserialize, Serialize};
 
 use crate::id::{ConstraintId, SketchEntityId};
 
+/// Parse the text of a dimension input box into a canonical-unit number.
+///
+/// Rejects anything that is not a finite number: `NaN`, `inf` and values
+/// that overflow `f64` all parse under `f64::from_str` but would make
+/// every later solve diverge.
+pub fn parse_dimension_input(text: &str) -> Result<f64, crate::expr::ExprError> {
+    signex_types::numeric::parse_finite_f64(text)
+        .map_err(|_| crate::expr::ExprError::BadQuantity(text.to_string()))
+}
+
 /// Optional dimension target — either a literal length/angle in
 /// canonical units (mm or rad) or an expression string evaluated at
 /// solve time.
 ///
-/// Phase 2 honours `Literal` only; `Expr` is preserved through the
-/// schema and evaluated by the parser/evaluator added in Phase 4.
+/// `Expr` is evaluated against the resolved parameter map when the
+/// constraint's residual is computed.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum DimTarget {
@@ -119,6 +129,19 @@ pub enum ConstraintKind {
 }
 
 impl ConstraintKind {
+    /// The dimension this constraint is driven toward, for the kinds that
+    /// carry one.
+    pub fn dim_target(&self) -> Option<&DimTarget> {
+        use ConstraintKind::*;
+        match self {
+            DistancePtPt { target, .. }
+            | DistancePtLine { target, .. }
+            | DistancePtCircle { target, .. }
+            | Angle { target, .. } => Some(target),
+            _ => None,
+        }
+    }
+
     /// Every entity this constraint names, in field order.
     pub fn entity_refs(&self) -> Vec<SketchEntityId> {
         use ConstraintKind::*;

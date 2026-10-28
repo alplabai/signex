@@ -4,8 +4,7 @@
 //! recorded edit then clears its redo.
 
 use signex_app::app::{
-    EditMsg, LocalColorSlot, Message, Signex, SymbolEditorState, SymbolViewRequest, TabInfo,
-    TabKind,
+    EditMsg, LocalColorSlot, Message, Signex, SymbolDocument, SymbolViewRequest, TabInfo, TabKind,
 };
 use signex_app::dock::DockMessage;
 use signex_app::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg};
@@ -21,7 +20,7 @@ fn symbol_app() -> (Signex, PathBuf) {
     file.symbols.push(Symbol::empty("B"));
     app.document_state
         .symbol_editors
-        .insert(path.clone(), SymbolEditorState::new(path.clone(), file));
+        .insert(path.clone(), SymbolDocument::new(path.clone(), file));
     app.document_state.tabs.push(TabInfo {
         title: "lib".into(),
         path: path.clone(),
@@ -49,7 +48,7 @@ fn undo(app: &mut Signex) {
     let _ = app.update(Message::Edit(EditMsg::Undo));
 }
 
-fn editor<'a>(app: &'a Signex, path: &Path) -> &'a SymbolEditorState {
+fn editor<'a>(app: &'a Signex, path: &Path) -> &'a SymbolDocument {
     &app.document_state.symbol_editors[path]
 }
 
@@ -188,7 +187,7 @@ fn every_properties_edit_records_exactly_one_step() {
         ("pin hidden", PanelMsg::SymEditorTogglePinHidden(0)),
         (
             "symbol designator",
-            PanelMsg::SymEditorSetSymbolDesignator("U?".into()),
+            PanelMsg::SymEditorSetSymbolDesignator("U9?".into()),
         ),
         ("symbol mirrored", PanelMsg::SymEditorToggleSymbolMirrored),
         (
@@ -273,7 +272,7 @@ fn history_shares_unchanged_symbols_between_snapshots() {
     let mut file = SymbolFile::from_symbol(Symbol::empty("A"));
     file.symbols.push(Symbol::empty("B"));
     file.symbols.push(Symbol::empty("C"));
-    let mut ed = SymbolEditorState::new(PathBuf::from("t.snxsym"), file);
+    let mut ed = SymbolDocument::new(PathBuf::from("t.snxsym"), file);
     let first = ed.snapshot();
     ed.commit_history(first);
     ed.file.symbols[1].name = "B2".into();

@@ -9,12 +9,12 @@
 
 use super::super::*;
 
-use crate::app::FootprintEditorState as Editor;
+use crate::app::FootprintDocument;
 
 /// The active footprint's sketch entity `id`, if it has a sketch and
 /// the entity exists.
 fn sketch_entity_mut(
-    editor: &mut Editor,
+    editor: &mut FootprintDocument,
     id: signex_sketch::id::SketchEntityId,
 ) -> Option<&mut signex_sketch::entity::Entity> {
     editor
@@ -28,7 +28,7 @@ fn sketch_entity_mut(
 
 /// The active footprint's sketch array `array_id`, if it exists.
 fn sketch_array_mut(
-    editor: &mut Editor,
+    editor: &mut FootprintDocument,
     array_id: signex_sketch::array::ArrayId,
 ) -> Option<&mut signex_sketch::array::Array> {
     editor
@@ -42,7 +42,7 @@ fn sketch_array_mut(
 
 /// Re-solve and re-bake after a sketch attribute edit, then mark the
 /// editor dirty and redraw.
-fn rebuild_sketch(editor: &mut Editor) {
+fn rebuild_sketch(editor: &mut FootprintDocument) {
     use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
     use crate::library::editor::footprint::sketch_mode::SketchEdit;
     editor.with_parts(|state, primitive| {
@@ -217,7 +217,7 @@ impl Signex {
     /// v0.13 — Altium "Snap Distance" setter.
     pub(crate) fn handle_fp_set_snap_distance(&mut self, raw: String) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut()
-            && let Ok(v) = raw.trim().parse::<f64>()
+            && let Some(v) = crate::numeric_field::parse_field_f64(&raw)
         {
             editor.state.snap_options.snap_distance_mm = v.clamp(0.001, 100.0);
             editor.canvas_cache.clear();
@@ -229,7 +229,7 @@ impl Signex {
     /// v0.13 — Altium "Axis Snap Range" setter.
     pub(crate) fn handle_fp_set_axis_snap_range(&mut self, raw: String) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut()
-            && let Ok(v) = raw.trim().parse::<f64>()
+            && let Some(v) = crate::numeric_field::parse_field_f64(&raw)
         {
             editor.state.snap_options.axis_snap_range_mm = v.clamp(0.001, 100.0);
             editor.canvas_cache.clear();
@@ -242,14 +242,11 @@ impl Signex {
     /// the user's text; on a clean positive parse writes
     /// `state.snap_options.grid_step_mm`. Invalid / empty / non-
     /// positive strings no-op so partial keystrokes don't snap to
-    /// zero (which would crash the canvas's grid math).
+    /// zero (which would crash the canvas's grid math). NaN / inf are
+    /// refused with a Messages-panel line (#925).
     pub(crate) fn fp_editor_set_snap_grid_step(&mut self, value: &str) -> bool {
-        let trimmed = value.trim();
-        if trimmed.is_empty() {
-            return true;
-        }
-        let parsed: f64 = match trimmed.parse::<f64>() {
-            Ok(v) if v > 0.0 && v.is_finite() => v,
+        let parsed = match crate::numeric_field::parse_field_f64(value) {
+            Some(v) if v > 0.0 => v,
             _ => return true,
         };
         if let Some(editor) = self.active_footprint_editor_mut() {

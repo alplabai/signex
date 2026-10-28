@@ -1,0 +1,27 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "two-flat-sheets",
+  "pcb_file": null,
+  "schematic_root": "empty_sheet.snxsch",
+  "sheets": [
+    {
+      "filename": "empty_sheet.snxsch",
+      "labels_count": 0,
+      "name": "Sheet 1",
+      "symbols_count": 0,
+      "wires_count": 0
+    },
+    {
+      "filename": "regulator_stage.snxsch",
+      "labels_count": 0,
+      "name": "Sheet 2",
+      "symbols_count": 0,
+      "wires_count": 0
+    }
+  ],
+  "variant_definitions": []
+}

@@ -79,13 +79,6 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
-[footprints.sketch.entities.pad.stack]
-paste_top_enabled = false
-paste_bottom_enabled = false
-mask_top_tented = false
-mask_bottom_tented = false
-thermal_relief = false
-
 [[footprints.sketch.entities]]
 id = "321de7ce-bd80-4bef-9fc4-a2a8fe6bc82c"
 plane = "cdbf6963-91f5-44b7-9f96-a2e01a046265"
@@ -110,13 +103,6 @@ shape = "Rect"
 
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
-
-[footprints.sketch.entities.pad.stack]
-paste_top_enabled = false
-paste_bottom_enabled = false
-mask_top_tented = false
-mask_bottom_tented = false
-thermal_relief = false
 
 [footprints.sketch.parameters]
 body_h = "1.25mm"

@@ -54,7 +54,7 @@ fn point_and_line(
     index: &EntityIndex,
     sketch: &SketchData,
 ) -> Result<(Vec2, Vec2, Vec2), SketchError> {
-    let (s, e) = line_endpoints(line, sketch).ok_or(SketchError::EntityNotFound(line))?;
+    let (s, e) = line_endpoints(line, index, sketch).ok_or(SketchError::EntityNotFound(line))?;
     let p = point_xy(point, state, index, sketch).ok_or(SketchError::EntityNotFound(point))?;
     let a = point_xy(s, state, index, sketch).ok_or(SketchError::EntityNotFound(s))?;
     let b = point_xy(e, state, index, sketch).ok_or(SketchError::EntityNotFound(e))?;
@@ -65,8 +65,8 @@ fn point_and_line(
 /// infinite line through `line`'s endpoints. Zero when `point` sits
 /// on the line.
 ///
-/// A degenerate line (`|B − A| < ε`) is treated as a malformed
-/// entity and reported via `SketchError::EntityNotFound(line)`.
+/// A degenerate line (`|B − A| < ε`) has no direction and is reported
+/// via `SketchError::DegenerateLine(line)`.
 pub fn point_on_line(
     point: SketchEntityId,
     line: SketchEntityId,
@@ -75,7 +75,7 @@ pub fn point_on_line(
     sketch: &SketchData,
 ) -> Result<Vec<f64>, SketchError> {
     let (p, a, b) = point_and_line(point, line, state, index, sketch)?;
-    let d = signed_perp_distance(p, a, b).ok_or(SketchError::EntityNotFound(line))?;
+    let d = signed_perp_distance(p, a, b).ok_or(SketchError::DegenerateLine(line))?;
     Ok(vec![d])
 }
 
@@ -94,7 +94,7 @@ pub fn point_on_arc(
     sketch: &SketchData,
 ) -> Result<Vec<f64>, SketchError> {
     let (center, start, _end, _ccw) =
-        arc_refs(arc, sketch).ok_or(SketchError::EntityNotFound(arc))?;
+        arc_refs(arc, index, sketch).ok_or(SketchError::EntityNotFound(arc))?;
     let c = point_xy(center, state, index, sketch).ok_or(SketchError::EntityNotFound(center))?;
     let s = point_xy(start, state, index, sketch).ok_or(SketchError::EntityNotFound(start))?;
     let p = point_xy(point, state, index, sketch).ok_or(SketchError::EntityNotFound(point))?;
@@ -116,7 +116,7 @@ pub fn distance_pt_line(
     sketch: &SketchData,
 ) -> Result<Vec<f64>, SketchError> {
     let (p, a, b) = point_and_line(point, line, state, index, sketch)?;
-    let d = signed_perp_distance(p, a, b).ok_or(SketchError::EntityNotFound(line))?;
+    let d = signed_perp_distance(p, a, b).ok_or(SketchError::DegenerateLine(line))?;
     Ok(vec![d - target_mm])
 }
 

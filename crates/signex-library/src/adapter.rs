@@ -27,24 +27,36 @@ pub enum LibraryError {
     NotFound(String),
     #[error("conflict: {0}")]
     Conflict(String),
-    #[error("locked by {holder}: {field_set}")]
-    Locked { holder: String, field_set: String },
+    /// The stored row is no longer at the base revision the write was
+    /// based on: someone else saved it in between. `current_revision` is
+    /// a server counter or, for a local library, a content hash.
+    #[error("changed by someone else since you read it; reload to see their version")]
+    RowChanged { current_revision: u64 },
+    /// Like [`Self::RowChanged`], for a symbol, footprint or sim model.
+    /// `subject` names it (`symbol <uuid>`) so the caller can keep the
+    /// local edit and offer save-as as well as reload.
+    #[error(
+        "{subject} was changed by someone else since you read it; save your edit as a new copy, \
+         or reload to see their version"
+    )]
+    PrimitiveChanged {
+        subject: String,
+        current_revision: u64,
+    },
+    /// The version-control guard refused to start a repository in a folder
+    /// that holds more than the project (#1205). The text says why.
+    #[error("{0}")]
+    VersionControlRefused(String),
     #[error("unauthorized: {0}")]
     Unauthorized(String),
     #[error("backend: {0}")]
     Backend(String),
-}
-
-/// Field-sets per v0.9-library-plan.md §8 — locking granularity.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum FieldSet {
-    Symbol,
-    Footprint,
-    Model3d,
-    SharedParams,
-    SharedSupplyChain,
-    SharedSimulation,
-    Lifecycle,
+    /// A write reached a library that is mounted read-only. A property
+    /// of the mount, not of filesystem permissions — it is raised
+    /// before any byte is touched, so it reads the same whether or not
+    /// the directory happens to be writable.
+    #[error("the library \"{library}\" ships with Signex and is not editable")]
+    ReadOnly { library: String },
 }
 
 /// A query into the library — partial match on internal_pn or mpn, plus facets.
@@ -132,6 +144,29 @@ pub struct HistoryEntry {
     pub deletions: u32,
 }
 
+/// A primitive together with the revision this copy was read at — the
+/// primitive tier's counterpart of `ComponentRow::server_revision`. The
+/// caller that holds the copy keeps the revision with it and hands it back
+/// as the base of its save, so the base is always "what this copy was read
+/// at", never "what someone last read". `None` for a backend that does not
+/// version primitives (a local library) and for a primitive being created.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Versioned<T> {
+    pub value: T,
+    pub revision: Option<u64>,
+}
+
+/// Refuse a base revision on a backend that hands none out: silently
+/// dropping it would turn a conditional save into an unconditional one.
+fn refuse_unversioned_base(base: Option<u64>) -> Result<(), LibraryError> {
+    match base {
+        None => Ok(()),
+        Some(_) => Err(LibraryError::Backend(
+            "this library does not version primitives; save without a base revision".into(),
+        )),
+    }
+}
+
 /// Storage backend abstraction. All flavours (LocalGit, Database, Plm)
 /// implement this.
 ///
@@ -151,6 +186,14 @@ pub trait LibraryAdapter: Send + Sync {
     }
 
     fn manifest(&self) -> &Manifest;
+
+    /// True when this library is mounted read-only (the stock library
+    /// that ships with Signex). Every write entry point of such an
+    /// adapter fails with [`LibraryError::ReadOnly`]; the UI uses this
+    /// to disable write affordances up front. Defaults to `false`.
+    fn is_read_only(&self) -> bool {
+        false
+    }
 
     /// Borrow the parsed `.snxlib` view if this adapter is backed by an
     /// on-disk file. Returns `None` for non-file adapters (e.g. the DB
@@ -181,6 +224,22 @@ pub trait LibraryAdapter: Send + Sync {
     /// adapters.
     fn library_file_path(&self) -> Option<&std::path::Path> {
         None
+    }
+
+    /// Re-point a file-backed adapter at `new_file` after the `.snxlib`
+    /// was renamed on disk. Pure bookkeeping — the adapter's parsed view
+    /// stays valid, so nothing is re-read. Without it, the next row write
+    /// persists to the old path and recreates the library there.
+    ///
+    /// The caller owns the file move and calls this once the file is at
+    /// `new_file`. A git-backed adapter records the rename in the library's
+    /// own repository (old name dropped, new name added, one commit); a
+    /// failure leaves the adapter on its old path. Adapters with no on-disk
+    /// file keep the default, which refuses.
+    fn relocate_library_file(&mut self, _new_file: &std::path::Path) -> Result<(), LibraryError> {
+        Err(LibraryError::Backend(
+            "relocate_library_file not supported for this adapter".into(),
+        ))
     }
 
     // ── Tables ──────────────────────────────────────────────────────────
@@ -357,6 +416,29 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
+    /// Move every pin of one row that binds `save`'s primitive (default or
+    /// alternate symbol, footprint, sim) onto `save.version` and patch-bump
+    /// the row's own version, re-reading the row at write time so the
+    /// write keeps any other field changed since a caller's snapshot.
+    /// Returns whether the row changed: a row already pinned at
+    /// `save.version` is left alone. The default reads and then updates;
+    /// an adapter with a write lock overrides it to do both under the lock.
+    fn bind_row_primitive_version(
+        &self,
+        table: &str,
+        row_id: RowId,
+        save: &crate::cascade::PrimitiveSave,
+        message: &str,
+    ) -> Result<bool, LibraryError> {
+        let mut row = self.read_row(table, row_id)?;
+        if !crate::cascade::needs_bump(&row, save) {
+            return Ok(false);
+        }
+        crate::cascade::apply_cascade_bump(&mut row, save);
+        self.update_row(table, row, message)?;
+        Ok(true)
+    }
+
     // ── Row CRUD ────────────────────────────────────────────────────────
 
     fn read_row(&self, _table: &str, _row_id: RowId) -> Result<ComponentRow, LibraryError> {
@@ -377,29 +459,84 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
-    fn update_row(&self, _table: &str, _row: ComponentRow, _msg: &str) -> Result<(), LibraryError> {
+    /// Replace a row. Writes only when the stored row is still at the base
+    /// revision `row.server_revision` (a server counter, or for a local
+    /// library a content hash, see `local_git::helpers::row_base`) and
+    /// returns the row's new base; an adapter without bases returns `None`.
+    fn update_row(
+        &self,
+        _table: &str,
+        _row: ComponentRow,
+        _msg: &str,
+    ) -> Result<Option<u64>, LibraryError> {
         Err(LibraryError::Backend(
             "update_row not implemented for this adapter".into(),
         ))
     }
 
-    fn delete_row(&self, _table: &str, _row_id: RowId, _msg: &str) -> Result<(), LibraryError> {
+    /// [`update_row`](Self::update_row), committing the working-tree files
+    /// `asset_rel_paths` (relative to the library root, already written)
+    /// in the same commit as the row that references them. An adapter that
+    /// keeps no working tree cannot hold those files, so with any asset it
+    /// refuses instead of saving a row whose pinned file nobody else can
+    /// resolve.
+    fn update_row_with_assets(
+        &self,
+        table: &str,
+        row: ComponentRow,
+        msg: &str,
+        asset_rel_paths: &[String],
+    ) -> Result<Option<u64>, LibraryError> {
+        if !asset_rel_paths.is_empty() {
+            return Err(LibraryError::Backend(
+                "this library cannot store pinned datasheet PDFs: it keeps no files beside its \
+                 library file. Use a URL datasheet instead"
+                    .into(),
+            ));
+        }
+        self.update_row(table, row, msg)
+    }
+
+    /// Delete a row. `base_revision` is the `server_revision` of the copy
+    /// the caller is deleting (server counter or local content hash); the
+    /// delete is refused when the stored row has moved past it.
+    fn delete_row(
+        &self,
+        _table: &str,
+        _row_id: RowId,
+        _base_revision: Option<u64>,
+        _msg: &str,
+    ) -> Result<(), LibraryError> {
         Err(LibraryError::Backend(
             "delete_row not implemented for this adapter".into(),
         ))
     }
 
-    // ── Locks (advisory) ────────────────────────────────────────────────
+    // ── Cached distributor pricing ──────────────────────────────────────
 
-    fn try_lock(&self, _row_id: RowId, _field_set: FieldSet) -> Result<(), LibraryError> {
-        Err(LibraryError::Backend(
-            "try_lock not implemented for this adapter".into(),
-        ))
+    /// Cached distributor prices of the named table, keyed by `row_id`.
+    /// Adapters without a price cache report none.
+    fn table_pricing(
+        &self,
+        _table: &str,
+    ) -> Result<std::collections::BTreeMap<Uuid, crate::pricing::RowPricing>, LibraryError> {
+        Ok(std::collections::BTreeMap::new())
     }
 
-    fn release_lock(&self, _row_id: RowId, _field_set: FieldSet) -> Result<(), LibraryError> {
+    /// Write fetched prices back as ONE save and ONE commit. `cancel` is
+    /// re-checked under the write lock, after the reload and before the
+    /// write: set, nothing is saved or committed. Each update is
+    /// re-checked against the row as it is at write time: a row deleted, or
+    /// whose SKU for that distributor changed, since the fetch started is
+    /// reported in [`crate::StoreOutcome::dropped`] and not written.
+    fn store_pricing(
+        &self,
+        _updates: Vec<crate::pricing::PricingUpdate>,
+        _cancel: &std::sync::atomic::AtomicBool,
+        _msg: &str,
+    ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
         Err(LibraryError::Backend(
-            "release_lock not implemented for this adapter".into(),
+            "store_pricing not implemented for this adapter".into(),
         ))
     }
 
@@ -446,6 +583,72 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
+    // ── Versioned primitive reads / saves ───────────────────────────────
+    //
+    // A shared library server versions every primitive. `get_*_versioned`
+    // returns the revision the copy was read at; `save_*_versioned` sends it
+    // back as the base, and the save is refused with
+    // `LibraryError::RowChanged` when the stored primitive has moved on.
+    // On a versioned backend a `None` base creates the primitive
+    // (`Conflict` if it exists). The saved revision comes back so the next
+    // save of the same copy can use it. The defaults carry `None` both ways
+    // and call the plain `save_*`, so a `None`-base save is only create-only
+    // when the plain `save_*` is. A shared backend must therefore make its
+    // plain `save_*` create-only (as `DatabaseAdapter` does); a local
+    // single-writer backend such as `LocalGitAdapter` overwrites, which is
+    // fine there because nobody else writes the copy.
+
+    fn get_symbol_versioned(&self, uuid: Uuid) -> Result<Versioned<Symbol>, LibraryError> {
+        self.get_symbol(uuid).map(|value| Versioned {
+            value,
+            revision: None,
+        })
+    }
+
+    fn get_footprint_versioned(&self, uuid: Uuid) -> Result<Versioned<Footprint>, LibraryError> {
+        self.get_footprint(uuid).map(|value| Versioned {
+            value,
+            revision: None,
+        })
+    }
+
+    fn get_sim_versioned(&self, uuid: Uuid) -> Result<Versioned<SimModel>, LibraryError> {
+        self.get_sim(uuid).map(|value| Versioned {
+            value,
+            revision: None,
+        })
+    }
+
+    fn save_symbol_versioned(
+        &self,
+        sym: Symbol,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        refuse_unversioned_base(base)?;
+        self.save_symbol(sym, message).map(|()| None)
+    }
+
+    fn save_footprint_versioned(
+        &self,
+        fp: Footprint,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        refuse_unversioned_base(base)?;
+        self.save_footprint(fp, message).map(|()| None)
+    }
+
+    fn save_sim_versioned(
+        &self,
+        sm: SimModel,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        refuse_unversioned_base(base)?;
+        self.save_sim(sm, message).map(|()| None)
+    }
+
     fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
         Ok(Vec::new())
     }
@@ -456,6 +659,14 @@ pub trait LibraryAdapter: Send + Sync {
 
     fn list_sims(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
         Ok(Vec::new())
+    }
+
+    /// True when the most recent `list_symbols` succeeded but left some
+    /// symbols out because a container file could not be read or parsed.
+    /// Such a listing says nothing about what is *missing*, so callers
+    /// that report absence must not trust it.
+    fn symbol_listing_is_partial(&self) -> bool {
+        false
     }
 
     /// For local-git, the `.snxlib/` directory; for DB, `None`.

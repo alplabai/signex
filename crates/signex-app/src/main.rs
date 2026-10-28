@@ -5,13 +5,9 @@
 //! dispatchers without spinning up the iced runtime.
 
 use signex_app::app::Signex;
+use signex_app::fonts::bundled;
 use signex_app::startup_args::StartupAction;
 use signex_app::{diagnostics, fonts, startup_args};
-
-const IOSEVKA_REGULAR: &[u8] = include_bytes!("../assets/fonts/Iosevka-Regular.ttf");
-const IOSEVKA_BOLD: &[u8] = include_bytes!("../assets/fonts/Iosevka-Bold.ttf");
-const ROBOTO_REGULAR: &[u8] = include_bytes!("../assets/fonts/Roboto-Regular.ttf");
-const ROBOTO_BOLD: &[u8] = include_bytes!("../assets/fonts/Roboto-Bold.ttf");
 
 fn main() -> iced::Result {
     // `--version` / `--help` must answer before logging, fonts, iced or
@@ -45,12 +41,15 @@ fn main() -> iced::Result {
     .title(Signex::title)
     .theme(Signex::theme)
     .subscription(Signex::subscription)
+    .scale_factor(Signex::scale_factor)
     // Iosevka — schematic / PCB canvas text (monospace, tuned for EDA).
-    .font(IOSEVKA_REGULAR)
-    .font(IOSEVKA_BOLD)
+    .font(bundled::IOSEVKA_REGULAR)
+    .font(bundled::IOSEVKA_BOLD)
+    .font(bundled::IOSEVKA_ITALIC)
+    .font(bundled::IOSEVKA_BOLD_ITALIC)
     // Roboto — UI chrome (panels, toolbars, menus, dialogs).
-    .font(ROBOTO_REGULAR)
-    .font(ROBOTO_BOLD)
+    .font(bundled::ROBOTO_REGULAR)
+    .font(bundled::ROBOTO_BOLD)
     // iced_aw bundled icon font — used by ColorPicker (Cancel / OK
     // glyphs) and other iced_aw widgets. Without this their action
     // buttons render as empty rectangles.

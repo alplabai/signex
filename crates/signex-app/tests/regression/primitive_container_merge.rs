@@ -6,7 +6,7 @@
 //! first window's symbol and dropped that edit.
 
 use signex_app::app::{
-    FileMsg, FootprintEditorState, Message, Signex, SymbolEditorState, TabInfo, TabKind,
+    FileMsg, FootprintDocument, Message, Signex, SymbolDocument, TabInfo, TabKind,
 };
 use signex_library::{Footprint, FootprintFile, Symbol, SymbolFile};
 use std::path::Path;
@@ -26,7 +26,7 @@ fn window_editing(path: &Path) -> Signex {
     let file = SymbolFile::from_toml_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     app.document_state.symbol_editors.insert(
         path.to_path_buf(),
-        SymbolEditorState::new(path.to_path_buf(), file),
+        SymbolDocument::new(path.to_path_buf(), file),
     );
     open_tab(&mut app, path, TabKind::SymbolEditor(path.to_path_buf()));
     app
@@ -46,7 +46,7 @@ fn open_tab(app: &mut Signex, path: &Path, kind: TabKind) {
 
 /// Ctrl+S on the window's active primitive tab.
 fn save(app: &mut Signex) {
-    let _ = app.update(Message::File(FileMsg::Save));
+    crate::settle_support::settle(app, Message::File(FileMsg::Save));
 }
 
 /// A Messages-panel line containing every needle. The panel cuts long
@@ -144,7 +144,7 @@ fn two_windows_saving_different_footprints_of_one_container_keep_both_edits() {
         let file = FootprintFile::from_toml_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         app.document_state
             .footprint_editors
-            .insert(path.clone(), FootprintEditorState::new(path.clone(), file));
+            .insert(path.clone(), FootprintDocument::new(path.clone(), file));
         open_tab(&mut app, &path, TabKind::FootprintEditor(path.clone()));
         app
     };

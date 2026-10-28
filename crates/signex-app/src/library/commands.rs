@@ -10,20 +10,21 @@ use std::path::PathBuf;
 
 use signex_library::adapters::local_git::LibraryInitOptions;
 use signex_library::{
-    ComponentClass, ComponentRow, ComponentSummary, DatasheetRef, FORMAT_TOKEN, InternalPn,
-    LibraryError, LibrarySection, LifecycleState, LocalGitAdapter, ManufacturerPart, ParamMap,
-    PlmReserved, PrimitiveRef, RowId, SnxlibManifest, UsersConfig, WorkflowConfig,
-    hash_row_content,
+    ComponentClass, ComponentRow, DatasheetRef, FORMAT_TOKEN, InternalPn, LibraryError,
+    LibrarySection, LifecycleState, LocalGitAdapter, ManufacturerPart, ParamMap, PlmReserved,
+    PrimitiveRef, RowId, SnxlibManifest, UsersConfig, WorkflowConfig, hash_row_content,
 };
 // Legacy `Manifest` / `LibraryMeta` / `LibraryMode` imports were retired
 // when `LocalGitAdapter::init` switched to the new `SnxlibManifest`
 // shape. The remaining sub-stages (Stage 13 workflow mode, Stage 14
 // versioning) will introduce richer manifest fields; keeping the
 // imports tight here keeps the v0.9-snxlib-as-file refactor auditable.
-use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
+use signex_types::project::{LibraryEntry, ProjectData};
 use uuid::Uuid;
 
 use super::state::LibraryState;
+use crate::app::CaseFold;
+use crate::app::library_entry::library_entry_location;
 
 /// Open a `*.snxlib/` and, when it was already mounted, refresh its
 /// component list.
@@ -163,6 +164,7 @@ pub fn materialize_pending_library(
     project: &mut ProjectData,
     library_id: Uuid,
     spec: &PendingLibrarySpec,
+    fold: CaseFold,
 ) -> Result<(), LibraryError> {
     if spec.lib_path.exists() {
         return Err(LibraryError::Conflict(format!(
@@ -201,13 +203,7 @@ pub fn materialize_pending_library(
     )?;
 
     let project_dir = PathBuf::from(&project.dir);
-    let (entry_path, entry_kind) = if !project_dir.as_os_str().is_empty()
-        && let Ok(rel) = spec.lib_path.strip_prefix(&project_dir)
-    {
-        (rel.to_path_buf(), LibraryEntryKind::ProjectLocal)
-    } else {
-        (spec.lib_path.clone(), LibraryEntryKind::Shared)
-    };
+    let (entry_path, entry_kind) = library_entry_location(&project_dir, &spec.lib_path, fold);
     project.libraries.push(LibraryEntry {
         path: entry_path,
         kind: entry_kind,
@@ -261,6 +257,7 @@ pub fn create_library_at(
     lib_path: PathBuf,
     enable_git: bool,
     use_lfs: bool,
+    fold: CaseFold,
 ) -> Result<Uuid, LibraryError> {
     // Library directories must use the `.snxlib` extension so the
     // library detector elsewhere (ancestor walk, dock open dialog,
@@ -357,13 +354,7 @@ pub fn create_library_at(
     // tree never showed the new library and the user had to delete
     // the orphan folder manually.
     let project_dir = PathBuf::from(&project.dir);
-    let (entry_path, entry_kind) = if !project_dir.as_os_str().is_empty()
-        && let Ok(rel) = lib_path.strip_prefix(&project_dir)
-    {
-        (rel.to_path_buf(), LibraryEntryKind::ProjectLocal)
-    } else {
-        (lib_path.clone(), LibraryEntryKind::Shared)
-    };
+    let (entry_path, entry_kind) = library_entry_location(&project_dir, &lib_path, fold);
 
     project.libraries.push(LibraryEntry {
         path: entry_path,
@@ -405,6 +396,7 @@ pub fn create_library(
     state: &mut LibraryState,
     project: &mut ProjectData,
     name: &str,
+    fold: CaseFold,
 ) -> Result<Uuid, LibraryError> {
     let trimmed = name.trim().to_string();
     if trimmed.is_empty() {
@@ -420,7 +412,7 @@ pub fn create_library(
     // Legacy convenience wrapper — defaults LFS off so existing
     // callers don't change behaviour. UI flows go through the
     // "Library Options" modal which carries `use_lfs` explicitly.
-    create_library_at(state, project, lib_path, false, false)
+    create_library_at(state, project, lib_path, false, false, fold)
 }
 
 /// What one `auto_mount_project_libraries` pass decided — issue #99
@@ -595,21 +587,24 @@ pub fn create_component_row(
     let library_root = library.root.clone();
     let library_id = library.library_id;
 
-    // Component creation does NOT mint new primitive files. Symbol +
-    // footprint are either picked through the Pick Symbol / Pick
-    // Footprint affordances inside the New Component modal, or bound
-    // later via the Component Preview tab. When the user submits with
-    // unbound refs, the row starts with sentinel `Uuid::nil()` and the
-    // Component Preview surfaces an "Unbound — pick a symbol" prompt.
+    // Component creation does NOT mint new primitive files: that would
+    // write `.snxsym` / `.snxfpt` without an explicit user action. A row
+    // created without refs starts with the sentinel `Uuid::nil()`; the
+    // browser grid, Properties panel and Component Preview show it as
+    // "No symbol bound" / "No footprint bound" with a Pick action, and
+    // the creation is reported once to the Messages panel below.
 
     let row_id = RowId::new();
     let now = chrono::Utc::now();
     let resolved_symbol = symbol_ref.unwrap_or_else(|| PrimitiveRef::new(library_id, Uuid::nil()));
     let mut row = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: row_id.as_uuid(),
         internal_pn: InternalPn::new(internal_pn),
         class,
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: resolved_symbol,
         footprint_ref,
@@ -631,8 +626,16 @@ pub fn create_component_row(
         created: now,
         updated: now,
         content_hash: [0u8; 32],
+        server_revision: None,
     };
     row.content_hash = hash_row_content(&row)?;
+    let mut unbound: Vec<&str> = Vec::new();
+    if row.is_symbol_unbound() {
+        unbound.push("symbol");
+    }
+    if row.is_footprint_unbound() {
+        unbound.push("footprint");
+    }
 
     let commit_msg = format!("new component: {internal_pn}");
     let adapter = state
@@ -650,31 +653,25 @@ pub fn create_component_row(
         );
     }
 
+    report_unbound_row(internal_pn, &unbound);
     Ok(row_id)
 }
 
-/// Re-run a query against every open library — picker filter helper.
-pub fn list_components_filtered(
-    state: &LibraryState,
-    text_filter: &str,
-) -> Vec<(PathBuf, ComponentSummary)> {
-    let needle = text_filter.trim().to_lowercase();
-    state
-        .all_components()
-        .into_iter()
-        .filter(|(_path, summary)| {
-            if needle.is_empty() {
-                return true;
-            }
-            summary
-                .internal_pn
-                .as_str()
-                .to_lowercase()
-                .contains(&needle)
-                || summary.mpn.to_lowercase().contains(&needle)
-                || summary.description.to_lowercase().contains(&needle)
-        })
-        .collect()
+/// Tell the Messages panel that a freshly created row has nothing bound.
+fn report_unbound_row(internal_pn: &str, unbound: &[&str]) {
+    if unbound.is_empty() {
+        return;
+    }
+    let name = if internal_pn.is_empty() {
+        "(unnamed row)"
+    } else {
+        internal_pn
+    };
+    tracing::warn!(
+        target: "signex::library",
+        "New component {name} has no {} bound. Use Pick Symbol / Pick Footprint in the library browser or Properties panel.",
+        unbound.join(" and no "),
+    );
 }
 
 /// Stub: emit `tracing::info!` with the use-site coordinates the

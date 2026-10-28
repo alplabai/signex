@@ -8,7 +8,8 @@
 //! Config file: OS-canonical config dir (`%APPDATA%\signex\prefs.json`
 //! on Windows, `~/Library/Application Support/signex/prefs.json` on
 //! macOS, `$XDG_CONFIG_HOME/signex/prefs.json` on Linux).
-//! Format: `{"ui_font": "Roboto"}`
+//! Format: a JSON object holding `ui_font` plus the other persisted keys
+//! (e.g. `component_classes`); writers preserve keys they do not own.
 //!
 //! Fallback: if the OS reports no config directory at all
 //! (`dirs::config_dir()` returns `None` — rare, e.g. a daemon or
@@ -159,24 +160,10 @@ pub fn iced_font_for_family(name: &str) -> iced::Font {
 /// then cached for the lifetime of the process.
 pub fn system_font_families() -> &'static Vec<String> {
     static CACHE: OnceLock<Vec<String>> = OnceLock::new();
-    CACHE.get_or_init(|| {
-        let mut db = fontdb::Database::new();
-        db.load_system_fonts();
-
-        // Collect all unique family names, sorted alphabetically.
-        let mut families: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-        for face in db.faces() {
-            if let Some((name, _)) = face.families.first() {
-                families.insert(name.clone());
-            }
-        }
-
-        // Always ensure Iosevka appears (it is bundled) so the canvas font
-        // option is always present even if not installed system-wide.
-        families.insert(DEFAULT_CANVAS_FONT.to_string());
-
-        families.into_iter().collect()
-    })
+    // Same scan the renderer reads (`catalog`), so the font pickers list
+    // exactly the families a document can resolve to. The bundled families
+    // are always in it, Iosevka included.
+    CACHE.get_or_init(|| catalog::installed_blocking().names().to_vec())
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -233,7 +220,7 @@ fn prefs_path() -> PathBuf {
 /// `$XDG_CONFIG_HOME` nor `$HOME`). Issue #437's review flagged the naive
 /// version of this fallback (a bare `<tmp>/signex/prefs.json`) as
 /// predictable and shared: two users on one host collide (the second gets
-/// `EACCES` from `atomic_write`, visible only at `tracing::debug!`, or
+/// `EACCES` from `atomic_write`, reported at `tracing::error!`, or
 /// silently reads the first user's prefs), and an attacker who pre-creates
 /// `prefs.json.tmp` as a symlink gets `atomic_write`'s `File::create` to
 /// write through it.
@@ -253,7 +240,7 @@ fn prefs_path() -> PathBuf {
 /// filesystem itself is unwritable — every other option has already
 /// failed too), this hands back a path anyway rather than panicking:
 /// every write through it fails at `atomic_write`'s own
-/// `tracing::debug!`, and the app simply runs the session on in-memory
+/// `tracing::error!`, and the app simply runs the session on in-memory
 /// defaults. Degrade, don't die.
 fn production_temp_fallback_path() -> PathBuf {
     let dir = match tempfile::Builder::new().prefix("signex-").tempdir() {
@@ -350,7 +337,8 @@ pub fn read_ui_font_pref_at(path: &Path) -> String {
 
 /// Persist the given `ui_font` choice to the preferences file.
 /// Creates parent directories if they do not exist.
-/// Silently ignores I/O errors (non-critical preference).
+/// An I/O failure is reported at `tracing::error!` (see `write_pref_atomic`);
+/// the setting still applies for the session.
 pub fn write_ui_font_pref(font_name: &str) {
     write_ui_font_pref_at(&prefs_path(), font_name)
 }
@@ -389,8 +377,8 @@ pub fn read_component_classes_pref() -> Vec<ComponentClassEntry> {
 }
 
 /// Persist `classes` to the `component_classes` array in prefs.json
-/// without clobbering other preference keys. Silent on I/O failure
-/// — preferences are best-effort.
+/// without clobbering other preference keys. An I/O failure is reported at
+/// `tracing::error!`; the in-memory setting still applies.
 pub fn write_component_classes_pref(classes: &[ComponentClassEntry]) {
     update_prefs_json(&prefs_path(), "component_classes", |prefs| {
         if let Ok(value) = serde_json::to_value(classes) {
@@ -691,12 +679,18 @@ pub fn write_symbol_pin_selection_pref(mode: PinSelectionMode) {
     })
 }
 
+pub mod bundled;
+pub mod catalog;
 mod dock_layout;
+pub mod document_report;
 mod erc;
+pub mod measure;
 mod misc;
+mod ordered_write;
 mod prefs_file;
 mod presets;
 mod recent;
+pub mod resolve;
 
 /// The one read-modify-write every preference writer in this module
 /// tree goes through (#594). Imported here rather than re-exported —
@@ -717,6 +711,7 @@ pub use prefs_file::{
 pub use dock_layout::*;
 pub use erc::*;
 pub use misc::*;
+pub use ordered_write::{OrderedPrefWrite, background_pref_write};
 pub use presets::*;
 pub use recent::*;
 
@@ -786,5 +781,27 @@ mod tests {
             crate::feature_flags::PCB_GPU_RENDER_DEFAULT,
             "an unrelated prefs file must not disturb the default"
         );
+    }
+}
+
+#[cfg(test)]
+mod designator_standard_tests {
+    use super::DEFAULT_COMPONENT_CLASSES;
+    use signex_types::designator::{DesignatorStandard, class_prefix};
+
+    /// Every seeded class but "generic" has letters under every standard, so
+    /// a renamed seed key cannot silently fall back to the legacy prefix.
+    #[test]
+    fn every_seed_class_but_generic_resolves_under_each_standard() {
+        for (key, _) in DEFAULT_COMPONENT_CLASSES {
+            for standard in DesignatorStandard::ALL {
+                let letters = class_prefix(standard, key);
+                if *key == "generic" {
+                    assert_eq!(letters, None);
+                } else {
+                    assert!(letters.is_some(), "{key} has no prefix under {standard}");
+                }
+            }
+        }
     }
 }

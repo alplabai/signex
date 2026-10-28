@@ -52,7 +52,7 @@ static PREFS_PATH_LOCK: Mutex<()> = Mutex::new(());
 /// protects a file path, not an invariant that a panicking test can leave
 /// half-applied, and [`PrefsPathGuard`] has already restored the path by
 /// the time this lock is released.
-fn serial() -> std::sync::MutexGuard<'static, ()> {
+pub(crate) fn serial() -> std::sync::MutexGuard<'static, ()> {
     PREFS_PATH_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -67,7 +67,7 @@ fn serial() -> std::sync::MutexGuard<'static, ()> {
 /// working copy as well as the prefs, so the one test that drives a real
 /// Save would otherwise leave `keyboard_shortcuts.toml` behind for every
 /// later `Signex::new()` in this binary to load.
-struct PrefsPathGuard {
+pub(crate) struct PrefsPathGuard {
     path: std::path::PathBuf,
     before: Option<Vec<u8>>,
     keymap_path: Option<std::path::PathBuf>,
@@ -75,7 +75,7 @@ struct PrefsPathGuard {
 }
 
 impl PrefsPathGuard {
-    fn capture() -> Self {
+    pub(crate) fn capture() -> Self {
         let path = signex_app::fonts::prefs_file_path();
         let before = std::fs::read(&path).ok();
         let keymap_path = signex_app::keymap::config_path();
@@ -383,12 +383,250 @@ fn erc_severity_override_equal_to_the_default_is_stored_verbatim() {
 
     // Act: Preferences chip
     app.ui_state.erc_severity_override.clear();
+    app.ui_state.preferences_draft_erc_severity.clear();
     let _ = app.update(inner(PrefMsg::DraftErcSeverity(rule, default)));
 
     // Assert
     assert_eq!(
-        app.ui_state.erc_severity_override.get(&rule),
+        app.ui_state.preferences_draft_erc_severity.get(&rule),
         Some(&default),
         "the Preferences chip must keep an override equal to the default"
     );
+}
+
+/// #348 — a pin-matrix cell the user cycles in the ERC dialog reaches the
+/// persisted prefs, survives a restart (a fresh read of the prefs file), and
+/// the matrix rebuilt from that read is what the rule consults: Output/Output
+/// goes Error -> Warning -> Info -> Off, and the mirrored cell moves with it.
+#[test]
+fn pin_matrix_cell_cycle_persists_and_drives_the_rule_matrix() {
+    use signex_app::app::ErcMsg;
+    use signex_erc::{PinAxis, PinMatrix, Severity};
+
+    // Arrange
+    let _serial = serial();
+    let _guard = PrefsPathGuard::capture();
+    let (mut app, _t) = Signex::new();
+    app.ui_state.pin_matrix_overrides.clear();
+    let output_output = |m: &PinMatrix| m.pair_severity(PinAxis::Output, PinAxis::Output);
+    let restart_matrix =
+        || PinMatrix::with_overrides(&signex_app::fonts::read_pin_matrix_overrides());
+
+    // The write runs in the returned Task (#1469), the way the iced runtime
+    // would run it; `update` itself leaves the prefs file alone.
+    let cycle = |app: &mut Signex| {
+        crate::library_symbol_drift::run_task(
+            app.update(Message::Erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 1 })),
+        )
+    };
+
+    // Act + Assert: Error (baseline) -> Warning
+    let task = app.update(Message::Erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 1 }));
+    assert_eq!(
+        output_output(&restart_matrix()),
+        Severity::Error,
+        "update must not write prefs.json inline"
+    );
+    let _ = crate::library_symbol_drift::run_task(task);
+    assert_eq!(output_output(&restart_matrix()), Severity::Warning);
+
+    // -> Info -> Off
+    let _ = cycle(&mut app);
+    let _ = cycle(&mut app);
+    assert_eq!(output_output(&restart_matrix()), Severity::Off);
+
+    // -> back to the baseline Error, which drops the override entirely.
+    let _ = cycle(&mut app);
+    assert_eq!(output_output(&restart_matrix()), Severity::Error);
+    assert!(signex_app::fonts::read_pin_matrix_overrides().is_empty());
+}
+
+/// #348 — cycling an off-diagonal cell writes its mirror too, so the dialog
+/// never shows two verdicts for one unordered pair.
+#[test]
+fn pin_matrix_cell_cycle_keeps_the_mirror_cell_in_step() {
+    use signex_app::app::ErcMsg;
+    use signex_erc::Severity;
+
+    // Arrange
+    let _serial = serial();
+    let _guard = PrefsPathGuard::capture();
+    let (mut app, _t) = Signex::new();
+    app.ui_state.pin_matrix_overrides.clear();
+
+    // Act: Output (1) x PowerOut (4), baseline Error.
+    let _ = app.update(Message::Erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 4 }));
+
+    // Assert
+    assert_eq!(
+        app.ui_state.pin_matrix_overrides.get(&(1, 4)),
+        Some(&Severity::Warning)
+    );
+    assert_eq!(
+        app.ui_state.pin_matrix_overrides.get(&(4, 1)),
+        Some(&Severity::Warning)
+    );
+}
+
+/// #1504 — an ERC severity chip is a Preferences draft: it neither touches
+/// the prefs file nor the severity the ERC engine runs with until Save, and
+/// Discard & Close drops it.
+#[test]
+fn erc_severity_draft_then_discard_changes_neither_disk_nor_effective() {
+    use signex_erc::{RuleKind, Severity};
+
+    // Arrange
+    let _serial = serial();
+    let _guard = PrefsPathGuard::capture();
+    let rule = RuleKind::UnusedPin;
+    let (mut app, _t) = Signex::new();
+    app.ui_state.erc_severity_override.clear();
+    signex_app::fonts::write_erc_severity_overrides(&app.ui_state.erc_severity_override);
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+
+    // Act
+    let _ = app.update(inner(PrefMsg::DraftErcSeverity(rule, Severity::Off)));
+
+    // Assert: nothing committed or written yet, but the dialog knows
+    assert!(app.ui_state.erc_severity_override.is_empty());
+    assert!(signex_app::fonts::read_erc_severity_overrides().is_empty());
+    assert!(app.ui_state.preferences_dirty);
+
+    // Act
+    let _ = app.update(inner(PrefMsg::DiscardAndClose));
+
+    // Assert
+    assert!(app.ui_state.erc_severity_override.is_empty());
+    assert!(app.ui_state.preferences_draft_erc_severity.is_empty());
+    assert!(signex_app::fonts::read_erc_severity_overrides().is_empty());
+}
+
+/// #1504 — Save commits the draft to the live map and persists it.
+#[test]
+fn erc_severity_draft_then_save_persists() {
+    use signex_erc::{RuleKind, Severity};
+
+    // Arrange
+    let _serial = serial();
+    let _guard = PrefsPathGuard::capture();
+    let rule = RuleKind::UnusedPin;
+    let (mut app, _t) = Signex::new();
+    app.ui_state.erc_severity_override.clear();
+    signex_app::fonts::write_erc_severity_overrides(&app.ui_state.erc_severity_override);
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+
+    // Act
+    let _ = app.update(inner(PrefMsg::DraftErcSeverity(rule, Severity::Off)));
+    let _ = app.update(inner(PrefMsg::Save));
+
+    // Assert
+    let expected = rule.normalize_override(Severity::Off);
+    assert_eq!(
+        app.ui_state.erc_severity_override.get(&rule),
+        Some(&expected)
+    );
+    assert_eq!(
+        signex_app::fonts::read_erc_severity_overrides().get(&rule),
+        Some(&expected)
+    );
+}
+
+/// #1504 — Reset is a draft too: Reset then Discard leaves the committed
+/// overrides and the file untouched.
+#[test]
+fn erc_severity_reset_then_discard_is_unchanged() {
+    use signex_erc::{RuleKind, Severity};
+
+    // Arrange
+    let _serial = serial();
+    let _guard = PrefsPathGuard::capture();
+    let rule = RuleKind::UnusedPin;
+    let (mut app, _t) = Signex::new();
+    let seeded = rule.normalize_override(Severity::Off);
+    app.ui_state.erc_severity_override.clear();
+    app.ui_state.erc_severity_override.insert(rule, seeded);
+    signex_app::fonts::write_erc_severity_overrides(&app.ui_state.erc_severity_override);
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+
+    // Act
+    let _ = app.update(inner(PrefMsg::ResetErcSeverities));
+    let _ = app.update(inner(PrefMsg::DiscardAndClose));
+
+    // Assert
+    assert_eq!(app.ui_state.erc_severity_override.get(&rule), Some(&seeded));
+    assert_eq!(
+        signex_app::fonts::read_erc_severity_overrides().get(&rule),
+        Some(&seeded)
+    );
+}
+
+/// #1504 review — an override the ERC dialog commits while Preferences is
+/// open survives a Save that only changed something else (theme), in memory
+/// and on disk, and does not leave the dialog dirty.
+#[test]
+fn erc_dialog_change_while_preferences_open_survives_save() {
+    use signex_app::app::ErcMsg;
+    use signex_erc::{RuleKind, Severity};
+
+    // Arrange
+    let _serial = serial();
+    let _guard = PrefsPathGuard::capture();
+    let rule = RuleKind::UnusedPin;
+    let (mut app, _t) = Signex::new();
+    app.ui_state.erc_severity_override.clear();
+    signex_app::fonts::write_erc_severity_overrides(&app.ui_state.erc_severity_override);
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+
+    // Act: dialog edit while Preferences is open, then an unrelated Save
+    let _ = app.update(Message::Erc(ErcMsg::SeverityChanged(rule, Severity::Off)));
+    assert!(
+        !app.ui_state.preferences_dirty,
+        "a committed ERC dialog change is not an unsaved Preferences edit"
+    );
+    let _ = app.update(inner(PrefMsg::DraftAutosaveEnabled(
+        !app.ui_state.autosave_enabled,
+    )));
+    let _ = app.update(inner(PrefMsg::Save));
+
+    // Assert
+    let expected = rule.normalize_override(Severity::Off);
+    assert_eq!(
+        app.ui_state.erc_severity_override.get(&rule),
+        Some(&expected)
+    );
+    assert_eq!(
+        signex_app::fonts::read_erc_severity_overrides().get(&rule),
+        Some(&expected)
+    );
+}
+
+/// #1504 review — X edited in Preferences and Y in the ERC dialog: Save
+/// keeps both.
+#[test]
+fn preferences_and_erc_dialog_edits_to_different_rules_both_survive_save() {
+    use signex_app::app::ErcMsg;
+    use signex_erc::{RuleKind, Severity};
+
+    // Arrange
+    let _serial = serial();
+    let _guard = PrefsPathGuard::capture();
+    let (x, y) = (RuleKind::UnusedPin, RuleKind::BadHierSheetPin);
+    let (mut app, _t) = Signex::new();
+    app.ui_state.erc_severity_override.clear();
+    signex_app::fonts::write_erc_severity_overrides(&app.ui_state.erc_severity_override);
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+
+    // Act
+    let _ = app.update(inner(PrefMsg::DraftErcSeverity(x, Severity::Off)));
+    let _ = app.update(Message::Erc(ErcMsg::SeverityChanged(y, Severity::Off)));
+    let _ = app.update(inner(PrefMsg::Save));
+
+    // Assert
+    let off_x = x.normalize_override(Severity::Off);
+    let off_y = y.normalize_override(Severity::Off);
+    let disk = signex_app::fonts::read_erc_severity_overrides();
+    assert_eq!(app.ui_state.erc_severity_override.get(&x), Some(&off_x));
+    assert_eq!(app.ui_state.erc_severity_override.get(&y), Some(&off_y));
+    assert_eq!(disk.get(&x), Some(&off_x));
+    assert_eq!(disk.get(&y), Some(&off_y));
 }

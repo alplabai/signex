@@ -34,7 +34,7 @@ pub use symbol_problems::SymbolFileProblem;
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 use uuid::Uuid;
 
@@ -45,7 +45,9 @@ use crate::identity::{InternalPn, RowId};
 use crate::library_file::{LibraryFile, LibraryRow, LibraryTable, SnxlibManifest};
 use crate::manifest::{LibraryMeta, Manifest};
 use crate::primitive::{Footprint, PrimitiveKind, SimFile, SimModel, Symbol, SymbolFile};
-use crate::tables::{TABLE_HEADER, record_to_row, row_to_record};
+use crate::tables::{
+    ALTERNATE_SYMBOLS_COLUMN, TABLE_HEADER, alternate_symbols_cell, record_to_row, row_to_record,
+};
 
 const SYMBOLS_DIR: &str = "symbols";
 const FOOTPRINTS_DIR: &str = "footprints";
@@ -109,6 +111,8 @@ pub struct LocalGitAdapter {
     git_lock: Mutex<()>,
     /// `.snxsym` containers the last symbol scan could not read (#690).
     symbol_problems: Mutex<symbol_problems::SymbolProblemLedger>,
+    /// `.snxfpt` files already warned about, keyed by (path, mtime) (#924).
+    skipped_footprints: Mutex<std::collections::HashSet<(PathBuf, std::time::SystemTime)>>,
     /// Stamp and content hash of the `.snxlib` text behind `library_file`
     /// (#531). `None` forces a reload on the next access. Lock order:
     /// `library_file` before `disk_stamp`.
@@ -119,6 +123,9 @@ pub struct LocalGitAdapter {
     warned_state: Mutex<Option<disk_sync::DiskState>>,
     /// The "cannot lock on this filesystem" warning was logged (#832).
     write_lock_warned: std::sync::atomic::AtomicBool,
+    /// Encoded row lines from the last row write (#416). Lock order: after
+    /// `library_file` and `disk_stamp`.
+    row_lines: Mutex<crate::library_file::RowLines>,
 }
 
 impl LocalGitAdapter {
@@ -151,11 +158,12 @@ impl LocalGitAdapter {
         fs::create_dir_all(&root_dir)?;
 
         let library_file = LibraryFile {
+            layout: Default::default(),
             manifest: snx_manifest,
             tables: std::collections::BTreeMap::new(),
         };
         let text = library_file.write()?;
-        fs::write(&file_path, &text)?;
+        signex_types::atomic_io::atomic_write(&file_path, text.as_bytes())?;
         let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
 
         // Git scaffolding — only when the user opted in. Without
@@ -216,9 +224,11 @@ impl LocalGitAdapter {
             manifest_synth,
             git_lock: Mutex::new(()),
             symbol_problems: Mutex::default(),
+            skipped_footprints: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
             write_lock_warned: Default::default(),
+            row_lines: Mutex::default(),
         })
     }
 
@@ -237,7 +247,8 @@ impl LocalGitAdapter {
         // Stamp first: a write racing the read then costs one extra reload.
         let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
         let text = fs::read_to_string(&file_path)?;
-        let library_file = LibraryFile::parse(&text)?;
+        let library_file =
+            LibraryFile::parse_with(&text, &crate::tables::repair_short_component_row)?;
         let root_dir = parent_dir(&file_path)?;
         // Validate the repo opens — but treat a missing `.git/` as a
         // clean "no version control" state rather than a hard error.
@@ -258,9 +269,11 @@ impl LocalGitAdapter {
             manifest_synth,
             git_lock: Mutex::new(()),
             symbol_problems: Mutex::default(),
+            skipped_footprints: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
             write_lock_warned: Default::default(),
+            row_lines: Mutex::default(),
         })
     }
 
@@ -312,6 +325,13 @@ impl LocalGitAdapter {
                 Some(&mut skip_write_lock_files),
             )
             .map_err(|e| LibraryError::Backend(format!("git add all: {e}")))?;
+        if lfs::convert_index(&repo, &mut index)
+            .map_err(|e| LibraryError::Backend(format!("git lfs: {e}")))?
+            > 0
+        {
+            lfs::install_pre_push_hook(&repo)
+                .map_err(|e| LibraryError::Backend(format!("git lfs hook: {e}")))?;
+        }
         index
             .write()
             .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
@@ -345,7 +365,8 @@ impl LocalGitAdapter {
         // Stamp first: a write racing the read then costs one extra reload.
         let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
         let text = fs::read_to_string(&file_path)?;
-        let library_file = LibraryFile::parse(&text)?;
+        let library_file =
+            LibraryFile::parse_with(&text, &crate::tables::repair_short_component_row)?;
         let manifest_synth = synthesize_manifest(&library_file.manifest);
         Ok(Self {
             file_path,
@@ -354,9 +375,11 @@ impl LocalGitAdapter {
             manifest_synth,
             git_lock: Mutex::new(()),
             symbol_problems: Mutex::default(),
+            skipped_footprints: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
             write_lock_warned: Default::default(),
+            row_lines: Mutex::default(),
         })
     }
 
@@ -405,10 +428,17 @@ pub use write_lock::{
     write_lock_path,
 };
 mod helpers;
+pub(crate) mod lfs;
+mod pinned_assets;
 mod primitives;
+mod row_edit;
 mod write_lock;
 
 use helpers::*;
+use row_edit::RowChange;
+
+#[cfg(test)]
+mod write_oracle_tests;
 
 #[cfg(test)]
 mod tests {
@@ -439,6 +469,32 @@ mod tests {
 
     fn fixture_symbol(name: &str) -> Symbol {
         Symbol::empty(name)
+    }
+
+    /// #924 — a skipped footprint is reported once per (path, mtime), and
+    /// again after the file changes.
+    #[test]
+    fn skipped_footprint_warns_once_per_file_version() {
+        crate::git_identity::test_identity::install();
+        let dir = tempfile::tempdir().unwrap();
+        let path = fixture_snxlib_path(&dir, "Dedup");
+        let adapter = LocalGitAdapter::init(
+            &path,
+            fixture_snx_manifest("Dedup"),
+            LibraryInitOptions {
+                enable_git: true,
+                use_lfs: false,
+            },
+        )
+        .unwrap();
+        let bad = dir.path().join("bad.snxfpt");
+        std::fs::write(&bad, "a").unwrap();
+        assert!(adapter.warn_footprint_skipped_once(&bad, "e"));
+        assert!(!adapter.warn_footprint_skipped_once(&bad, "e"));
+        let f = std::fs::OpenOptions::new().write(true).open(&bad).unwrap();
+        f.set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(5))
+            .unwrap();
+        assert!(adapter.warn_footprint_skipped_once(&bad, "e"));
     }
 
     #[test]

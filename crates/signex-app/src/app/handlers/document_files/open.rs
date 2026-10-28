@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 
 use super::super::super::*;
+use super::new_project::{new_project_parts, write_new_project_files};
 
 impl Signex {
     /// An async read+parse of a document came back failed: log it and
@@ -48,81 +49,78 @@ impl Signex {
         self.interaction_state.editing_text = None;
         self.interaction_state.context_menu = None;
 
-        match self.create_new_project(&path) {
-            Ok(task) => task,
+        match new_project_parts(&path) {
+            // The directory, the refusal check and the file writes run on a
+            // blocking worker; `handle_new_project_written` opens the project.
+            Ok(_) => {
+                // A second New Project for the same path while the first
+                // worker is pending would race it; ignore it.
+                if !self.document_state.pending_opens.insert(path.clone()) {
+                    return iced::Task::none();
+                }
+                iced::Task::perform(
+                    super::super::dock::project_navigation::add_io::on_blocking_pool({
+                        let path = path.clone();
+                        move || write_new_project_files(&path).map_err(|e| format!("{e:#}"))
+                    }),
+                    move |result| Message::File(FileMsg::NewProjectWritten { path, result }),
+                )
+            }
             Err(error) => {
-                crate::diagnostics::log_error("Failed to create new project", &error);
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(
-                    format!("Failed to create new project: {error:#}"),
-                ));
+                self.report_new_project_failure(&format!("{error:#}"));
                 iced::Task::none()
             }
         }
     }
 
-    /// Create a brand-new `.snxprj` at `path` plus a blank companion
-    /// `<stem>.snxsch` in the same directory, then load the project and
-    /// open the schematic as a tab. The `.snxprj` is written empty —
-    /// `parse_project` is directory-driven and ignores file content.
-    fn create_new_project(
+    fn report_new_project_failure(&mut self, error: &str) {
+        crate::diagnostics::log_error(
+            "Failed to create new project",
+            &anyhow::anyhow!(error.to_owned()),
+        );
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(format!(
+            "Failed to create new project: {error}"
+        )));
+    }
+
+    /// Completion of the off-thread New Project writes: on success load the
+    /// project and open its companion schematic; a failure raises the notice.
+    pub(crate) fn handle_new_project_written(
         &mut self,
-        project_path: &std::path::Path,
-    ) -> Result<iced::Task<Message>> {
-        if project_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.eq_ignore_ascii_case("snxprj"))
-            != Some(true)
-        {
-            anyhow::bail!(
-                "new project path must end in .snxprj (got {})",
-                project_path.display()
-            );
+        project_path: PathBuf,
+        result: Result<PathBuf, String>,
+    ) -> iced::Task<Message> {
+        self.document_state
+            .pending_opens
+            .remove_untracked(&project_path);
+        let written = match result {
+            Ok(written) => written,
+            Err(error) => {
+                self.report_new_project_failure(&error);
+                return iced::Task::none();
+            }
+        };
+        match self.open_new_project(&written) {
+            Ok(task) => task,
+            Err(error) => {
+                self.report_new_project_failure(&format!("{error:#}"));
+                iced::Task::none()
+            }
         }
-        let dir = project_path
-            .parent()
-            .ok_or_else(|| anyhow::anyhow!("project path has no parent directory"))?;
-        let stem = project_path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .ok_or_else(|| anyhow::anyhow!("project path has no file stem"))?
-            .to_string();
+    }
 
-        std::fs::create_dir_all(dir)
-            .with_context(|| format!("create project directory {}", dir.display()))?;
-
-        // Refuse to create a new project over an existing, non-empty
-        // `.snxprj` — writing the empty marker below would truncate it
-        // and destroy the user's project. A zero-byte file is a legacy
-        // marker and safe to (re)write.
-        if let Ok(meta) = std::fs::metadata(project_path)
-            && meta.len() > 0
-        {
-            anyhow::bail!(
-                "a project already exists at {} — open it instead of creating a new one over it",
-                project_path.display()
-            );
-        }
-
-        std::fs::write(project_path, b"")
-            .with_context(|| format!("write project file {}", project_path.display()))?;
-
+    /// Load a freshly written project and open its companion schematic as
+    /// a tab (`<stem>.snxsch` beside the `.snxprj`).
+    fn open_new_project(&mut self, project_path: &std::path::Path) -> Result<iced::Task<Message>> {
+        let (dir, stem) = new_project_parts(project_path)?;
         let sch_path = dir.join(format!("{stem}.snxsch"));
-        if !sch_path.exists() {
-            let sheet = super::blank_schematic_sheet();
-            let serialised = signex_types::format::SnxSchematic::new(sheet)
-                .write_string()
-                .context("serialise blank schematic")?;
-            signex_types::atomic_io::atomic_write(&sch_path, serialised.as_bytes())
-                .with_context(|| format!("write blank schematic {}", sch_path.display()))?;
-        }
 
         // The project itself opens synchronously (a directory-driven
         // `.snxprj` parse, no heavy IO) — only the schematic tab's
         // read+parse below is async, via `open_document_path`'s
         // `snxsch` branch.
         let project_task = self.open_document_path(project_path.to_path_buf())?;
-        let schematic_task = if sch_path.exists() {
+        let schematic_task = {
             // Best-effort: surface the schematic tab so the new project
             // lands the user on a drawable canvas. A failure is logged
             // to the Messages panel and leaves them on the Welcome view.
@@ -133,8 +131,6 @@ impl Signex {
                     iced::Task::none()
                 }
             }
-        } else {
-            iced::Task::none()
         };
         self.refresh_panel_ctx();
         // Both Tasks go back to the runtime: the project's library
@@ -219,13 +215,18 @@ impl Signex {
         &mut self,
         from_path: PathBuf,
         to_path: PathBuf,
-    ) {
-        if let Err(error) = self.save_active_document_as(&from_path, to_path) {
-            self.report_save_failure("Failed to save active document as", &error);
+    ) -> iced::Task<Message> {
+        match self.save_active_document_as(&from_path, to_path) {
+            Ok(task) => task,
+            Err(error) => {
+                self.report_save_failure("Failed to save active document as", &error);
+                iced::Task::none()
+            }
         }
     }
 
-    fn open_document_path(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+    pub(crate) fn open_document_path(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        self.refuse_while_project_moves(&path, "open")?;
         let ext = path
             .extension()
             .and_then(|extension| extension.to_str())
@@ -314,18 +315,14 @@ impl Signex {
         // hardware that does GB/s), so six libraries are embarrassingly
         // parallel. `request_mount` already recorded each path as pending
         // inside `auto_mount_project_libraries`, so no path spawns twice.
-        let mount_task = iced::Task::batch(outcome.pending.into_iter().map(|library_path| {
-            let completion_path = library_path.clone();
-            iced::Task::perform(
-                crate::library::mount::prepare_mount_off_thread(library_path),
-                move |prepared| {
-                    Message::Library(crate::library::LibraryMessage::MountFinished {
-                        path: completion_path.clone(),
-                        prepared,
-                    })
-                },
-            )
-        }));
+        let mount_tasks = crate::library::mount::spawn_pending_mounts(outcome.pending);
+        // Probe the project's volume once, off-thread (#694); `update` only
+        // stores the answer on the project.
+        let case_probe = crate::app::state::project_case::spawn_case_probe(
+            id,
+            project_path.parent().unwrap_or(project_path).to_path_buf(),
+        );
+        let mount_task = iced::Task::batch([mount_tasks, case_probe]);
         self.document_state
             .projects
             .push(super::super::super::state::LoadedProject {
@@ -333,9 +330,60 @@ impl Signex {
                 path: project_path.to_path_buf(),
                 data,
                 pending_libraries: std::collections::HashMap::new(),
+                case_fold: crate::app::state::scope::CaseFold::host_default(),
+                case_probed: false,
             });
         self.document_state.active_project = Some(id);
         Ok((id, mount_task))
+    }
+
+    /// Whether a document already owns `path`: it has a tab, or its engine
+    /// holds unsaved edits (a parked tab-less engine). A clean tab-less
+    /// engine owns nothing: reopening reads the file, which is the truth.
+    /// Exact path equality, pending the `CaseFold` key (#1034).
+    pub(crate) fn path_is_owned_by_open_document(&self, path: &std::path::Path) -> bool {
+        self.document_state.tabs.iter().any(|tab| tab.path == path)
+            || (self.document_state.engines.contains_key(path)
+                && self.document_state.dirty_paths.contains(path))
+    }
+
+    /// The owner of a superseded schematic open result may be a dirty
+    /// engine parked without a tab (a sheet-reference rewrite loaded it
+    /// while the open was in flight). The user asked for that tab, so attach
+    /// it to the parked engine, exactly like a re-open does; nothing is read
+    /// from disk and the engine is kept as is.
+    pub(crate) fn attach_parked_tab_for_superseded_open(
+        &mut self,
+        path: &std::path::Path,
+        title: String,
+    ) {
+        if self.document_state.tabs.iter().any(|tab| tab.path == path) {
+            return;
+        }
+        self.attach_parked_schematic_tab(path.to_path_buf(), title);
+    }
+
+    /// An open result landed for a path a document now owns (a Save As got
+    /// there first, #1089): applying it would push a second tab and replace
+    /// the owner's engine with disk content, losing its edits. The caller
+    /// drops the result; this logs why, including that an `Err` was dropped.
+    pub(crate) fn is_open_result_superseded<T, E>(
+        &self,
+        path: &std::path::Path,
+        result: &Result<T, E>,
+    ) -> bool {
+        if !self.path_is_owned_by_open_document(path) {
+            return false;
+        }
+        let what = match result {
+            Ok(_) => "result",
+            Err(_) => "failure (its error was dropped too)",
+        };
+        crate::diagnostics::log_warning(format!(
+            "[open] A document already owns that path, so the open {what} was dropped: {}",
+            super::save::file_label(path)
+        ));
+        true
     }
 
     /// #478 review — dedup guard shared by `open_schematic_file` /
@@ -349,18 +397,37 @@ impl Signex {
     /// entry, and closing one would orphan the other. Returns `true`
     /// when the caller must stop and not spawn a new open `Task`.
     fn activate_or_skip_duplicate_open(&mut self, path: &std::path::Path) -> bool {
-        if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
-            if idx != self.document_state.active_tab {
-                self.park_active_schematic_session();
-                self.document_state.active_tab = idx;
-                self.sync_active_tab();
-            }
+        if self.activate_tab_for_path(path) {
+            return true;
+        }
+        // A save is still writing `path`: a read now would return the old
+        // bytes as a clean tab. The write lands as the re-keyed tab.
+        if self.document_state.document_saves.is_saving(path) {
+            crate::diagnostics::log_warning(format!(
+                "[open] A save to that file (or a case variant of its name) is still running, \
+                 so it was not opened; try again once it finishes: {}",
+                super::save::file_label(path)
+            ));
             return true;
         }
         self.document_state.pending_opens.contains(path)
     }
 
+    /// Activate the tab that owns `path`, if any. Returns whether one exists.
+    pub(crate) fn activate_tab_for_path(&mut self, path: &std::path::Path) -> bool {
+        let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) else {
+            return false;
+        };
+        if idx != self.document_state.active_tab {
+            self.park_active_schematic_session();
+            self.document_state.active_tab = idx;
+            self.sync_active_tab();
+        }
+        true
+    }
+
     fn open_schematic_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        let path = self.resolve_held_spelling(path);
         if self.activate_or_skip_duplicate_open(&path) {
             return Ok(iced::Task::none());
         }
@@ -436,6 +503,7 @@ impl Signex {
     }
 
     fn open_pcb_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        let path = self.resolve_held_spelling(path);
         if self.activate_or_skip_duplicate_open(&path) {
             return Ok(iced::Task::none());
         }
@@ -524,4 +592,27 @@ fn read_and_parse_pcb(path: &std::path::Path) -> Result<signex_types::pcb::PcbBo
                 .map(|pcb| pcb.board)
         })
         .map_err(|err| format!("{err:#}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::Signex;
+
+    #[test]
+    fn loading_a_project_starts_its_volume_probe_exactly_once() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let project = dir.path().join("P.snxprj");
+        std::fs::write(&project, b"").expect("write project");
+        let (mut app, _task) = Signex::new();
+
+        let (_id, first) = app.load_or_activate_project(&project).expect("load");
+        let (_id, again) = app.load_or_activate_project(&project).expect("reactivate");
+
+        assert_eq!(first.units(), 1, "the probe is the only task: no libraries");
+        assert_eq!(
+            again.units(),
+            0,
+            "an already loaded project is not probed again"
+        );
+    }
 }

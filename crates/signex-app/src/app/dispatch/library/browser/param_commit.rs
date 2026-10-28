@@ -20,6 +20,7 @@
 //! boolean type with it.
 
 use signex_library::ParamValue;
+use signex_types::numeric::parse_finite_f64;
 
 /// A refused commit — the buffer could not be read as the cell's type.
 pub(super) struct ParamRefusal {
@@ -41,17 +42,15 @@ pub(super) fn param_value_for_commit(
 ) -> Result<ParamValue, ParamRefusal> {
     match existing {
         // Preserve the unit on commit by reading the existing value.
-        Some(ParamValue::Measurement { unit, .. }) => buf
-            .parse::<f64>()
+        Some(ParamValue::Measurement { unit, .. }) => parse_finite_f64(buf)
             .map(|value| ParamValue::Measurement {
                 value,
                 unit: unit.clone(),
             })
-            .map_err(|_| refusal("a number; the cell's unit is kept", existing)),
-        Some(ParamValue::Number(_)) => buf
-            .parse::<f64>()
+            .map_err(|_| refusal("a finite number; the cell's unit is kept", existing)),
+        Some(ParamValue::Number(_)) => parse_finite_f64(buf)
             .map(ParamValue::Number)
-            .map_err(|_| refusal("a number", existing)),
+            .map_err(|_| refusal("a finite number", existing)),
         // #612. The #599 register recorded the two numeric arms only, so
         // this one kept retyping to text — the same defect one arm up,
         // with the same consequence for anything keying on the boolean
@@ -64,7 +63,7 @@ pub(super) fn param_value_for_commit(
         // behind a bug fix. Refusing the rest breaks no input that
         // worked before — it only closes the path that destroyed the
         // type. The numeric arms above draw the line in the same place:
-        // exactly what `parse::<f64>()` accepts.
+        // exactly what `parse_finite_f64` accepts.
         Some(ParamValue::Bool(_)) => {
             if buf.eq_ignore_ascii_case("true") {
                 Ok(ParamValue::Bool(true))
@@ -85,6 +84,66 @@ fn refusal(expected: &'static str, existing: Option<&ParamValue>) -> ParamRefusa
         expected,
         kept: existing.map(ParamValue::display).unwrap_or_default(),
     }
+}
+
+/// What the edit modal's "commit parameter" stores for a typed `value` and
+/// `unit`. `None` means the entry was refused and the draft must stay as
+/// it is: a `nan` / `inf` / overflowing entry is a deliberate-looking
+/// number that would otherwise be stored as a non-finite parameter.
+pub(super) fn modal_param_value(value: String, unit: &str) -> Option<ParamValue> {
+    use crate::numeric_field::{FieldNumber, parse_field_number};
+    let number = match parse_field_number(&value) {
+        FieldNumber::Refused => return None,
+        FieldNumber::Number(n) => Some(n),
+        FieldNumber::NotANumber => None,
+    };
+    let pv = if !unit.trim().is_empty() {
+        // A number gets the unit; anything else is kept as text.
+        match number {
+            Some(n) => ParamValue::Measurement {
+                value: n,
+                unit: unit.to_string(),
+            },
+            None => ParamValue::Text(format!("{value} {unit}")),
+        }
+    } else if let Some(n) = number {
+        ParamValue::Number(n)
+    } else if value.eq_ignore_ascii_case("true") {
+        ParamValue::Bool(true)
+    } else if value.eq_ignore_ascii_case("false") {
+        ParamValue::Bool(false)
+    } else {
+        ParamValue::Text(value)
+    };
+    Some(pv)
+}
+
+/// Every buffered parameter edit that was typed but never committed
+/// (Enter), as the value `CommitParam` would store. `Err(key)` names the
+/// first entry that is refused, so Save can stop instead of dropping it.
+/// `tags` is skipped: its own buffer is flushed separately.
+pub(super) fn uncommitted_param_edits(
+    draft: &signex_library::ParamMap,
+    buf: &std::collections::HashMap<String, (String, String)>,
+) -> Result<Vec<(String, ParamValue)>, String> {
+    use crate::library::state::EditRowModalState;
+    let mut keys: Vec<&String> = buf.keys().filter(|k| k.as_str() != "tags").collect();
+    keys.sort();
+    let mut edits = Vec::new();
+    for key in keys {
+        let (value, unit) = &buf[key];
+        let untouched = draft.get(key).is_some_and(|pv| {
+            EditRowModalState::param_buf_entry(pv) == (value.clone(), unit.clone())
+        });
+        if untouched {
+            continue;
+        }
+        match modal_param_value(value.clone(), unit) {
+            Some(pv) => edits.push((key.clone(), pv)),
+            None => return Err(key.clone()),
+        }
+    }
+    Ok(edits)
 }
 
 #[cfg(test)]
@@ -128,7 +187,7 @@ mod tests {
         // Assert
         let refusal = committed.expect_err("an unparseable buffer must be refused");
         assert_eq!(refusal.kept, "4.7 kΩ");
-        assert_eq!(refusal.expected, "a number; the cell's unit is kept");
+        assert_eq!(refusal.expected, "a finite number; the cell's unit is kept");
     }
 
     #[test]
@@ -142,7 +201,7 @@ mod tests {
         // Assert
         let refusal = committed.expect_err("an unparseable buffer must be refused");
         assert_eq!(refusal.kept, "3");
-        assert_eq!(refusal.expected, "a number");
+        assert_eq!(refusal.expected, "a finite number");
     }
 
     #[test]
@@ -219,5 +278,51 @@ mod tests {
 
         // Assert
         assert_eq!(committed.ok(), Some(ParamValue::Text("maybe".to_string())));
+    }
+
+    const NON_FINITE: [&str; 5] = ["nan", "inf", "-inf", "1e999", "-1e999"];
+
+    /// #828 -- a typed numeric cell refuses a non-finite buffer.
+    #[test]
+    fn typed_cells_refuse_non_finite_buffers() {
+        for bad in NON_FINITE {
+            let number = param_value_for_commit(Some(&ParamValue::Number(3.0)), bad);
+            assert!(number.is_err(), "number cell took {bad:?}");
+            let measurement = param_value_for_commit(Some(&kilo_ohms()), bad);
+            assert!(measurement.is_err(), "measurement cell took {bad:?}");
+        }
+    }
+
+    /// #828 -- the edit modal never stores a non-finite number, with or
+    /// without a unit, and tells the caller to keep the draft.
+    #[test]
+    fn the_modal_refuses_non_finite_entries() {
+        for bad in NON_FINITE {
+            assert_eq!(modal_param_value(bad.to_string(), ""), None, "{bad:?}");
+            assert_eq!(modal_param_value(bad.to_string(), "V"), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn the_modal_still_types_ordinary_entries() {
+        assert_eq!(
+            modal_param_value("2.5".into(), ""),
+            Some(ParamValue::Number(2.5))
+        );
+        assert_eq!(
+            modal_param_value("2.5".into(), "V"),
+            Some(ParamValue::Measurement {
+                value: 2.5,
+                unit: "V".into()
+            })
+        );
+        assert_eq!(
+            modal_param_value("TRUE".into(), ""),
+            Some(ParamValue::Bool(true))
+        );
+        assert_eq!(
+            modal_param_value("abc".into(), "V"),
+            Some(ParamValue::Text("abc V".into()))
+        );
     }
 }

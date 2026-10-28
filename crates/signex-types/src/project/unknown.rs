@@ -31,4 +31,28 @@ impl UnknownJson {
     pub fn get(&self, key: &str) -> Option<&Value> {
         self.0.get(key)
     }
+
+    /// Every captured key with its raw value, in key order.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &Value)> {
+        self.0.iter()
+    }
+
+    /// Take every key of `other` this bag lacks, so a replacement section can
+    /// keep what the section it replaces held from a newer build.
+    pub fn fill_missing_from(&mut self, other: &UnknownJson) {
+        for (key, value) in &other.0 {
+            self.0.entry(key.clone()).or_insert_with(|| value.clone());
+        }
+    }
+
+    /// Keep `value` under `key`, for a known key whose value this build
+    /// cannot interpret.
+    pub(crate) fn insert(&mut self, key: String, value: Value) {
+        self.0.insert(key, value);
+    }
+
+    /// Drop a captured key, for a section an explicit edit now replaces.
+    pub(crate) fn remove(&mut self, key: &str) {
+        self.0.remove(key);
+    }
 }

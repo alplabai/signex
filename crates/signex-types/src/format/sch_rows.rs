@@ -11,7 +11,7 @@
 
 use super::extras::{JunctionExtras, SymbolExtras};
 use super::tsv::{format_f64, parse_f64, parse_i64, parse_uuid};
-use super::units::{mm_to_nm, nm_to_mm};
+use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use super::unknown_columns::impl_unknown_columns_accessors;
 use super::*;
 use crate::schematic::{HAlign, Junction, Label, LabelType, Point, Symbol, VAlign, Wire};
@@ -24,7 +24,7 @@ use uuid::Uuid;
 /// MPN). Symbol-level fields that don't fit a flat row — `fields`
 /// map, `custom_properties`, `pin_uuids`, `instances`, `ref_text` /
 /// `val_text` text-prop overrides — survive in the
-/// `[sheets.component_extras.<uuid>]` auxiliary TOML tables.
+/// `[extras.symbols.<uuid>]` auxiliary TOML tables.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SchComponentRow {
     pub uuid: Uuid,
@@ -45,14 +45,14 @@ impl SnxTable for SchComponentRow {
         ]
     }
 
-    fn to_row(&self) -> Result<Vec<String>, FormatError> {
+    fn to_row(&self) -> Result<Vec<String>, NonFiniteField> {
         Ok(vec![
             self.uuid.to_string(),
             self.ref_des.clone(),
             self.library.clone(),
             self.pos_x.to_string(),
             self.pos_y.to_string(),
-            format_f64("rotation", self.rotation)?,
+            format_f64(self.rotation, "rotation")?,
             self.value.clone(),
             self.mpn.clone(),
         ])
@@ -101,7 +101,7 @@ impl SnxTable for SchWireRow {
         ]
     }
 
-    fn to_row(&self) -> Result<Vec<String>, FormatError> {
+    fn to_row(&self) -> Result<Vec<String>, NonFiniteField> {
         Ok(vec![
             self.uuid.to_string(),
             self.net.clone(),
@@ -109,7 +109,7 @@ impl SnxTable for SchWireRow {
             self.start_y.to_string(),
             self.end_x.to_string(),
             self.end_y.to_string(),
-            format_f64("stroke_width", self.stroke_width)?,
+            format_f64(self.stroke_width, "stroke_width")?,
         ])
     }
 
@@ -144,12 +144,12 @@ impl SnxTable for SchJunctionRow {
         &["uuid", "pos_x", "pos_y", "diameter"]
     }
 
-    fn to_row(&self) -> Result<Vec<String>, FormatError> {
+    fn to_row(&self) -> Result<Vec<String>, NonFiniteField> {
         Ok(vec![
             self.uuid.to_string(),
             self.pos_x.to_string(),
             self.pos_y.to_string(),
-            format_f64("diameter", self.diameter)?,
+            format_f64(self.diameter, "diameter")?,
         ])
     }
 
@@ -198,16 +198,16 @@ impl SnxTable for SchLabelRow {
         ]
     }
 
-    fn to_row(&self) -> Result<Vec<String>, FormatError> {
+    fn to_row(&self) -> Result<Vec<String>, NonFiniteField> {
         Ok(vec![
             self.uuid.to_string(),
             self.text.clone(),
             self.pos_x.to_string(),
             self.pos_y.to_string(),
-            format_f64("rotation", self.rotation)?,
+            format_f64(self.rotation, "rotation")?,
             self.kind.clone(),
             self.shape.clone(),
-            format_f64("font_size", self.font_size)?,
+            format_f64(self.font_size, "font_size")?,
             self.justify.clone(),
             self.justify_v.clone(),
         ])
@@ -290,18 +290,18 @@ fn parse_valign(s: &str) -> VAlign {
 // Symbol ↔ row translation
 // ---------------------------------------------------------------------------
 
-pub(in crate::format) fn symbol_to_row(s: &Symbol) -> SchComponentRow {
-    SchComponentRow {
+pub(in crate::format) fn symbol_to_row(s: &Symbol) -> Result<SchComponentRow, NonFiniteField> {
+    Ok(SchComponentRow {
         uuid: s.uuid,
         ref_des: s.reference.clone(),
         library: s.lib_id.clone(),
-        pos_x: mm_to_nm(s.position.x),
-        pos_y: mm_to_nm(s.position.y),
+        pos_x: mm_to_nm(s.position.x, "pos_x")?,
+        pos_y: mm_to_nm(s.position.y, "pos_y")?,
         rotation: s.rotation,
         value: s.value.clone(),
         mpn: s.fields.get("MPN").cloned().unwrap_or_default(),
         unknown_columns: s.unknown_columns.clone(),
-    }
+    })
 }
 
 pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtras) -> Symbol {
@@ -332,8 +332,14 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         mirror_y: extras.mirror_y,
         unit: extras.unit,
         is_power: extras.is_power,
-        ref_text: extras.ref_text,
-        val_text: extras.val_text,
+        ref_text: extras.ref_text.map(|mut prop| {
+            prop.font_family = extras.ref_font_family.or(prop.font_family);
+            prop
+        }),
+        val_text: extras.val_text.map(|mut prop| {
+            prop.font_family = extras.val_font_family.or(prop.font_family);
+            prop
+        }),
         fields_autoplaced: extras.fields_autoplaced,
         fields_user_placed: extras.fields_user_placed,
         dnp: extras.dnp,
@@ -344,26 +350,26 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         fields,
         custom_properties: extras.custom_properties,
         pin_uuids: extras.pin_uuids.into_iter().collect(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
+        library_id: extras.library_id,
+        row_id: extras.row_id,
+        library_version: extras.library_version,
         instances: extras.instances,
         unknown: extras.unknown,
         unknown_columns: row.unknown_columns,
     }
 }
 
-pub(in crate::format) fn wire_to_row(w: &Wire) -> SchWireRow {
-    SchWireRow {
+pub(in crate::format) fn wire_to_row(w: &Wire) -> Result<SchWireRow, NonFiniteField> {
+    Ok(SchWireRow {
         uuid: w.uuid,
         net: String::new(),
-        start_x: mm_to_nm(w.start.x),
-        start_y: mm_to_nm(w.start.y),
-        end_x: mm_to_nm(w.end.x),
-        end_y: mm_to_nm(w.end.y),
+        start_x: mm_to_nm(w.start.x, "start_x")?,
+        start_y: mm_to_nm(w.start.y, "start_y")?,
+        end_x: mm_to_nm(w.end.x, "end_x")?,
+        end_y: mm_to_nm(w.end.y, "end_y")?,
         stroke_width: w.stroke_width,
         unknown_columns: w.unknown_columns.clone(),
-    }
+    })
 }
 
 pub(in crate::format) fn row_to_wire(row: SchWireRow) -> Wire {
@@ -382,14 +388,14 @@ pub(in crate::format) fn row_to_wire(row: SchWireRow) -> Wire {
     }
 }
 
-pub(in crate::format) fn junction_to_row(j: &Junction) -> SchJunctionRow {
-    SchJunctionRow {
+pub(in crate::format) fn junction_to_row(j: &Junction) -> Result<SchJunctionRow, NonFiniteField> {
+    Ok(SchJunctionRow {
         uuid: j.uuid,
-        pos_x: mm_to_nm(j.position.x),
-        pos_y: mm_to_nm(j.position.y),
+        pos_x: mm_to_nm(j.position.x, "pos_x")?,
+        pos_y: mm_to_nm(j.position.y, "pos_y")?,
         diameter: j.diameter,
         unknown_columns: j.unknown_columns.clone(),
-    }
+    })
 }
 
 pub(in crate::format) fn row_to_junction(row: SchJunctionRow, extra: JunctionExtras) -> Junction {
@@ -405,23 +411,40 @@ pub(in crate::format) fn row_to_junction(row: SchJunctionRow, extra: JunctionExt
     }
 }
 
-pub(in crate::format) fn label_to_row(l: &Label) -> SchLabelRow {
-    SchLabelRow {
+/// Header of the optional label font column. It is not part of
+/// [`SchLabelRow::columns`]: a file whose labels set no family must stay
+/// byte-identical (and a legacy file must still load), so the cell rides the
+/// foreign-column path and the header appears only when some label sets one.
+/// A build that predates the field keeps the column as foreign cells.
+const LABEL_FONT_FAMILY_COLUMN: &str = "font_family";
+
+pub(in crate::format) fn label_to_row(l: &Label) -> Result<SchLabelRow, NonFiniteField> {
+    let mut unknown_columns = l.unknown_columns.clone();
+    if let Some(family) = &l.font_family {
+        unknown_columns.set(LABEL_FONT_FAMILY_COLUMN, family.clone());
+    }
+    Ok(SchLabelRow {
         uuid: l.uuid,
         text: l.text.clone(),
-        pos_x: mm_to_nm(l.position.x),
-        pos_y: mm_to_nm(l.position.y),
+        pos_x: mm_to_nm(l.position.x, "pos_x")?,
+        pos_y: mm_to_nm(l.position.y, "pos_y")?,
         rotation: l.rotation,
         kind: label_kind_str(l.label_type).to_string(),
         shape: l.shape.clone(),
         font_size: l.font_size,
         justify: halign_str(l.justify).to_string(),
         justify_v: valign_str(l.justify_v).to_string(),
-        unknown_columns: l.unknown_columns.clone(),
-    }
+        unknown_columns,
+    })
 }
 
-pub(in crate::format) fn row_to_label(row: SchLabelRow) -> Label {
+pub(in crate::format) fn row_to_label(mut row: SchLabelRow) -> Label {
+    // An empty cell is a label that sets no family (rows of a block where
+    // only some labels do).
+    let font_family = row
+        .unknown_columns
+        .take(LABEL_FONT_FAMILY_COLUMN)
+        .filter(|family| !family.is_empty());
     Label {
         uuid: row.uuid,
         text: row.text,
@@ -433,6 +456,7 @@ pub(in crate::format) fn row_to_label(row: SchLabelRow) -> Label {
         label_type: parse_label_kind(&row.kind),
         shape: row.shape,
         font_size: row.font_size,
+        font_family,
         justify: parse_halign(&row.justify),
         justify_v: parse_valign(&row.justify_v),
         unknown_columns: row.unknown_columns,

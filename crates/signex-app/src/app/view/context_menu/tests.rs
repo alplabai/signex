@@ -215,3 +215,188 @@ fn place_menu_is_all_enabled_active_bar_rows() {
         _ => true,
     }));
 }
+
+#[test]
+fn refresh_all_pricing_row_is_live_for_a_library_node() {
+    use super::project_tree::refresh_pricing_entry;
+    let app = crate::app::handlers::menu::export::tests::app_workspace("/p", &[]);
+    let row = crate::app::LibraryRowRef {
+        project_id: app.document_state.projects[0].id,
+        root: std::path::PathBuf::from("/libs/Power.snxlib"),
+    };
+    match refresh_pricing_entry(Some(row.clone()), true) {
+        DropdownEntry::Item(it) => {
+            assert_eq!(it.label, "Refresh All Pricing");
+            assert!(!it.disabled, "the row used to be a greyed stub");
+            match it.on_press {
+                Some(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                    crate::app::ProjectTreeAction::RefreshLibraryPricing(got),
+                ))) => assert_eq!(got, row),
+                other => panic!("wrong message: {other:?}"),
+            }
+        }
+        _ => panic!("expected an Item"),
+    }
+    assert!(
+        disabled_of(&[refresh_pricing_entry(None, true)], "Refresh All Pricing"),
+        "no resolvable library, nothing to refresh"
+    );
+}
+
+#[test]
+fn refresh_all_pricing_row_is_greyed_with_a_reason_when_no_client_prices() {
+    use super::project_tree::refresh_pricing_entry;
+    let app = crate::app::handlers::menu::export::tests::app_workspace("/p", &[]);
+    let row = crate::app::LibraryRowRef {
+        project_id: app.document_state.projects[0].id,
+        root: std::path::PathBuf::from("/libs/Power.snxlib"),
+    };
+    match refresh_pricing_entry(Some(row), false) {
+        DropdownEntry::Item(it) => {
+            assert!(it.disabled);
+            assert!(it.on_press.is_none(), "a greyed row must not publish");
+            assert_eq!(
+                it.shortcut.as_deref(),
+                Some("No enabled distributor returns prices yet")
+            );
+        }
+        _ => panic!("expected an Item"),
+    }
+}
+
+/// #1098: the Enable Version Control row follows the Model fact alone. The
+/// directory below does not exist, so any disk read would answer differently.
+#[test]
+fn enable_version_control_follows_the_model_fact_not_the_disk() {
+    use crate::app::state::project_fs::git_marker;
+    let dir = std::path::Path::new("snx-1098-no-such-dir");
+    let (mut app, _task) = Signex::new();
+    assert!(
+        !app.offers_enable_version_control(dir),
+        "unprobed must not offer the row"
+    );
+    let facts = &mut app.document_state.project_fs.facts;
+    facts.set_exists(git_marker(dir), false);
+    assert!(app.offers_enable_version_control(dir), "probed: no .git");
+    app.document_state
+        .project_fs
+        .facts
+        .set_exists(git_marker(dir), true);
+    assert!(!app.offers_enable_version_control(dir), "probed: has .git");
+}
+
+// ---- #271: context-menu rows read their text from the command table ----
+
+#[test]
+fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
+    // Routing the rows through `action_label` must not change what the
+    // user sees; this pins the wording that was hard-coded before.
+    assert_eq!(
+        labels(&place_entries(TID)),
+        [
+            "Wire",
+            "Bus",
+            "Bus Entry",
+            "Net Label",
+            "Port",
+            "Off Sheet Connector",
+            "GND Power Port",
+            "VCC Power Port",
+            "+5 Power Port",
+            "+12 Power Port",
+            "Parameter Set",
+            "Generic No ERC",
+            "Differential Pair",
+            "Blanket",
+            "Signal Harness",
+            "Harness Connector",
+            "Harness Entry",
+            "Sheet Symbol",
+            "Sheet Entry",
+            "Device Sheet Symbol",
+            "Part",
+            "Text String",
+            "Text Frame",
+            "Note",
+        ]
+    );
+    assert_eq!(
+        labels(&align_entries(TID, 3)),
+        [
+            "Align Left",
+            "Align Right",
+            "Align Horizontal Centers",
+            "Distribute Horizontally",
+            "Align Top",
+            "Align Bottom",
+            "Align Vertical Centers",
+            "Distribute Vertically",
+            "Align To Grid",
+        ]
+    );
+}
+
+#[test]
+fn canvas_row_text_is_byte_identical_to_the_old_literals() {
+    let tokens = theme_tokens(TID);
+    let rows = canvas_menu_entries(TID, &tokens, true, true, None, &shortcuts());
+    for expected in [
+        "Find Text...",
+        "Cut",
+        "Copy",
+        "Paste",
+        "Paste Special",
+        "Rotate",
+        "Mirror X",
+        "Mirror Y",
+        "Delete",
+        "Preferences...",
+        "Properties...",
+    ] {
+        assert!(has_row(&rows, expected), "missing {expected:?}");
+    }
+}
+
+/// The same `AppCommandId` reads the same label on the menu bar and the
+/// context menu wherever both carry it, and the Active Bar actions reached
+/// from the Place / Align flyouts read the catalog `menu_label` the Active
+/// Bar itself renders.
+#[test]
+fn shared_command_ids_read_the_same_label_on_every_surface() {
+    use crate::active_bar::ActiveBarAction as A;
+    use crate::app::command::active_bar::{action_label, id_for_action};
+
+    // Context-menu canvas ids: label comes from the catalog, so the menu
+    // bar's lookup of the same id must agree with the row.
+    let tokens = theme_tokens(TID);
+    let rows = canvas_menu_entries(TID, &tokens, true, true, None, &shortcuts());
+    for (id, row_label) in [
+        ("cut", "Cut"),
+        ("copy", "Copy"),
+        ("paste", "Paste"),
+        ("smart_paste", "Paste Special"),
+        ("mirror_x", "Mirror X"),
+        ("mirror_y", "Mirror Y"),
+        ("delete_selection", "Delete"),
+        ("open_preferences", "Preferences..."),
+        ("edit_selected_object_properties", "Properties..."),
+    ] {
+        assert_eq!(
+            crate::menu_bar::cmd_label(id, "<missing>"),
+            row_label,
+            "{id}"
+        );
+        assert!(has_row(&rows, row_label), "{id} row {row_label:?}");
+    }
+
+    // Place / Align flyouts: id-backed and labelled by the catalog.
+    for (action, row_label) in [
+        (A::DrawWire, "Wire"),
+        (A::PlacePort, "Port"),
+        (A::AlignLeft, "Align Left"),
+        (A::AlignToGrid, "Align To Grid"),
+    ] {
+        assert!(id_for_action(&action).is_some(), "{action:?} lost its id");
+        assert_eq!(action_label(&action, "<missing>"), row_label);
+    }
+}

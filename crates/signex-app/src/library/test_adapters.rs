@@ -125,6 +125,51 @@ impl LibraryAdapter for CountingAdapter {
     }
 }
 
+/// An adapter whose symbol listing is whatever the test last put behind
+/// the handle — lets a test tell two reads of the same library apart.
+pub(crate) struct ScriptedSymbolsAdapter {
+    manifest: Manifest,
+    symbols: std::sync::Arc<std::sync::Mutex<Vec<PrimitiveSummary>>>,
+}
+
+impl ScriptedSymbolsAdapter {
+    pub(crate) fn new(
+        library_id: Uuid,
+    ) -> (
+        Self,
+        std::sync::Arc<std::sync::Mutex<Vec<PrimitiveSummary>>>,
+    ) {
+        let symbols = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let adapter = Self {
+            manifest: FailingListingAdapter::new(library_id).manifest,
+            symbols: symbols.clone(),
+        };
+        (adapter, symbols)
+    }
+}
+
+impl LibraryAdapter for ScriptedSymbolsAdapter {
+    fn manifest(&self) -> &Manifest {
+        &self.manifest
+    }
+
+    fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
+        Ok(Vec::new())
+    }
+
+    fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        Ok(self.symbols.lock().expect("symbols lock").clone())
+    }
+
+    fn list_footprints(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        Ok(Vec::new())
+    }
+
+    fn list_sims(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        Ok(Vec::new())
+    }
+}
+
 /// A `PrimitiveSummary` standing in for an entry already on disk and
 /// already cached — the thing a failed listing used to erase.
 pub(crate) fn cached_summary(name: &str) -> PrimitiveSummary {
@@ -133,5 +178,120 @@ pub(crate) fn cached_summary(name: &str) -> PrimitiveSummary {
         name: name.to_string(),
         kind: signex_library::PrimitiveKind::Symbol,
         used_by_count: 0,
+    }
+}
+
+/// A server-backed library in miniature: it holds one revision counter and,
+/// like the library server, writes a row only when the caller's
+/// `server_revision` matches it, bumping it on every update.
+pub(crate) struct RevisionedRowAdapter {
+    manifest: Manifest,
+    revision: std::sync::atomic::AtomicU64,
+    /// The stored row, as `read_row` and `iter_rows` return it.
+    row: std::sync::Mutex<Option<signex_library::ComponentRow>>,
+}
+
+impl RevisionedRowAdapter {
+    pub(crate) fn new(library_id: Uuid, revision: u64) -> Self {
+        Self {
+            manifest: FailingListingAdapter::new(library_id).manifest,
+            revision: std::sync::atomic::AtomicU64::new(revision),
+            row: std::sync::Mutex::new(None),
+        }
+    }
+
+    /// Store `row` at the current revision, as another user's save would.
+    pub(crate) fn store(&self, mut row: signex_library::ComponentRow) {
+        row.server_revision = Some(self.revision.load(std::sync::atomic::Ordering::SeqCst));
+        *self.row.lock().expect("stub row") = Some(row);
+    }
+
+    /// Advance the stored revision if it is still `base`.
+    fn bump_from(&self, base: Option<u64>) -> Result<u64, LibraryError> {
+        let current = self.revision.load(std::sync::atomic::Ordering::SeqCst);
+        if base != Some(current) {
+            return Err(LibraryError::RowChanged {
+                current_revision: current,
+            });
+        }
+        self.revision
+            .store(current + 1, std::sync::atomic::Ordering::SeqCst);
+        Ok(current + 1)
+    }
+}
+
+impl LibraryAdapter for RevisionedRowAdapter {
+    fn manifest(&self) -> &Manifest {
+        &self.manifest
+    }
+
+    fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
+        Ok(vec!["R".to_string()])
+    }
+
+    fn read_table(&self, _name: &str) -> Result<Vec<signex_library::ComponentRow>, LibraryError> {
+        Ok(self
+            .row
+            .lock()
+            .expect("stub row")
+            .clone()
+            .into_iter()
+            .collect())
+    }
+
+    fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        Ok(Vec::new())
+    }
+
+    fn list_footprints(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        Ok(Vec::new())
+    }
+
+    fn list_sims(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        Ok(Vec::new())
+    }
+
+    fn update_row(
+        &self,
+        _table: &str,
+        row: signex_library::ComponentRow,
+        _msg: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        let revision = self.bump_from(row.server_revision)?;
+        self.store(row);
+        Ok(Some(revision))
+    }
+
+    fn read_row(
+        &self,
+        _table: &str,
+        row_id: signex_library::RowId,
+    ) -> Result<signex_library::ComponentRow, LibraryError> {
+        self.row
+            .lock()
+            .expect("stub row")
+            .clone()
+            .filter(|row| signex_library::RowId::from_uuid(row.row_id) == row_id)
+            .ok_or_else(|| LibraryError::NotFound(row_id.to_string()))
+    }
+
+    fn iter_rows(&self) -> Result<Vec<(String, signex_library::ComponentRow)>, LibraryError> {
+        Ok(self
+            .row
+            .lock()
+            .expect("stub row")
+            .clone()
+            .map(|row| vec![("R".to_string(), row)])
+            .unwrap_or_default())
+    }
+
+    fn delete_row(
+        &self,
+        _table: &str,
+        _row_id: signex_library::RowId,
+        base_revision: Option<u64>,
+        _msg: &str,
+    ) -> Result<(), LibraryError> {
+        self.bump_from(base_revision).map(|_| ())
     }
 }

@@ -9,6 +9,7 @@ impl Signex {
     /// via `Message::Edit`.
     pub(crate) fn dispatch_edit_message(&mut self, msg: EditMsg) -> Task<Message> {
         match msg {
+            EditMsg::UpdateDrawingField(uuid, edit) => self.handle_update_drawing_field(uuid, edit),
             EditMsg::DeleteSelected => {
                 // v0.20 — if the active tab is a footprint editor,
                 // route the Delete key to FootprintDeleteSelected so
@@ -38,15 +39,21 @@ impl Signex {
                 Task::batch([task, self.finish_update()])
             }
             EditMsg::Undo => {
+                self.cancel_move_pick();
                 self.handle_undo_requested();
                 self.finish_update()
             }
             EditMsg::Redo => {
+                self.cancel_move_pick();
                 self.handle_redo_requested();
                 self.finish_update()
             }
-            EditMsg::RotateSelected => {
-                self.handle_selection_rotate_requested();
+            EditMsg::RotateSelectedClockwise => {
+                self.handle_selection_rotate_requested(true);
+                self.finish_update()
+            }
+            EditMsg::RotateSelectedCounterclockwise => {
+                self.handle_selection_rotate_requested(false);
                 self.finish_update()
             }
             EditMsg::MirrorSelectedX => {
@@ -91,8 +98,20 @@ impl Signex {
                 let task = self.handle_new_project_file(path);
                 Task::batch([task, self.finish_update()])
             }
+            FileMsg::NewProjectWritten { path, result } => {
+                let task = self.handle_new_project_written(path, result);
+                Task::batch([task, self.finish_update()])
+            }
             FileMsg::SampleProjectUnpacked(result) => {
                 let task = self.handle_sample_project_unpacked(result);
+                Task::batch([task, self.finish_update()])
+            }
+            FileMsg::AltiumImportPicked(path) => {
+                let task = self.handle_altium_import_picked(path);
+                Task::batch([task, self.finish_update()])
+            }
+            FileMsg::AltiumImportFinished(result) => {
+                let task = self.handle_altium_import_finished(result);
                 Task::batch([task, self.finish_update()])
             }
             FileMsg::Save => {
@@ -100,14 +119,54 @@ impl Signex {
                 iced::Task::batch([task, self.finish_update()])
             }
             FileMsg::SaveAs { from_path, to_path } => {
-                self.handle_active_document_save_as_requested(from_path, to_path);
+                let task = self.handle_active_document_save_as_requested(from_path, to_path);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            FileMsg::DocumentSaveWaitFailed(reason) => {
+                crate::diagnostics::log_error(
+                    "Could not confirm that document writes finished before exit",
+                    &anyhow::anyhow!(reason),
+                );
                 self.finish_update()
             }
+            FileMsg::DocumentSaved(done) => {
+                let task = self.handle_document_saved(done);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            FileMsg::PrimitiveSaved(done) => {
+                let task = self.handle_primitive_saved(*done);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            FileMsg::SaveAllProbed(plan) => {
+                let task = self.begin_save_all_planned(*plan);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            FileMsg::SaveAllSettled(settle) => {
+                let task = self.handle_save_all_settled(*settle);
+                iced::Task::batch([task, self.finish_update()])
+            }
             FileMsg::SavePrimitiveAs { from_path, to_path } => {
-                if let Err(error) = self.handle_save_primitive_as(&from_path, &to_path) {
-                    crate::diagnostics::log_error("Save As failed", &error);
-                }
-                self.finish_update()
+                let task = match self.handle_save_primitive_as(&from_path, &to_path) {
+                    Ok(task) => task,
+                    Err(error) => {
+                        self.report_save_failure("Save As failed", &error);
+                        Task::none()
+                    }
+                };
+                iced::Task::batch([task, self.finish_update()])
+            }
+            FileMsg::DocumentReadFinished { request, result } => {
+                let task = self.handle_document_read_finished(request, result);
+                Task::batch([task, self.finish_update()])
+            }
+            FileMsg::HistoryRestoreFinished {
+                request,
+                sha,
+                edit_stamp,
+                result,
+            } => {
+                let task = self.handle_history_restore_finished(request, &sha, edit_stamp, result);
+                Task::batch([task, self.finish_update()])
             }
             FileMsg::SchematicOpenFinished {
                 path,
@@ -117,10 +176,29 @@ impl Signex {
                 // #478 review — clear the in-flight guard before acting
                 // on the result so a duplicate open fired while this one
                 // was in flight is free to spawn again from here on.
-                self.document_state.pending_opens.remove(&path);
+                self.document_state.pending_opens.remove_untracked(&path);
+                if self.is_open_result_superseded(&path, &result) {
+                    self.attach_parked_tab_for_superseded_open(&path, title);
+                    self.activate_tab_for_path(&path);
+                    return self.finish_update();
+                }
                 match result {
-                    Ok(sheet) => self.open_schematic_tab(path, title, *sheet),
+                    Ok(_) if self.has_tab_for(&path) => Self::log_duplicate_open(&path),
+                    Ok(sheet) => {
+                        // `update` starts the recovery check of every tab opened.
+                        self.open_schematic_tab(path, title, *sheet);
+                    }
                     Err(message) => self.report_open_failure(message),
+                }
+                self.finish_update()
+            }
+            FileMsg::InstanceNoteReady(note) => {
+                match note {
+                    Ok(Some(note)) => crate::diagnostics::log_info(note),
+                    Ok(None) => {}
+                    Err(error) => crate::diagnostics::log_warning(format!(
+                        "Sheet-placement designator note failed: {error}"
+                    )),
                 }
                 self.finish_update()
             }
@@ -130,8 +208,13 @@ impl Signex {
                 result,
             } => {
                 // #478 review — same in-flight guard clear as above.
-                self.document_state.pending_opens.remove(&path);
+                self.document_state.pending_opens.remove_untracked(&path);
+                if self.is_open_result_superseded(&path, &result) {
+                    self.activate_tab_for_path(&path);
+                    return self.finish_update();
+                }
                 match result {
+                    Ok(_) if self.has_tab_for(&path) => Self::log_duplicate_open(&path),
                     Ok(board) => self.open_pcb_tab(path, title, *board),
                     Err(message) => self.report_open_failure(message),
                 }
@@ -146,12 +229,12 @@ impl Signex {
     /// `app/handlers/menu/export.rs`.
     pub(crate) fn dispatch_export_message(&mut self, msg: ExportMsg) -> Task<Message> {
         match msg {
-            ExportMsg::PdfFinished(result) => {
-                let task = self.handle_export_pdf_finished(result);
+            ExportMsg::PdfFinished { request, result } => {
+                let task = self.handle_export_pdf_finished(request, result);
                 iced::Task::batch([task, self.finish_update()])
             }
-            ExportMsg::NetlistFinished(result) => {
-                let task = self.handle_export_netlist_finished(result);
+            ExportMsg::NetlistFinished { source, result } => {
+                let task = self.handle_export_netlist_finished(source, result);
                 iced::Task::batch([task, self.finish_update()])
             }
             ExportMsg::PdfOpenDialog => {
@@ -170,16 +253,20 @@ impl Signex {
                 let task = self.handle_bom_preview_open();
                 iced::Task::batch([task, self.finish_update()])
             }
-            ExportMsg::BomFinished(result) => {
-                let task = self.handle_export_bom_finished(result);
+            ExportMsg::BomFinished {
+                source,
+                options,
+                result,
+            } => {
+                let task = self.handle_export_bom_finished(source, *options, result);
                 iced::Task::batch([task, self.finish_update()])
             }
             ExportMsg::ErcReportPathChosen(result) => {
                 let task = self.handle_erc_report_path_chosen(result);
                 iced::Task::batch([task, self.finish_update()])
             }
-            ExportMsg::ErcReportWritten(result) => {
-                let task = self.handle_erc_report_written(result);
+            ExportMsg::FileWritten(outcome) => {
+                let task = self.handle_export_written(*outcome);
                 iced::Task::batch([task, self.finish_update()])
             }
         }
@@ -187,6 +274,29 @@ impl Signex {
 
     /// BOM-preview modal message handler (namespaced family, ADR-0001 D3).
     pub(crate) fn dispatch_bom_preview_message(&mut self, msg: BomPreviewMsg) -> Task<Message> {
+        // Pure pointer/UI-state messages cannot change the row order; every
+        // other message (and any future one) re-sorts after it ran.
+        let reorders = !matches!(
+            msg,
+            BomPreviewMsg::ColumnHoverEnter(_)
+                | BomPreviewMsg::ColumnHoverExit(_)
+                | BomPreviewMsg::ColumnDragStart(_)
+                | BomPreviewMsg::ColumnResizeStart(_)
+                | BomPreviewMsg::ColumnResizeEnd
+                | BomPreviewMsg::SetSidebarTab(_)
+        );
+        let task = self.dispatch_bom_preview_message_inner(msg);
+        if reorders && let Some(p) = self.document_state.bom_preview.as_mut() {
+            p.row_order = crate::app::view::dialogs::sorted_row_order(
+                &p.table.rows,
+                &p.options.columns,
+                p.sort,
+            );
+        }
+        task
+    }
+
+    fn dispatch_bom_preview_message_inner(&mut self, msg: BomPreviewMsg) -> Task<Message> {
         match msg {
             BomPreviewMsg::SetGrouping(g) => {
                 self.handle_bom_preview_set_grouping(g);
@@ -248,18 +358,10 @@ impl Signex {
                     let start_width = p.column_widths.get(&idx).copied().unwrap_or_else(|| {
                         // Fall back to the per-BomColumn default
                         // table the view function uses.
-                        use signex_output::BomColumn;
-                        match p.options.columns.get(idx) {
-                            Some(BomColumn::Name) => 140.0,
-                            Some(BomColumn::Description) => 220.0,
-                            Some(BomColumn::Designator) | Some(BomColumn::Reference) => 220.0,
-                            Some(BomColumn::Value) => 110.0,
-                            Some(BomColumn::Footprint) => 140.0,
-                            Some(BomColumn::LibRef) => 160.0,
-                            Some(BomColumn::Qty) => 50.0,
-                            Some(BomColumn::Custom(_)) => 120.0,
-                            None => 120.0,
-                        }
+                        p.options
+                            .columns
+                            .get(idx)
+                            .map_or(120.0, crate::app::view::dialogs::bom_default_column_width)
                     });
                     p.column_resize = Some(crate::app::state::ColumnResizeState {
                         idx,
@@ -301,61 +403,77 @@ impl Signex {
                 let task = self.handle_print_preview_requested();
                 iced::Task::batch([task, self.finish_update()])
             }
-            PrintPreviewMsg::SelectPage(idx) => {
-                self.handle_print_preview_select_page(idx);
+            PrintPreviewMsg::Rasterized {
+                generation,
+                outline,
+                pages,
+            } => {
+                let task = self.handle_print_preview_rasterized(generation, &outline, pages);
+                Task::batch([task, self.finish_update()])
+            }
+            PrintPreviewMsg::PagesRasterized { generation, pages } => {
+                self.handle_print_preview_pages_rasterized(generation, pages);
                 self.finish_update()
+            }
+            PrintPreviewMsg::RasterFailed { generation, reason } => {
+                self.handle_print_preview_raster_failed(generation, &reason);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SelectPage(idx) => {
+                let task = self.handle_print_preview_select_page(idx);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetColourMode(mode) => {
-                self.handle_print_preview_set_colour_mode(mode);
-                self.finish_update()
+                let task = self.handle_print_preview_set_colour_mode(mode);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetPageRangeAll => {
-                self.handle_print_preview_set_page_range_all();
-                self.finish_update()
+                let task = self.handle_print_preview_set_page_range_all();
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetPageRangeCurrent => {
-                self.handle_print_preview_set_page_range_current();
-                self.finish_update()
+                let task = self.handle_print_preview_set_page_range_current();
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetPageRangeSpecific => {
-                self.handle_print_preview_set_page_range_specific();
-                self.finish_update()
+                let task = self.handle_print_preview_set_page_range_specific();
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetSpecificPageInput(value) => {
-                self.handle_print_preview_set_specific_page_input(value);
-                self.finish_update()
+                let task = self.handle_print_preview_set_specific_page_input(value);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetPageSize(size) => {
-                self.handle_print_preview_set_page_size(size);
-                self.finish_update()
+                let task = self.handle_print_preview_set_page_size(size);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetOrientation(orientation) => {
-                self.handle_print_preview_set_orientation(orientation);
-                self.finish_update()
+                let task = self.handle_print_preview_set_orientation(orientation);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetCustomWidth(text) => {
-                self.handle_print_preview_set_custom_dimension(true, text);
-                self.finish_update()
+                let task = self.handle_print_preview_set_custom_dimension(true, text);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetCustomHeight(text) => {
-                self.handle_print_preview_set_custom_dimension(false, text);
-                self.finish_update()
+                let task = self.handle_print_preview_set_custom_dimension(false, text);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetMargin(edge, text) => {
-                self.handle_print_preview_set_margin(edge, text);
-                self.finish_update()
+                let task = self.handle_print_preview_set_margin(edge, text);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetScaleMode(mode) => {
-                self.handle_print_preview_set_scale_mode(mode);
-                self.finish_update()
+                let task = self.handle_print_preview_set_scale_mode(mode);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetScalePercent(text) => {
-                self.handle_print_preview_set_scale_percent(text);
-                self.finish_update()
+                let task = self.handle_print_preview_set_scale_percent(text);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetIncludeTitleBlock(include) => {
-                self.handle_print_preview_set_include_title_block(include);
-                self.finish_update()
+                let task = self.handle_print_preview_set_include_title_block(include);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::Zoom(delta) => {
                 self.handle_print_preview_zoom(delta);
@@ -383,17 +501,17 @@ impl Signex {
                 self.handle_print_preview_pan_finished();
                 self.finish_update()
             }
-            PrintPreviewMsg::ToggleFile(path) => {
-                self.handle_print_preview_toggle_file(path);
-                self.finish_update()
+            PrintPreviewMsg::ToggleFile(page) => {
+                let task = self.handle_print_preview_toggle_file(page);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SelectAllFiles => {
-                self.handle_print_preview_select_all_files();
-                self.finish_update()
+                let task = self.handle_print_preview_select_all_files();
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::ClearAllFiles => {
-                self.handle_print_preview_clear_all_files();
-                self.finish_update()
+                let task = self.handle_print_preview_clear_all_files();
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetVariant(v) => {
                 self.handle_print_preview_set_variant(v);
@@ -407,22 +525,22 @@ impl Signex {
                 if let Some(p) = self.document_state.preview.as_mut() {
                     p.pdf_options.include_no_erc_markers = v;
                 }
-                self.handle_print_preview_rerender();
-                self.finish_update()
+                let task = self.handle_print_preview_rerender();
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetIncludeNoConnectMarkers(v) => {
                 if let Some(p) = self.document_state.preview.as_mut() {
                     p.pdf_options.include_no_connect_markers = v;
                 }
-                self.handle_print_preview_rerender();
-                self.finish_update()
+                let task = self.handle_print_preview_rerender();
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetIncludeNotes(v) => {
                 if let Some(p) = self.document_state.preview.as_mut() {
                     p.pdf_options.include_notes = v;
                 }
-                self.handle_print_preview_rerender();
-                self.finish_update()
+                let task = self.handle_print_preview_rerender();
+                Task::batch([task, self.finish_update()])
             }
             // Bookkeeping toggles — stored on `pdf_options` for the
             // exporter to honour later, but no render hookup yet so
@@ -495,8 +613,8 @@ impl Signex {
                 // Visual toggle — preview rasterises at the new
                 // DPI so the user sees the picker reflected
                 // immediately rather than only at next export.
-                self.handle_print_preview_rerender();
-                self.finish_update()
+                let task = self.handle_print_preview_rerender();
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetBookmarkZoom(z) => {
                 if let Some(p) = self.document_state.preview.as_mut() {

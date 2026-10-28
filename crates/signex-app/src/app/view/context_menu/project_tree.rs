@@ -54,7 +54,46 @@ pub(super) fn tree_node_role(icon: &TreeIcon, path_len: usize, has_children: boo
     TreeNodeRole::Unknown
 }
 
+/// Why Refresh All Pricing is greyed when no enabled distributor can price.
+pub(super) const NO_PRICING_CLIENT: &str = "No enabled distributor returns prices yet";
+
+/// "Refresh All Pricing" for a library node. The gate is static: it asks only
+/// whether an *enabled* distributor (the Distributor APIs list) has a client
+/// that can return prices. It does not look at credentials, because `view`
+/// must not touch the OS keyring; a distributor without a key or token shows
+/// up per row in the Messages panel as an authentication failure. The refresh
+/// itself refuses a second concurrent run with a Messages-panel line, so the
+/// row stays pressable while one runs.
+pub(super) fn refresh_pricing_entry(
+    library_ref: Option<crate::app::LibraryRowRef>,
+    any_client_prices: bool,
+) -> DropdownEntry<Message> {
+    if !any_client_prices {
+        return dd_disabled(None, "Refresh All Pricing", Some(NO_PRICING_CLIENT));
+    }
+    match library_ref {
+        Some(row) => dd_msg(
+            None,
+            "Refresh All Pricing",
+            "",
+            Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                crate::app::ProjectTreeAction::RefreshLibraryPricing(row),
+            )),
+        ),
+        None => dd_disabled(None, "Refresh All Pricing", Some("Library not found")),
+    }
+}
+
 impl Signex {
+    /// Whether "Enable Version Control..." is offered for `dir`: a pure read
+    /// of the probed Model fact, never the disk (#1098).
+    pub(in crate::app::view) fn offers_enable_version_control(
+        &self,
+        dir: &std::path::Path,
+    ) -> bool {
+        self.document_state.project_fs.facts.lacks_git(dir)
+    }
+
     /// Build the Projects-panel tree-view right-click menu. The item set
     /// is derived from the clicked node's [`TreeNodeRole`] — project root
     /// vs library leaf vs openable leaf vs container branch — so the menu
@@ -212,7 +251,7 @@ impl Signex {
                     .first()
                     .and_then(|idx| self.document_state.projects.get(*idx))
                     .and_then(|p| p.path.parent())
-                    .map(|dir| !dir.join(".git").exists())
+                    .map(|dir| self.offers_enable_version_control(dir))
                     .unwrap_or(false);
                 if no_git_yet {
                     v.push(dd_msg(
@@ -226,6 +265,9 @@ impl Signex {
                 }
             }
             TreeNodeRole::Library => {
+                // Identity of the right-clicked library, so the actions
+                // below cannot be retargeted by a tree rebuild (#742).
+                let library_ref = self.library_row_ref(path.as_slice());
                 // Library node menu — mirrors Altium's "Add New ▸" submenu:
                 // Component opens the New Component modal; Symbol / Footprint
                 // create FILES via the adapter. The basic expand / refresh
@@ -255,27 +297,27 @@ impl Signex {
                     ));
                 }
                 v.push(DropdownEntry::Separator);
-                // Distributor pricing refresh has no backing implementation
-                // yet (no row-to-part binding or pricing store), so the row
-                // is shown greyed rather than wired to a no-op.
-                v.push(dd_disabled(
-                    None,
-                    "Refresh All Pricing",
-                    Some("Not yet available"),
+                v.push(refresh_pricing_entry(
+                    library_ref.clone(),
+                    self.library
+                        .settings
+                        .preferred_order
+                        .iter()
+                        .any(|s| signex_library::source_supports_pricing(*s)),
                 ));
                 v.push(DropdownEntry::Separator);
                 // Enable Version Control on the library directory itself —
                 // hidden once the library has a `.git/`.
-                if let Some(lib_file) = self.library_node_path_from_tree(path.as_slice())
-                    && let Some(lib_dir) = lib_file.parent()
-                    && !lib_dir.join(".git").exists()
+                if let Some(library_ref) = library_ref.clone()
+                    && let Some(lib_dir) = library_ref.root.parent()
+                    && self.offers_enable_version_control(lib_dir)
                 {
                     v.push(dd_msg(
                         None,
                         "Enable Version Control...",
                         "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                            A::OpenLibraryEnableVersionControl(path.clone()),
+                            A::OpenLibraryEnableVersionControl(library_ref),
                         )),
                     ));
                     v.push(DropdownEntry::Separator);
@@ -297,14 +339,17 @@ impl Signex {
                 ));
                 // F23 — "Remove from Project" reuses the RemoveDialog flow.
                 v.push(DropdownEntry::Separator);
-                v.push(dd_msg(
-                    None,
-                    "Remove from Project...",
-                    "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenRemoveDialog(
-                        path.clone(),
-                    ))),
-                ));
+                v.push(match library_ref {
+                    Some(library_ref) => dd_msg(
+                        None,
+                        "Remove from Project...",
+                        "",
+                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::RemoveLibrary(
+                            library_ref,
+                        ))),
+                    ),
+                    None => dd_disabled(None, "Remove from Project...", None),
+                });
             }
             TreeNodeRole::OpenableLeaf => {
                 // Sheet / PCB / library leaf — Altium's per-document menu.

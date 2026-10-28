@@ -18,7 +18,7 @@ use tempfile::TempDir;
 // exercised in every assertion.
 // ─────────────────────────────────────────────────────────────────
 
-/// Phase-5 helper — fresh `Signex` + a `FootprintEditorState` parked
+/// Phase-5 helper — fresh `Signex` + a `FootprintDocument` parked
 /// in `document_state.footprint_editors` for a `<stem>.snxfpt` path
 /// inside a tempdir. The active tab points at the editor with
 /// `TabKind::FootprintEditor` so the `Message::Edit(EditMsg::Undo)`/`Redo` fork in
@@ -31,7 +31,7 @@ use tempfile::TempDir;
 /// the sketch already has at least one entity (avoids auto-minting
 /// a sketch the user never visited).
 fn fixture_empty_footprint_editor(stem: &str) -> (Signex, std::path::PathBuf, TempDir) {
-    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::app::{FootprintDocument, TabInfo, TabKind};
     use signex_library::{Footprint, FootprintFile};
     use signex_sketch::SketchData;
     use signex_sketch::entity::{Entity, EntityKind};
@@ -59,7 +59,7 @@ fn fixture_empty_footprint_editor(stem: &str) -> (Signex, std::path::PathBuf, Te
         ..SketchData::default()
     });
     let file = FootprintFile::from_footprint(fp);
-    let editor = FootprintEditorState::new(path.clone(), file);
+    let editor = FootprintDocument::new(path.clone(), file);
 
     let (mut app, _initial_task) = Signex::new();
     app.document_state
@@ -211,7 +211,7 @@ fn place_round_rect_then_undo_restores_pre_place_state() {
 /// without disturbing the seed Line.
 #[test]
 fn ctrl_z_during_tangent_arc_undoes_last_segment() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::app::{TabInfo, TabKind};
     use signex_app::library::editor::footprint::state::{SketchTool, ToolPending};
     use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -253,7 +253,7 @@ fn ctrl_z_during_tangent_arc_undoes_last_segment() {
     });
 
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.active_tool = SketchTool::TangentArc;
     // Click 1 already happened — pre-stash `first = b_id` so the
     // next click is click 2 (the gesture's commit).
@@ -488,7 +488,7 @@ fn placement_input_does_not_corrupt_history_on_undo() {
 /// shared `corner_r` binding survives.
 #[test]
 fn place_round_rect_then_select_arc_unlink_then_undo_restores_link() {
-    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::app::{FootprintDocument, TabInfo, TabKind};
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -510,7 +510,7 @@ fn place_round_rect_then_select_arc_unlink_then_undo_restores_link() {
     let ne_arc_id = SketchEntityId(uuid::Uuid::parse_str(&ne_arc_slug).expect("UUID slug"));
 
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
 
@@ -618,7 +618,7 @@ fn place_round_rect_then_select_arc_unlink_then_undo_restores_link() {
 /// corner_radius_pct mirror.
 #[test]
 fn editing_corner_r_via_properties_updates_all_4_arcs() {
-    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::app::{FootprintDocument, TabInfo, TabKind};
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_library::{Footprint, FootprintFile, PadShape};
@@ -638,7 +638,7 @@ fn editing_corner_r_via_properties_updates_all_4_arcs() {
         .expect("corner_r minted");
 
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
 
@@ -751,7 +751,7 @@ fn editing_corner_r_via_properties_updates_all_4_arcs() {
 /// to Phase 6**, flagged in the report.
 #[test]
 fn unlink_one_corner_only_that_arc_reads_per_corner_param() {
-    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::app::{FootprintDocument, TabInfo, TabKind};
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -778,7 +778,7 @@ fn unlink_one_corner_only_that_arc_reads_per_corner_param() {
         .expect("shared corner_r binding minted");
 
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
 
@@ -911,7 +911,7 @@ fn unlink_one_corner_only_that_arc_reads_per_corner_param() {
 /// future constraint-bound Point would see the new value.
 #[test]
 fn oval_width_edit_propagates_to_arc_centre_via_solve() {
-    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::app::{FootprintDocument, TabInfo, TabKind};
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_library::{Footprint, FootprintFile, PadShape};
@@ -936,7 +936,7 @@ fn oval_width_edit_propagates_to_arc_centre_via_solve() {
         .expect("height param minted");
 
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
 

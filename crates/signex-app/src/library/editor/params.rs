@@ -139,7 +139,7 @@ pub fn view<'a>(
     }
 
     // [+ Add custom parameter] row
-    body = body.push(add_custom_row(tokens, &address));
+    body = body.push(add_custom_row(state, tokens, &address));
 
     container(scrollable(body).width(Length::Fill).height(Length::Fill))
         .style(crate::styles::modal_card(tokens))
@@ -434,11 +434,10 @@ fn display_param(v: &ParamValue) -> String {
 /// separate `+` buttons because adding a custom row is rare and a
 /// pick-list would be heavier than the four-pill UI.
 ///
-/// The "Add" buttons read the buffered name from the editor's
-/// `params_edit_buf` map under the sentinel key "" (empty string, kept
-/// out of the displayed-rows pass because parameters with empty names
-/// are rejected by the dispatcher).
+/// The kind pills add a parameter named by the input's text
+/// (`ComponentPreviewState::new_param_name`); a blank name adds nothing.
 fn add_custom_row<'a>(
+    state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
@@ -464,11 +463,6 @@ fn add_custom_row<'a>(
                 table,
                 row_id,
                 msg: EditorMsg::ParamAddCustom {
-                    // The name picker is intentionally minimal here;
-                    // the dispatcher rejects empty names so the message
-                    // is benign when fired with an empty buffer. UIs
-                    // (e.g. an inline name field) layer on top.
-                    name: String::new(),
                     kind: kind_for_msg.clone(),
                 },
             })
@@ -493,8 +487,25 @@ fn add_custom_row<'a>(
             .into()
     };
 
+    let name_input = {
+        let lib_path = address.library_path.clone();
+        let table = address.table.clone();
+        text_input("Parameter name", &state.new_param_name)
+            .on_input(move |s| LibraryMessage::EditorEvent {
+                library_path: lib_path.clone(),
+                table: table.clone(),
+                row_id,
+                msg: EditorMsg::ParamNewNameChanged(s),
+            })
+            .padding([3, 6])
+            .size(11)
+            .width(Length::Fixed(160.0))
+    };
+
     row![
         text("[+ Add custom parameter]").size(11).color(muted),
+        Space::new().width(8),
+        name_input,
         Space::new().width(8),
         pill("Text", ParamKindMsg::Text),
         Space::new().width(4),
@@ -607,67 +618,5 @@ mod tests {
         assert!(missing.contains(&"tolerance".to_string()));
         assert!(missing.contains(&"power".to_string()));
         assert!(!missing.contains(&"value".to_string()));
-    }
-
-    /// Measurement parse round-trip via the buffer pattern: a typed
-    /// string commits into a `ParamValue::Measurement` with the
-    /// template's unit.
-    #[test]
-    fn measurement_parse_round_trip_via_buffer() {
-        let mut buffer: std::collections::HashMap<String, String> =
-            std::collections::HashMap::new();
-        buffer.insert("voltage_max".to_string(), "12.5".to_string());
-
-        let mut params = ParamMap::new();
-        // Simulate the dispatcher's commit step — same logic as the
-        // ParamCommitMeasurement arm in `dispatch::library`.
-        if let Some(buf) = buffer.get("voltage_max") {
-            let trimmed = buf.trim();
-            if let Ok(v) = trimmed.parse::<f64>() {
-                params.insert(
-                    "voltage_max".into(),
-                    ParamValue::Measurement {
-                        value: v,
-                        unit: "V".into(),
-                    },
-                );
-            }
-        }
-        assert_eq!(
-            params.get("voltage_max"),
-            Some(&ParamValue::Measurement {
-                value: 12.5,
-                unit: "V".into(),
-            })
-        );
-    }
-
-    /// Bad parse path: an in-progress numeric input ("12.5e") leaves
-    /// the buffer dirty and skips the commit, so the parameter stays
-    /// at its previous value (or absent). Mirrors the contract for
-    /// `ParamCommitNumber` / `ParamCommitMeasurement` in the dispatcher.
-    #[test]
-    fn bad_parse_keeps_buffer_dirty_and_skips_commit() {
-        let mut buffer: std::collections::HashMap<String, String> =
-            std::collections::HashMap::new();
-        buffer.insert("tcr".to_string(), "12.5e".to_string());
-
-        let mut params = ParamMap::new();
-        if let Some(buf) = buffer.get("tcr") {
-            let trimmed = buf.trim();
-            if let Ok(v) = trimmed.parse::<f64>() {
-                params.insert(
-                    "tcr".into(),
-                    ParamValue::Measurement {
-                        value: v,
-                        unit: "ppm/C".into(),
-                    },
-                );
-            }
-        }
-        // Parse failed → no commit, parameter stays absent.
-        assert!(!params.contains_key("tcr"));
-        // Buffer still carries the typed text so the user can fix it.
-        assert_eq!(buffer.get("tcr").map(String::as_str), Some("12.5e"));
     }
 }

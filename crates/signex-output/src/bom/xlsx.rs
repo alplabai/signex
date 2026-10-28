@@ -15,6 +15,7 @@ const COL_WIDTH_VALUE: f64 = 15.0;
 const COL_WIDTH_FOOTPRINT: f64 = 30.0;
 const COL_WIDTH_DESC: f64 = 40.0;
 const COL_WIDTH_CUSTOM: f64 = 20.0;
+const COL_WIDTH_NUMBER: f64 = 10.0;
 
 /// Emit a BOM table as XLSX with styled header row and auto-fit widths.
 pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError> {
@@ -41,6 +42,12 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
             BomColumn::Footprint => COL_WIDTH_FOOTPRINT,
             BomColumn::Description => COL_WIDTH_DESC,
             BomColumn::Custom(_) => COL_WIDTH_CUSTOM,
+            BomColumn::UnitPrice
+            | BomColumn::BuyQty
+            | BomColumn::ExtendedPrice
+            | BomColumn::Stock => COL_WIDTH_NUMBER,
+            BomColumn::Currency => COL_WIDTH_QTY + 4.0,
+            BomColumn::Distributor | BomColumn::PriceAge => COL_WIDTH_VALUE,
         };
 
         worksheet.write_string_with_format(0, col, header_text, &header_format)?;
@@ -56,27 +63,28 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
 
         for (col_idx, column) in columns.iter().enumerate() {
             let col = col_idx as u16;
-            let value = match column {
-                BomColumn::Name => bom_row.name.clone(),
-                BomColumn::Designator | BomColumn::Reference => bom_row.references.join(", "),
-                BomColumn::LibRef => bom_row.lib_ref.clone(),
-                BomColumn::Qty => bom_row.qty.to_string(),
-                BomColumn::Value => bom_row.value.clone(),
-                BomColumn::Footprint => bom_row.footprint.clone(),
-                BomColumn::Description => bom_row.description.clone(),
-                BomColumn::Custom(name) => bom_row.custom.get(name).cloned().unwrap_or_default(),
+            // Quantities, prices and stock stay numbers, so a spreadsheet can
+            // sum and sort them.
+            match super::cell_number(bom_row, column) {
+                Some(number) => worksheet.write_number(row, col, number)?,
+                None => worksheet.write_string(row, col, super::cell_text(bom_row, column))?,
             };
+        }
+    }
 
-            // Try to parse as number for Qty column; otherwise write as string
-            if matches!(column, BomColumn::Qty) {
-                if let Ok(qty_num) = value.parse::<u32>() {
-                    worksheet.write_number(row, col, qty_num as f64)?;
-                } else {
-                    worksheet.write_string(row, col, &value)?;
+    // One total line per currency under a priced BOM (#1023).
+    let total_format = Format::new().set_bold();
+    for (line_idx, line) in super::total_lines(table, columns).into_iter().enumerate() {
+        // After one empty row, so the totals are not read as a part.
+        let row = (table.rows.len() + 2 + line_idx) as u32;
+        for (col_idx, (text, number)) in line.into_iter().enumerate() {
+            let col = col_idx as u16;
+            match number {
+                Some(number) => {
+                    worksheet.write_number_with_format(row, col, number, &total_format)?
                 }
-            } else {
-                worksheet.write_string(row, col, &value)?;
-            }
+                None => worksheet.write_string_with_format(row, col, text, &total_format)?,
+            };
         }
     }
 
