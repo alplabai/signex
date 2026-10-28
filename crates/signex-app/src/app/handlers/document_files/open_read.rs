@@ -100,6 +100,7 @@ impl Signex {
     /// running, so none of them reopens a tab afterwards.
     pub(crate) fn cancel_in_flight_reads(&mut self) {
         self.document_state.pending_opens.cancel_all();
+        self.ui_state.pending_create_sheet = None;
         self.document_state.pending_restores.cancel_all_retaining();
     }
 

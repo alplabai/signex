@@ -168,7 +168,7 @@ impl Signex {
 
         // Another open project's sheets that place this file are not re-pointed
         // by this rename: refuse rather than leave their symbols dangling.
-        if is_sheet {
+        {
             let owner = state.project_id.or_else(|| {
                 let idx = *state.tree_path.first()?;
                 self.document_state.projects.get(idx).map(|p| p.id)

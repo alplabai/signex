@@ -796,8 +796,12 @@ fn deleting_a_sheet_mid_flight_refuses_the_replace() {
 
     // Removed behind the replace's back (the Remove dialog itself now refuses
     // a sheet that another sheet places, #1618).
+    let epoch = app.document_state.documents_epoch;
     std::fs::remove_file(&child).unwrap();
-    app.document_state.remove_engine(&child);
+    // The tail of a confirmed Delete: forget the held documents, which must
+    // also mark the epoch the in-flight replace compares against.
+    app.drop_deleted_documents(&child, crate::app::state::scope::CaseFold::host_default());
+    assert_ne!(app.document_state.documents_epoch, epoch, "the epoch moved");
     assert!(!child.exists(), "the file was deleted");
     deliver(&mut app, generation, prep);
 

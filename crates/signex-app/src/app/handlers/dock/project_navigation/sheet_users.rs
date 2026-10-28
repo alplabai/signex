@@ -16,7 +16,6 @@ use std::path::{Path, PathBuf};
 use super::*;
 use crate::app::project_sheets::{lexically_normalize, resolve_child_reference};
 use crate::app::sheet_hierarchy::{SheetHierarchy, SheetNode, SheetNodeKind};
-use crate::app::state::library_entry::entry_resolves_to;
 use crate::app::state::scope::{CaseFold, path_key_with};
 use crate::panels::SheetInfo;
 
@@ -94,10 +93,9 @@ impl Signex {
 
     /// What stands in the way of removing the sheet a Remove dialog names.
     pub(crate) fn remove_blockers(&self, state: &RemoveDialogState) -> RemoveBlockers {
-        let is_sheet = state.target_path.extension().and_then(|e| e.to_str()) == Some("snxsch");
-        if !is_sheet {
-            return RemoveBlockers::default();
-        }
+        // Keyed by the file and the project's case rules, never by its
+        // extension: a symbol can name any file, and "nobody places it" must
+        // not depend on how the name is spelled.
         let own_parent = (state.tree_path.len() >= 4)
             .then(|| self.tree_path_to_file_path(&state.tree_path[..state.tree_path.len() - 1]))
             .flatten();
@@ -112,30 +110,14 @@ impl Signex {
         let (own, other): (Vec<PathBuf>, Vec<PathBuf>) =
             users.parents.iter().cloned().partition(|p| is_own(p));
         RemoveBlockers {
-            unlisted: !self.sheet_is_listed(state),
+            unlisted: self
+                .sheet_info_at(&state.tree_path)
+                .is_some_and(|row| row.is_child_reference && !row.in_project_list),
             other_parents: other,
             own_parent: own.into_iter().next(),
             placed: !users.parents.is_empty(),
             unknown: users.unknown,
         }
-    }
-
-    /// Is the dialog's target a `.snxprj` page or the declared root?
-    fn sheet_is_listed(&self, state: &RemoveDialogState) -> bool {
-        let Some(project) = state
-            .project_id
-            .and_then(|id| self.document_state.project_by_id(id))
-        else {
-            return true;
-        };
-        let (dir, fold) = (project.dir(), project.case_fold);
-        let is_target = |entry: &str| entry_resolves_to(dir, entry, &state.target_path, fold);
-        project.data.sheets.iter().any(|e| is_target(&e.filename))
-            || project
-                .data
-                .schematic_root
-                .as_deref()
-                .is_some_and(is_target)
     }
 
     /// Every sheet whose symbols place `target`: in the walked hierarchy of
@@ -183,11 +165,13 @@ impl Signex {
                 );
             }
             let Some(hierarchy) = hierarchy else { continue };
-            if let Some(bad) = incomplete_node(hierarchy) {
+            // The sheet being deleted may itself be the broken one.
+            if let Some(bad) = incomplete_node(hierarchy, target) {
                 note_unknown(
                     users,
                     format!(
-                        "{} in project {} could not be read completely",
+                        "{} in project {} could not be read completely; fix or remove that \
+                         sheet first",
                         bad.display(),
                         project.data.name
                     ),
@@ -228,18 +212,21 @@ fn note_unknown(users: &mut SheetUsers, reason: String) {
     users.unknown.get_or_insert(reason);
 }
 
-/// A node whose children are unknown: unreadable, or cut off by the budget.
-fn incomplete_node(hierarchy: &SheetHierarchy) -> Option<&Path> {
-    fn find(node: &SheetNode) -> Option<&Path> {
-        if matches!(
+/// A node whose children are unknown (unreadable, or cut off by the budget),
+/// other than the `target` itself.
+fn incomplete_node<'a>(hierarchy: &'a SheetHierarchy, target: &Path) -> Option<&'a Path> {
+    fn find<'a>(node: &'a SheetNode, target: &Path, fold: CaseFold) -> Option<&'a Path> {
+        let incomplete = matches!(
             node.kind,
             SheetNodeKind::Unreadable | SheetNodeKind::Truncated
-        ) {
+        );
+        if incomplete && !node.is_at(target, fold) {
             return Some(&node.path);
         }
-        node.children.iter().find_map(find)
+        node.children.iter().find_map(|c| find(c, target, fold))
     }
-    SheetHierarchy::top_level(hierarchy).find_map(find)
+    let fold = hierarchy.fold;
+    SheetHierarchy::top_level(hierarchy).find_map(|top| find(top, target, fold))
 }
 
 fn collect_parents(node: &SheetNode, target: &Path, fold: CaseFold, out: &mut Vec<PathBuf>) {

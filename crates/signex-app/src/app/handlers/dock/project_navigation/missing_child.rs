@@ -84,6 +84,11 @@ impl Signex {
             Ok(task) => {
                 // Focusing a tab that is already open needs no read.
                 self.resume_create_sheet(&missing.parent, false);
+                // Nothing focused and nothing reading: no open will ever
+                // resume it, and a later unrelated open must not.
+                if task.units() == 0 {
+                    self.ui_state.pending_create_sheet = None;
+                }
                 task
             }
             Err(error) => {
@@ -100,10 +105,18 @@ impl Signex {
         let Some((parent, child)) = self.ui_state.pending_create_sheet.clone() else {
             return;
         };
-        if parent != opened {
+        let fold =
+            crate::app::state::project_case::fold_of(self.document_state.document_project(&parent));
+        let same = |a: &std::path::Path, b: &std::path::Path| {
+            crate::app::state::scope::path_key_with(a, fold)
+                == crate::app::state::scope::path_key_with(b, fold)
+        };
+        if !same(&parent, opened) {
             return;
         }
-        let focused = self.active_tab_path().as_deref() == Some(parent.as_path());
+        let focused = self
+            .active_tab_path()
+            .is_some_and(|active| same(&active, &parent));
         if !focused && !settled {
             return;
         }

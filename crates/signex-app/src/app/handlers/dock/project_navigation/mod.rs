@@ -26,6 +26,8 @@ mod nested_row_incomplete_tests;
 #[cfg(test)]
 mod nested_row_safety_tests;
 #[cfg(test)]
+mod nested_row_spelling_tests;
+#[cfg(test)]
 mod nested_row_tests;
 mod open_document;
 mod project_actions;

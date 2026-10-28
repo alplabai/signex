@@ -289,7 +289,9 @@ impl ProjectFsCache {
     }
 
     /// Does the stored hierarchy of `project` describe the project as it is
-    /// now? `None` when the project has no walk wanted (no sheets); otherwise
+    /// now? An edit made outside Signex to a closed sheet still reads as
+    /// current until the next 2 s poll sees its new mtime.
+    /// `None` when the project has no walk wanted (no sheets); otherwise
     /// false while its job is still to be walked, running, or out of date.
     pub fn hierarchy_current(&self, project: ProjectId) -> Option<bool> {
         let wanted = self
