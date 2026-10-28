@@ -90,6 +90,7 @@ impl Signex {
         self.ui_state.preferences_draft_symbol_pin_selection = self.ui_state.symbol_pin_selection;
         self.ui_state.preferences_draft_zoom_step_percent = self.ui_state.zoom_step_percent;
         self.ui_state.preferences_draft_erc_severity = self.ui_state.erc_severity_override.clone();
+        self.ui_state.preferences_seed_erc_severity = self.ui_state.erc_severity_override.clone();
         self.ui_state.preferences_draft_ui_scale_percent =
             crate::ui_scale::scale_to_percent(self.ui_state.ui_scale);
         // Fresh working copy of the live profile set for the Keyboard
@@ -118,6 +119,30 @@ impl Signex {
         self.refresh_keymap_backup();
         self.ui_state.preferences_dirty = false;
         self.ui_state.preferences_dirty_sticky = false;
+    }
+
+    /// Apply only the rules the user changed in Preferences (draft vs the
+    /// seed snapshot, Reset's clears included) onto the CURRENT live map, so
+    /// an override the ERC dialog wrote while Preferences was open survives.
+    fn commit_erc_severity_draft(&mut self) {
+        let ui = &mut self.ui_state;
+        let mut changed = false;
+        for rule in signex_erc::RuleKind::ALL {
+            let draft = ui.preferences_draft_erc_severity.get(&rule).copied();
+            if draft == ui.preferences_seed_erc_severity.get(&rule).copied() {
+                continue;
+            }
+            match draft {
+                Some(severity) => ui.erc_severity_override.insert(rule, severity),
+                None => ui.erc_severity_override.remove(&rule),
+            };
+            changed = true;
+        }
+        if changed {
+            crate::fonts::write_erc_severity_overrides(&ui.erc_severity_override);
+        }
+        ui.preferences_draft_erc_severity = ui.erc_severity_override.clone();
+        ui.preferences_seed_erc_severity = ui.erc_severity_override.clone();
     }
 
     /// Re-check whether `keyboard_shortcuts.toml.bak` is on disk (#603).
@@ -293,18 +318,7 @@ impl Signex {
                 crate::fonts::write_symbol_pin_selection_pref(self.ui_state.symbol_pin_selection);
                 crate::fonts::write_zoom_step_percent_pref(self.ui_state.zoom_step_percent);
                 crate::fonts::write_ui_scale_pref(self.ui_state.ui_scale);
-                // Commit the ERC severity draft. Only when it differs, so a
-                // Save that never touched ERC cannot clobber an override the
-                // ERC dialog wrote while Preferences was open.
-                if self.ui_state.preferences_draft_erc_severity
-                    != self.ui_state.erc_severity_override
-                {
-                    self.ui_state.erc_severity_override =
-                        self.ui_state.preferences_draft_erc_severity.clone();
-                    crate::fonts::write_erc_severity_overrides(
-                        &self.ui_state.erc_severity_override,
-                    );
-                }
+                self.commit_erc_severity_draft();
                 // Component classes — keep entries with non-empty keys
                 // and labels, dedupe by key (last write wins) so the
                 // dropdown never shows blanks or duplicates.
