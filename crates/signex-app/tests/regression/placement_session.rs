@@ -588,7 +588,6 @@ fn closing_the_project_mid_session_drops_it() {
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
-            parameters: Default::default(),
             rules: None,
             annotation: None,
             parameters: Default::default(),
