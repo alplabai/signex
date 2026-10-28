@@ -1,18 +1,18 @@
 //! Ratchets (#1251) over the menu bar's inert rows.
 //!
-//! - `leaf_stub` rows are features that do not exist yet, greyed with a
+//! - `stub` rows are features that do not exist yet, greyed with a
 //!   "planned" tooltip. The set may only shrink.
-//! - `leaf_disabled` called with a literal label is a row that is greyed
+//! - `unavailable` called with a literal label is a row that is greyed
 //!   for good with NO explanation. Only the informational placeholder
-//!   below is allowed; anything else must be wired or become a `leaf_stub`.
-//!   (`leaf_if` reaches `leaf_disabled` with a variable label for rows that
-//!   are only greyed while unavailable; those are not literal call sites.)
+//!   below is allowed; anything else must be wired or become a `stub`.
+//!   (`item_if` rows that are only greyed while unavailable are live rows,
+//!   not literal call sites of this kind.)
 //!
 //! A new stub row fails here: wire a real action instead, or — if it must
 //! ship planned — add its key to the list and justify it in the PR. A
 //! removed row must be removed from the list too.
 
-/// The first string literal after each `leaf_stub(` call in `view.rs`: the
+/// The first string literal after each `stub(` call in `model/menus.rs`: the
 /// row's label, or the command id the label is read from.
 const EXPECTED_STUBS: &[&str] = &[
     "Sheet Entry",
@@ -27,7 +27,7 @@ const EXPECTED_STUBS: &[&str] = &[
     "Close All Documents",
 ];
 
-/// Literal `leaf_disabled` rows that are allowed to stay unexplained.
+/// Literal `unavailable` rows that are allowed to stay unexplained.
 const EXPECTED_DISABLED: &[&str] = &["No recent projects"];
 
 /// The label literal of each `<callee>(` call in `source` whose first
@@ -82,34 +82,34 @@ fn assert_ratchet(callee: &str, found: &[String], expected: &[&str]) {
 
 #[test]
 fn menu_stub_rows_can_only_shrink() {
-    let keys = call_keys(include_str!("view.rs"), "leaf_stub");
-    assert_ratchet("leaf_stub", &keys, EXPECTED_STUBS);
+    let keys = call_keys(include_str!("model/menus.rs"), "stub");
+    assert_ratchet("stub", &keys, EXPECTED_STUBS);
 }
 
 #[test]
 fn unexplained_disabled_rows_can_only_shrink() {
-    let keys = call_keys(include_str!("view.rs"), "leaf_disabled");
-    assert_ratchet("leaf_disabled", &keys, EXPECTED_DISABLED);
+    let keys = call_keys(include_str!("model/menus.rs"), "unavailable");
+    assert_ratchet("unavailable", &keys, EXPECTED_DISABLED);
 }
 
 #[test]
 fn the_scanner_catches_a_new_inert_row() {
-    let fake = r#"leaf_stub("Brand New Row", None, mc),"#;
-    assert_eq!(call_keys(fake, "leaf_stub"), vec!["Brand New Row"]);
-    let fake = "leaf_disabled(\n    &cmd_label(\"x\", \"X\"),";
-    assert_eq!(call_keys(fake, "leaf_disabled"), vec!["x"]);
+    let fake = r#"stub("Brand New Row"),"#;
+    assert_eq!(call_keys(fake, "stub"), vec!["Brand New Row"]);
+    let fake = "unavailable(\n    \"Greyed\",";
+    assert_eq!(call_keys(fake, "unavailable"), vec!["Greyed"]);
 }
 
 #[test]
 fn generate_bom_is_not_a_stub() {
-    let keys = call_keys(include_str!("view.rs"), "leaf_stub");
+    let keys = call_keys(include_str!("model/menus.rs"), "stub");
     assert!(!keys.iter().any(|k| k == "Generate BOM"));
 }
 
 /// Rows whose feature already works are wired to its message.
 #[test]
 fn working_rows_send_their_messages() {
-    let source = include_str!("view.rs");
+    let source = include_str!("model/menus.rs");
     for (label, message) in [
         ("zoom_in_at_cursor", "MenuMessage::ZoomIn"),
         ("zoom_out_at_cursor", "MenuMessage::ZoomOut"),

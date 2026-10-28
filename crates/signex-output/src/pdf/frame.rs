@@ -41,8 +41,31 @@ pub(crate) fn sheet_frame_elements(
         ),
     };
 
-    let sub_ctx = SubstitutionContext {
-        metadata: &ctx.metadata,
+    let metadata = ctx.metadata.for_sheet(&sheet.schematic.title_block);
+    let sub_ctx = sheet_substitution(sheet, opts, &metadata);
+    let (paper_w_mm, paper_h_mm) = super::layout::sheet_paper_mm(sheet);
+    let settings = &sheet.schematic.frame;
+    let primitives = crate::template::lower_sheet_frame(
+        paper_w_mm,
+        paper_h_mm,
+        &frame.with_sheet_settings(settings),
+        settings.show_title_block.then_some(&title_block),
+        |text| crate::resolve(text, &sub_ctx),
+    );
+    let xform = PageTransform::new(sheet, page_w_mm, page_h_mm, opts, units_per_mm);
+    frame_elements(&primitives, &xform, opts.palette.sheet_border)
+}
+
+/// The special-string context for `sheet` on a page printed with `opts`:
+/// the one the title block, and every text item, resolve their `${TOKEN}`s
+/// with. `metadata` is the sheet's own ([`crate::ProjectMetadata::for_sheet`]).
+pub(crate) fn sheet_substitution<'a>(
+    sheet: &crate::SheetSnapshot,
+    opts: &PdfOptions,
+    metadata: &'a crate::ProjectMetadata,
+) -> SubstitutionContext<'a> {
+    SubstitutionContext {
+        metadata,
         filename: sheet
             .path
             .file_name()
@@ -57,18 +80,7 @@ pub(crate) fn sheet_frame_elements(
         physical_structure: opts.use_physical_structure,
         physical_sheet_number: opts.physical_sheet_number,
         physical_document_number: opts.physical_document_number,
-    };
-    let (paper_w_mm, paper_h_mm) = super::layout::sheet_paper_mm(sheet);
-    let settings = &sheet.schematic.frame;
-    let primitives = crate::template::lower_sheet_frame(
-        paper_w_mm,
-        paper_h_mm,
-        &frame.with_sheet_settings(settings),
-        settings.show_title_block.then_some(&title_block),
-        |text| crate::resolve(text, &sub_ctx),
-    );
-    let xform = PageTransform::new(sheet, page_w_mm, page_h_mm, opts, units_per_mm);
-    frame_elements(&primitives, &xform, opts.palette.sheet_border)
+    }
 }
 
 /// Turn frame primitives (sheet mm) into page elements through `xform`.
@@ -332,5 +344,76 @@ mod tests {
             ..PdfOptions::default()
         };
         assert!(sheet_frame_elements(&sheet, &off, &ctx, 297.0, 210.0, 1.0).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod special_string_tests {
+    use super::*;
+    use crate::svg::{SvgEvaluatorInputs, SvgRenderContext};
+    use crate::{ProjectMetadata, SheetSnapshot};
+    use std::collections::{BTreeMap, HashMap};
+
+    const NOTE: &str = "${PROJECT_NAME}: ${TITLE} by ${DRAWNBY} (${SHEETNUMBER}/${SHEETCOUNT})";
+
+    /// A text note that names tokens prints, in the SVG/PDF page, the string
+    /// the resolver gives the title block, with the sheet override applied.
+    #[test]
+    fn a_text_note_resolves_the_same_tokens_as_the_title_block() {
+        let mut schematic = signex_types::schematic::SchematicSheet::default();
+        schematic.title_block.insert("title".into(), "Power".into());
+        schematic
+            .text_notes
+            .push(signex_types::schematic::TextNote {
+                uuid: uuid::Uuid::new_v4(),
+                text: NOTE.into(),
+                position: signex_types::schematic::Point::new(10.0, 10.0),
+                rotation: 0.0,
+                font_size: 1.27,
+                font_family: None,
+                justify_h: Default::default(),
+                justify_v: Default::default(),
+            });
+        let sheet = SheetSnapshot {
+            path: std::path::PathBuf::from("/p/power.snxsch"),
+            schematic,
+            sheet_name: "Power".into(),
+            sheet_number: 2,
+            sheet_count: 3,
+            placement: Default::default(),
+        };
+        let mut metadata = ProjectMetadata {
+            project_parameters: Some(BTreeMap::from([
+                ("title".to_string(), "Project".to_string()),
+                ("drawn_by".to_string(), "A. Engineer".to_string()),
+            ])),
+            ..ProjectMetadata::default()
+        };
+        metadata
+            .custom_fields
+            .insert("project_name".into(), "Oscar".into());
+        let opts = PdfOptions {
+            include_notes: true,
+            ..PdfOptions::default()
+        };
+        let sheet_metadata = metadata.for_sheet(&sheet.schematic.title_block);
+        let special = sheet_substitution(&sheet, &opts, &sheet_metadata);
+        let wanted = "Oscar: Power by A. Engineer (2/3)";
+        assert_eq!(crate::resolve(NOTE, &special), wanted);
+
+        let (refdes, nets) = (HashMap::new(), HashMap::new());
+        let inputs = SvgEvaluatorInputs {
+            special_strings: Some(&special),
+            global_refdes: &refdes,
+            net_name_by_symbol_pin: &nets,
+            cell: "",
+        };
+        let page = SvgRenderContext::from_sheet(&sheet, &opts, 297.0, 210.0, 1.0, Some(&inputs));
+        assert!(
+            page.elements
+                .iter()
+                .any(|e| matches!(e, SvgElement::Text { text, .. } if text == wanted)),
+            "the note prints the resolved string"
+        );
     }
 }

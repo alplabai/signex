@@ -136,6 +136,7 @@ impl Signex {
                     ActiveBarAction::NetColorDarkGreen => (0x16, 0xA3, 0x4A),
                     _ => (0xFF, 0xFF, 0xFF),
                 };
+                self.cancel_placement_session();
                 self.ui_state.pending_net_color = Some(signex_types::theme::Color {
                     r: c.0,
                     g: c.1,
@@ -169,6 +170,7 @@ impl Signex {
                 // A distinct armed state: use a sentinel color (alpha 0)
                 // to mean "clear mode". Simpler than a second enum — we
                 // still read pending_net_color at click time.
+                self.cancel_placement_session();
                 self.ui_state.pending_net_color = Some(signex_types::theme::Color {
                     r: 0,
                     g: 0,

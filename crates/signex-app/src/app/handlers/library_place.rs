@@ -5,9 +5,11 @@
 //!   1. `PlaceLibraryComponent` validates cheaply and returns a `Task`
 //!      running [`resolve_placement`] off the update thread: read the
 //!      picked row and its `.snxsym`, convert with `Symbol::to_lib_symbol`.
-//!   2. `LibraryComponentResolved` registers that `LibSymbol` on the active
-//!      sheet and places a schematic `Symbol` referencing it, as ONE engine
-//!      batch so a single undo removes both.
+//!   2. `LibraryComponentResolved` arms a placement session (see
+//!      `placement_session.rs`): the part follows the cursor, Space / X / Y
+//!      turn it, and each click registers the `LibSymbol` and places a
+//!      schematic `Symbol` referencing it as ONE engine batch, so a single
+//!      undo removes both. The session stays armed for the next copy.
 //!
 //! ## `lib_id` scheme
 //!
@@ -20,9 +22,12 @@
 //!
 //! `update` does none. [`resolve_placement`] runs in `spawn_blocking` and
 //! opens its own adapter on the `.snxlib`. The completion carries the sheet
-//! that was active when the gesture started and refuses to place if that
+//! that was active when the gesture started and refuses to arm if that
 //! sheet is no longer the active one or the library was closed meanwhile:
-//! "Place Failed", never a placement into the wrong sheet. A symbol
+//! "Place Failed", never a placement into the wrong sheet. It also carries
+//! the placement epoch the gesture started under; Esc or a tool change in
+//! between bumps it, and a read that finishes after that arms nothing.
+//! A sheet written by a newer Signex is read-only: no session is armed. A symbol
 //! reference into a *different* library is resolved through the other open
 //! libraries (the worker gets an id-to-path map); if that library is not
 //! open the failure says so.
@@ -35,6 +40,7 @@
 use iced::Task;
 use std::path::{Path, PathBuf};
 
+use signex_engine::PlacementPayload;
 use signex_library::RowId;
 
 use super::super::contracts::Message;
@@ -52,6 +58,9 @@ impl Signex {
         row_id: RowId,
     ) -> Task<Message> {
         self.library.picker = None;
+        // A newer pick supersedes any read still in flight, even one that
+        // fails the checks below.
+        self.interaction_state.placement_epoch += 1;
         let Some(target_sheet) = self.document_state.active_path.clone() else {
             self.report_place_failure("Open a schematic sheet before placing a library part.");
             return Task::none();
@@ -63,6 +72,7 @@ impl Signex {
             ));
             return Task::none();
         }
+        let arm_epoch = self.interaction_state.placement_epoch;
         let path = library_path.clone();
         let open_libraries: Vec<(uuid::Uuid, PathBuf)> = self
             .library
@@ -81,6 +91,7 @@ impl Signex {
             move |result| {
                 Message::Library(LibraryMessage::LibraryComponentResolved {
                     target_sheet: target_sheet.clone(),
+                    arm_epoch,
                     library_path: library_path.clone(),
                     result: result.map(Box::new),
                 })
@@ -88,26 +99,33 @@ impl Signex {
         )
     }
 
-    /// Completion of [`resolve_placement`]: register the `LibSymbol` and
-    /// place the part as one undo step.
+    /// Completion of [`resolve_placement`]: attach the part to the cursor.
     pub(crate) fn handle_library_component_resolved(
         &mut self,
         target_sheet: PathBuf,
+        arm_epoch: u64,
         library_path: PathBuf,
         result: Result<Box<ResolvedPlacement>, String>,
     ) -> Task<Message> {
-        if let Err(detail) = self.place_resolved(&target_sheet, &library_path, result) {
+        if let Err(detail) = self.arm_resolved(&target_sheet, arm_epoch, &library_path, result) {
             self.report_place_failure(&detail);
         }
         Task::none()
     }
 
-    fn place_resolved(
+    fn arm_resolved(
         &mut self,
         target_sheet: &Path,
+        arm_epoch: u64,
         library_path: &Path,
         result: Result<Box<ResolvedPlacement>, String>,
     ) -> Result<(), String> {
+        if arm_epoch != self.interaction_state.placement_epoch {
+            // Esc, a right-click, a tool change or a newer pick came in while
+            // the row was being read: this gesture is no longer wanted, so
+            // even its failure is not worth a notice.
+            return Ok(());
+        }
         let resolved = *result?;
         if self.library.library_at(library_path).is_none() {
             return Err(format!(
@@ -124,33 +142,47 @@ impl Signex {
                 resolved.internal_pn
             ));
         }
-        let (x, y) = self.interaction_state.canvas.view_centre_world();
-        let at = self.free_drop_point(snap_mm(x), snap_mm(y));
-        let prefix = self.placement_prefix_for(target_sheet, &resolved);
-        let reference = self.next_designator_for_prefix(&prefix);
-        let placed = placed_symbol(&resolved, reference, at);
-        let internal_pn = resolved.internal_pn;
-        self.warn_if_sheet_copy_differs(&resolved.lib_symbol, &internal_pn);
-        let commands = vec![
-            signex_engine::Command::RegisterLibSymbol {
-                lib_symbol: resolved.lib_symbol,
-            },
-            signex_engine::Command::PlaceSymbol { symbol: placed },
-        ];
-        // `false` covers an engine error (already logged by the gateway) or
-        // an unchanged result; either way nothing was placed.
-        if self.apply_engine_commands(commands, false, false) {
-            Ok(())
-        } else {
-            Err(format!(
-                "{internal_pn} was not placed; see the log for details."
-            ))
+        if self
+            .document_state
+            .engines
+            .get(target_sheet)
+            .is_some_and(|e| e.document().unknown.newer_minor_source.is_some())
+        {
+            return Err(format!(
+                "The sheet {} was written by a newer Signex and is read-only in this build; {} was not placed.",
+                target_sheet.display(),
+                resolved.internal_pn
+            ));
         }
+        let prefix = self.placement_prefix_for(target_sheet, &resolved);
+        let reference = self.next_designator_in_sheet(target_sheet, &prefix);
+        let placed = placed_symbol(
+            &resolved,
+            reference,
+            signex_types::schematic::Point::new(0.0, 0.0),
+        );
+        self.warn_if_sheet_copy_differs(&resolved.lib_symbol, &resolved.internal_pn);
+        // The click binds the placed symbol to the sheet's existing copy of
+        // the body when there is one (`RegisterLibSymbol` keeps it), so the
+        // ghost and its turns show THAT copy, not the library's newer one.
+        let body = self
+            .document_state
+            .engines
+            .get(target_sheet)
+            .and_then(|e| e.document().lib_symbols.get(&resolved.lib_symbol.id))
+            .cloned()
+            .unwrap_or(resolved.lib_symbol);
+        let mut fragment = signex_types::schematic::SchematicSheet::default();
+        fragment.lib_symbols.insert(body.id.clone(), body);
+        fragment.symbols.push(placed);
+        self.arm_placement_session(PlacementPayload::new(fragment), target_sheet, prefix);
+        Ok(())
     }
 
     /// The reference prefix for `resolved` on `target_sheet`: the designator
-    /// standard of the project that OWNS the sheet decides by component class;
-    /// without one (or for a loose sheet) the symbol's own letters apply.
+    /// standard of the project that OWNS the sheet decides by component class,
+    /// unless the row carries its own prefix override; without a standard (or for
+    /// a loose sheet) the symbol's own letters apply.
     fn placement_prefix_for(&self, target_sheet: &Path, resolved: &ResolvedPlacement) -> String {
         let project = self.document_state.document_project(target_sheet);
         if let Some(p) = project.filter(|p| p.data.has_unreadable_annotation()) {
@@ -160,30 +192,20 @@ impl Signex {
                 p.path.display()
             ));
         }
+        if let Some(raw) = resolved.prefix_override.as_deref()
+            && let Err(why) = signex_types::designator::normalize_prefix_override(raw)
+        {
+            crate::diagnostics::log_warning(format!(
+                "The designator prefix override {raw:?} of {} is ignored: {why}.",
+                resolved.internal_pn
+            ));
+        }
         signex_types::designator::resolve_prefix(
             project.and_then(|p| p.data.designator_standard()),
             Some(&resolved.class),
+            resolved.prefix_override.as_deref(),
             &resolved.prefix,
         )
-    }
-
-    /// The view-centre drop, stepped one grid cell down-right while a
-    /// symbol already sits on it, so a repeated drop is visibly a new part.
-    fn free_drop_point(&self, x: f64, y: f64) -> signex_types::schematic::Point {
-        let occupied = |x: f64, y: f64| {
-            self.document_state.active_engine().is_some_and(|e| {
-                e.document()
-                    .symbols
-                    .iter()
-                    .any(|s| (s.position.x - x).abs() < 1e-6 && (s.position.y - y).abs() < 1e-6)
-            })
-        };
-        let (mut x, mut y) = (x, y);
-        while occupied(x, y) {
-            x += DROP_GRID_MM;
-            y += DROP_GRID_MM;
-        }
-        signex_types::schematic::Point::new(x, y)
     }
 
     /// `RegisterLibSymbol` keeps an existing entry under the same key, so
@@ -222,13 +244,6 @@ impl Signex {
             detail: detail.to_owned(),
         });
     }
-}
-
-/// Grid the view-centre drop is rounded to (50 mil).
-const DROP_GRID_MM: f64 = 1.27;
-
-fn snap_mm(v: f64) -> f64 {
-    (v / DROP_GRID_MM).round() * DROP_GRID_MM
 }
 
 /// The schematic `Symbol` for a resolved row. Field set mirrors

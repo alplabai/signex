@@ -103,8 +103,10 @@ impl Signex {
             ActiveBarAction::RotateSelectionCW => {
                 self.update(Message::Edit(EditMsg::RotateSelectedClockwise))
             }
-            ActiveBarAction::FlipSelectedX => self.update(Message::Edit(EditMsg::MirrorSelectedX)),
-            ActiveBarAction::FlipSelectedY => self.update(Message::Edit(EditMsg::MirrorSelectedY)),
+            // Axes are crossed on purpose, like the `mirror_x` / `mirror_y`
+            // keys: see the "Visual-flip semantics" note in command/bridge.rs.
+            ActiveBarAction::FlipSelectedX => self.update(Message::Edit(EditMsg::MirrorSelectedY)),
+            ActiveBarAction::FlipSelectedY => self.update(Message::Edit(EditMsg::MirrorSelectedX)),
             // "Select → Connection": if a wire/bus/junction/label is already
             // selected, expand immediately. Otherwise fall through to Select
             // tool so the next click triggers the net walk via the hit-test

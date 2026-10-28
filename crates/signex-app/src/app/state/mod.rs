@@ -17,6 +17,7 @@ mod path_key;
 mod pcb_revision;
 mod pdf_page_setup;
 mod pdf_preview_raster;
+mod placement;
 mod profile_update;
 pub(crate) mod project_case;
 pub(crate) mod project_fs;
@@ -36,6 +37,7 @@ pub use pdf_preview_raster::{
     PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
     forget_page_setup, rekey_page_setup,
 };
+pub use placement::PlacementSession;
 pub use profile_update::PendingProfileUpdate;
 pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{NetColorStep, UiState};
@@ -346,6 +348,8 @@ impl ErrorNotice {
 pub enum ModalId {
     AnnotateDialog,
     AnnotateResetConfirm,
+    /// Re-prefix to standard (#1315): the list of changes, to confirm.
+    ReprefixConfirm,
     ErcDialog,
     /// Altium-style Move-Selection dialog — numeric ΔX / ΔY inputs.
     MoveSelection,
