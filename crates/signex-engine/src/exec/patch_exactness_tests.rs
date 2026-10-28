@@ -772,6 +772,9 @@ fn samples() -> Vec<(String, Command)> {
                 row_id: Some(uid(SYMBOL, 8)),
                 library_version: "2".into(),
                 value: "NEW-MPN".into(),
+                footprint: String::new(),
+                datasheet: String::new(),
+                fields: Vec::new(),
             },
         },
     );

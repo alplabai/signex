@@ -30,6 +30,9 @@ pub struct PinMapping {
     pub unmatched: Vec<String>,
 }
 
+/// Reads the label one matching pass compares.
+type PinLabel = fn(&LibPin) -> &str;
+
 /// A pin's identity in reports: its number, else its name.
 pub fn pin_key(lp: &LibPin) -> &str {
     if lp.pin.number.is_empty() {
@@ -45,7 +48,7 @@ pub fn pin_key(lp: &LibPin) -> &str {
 pub fn map_pins(old: &[&LibPin], new: &[&LibPin]) -> PinMapping {
     let mut taken = vec![false; new.len()];
     let mut found: Vec<Option<(usize, PinMatchedBy)>> = vec![None; old.len()];
-    let passes: [(PinMatchedBy, fn(&LibPin) -> &str); 2] = [
+    let passes: [(PinMatchedBy, PinLabel); 2] = [
         (PinMatchedBy::Number, |lp| lp.pin.number.as_str()),
         (PinMatchedBy::Name, |lp| lp.pin.name.as_str()),
     ];
