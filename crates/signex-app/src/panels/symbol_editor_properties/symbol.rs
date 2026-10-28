@@ -4,6 +4,11 @@ use iced::widget::{Column, container, row, text};
 use iced::{Color, Element, Length};
 
 use super::super::{ColorFieldProps, PanelMsg, SymbolEditorPanelContext, color_field};
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// Render one Local Colors row (Fills / Lines / Pins) via the shared
 /// [`color_field`] widget. `picker` carries the transient open-state;
@@ -70,26 +75,26 @@ pub(super) fn view_symbol_selection<'a>(
         container(
             row![
                 text(label)
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::FillPortion(2)),
                 iced::widget::text_input(placeholder, value)
-                    .padding([2, 4])
-                    .size(11)
+                    .padding([SP.xs, SP.s])
+                    .size(TS.body)
                     .on_input(on_input)
                     .width(Length::FillPortion(3)),
             ]
-            .spacing(4)
+            .spacing(SP.s)
             .align_y(iced::Alignment::Center),
         )
-        .padding([3, 8])
+        .padding([3.0, SP.m])
         .width(Length::Fill)
         .into()
     };
 
     // ── ▾ Symbol ──
     col = col.push(super::super::thin_sep(border_c));
-    col = col.push(container(text("Symbol").size(11).color(primary)).padding([6, 8]));
+    col = col.push(container(text("Symbol").size(TS.body).color(primary)).padding([6.0, SP.m]));
     col = col.push(text_field(
         "Design Item ID",
         sym.symbol_name.as_str(),
@@ -130,28 +135,29 @@ pub(super) fn view_symbol_selection<'a>(
 
     // ── ▾ Graphical ──
     col = col.push(super::super::thin_sep(border_c));
-    col = col.push(container(text("Graphical").size(11).color(primary)).padding([6, 8]));
+    col = col.push(container(text("Graphical").size(TS.body).color(primary)).padding([6.0, SP.m]));
     let mirrored_row: Element<'a, PanelMsg> = container(
         row![
             text("Mirrored")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             iced::widget::checkbox(sym.symbol_mirrored)
-                .size(14)
+                .size(TS.heading)
                 .on_toggle(|_| PanelMsg::SymEditorToggleSymbolMirrored),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .width(Length::Fill)
     .into();
     col = col.push(mirrored_row);
 
     // ── Local Colors (Fills / Lines / Pins) ──
     col = col.push(super::super::thin_sep(border_c));
-    col = col.push(container(text("Local Colors").size(11).color(primary)).padding([6, 8]));
+    col =
+        col.push(container(text("Local Colors").size(TS.body).color(primary)).padding([6.0, SP.m]));
     col = col.push(local_color_field(
         "Fills",
         crate::app::LocalColorSlot::Fill,

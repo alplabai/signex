@@ -6,6 +6,11 @@ use iced::{Color, Length};
 use super::super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg};
 use super::super::pad::{pad_check_row, pad_input_row};
 use super::super::{fp_is_collapsed, props_section_header};
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 // v0.23 — safety caps mirrored from mod.rs's constants for the
 // per-instance checkbox grids in the Pattern sub-form.
@@ -54,15 +59,15 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
         container(
             row![
                 text("Kind")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(80.0)),
-                text(kind_label).size(10).color(primary),
+                text(kind_label).size(TS.caption).color(primary),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),
         )
-        .padding([2, 8])
+        .padding([SP.xs, SP.m])
         .width(Length::Fill),
     );
 
@@ -195,26 +200,27 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 let nx = (*nx).min(MAX_GRID_CHECKBOX_DIM);
                 let ny = (*ny).min(MAX_GRID_CHECKBOX_DIM);
                 col = col.push(
-                    container(text("Instances").size(10).color(muted))
-                        .padding([6, 8])
+                    container(text("Instances").size(TS.caption).color(muted))
+                        .padding([6.0, SP.m])
                         .width(Length::Fill),
                 );
-                let mut grid_col = Column::new().spacing(2).padding([0, 8]);
+                let mut grid_col = Column::new().spacing(SP.xs).padding([0.0, SP.m]);
                 for j in 0..ny {
-                    let mut grid_row = iced::widget::Row::new().spacing(2);
+                    let mut grid_row = iced::widget::Row::new().spacing(SP.xs);
                     for i in 0..nx {
                         let suppressed = suppressed_instances
                             .iter()
                             .any(|(si, sj)| *si == i && *sj == j);
                         let on = !suppressed;
-                        let cb = iced::widget::checkbox(on).size(12).spacing(0).on_toggle(
-                            move |checked| PanelMsg::FpEditorToggleArrayInstance {
+                        let cb = iced::widget::checkbox(on)
+                            .size(TS.label)
+                            .spacing(0)
+                            .on_toggle(move |checked| PanelMsg::FpEditorToggleArrayInstance {
                                 array_id,
                                 i,
                                 j,
                                 value: checked,
-                            },
-                        );
+                            });
                         grid_row = grid_row.push(cb);
                     }
                     grid_col = grid_col.push(grid_row);
@@ -267,15 +273,15 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 container(
                     row![
                         text("Centre")
-                            .size(10)
+                            .size(TS.caption)
                             .color(muted)
                             .width(Length::Fixed(80.0)),
-                        text(centre_label).size(10).color(primary),
+                        text(centre_label).size(TS.caption).color(primary),
                     ]
                     .spacing(6)
                     .align_y(iced::Alignment::Center),
                 )
-                .padding([2, 8])
+                .padding([SP.xs, SP.m])
                 .width(Length::Fill),
             );
             let repick_label = if arr.repicking_polar_center {
@@ -290,12 +296,12 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
             };
             col = col.push(
                 container(
-                    button(text(repick_label).size(10).color(primary))
-                        .padding([3, 8])
+                    button(text(repick_label).size(TS.caption).color(primary))
+                        .padding([3.0, SP.m])
                         .style(repick_btn_style)
                         .on_press(PanelMsg::FpEditorBeginRepickPolarCenter { array_id }),
                 )
-                .padding([2, 8])
+                .padding([SP.xs, SP.m])
                 .width(Length::Fill),
             );
             col = col.push(pad_input_row(
@@ -316,24 +322,23 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
             if let Some(count) = count_value {
                 let count = (*count).min(MAX_POLAR_CHECKBOX_COUNT);
                 col = col.push(
-                    container(text("Instances").size(10).color(muted))
-                        .padding([6, 8])
+                    container(text("Instances").size(TS.caption).color(muted))
+                        .padding([6.0, SP.m])
                         .width(Length::Fill),
                 );
-                let mut grid_row = iced::widget::Row::new().spacing(2).padding([0, 8]);
+                let mut grid_row = iced::widget::Row::new().spacing(SP.xs).padding([0.0, SP.m]);
                 for i in 0..count {
                     let suppressed = suppressed_instances.contains(&i);
                     let on = !suppressed;
-                    let cb =
-                        iced::widget::checkbox(on)
-                            .size(12)
-                            .spacing(0)
-                            .on_toggle(move |checked| PanelMsg::FpEditorToggleArrayInstance {
-                                array_id,
-                                i,
-                                j: 0,
-                                value: checked,
-                            });
+                    let cb = iced::widget::checkbox(on)
+                        .size(TS.label)
+                        .spacing(0)
+                        .on_toggle(move |checked| PanelMsg::FpEditorToggleArrayInstance {
+                            array_id,
+                            i,
+                            j: 0,
+                            value: checked,
+                        });
                     grid_row = grid_row.push(cb);
                 }
                 col = col.push(grid_row);
@@ -346,7 +351,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
         container(
             row![
                 text("Numbering")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(80.0)),
                 pick_list(
@@ -355,13 +360,13 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     move |scheme| PanelMsg::FpEditorSetArrayNumberingScheme { array_id, scheme }
                 )
                 .text_size(10)
-                .padding([3, 8])
+                .padding([3.0, SP.m])
                 .width(Length::Fill),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),
         )
-        .padding([2, 8])
+        .padding([SP.xs, SP.m])
         .width(Length::Fill),
     );
 
@@ -399,12 +404,12 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
     // Delete button — destructive style. Source entity stays put.
     col = col.push(
         container(
-            button(text("Delete pattern").size(10).color(primary))
-                .padding([3, 8])
+            button(text("Delete pattern").size(TS.caption).color(primary))
+                .padding([3.0, SP.m])
                 .style(iced::widget::button::danger)
                 .on_press(PanelMsg::FpEditorDeleteArray { array_id }),
         )
-        .padding([4, 8])
+        .padding([SP.s, SP.m])
         .width(Length::Fill),
     );
 

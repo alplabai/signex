@@ -1,7 +1,12 @@
 //! Components panel view.
 
 use super::*;
+use crate::styles::{Spacing, TypeScale};
 use iced::widget::column;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 // ─── Components Panel (matched to Altium Designer) ───────────
 
@@ -28,7 +33,7 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .text_size(11)
             .width(Length::Fill),
         )
-        .padding([4, 8]),
+        .padding([SP.s, SP.m]),
     );
 
     // Search filter input
@@ -36,10 +41,10 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         container(
             iced::widget::text_input("Search components...", &ctx.component_filter)
                 .on_input(PanelMsg::ComponentFilter)
-                .size(11)
+                .size(TS.body)
                 .width(Length::Fill),
         )
-        .padding([4, 8]),
+        .padding([SP.s, SP.m]),
     );
 
     list_col = list_col.push(thin_sep(border_c));
@@ -47,21 +52,21 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         container(
             row![
                 text("Name")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::FillPortion(3)),
                 text("Library")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::FillPortion(2)),
                 text("Pins")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::FillPortion(1)),
             ]
-            .spacing(4.0),
+            .spacing(SP.s),
         )
-        .padding([4, 8])
+        .padding([SP.s, SP.m])
         .width(Length::Fill),
     );
     list_col = list_col.push(thin_sep(border_c));
@@ -91,7 +96,8 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         } else {
             "Select a library above"
         };
-        list_col = list_col.push(container(text(msg).size(10).color(muted)).padding([8, 8]));
+        list_col =
+            list_col.push(container(text(msg).size(TS.caption).color(muted)).padding([SP.m, SP.m]));
     } else {
         let sel = &ctx.selected_component;
         for entry in &filtered_symbols {
@@ -108,23 +114,23 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     iced::widget::button(
                         row![
                             text(entry.symbol_name.clone())
-                                .size(10)
+                                .size(TS.caption)
                                 .color(name_c)
                                 .width(Length::FillPortion(3))
                                 .wrapping(iced::widget::text::Wrapping::None),
                             text(entry.library_name.clone())
-                                .size(10)
+                                .size(TS.caption)
                                 .color(muted)
                                 .width(Length::FillPortion(2))
                                 .wrapping(iced::widget::text::Wrapping::None),
                             text(entry.pin_count.to_string())
-                                .size(10)
+                                .size(TS.caption)
                                 .color(muted)
                                 .width(Length::FillPortion(1)),
                         ]
-                        .spacing(4.0),
+                        .spacing(SP.s),
                     )
-                    .padding([3, 8])
+                    .padding([3.0, SP.m])
                     .width(Length::Fill)
                     .on_press(PanelMsg::SelectComponent(lib_id))
                     .style(
@@ -153,10 +159,10 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     list_col = list_col.push(
         container(
             text(format!("Results: {}", filtered_symbols.len()))
-                .size(10)
+                .size(TS.caption)
                 .color(muted),
         )
-        .padding([4, 8]),
+        .padding([SP.s, SP.m]),
     );
 
     // ── BOTTOM: Details panel (scrollable) ──
@@ -224,7 +230,7 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                         ..container::Style::default()
                     }),
                 )
-                .padding([4, 8]),
+                .padding([SP.s, SP.m]),
             );
 
             // Footprint preview placeholder
@@ -232,12 +238,12 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 container(
                     container(
                         text("Footprint preview")
-                            .size(10)
+                            .size(TS.caption)
                             .color(muted)
                             .align_x(iced::alignment::Horizontal::Center),
                     )
                     .width(Length::Fill)
-                    .padding([30, 8])
+                    .padding([30.0, SP.m])
                     .style(move |_: &Theme| container::Style {
                         background: Some(Background::Color(panel_bg_c)),
                         border: Border {
@@ -248,7 +254,7 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                         ..container::Style::default()
                     }),
                 )
-                .padding([4, 8]),
+                .padding([SP.s, SP.m]),
             );
         }
 
@@ -262,8 +268,8 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         }
     } else {
         detail_col = detail_col.push(
-            container(text("Select a component").size(10).color(muted))
-                .padding([12, 8])
+            container(text("Select a component").size(TS.caption).color(muted))
+                .padding([SP.l, SP.m])
                 .width(Length::Fill),
         );
     }

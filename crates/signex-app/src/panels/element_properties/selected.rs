@@ -7,6 +7,11 @@
 
 use super::super::*;
 use super::font_row::font_family_row;
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 pub(in crate::panels) fn view_selected_element_properties<'a>(
     ctx: &'a PanelContext,
@@ -41,8 +46,8 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
 
     // ── Header ──
     col = col.push(
-        container(text(elem_type.to_owned()).size(11).color(primary))
-            .padding([6, 8])
+        container(text(elem_type.to_owned()).size(TS.body).color(primary))
+            .padding([6.0, SP.m])
             .width(Length::Fill),
     );
     col = col.push(thin_sep(border_c));
@@ -458,10 +463,10 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             c = c.push(
                                 container(
                                     text("No custom parameters".to_string())
-                                        .size(11)
+                                        .size(TS.body)
                                         .color(muted),
                                 )
-                                .padding([6, 8]),
+                                .padding([6.0, SP.m]),
                             );
                         } else {
                             for (name, value) in &section_params {
@@ -710,7 +715,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                                 palette,
                                 ctx.theme_id,
                             ))
-                            .padding([4, 8]),
+                            .padding([SP.s, SP.m]),
                         );
                         c
                     },
@@ -827,7 +832,9 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     // ── Status bar ──
     col = col.push(Space::new().height(8.0));
     col = col.push(thin_sep(border_c));
-    col = col.push(container(text("1 object selected").size(10).color(muted)).padding([4, 8]));
+    col = col.push(
+        container(text("1 object selected").size(TS.caption).color(muted)).padding([SP.s, SP.m]),
+    );
 
     scrollable(col).width(Length::Fill).into()
 }
