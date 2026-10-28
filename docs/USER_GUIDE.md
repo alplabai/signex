@@ -510,12 +510,11 @@ the default Altium profile; the menu path always works.
    save dialog, and keep the `.snxprj` ending (section 3). Signex creates a
    folder named after the project; a blank `.snxsch` in it opens in a tab.
 2. **Find a part.** Open **View ▸ Components** and expand **Stock**
-   (section 5). Type in **Filter components…** to find the part, for example a
-   resistor.
+   (section 5). Type in **Filter components…** to find the part.
 3. **Place it.** Choose **File ▸ Library ▸ Place Component…**, select the
-   part and press **Place**, or press **Place** at the end of its row in the
-   Components panel. The part follows the cursor; click to drop it, then press
-   `Esc` to let go (section 5). `Space` rotates it while it is on the cursor.
+   part and press **Place** (or press **Place** on the part's row in the
+   Components panel). The part follows the cursor; click to drop it and press
+   `Esc` to let go (section 5).
 4. **Wire it.** Choose **Place ▸ Wire** (or press `P` then `W`, or `Ctrl+W`),
    click to start, click to bend, and double-click to stop (section 6). End
    each wire on a pin end of the part.
