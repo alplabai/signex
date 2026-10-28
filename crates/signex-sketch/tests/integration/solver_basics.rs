@@ -152,7 +152,7 @@ fn coincident(p1: SketchEntityId, p2: SketchEntityId) -> signex_sketch::constrai
 
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::id::ConstraintId;
-use signex_sketch::solver::jacobian::numerical_jacobian;
+use signex_sketch::solver::jacobian::jacobian;
 use signex_sketch::solver::residual::ResolvedParams;
 
 fn empty_params() -> ResolvedParams {
@@ -190,7 +190,7 @@ fn jacobian_distance_pt_pt_matches_analytical() {
     });
     let packed = pack(&s.data);
 
-    let j = numerical_jacobian(&s.data, &packed.vector, &packed.index, &empty_params())
+    let j = jacobian(&s.data, &packed.vector, &packed.index, &empty_params())
         .expect("jacobian computes");
     assert_eq!(j.len(), 1, "DistancePtPt produces 1 residual row");
     assert_eq!(j[0].len(), 4, "two free points = 4 state coordinates");
@@ -216,7 +216,7 @@ fn jacobian_coincident_matches_analytical() {
     });
     let packed = pack(&s.data);
 
-    let j = numerical_jacobian(&s.data, &packed.vector, &packed.index, &empty_params())
+    let j = jacobian(&s.data, &packed.vector, &packed.index, &empty_params())
         .expect("jacobian computes");
     assert_eq!(j.len(), 2, "Coincident produces 2 residual rows");
     assert_eq!(j[0].len(), 4);
@@ -242,7 +242,7 @@ fn jacobian_horizontal_matches_analytical() {
     });
     let packed = pack(&s.data);
 
-    let j = numerical_jacobian(&s.data, &packed.vector, &packed.index, &empty_params())
+    let j = jacobian(&s.data, &packed.vector, &packed.index, &empty_params())
         .expect("jacobian computes");
     assert_eq!(j.len(), 1);
     assert_eq!(j[0].len(), 4);
@@ -263,7 +263,7 @@ fn jacobian_empty_sketch_is_zero_rows() {
     let packed = pack(&s.data);
     assert_eq!(packed.vector.len(), 0);
 
-    let j = numerical_jacobian(&s.data, &packed.vector, &packed.index, &empty_params())
+    let j = jacobian(&s.data, &packed.vector, &packed.index, &empty_params())
         .expect("empty Jacobian computes");
     assert_eq!(j.len(), 0, "no constraints ⇒ zero rows");
 }
