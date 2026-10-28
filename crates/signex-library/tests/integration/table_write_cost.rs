@@ -76,6 +76,7 @@ fn row(n: usize, lib: Uuid) -> ComponentRow {
         content_hash: [0u8; 32],
         server_revision: None,
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
     }
 }

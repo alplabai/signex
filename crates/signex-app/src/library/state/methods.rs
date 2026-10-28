@@ -705,14 +705,13 @@ pub(crate) fn resolved_path(path: &Path) -> PathBuf {
     }
 }
 
-/// Picker/panel summary for one table row. `description` stays empty:
-/// `ComponentRow` carries no description field to source it from.
-fn summarize_row(row: &ComponentRow) -> ComponentSummary {
+/// Picker/panel summary for one table row.
+pub(super) fn summarize_row(row: &ComponentRow) -> ComponentSummary {
     ComponentSummary {
         row_id: row.row_id,
         internal_pn: row.internal_pn.clone(),
         mpn: row.primary_mpn.mpn.clone(),
         state: row.state,
-        description: String::new(),
+        description: row.description.clone(),
     }
 }

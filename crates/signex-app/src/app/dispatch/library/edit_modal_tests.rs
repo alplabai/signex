@@ -26,6 +26,7 @@ fn row() -> ComponentRow {
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
@@ -247,4 +248,55 @@ fn a_hash_pinned_datasheet_survives_editing_another_field_and_saving() {
     let row = stored(&app, &root, row_id);
     assert_eq!(row.primary_mpn.mpn, "R-1500-B");
     assert_eq!(row.datasheet, pinned);
+}
+
+#[test]
+fn editing_the_description_updates_the_draft_and_saves_it() {
+    let (mut app, root, row_id) = app_with_browser();
+    open_modal(&mut app, &root, row_id);
+    let _ = app.update(edit(
+        &root,
+        BrowserEditMsg::SetDescription("100 nF 50 V X7R".into()),
+    ));
+    let modal = app.library.library_browsers[&root]
+        .edit_modal
+        .as_ref()
+        .unwrap();
+    assert_eq!(modal.draft.description, "100 nF 50 V X7R");
+
+    let _ = app.update(edit(&root, BrowserEditMsg::Save));
+    app.land_pending_refresh(&root);
+    assert_eq!(stored(&app, &root, row_id).description, "100 nF 50 V X7R");
+}
+
+#[test]
+fn a_pasted_multi_line_description_becomes_one_line() {
+    let (mut app, root, row_id) = app_with_browser();
+    open_modal(&mut app, &root, row_id);
+    let _ = app.update(edit(
+        &root,
+        BrowserEditMsg::SetDescription("100 nF\n50 V\t\tX7R".into()),
+    ));
+    let modal = app.library.library_browsers[&root]
+        .edit_modal
+        .as_ref()
+        .unwrap();
+    assert_eq!(modal.draft.description, "100 nF 50 V X7R");
+}
+
+#[test]
+fn a_description_with_triple_quotes_is_refused_at_input() {
+    let (mut app, root, row_id) = app_with_browser();
+    open_modal(&mut app, &root, row_id);
+    let _ = app.update(edit(&root, BrowserEditMsg::SetDescription("ok".into())));
+    let _ = app.update(edit(
+        &root,
+        BrowserEditMsg::SetDescription("a ''' b".into()),
+    ));
+    let modal = app.library.library_browsers[&root]
+        .edit_modal
+        .as_ref()
+        .unwrap();
+    assert_eq!(modal.draft.description, "ok");
+    assert!(modal.error.is_some());
 }

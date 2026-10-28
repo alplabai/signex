@@ -90,7 +90,7 @@ pub(crate) fn os_title_bar_slot<'a>() -> Element<'a, Message> {
 }
 
 /// Compact X close button for borderless modal headers. Matches the
-/// main-window chrome close (`view/mod.rs::view_main_window_chrome`):
+/// main-window chrome close (`view/chrome/buttons.rs::windows_button`):
 /// no border, fully transparent at rest, Windows-native red bg + white
 /// icon on hover. The `_text_color` argument is kept for API
 /// compatibility with existing call sites — it is intentionally
@@ -101,7 +101,7 @@ pub(crate) fn close_x_button(
     _text_color: Color,
 ) -> Element<'static, Message> {
     // Use the same SVG and footprint as the main-window chrome close
-    // (`view::view_main_window_chrome::chrome_btn`) so the modal X is
+    // (`view/chrome/buttons.rs::windows_button`) so the modal X is
     // visually identical to the OS-window X, including stroke weight,
     // hit-box dimensions, and red-on-hover behaviour. Glyph is
     // ALWAYS white per design — `_text_color` is ignored for the
