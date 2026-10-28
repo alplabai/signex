@@ -289,7 +289,10 @@ mod tests {
         use DesignatorStandard::*;
         for class in ["comparator", "regulator_linear", "crystal"] {
             assert_eq!(class_prefix(Iec81346_2, class), None, "{class}");
-            assert_eq!(resolve_prefix(Some(Iec81346_2), Some(class), "U?"), "U");
+            assert_eq!(
+                resolve_prefix(Some(Iec81346_2), Some(class), None, "U?"),
+                "U"
+            );
             assert!(class_prefix(Ieee315, class).is_some(), "{class}");
             assert!(class_prefix(Din40719_2, class).is_some(), "{class}");
         }
