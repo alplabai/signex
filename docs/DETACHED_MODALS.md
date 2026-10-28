@@ -34,6 +34,30 @@ it is a corner card, not a dialog.
 F1 toggles the shortcuts sheet from the main window and from the sheet's own
 window.
 
+## Window behaviour and size
+
+- **Fixed dialogs** (the confirm and warning class: app-quit, project-close,
+  error notice, netlist prompt, autosave and library recovery, rename, remove,
+  annotate reset, Create Sheet, close-library, library delete; and the small
+  dialogs: About, Grid Properties, Custom Selection Filter, Enable Version
+  Control, custom net colour, library picker, primitive picker, document
+  options, library options) open with `resizable: false` and `minimizable:
+  false`. iced 0.14 maps `resizable` to winit's maximise / zoom button (so the
+  macOS green button is disabled) and `minimizable` to the minimise button;
+  iced exposes no separate fullscreen switch, so fullscreen is off only as a
+  consequence of `resizable: false`. `modal_is_fixed` in `erc/modals.rs` is the
+  one list.
+- **Tool windows** (Preferences, ERC, BOM, Print Preview, Annotate, Parameter
+  Manager, Find / Replace, shortcuts, calculator, edit row, updates) keep normal
+  window behaviour (resizable, zoom allowed) and open at a sensible default size.
+- **Sizing rule.** A fixed dialog's window is sized to its content
+  (`modal_size`): width fits the text, height is the content plus the footer.
+  iced cannot measure a body to size its own window, so the sizes are constants,
+  and a test (`fixed_dialogs_fit_their_content_without_large_slack`) lays each
+  body out in its window and fails if content is cut off or more than 110 px of
+  empty window is left. The error notice and the netlist prompt scroll a long
+  message instead of growing the window.
+
 ## Lock policy
 
 Confirm and warning dialogs lock the main window; tool windows do not.
@@ -45,7 +69,7 @@ Confirm and warning dialogs lock the main window; tool windows do not.
   `locking_confirm_window` names a locking dialog that has its own window.
 - **While a detached confirm is open:** the main window and undocked tabs take
   no key (`route_key`; Esc still resolves, so the lock can be dismissed), a
-  layer over the content eats the pointer and shows "A dialog is open: click to
+  layer over the content dims it slightly, eats the pointer and shows "A dialog is open: click to
   show it, Esc to cancel", and clicking it raises the dialog
   (`WindowMsg::LockedWindowClicked`). The layer sits BELOW the in-window
   overlays, so a dialog that opens meanwhile (quit confirm, an error notice) is

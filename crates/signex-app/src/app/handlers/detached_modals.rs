@@ -225,9 +225,7 @@ impl Signex {
 
     fn detach_browser_modal(&mut self, modal: ModalId, path: std::path::PathBuf) -> Task<Message> {
         let (id, open_task) =
-            iced::window::open(crate::app::handlers::erc::detached_modal_settings(
-                crate::app::handlers::erc::modal_size(modal),
-            ));
+            iced::window::open(crate::app::handlers::erc::modal_window_settings(modal));
         self.ui_state
             .windows
             .insert(id, WindowKind::DetachedModal(modal));
@@ -805,5 +803,48 @@ mod tests {
         assert!(first.units() >= 2, "window open + unfocus");
         let second = app.sync_detached_modals();
         assert!(second.is_none(), "not repeated while the lock holds");
+    }
+
+    /// The lowest laid-out text of `modal`'s body in a window of its size.
+    fn content_bottom(modal: ModalId) -> (f32, f32) {
+        let (mut app, _main) = test_app();
+        open(&mut app, modal);
+        let _ = app.sync_detached_modals();
+        let id = window_of(&app, modal).expect("window");
+        let size = crate::app::handlers::erc::modal_window_settings(modal).size;
+        let texts = lay_out_texts(app.view(id), size);
+        let bottom = texts
+            .iter()
+            .map(|t| t.bounds.y + t.bounds.height)
+            .fold(0.0_f32, f32::max);
+        (size.height, bottom)
+    }
+
+    /// Fixed-size dialogs are sized to their content: nothing is cut off and
+    /// there is no large empty area (their windows cannot be resized, so a
+    /// wrong size would stay wrong). Dialogs whose body is a list the data
+    /// decides (Enable Version Control, the pickers) are left out.
+    #[test]
+    fn fixed_dialogs_fit_their_content_without_large_slack() {
+        for modal in testable().filter(|m| crate::app::handlers::erc::modal_is_fixed(*m)) {
+            if matches!(
+                modal,
+                ModalId::EnableVersionControl
+                    | ModalId::LibraryPicker
+                    | ModalId::LibraryPrimitivePicker
+            ) {
+                continue;
+            }
+            let (window, bottom) = content_bottom(modal);
+            assert!(
+                bottom <= window,
+                "{modal:?}: content ends at {bottom}, window is {window}"
+            );
+            assert!(
+                window - bottom <= 110.0,
+                "{modal:?}: {} px of empty window below the content",
+                window - bottom
+            );
+        }
     }
 }

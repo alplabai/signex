@@ -480,3 +480,48 @@ fn the_place_tool_stays_armed_after_the_dialog_and_later() {
     );
     assert_eq!(app.interaction_state.current_tool, crate::app::Tool::Sheet);
 }
+
+/// The hint the lock layer shows over the main window.
+const LOCK_HINT: &str = "A dialog is open: click to show it, Esc to cancel";
+
+fn main_window_shows_the_lock(app: &Signex) -> bool {
+    let main = app.ui_state.main_window_id.expect("main window");
+    crate::layout_probe::lay_out_texts(app.view(main), iced::Size::new(1400.0, 900.0))
+        .iter()
+        .any(|t| t.text == LOCK_HINT)
+}
+
+#[test]
+fn the_main_window_is_locked_while_create_sheet_is_open_by_either_route() {
+    // Placement route.
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _top, _id) = parent_with_symbol(dir.path());
+    app.ui_state.main_window_opened = true;
+    app.ui_state.first_run_tour_open = false;
+    assert!(!main_window_shows_the_lock(&app), "no dialog yet");
+    app.place_sheet_click(10.0, 10.0);
+    app.place_sheet_click(40.0, 40.0);
+    let _ = app.sync_detached_modals();
+    assert!(
+        app.detached_window_of(crate::app::state::ModalId::CreateChildSheet)
+            .is_some(),
+        "the dialog has its window"
+    );
+    assert!(app.locking_confirm_window().is_some());
+    assert!(
+        main_window_shows_the_lock(&app),
+        "placement route: the lock layer is drawn"
+    );
+
+    // Descend route.
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _top, id) = parent_with_symbol(dir.path());
+    app.ui_state.main_window_opened = true;
+    app.ui_state.first_run_tour_open = false;
+    app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    let _ = app.sync_detached_modals();
+    assert!(
+        main_window_shows_the_lock(&app),
+        "descend route: the lock layer is drawn"
+    );
+}

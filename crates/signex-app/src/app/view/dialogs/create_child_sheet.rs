@@ -55,10 +55,15 @@ impl Signex {
             super::super::super::state::ModalId::CreateChildSheet,
         );
 
-        let folder = confirm
-            .parent
-            .parent()
-            .map_or_else(String::new, |dir| dir.display().to_string());
+        // The folder the path is relative to, shown from the project folder
+        // down; the full path is the tooltip.
+        let parent_dir = confirm.parent.parent().unwrap_or(std::path::Path::new(""));
+        let full_folder = parent_dir.display().to_string();
+        let folder = match parent_dir.strip_prefix(&confirm.project_dir) {
+            Ok(rel) if rel.as_os_str().is_empty() => "the project folder".to_owned(),
+            Ok(rel) => format!("{}/", rel.display()),
+            Err(_) => full_folder.clone(),
+        };
         let field = text_input("sheet.snxsch", &confirm.path_text)
             .on_input(|t| msg(ProjectMsg::CreateChildSheetPathChanged(t)))
             .on_submit(create.clone())
@@ -90,9 +95,13 @@ impl Signex {
                         ))
                         .size(11)
                         .color(text_muted),
-                        text(format!("Relative to {folder}"))
-                            .size(10)
-                            .color(text_muted),
+                        iced::widget::tooltip(
+                            text(format!("Relative to {folder}"))
+                                .size(10)
+                                .color(text_muted),
+                            text(full_folder).size(10),
+                            iced::widget::tooltip::Position::Bottom,
+                        ),
                         row![
                             field,
                             secondary_button(
@@ -109,7 +118,6 @@ impl Signex {
                     .spacing(8),
                 )
                 .padding([14, 14]),
-                Space::new().height(Length::Fill),
                 container(
                     row![
                         Space::new().width(Length::Fill),

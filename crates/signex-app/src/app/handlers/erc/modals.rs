@@ -348,9 +348,7 @@ impl Signex {
             return Task::none();
         }
 
-        let size = modal_size(modal);
-
-        let (id, open_task) = iced::window::open(detached_modal_settings(size));
+        let (id, open_task) = iced::window::open(modal_window_settings(modal));
         // Stash the mapping right away — view(id) for the new window
         // fires before open_task resolves on some platforms, and without
         // the entry the detached window would render empty.
@@ -464,41 +462,97 @@ fn move_offset(field: &str, text: &str) -> Option<f64> {
 /// sees continuity.
 pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
     match modal {
-        ModalId::AnnotateDialog => iced::Size::new(1100.0, 760.0),
+        ModalId::AnnotateDialog => iced::Size::new(1000.0, 680.0),
         ModalId::ErcDialog => iced::Size::new(1000.0, 600.0),
-        ModalId::AnnotateResetConfirm => iced::Size::new(420.0, 180.0),
+        ModalId::AnnotateResetConfirm => iced::Size::new(440.0, 200.0),
         ModalId::MoveSelection => iced::Size::new(420.0, 240.0),
         ModalId::NetColorPalette => iced::Size::new(520.0, 480.0),
         ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
         ModalId::Preferences => iced::Size::new(900.0, 620.0),
-        ModalId::FindReplace => iced::Size::new(420.0, 180.0),
-        ModalId::RenameDialog => iced::Size::new(420.0, 200.0),
-        ModalId::RemoveDialog => iced::Size::new(560.0, 260.0),
-        ModalId::PrintPreview => iced::Size::new(1100.0, 780.0),
-        ModalId::BomPreview => iced::Size::new(1180.0, 760.0),
+        ModalId::FindReplace => iced::Size::new(440.0, 320.0),
+        ModalId::RenameDialog => iced::Size::new(420.0, 160.0),
+        ModalId::RemoveDialog => iced::Size::new(520.0, 240.0),
+        ModalId::PrintPreview => iced::Size::new(1000.0, 700.0),
+        ModalId::BomPreview => iced::Size::new(1080.0, 700.0),
         ModalId::EnableVersionControl => iced::Size::new(560.0, 480.0),
-        ModalId::GridProperties => iced::Size::new(480.0, 280.0),
-        ModalId::SelectionFilterCustom => iced::Size::new(440.0, 380.0),
-        ModalId::About => iced::Size::new(380.0, 260.0),
+        ModalId::GridProperties => iced::Size::new(480.0, 290.0),
+        ModalId::SelectionFilterCustom => iced::Size::new(440.0, 330.0),
+        ModalId::About => iced::Size::new(400.0, 200.0),
         ModalId::KeyboardShortcuts => iced::Size::new(520.0, 600.0),
-        ModalId::PassiveCalculator => iced::Size::new(640.0, 520.0),
+        ModalId::PassiveCalculator => iced::Size::new(640.0, 480.0),
         ModalId::FirstRunTour => iced::Size::new(360.0, 170.0),
-        ModalId::CreateChildSheet => iced::Size::new(560.0, 260.0),
-        ModalId::ErrorNotice => iced::Size::new(520.0, 220.0),
-        ModalId::NetlistIncompletePrompt => iced::Size::new(580.0, 330.0),
-        ModalId::AutosaveRecovery => iced::Size::new(540.0, 280.0),
-        ModalId::ProjectCloseConfirm => iced::Size::new(540.0, 380.0),
-        ModalId::AppQuitConfirm => iced::Size::new(540.0, 380.0),
-        ModalId::LibraryPicker => iced::Size::new(560.0, 560.0),
-        ModalId::LibraryEditRow => iced::Size::new(700.0, 660.0),
+        ModalId::CreateChildSheet => iced::Size::new(560.0, 215.0),
+        ModalId::ErrorNotice => iced::Size::new(520.0, 260.0),
+        ModalId::NetlistIncompletePrompt => iced::Size::new(580.0, 360.0),
+        ModalId::AutosaveRecovery => iced::Size::new(540.0, 200.0),
+        ModalId::ProjectCloseConfirm => iced::Size::new(540.0, 310.0),
+        ModalId::AppQuitConfirm => iced::Size::new(540.0, 310.0),
+        ModalId::LibraryPicker => iced::Size::new(560.0, 540.0),
+        ModalId::LibraryEditRow => iced::Size::new(640.0, 600.0),
         ModalId::LibraryPrimitivePicker => iced::Size::new(760.0, 600.0),
-        ModalId::LibraryDocumentOptions => iced::Size::new(580.0, 480.0),
-        ModalId::LibraryCreateOptions => iced::Size::new(520.0, 340.0),
+        ModalId::LibraryDocumentOptions => iced::Size::new(580.0, 360.0),
+        ModalId::LibraryCreateOptions => iced::Size::new(520.0, 310.0),
         ModalId::LibraryUpdates => iced::Size::new(680.0, 460.0),
-        ModalId::LibraryCloseConfirm => iced::Size::new(560.0, 400.0),
-        ModalId::LibraryDeleteConfirm => iced::Size::new(520.0, 260.0),
-        ModalId::LibraryRecovery => iced::Size::new(600.0, 340.0),
-        ModalId::NetColorCustom => iced::Size::new(600.0, 520.0),
+        ModalId::LibraryCloseConfirm => iced::Size::new(560.0, 410.0),
+        ModalId::LibraryDeleteConfirm => iced::Size::new(520.0, 240.0),
+        ModalId::LibraryRecovery => iced::Size::new(600.0, 280.0),
+        ModalId::NetColorCustom => iced::Size::new(600.0, 480.0),
+    }
+}
+
+/// Dialogs that are fixed-size: the confirm and warning class, and the small
+/// dialogs. They are not resizable (which disables the maximise / zoom button
+/// in winit) and cannot be minimised. The large tool windows (Preferences, ERC,
+/// BOM, Print Preview, Annotate, Parameter Manager, Find / Replace, shortcuts,
+/// calculator, edit row) keep the normal window behaviour.
+pub(crate) fn modal_is_fixed(modal: ModalId) -> bool {
+    match modal {
+        ModalId::AppQuitConfirm
+        | ModalId::ProjectCloseConfirm
+        | ModalId::ErrorNotice
+        | ModalId::NetlistIncompletePrompt
+        | ModalId::AutosaveRecovery
+        | ModalId::LibraryRecovery
+        | ModalId::RenameDialog
+        | ModalId::RemoveDialog
+        | ModalId::AnnotateResetConfirm
+        | ModalId::CreateChildSheet
+        | ModalId::LibraryCloseConfirm
+        | ModalId::LibraryDeleteConfirm
+        | ModalId::About
+        | ModalId::GridProperties
+        | ModalId::SelectionFilterCustom
+        | ModalId::EnableVersionControl
+        | ModalId::NetColorCustom
+        | ModalId::LibraryPicker
+        | ModalId::LibraryPrimitivePicker
+        | ModalId::LibraryDocumentOptions
+        | ModalId::LibraryCreateOptions => true,
+        ModalId::AnnotateDialog
+        | ModalId::ErcDialog
+        | ModalId::MoveSelection
+        | ModalId::NetColorPalette
+        | ModalId::ParameterManager
+        | ModalId::Preferences
+        | ModalId::FindReplace
+        | ModalId::PrintPreview
+        | ModalId::BomPreview
+        | ModalId::KeyboardShortcuts
+        | ModalId::PassiveCalculator
+        | ModalId::FirstRunTour
+        | ModalId::LibraryEditRow
+        | ModalId::LibraryUpdates => false,
+    }
+}
+
+/// The settings `modal`'s window opens with: its size, and fixed (not
+/// resizable, not minimisable) when [`modal_is_fixed`].
+pub(crate) fn modal_window_settings(modal: ModalId) -> iced::window::Settings {
+    let fixed = modal_is_fixed(modal);
+    iced::window::Settings {
+        resizable: !fixed,
+        minimizable: !fixed,
+        ..detached_modal_settings(modal_size(modal))
     }
 }
 
@@ -556,6 +610,30 @@ mod tests {
     fn detached_modal_is_not_always_on_top() {
         let s = detached_modal_settings(iced::Size::new(420.0, 180.0));
         assert_eq!(s.level, iced::window::Level::Normal);
+    }
+
+    #[test]
+    fn confirms_and_small_dialogs_are_fixed_and_tool_windows_are_not() {
+        use crate::app::state::ModalId;
+        for fixed in [
+            ModalId::AppQuitConfirm,
+            ModalId::ErrorNotice,
+            ModalId::CreateChildSheet,
+            ModalId::About,
+            ModalId::LibraryDeleteConfirm,
+        ] {
+            let s = super::modal_window_settings(fixed);
+            assert!(!s.resizable && !s.minimizable, "{fixed:?}");
+        }
+        for tool in [
+            ModalId::Preferences,
+            ModalId::ErcDialog,
+            ModalId::BomPreview,
+            ModalId::LibraryEditRow,
+        ] {
+            let s = super::modal_window_settings(tool);
+            assert!(s.resizable && s.minimizable, "{tool:?}");
+        }
     }
 
     #[test]

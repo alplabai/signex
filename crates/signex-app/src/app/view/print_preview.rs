@@ -46,7 +46,10 @@ impl Signex {
             ]
             .align_y(iced::Alignment::Center),
             iced::widget::Space::new().height(8),
-            text(notice.detail.clone()).size(12).color(text_c),
+            container(iced::widget::scrollable(
+                text(notice.detail.clone()).size(12).color(text_c)
+            ))
+            .max_height(200),
             iced::widget::Space::new().height(12),
             row![iced::widget::Space::new().width(Length::Fill), ok_btn,],
         ]
@@ -159,7 +162,10 @@ impl Signex {
             .size(12)
             .color(text_c),
             iced::widget::Space::new().height(8),
-            text(detail).size(11).color(text_muted),
+            container(iced::widget::scrollable(
+                text(detail).size(11).color(text_muted)
+            ))
+            .max_height(120),
             iced::widget::Space::new().height(14),
             row![
                 iced::widget::Space::new().width(Length::Fill),

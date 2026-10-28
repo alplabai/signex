@@ -446,7 +446,14 @@ impl Signex {
         .width(Length::Fill)
         .height(Length::Fill)
         .center_x(Length::Fill)
-        .center_y(Length::Fill);
+        .center_y(Length::Fill)
+        // A light dim, so a locked window reads as locked at a glance.
+        .style(|_: &iced::Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                0.0, 0.0, 0.0, 0.22,
+            ))),
+            ..Default::default()
+        });
         iced::widget::opaque(
             iced::widget::mouse_area(hint)
                 .on_press(Message::Window(WindowMsg::LockedWindowClicked)),
