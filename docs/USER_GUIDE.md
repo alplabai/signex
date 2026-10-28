@@ -486,7 +486,7 @@ Drawn / Checked / Approved row.
 ## Walkthrough: a saved schematic with a wired symbol
 
 This is sections 3 to 10 as one run. Each step names the section with the
-detail. Step 3 cannot be completed from the UI yet; see its note.
+detail.
 
 1. **Create the project.** Choose **File ▸ New Project**, name it in the
    **New Project** save dialog, and keep the `.snxprj` ending (section 3).
@@ -494,10 +494,10 @@ detail. Step 3 cannot be completed from the UI yet; see its note.
    opens in a tab.
 2. **Find a part.** Open **View ▸ Components** and expand **Stock**
    (section 5). Type in **Filter components…** to find the part.
-3. **Place it.** Intended path: **File ▸ Library ▸ Place Component…**, select
-   the part, press **Place**. *Not working yet:* the **Place** button closes
-   the picker without placing (section 5). Everything below then runs on a
-   sheet without a part.
+3. **Place it.** Choose **File ▸ Library ▸ Place Component…**, select the
+   part and press **Place** (or press **Place** on the part's row in the
+   Components panel). The part follows the cursor; click to drop it and press
+   `Esc` to let go (section 5).
 4. **Wire it.** Choose **Place ▸ Wire**, click to start, click to bend, and
    double-click to stop (section 6). End each wire on a pin end of the part.
 5. **Name the net.** Choose **Place ▸ Net Label**, click the wire, press `Esc`,

@@ -1,0 +1,1 @@
+- **User guide walkthrough places the part (#322)** — step 3 of the end-to-end walkthrough no longer says Place is broken; it describes the cursor-attached placement that section 5 already documents.
