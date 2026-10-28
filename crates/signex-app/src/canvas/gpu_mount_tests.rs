@@ -303,6 +303,9 @@ struct Look {
     focus_label: bool,
     auto_focus: bool,
     dpi: f32,
+    /// Logical padding around the mounted canvas: a window whose canvas does
+    /// not start at the origin.
+    padding: iced::Padding,
 }
 
 impl Default for Look {
@@ -312,6 +315,7 @@ impl Default for Look {
             focus_label: false,
             auto_focus: false,
             dpi: 1.0,
+            padding: iced::Padding::ZERO,
         }
     }
 }
@@ -334,18 +338,18 @@ fn frame_with(gpu: &mut Gpu, layer: Layer, sheet: &SchematicSheet, look: &Look) 
     let mut prefs = test_prefs(&overrides, &filters);
     prefs.grid_visible = false;
     prefs.auto_focus = look.auto_focus;
-    let dpi = look.dpi;
-    match layer {
-        Layer::Stack => render_at(gpu, gpu_mount::view(&slot, prefs), dpi),
-        Layer::Backdrop => render(gpu, fill(gpu_mount::SchematicBackdrop::new(&slot, prefs))),
-        Layer::Overlay => render(gpu, fill(SchematicCanvas::new(&slot, prefs).gpu_overlay())),
-        Layer::Shaders => render(gpu, shaders(&slot, prefs)),
-        Layer::StaticTexts => render(
-            gpu,
-            fill(gpu_drag::SchematicStaticTextLayer::new(&slot, prefs)),
-        ),
-        Layer::Cpu => render_at(gpu, fill(SchematicCanvas::new(&slot, prefs)), dpi),
-    }
+    let element = match layer {
+        Layer::Stack => gpu_mount::view(&slot, prefs),
+        Layer::Backdrop => fill(gpu_mount::SchematicBackdrop::new(&slot, prefs)),
+        Layer::Overlay => fill(SchematicCanvas::new(&slot, prefs).gpu_overlay()),
+        Layer::Shaders => shaders(&slot, prefs),
+        Layer::StaticTexts => fill(gpu_drag::SchematicStaticTextLayer::new(&slot, prefs)),
+        Layer::Cpu => fill(SchematicCanvas::new(&slot, prefs)),
+    };
+    let element = iced::widget::container(element)
+        .padding(look.padding)
+        .into();
+    render_at(gpu, element, look.dpi)
 }
 
 fn region(x: f32, y: f32, half_w: f32, half_h: f32) -> (u32, u32, u32, u32) {
@@ -894,4 +898,77 @@ fn a_hidpi_window_puts_the_wire_at_twice_the_pixel() {
             "2x wire pixel {got:?} is not the wire colour {want:?}"
         );
     }
+}
+
+/// A canvas that does not start at the window origin: the GPU layers must put
+/// the sheet where the CPU canvas puts it, shifted by the padding.
+#[test]
+fn a_padded_mount_shifts_the_wire() {
+    const PAD: u32 = 24;
+    let mut gpu = gpu();
+    let look = Look {
+        padding: iced::Padding::new(PAD as f32),
+        ..Look::default()
+    };
+    let stack = frame_with(&mut gpu, Layer::Stack, &fixture(), &look);
+    let blank = frame_with(&mut gpu, Layer::Stack, &SchematicSheet::default(), &look);
+    let (x0, y0, x1, y1) = regions().wire;
+    let wire = stack.changed_vs(&blank, (x0 + PAD, y0 + PAD, x1 + PAD, y1 + PAD));
+    assert!(!wire.is_empty(), "no wire at the padded position");
+    let (_, cy) = centroid(&wire);
+    let (_, wy) = world(12.5, 5.0);
+    assert!(
+        (cy - (wy + PAD) as f32).abs() <= 2.0,
+        "wire row centroid {cy} is not at world y + padding {}",
+        wy + PAD
+    );
+    assert!(
+        stack.changed_vs(&blank, (0, 0, WIDTH, PAD)).is_empty(),
+        "the sheet drew into the padding"
+    );
+    let min_x = wire.iter().map(|p| p.0).min().unwrap_or(0);
+    let max_x = wire.iter().map(|p| p.0).max().unwrap_or(0);
+    let (start, end) = (world(5.0, 5.0).0 + PAD, world(20.0, 5.0).0 + PAD);
+    assert!(
+        min_x.abs_diff(start) <= 2 && max_x.abs_diff(end) <= 2,
+        "wire spans {min_x}..{max_x}, not {start}..{end}"
+    );
+}
+
+/// The GPU label lines up with the CPU text when the canvas starts right of
+/// the window edge (left padding only, so the label stays in the window).
+#[test]
+fn a_padded_mount_keeps_the_gpu_label_on_the_cpu_text() {
+    const PAD: u32 = 40;
+    let mut gpu = gpu();
+    let look = Look {
+        padding: iced::Padding {
+            left: PAD as f32,
+            ..iced::Padding::ZERO
+        },
+        ..Look::default()
+    };
+    let (sheet, empty) = (fixture(), SchematicSheet::default());
+    let stack = frame_with(&mut gpu, Layer::Stack, &sheet, &look);
+    let blank = frame_with(&mut gpu, Layer::Stack, &empty, &look);
+    let cpu = frame_with(&mut gpu, Layer::Cpu, &sheet, &look);
+    let cpu_blank = frame_with(&mut gpu, Layer::Cpu, &empty, &look);
+    let (x0, y0, x1, y1) = regions().horizontal;
+    let region = (x0 + PAD, y0, x1 + PAD, y1);
+    let gpu_label = stack.changed_vs(&blank, region);
+    let cpu_label = cpu.changed_vs(&cpu_blank, region);
+    assert!(
+        !gpu_label.is_empty() && !cpu_label.is_empty(),
+        "label missing: GPU {}, CPU {}",
+        gpu_label.len(),
+        cpu_label.len()
+    );
+    let (gpu_box, cpu_box) = (bbox(&gpu_label), bbox(&cpu_label));
+    assert!(
+        gpu_box
+            .iter()
+            .zip(cpu_box)
+            .all(|(g, c)| g.abs_diff(c) <= TEXT_TOLERANCE_PX),
+        "GPU label bbox {gpu_box:?} is not the CPU's {cpu_box:?}"
+    );
 }

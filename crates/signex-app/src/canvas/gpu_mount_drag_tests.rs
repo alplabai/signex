@@ -359,6 +359,42 @@ fn a_redraw_request_after_an_app_message_leaves_no_blank_sheet() {
     });
 }
 
+/// A float whose pick has not landed holds the selection it was lifted from
+/// (`before`); the app then writes the lifted selection. Both are the same
+/// float, so the flip must neither end it nor leave a second copy drawn: after
+/// the redraw request the item is on the drag layer once and out of the static
+/// layer.
+#[test]
+fn a_before_to_lifted_selection_flip_draws_the_item_once() {
+    let mut slot = slot_with_wire_selected();
+    let mut state = CanvasState::default();
+    let lifted = slot.selected.clone();
+    let before = vec![SelectedItem::new(
+        fixture().wires[0].uuid,
+        SelectedKind::Junction,
+    )];
+    slot.selected = before.clone();
+    state.start_floating_move((12.5, 5.0), slot.move_epoch, lifted.clone(), before);
+    let full = rig(&slot, |p| content(p).scene.lines.len());
+    rig(&slot, |p| {
+        drag_to(&p.overlay, &mut state, 150.0);
+        send(&p.overlay, &mut state, redraw_requested(), at(150.0, 60.0));
+    });
+
+    // The pick lands: the selection becomes the lifted one.
+    slot.selected = lifted;
+    rig(&slot, |p| {
+        send(&p.overlay, &mut state, redraw_requested(), at(150.0, 60.0));
+        assert!(drag_is_live(p), "the flip does not end the float");
+        assert_eq!(moving(p).scene.lines.len(), 1, "the wire is drawn moving");
+        assert_eq!(
+            content(p).scene.lines.len(),
+            full - 1,
+            "and is gone from the static layer: no double draw"
+        );
+    });
+}
+
 /// A tab switch hands the slot a canvas state with no drag in it; the redraw
 /// request that precedes the next draw ends the published drag.
 #[test]

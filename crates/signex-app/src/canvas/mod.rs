@@ -513,25 +513,18 @@ impl<'a> SchematicCanvas<'a> {
         })
     }
 
-    /// The rubber-banded frame already computed for this drag delta, if any
-    /// (`refresh_drag_ghost` fills it from `update`).
-    fn ready_ghost_frame(
-        &self,
-        state: &CanvasState,
-        drag_offset: Option<(f64, f64)>,
-        revision: u64,
-    ) -> Option<drag_layers::DragFrame> {
-        if !self.prefs.move_keeps_wires {
-            return None;
-        }
-        let (dx, dy) = drag_offset?;
-        let (gx, gy) = self.ghost_delta(dx, dy);
-        state.ghost.ready_frame(revision, &self.selected, gx, gy)
+    /// Whether a move is in flight: a drag, or a float that is not stale.
+    /// The cheap half of [`Self::drag_delta`], which is `Some` exactly then.
+    fn is_moving(&self, state: &CanvasState) -> bool {
+        state.move_dragging
+            && !self.float_is_stale(state)
+            && state.move_origin.is_some()
+            && state.move_current.is_some()
     }
 
     /// The snapped drag/float delta, while a move is in flight.
     fn drag_delta(&self, state: &CanvasState) -> Option<(f64, f64)> {
-        if !state.move_dragging || self.float_is_stale(state) {
+        if !self.is_moving(state) {
             return None;
         }
         state
@@ -581,64 +574,6 @@ impl<'a> SchematicCanvas<'a> {
     /// The drag delta the rubber-banded ghost is computed and looked up at.
     fn ghost_delta(&self, dx: f64, dy: f64) -> (f64, f64) {
         drag_preview::ghost_delta(dx, dy, self.prefs.snap_enabled, self.camera().scale)
-    }
-
-    /// Route one input event to its handler.
-    fn dispatch_event(
-        &self,
-        state: &mut CanvasState,
-        event: &Event,
-        bounds: Rectangle,
-        cursor: mouse::Cursor,
-    ) -> Option<canvas::Action<Message>> {
-        // Remember the bounds so menu zoom (no cursor) can find the view centre.
-        self.viewport.set(bounds);
-        // Consume any pending fit-to-content before dispatching the event.
-        if let Some(action) = self.update_pending_fit(bounds) {
-            return Some(action);
-        }
-
-        // Dispatch each input event to its handler, in the original order.
-        match event {
-            Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                let action = self.update_wheel_scrolled(delta, bounds, cursor);
-                // A zoom changes the ghost's step (`ghost_delta`); without
-                // this the drag shows the plain shift until the cursor moves.
-                self.refresh_drag_ghost(state);
-                action
-            }
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                self.update_left_pressed(state, bounds, cursor)
-            }
-            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                self.update_left_released(state)
-            }
-            Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) => {
-                self.update_modifiers_changed(state, mods)
-            }
-            Event::Keyboard(iced::keyboard::Event::KeyPressed {
-                key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
-                ..
-            }) => self.update_escape_pressed(state),
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
-                self.update_right_pressed(state, bounds, cursor)
-            }
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) => {
-                self.update_middle_pressed(state, bounds, cursor)
-            }
-            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right)) => {
-                self.update_right_released(state, bounds, cursor)
-            }
-            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Middle)) => {
-                self.update_middle_released(state)
-            }
-            Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                let action = self.update_cursor_moved(state, bounds, cursor);
-                self.refresh_drag_ghost(state);
-                action
-            }
-            _ => None,
-        }
     }
 
     pub fn new(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Self {
