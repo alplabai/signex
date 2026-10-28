@@ -75,7 +75,7 @@ fn open_library_total_rows_sums_tables() {
 
 /// Helper — minimal `ComponentRow` for the panel-side cache tests.
 /// The full row schema lives in `signex_library`'s tests.
-fn fixture_row(pn: &str) -> ComponentRow {
+pub(super) fn fixture_row(pn: &str) -> ComponentRow {
     use signex_library::{
         ComponentClass, DatasheetRef, InternalPn, LifecycleState, ManufacturerPart, ParamMap,
         PinPadOverride, PlmReserved,
