@@ -14,13 +14,14 @@ use signex_renderer::schematic::{
 use signex_renderer::theme::ResolvedTheme;
 use signex_types::net_class::NetLineStyle;
 use signex_types::schematic::{
-    Aabb, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
-    SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle, field_effective_style,
-    text_aabb_with_width, text_height_mm,
+    Aabb, DrawingPlacement, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet,
+    SelectedItem, SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle,
+    field_effective_style, text_aabb_with_width, text_height_mm,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
 
+mod drawings;
 pub mod hit_test;
 pub mod label;
 pub mod lock_indicator;
@@ -247,6 +248,8 @@ fn copy_invalidated(
     }
     if invalidation.intersects(R::DRAWINGS) {
         dst.drawings.clone_from(&src.drawings);
+        // Placements are edited under the same patch (#1583).
+        dst.drawing_placements.clone_from(&src.drawing_placements);
     }
     if invalidation.intersects(R::LIB_SYMBOLS) {
         dst.lib_symbols.clone_from(&src.lib_symbols);
@@ -331,6 +334,8 @@ pub fn draw_power_port_preview(
         parameter_texts,
         overlays: OverlayInputs::default(),
         erc_markers: Vec::new(),
+        drawings: Vec::new(),
+        drawings_front: Vec::new(),
         wire_color_overrides: HashMap::new(),
         wire_line_styles: HashMap::new(),
     };
@@ -422,6 +427,8 @@ pub(crate) fn build_schematic_scene(
         && renderer_snapshot.junctions.is_empty()
         && renderer_snapshot.arcs.is_empty()
         && renderer_snapshot.polygons.is_empty()
+        && renderer_snapshot.drawings.is_empty()
+        && renderer_snapshot.drawings_front.is_empty()
         && renderer_snapshot.labels.is_empty()
         && renderer_snapshot.pin_texts.is_empty()
         && renderer_snapshot.reference_value_texts.is_empty()
@@ -438,6 +445,7 @@ pub(crate) fn build_schematic_scene(
             | DirtyFlags::CIRCLES
             | DirtyFlags::ARCS
             | DirtyFlags::POLYGONS
+            | DirtyFlags::DRAWINGS
             | DirtyFlags::TEXT,
         &mut scene,
     );
@@ -1027,6 +1035,8 @@ pub fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
     normalize(am) < normalize(a1)
 }
 
+#[cfg(test)]
+mod drawings_tests;
 #[cfg(test)]
 mod font_geometry_tests;
 #[cfg(test)]

@@ -157,6 +157,11 @@ pub enum MenuMessage {
     Delete,
     SelectAll,
     Duplicate,
+    // Edit ▸ Arrange (drawings only, #1583)
+    BringDrawingsToFront,
+    SendDrawingsToBack,
+    BringDrawingsForward,
+    SendDrawingsBackward,
     Find,
     Replace,
     // View

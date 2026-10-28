@@ -15,11 +15,13 @@ use iced::Rectangle;
 use signex_gfx::pipeline::arc::ArcPipeline;
 use signex_gfx::pipeline::circle::CirclePipeline;
 use signex_gfx::pipeline::line::LinePipeline;
+use signex_gfx::pipeline::ordered::OrderedPipeline;
 use signex_gfx::pipeline::polygon::PolygonPipeline;
 use signex_gfx::pipeline::text::GlyphonTextPipeline;
 use signex_gfx::primitive::arc::Arc as GpuArc;
 use signex_gfx::primitive::circle::Circle;
 use signex_gfx::primitive::line::LineSegment;
+use signex_gfx::primitive::ordered::OrderedItem;
 use signex_gfx::primitive::polygon::GpuPolygon;
 use signex_gfx::primitive::text::{TextItem, TextSizePolicy};
 use signex_gfx::scene::{SceneUploadTarget, TextUploadParams, ViewportAabbMm};
@@ -44,6 +46,10 @@ pub struct GpuUploadTarget<'a> {
     pub circle: &'a mut CirclePipeline,
     pub arc: &'a mut ArcPipeline,
     pub polygon: &'a mut PolygonPipeline,
+    /// Drawings behind the circuit, in file paint order (#1579).
+    pub ordered: &'a mut OrderedPipeline,
+    /// Drawings placed above the circuit (#1583).
+    pub ordered_front: &'a mut OrderedPipeline,
     pub text: &'a mut GlyphonTextPipeline,
     pub text_frame: TextFrame<'a>,
 }
@@ -71,6 +77,14 @@ impl SceneUploadTarget for GpuUploadTarget<'_> {
 
     fn upload_top_polygons(&mut self, polygons: &[GpuPolygon]) {
         self.polygon.upload_top(self.device, self.queue, polygons);
+    }
+
+    fn upload_drawings(&mut self, drawings: &[OrderedItem]) {
+        self.ordered.upload(self.device, self.queue, drawings);
+    }
+
+    fn upload_drawings_front(&mut self, drawings: &[OrderedItem]) {
+        self.ordered_front.upload(self.device, self.queue, drawings);
     }
 
     fn upload_texts(
