@@ -3,7 +3,8 @@
 //! registry's dispatch entry point ([`Signex::dispatch_command`]) and
 //! its argument type ([`CommandArgs`]). Slice 3 gates it on
 //! [`enablement::is_enabled`], which the menu bar reads too; rewiring
-//! menus/palette onto the registry (slice 4) is still ahead.
+//! menus/palette onto the registry (slice 4) is not done yet; the
+//! palette still calls `bridge::core_to_message` directly.
 
 pub(crate) mod active_bar;
 mod args;
@@ -54,6 +55,17 @@ impl Signex {
         _args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
+        // Undo / Redo typed in an undocked tab step that window's document
+        // and are gated by its history, not the main window's active tab
+        // (#1546).
+        if let Some(window_id) = window
+            && matches!(command.as_str(), "undo" | "redo")
+            && self.undocked_tab_has_canvas(window)
+        {
+            return self.run_in_window(window_id, true, |app| {
+                app.dispatch_command(command, _args, None)
+            });
+        }
         if !is_enabled(command, &self.command_context(window))
             && !enablement::explains_when_unavailable(command)
         {

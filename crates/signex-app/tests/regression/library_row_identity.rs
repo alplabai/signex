@@ -42,6 +42,7 @@ fn app_with_libraries(
         id,
         path: project_path.to_path_buf(),
         data: ProjectData {
+            description: None,
             name: "Board".into(),
             dir: project_dir.to_string_lossy().into_owned(),
             schematic_root: None,

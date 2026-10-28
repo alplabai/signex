@@ -550,7 +550,9 @@ impl Signex {
             has_schematic: self.has_active_schematic(),
             has_pcb: self.has_active_pcb(),
             paper_size: active_schematic_snapshot
-                .map(|snapshot| snapshot.paper_size.clone())
+                .map(|snapshot| {
+                    crate::app::load_gateway::effective_paper_size(&snapshot.paper_size)
+                })
                 .or_else(|| {
                     active_pcb_snapshot
                         .map(|snapshot| format!("PCB • {} layers", snapshot.layers.len()))
@@ -720,6 +722,7 @@ mod tests {
             id,
             path: dir.join("P.snxprj"),
             data: ProjectData {
+                description: None,
                 name: "P".to_string(),
                 dir: dir.to_string_lossy().into_owned(),
                 schematic_root: None,

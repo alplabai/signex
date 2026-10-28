@@ -56,6 +56,7 @@ impl Signex {
             target: crate::library::state::PrimitivePickerTarget::BrowserRow(address),
             filter: String::new(),
             error: None,
+            scroll_y: 0.0,
         });
     }
 

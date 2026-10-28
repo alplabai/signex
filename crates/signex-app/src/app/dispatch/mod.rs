@@ -202,9 +202,6 @@ impl Signex {
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
                             ModalId::PrintPreview => self.dismiss_print_preview(),
                             ModalId::BomPreview => self.document_state.bom_preview = None,
-                            ModalId::ProjectOptions => {
-                                self.ui_state.project_options = None;
-                            }
                             ModalId::EnableVersionControl => {
                                 self.close_enable_version_control_dialog();
                             }
@@ -291,6 +288,12 @@ impl Signex {
             }
             WindowMsg::UndockTab(idx) => self.handle_undock_tab(idx),
             WindowMsg::UndockedTabOpened { path, id } => {
+                // The entry was inserted when the open was requested; if
+                // the window closed before the OS confirmed the open, do
+                // not resurrect it (stale window + canvas leak).
+                if !self.ui_state.windows.contains_key(&id) {
+                    return Task::none();
+                }
                 let title = self
                     .document_state
                     .tabs
@@ -364,6 +367,12 @@ impl Signex {
             }
             WindowMsg::DetachFloatingPanel(idx) => self.handle_detach_floating_panel(idx),
             WindowMsg::DetachedPanelOpened { kind, id } => {
+                // The entry was inserted when the open was requested; if
+                // the window closed before the OS confirmed the open, do
+                // not resurrect it (stale window + canvas leak).
+                if !self.ui_state.windows.contains_key(&id) {
+                    return Task::none();
+                }
                 self.ui_state
                     .windows
                     .insert(id, super::state::WindowKind::DetachedPanel(kind));
@@ -468,10 +477,11 @@ impl Signex {
                 Task::none()
             }
             NetColorMsg::CustomChannel(chan, s) => {
-                // Parse as u8; silently ignore invalid input so the
-                // text_input doesn't reject intermediate values like
-                // the empty string while the user types.
-                let parsed = s.trim().parse::<u16>().unwrap_or(0).min(255) as u8;
+                // Parse as u8; unparsable input (e.g. the empty string
+                // while the user types) resets the channel to 0 and
+                // values above 255 (however large) clamp to 255, so the text_input never
+                // rejects an intermediate value.
+                let parsed = s.trim().parse::<u64>().unwrap_or(0).min(255) as u8;
                 let draft = &mut self.ui_state.net_color_custom.draft;
                 let v = parsed as f32 / 255.0;
                 match chan {

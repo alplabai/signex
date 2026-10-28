@@ -93,6 +93,18 @@ impl Signex {
         let Some(tab) = self.document_state.tabs.get(idx) else {
             return Task::none();
         };
+        // A Project tab stays docked (#1202): commands typed in an undocked
+        // window act on the main window's active tab, so Ctrl+Z / Ctrl+S
+        // there would reach another document.
+        if tab.kind.as_project().is_some() {
+            // End the tab drag so the next move past the edge does not ask
+            // (and log the refusal) again.
+            self.ui_state.tab_dragging = None;
+            crate::diagnostics::log_warning(
+                "The Project tab stays in the main window; it cannot be undocked yet",
+            );
+            return Task::none();
+        }
         let path = tab.path.clone();
         // Component Preview tabs undock to a window with
         // `WindowKind::ComponentEditor` so the editor view dispatch
@@ -227,7 +239,6 @@ impl Signex {
             ModalId::FindReplace
             | ModalId::RenameDialog
             | ModalId::RemoveDialog
-            | ModalId::ProjectOptions
             | ModalId::EnableVersionControl
             | ModalId::GridProperties
             | ModalId::SelectionFilterCustom => None,
@@ -289,7 +300,6 @@ impl Signex {
             ModalId::RemoveDialog => iced::Size::new(560.0, 260.0),
             ModalId::PrintPreview => iced::Size::new(1100.0, 780.0),
             ModalId::BomPreview => iced::Size::new(1180.0, 760.0),
-            ModalId::ProjectOptions => iced::Size::new(520.0, 400.0),
             ModalId::EnableVersionControl => iced::Size::new(560.0, 480.0),
             ModalId::GridProperties => iced::Size::new(480.0, 280.0),
             ModalId::SelectionFilterCustom => iced::Size::new(440.0, 380.0),

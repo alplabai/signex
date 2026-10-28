@@ -234,7 +234,7 @@ pub enum EditorMsg {
         value: String,
     },
     /// Live-update the per-row edit buffer for a `ParamValue::Number`
-    /// row. The buffer lives on `ComponentEditorState.params_edit_buf`;
+    /// row. The buffer lives on `ComponentPreviewState.params_edit_buf`;
     /// the value is committed via `ParamCommitNumber`.
     ParamSetNumberBuf {
         name: String,
@@ -635,6 +635,8 @@ pub enum BrowserEditMsg {
 pub enum PrimitivePickerMsg {
     /// Live update of the filter text input.
     SetFilter(String),
+    /// The list scrolled to this offset (pixels from the top).
+    Scrolled(f32),
     /// Commit a picked `PrimitiveRef` — applies to the picker's
     /// configured target.
     Pick(PrimitiveRef),

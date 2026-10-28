@@ -39,8 +39,7 @@ pub enum ContextSubmenu {
     Place,
     Align,
     /// Project-tree → "Add New to Project ›" launcher. Items are
-    /// version-tagged placeholders today — actual document creation
-    /// lands with project-write support in v0.9.
+    /// version-tagged placeholders today; they do not create documents yet.
     AddNewToProject,
 }
 
@@ -179,6 +178,8 @@ pub enum SaveAllNext {
     },
     /// Close the main window; the tail of the app-quit Save All.
     Quit,
+    /// Close a library; the tail of the close-library Save All.
+    CloseLibrary { library_path: std::path::PathBuf },
 }
 
 /// A Save All whose loose documents' volumes have been probed off-thread;
@@ -203,6 +204,12 @@ pub struct SaveAllSettle {
     /// `(label, reason)` of what already failed before a write started
     /// (Component Preview rows).
     pub failed: Vec<(String, String)>,
+    /// The Component Preview rows the Save All started: those whose write
+    /// ran off-thread report a failure into `LibraryState::batch_row_failures`.
+    pub rows: Vec<crate::library::state::EditorAddress>,
+    /// This Save All's id, the key of its rows' entries in
+    /// `LibraryState::batch_row_failures`.
+    pub batch: u64,
     /// Files held under several case-variant spellings: the spelling that
     /// was written, and the others it stands for. The others' dirty markers
     /// go once the written one is clean.
@@ -296,7 +303,8 @@ pub enum ProjectTreeAction {
     /// project name (the `.snxprj` stem). Submit renames the trio
     /// `<old>.snxprj` / `<old>.snxsch` / `<old>.snxpcb` in lockstep.
     OpenProjectRenameDialog(Vec<usize>),
-    /// v0.9 project-root: open the Project Options metadata modal.
+    /// Project root: Project Options… opens (or focuses) the project's
+    /// Project tab (#1202).
     OpenProjectOptions(Vec<usize>),
     /// v0.9 project-root: open a file dialog and add the picked file
     /// to the project. Files outside the project directory are copied
@@ -437,20 +445,6 @@ pub struct EnableVersionControlState {
     /// A confirmed run is on the blocking pool: the dialog shows it as
     /// working and ignores edits and a second Confirm until it finishes.
     pub working: bool,
-}
-
-/// State for the read-only "Project Options" modal — the v0.9 surface
-/// is a metadata summary (name / dir / schematic root / pcb file /
-/// libraries). Editing happens through the dedicated rename / library
-/// flows; a future revision can promote this to a full editor.
-#[derive(Debug, Clone)]
-pub struct ProjectOptionsState {
-    pub project_idx: usize,
-    pub name: String,
-    pub directory: String,
-    pub schematic_root: Option<String>,
-    pub pcb_file: Option<String>,
-    pub library_count: usize,
 }
 
 /// State for the "Remove from Project" modal. `Delete` removes the file

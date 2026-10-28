@@ -24,6 +24,8 @@ mod project_rename_fs;
 #[cfg(test)]
 mod project_rename_inflight_tests;
 #[cfg(test)]
+mod project_rename_recovery_tests;
+#[cfg(test)]
 mod project_rename_tests;
 mod remove;
 mod remove_guard;
@@ -246,7 +248,9 @@ impl Signex {
                 self.open_project_rename_dialog(tree_path);
             }
             ProjectTreeAction::OpenProjectOptions(tree_path) => {
-                self.open_project_options_dialog(tree_path);
+                if let Some(&project_idx) = tree_path.first() {
+                    self.open_project_tab(project_idx);
+                }
             }
             ProjectTreeAction::AddExistingToProject(tree_path) => {
                 return self.add_existing_to_project(tree_path);

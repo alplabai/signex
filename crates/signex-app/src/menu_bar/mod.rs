@@ -227,7 +227,7 @@ pub enum MenuMessage {
 /// context-aware — e.g. Annotate / ERC / Save are unclickable when no
 /// schematic is open.
 #[derive(Debug, Clone)]
-pub struct MenuContext {
+pub struct MenuContext<'a> {
     /// The enablement facts for this window; rows keyed on a command id
     /// grey themselves through [`crate::app::command::is_enabled`] (#368).
     pub(crate) commands: crate::app::command::CommandContext,
@@ -245,17 +245,17 @@ pub struct MenuContext {
     /// Active committed shortcut profile for menu shortcut labels.
     pub active_keymap: Option<std::sync::Arc<CompiledKeymap>>,
     /// File ▸ Open Recent entries, most recent first.
-    pub recent_projects: Vec<std::path::PathBuf>,
+    pub recent_projects: &'a [std::path::PathBuf],
 }
 
-impl Default for MenuContext {
+impl Default for MenuContext<'_> {
     fn default() -> Self {
         Self {
             commands: Default::default(),
             has_project: false,
             scale_factor: 1.0,
             active_keymap: None,
-            recent_projects: Vec::new(),
+            recent_projects: &[],
         }
     }
 }
@@ -361,12 +361,12 @@ pub(crate) fn run_erc_menu_path() -> String {
 
 /// Whether the row for `command_id` is enabled: the same predicate the
 /// keyboard path dispatches by.
-fn enabled(ctx: &MenuContext, command_id: &str) -> bool {
+fn enabled(ctx: &MenuContext<'_>, command_id: &str) -> bool {
     crate::keymap::AppCommandId::new(command_id)
         .is_ok_and(|id| crate::app::command::is_enabled(&id, &ctx.commands))
 }
 
-fn shortcut_for(ctx: &MenuContext, command_id: &str, fallback: &str) -> Option<String> {
+fn shortcut_for(ctx: &MenuContext<'_>, command_id: &str, fallback: &str) -> Option<String> {
     let command = AppCommandId::new(command_id).ok()?;
     Some(
         ctx.active_keymap

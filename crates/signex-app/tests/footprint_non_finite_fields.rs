@@ -1,3 +1,4 @@
+// Standalone binary: reads the process-wide, 200-entry diagnostics ring; other tests' logging would evict the entry.
 //! #678 — `f64::from_str` accepts `NaN` and `inf`, so a footprint-editor
 //! numeric field used to store them straight into pad / silk geometry.
 //! Every field must refuse a non-finite value, keep what was stored, and

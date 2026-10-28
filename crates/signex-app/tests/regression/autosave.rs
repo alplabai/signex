@@ -198,6 +198,7 @@ fn project_close_discard_all_removes_the_sidecar() {
         id,
         path: prj,
         data: ProjectData {
+            description: None,
             name: "P".to_string(),
             dir: f.doc.parent().unwrap().to_string_lossy().into_owned(),
             schematic_root: Some("autosave.snxsch".to_string()),

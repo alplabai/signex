@@ -73,6 +73,10 @@ pub(crate) fn chrome_search_bar_geometry(
     (x, width)
 }
 
+/// Pointer travel (px) before a tab press counts as a drag, for both the
+/// grab cursor and the drag ghost.
+const TAB_DRAG_THRESHOLD_PX: f32 = 6.0;
+
 impl Signex {
     pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message> {
         // Secondary windows (detached modals, future undocked tabs) render
@@ -181,9 +185,19 @@ impl Signex {
             // a secondary window onto a monitor with a different DPI.
             scale_factor: crate::ui_scale::render_scale(ui.main_window_scale, ui.ui_scale),
             active_keymap: Some(std::sync::Arc::clone(&ui.active_keymap)),
-            recent_projects: ui.recent_projects.entries().to_vec(),
+            recent_projects: ui.recent_projects.entries(),
         };
-        let menu_row = menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(Message::Menu);
+        let undocked = ui.main_window_id != Some(window_id);
+        let menu_row =
+            menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(move |msg| match msg {
+                MenuMessage::Undo | MenuMessage::Redo if undocked => {
+                    Message::Ui(UiMsg::MenuInWindow {
+                        window: window_id,
+                        msg,
+                    })
+                }
+                msg => Message::Menu(msg),
+            });
 
         let left_has_panels = document.dock.has_panels(PanelPosition::Left);
         let right_has_panels = document.dock.has_panels(PanelPosition::Right);
@@ -310,12 +324,11 @@ impl Signex {
             // switch armed the drag state and flipped the
             // cursor to Grabbing instantaneously, plus flashed
             // the drag ghost.
-            const DRAG_THRESHOLD_PX: f32 = 6.0;
             let dragging = ui.tab_dragging.and_then(|(idx, ox, oy)| {
                 let (mx, my) = interaction.last_mouse_pos;
                 let dx = mx - ox;
                 let dy = my - oy;
-                if dx * dx + dy * dy > DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX {
+                if dx * dx + dy * dy > TAB_DRAG_THRESHOLD_PX * TAB_DRAG_THRESHOLD_PX {
                     Some(idx)
                 } else {
                     None
@@ -376,11 +389,10 @@ impl Signex {
         if let Some((tab_idx, ox, oy)) = ui.tab_dragging
             && let Some(tab) = document.tabs.get(tab_idx)
         {
-            const DRAG_GHOST_THRESHOLD_PX: f32 = 6.0;
             let (mx, my) = interaction.last_mouse_pos;
             let dx = mx - ox;
             let dy = my - oy;
-            if dx * dx + dy * dy > DRAG_GHOST_THRESHOLD_PX * DRAG_GHOST_THRESHOLD_PX {
+            if dx * dx + dy * dy > TAB_DRAG_THRESHOLD_PX * TAB_DRAG_THRESHOLD_PX {
                 overlays.push(self.view_tab_drag_ghost(&tab.title));
             }
         }
@@ -408,6 +420,9 @@ impl Signex {
 
     fn view_center(&self, window_id: iced::window::Id) -> Element<'_, Message> {
         let is_main = self.ui_state.main_window_id == Some(window_id);
+        if let Some(project_id) = self.project_tab_in_window(is_main) {
+            return self.view_project_tab(project_id);
+        }
 
         // When the active tab is a Component Preview, render the
         // editor inside the main window's content pane. The same
