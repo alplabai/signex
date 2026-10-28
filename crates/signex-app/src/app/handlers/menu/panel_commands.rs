@@ -45,6 +45,7 @@ impl Signex {
                 // close path goes through
                 // `Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)`.
                 self.ui_state.keyboard_shortcuts_open = true;
+                self.ui_state.refresh_shortcut_sections();
                 self.interaction_state.context_menu = None;
                 self.ui_state.panel_list_open = false;
                 Some(Task::none())
