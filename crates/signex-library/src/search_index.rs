@@ -189,7 +189,12 @@ pub struct TantivySearchIndex {
     index: Index,
     fields: SchemaFields,
     reader: IndexReader,
-    writer: Mutex<IndexWriter>,
+    /// `None` only after `Drop` has taken the writer to wind it down.
+    writer: Mutex<Option<IndexWriter>>,
+    /// Ops staged since the last successful commit, so a commit that fails on a
+    /// transient sharing violation can restart the writer and replay them
+    /// instead of silently losing the rows. Lock order: `writer`, then `pending`.
+    pending: Mutex<Vec<(Term, TantivyDocument)>>,
 }
 
 impl TantivySearchIndex {
@@ -231,7 +236,8 @@ impl TantivySearchIndex {
             index,
             fields,
             reader,
-            writer: Mutex::new(writer),
+            writer: Mutex::new(Some(writer)),
+            pending: Mutex::new(Vec::new()),
         })
     }
 
@@ -272,7 +278,15 @@ impl TantivySearchIndex {
         Self::open(path)
     }
 
-    fn writer(&self) -> Result<MutexGuard<'_, IndexWriter>, TantivyIndexError> {
+    fn pending_ops(
+        &self,
+    ) -> Result<MutexGuard<'_, Vec<(Term, TantivyDocument)>>, TantivyIndexError> {
+        self.pending
+            .lock()
+            .map_err(|_| TantivyIndexError::Internal("pending-ops mutex poisoned".into()))
+    }
+
+    fn writer(&self) -> Result<MutexGuard<'_, Option<IndexWriter>>, TantivyIndexError> {
         // M8: a poisoned mutex is an internal failure, not a malformed query —
         // route it through `Internal` so operator dashboards can distinguish
         // user errors from process-level corruption.
@@ -294,12 +308,13 @@ impl TantivySearchIndex {
     /// repeatedly. Caller must `commit()` to make changes visible to
     /// subsequent queries.
     pub fn add_or_update(&self, row: &ComponentRow) -> Result<(), TantivyIndexError> {
-        let writer = self.writer()?;
+        let guard = self.writer()?;
+        let writer = guard.as_ref().ok_or_else(writer_closed)?;
 
         // Delete any existing doc with this row_id; harmless on first insert.
         let uuid_str = row.row_id.to_string();
         let term = Term::from_field_text(self.fields.uuid, &uuid_str);
-        writer.delete_term(term);
+        writer.delete_term(term.clone());
 
         // The row carries its own `class` (resistor / capacitor / …); we
         // surface that as the `category` facet so existing UI code that
@@ -358,14 +373,33 @@ impl TantivySearchIndex {
             doc.add_object(self.fields.parameters, json_blob);
         }
 
-        writer.add_document(doc)?;
+        writer.add_document(doc.clone())?;
+        self.pending_ops()?.push((term, doc));
         Ok(())
     }
 
     /// Flush pending writes; required before queries see new docs.
     pub fn commit(&self) -> Result<(), TantivyIndexError> {
-        let mut writer = self.writer()?;
-        writer.commit()?;
+        let mut guard = self.writer()?;
+        let writer = guard.as_mut().ok_or_else(writer_closed)?;
+        // On Windows a segment file can fail to open for write with a transient
+        // sharing violation (leftover handles, antivirus). Tantivy surfaces it
+        // at commit and drops that batch with it, so restart the writer, replay
+        // the staged ops, and retry a few times with a short backoff.
+        let mut attempt = 0;
+        while let Err(e) = writer.commit() {
+            attempt += 1;
+            if attempt > COMMIT_RETRIES || !is_transient_sharing_violation(&e) {
+                return Err(e.into());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10 * attempt as u64));
+            writer.rollback()?;
+            for (term, doc) in self.pending_ops()?.iter() {
+                writer.delete_term(term.clone());
+                writer.add_document(doc.clone())?;
+            }
+        }
+        self.pending_ops()?.clear();
         // Pick up the new commit immediately.
         self.reader.reload()?;
         Ok(())
@@ -603,6 +637,26 @@ impl TantivySearchIndex {
     }
 }
 
+impl Drop for TantivySearchIndex {
+    /// Wind the writer down before the index and its directory handle go away.
+    /// Dropping an `IndexWriter` does not join its merge threads, so on Windows
+    /// they could still hold index files open when the same path is reopened
+    /// (e.g. after a library remount), failing the next commit with
+    /// `ERROR_ACCESS_DENIED` (#1593). Uncommitted docs are discarded, as before.
+    fn drop(&mut self) {
+        let slot = match self.writer.get_mut() {
+            Ok(slot) => slot,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        if let Some(mut writer) = slot.take() {
+            let _ = writer.rollback();
+            if let Err(e) = writer.wait_merging_threads() {
+                tracing::warn!(target: "signex::search", error = %e, "merge threads did not finish cleanly on close");
+            }
+        }
+    }
+}
+
 impl SearchIndex for TantivySearchIndex {
     fn query(&self, q: &SearchQuery) -> Vec<ComponentSummary> {
         // HI-21: bound `limit` so a `usize::MAX` query can't ask Tantivy
@@ -707,6 +761,28 @@ where
 }
 
 // ── helpers ────────────────────────────────────────────────────────────
+
+/// Extra commit attempts after a transient Windows sharing violation.
+const COMMIT_RETRIES: usize = 5;
+
+fn writer_closed() -> TantivyIndexError {
+    TantivyIndexError::Internal("index writer already closed".into())
+}
+
+/// Windows `ERROR_ACCESS_DENIED` (5) / `ERROR_SHARING_VIOLATION` (32) surfaced
+/// as an I/O error. Always false off Windows, where these are real errors.
+fn is_transient_sharing_violation(e: &TantivyError) -> bool {
+    use tantivy::directory::error::OpenWriteError;
+    if !cfg!(windows) {
+        return false;
+    }
+    let io = match e {
+        TantivyError::IoError(io) => io,
+        TantivyError::OpenWriteError(OpenWriteError::IoError { io_error, .. }) => io_error,
+        _ => return false,
+    };
+    io.kind() == std::io::ErrorKind::PermissionDenied || matches!(io.raw_os_error(), Some(5 | 32))
+}
 
 /// Re-parse `text` as a quoted phrase over the same default fields, so
 /// query-syntax characters inside a part number are matched as text

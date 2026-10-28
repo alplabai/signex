@@ -63,27 +63,6 @@ pub struct ExpressionEvalContext<'a> {
 }
 
 // ---------------------------------------------------------------------------
-// Auto net name — Signex format, not derived from any other EDA tool
-// ---------------------------------------------------------------------------
-
-/// Default name for an unnamed net.
-///
-/// Format: `unnamed-<sheet>:<ref>:<pin>`. Picks the lexicographically-
-/// smallest `(refdes, pin)` for determinism. Sheet defaults to empty
-/// string when the caller doesn't have a sheet context.
-pub fn auto_net_name(sheet: &str, pins: &[(String, String)]) -> Option<String> {
-    pins.iter()
-        .min_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)))
-        .map(|(r, p)| {
-            if sheet.is_empty() {
-                format!("unnamed-{r}:{p}")
-            } else {
-                format!("unnamed-{sheet}:{r}:{p}")
-            }
-        })
-}
-
-// ---------------------------------------------------------------------------
 // Expression evaluator
 // ---------------------------------------------------------------------------
 
@@ -797,27 +776,6 @@ mod tests {
             parse_signex_markup("a*b"),
             vec![RichSegment::Normal("a*b".into())]
         );
-    }
-
-    #[test]
-    fn auto_net_name_format_is_signex() {
-        let pins = vec![
-            ("U2".to_string(), "5".to_string()),
-            ("R1".to_string(), "2".to_string()),
-            ("R1".to_string(), "1".to_string()),
-        ];
-        // Format must be "unnamed-<sheet>:<ref>:<pin>" per the Apache-clean
-        // remediation. Must NOT match the historical Standard format string.
-        assert_eq!(auto_net_name("", &pins), Some("unnamed-R1:1".to_string()));
-        assert_eq!(
-            auto_net_name("PowerSupply", &pins),
-            Some("unnamed-PowerSupply:R1:1".to_string())
-        );
-    }
-
-    #[test]
-    fn auto_net_name_empty_pins() {
-        assert_eq!(auto_net_name("", &[]), None);
     }
 
     #[test]

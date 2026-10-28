@@ -37,7 +37,7 @@ pub(crate) use state::library_entry;
 pub(crate) mod stitched_netlist;
 mod symbol_history;
 mod undo_groups;
-pub use undo_groups::UndoGroupSheets;
+pub use undo_groups::{UndoGroupKind, UndoGroupSheets};
 pub(crate) mod view;
 
 pub use contracts::{
@@ -59,6 +59,7 @@ pub use documents::{
 };
 pub(crate) use handlers::selection_workflow::passes_filter;
 pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};
+pub use state::project_case::CaseProbeOutcome;
 pub use state::{
     CaseFold, DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
     PreviewState, ProjectId, Signex, UiState,

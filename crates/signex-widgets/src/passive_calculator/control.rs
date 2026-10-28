@@ -8,6 +8,12 @@ use super::network::{Network, format_number, format_value};
 use super::rkm_encoder::{RkmEncoder, RkmEncoderMessage};
 use super::solver::{MAX_PARTS, SolveOptions, solve};
 
+// Control widths (px) for the target row; sized to fit the longest option.
+const TARGET_INPUT_W: f32 = 110.0;
+const UNIT_PICK_W: f32 = 80.0;
+const SERIES_PICK_W: f32 = 85.0;
+const MAX_PARTS_PICK_W: f32 = 70.0;
+
 const MAX_COMPONENT_OPTIONS: [usize; MAX_PARTS] = [1, 2, 3, 4];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -239,7 +245,7 @@ impl CalculatorControl {
                     .on_input(CalculatorMessage::TargetChanged)
                     .size(11)
                     .padding([4, 6])
-                    .width(110),
+                    .width(TARGET_INPUT_W),
             ),
             labeled(
                 "Unit",
@@ -250,7 +256,7 @@ impl CalculatorControl {
                 )
                 .text_size(11)
                 .padding([4, 6])
-                .width(80),
+                .width(UNIT_PICK_W),
             ),
             text(state.prefix.unit(self.kind))
                 .size(11)
@@ -264,7 +270,7 @@ impl CalculatorControl {
                 )
                 .text_size(11)
                 .padding([4, 6])
-                .width(85),
+                .width(SERIES_PICK_W),
             ),
             labeled(
                 "Maximum parts",
@@ -275,7 +281,7 @@ impl CalculatorControl {
                 )
                 .text_size(11)
                 .padding([4, 6])
-                .width(70),
+                .width(MAX_PARTS_PICK_W),
             ),
             button(text("Calculate").size(11))
                 .padding([4, 10])
@@ -301,7 +307,7 @@ impl CalculatorControl {
             content = content.push(
                 text(error)
                     .size(11)
-                    .color(iced::Color::from_rgb8(210, 70, 70)),
+                    .color(crate::theme_ext::error_color(tokens)),
             );
         }
 

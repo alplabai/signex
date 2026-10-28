@@ -74,6 +74,20 @@ pub enum AnnotateMsg {
         generation: u64,
         result: std::sync::Arc<Result<crate::app::handlers::erc::AnnotatePreviewLoad, String>>,
     },
+    /// "Re-prefix to standard" was pressed (#1315): ask the mounted libraries
+    /// for the class and prefix override of the project's placed parts.
+    ReprefixPressed,
+    /// The libraries answered the Re-prefix lookup. `generation` is the
+    /// request's token; a result a newer request replaced is dropped.
+    ReprefixRowsResolved {
+        generation: u64,
+        result: std::sync::Arc<Result<crate::library::reprefix_lookup::ReprefixLookup, String>>,
+    },
+    /// Confirm on the Re-prefix list: re-plan against the state of now and
+    /// apply it as one undo step.
+    ReprefixConfirmed,
+    /// Cancel (or Esc) on the Re-prefix list: nothing changes.
+    ReprefixCancelled,
 }
 
 /// ERC dialog message family (ADR-0001 D3). Namespaced under
@@ -443,6 +457,13 @@ pub enum FileMsg {
     /// The off-thread volume probes of a Save All finished; its writes
     /// start now (#1216).
     SaveAllProbed(Box<SaveAllPlan>),
+    /// The off-thread identity probe of a loose document's directory finished
+    /// (#1447): the case rule open and Ctrl+S use to tell whether two
+    /// spellings are one file.
+    DirCaseProbed {
+        dir: PathBuf,
+        answer: crate::app::state::project_case::CaseProbeOutcome,
+    },
     /// Every write a Save All started has completed; carries what to do
     /// next (close the project, quit) and the failures already known.
     SaveAllSettled(Box<SaveAllSettle>),

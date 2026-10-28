@@ -39,6 +39,7 @@ pub struct RowDiff {
     pub datasheet_changed: bool,
     pub state_changed: bool,
     pub plm_changed: bool,
+    pub description_changed: bool,
 
     /// Detail rows — populated only for the dimensions actually changed.
     pub parameters: ParameterDiff,
@@ -161,6 +162,7 @@ pub fn diff_rows(a: &ComponentRow, b: &ComponentRow) -> RowDiff {
         datasheet_changed: a.documents() != b.documents(),
         state_changed: lifecycle_detail.from.is_some(),
         plm_changed: a.plm != b.plm,
+        description_changed: a.description != b.description,
         parameters,
         pin_map,
         alternates_detail,
@@ -329,6 +331,7 @@ mod tests {
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::url(""),
             datasheet_label: String::new(),
+            description: String::new(),
             more_datasheets: Vec::new(),
             state: LifecycleState::Released,
             symbol_ref: PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
@@ -544,6 +547,16 @@ mod tests {
         b.datasheet = DatasheetRef::url("b.pdf");
         let d = diff_rows(&a, &b);
         assert!(d.datasheet_changed);
+    }
+
+    #[test]
+    fn diff_detects_description_change() {
+        let a = row();
+        let mut b = row();
+        b.description = "100 nF".into();
+        assert!(diff_rows(&a, &b).description_changed);
+        assert!(!diff_rows(&a, &row()).description_changed);
+        assert_eq!(auto_bump_kind(&diff_rows(&a, &b)), BumpKind::Minor);
     }
 
     #[test]

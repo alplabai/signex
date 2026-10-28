@@ -18,7 +18,11 @@
 //! shipped file is never edited; a DDL change is a new, higher-numbered
 //! migration in BOTH sets.
 
+pub mod page;
+
 use std::str::FromStr;
+
+pub use page::{DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, Page};
 
 use chrono::Utc;
 use signex_library::component::ComponentRow;
@@ -140,8 +144,9 @@ impl AppState {
     // and Postgres so the route handlers can stay backend-agnostic.
     //
     // The row body is round-tripped as JSON via `ComponentRow`'s serde impl
-    // so adding fields later (e.g. when v3.0 lifts `PlmReserved` into wire
-    // format) doesn't require a schema migration.
+    // so a new `ComponentRow` field needs no SQL migration. New fields are
+    // required in the JSON: rows stored before a field existed are not
+    // supported.
 
     /// Insert a brand-new row. Returns `Ok(false)` when a row with the
     /// same `(library_id, table, row_id)` already exists so the caller
@@ -399,22 +404,25 @@ impl AppState {
         }
     }
 
-    /// Read every row in `table_name` for `library_id`, ordered by
-    /// `internal_pn`.
+    /// Read one [`Page`] of the rows in `table_name` for `library_id`,
+    /// ordered by `internal_pn` (then `row_id`, so pages never overlap).
     pub async fn list_rows_in_table(
         &self,
         library_id: Uuid,
         table_name: &str,
+        page: Page,
     ) -> sqlx::Result<Vec<ComponentRow>> {
         let stored: Vec<(String, i64)> = match &self.pool {
             DbPool::Sqlite(pool) => {
                 sqlx::query_as(
                     "SELECT payload, revision FROM component_rows \
                  WHERE library_id = ? AND table_name = ? \
-                 ORDER BY internal_pn",
+                 ORDER BY internal_pn, row_id LIMIT ? OFFSET ?",
                 )
                 .bind(library_id.to_string())
                 .bind(table_name)
+                .bind(page.limit)
+                .bind(page.offset)
                 .fetch_all(pool)
                 .await?
             }
@@ -422,10 +430,12 @@ impl AppState {
                 sqlx::query_as(
                     "SELECT payload, revision FROM component_rows \
                  WHERE library_id = $1 AND table_name = $2 \
-                 ORDER BY internal_pn",
+                 ORDER BY internal_pn, row_id LIMIT $3 OFFSET $4",
                 )
                 .bind(library_id.to_string())
                 .bind(table_name)
+                .bind(page.limit)
+                .bind(page.offset)
                 .fetch_all(pool)
                 .await?
             }
@@ -483,8 +493,9 @@ impl AppState {
     pub async fn list_symbols(
         &self,
         library_id: Option<Uuid>,
+        page: Page,
     ) -> sqlx::Result<Vec<PrimitiveSummary>> {
-        list_primitive_summaries(&self.pool, "symbols", library_id).await
+        list_primitive_summaries(&self.pool, "symbols", library_id, page).await
     }
 
     /// Create a footprint; `false` when `(library_id, uuid)` already exists.
@@ -540,8 +551,9 @@ impl AppState {
     pub async fn list_footprints(
         &self,
         library_id: Option<Uuid>,
+        page: Page,
     ) -> sqlx::Result<Vec<PrimitiveSummary>> {
-        list_primitive_summaries(&self.pool, "footprints", library_id).await
+        list_primitive_summaries(&self.pool, "footprints", library_id, page).await
     }
 
     /// Create a sim model; `false` when `(library_id, uuid)` already exists.
@@ -582,8 +594,12 @@ impl AppState {
             .transpose()
     }
 
-    pub async fn list_sims(&self, library_id: Option<Uuid>) -> sqlx::Result<Vec<PrimitiveSummary>> {
-        list_primitive_summaries(&self.pool, "sims", library_id).await
+    pub async fn list_sims(
+        &self,
+        library_id: Option<Uuid>,
+        page: Page,
+    ) -> sqlx::Result<Vec<PrimitiveSummary>> {
+        list_primitive_summaries(&self.pool, "sims", library_id, page).await
     }
 }
 
@@ -756,6 +772,7 @@ async fn list_primitive_summaries(
     pool: &DbPool,
     table: &'static str,
     library_id: Option<Uuid>,
+    page: Page,
 ) -> sqlx::Result<Vec<PrimitiveSummary>> {
     assert_primitive_table(table);
     match pool {
@@ -763,15 +780,23 @@ async fn list_primitive_summaries(
             let rows = if let Some(lib) = library_id {
                 let sql = format!(
                     "SELECT library_id, uuid, name FROM {table} \
-                     WHERE library_id = ? ORDER BY name"
+                     WHERE library_id = ? ORDER BY name, uuid LIMIT ? OFFSET ?"
                 );
                 sqlx::query(&sql)
                     .bind(lib.to_string())
+                    .bind(page.limit)
+                    .bind(page.offset)
                     .fetch_all(pool)
                     .await?
             } else {
-                let sql = format!("SELECT library_id, uuid, name FROM {table} ORDER BY name");
-                sqlx::query(&sql).fetch_all(pool).await?
+                let sql = format!(
+                    "SELECT library_id, uuid, name FROM {table} ORDER BY name, uuid LIMIT ? OFFSET ?"
+                );
+                sqlx::query(&sql)
+                    .bind(page.limit)
+                    .bind(page.offset)
+                    .fetch_all(pool)
+                    .await?
             };
             rows.into_iter()
                 .map(|r| {
@@ -795,15 +820,23 @@ async fn list_primitive_summaries(
             let rows = if let Some(lib) = library_id {
                 let sql = format!(
                     "SELECT library_id, uuid, name FROM {table} \
-                     WHERE library_id = $1 ORDER BY name"
+                     WHERE library_id = $1 ORDER BY name, uuid LIMIT $2 OFFSET $3"
                 );
                 sqlx::query(&sql)
                     .bind(lib.to_string())
+                    .bind(page.limit)
+                    .bind(page.offset)
                     .fetch_all(pool)
                     .await?
             } else {
-                let sql = format!("SELECT library_id, uuid, name FROM {table} ORDER BY name");
-                sqlx::query(&sql).fetch_all(pool).await?
+                let sql = format!(
+                    "SELECT library_id, uuid, name FROM {table} ORDER BY name, uuid LIMIT $1 OFFSET $2"
+                );
+                sqlx::query(&sql)
+                    .bind(page.limit)
+                    .bind(page.offset)
+                    .fetch_all(pool)
+                    .await?
             };
             rows.into_iter()
                 .map(|r| {

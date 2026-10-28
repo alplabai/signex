@@ -76,6 +76,7 @@ fn row(n: usize, lib: Uuid) -> ComponentRow {
         content_hash: [0u8; 32],
         server_revision: None,
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
     }
 }
@@ -135,11 +136,12 @@ fn seeded_library(dir: &Path, size: usize) -> (PathBuf, LocalGitAdapter, Compone
     let mut lf = LibraryFile::parse(&fs::read_to_string(&file).unwrap()).unwrap();
     let table = lf.tables.get_mut("resistors").unwrap();
     let stored = table.rows[0].clone();
-    for _ in 1..size {
+    for n in 1..size {
         let mut r = stored.clone();
-        std::sync::Arc::make_mut(&mut r)
-            .cells
-            .insert("row_id".into(), Uuid::now_v7().to_string());
+        let cells = &mut std::sync::Arc::make_mut(&mut r).cells;
+        cells.insert("row_id".into(), Uuid::now_v7().to_string());
+        // Part numbers are unique library-wide (#1363).
+        cells.insert("internal_pn".into(), format!("R0805_{n}"));
         table.rows.push(r);
     }
     fs::write(&file, lf.write().unwrap()).unwrap();

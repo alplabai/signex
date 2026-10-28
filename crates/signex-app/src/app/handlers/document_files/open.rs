@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 
 use super::super::super::*;
 use super::new_project::{new_project_parts, write_new_project_files};
+use super::spelling::OpenGate;
 
 impl Signex {
     /// An async read+parse of a document came back failed: log it and
@@ -240,7 +241,12 @@ impl Signex {
             "standard_pro" | "snxprj" => self.open_project_file(path)?,
             "standard_sch" | "snxsch" => self.open_schematic_file(path)?,
             "standard_pcb" | "snxpcb" => self.open_pcb_file(path)?,
-            "snxsym" | "snxfpt" => self.handle_open_primitive(path),
+            "snxsym" | "snxfpt" => match self.gate_open(path) {
+                OpenGate::Proceed { path, probe } => {
+                    iced::Task::batch([probe, self.handle_open_primitive(path)])
+                }
+                OpenGate::Deferred(probe) => probe,
+            },
             // `.snxlib/` is a directory package — open it as a Library
             // Browser tab in the main canvas area. The handler mounts
             // the library if not already mounted and pushes the tab
@@ -341,6 +347,7 @@ impl Signex {
                 pending_libraries: std::collections::HashMap::new(),
                 case_fold: crate::app::state::scope::CaseFold::host_default(),
                 case_probed: false,
+                case_decided: false,
             });
         self.document_state.active_project = Some(id);
         Ok((id, mount_task))
@@ -436,7 +443,15 @@ impl Signex {
     }
 
     fn open_schematic_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
-        let path = self.resolve_held_spelling(path);
+        let (path, probe) = match self.gate_open(path) {
+            OpenGate::Proceed { path, probe } => (path, probe),
+            OpenGate::Deferred(probe) => return Ok(probe),
+        };
+        let task = self.open_schematic_resolved(path)?;
+        Ok(iced::Task::batch([probe, task]))
+    }
+
+    fn open_schematic_resolved(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
         if self.activate_or_skip_duplicate_open(&path) {
             return Ok(iced::Task::none());
         }
@@ -512,7 +527,15 @@ impl Signex {
     }
 
     fn open_pcb_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
-        let path = self.resolve_held_spelling(path);
+        let (path, probe) = match self.gate_open(path) {
+            OpenGate::Proceed { path, probe } => (path, probe),
+            OpenGate::Deferred(probe) => return Ok(probe),
+        };
+        let task = self.open_pcb_resolved(path)?;
+        Ok(iced::Task::batch([probe, task]))
+    }
+
+    fn open_pcb_resolved(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
         if self.activate_or_skip_duplicate_open(&path) {
             return Ok(iced::Task::none());
         }

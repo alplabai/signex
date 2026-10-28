@@ -33,6 +33,8 @@ impl Signex {
             draft_pcb_gpu_render: ui.preferences_draft_pcb_gpu_render,
             draft_annotate_undo: ui.preferences_draft_annotate_undo,
             draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
+            draft_window_controls_placement: ui.preferences_draft_window_controls_placement,
+            window_controls_restart_note: self.window_controls_needs_restart(),
             draft_autosave_enabled: ui.preferences_draft_autosave_enabled,
             draft_symbol_grid_size_mm: ui.preferences_draft_symbol_grid_size_mm,
             draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
@@ -241,6 +243,12 @@ impl Signex {
         (self.ui_state.annotate_reset_confirm
             && !self.modal_detached(crate::app::state::ModalId::AnnotateResetConfirm))
         .then(|| self.view_annotate_reset_confirm())
+    }
+
+    pub(in crate::app::view) fn reprefix_confirm_overlay(&self) -> Option<Element<'_, Message>> {
+        (self.ui_state.reprefix_confirm.is_some()
+            && !self.modal_detached(crate::app::state::ModalId::ReprefixConfirm))
+        .then(|| self.view_reprefix_confirm())
     }
 
     pub(in crate::app::view) fn erc_dialog_overlay(&self) -> Option<Element<'_, Message>> {

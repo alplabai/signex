@@ -109,6 +109,7 @@ fn fixture() -> Fixture {
         pending_libraries: Default::default(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(project_id);
     app.library
@@ -514,6 +515,7 @@ fn a_library_listed_by_another_open_project_is_refused() {
         pending_libraries: Default::default(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
 
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");

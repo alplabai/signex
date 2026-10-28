@@ -239,6 +239,28 @@ mod tests {
         }
     }
 
+    /// #1080 - the document number and the sign-off row are in every built-in.
+    #[test]
+    fn every_built_in_has_the_document_number_and_sign_off_rows() {
+        for id in all_builtin_ids() {
+            let block = load_builtin(&id).unwrap().title_block;
+            for (caption, value) in [
+                ("Doc No", "${DOCUMENTNUMBER}"),
+                ("Drawn", "${DRAWNBY}"),
+                ("Checked", "${CHECKEDBY}"),
+                ("Approved", "${APPROVEDBY}"),
+            ] {
+                assert!(
+                    block
+                        .cells
+                        .iter()
+                        .any(|c| c.caption == caption && c.value == value),
+                    "{id:?} lacks {caption}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn unknown_id_returns_none() {
         assert!(load_builtin(&TemplateId::from("bogus")).is_none());

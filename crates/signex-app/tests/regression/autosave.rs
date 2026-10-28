@@ -218,11 +218,13 @@ fn project_close_discard_all_removes_the_sidecar() {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     f.app.document_state.tabs[0].project_id = Some(id);
     crate::close_support::close_first_project(&mut f.app);

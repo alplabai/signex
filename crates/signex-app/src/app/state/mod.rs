@@ -8,6 +8,7 @@ use super::TabInfo;
 
 mod case_fold;
 mod child_refs_cache;
+pub(crate) mod dir_case;
 mod interaction;
 pub(crate) mod library_entry;
 mod link_policy;
@@ -17,6 +18,7 @@ mod path_key;
 mod pcb_revision;
 mod pdf_page_setup;
 mod pdf_preview_raster;
+mod placement;
 mod profile_update;
 pub(crate) mod project_case;
 pub(crate) mod project_fs;
@@ -36,6 +38,7 @@ pub use pdf_preview_raster::{
     PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
     forget_page_setup, rekey_page_setup,
 };
+pub use placement::{PlacementKind, PlacementSession};
 pub use profile_update::PendingProfileUpdate;
 pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{NetColorStep, UiState};
@@ -346,6 +349,8 @@ impl ErrorNotice {
 pub enum ModalId {
     AnnotateDialog,
     AnnotateResetConfirm,
+    /// Re-prefix to standard (#1315): the list of changes, to confirm.
+    ReprefixConfirm,
     ErcDialog,
     /// Altium-style Move-Selection dialog — numeric ΔX / ΔY inputs.
     MoveSelection,
@@ -425,6 +430,10 @@ pub struct LoadedProject {
     pub case_fold: scope::CaseFold,
     /// The volume probe has reported; the first answer wins.
     pub case_probed: bool,
+    /// The probe DECIDED (not undecided, failed or a stat error): only then is
+    /// `case_fold` a fact about the volume rather than the host default, and
+    /// only then does document identity trust it (#1447).
+    pub case_decided: bool,
 }
 
 impl LoadedProject {
@@ -605,6 +614,11 @@ pub struct DocumentState {
     /// project-wide undo steps (an annotate run under "One step for the whole
     /// project"). Never reused.
     pub next_undo_group: u64,
+    /// Bumped whenever a document is opened, saved or closed (and when a
+    /// project closes). A background job that read sheets from disk records it
+    /// first and applies its result only if it is unchanged, so it never
+    /// installs bytes a later open, save or close has already superseded.
+    pub documents_epoch: u64,
     /// Last board revision handed out; see `state/pcb_revision.rs`. Never reused.
     pub next_pcb_revision: u64,
     /// The current board revision per PCB path; a PCB save completion only
@@ -683,6 +697,9 @@ pub struct DocumentState {
     /// spawned; cleared in both the `Ok` and `Err` arms of
     /// `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished`.
     pub pending_opens: crate::app::document_read::InFlightReads,
+    /// What the directory case probes of loose documents reported, and the
+    /// opens and saves waiting on one (#1447).
+    pub dir_case: dir_case::DirCases,
     /// #859 — History restores running on a worker, keyed by the document
     /// path. A second restore click for the same document is ignored until
     /// the first completes; closing the project or all documents cancels it.
@@ -1092,6 +1109,42 @@ impl DocumentState {
         )
     }
 
+    /// Record that the set of open documents, or what they hold on disk,
+    /// changed. See [`DocumentState::documents_epoch`].
+    pub fn note_documents_changed(&mut self) {
+        self.documents_epoch += 1;
+    }
+
+    /// Install `engine` for `path` and move the epoch. Use this for any engine
+    /// a background read could otherwise miss. The active-session swap in
+    /// `load_gateway` and the bulk `engines.retain` calls bypass it; they act
+    /// only on engines that already existed, which a background read never
+    /// replaces from disk.
+    pub fn insert_engine(
+        &mut self,
+        path: PathBuf,
+        engine: signex_engine::Engine,
+    ) -> Option<signex_engine::Engine> {
+        self.note_documents_changed();
+        self.engines.insert(path, engine)
+    }
+
+    /// Drop the engine for `path`; see [`DocumentState::insert_engine`].
+    pub fn remove_engine(&mut self, path: &std::path::Path) -> Option<signex_engine::Engine> {
+        self.note_documents_changed();
+        self.engines.remove(path)
+    }
+
+    /// A `.snxsch` was written or deleted on disk with no engine behind it
+    /// (the unopened-sheet Annotate and Reset Duplicate Designators writes,
+    /// a deleted project file). The writers reach it through
+    /// `autosave_after_disk_write` or `drop_deleted_documents`; a new
+    /// engine-less writer must call one of those or this, so a background read
+    /// of that file can tell it is out of date.
+    pub fn note_document_written_behind_engines(&mut self) {
+        self.note_documents_changed();
+    }
+
     pub fn active_engine(&self) -> Option<&signex_engine::Engine> {
         self.engines.get(self.active_path.as_ref()?)
     }
@@ -1105,6 +1158,7 @@ impl DocumentState {
     /// active tab — the tab's engine is gone, and `active_path` follows
     /// to whichever tab becomes active next.
     pub fn clear_active_engine(&mut self) {
+        self.note_documents_changed();
         if let Some(path) = self.active_path.as_ref().cloned() {
             self.engines.remove(&path);
         }

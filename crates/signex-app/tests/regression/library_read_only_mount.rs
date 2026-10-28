@@ -67,6 +67,7 @@ fn stock_like_library_named(dir: &Path, name: &str) -> (PathBuf, RowId) {
         class: ComponentClass::new("IC"),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib_id, Uuid::now_v7()),
