@@ -287,9 +287,9 @@ pub enum TabContextAction {
 #[derive(Debug, Clone)]
 pub enum ProjectTreeAction {
     /// Open the file backed by this leaf in the current document slot.
-    OpenNode(Vec<usize>),
+    OpenNode(signex_widgets::tree_view::TreeKey),
     /// Expand (or collapse) a specific branch node.
-    ToggleNode(Vec<usize>),
+    ToggleNode(signex_widgets::tree_view::TreeKey),
     /// Recursively expand every node in the tree.
     ExpandAll,
     /// Recursively collapse every node in the tree.
@@ -306,59 +306,59 @@ pub enum ProjectTreeAction {
     /// against — leaves nested under project B reveal in B's dir
     /// even when project A is active. A single-element path means
     /// the project root row was clicked.
-    RevealInExplorer(Vec<usize>),
+    RevealInExplorer(signex_widgets::tree_view::TreeKey),
     /// Fire the print preview flow — only surfaced on leaves that are
     /// already the active tab.
     PrintActive,
     /// Open the sheet-rename modal for this leaf, preloaded with the
     /// current filename.
-    OpenRenameDialog(Vec<usize>),
+    OpenRenameDialog(signex_widgets::tree_view::TreeKey),
     /// Open the "Remove from Project" modal (Delete / Exclude / Cancel)
     /// for this leaf.
-    OpenRemoveDialog(Vec<usize>),
+    OpenRemoveDialog(signex_widgets::tree_view::TreeKey),
     /// Close the entire project whose root is at this tree path. Closes
     /// every open tab backed by the project, drops the `LoadedProject`
     /// from the workspace, and promotes another project (or `None`) to
     /// active. The tree path's first index selects the project; other
     /// indices are ignored so the action is safe to fire from any node
     /// underneath a project root.
-    CloseProject(Vec<usize>),
+    CloseProject(signex_widgets::tree_view::TreeKey),
     /// v0.9 project-root: run ERC across the project. Promotes the
     /// project to active, opens its `schematic_root` if no schematic
     /// from this project is currently active, then dispatches the
     /// existing ERC dialog.
-    ValidateProject(Vec<usize>),
+    ValidateProject(signex_widgets::tree_view::TreeKey),
     /// v0.9 project-root: open the rename modal seeded with the
     /// project name (the `.snxprj` stem). Submit renames the trio
     /// `<old>.snxprj` / `<old>.snxsch` / `<old>.snxpcb` in lockstep.
-    OpenProjectRenameDialog(Vec<usize>),
+    OpenProjectRenameDialog(signex_widgets::tree_view::TreeKey),
     /// Project root: Project Options… opens (or focuses) the project's
     /// Project tab (#1202).
-    OpenProjectOptions(Vec<usize>),
+    OpenProjectOptions(signex_widgets::tree_view::TreeKey),
     /// v0.9 project-root: open a file dialog and add the picked file
     /// to the project. Files outside the project directory are copied
     /// in; files already inside just trigger a tree refresh.
-    AddExistingToProject(Vec<usize>),
+    AddExistingToProject(signex_widgets::tree_view::TreeKey),
     /// v0.9 project-root → Add New ▸ Schematic. Spawns a Save-As
     /// dialog scoped to the project directory; the result writes a
     /// blank `.snxsch`, registers it as a SheetEntry, marks the
     /// project dirty, and refreshes the tree (no tab opens).
-    AddNewSchematic(Vec<usize>),
+    AddNewSchematic(signex_widgets::tree_view::TreeKey),
     /// project-root → Add New ▸ Symbol Library. Save-As dialog
     /// scoped to the project dir, writes an empty `.snxsym`, opens
     /// the file as a primitive editor tab. Altium parity: Schematic
     /// Library is a top-level project document.
-    AddProjectSymbolLibrary(Vec<usize>),
+    AddProjectSymbolLibrary(signex_widgets::tree_view::TreeKey),
     /// project-root → Add New ▸ PCB Library. Save-As dialog
     /// scoped to the project dir, writes an empty `.snxfpt`, opens
     /// the file as a primitive editor tab.
-    AddProjectFootprintLibrary(Vec<usize>),
+    AddProjectFootprintLibrary(signex_widgets::tree_view::TreeKey),
     /// v0.11 project-root: open the Enable Version Control confirm
     /// modal. Runs `git init` at the project dir, optionally seeds
     /// `.gitattributes` for binary-model LFS, and creates the
     /// initial commit covering the entire project tree. Only
     /// enabled when the project dir has no `.git/` already.
-    OpenEnableVersionControl(Vec<usize>),
+    OpenEnableVersionControl(signex_widgets::tree_view::TreeKey),
     /// Right-click on a plain-files `.snxlib` node → opens the
     /// Enable Version Control modal scoped to that library directory.
     OpenLibraryEnableVersionControl(LibraryRowRef),
@@ -368,6 +368,37 @@ pub enum ProjectTreeAction {
     /// Right-click on a library node → Refresh All Pricing. Runs in the
     /// background; resolved by the library's identity like the rest.
     RefreshLibraryPricing(LibraryRowRef),
+}
+
+impl ProjectTreeAction {
+    /// The tree row this action targets, when it targets one.
+    pub fn row_key(&self) -> Option<&signex_widgets::tree_view::TreeKey> {
+        use ProjectTreeAction::*;
+        match self {
+            OpenNode(k)
+            | ToggleNode(k)
+            | RevealInExplorer(k)
+            | OpenRenameDialog(k)
+            | OpenRemoveDialog(k)
+            | CloseProject(k)
+            | ValidateProject(k)
+            | OpenProjectRenameDialog(k)
+            | OpenProjectOptions(k)
+            | AddExistingToProject(k)
+            | AddNewSchematic(k)
+            | AddProjectSymbolLibrary(k)
+            | AddProjectFootprintLibrary(k)
+            | OpenEnableVersionControl(k) => Some(k),
+            ExpandAll
+            | CollapseAll
+            | Refresh
+            | CloseAllDocuments
+            | PrintActive
+            | OpenLibraryEnableVersionControl(_)
+            | RemoveLibrary(_)
+            | RefreshLibraryPricing(_) => None,
+        }
+    }
 }
 
 /// Stable identity of a library row in the project tree: the owning

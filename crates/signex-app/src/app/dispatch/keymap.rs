@@ -35,13 +35,19 @@ impl Signex {
         // #103 - a blocking modal owns the screen: a bare key must not reach
         // the canvas behind it. Dropped before it can start a chord, so no
         // prefix is left over to complete once the modal closes.
-        if target.paints_overlay_stack() && self.has_blocking_modal() && is_single_key(&stroke) {
-            self.ui_state.keymap_pending_sequence.clear();
-            return Task::none();
+        //
+        // #1378 - and a chord held from before the modal opened must never
+        // fire behind it, whatever the stroke: it is dropped, not resolved.
+        if target.paints_overlay_stack() && self.has_blocking_modal() {
+            self.cancel_pending_chord();
+            if is_single_key(&stroke) {
+                return Task::none();
+            }
         }
         self.begin_or_continue_chord(target);
         let contexts = self.shortcut_contexts(window);
         self.ui_state.keymap_pending_sequence.push(stroke.clone());
+        self.ui_state.keymap_chord_wait = None;
 
         if let Some(task) = self.take_keymap_match(&contexts, window) {
             return task;
@@ -50,16 +56,40 @@ impl Signex {
         // Definite miss on the accumulated sequence. Restart from the
         // latest stroke alone so a stale prefix (e.g. an abandoned `P`)
         // can't swallow the next real shortcut.
+        let mut tasks = Vec::new();
         if self.ui_state.keymap_pending_sequence.len() > 1 {
-            self.ui_state.keymap_pending_sequence.clear();
+            let mut held = std::mem::take(&mut self.ui_state.keymap_pending_sequence);
+            held.pop();
+            // #1378: `held` may be a complete shortcut that was waiting
+            // because a longer chord starts with it (`T A` / `T A E`).
+            // A key that does not continue the longer chord fires it
+            // now; `chord.rs` covers the other ways the wait ends
+            // (timeout, Esc, pointer press, modal).
+            let waiting = self.ui_state.active_keymap.lookup(&held, &contexts).command;
+            if let Some(command) = waiting {
+                tasks.push(self.dispatch_command(
+                    &command,
+                    crate::app::command::CommandArgs::none(),
+                    window,
+                ));
+            }
+            // The released command may itself have opened a blocking modal
+            // (print preview): the restart stroke must not run behind it,
+            // same rule as at the top of this function.
+            if target.paints_overlay_stack() && self.has_blocking_modal() && is_single_key(&stroke)
+            {
+                self.cancel_pending_chord();
+                return Task::batch(tasks);
+            }
             self.ui_state.keymap_pending_sequence.push(stroke);
             if let Some(task) = self.take_keymap_match(&contexts, window) {
-                return task;
+                tasks.push(task);
+                return Task::batch(tasks);
             }
         }
 
-        self.ui_state.keymap_pending_sequence.clear();
-        Task::none()
+        self.cancel_pending_chord();
+        Task::batch(tasks)
     }
 
     /// Look the current pending sequence up in the active keymap.
@@ -79,8 +109,15 @@ impl Signex {
             .active_keymap
             .lookup(&self.ui_state.keymap_pending_sequence, contexts);
 
+        if lookup.command.is_some() && lookup.pending {
+            // #1378: complete shortcut that is also the prefix of a longer
+            // chord. Wait for the next key (or `CHORD_TIMEOUT`) instead of
+            // firing now, or the longer chord could never be typed.
+            self.arm_chord_wait(window);
+            return Some(Task::none());
+        }
         if let Some(command) = lookup.command.as_ref() {
-            self.ui_state.keymap_pending_sequence.clear();
+            self.cancel_pending_chord();
             return Some(self.dispatch_command(
                 command,
                 crate::app::command::CommandArgs::none(),
@@ -88,7 +125,7 @@ impl Signex {
             ));
         }
         if lookup.matched {
-            self.ui_state.keymap_pending_sequence.clear();
+            self.cancel_pending_chord();
             return Some(Task::none());
         }
         if lookup.pending {
@@ -108,7 +145,7 @@ impl Signex {
         if self.ui_state.keymap_pending_target == Some(target) {
             return;
         }
-        self.ui_state.keymap_pending_sequence.clear();
+        self.cancel_pending_chord();
         self.ui_state.keymap_pending_target = Some(target);
     }
 

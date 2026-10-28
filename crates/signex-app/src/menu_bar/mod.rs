@@ -370,15 +370,19 @@ fn enabled(ctx: &MenuContext<'_>, command_id: &str) -> bool {
         .is_ok_and(|id| crate::app::command::is_enabled(&id, &ctx.commands))
 }
 
+/// Shortcut text for a menu row. The hardcoded `fallback` stands in only
+/// when there is no active keymap at all; with one, a command it does not
+/// bind (or the user unbound) shows no hint (#1378).
 fn shortcut_for(ctx: &MenuContext<'_>, command_id: &str, fallback: &str) -> Option<String> {
+    let Some(keymap) = ctx.active_keymap.as_ref() else {
+        return Some(fallback.to_string());
+    };
     let command = AppCommandId::new(command_id).ok()?;
-    Some(
-        ctx.active_keymap
-            .as_ref()
-            .and_then(|keymap| keymap.shortcut_label(&command))
-            .unwrap_or_else(|| fallback.to_string()),
-    )
+    keymap.shortcut_label(&command)
 }
+
+#[cfg(test)]
+mod shortcut_tests;
 
 /// Wrap a menu element in the toolbar-strip styled container used on
 /// secondary (undocked-tab) windows that keep their OS title bar.
