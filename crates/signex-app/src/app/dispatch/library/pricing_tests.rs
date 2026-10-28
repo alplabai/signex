@@ -197,7 +197,7 @@ fn closing_the_project_leaves_its_librarys_walk_running() {
     pick(&mut app, &row);
     let flag = cancel_flag(&app);
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::CloseProject(vec![0]),
+        ProjectTreeAction::CloseProject(vec![app.document_state.projects[0].id.to_string()]),
     )));
     let result = app.resolve_sheet_refs_blocking();
     let _ = app.update(Message::Project(

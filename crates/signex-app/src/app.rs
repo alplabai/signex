@@ -38,6 +38,7 @@ mod selection_request;
 pub(crate) mod sheet_hierarchy;
 mod state;
 pub(crate) use state::library_entry;
+pub(crate) use state::rule_profile_ui;
 pub(crate) mod stitched_netlist;
 mod symbol_history;
 mod undo_groups;
@@ -97,6 +98,11 @@ impl Signex {
         // the disk; the probe that fetches it starts here (#111).
         if let Some(probe) = self.start_project_fs_probe(false) {
             tasks.push(probe);
+        }
+        // Likewise the Navigator hierarchy: the refresh records the request,
+        // the sheet reads run here off-thread (#1470).
+        if let Some(assembly) = self.start_navigator_assembly() {
+            tasks.push(assembly);
         }
         if tasks.len() == 1 {
             return tasks.pop().expect("one task");

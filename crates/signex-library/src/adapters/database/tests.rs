@@ -172,3 +172,20 @@ fn encode_segment_handles_utf8() {
     // Multi-byte UTF-8 must escape every byte.
     assert_eq!(DatabaseAdapter::encode_segment("π"), "%CF%80");
 }
+
+#[test]
+fn pn_uniqueness_is_trimmed_case_sensitive_and_blank_exempt() {
+    use super::pn_unique::ensure_pn_free;
+    let row = |pn: &str| {
+        let mut r = crate::component::tests::fixture_row();
+        r.internal_pn = InternalPn::new(pn);
+        r
+    };
+    let a = row("PN-A");
+    let rows = vec![("t".to_string(), a.clone())];
+    assert!(ensure_pn_free(&rows, "PN-A", None).is_err());
+    assert!(ensure_pn_free(&rows, " PN-A ", None).is_err());
+    assert!(ensure_pn_free(&rows, "pn-a", None).is_ok());
+    assert!(ensure_pn_free(&rows, "  ", None).is_ok());
+    assert!(ensure_pn_free(&rows, "PN-A", Some(a.row_id)).is_ok());
+}

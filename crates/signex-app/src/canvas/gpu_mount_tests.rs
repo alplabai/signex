@@ -24,21 +24,21 @@ use signex_types::schematic::{
 use super::tests::test_prefs;
 use super::*;
 
-const WIDTH: u32 = 260;
-const HEIGHT: u32 = 200;
+pub(super) const WIDTH: u32 = 260;
+pub(super) const HEIGHT: u32 = 200;
 const SCALE: f32 = 8.0;
 const OFFSET: f32 = 20.0;
 /// The colour behind everything: what a layer that paints no background
 /// leaves showing through.
 const CLEAR: Color = Color::from_rgb(0.0, 0.0, 0.0);
 
-struct Gpu {
-    renderer: iced::Renderer,
+pub(super) struct Gpu {
+    pub(super) renderer: iced::Renderer,
     is_lavapipe: bool,
 }
 
 /// The renderer. A machine with no adapter fails loudly instead.
-fn gpu() -> Gpu {
+pub(super) fn gpu() -> Gpu {
     let require = std::env::var_os("SIGNEX_REQUIRE_LAVAPIPE").is_some_and(|v| v == "1");
     let instance = wgpu::Instance::default();
     let adapter =
@@ -95,14 +95,14 @@ fn gpu() -> Gpu {
 }
 
 /// An RGBA frame, `width` physical pixels across.
-struct Frame {
-    data: Vec<u8>,
-    width: u32,
-    height: u32,
+pub(super) struct Frame {
+    pub(super) data: Vec<u8>,
+    pub(super) width: u32,
+    pub(super) height: u32,
 }
 
 impl Frame {
-    fn px(&self, x: u32, y: u32) -> [u8; 4] {
+    pub(super) fn px(&self, x: u32, y: u32) -> [u8; 4] {
         let i = ((y * self.width + x) * 4) as usize;
         [
             self.data[i],
@@ -127,7 +127,7 @@ impl Frame {
     }
 }
 
-fn render(gpu: &mut Gpu, element: Element<'_, crate::app::Message>) -> Frame {
+pub(super) fn render(gpu: &mut Gpu, element: Element<'_, crate::app::Message>) -> Frame {
     render_at(gpu, element, 1.0)
 }
 

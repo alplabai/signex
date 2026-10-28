@@ -519,3 +519,49 @@ mod tests {
         assert_eq!(engine.history.len(), 2);
     }
 }
+
+#[cfg(test)]
+mod snapshot_cost_tests {
+    use super::*;
+    use crate::test_support::test_sheet;
+    use signex_types::schematic::{NoConnect, Point};
+
+    fn place() -> Command {
+        Command::PlaceNoConnect {
+            no_connect: NoConnect {
+                uuid: uuid::Uuid::new_v4(),
+                position: Point::new(0.0, 0.0),
+            },
+        }
+    }
+
+    #[test]
+    fn a_batch_of_n_takes_one_sheet_snapshot_not_n_plus_one() {
+        let mut engine = Engine::new(test_sheet()).unwrap();
+        engine
+            .execute_batch(std::iter::repeat_with(place).take(8))
+            .unwrap();
+        assert_eq!(engine.history.len(), 1);
+        assert_eq!(engine.pre_image_clones, 0, "inner commands must not clone");
+    }
+
+    #[test]
+    fn a_single_command_takes_one_snapshot() {
+        let mut engine = Engine::new(test_sheet()).unwrap();
+        engine.execute(place()).unwrap();
+        assert_eq!(engine.pre_image_clones, 1);
+    }
+
+    #[test]
+    fn a_command_that_changes_nothing_adds_no_undo_entry() {
+        let mut engine = Engine::new(test_sheet()).unwrap();
+        engine.execute(place()).unwrap();
+        engine.undo().unwrap();
+        let result = engine
+            .execute(Command::DeleteSelection { items: Vec::new() })
+            .unwrap();
+        assert!(!result.changed);
+        assert!(!engine.can_undo());
+        assert!(engine.can_redo(), "redo survives an unchanged command");
+    }
+}

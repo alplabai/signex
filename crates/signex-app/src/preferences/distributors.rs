@@ -8,6 +8,9 @@ use super::*;
 use iced::widget::{Space, column, container};
 use iced::{Element, Length};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Mount the live Distributor APIs panel inside the Preferences modal.
 ///
 /// The panel emits `LibraryMessage::Settings(_)`; we wrap every
@@ -24,7 +27,7 @@ pub(super) fn content_library_distributors<'a>(
         section_title("Library — Distributor APIs"),
         Space::new().height(8),
     ]
-    .padding([16, 20])
+    .padding([SP.xl, 20.0])
     .into();
 
     // The library panel returns `Element<'a, LibraryMessage>`. We

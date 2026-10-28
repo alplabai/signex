@@ -19,6 +19,10 @@ mod print_preview;
 
 use super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 // ── Submenu chevron — single source of truth ─────────────────────────
 //
 // Right-pointing angle quote (U+203A), NOT the BLACK RIGHT-POINTING
@@ -92,11 +96,16 @@ impl Signex {
                 // window id they render into.
                 super::state::WindowKind::UndockedTab { .. } => self.view_main_for(window_id),
                 super::state::WindowKind::DetachedPanel(kind) => {
-                    let panel = crate::panels::view_panel(*kind, &self.document_state.panel_ctx)
-                        .map(crate::dock::DockMessage::Panel)
-                        .map(Message::Dock);
+                    let ctx = &self.document_state.panel_ctx;
+                    let panel = if *kind == crate::panels::PanelKind::Components {
+                        crate::panels::components_panel::view(&self.library, ctx, &ctx.tokens)
+                            .map(crate::dock::DockMessage::Library)
+                    } else {
+                        crate::panels::view_panel(*kind, ctx).map(crate::dock::DockMessage::Panel)
+                    }
+                    .map(Message::Dock);
                     iced::widget::container(iced::widget::scrollable(panel))
-                        .padding(8)
+                        .padding(SP.m)
                         .into()
                 }
                 // Detached Component Preview window — render the same
@@ -160,8 +169,8 @@ impl Signex {
             is_last: true,
             accent_position: AccentPosition::Bottom,
         };
-        let inner =
-            container(row![text(title.to_string()).size(11).color(text_c)]).padding([4, 10]);
+        let inner = container(row![text(title.to_string()).size(TS.body).color(text_c)])
+            .padding([SP.s, 10.0]);
         let pill = TabPill::new(inner, pill_style);
         // Anchor near the cursor (right + below) so the pointer
         // remains visible while the ghost trails it.
@@ -448,10 +457,10 @@ impl Signex {
                 container(
                     column![
                         iced::widget::text("Component Editor — state not yet loaded")
-                            .size(13)
+                            .size(TS.title)
                             .color(crate::styles::ti(tokens.text_secondary)),
                     ]
-                    .spacing(4)
+                    .spacing(SP.s)
                     .align_x(iced::Alignment::Center),
                 )
                 .center(Length::Fill)
@@ -512,7 +521,7 @@ impl Signex {
                     // renderable rather than crashing.
                     return container(
                         iced::widget::text("Library Browser — state not yet loaded")
-                            .size(13)
+                            .size(TS.title)
                             .color(crate::styles::ti(tokens.text_secondary)),
                     )
                     .center(Length::Fill)
@@ -631,7 +640,7 @@ impl Signex {
             match Surface::select(self.document_state.active_project.is_some()) {
                 Surface::ProjectHint => start_screen::hint_view(tokens),
                 Surface::Start => {
-                    let open_shortcut = self.keymap_shortcut_label("open_document", "Ctrl+O");
+                    let open_shortcut = self.keymap_shortcut_label("open_document");
                     start_screen::view(
                         tokens,
                         &open_shortcut,

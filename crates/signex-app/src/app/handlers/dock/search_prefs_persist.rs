@@ -10,15 +10,6 @@ use crate::app::{Message, Signex};
 use crate::persist::{SEARCH_PREFS_SAVE_DEBOUNCE, SearchPrefsMsg, SearchPrefsWrite};
 
 impl Signex {
-    /// The Components-panel filter changed: record it and arm the debounce.
-    pub(crate) fn persist_component_filter_soon(&mut self, filter: &str) -> Task<Message> {
-        let armed = self
-            .document_state
-            .search_prefs
-            .set_component_filter(filter);
-        search_prefs_timer(armed)
-    }
-
     /// A Library Browser search box changed: record it and arm the debounce.
     pub(crate) fn persist_library_search_soon(
         &mut self,
@@ -60,6 +51,9 @@ impl Signex {
         // A pricing walk must not write into a library after quit, and an
         // in-flight save + commit is waited for.
         let next = self.wait_for_pricing_then(next);
+        // Profile edits still queued (the machine's rules, a profile edited in
+        // Preferences) are written before the process goes.
+        let next = self.wait_for_profile_writes_then(next);
         let search = self.flush_search_prefs_then(next);
         // After the document saves: a save supersedes its recovery copy, and
         // the removal that follows must finish before the process exits.

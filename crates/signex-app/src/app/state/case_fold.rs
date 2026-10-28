@@ -11,7 +11,7 @@
 /// An injectable input rather than a `cfg!(windows)` read inside the key
 /// function, so every combination runs on every host, including the
 /// Linux-only `cargo test` CI job.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CaseFold {
     /// `A.snxsch` and `a.snxsch` are one file on this volume.
     pub fold_case: bool,

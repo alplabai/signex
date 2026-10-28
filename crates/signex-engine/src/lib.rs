@@ -100,6 +100,10 @@ pub struct Engine {
     /// outside that loop, so every other path behaves exactly as before.
     /// See `exec/batch.rs`.
     history_suppressed: bool,
+    /// Full-sheet pre-image clones taken by `execute` (test hook for the
+    /// one-snapshot-per-batch guarantee).
+    #[cfg(test)]
+    pre_image_clones: usize,
     /// Re-drawn from a process-wide counter by every entry point that can
     /// change `document` (and at construction), so an off-thread save can
     /// tell whether the document moved on while it ran, even if the engine
@@ -191,6 +195,8 @@ impl Engine {
             redo_stack: Vec::new(),
             history_evicted: 0,
             history_suppressed: false,
+            #[cfg(test)]
+            pre_image_clones: 0,
             revision: crate::next_revision(),
             base_revision: 0,
             connectivity_revision: crate::next_revision(),
@@ -220,6 +226,8 @@ impl Engine {
             redo_stack: Vec::new(),
             history_evicted: 0,
             history_suppressed: false,
+            #[cfg(test)]
+            pre_image_clones: 0,
             revision: crate::next_revision(),
             base_revision: 0,
             connectivity_revision: crate::next_revision(),
@@ -385,7 +393,7 @@ impl Engine {
             return Err(refusal);
         }
         self.bump_revision();
-        let before = self.document.clone();
+        let before = self.pre_image(&cmd);
 
         let result = match cmd {
             Command::ReplaceDocument { .. }
@@ -439,6 +447,22 @@ impl Engine {
         };
         self.note_command_result(&result);
         result
+    }
+
+    /// The sheet as it stood before `cmd`, for the history entry. While
+    /// history is suppressed (inside a batch, or `execute_unrecorded`) the
+    /// entry is never written, so only a command whose rubber-band guard
+    /// reads the pre-image pays for a clone; the rest get an empty
+    /// placeholder that nothing reads.
+    fn pre_image(&mut self, cmd: &Command) -> SchematicSheet {
+        if self.history_suppressed && !cmd.reads_pre_image() {
+            return SchematicSheet::default();
+        }
+        #[cfg(test)]
+        {
+            self.pre_image_clones += 1;
+        }
+        self.document.clone()
     }
 
     pub fn document(&self) -> &SchematicSheet {

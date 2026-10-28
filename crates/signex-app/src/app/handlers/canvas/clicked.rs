@@ -376,9 +376,6 @@ impl Signex {
                     self.apply_engine_commands(signex_engine::place_power_port(sym), false, false);
                 }
             }
-            Tool::Component => {
-                let _ = self.place_selected_component(wx, wy);
-            }
             Tool::NoConnect => {
                 let nc = signex_types::schematic::NoConnect {
                     uuid: uuid::Uuid::new_v4(),

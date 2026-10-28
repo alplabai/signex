@@ -23,8 +23,8 @@ mod appearance;
 mod component_classes;
 mod distributors;
 mod editing;
-mod erc;
 mod keymap;
+mod profiles;
 mod widgets;
 
 use annotation::content_annotation;
@@ -32,8 +32,9 @@ use appearance::content_appearance;
 use component_classes::content_component_classes;
 use distributors::content_library_distributors;
 use editing::content_editing;
-use erc::content_erc;
 use keymap::content_keyboard_shortcuts;
+use profiles::content_profiles;
+pub use profiles::{ProfileAction, ProfilesMsg};
 
 // Shared style / text / button helpers live in `widgets`; re-export them
 // at their original module-local visibility so the shell here and every
@@ -56,8 +57,9 @@ pub enum PrefNav {
     /// import / export a profile and rebind individual commands via the
     /// chord recorder. Backed by `UiState::preferences_keymap_editor`.
     Keyboard,
-    /// Electrical Rule Check — per-rule severity override.
-    Erc,
+    /// Rule profiles: the library of named ERC rule sets, the default for
+    /// new projects, and the editor for each profile (#1608).
+    RuleProfiles,
     /// v0.9 Library settings — Distributor APIs, lifecycle defaults.
     LibraryDistributors,
     /// User-editable component-class registry — surfaces in the New
@@ -74,7 +76,7 @@ impl PrefNav {
         PrefNav::Annotation,
         PrefNav::Editing,
         PrefNav::Keyboard,
-        PrefNav::Erc,
+        PrefNav::RuleProfiles,
         PrefNav::LibraryDistributors,
         PrefNav::ComponentClasses,
     ];
@@ -85,7 +87,7 @@ impl PrefNav {
             PrefNav::Annotation => "Annotation",
             PrefNav::Editing => "Editing",
             PrefNav::Keyboard => "Keyboard Shortcuts",
-            PrefNav::Erc => "Electrical Rules",
+            PrefNav::RuleProfiles => "Rule Profiles",
             PrefNav::LibraryDistributors => "Distributor APIs",
             // Now a *seed* pane — the actual class registry is
             // per-library inside each `.snxlib`'s manifest. This
@@ -102,7 +104,7 @@ impl PrefNav {
             PrefNav::Annotation => "Schematic",
             PrefNav::Editing => "Schematic",
             PrefNav::Keyboard => "System",
-            PrefNav::Erc => "Validation",
+            PrefNav::RuleProfiles => "Validation",
             PrefNav::LibraryDistributors => "Library",
             PrefNav::ComponentClasses => "Library",
         }
@@ -165,11 +167,9 @@ pub enum PrefMsg {
     ThemeExportFinished(Result<std::path::PathBuf, String>),
     /// Loaded JSON content from an import pick dialog.
     ThemeFileLoaded(String),
-    /// Set the severity override for an ERC rule. Setting the override
-    /// to the default value clears the entry instead.
-    DraftErcSeverity(signex_erc::RuleKind, signex_erc::Severity),
-    /// Clear every ERC severity override — reset to defaults.
-    ResetErcSeverities,
+    /// Rule Profiles pane (#1608). Its edits are written to the profile
+    /// files at once, so they are not drafts and never mark the dialog dirty.
+    Profiles(ProfilesMsg),
     /// Move an unloadable `prefs.json` aside so writes can resume from a
     /// fresh file, keeping the original on disk beside it (#602). Offered
     /// only from the banner, and the handler re-checks the file before
@@ -236,6 +236,7 @@ pub enum PrefMsg {
     KeymapExportFinished(Result<std::path::PathBuf, String>),
     /// Open the chord recorder for a specific binding.
     KeymapRecorderOpen {
+        slot: crate::keymap::BindingSlot,
         command: crate::keymap::AppCommandId,
         label: String,
         context: crate::keymap::ShortcutContext,
@@ -303,7 +304,9 @@ pub struct PrefsView<'a> {
     /// Appearance ▸ theme import/export status line. Empty renders nothing.
     pub theme_status: &'a str,
     pub dirty: bool,
-    pub erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    pub profiles: &'a crate::app::rule_profile_ui::ProfileManager,
+    /// The profile new projects start from; `None` is automatic.
+    pub default_profile: Option<&'a str>,
     pub distributor_settings: &'a crate::library::state::DistributorSettings,
     pub panel_tokens: &'a signex_types::theme::ThemeTokens,
     pub draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
@@ -599,7 +602,8 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_annotate_undo,
         draft_move_keeps_wires,
         draft_autosave_enabled,
-        erc_overrides,
+        profiles,
+        default_profile,
         distributor_settings,
         panel_tokens,
         draft_component_classes,
@@ -616,7 +620,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         PrefNav::Appearance => content_appearance(v),
         PrefNav::Annotation => content_annotation(draft_annotate_undo),
         PrefNav::Editing => content_editing(draft_move_keeps_wires, draft_autosave_enabled),
-        PrefNav::Erc => content_erc(erc_overrides),
+        PrefNav::RuleProfiles => content_profiles(profiles, default_profile, panel_tokens),
         // Library → Distributor APIs — the library subsystem owns
         // the actual form
         // (`crate::library::settings::distributor_apis::view`); we

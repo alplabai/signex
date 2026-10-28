@@ -659,3 +659,55 @@ pub fn point_to_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f6
     let proj_y = ay + t * dy;
     ((px - proj_x).powi(2) + (py - proj_y).powi(2)).sqrt()
 }
+
+#[cfg(test)]
+mod lib_symbol_table_tests {
+    use super::*;
+
+    fn symbol(id: &str) -> LibSymbol {
+        LibSymbol {
+            id: id.to_string(),
+            reference: "U".into(),
+            value: String::new(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            description: "d".into(),
+            keywords: String::new(),
+            fp_filters: String::new(),
+            in_bom: true,
+            on_board: true,
+            in_pos_files: true,
+            duplicate_pin_numbers_are_jumpers: false,
+            graphics: Vec::new(),
+            pins: Vec::new(),
+            show_pin_numbers: true,
+            show_pin_names: true,
+            pin_name_offset: 0.0,
+        }
+    }
+
+    #[test]
+    fn serialises_byte_identically_to_the_plain_map() {
+        let mut plain = HashMap::new();
+        plain.insert("A:B".to_string(), symbol("A:B"));
+        let table: LibSymbolTable = plain.clone().into_iter().collect();
+
+        let from_table = serde_json::to_string(&table).unwrap();
+        assert_eq!(from_table, serde_json::to_string(&plain).unwrap());
+
+        let back: LibSymbolTable = serde_json::from_str(&from_table).unwrap();
+        assert_eq!(serde_json::to_string(&back).unwrap(), from_table);
+    }
+
+    #[test]
+    fn a_copy_shares_until_mutated_and_the_original_is_untouched() {
+        let mut live: LibSymbolTable = [("A:B".to_string(), symbol("A:B"))].into_iter().collect();
+        let snapshot = live.clone();
+        assert!(live.shares_storage_with(&snapshot));
+
+        live.insert("C:D".to_string(), symbol("C:D"));
+        assert!(!live.shares_storage_with(&snapshot));
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(live.len(), 2);
+    }
+}

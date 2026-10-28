@@ -1,8 +1,7 @@
 //! In-memory state for the Library subsystem (DBLib model).
 //!
-//! Owned by [`crate::app::Signex::library`]. In the v0.9-refactor-2
-//! model, components are rows inside per-category TSV tables under
-//! `<lib>/tables/<category>.tsv`, addressed by
+//! Owned by [`crate::app::Signex::library`]. Components are rows inside per-category TSV
+//! tables under `<lib>/tables/<category>.tsv`, addressed by
 //! `(library_path, table, row_id)`. The main pieces:
 //!
 //! * `set` — `signex_library::LibrarySet`, the cross-library resolver
@@ -76,9 +75,10 @@ impl EditorAddress {
 /// Mirrors plan §6 "Lifecycle, tagging, distributors": rows tagged
 /// `Released`/`InReview`/`Draft` count as "active" for filtering, while
 /// `Deprecated` and `Obsolete` rows are both hidden by default
-/// (`Deprecated` rows are tinted yellow once `IncludeDeprecated` shows them). Stage 18 surfaces these as a single dropdown
-/// pill in the browser header so users can pivot the visible row set
-/// without touching every row's lifecycle field.
+/// (`Deprecated` rows are tinted yellow once `IncludeDeprecated` shows
+/// them). Stage 18 surfaces these as a single dropdown pill in the
+/// browser header so users can pivot the visible row set without
+/// touching every row's lifecycle field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum LifecycleFilter {
     /// Default — show `Released` / `InReview` / `Draft`. Hides
@@ -495,6 +495,10 @@ pub struct LibraryState {
     /// Mounted path of the bundled stock library; `None` when it was not
     /// found or failed to mount. Set once at bootstrap.
     pub stock_library: Option<PathBuf>,
+    /// Where the bundled stock library was resolved, mounted or not. A
+    /// stock library that fails to open is never mounted, so only this
+    /// field lets the open-failure recovery flows recognise it (#814).
+    pub stock_library_root: Option<PathBuf>,
     /// Components Panel UI state — collapsed sections + substring
     /// filter. Stage 9 ships the simple substring matcher; the full
     /// search syntax (plan §5) is polish work.
@@ -696,6 +700,7 @@ mod refresh;
 mod refresh_tests;
 mod relocate;
 mod symbol_choice;
+mod table_scan;
 #[cfg(test)]
 mod tests;
 mod under_folder;

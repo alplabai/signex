@@ -19,8 +19,12 @@ use crate::menu_bar::cmd_label;
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Keyboard-shortcut hints for the canvas menu, resolved from the active
-/// keymap profile (with the historic Altium defaults as fallbacks) before
+/// keymap profile (empty when the profile does not bind the command) before
 /// the pure builder runs.
 pub(super) struct CanvasShortcuts {
     pub find: String,
@@ -80,8 +84,8 @@ impl Signex {
             let row_label = *label;
             let row_step = *step_mm;
             let btn = button(
-                container(text(row_label).size(11).color(lbl_color))
-                    .padding([4, 12])
+                container(text(row_label).size(TS.body).color(lbl_color))
+                    .padding([SP.s, SP.l])
                     .width(iced::Length::Fill),
             )
             .padding(0)
@@ -105,7 +109,7 @@ impl Signex {
         }
 
         container(col)
-            .padding(4)
+            .padding(SP.s)
             .style(move |_: &iced::Theme| iced::widget::container::Style {
                 background: Some(iced::Background::Color(panel_bg)),
                 border: iced::Border {
@@ -130,14 +134,14 @@ impl Signex {
             .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet);
         let drawing_selected = !self.selected_drawing_ids().is_empty();
         let active_submenu = self.interaction_state.context_submenu;
-        // Shortcut hints read from the active keymap profile, falling
-        // back to the historic Altium defaults when a command is unbound.
+        // Shortcut hints read from the active keymap profile; a command
+        // it does not bind has none.
         let sc = CanvasShortcuts {
-            find: self.keymap_shortcut_label("find", "Ctrl+F"),
-            cut: self.keymap_shortcut_label("cut", "Ctrl+X"),
-            copy: self.keymap_shortcut_label("copy", "Ctrl+C"),
-            paste: self.keymap_shortcut_label("paste", "Ctrl+V"),
-            smart_paste: self.keymap_shortcut_label("smart_paste", "Shift+Ctrl+V"),
+            find: self.keymap_shortcut_label("find"),
+            cut: self.keymap_shortcut_label("cut"),
+            copy: self.keymap_shortcut_label("copy"),
+            paste: self.keymap_shortcut_label("paste"),
+            smart_paste: self.keymap_shortcut_label("smart_paste"),
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let entries = canvas_menu_entries(
@@ -247,7 +251,7 @@ pub(super) fn canvas_menu_entries(
         if drawing_selected {
             v.push(submenu_launcher(
                 tokens,
-                None,
+                Some(ic::icon_dd_align_menu(tid)),
                 "Arrange",
                 ContextSubmenu::Arrange,
                 active_submenu == Some(ContextSubmenu::Arrange),
