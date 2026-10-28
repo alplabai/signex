@@ -112,6 +112,7 @@ fn library_id_is_the_pinned_constant() {
     );
     assert_eq!(
         stock_gen::manifest::stock_library_file()
+            .expect("stock library file")
             .manifest
             .library_id,
         committed.manifest.library_id
@@ -119,15 +120,15 @@ fn library_id_is_the_pinned_constant() {
 }
 
 #[test]
-fn manifest_declares_local_git_personal_empty_schema_and_classes() {
-    let lf = stock_gen::manifest::stock_library_file();
+fn manifest_declares_local_git_personal_schema_classes_and_rows() {
+    let lf = stock_gen::manifest::stock_library_file().expect("stock library file");
     assert_eq!(lf.manifest.mode, LibraryMode::LocalGit);
     assert_eq!(lf.manifest.workflow.mode, WorkflowMode::Personal);
     assert!(!lf.manifest.classes.is_empty(), "class registry is seeded");
     assert_eq!(lf.tables.len(), 1);
     let table = lf.tables.values().next().expect("one table");
     assert!(!table.columns.is_empty(), "schema is declared");
-    assert!(table.rows.is_empty(), "no component rows yet");
+    assert_eq!(table.rows.len(), 34, "one row per non-power stock symbol");
 }
 
 #[test]

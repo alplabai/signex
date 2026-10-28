@@ -251,6 +251,8 @@ mod library_place_designator_standard;
 mod library_place_symbol;
 #[path = "regression/library_place_ui.rs"]
 mod library_place_ui;
+#[path = "regression/library_stock_place.rs"]
+mod library_stock_place;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
 // #1231 — Properties lists a placed symbol's library row documents.
