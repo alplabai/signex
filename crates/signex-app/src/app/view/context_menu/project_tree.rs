@@ -170,7 +170,7 @@ impl Signex {
                     "Validate Project",
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::ValidateProject(
-                        path.clone(),
+                        key.clone(),
                     ))),
                 ));
                 v.push(submenu_launcher(
@@ -185,7 +185,7 @@ impl Signex {
                     "Add Existing to Project...",
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                        A::AddExistingToProject(path.clone()),
+                        A::AddExistingToProject(key.clone()),
                     )),
                 ));
                 v.push(save_entry(can_save));
@@ -194,7 +194,7 @@ impl Signex {
                     "Rename...",
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                        A::OpenProjectRenameDialog(path.clone()),
+                        A::OpenProjectRenameDialog(key.clone()),
                     )),
                 ));
                 v.push(DropdownEntry::Separator);
@@ -215,7 +215,7 @@ impl Signex {
                     "Close Project",
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::CloseProject(
-                        path.clone(),
+                        key.clone(),
                     ))),
                 ));
                 v.push(if has_project_dir {
@@ -224,7 +224,7 @@ impl Signex {
                         "Explore",
                         "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                            A::RevealInExplorer(path.clone()),
+                            A::RevealInExplorer(key.clone()),
                         )),
                     )
                 } else {
@@ -242,7 +242,7 @@ impl Signex {
                     "Project Options...",
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenProjectOptions(
-                        path.clone(),
+                        key.clone(),
                     ))),
                 ));
                 // Enable Version Control — only surfaced when the project
@@ -259,7 +259,7 @@ impl Signex {
                         "Enable Version Control...",
                         "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                            A::OpenEnableVersionControl(path.clone()),
+                            A::OpenEnableVersionControl(key.clone()),
                         )),
                     ));
                 }
@@ -328,7 +328,7 @@ impl Signex {
                     toggle_label,
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::ToggleNode(
-                        path.clone(),
+                        key.clone(),
                     ))),
                 ));
                 v.push(dd_msg(
@@ -366,7 +366,7 @@ impl Signex {
                     "Open",
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenNode(
-                        path.clone(),
+                        key.clone(),
                     ))),
                 ));
                 v.push(DropdownEntry::Separator);
@@ -376,7 +376,7 @@ impl Signex {
                         "Explore",
                         "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                            A::RevealInExplorer(path.clone()),
+                            A::RevealInExplorer(key.clone()),
                         )),
                     )
                 } else {
@@ -388,7 +388,7 @@ impl Signex {
                     "Rename...",
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenRenameDialog(
-                        path.clone(),
+                        key.clone(),
                     ))),
                 ));
                 v.push(dd_msg(
@@ -396,7 +396,7 @@ impl Signex {
                     "Remove from Project",
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenRemoveDialog(
-                        path.clone(),
+                        key.clone(),
                     ))),
                 ));
                 v.push(DropdownEntry::Separator);
@@ -424,7 +424,7 @@ impl Signex {
                     label,
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::ToggleNode(
-                        path.clone(),
+                        key.clone(),
                     ))),
                 ));
                 v.push(dd_msg(
