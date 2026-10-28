@@ -69,8 +69,8 @@ pub use footprint_context::{
     FootprintEditorPanelContext, FootprintLibInternalRow, FootprintLibSibling, FootprintModeKind,
     FootprintPadSummary, FootprintSelectedSilkSummary, FootprintSketchEntitySummary,
     FootprintSolveSummary, KeepoutKindFlag, KeepoutSummary, NumberingSchemeKindUi,
-    OverConstraintSummary, PadShapeParamSummary, PourSummary, SilkKindGeometry,
-    SketchPadAttrSummary, SnapOptionFlag,
+    OverConstraintSummary, PadShapeParamSummary, PourSummary, RejectedConflictSummary,
+    SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
 pub use library::LibraryRowDetail;
 pub(super) use library::{view_footprint_library, view_library_row_properties, view_sch_library};

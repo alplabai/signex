@@ -23,6 +23,7 @@ const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 // Submodule declarations (split from the original 4570-line file).
+mod conflicts;
 mod managers;
 mod pad;
 mod pad_stack_check;
