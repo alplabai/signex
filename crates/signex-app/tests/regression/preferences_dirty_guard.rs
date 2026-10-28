@@ -232,3 +232,27 @@ fn move_keeps_wires_draft_marks_dirty_and_discard_restores_it() {
     assert!(app.ui_state.preferences_draft_move_keeps_wires);
     assert!(!app.ui_state.preferences_dirty);
 }
+
+/// #1257 — "Select by drag direction" follows the same draft pattern.
+#[test]
+fn drag_direction_select_draft_marks_dirty_and_discard_restores_it() {
+    let (mut app, _t) = Signex::new();
+    app.ui_state.drag_direction_select = true;
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+    assert!(!app.ui_state.preferences_dirty);
+
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DraftDragDirectionSelect(false),
+    )));
+    assert!(app.ui_state.preferences_dirty, "a changed draft is unsaved");
+    assert!(
+        app.ui_state.drag_direction_select,
+        "not committed before Save"
+    );
+
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DiscardAndClose,
+    )));
+    assert!(app.ui_state.preferences_draft_drag_direction_select);
+    assert!(!app.ui_state.preferences_dirty);
+}

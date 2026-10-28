@@ -10,6 +10,7 @@ mod drag;
 mod drag_points;
 mod ghosts;
 mod hud_tag;
+mod measure;
 mod overlay;
 mod previews;
 mod scene;

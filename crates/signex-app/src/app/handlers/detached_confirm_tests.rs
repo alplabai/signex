@@ -248,7 +248,11 @@ fn a_lock_closes_the_menus_and_the_palette_behind_it() {
     let (mut app, _main) = quit_app();
     app.ui_state.command_palette.open = true;
     app.ui_state.panel_list_open = true;
-    app.interaction_state.context_menu = Some(crate::app::ContextMenuState { x: 10.0, y: 10.0 });
+    app.interaction_state.context_menu = Some(crate::app::ContextMenuState {
+        x: 10.0,
+        y: 10.0,
+        world: None,
+    });
     let _ = app.sync_detached_modals();
     assert!(app.interaction_state.context_menu.is_some(), "no lock yet");
     app.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState {
