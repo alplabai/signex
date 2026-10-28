@@ -156,8 +156,11 @@ impl HistoryEntry {
             DateTime::<Utc>::from_timestamp(author.when().seconds(), 0).unwrap_or_else(Utc::now);
         let full = commit.message().unwrap_or_default();
         let (subject, body) = match full.split_once('\n') {
-            Some((s, rest)) => (s.to_string(), rest.trim_start_matches('\n').to_string()),
-            None => (full.to_string(), String::new()),
+            Some((s, rest)) => (
+                s.trim_end().to_string(),
+                rest.trim_start_matches('\n').to_string(),
+            ),
+            None => (full.trim_end().to_string(), String::new()),
         };
         Self {
             sha: commit.id().to_string(),

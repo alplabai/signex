@@ -78,13 +78,13 @@ fn world_and_adapter(seed: u64) -> (Rng, World, tempfile::TempDir, LocalGitAdapt
 #[test]
 fn blank_part_numbers_never_conflict() {
     let (mut rng, w, _dir, adapter) = world_and_adapter(5);
-    for pn in ["", "  "] {
+    for pn in ["", "", "  ", "  "] {
         let id = rng.uuid();
         let mut row = random_row(&mut rng, &w, id);
         row.internal_pn = InternalPn::new(pn);
         adapter.insert_row("t", row, "draft").unwrap();
     }
-    assert_eq!(adapter.read_table("t").unwrap().len(), 2);
+    assert_eq!(adapter.read_table("t").unwrap().len(), 4);
 }
 
 #[test]
@@ -149,4 +149,19 @@ fn existing_table_with_refused_name_still_takes_rows() {
     };
     row.internal_pn = InternalPn::new("PN-LEGACY");
     adapter.insert_row("a.b", row, "x").unwrap();
+}
+
+#[test]
+fn history_subject_drops_a_trailing_carriage_return() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = git2::Repository::init(dir.path()).unwrap();
+    let sig = git2::Signature::now("t", "t@example.com").unwrap();
+    let tree = repo
+        .find_tree(repo.treebuilder(None).unwrap().write().unwrap())
+        .unwrap();
+    let id = repo
+        .commit(None, &sig, &sig, "x\r\n\r\nbody\r\n", &tree, &[])
+        .unwrap();
+    let entry = HistoryEntry::from_commit(&repo.find_commit(id).unwrap());
+    assert_eq!(entry.subject, "x");
 }
