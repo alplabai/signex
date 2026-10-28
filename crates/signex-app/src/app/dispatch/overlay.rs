@@ -17,6 +17,10 @@ impl Signex {
                 self.ui_state.panel_list_open = false;
                 self.show_panel(kind)
             }
+            OverlayMsg::PanelToggled(kind) => {
+                self.ui_state.panel_list_open = false;
+                self.toggle_panel(kind)
+            }
             OverlayMsg::OpenFind => self.handle_find_replace_open_requested(false),
             OverlayMsg::OpenReplace => self.handle_find_replace_open_requested(true),
             OverlayMsg::CloseKeyboardShortcuts => {
