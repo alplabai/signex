@@ -49,7 +49,8 @@ impl Signex {
                 && !self.modal_detached(crate::app::state::ModalId::NetlistIncompletePrompt))
             || (self.document_state.preview.is_some()
                 && !self.modal_detached(crate::app::state::ModalId::PrintPreview))
-            || self.ui_state.net_color_custom.show
+            || (self.ui_state.net_color_custom.show
+                && !self.modal_detached(crate::app::state::ModalId::NetColorCustom))
     }
 
     /// Export-error modal — appears when PDF / netlist / BOM export
@@ -114,7 +115,9 @@ impl Signex {
     /// precise RGB inputs side-by-side. Pushes the dismiss backdrop
     /// then the picker card.
     pub(in crate::app::view) fn net_color_custom_overlay(&self) -> Vec<Element<'_, Message>> {
-        if !self.ui_state.net_color_custom.show {
+        if !self.ui_state.net_color_custom.show
+            || self.modal_detached(crate::app::state::ModalId::NetColorCustom)
+        {
             return Vec::new();
         }
         vec![

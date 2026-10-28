@@ -12,6 +12,7 @@ mod erc_run_tests;
 pub(crate) use annotate_preview::{AnnotatePreviewCache, AnnotatePreviewLoad};
 pub(crate) use erc_job::ErcRunOutcome;
 mod modals;
+pub(crate) use modals::{detached_modal_settings, modal_size};
 mod net_focus;
 mod rule_profiles;
 #[cfg(test)]

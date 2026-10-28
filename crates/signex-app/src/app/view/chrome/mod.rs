@@ -249,7 +249,11 @@ impl Signex {
         dialog
     }
 
-    pub(super) fn view_detached_modal(&self, modal: super::state::ModalId) -> Element<'_, Message> {
+    pub(super) fn view_detached_modal(
+        &self,
+        window: iced::window::Id,
+        modal: super::state::ModalId,
+    ) -> Element<'_, Message> {
         use super::state::ModalId;
         match modal {
             ModalId::AnnotateDialog => self.view_annotate_dialog_body(),
@@ -282,6 +286,29 @@ impl Signex {
                 &self.ui_state.passive_calculator,
             ),
             ModalId::CreateChildSheet => self.view_create_child_sheet_body(),
+            ModalId::LibraryPicker
+            | ModalId::LibraryEditRow
+            | ModalId::LibraryPrimitivePicker
+            | ModalId::LibraryDocumentOptions
+            | ModalId::LibraryCreateOptions
+            | ModalId::LibraryUpdates
+            | ModalId::LibraryCloseConfirm
+            | ModalId::LibraryDeleteConfirm
+            | ModalId::LibraryRecovery
+            | ModalId::NetColorCustom => {
+                // The card centred in its own window: no scrim, and for the
+                // per-browser dialogs the browser that opened this window.
+                let owner = self.ui_state.library_modal_owners.get(&window);
+                match self.library_dialog_card(modal, owner.map(std::path::PathBuf::as_path)) {
+                    Some(card) => iced::widget::container(card)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .center_x(Length::Fill)
+                        .center_y(Length::Fill)
+                        .into(),
+                    None => iced::widget::Space::new().into(),
+                }
+            }
             ModalId::ErrorNotice => self.view_error_notice(),
             ModalId::NetlistIncompletePrompt => self.view_netlist_incomplete_prompt(),
             ModalId::AutosaveRecovery => match self.document_state.autosave.current_offer() {

@@ -176,6 +176,7 @@ impl Signex {
                 // reattaching a phantom copy to the main window on the
                 // next view frame. Phase 3 will add undocked-tab cleanup
                 // here too.
+                let owner = self.ui_state.library_modal_owners.remove(&id);
                 if let Some(kind) = self.ui_state.windows.remove(&id) {
                     use super::state::{ModalId, WindowKind};
                     match kind {
@@ -240,11 +241,36 @@ impl Signex {
                             ModalId::NetlistIncompletePrompt => {
                                 self.document_state.netlist_incomplete_prompt = None
                             }
-                            ModalId::AutosaveRecovery => {}
+                            ModalId::AutosaveRecovery => self.note_recovery_window_vanished(),
                             ModalId::ProjectCloseConfirm => {
                                 self.ui_state.project_close_confirm = None
                             }
                             ModalId::AppQuitConfirm => self.ui_state.app_quit_confirm = None,
+                            // A window that vanished without a close request
+                            // is a Cancel: nothing is written or deleted.
+                            ModalId::LibraryPicker => self.library.picker = None,
+                            ModalId::LibraryPrimitivePicker => self.library.primitive_picker = None,
+                            ModalId::LibraryDocumentOptions => self.library.document_options = None,
+                            ModalId::LibraryCreateOptions => self.library.create_options = None,
+                            ModalId::LibraryUpdates => self.library.library_updates = None,
+                            ModalId::LibraryCloseConfirm => {
+                                self.library.close_library_confirm = None
+                            }
+                            ModalId::NetColorCustom => self.ui_state.net_color_custom.show = false,
+                            // Never auto-decided: the sync shows it again.
+                            ModalId::LibraryRecovery => self.note_recovery_window_vanished(),
+                            ModalId::LibraryEditRow | ModalId::LibraryDeleteConfirm => {
+                                if let Some(path) = owner {
+                                    if let Some(browser) =
+                                        self.library.library_browsers.get_mut(&path)
+                                    {
+                                        match modal {
+                                            ModalId::LibraryEditRow => browser.edit_modal = None,
+                                            _ => browser.delete_confirm = None,
+                                        }
+                                    }
+                                }
+                            }
                         },
                         // Closing an undocked-tab window is the reattach
                         // gesture — the tab itself stays in
@@ -466,7 +492,7 @@ impl Signex {
                     self.handle_app_quit_requested()
                 } else if let Some(super::state::WindowKind::DetachedModal(modal)) =
                     self.ui_state.windows.get(&id).cloned()
-                    && let Some(close) = Self::detached_modal_close_message(modal)
+                    && let Some(close) = self.window_close_message(id, modal)
                 {
                     // The native close button of a detached modal runs
                     // the modal's own close message, so the dirty guard

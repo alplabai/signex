@@ -159,6 +159,12 @@ pub struct UiState {
     /// Text inputs were unfocused for the confirm dialog that now locks the
     /// main window (once per lock).
     pub lock_unfocused: bool,
+    /// How often a recovery prompt's window vanished without being answered;
+    /// after two it stays in the main window instead of reopening.
+    pub recovery_window_vanished: u8,
+    /// Which library browser opened each per-browser dialog window (edit row,
+    /// delete confirm): the window reads and answers for THAT browser.
+    pub library_modal_owners: std::collections::HashMap<iced::window::Id, std::path::PathBuf>,
     /// Logical size of the monitor holding the main window, when known.
     pub main_window_monitor_size: Option<iced::Size>,
     /// Opt-in autosave of recovery copies (#104). Off by default.

@@ -277,16 +277,9 @@ impl Signex {
         .then(|| self.view_erc_dialog())
     }
 
-    /// v0.9 Library — picker modal overlay. Centered card on a dim
-    /// backdrop; Esc dismisses via `OpenOverlays::escape_message`'s
-    /// `library_picker_open` rung (`app/bootstrap/subscription.rs`), the
-    /// close X is the mouse-click path.
-    pub(in crate::app::view) fn library_picker_overlay(&self) -> Option<Element<'_, Message>> {
-        let document = &self.document_state;
-        let picker = self.library.picker.as_ref()?;
-        let card =
-            crate::library::picker::view(picker, &document.panel_ctx.tokens).map(Message::Library);
-        let backdrop = container(card)
+    /// The dim backdrop the in-window library cards sit on.
+    fn library_scrim<'a>(card: Element<'a, Message>) -> Element<'a, Message> {
+        container(card)
             .width(Length::Fill)
             .height(Length::Fill)
             .center_x(Length::Fill)
@@ -296,202 +289,176 @@ impl Signex {
                     0.0, 0.0, 0.0, 0.45,
                 ))),
                 ..Default::default()
-            });
-        Some(backdrop.into())
+            })
+            .into()
     }
 
-    /// Edit Component Details modal, opened from the browser action row's
-    /// "Edit Details" button. First browser with an open modal wins.
-    pub(in crate::app::view) fn edit_row_modal_overlay(&self) -> Vec<Element<'_, Message>> {
-        let document = &self.document_state;
-        let mut out: Vec<Element<'_, Message>> = Vec::new();
-        for (lib_path, browser_state) in &self.library.library_browsers {
-            if let Some(edit) = browser_state.edit_modal.as_ref() {
-                // Class registry is per-library — read from the
-                // editing library's manifest. Falls back to the
-                // user's prefs default when the library has no
-                // classes registered yet.
-                let row_classes: Vec<crate::fonts::ComponentClassEntry> = self
-                    .library
-                    .library_at(lib_path)
-                    .map(|lib| {
-                        lib.cached_classes
-                            .iter()
-                            .map(|c| crate::fonts::ComponentClassEntry {
-                                key: c.key.clone(),
-                                label: c.label.clone(),
-                            })
-                            .collect()
+    /// The card of a library dialog, shared by the in-window overlay (on a
+    /// scrim) and the dialog's own window (centred, no scrim). `owner` names the
+    /// browser for the two per-browser dialogs; `None` there means the first
+    /// browser with the dialog open.
+    pub(in crate::app::view) fn library_dialog_card(
+        &self,
+        modal: crate::app::state::ModalId,
+        owner: Option<&std::path::Path>,
+    ) -> Option<Element<'_, Message>> {
+        use crate::app::state::ModalId;
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let lib = &self.library;
+        let card: Element<'_, Message> = match modal {
+            ModalId::LibraryPicker => {
+                crate::library::picker::view(lib.picker.as_ref()?, tokens).map(Message::Library)
+            }
+            ModalId::LibraryPrimitivePicker => {
+                crate::library::primitive_picker::view(lib, lib.primitive_picker.as_ref()?, tokens)
+                    .map(Message::Library)
+            }
+            ModalId::LibraryDocumentOptions => {
+                crate::library::document_options::view(lib.document_options.as_ref()?, tokens)
+                    .map(Message::Library)
+            }
+            ModalId::LibraryCreateOptions => {
+                crate::library::create_options::view(lib.create_options.as_ref()?, tokens)
+                    .map(Message::Library)
+            }
+            ModalId::LibraryCloseConfirm => {
+                crate::library::close_prompt::view(lib, lib.close_library_confirm.as_ref()?, tokens)
+                    .map(Message::Library)
+            }
+            ModalId::LibraryRecovery => {
+                crate::library::recovery::view(lib.recovery.as_ref()?, tokens).map(Message::Library)
+            }
+            ModalId::LibraryUpdates => {
+                crate::library::updates_dialog::view(lib.library_updates.as_ref()?, tokens)
+                    .map(Message::Library)
+            }
+            ModalId::LibraryEditRow => {
+                let (path, edit) = self.browser_modal(owner, |b| b.edit_modal.as_ref())?;
+                let classes = self.row_classes_for(path);
+                crate::library::edit_row_modal::view(path, edit, tokens, classes)
+                    .map(Message::Library)
+            }
+            ModalId::LibraryDeleteConfirm => {
+                let (path, confirm) = self.browser_modal(owner, |b| b.delete_confirm.as_ref())?;
+                crate::library::edit_row_modal::view_delete_confirm(path, confirm, tokens)
+                    .map(Message::Library)
+            }
+            ModalId::NetColorCustom => {
+                if !self.ui_state.net_color_custom.show {
+                    return None;
+                }
+                self.view_net_color_custom_picker()
+            }
+            _ => return None,
+        };
+        Some(card)
+    }
+
+    /// The browser (and its dialog state) a per-browser dialog is about:
+    /// `owner` when given, else the first browser that has one open and no
+    /// window of its own.
+    fn browser_modal<'a, T>(
+        &'a self,
+        owner: Option<&std::path::Path>,
+        pick: impl Fn(&'a crate::library::state::LibraryBrowserState) -> Option<&'a T>,
+    ) -> Option<(&'a std::path::Path, &'a T)> {
+        match owner {
+            Some(path) => {
+                let (key, browser) = self.library.library_browsers.get_key_value(path)?;
+                pick(browser).map(|state| (key.as_path(), state))
+            }
+            None => self
+                .library
+                .library_browsers
+                .iter()
+                .find_map(|(key, browser)| {
+                    (!self.browser_modal_has_window(key))
+                        .then(|| pick(browser).map(|state| (key.as_path(), state)))
+                        .flatten()
+                }),
+        }
+    }
+
+    /// Class registry of the editing library, else the user's default.
+    fn row_classes_for(
+        &self,
+        lib_path: &std::path::Path,
+    ) -> Vec<crate::fonts::ComponentClassEntry> {
+        let from_lib: Vec<crate::fonts::ComponentClassEntry> = self
+            .library
+            .library_at(lib_path)
+            .map(|lib| {
+                lib.cached_classes
+                    .iter()
+                    .map(|c| crate::fonts::ComponentClassEntry {
+                        key: c.key.clone(),
+                        label: c.label.clone(),
                     })
-                    .unwrap_or_default();
-                let row_classes = if row_classes.is_empty() {
-                    self.ui_state.component_classes.clone()
-                } else {
-                    row_classes
-                };
-                let card = crate::library::edit_row_modal::view(
-                    lib_path.as_path(),
-                    edit,
-                    &document.panel_ctx.tokens,
-                    row_classes,
-                )
-                .map(Message::Library);
-                let backdrop = container(card)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .center_x(Length::Fill)
-                    .center_y(Length::Fill)
-                    .style(|_: &iced::Theme| iced::widget::container::Style {
-                        background: Some(iced::Background::Color(iced::Color::from_rgba(
-                            0.0, 0.0, 0.0, 0.45,
-                        ))),
-                        ..Default::default()
-                    });
-                out.push(backdrop.into());
-                break; // only one edit modal at a time
-            }
+                    .collect()
+            })
+            .unwrap_or_default();
+        if from_lib.is_empty() {
+            self.ui_state.component_classes.clone()
+        } else {
+            from_lib
         }
-        out
     }
 
-    /// Delete Selected confirm modal (Deliverable D). First browser with
-    /// a pending confirm wins.
+    /// Whether `path`'s browser has a dialog window of its own (either kind).
+    pub(crate) fn browser_modal_has_window(&self, path: &std::path::Path) -> bool {
+        self.ui_state
+            .library_modal_owners
+            .values()
+            .any(|owner| owner == path)
+    }
+
+    fn library_overlay(&self, modal: crate::app::state::ModalId) -> Option<Element<'_, Message>> {
+        if self.modal_detached(modal) {
+            return None;
+        }
+        self.library_dialog_card(modal, None)
+            .map(Self::library_scrim)
+    }
+
+    pub(in crate::app::view) fn library_picker_overlay(&self) -> Option<Element<'_, Message>> {
+        self.library_overlay(crate::app::state::ModalId::LibraryPicker)
+    }
+
+    /// Edit Component Details modal; the first browser with one open (and no
+    /// window of its own) is painted.
+    pub(in crate::app::view) fn edit_row_modal_overlay(&self) -> Vec<Element<'_, Message>> {
+        self.library_dialog_card(crate::app::state::ModalId::LibraryEditRow, None)
+            .map(Self::library_scrim)
+            .into_iter()
+            .collect()
+    }
+
+    /// Delete Selected confirm modal; same rule as the edit modal.
     pub(in crate::app::view) fn delete_confirm_overlay(&self) -> Option<Element<'_, Message>> {
-        let document = &self.document_state;
-        for (lib_path, browser_state) in &self.library.library_browsers {
-            if let Some(confirm) = browser_state.delete_confirm.as_ref() {
-                let card = crate::library::edit_row_modal::view_delete_confirm(
-                    lib_path.as_path(),
-                    confirm,
-                    &document.panel_ctx.tokens,
-                )
-                .map(Message::Library);
-                let backdrop = container(card)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .center_x(Length::Fill)
-                    .center_y(Length::Fill)
-                    .style(|_: &iced::Theme| iced::widget::container::Style {
-                        background: Some(iced::Background::Color(iced::Color::from_rgba(
-                            0.0, 0.0, 0.0, 0.45,
-                        ))),
-                        ..Default::default()
-                    });
-                return Some(backdrop.into());
-            }
-        }
-        None
+        self.library_dialog_card(crate::app::state::ModalId::LibraryDeleteConfirm, None)
+            .map(Self::library_scrim)
     }
 
-    /// Primitive picker (Pick Symbol / Pick Footprint).
     pub(in crate::app::view) fn primitive_picker_overlay(&self) -> Option<Element<'_, Message>> {
-        let document = &self.document_state;
-        let picker = self.library.primitive_picker.as_ref()?;
-        let card = crate::library::primitive_picker::view(
-            &self.library,
-            picker,
-            &document.panel_ctx.tokens,
-        )
-        .map(Message::Library);
-        let backdrop = container(card)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .style(|_: &iced::Theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    0.0, 0.0, 0.0, 0.45,
-                ))),
-                ..Default::default()
-            });
-        Some(backdrop.into())
+        self.library_overlay(crate::app::state::ModalId::LibraryPrimitivePicker)
     }
 
-    /// Tools ▸ Document Options modal — Altium SchLib parity.
     pub(in crate::app::view) fn document_options_overlay(&self) -> Option<Element<'_, Message>> {
-        let document = &self.document_state;
-        let state = self.library.document_options.as_ref()?;
-        let card = crate::library::document_options::view(state, &document.panel_ctx.tokens)
-            .map(Message::Library);
-        let backdrop = container(card)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .style(|_: &iced::Theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    0.0, 0.0, 0.0, 0.45,
-                ))),
-                ..Default::default()
-            });
-        Some(backdrop.into())
+        self.library_overlay(crate::app::state::ModalId::LibraryDocumentOptions)
     }
 
-    /// "Library Options" modal — pops between the New Library Save-As
-    /// dialog and the actual `LocalGitAdapter::init` so the user can opt
-    /// into Git LFS for binary 3D models before anything hits disk.
     pub(in crate::app::view) fn create_options_overlay(&self) -> Option<Element<'_, Message>> {
-        let document = &self.document_state;
-        let state = self.library.create_options.as_ref()?;
-        let card = crate::library::create_options::view(state, &document.panel_ctx.tokens)
-            .map(Message::Library);
-        let backdrop = container(card)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .style(|_: &iced::Theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    0.0, 0.0, 0.0, 0.45,
-                ))),
-                ..Default::default()
-            });
-        Some(backdrop.into())
+        self.library_overlay(crate::app::state::ModalId::LibraryCreateOptions)
     }
 
-    /// Close-Library — Unsaved Drafts confirm modal.
     pub(in crate::app::view) fn close_library_confirm_overlay(
         &self,
     ) -> Option<Element<'_, Message>> {
-        let document = &self.document_state;
-        let confirm = self.library.close_library_confirm.as_ref()?;
-        let card =
-            crate::library::close_prompt::view(&self.library, confirm, &document.panel_ctx.tokens)
-                .map(Message::Library);
-        let backdrop = container(card)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .style(|_: &iced::Theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    0.0, 0.0, 0.0, 0.45,
-                ))),
-                ..Default::default()
-            });
-        Some(backdrop.into())
+        self.library_overlay(crate::app::state::ModalId::LibraryCloseConfirm)
     }
 
-    /// Library recovery dialog (Stage 10). Surfaces missing-snxlib,
-    /// missing-.git, and broken primitive bindings as user-facing modals
-    /// instead of silent log lines.
     pub(in crate::app::view) fn library_recovery_overlay(&self) -> Option<Element<'_, Message>> {
-        let document = &self.document_state;
-        let dialog = self.library.recovery.as_ref()?;
-        let card = crate::library::recovery::view(dialog, &document.panel_ctx.tokens)
-            .map(Message::Library);
-        let backdrop = container(card)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .style(|_: &iced::Theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    0.0, 0.0, 0.0, 0.45,
-                ))),
-                ..Default::default()
-            });
-        Some(backdrop.into())
+        self.library_overlay(crate::app::state::ModalId::LibraryRecovery)
     }
 
     /// Command palette dropdown (Ctrl+Shift+P). Painted last so it sits
@@ -508,25 +475,7 @@ impl Signex {
         ]
     }
 
-    /// "Library Updates Available" modal (Stage 16 §3.5). Opened on
-    /// schematic open under Team workflow mode when a placed Symbol's
-    /// `library_version` drifts from the source row's current version.
     pub(in crate::app::view) fn library_updates_overlay(&self) -> Option<Element<'_, Message>> {
-        let document = &self.document_state;
-        let state = self.library.library_updates.as_ref()?;
-        let card = crate::library::updates_dialog::view(state, &document.panel_ctx.tokens)
-            .map(Message::Library);
-        let backdrop = container(card)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .style(|_: &iced::Theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    0.0, 0.0, 0.0, 0.45,
-                ))),
-                ..Default::default()
-            });
-        Some(backdrop.into())
+        self.library_overlay(crate::app::state::ModalId::LibraryUpdates)
     }
 }

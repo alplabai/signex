@@ -398,6 +398,23 @@ pub enum ModalId {
     ProjectCloseConfirm,
     /// "Exit Signex - Unsaved Edits" (confirm class, on the data-loss path).
     AppQuitConfirm,
+    // Library dialogs. Edit row and delete confirm are bound to ONE library
+    // browser per window (`UiState::library_modal_owners`); the rest are
+    // single-instance.
+    LibraryPicker,
+    LibraryEditRow,
+    LibraryPrimitivePicker,
+    LibraryDocumentOptions,
+    LibraryCreateOptions,
+    LibraryUpdates,
+    /// Close library with unsaved drafts (confirm class).
+    LibraryCloseConfirm,
+    /// Delete the selected library row (confirm class).
+    LibraryDeleteConfirm,
+    /// Library recovery (confirm class); never auto-decided.
+    LibraryRecovery,
+    /// The custom net colour picker.
+    NetColorCustom,
 }
 
 pub use signex_types::schematic::AnnotateOrder;

@@ -387,7 +387,7 @@ impl OpenOverlays {
 /// `ParameterManager` have no `OverlayId` and no `OpenOverlays` field —
 /// they are part of the `every_modal_claims_escape` gap, and Esc does
 /// nothing over their in-window cards either.
-fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
+pub(crate) fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
     use crate::app::state::ModalId;
     match modal {
         ModalId::AnnotateDialog => Some(OverlayId::AnnotateDialog),
@@ -412,6 +412,16 @@ fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
         ModalId::AutosaveRecovery => Some(OverlayId::AutosaveRecovery),
         ModalId::ProjectCloseConfirm => Some(OverlayId::ProjectCloseConfirm),
         ModalId::AppQuitConfirm => Some(OverlayId::AppQuitConfirm),
+        ModalId::LibraryPicker => Some(OverlayId::LibraryPicker),
+        ModalId::LibraryEditRow => Some(OverlayId::EditRowModal),
+        ModalId::LibraryPrimitivePicker => Some(OverlayId::PrimitivePicker),
+        ModalId::LibraryDocumentOptions => Some(OverlayId::DocumentOptions),
+        ModalId::LibraryCreateOptions => Some(OverlayId::CreateOptions),
+        ModalId::LibraryUpdates => Some(OverlayId::LibraryUpdates),
+        ModalId::LibraryCloseConfirm => Some(OverlayId::CloseLibraryConfirm),
+        ModalId::LibraryDeleteConfirm => Some(OverlayId::DeleteConfirm),
+        ModalId::LibraryRecovery => Some(OverlayId::LibraryRecovery),
+        ModalId::NetColorCustom => Some(OverlayId::NetColorCustom),
         ModalId::MoveSelection | ModalId::NetColorPalette | ModalId::ParameterManager => None,
     }
 }
@@ -516,7 +526,8 @@ impl Signex {
             remove_open: self.ui_state.remove_dialog.is_some(),
             enable_vc_open: self.ui_state.enable_version_control.is_some()
                 && !modal_detached(crate::app::state::ModalId::EnableVersionControl),
-            library_create_options_open: self.library.create_options.is_some(),
+            library_create_options_open: self.library.create_options.is_some()
+                && !modal_detached(crate::app::state::ModalId::LibraryCreateOptions),
             passive_calculator_open: self.ui_state.passive_calculator_open
                 && !modal_detached(crate::app::state::ModalId::PassiveCalculator),
             annotate_reset_confirm_open: self.ui_state.annotate_reset_confirm
@@ -528,10 +539,14 @@ impl Signex {
                 && !modal_detached(crate::app::state::ModalId::GridProperties),
             selection_filter_custom_open: self.ui_state.selection_filter_custom.is_some()
                 && !modal_detached(crate::app::state::ModalId::SelectionFilterCustom),
-            library_picker_open: self.library.picker.is_some(),
-            library_document_options_open: self.library.document_options.is_some(),
-            library_updates_open: self.library.library_updates.is_some(),
-            library_primitive_picker_open: self.library.primitive_picker.is_some(),
+            library_picker_open: self.library.picker.is_some()
+                && !modal_detached(crate::app::state::ModalId::LibraryPicker),
+            library_document_options_open: self.library.document_options.is_some()
+                && !modal_detached(crate::app::state::ModalId::LibraryDocumentOptions),
+            library_updates_open: self.library.library_updates.is_some()
+                && !modal_detached(crate::app::state::ModalId::LibraryUpdates),
+            library_primitive_picker_open: self.library.primitive_picker.is_some()
+                && !modal_detached(crate::app::state::ModalId::LibraryPrimitivePicker),
             close_library_confirm_open: self.library.close_library_confirm.is_some(),
             recovery_kind: self
                 .library
@@ -558,7 +573,8 @@ impl Signex {
                 && !modal_detached(crate::app::state::ModalId::PrintPreview),
             bom_preview_open: self.document_state.bom_preview.is_some()
                 && !modal_detached(crate::app::state::ModalId::BomPreview),
-            net_color_custom_open: self.ui_state.net_color_custom.show,
+            net_color_custom_open: self.ui_state.net_color_custom.show
+                && !modal_detached(crate::app::state::ModalId::NetColorCustom),
             // MUST mirror `delete_confirm_overlay`'s pick
             // (`view/overlays/modals.rs:291-316`): it iterates
             // `library_browsers` and returns on the FIRST entry with a

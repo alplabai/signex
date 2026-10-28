@@ -25,6 +25,7 @@ fn bundled_window_icon() -> Option<iced::window::Icon> {
 mod boot_tests;
 mod new;
 mod subscription;
+pub(crate) use subscription::modal_overlay_id;
 mod window_subscriptions;
 
 impl Signex {

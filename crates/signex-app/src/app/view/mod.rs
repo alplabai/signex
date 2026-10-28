@@ -87,7 +87,9 @@ impl Signex {
         // detached so we don't double-render.
         if let Some(kind) = self.ui_state.windows.get(&window_id) {
             return match kind {
-                super::state::WindowKind::DetachedModal(modal) => self.view_detached_modal(*modal),
+                super::state::WindowKind::DetachedModal(modal) => {
+                    self.view_detached_modal(window_id, *modal)
+                }
                 // Undocked tab = full duplicate of the main app view.
                 // Shared Signex state means edits sync automatically; the
                 // only difference between main and undocked is the OS
@@ -386,7 +388,16 @@ impl Signex {
         // PrintPreview were missing, so they only painted on an editor tab
         // (#114). A new overlay needs a builder guard and an `OverlayId`,
         // nothing else.
-        let mut overlays = self.collect_overlays();
+        // A confirm dialog in its own window locks this one: a layer eats the
+        // pointer and a click raises that dialog. It sits above the non-modal
+        // chrome (menus, Active Bar, text edit, panels) and below the dialogs,
+        // so nothing can be edited through it and an in-window dialog that
+        // opens meanwhile (quit confirm, a notice) can still be answered.
+        let lock = self
+            .locking_confirm_window()
+            .is_some()
+            .then(|| self.locked_window_layer());
+        let mut overlays = self.collect_overlays(lock);
         // Tab drag ghost: only renders once the cursor has travelled past
         // the same 6 px threshold the cursor gating uses
         // (`tab_bar::view`). Mirrors that gate here so press-without-move
@@ -401,24 +412,13 @@ impl Signex {
                 overlays.push(self.view_tab_drag_ghost(&tab.title));
             }
         }
-        // A confirm dialog in its own window locks this one: a layer above
-        // the content eats the pointer and a click raises that dialog. It
-        // sits BELOW the in-window overlays, so a dialog that opens here
-        // meanwhile (quit confirm, error notice) can still be answered.
-        let lock = self
-            .locking_confirm_window()
-            .is_some()
-            .then(|| self.locked_window_layer());
-        if !overlays.is_empty() || lock.is_some() {
+        if !overlays.is_empty() {
             let mut stack = iced::widget::Stack::new().push(main);
             // Resize edges sit above the content but below functional
             // overlays (Active Bar, menus, modals) so the 6 px border
             // strip doesn't eat clicks on those.
             if has_resize_edges {
                 stack = stack.push(Self::resize_edges_overlay());
-            }
-            if let Some(lock) = lock {
-                stack = stack.push(lock);
             }
             for overlay in overlays {
                 stack = stack.push(overlay);
@@ -670,9 +670,18 @@ impl Signex {
     ///
     /// [`overlay_id::visible`] applies the blocking-modal cutoff, which
     /// is why this loop has no early return of its own.
-    fn collect_overlays(&self) -> Vec<Element<'_, Message>> {
+    fn collect_overlays<'a>(
+        &'a self,
+        mut lock: Option<Element<'a, Message>>,
+    ) -> Vec<Element<'a, Message>> {
         let mut layers = Vec::new();
         for id in overlay_id::visible(self.has_blocking_modal()) {
+            // The lock layer goes in where the dialogs start.
+            if *id == overlay_id::OverlayId::Preferences
+                && let Some(layer) = lock.take()
+            {
+                layers.push(layer);
+            }
             let first_new = layers.len();
             self.extend_overlay(&mut layers, *id);
             // #562 — stop the wheel here rather than let it reach the
@@ -695,6 +704,11 @@ impl Signex {
                         .into();
                 }
             }
+        }
+        // A blocking modal cut the walk short before the dialogs: the lock
+        // goes under what is left.
+        if let Some(layer) = lock {
+            layers.insert(0, layer);
         }
         layers
     }

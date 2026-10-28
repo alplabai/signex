@@ -5,6 +5,8 @@ use iced::Task;
 use super::super::super::state::ModalId;
 use super::super::super::*;
 
+use crate::library::messages::LibraryMessage;
+
 impl Signex {
     pub(crate) fn handle_open_erc_dialog(&mut self) -> Task<Message> {
         self.ui_state.erc_dialog_open = true;
@@ -276,6 +278,32 @@ impl Signex {
             ModalId::AppQuitConfirm => Some(Message::Project(ProjectMsg::AppQuitConfirm(
                 ProjectCloseChoice::Cancel,
             ))),
+            // Library dialogs: Cancel, never a write or a delete. The
+            // per-browser ones and the recovery prompt (whose choice depends
+            // on which recovery is open) are answered by
+            // `window_close_message`, which knows the window.
+            ModalId::LibraryPicker => Some(Message::Library(LibraryMessage::ClosePicker)),
+            ModalId::LibraryPrimitivePicker => {
+                Some(Message::Library(LibraryMessage::PrimitivePicker(
+                    crate::library::messages::PrimitivePickerMsg::Cancel,
+                )))
+            }
+            ModalId::LibraryDocumentOptions => {
+                Some(Message::Library(LibraryMessage::DocumentOptionsCancel))
+            }
+            ModalId::LibraryCreateOptions => {
+                Some(Message::Library(LibraryMessage::LibraryCreateOptionsCancel))
+            }
+            ModalId::LibraryUpdates => Some(Message::Library(LibraryMessage::LibraryUpdatesCancel)),
+            ModalId::LibraryCloseConfirm => {
+                Some(Message::Library(LibraryMessage::CloseLibraryConfirm(
+                    crate::library::messages::CloseLibraryChoice::Cancel,
+                )))
+            }
+            ModalId::NetColorCustom => Some(Message::NetColor(NetColorMsg::CustomShow(false))),
+            ModalId::LibraryEditRow | ModalId::LibraryDeleteConfirm | ModalId::LibraryRecovery => {
+                None
+            }
         }
     }
 
@@ -461,6 +489,16 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::AutosaveRecovery => iced::Size::new(540.0, 280.0),
         ModalId::ProjectCloseConfirm => iced::Size::new(540.0, 380.0),
         ModalId::AppQuitConfirm => iced::Size::new(540.0, 380.0),
+        ModalId::LibraryPicker => iced::Size::new(560.0, 560.0),
+        ModalId::LibraryEditRow => iced::Size::new(700.0, 660.0),
+        ModalId::LibraryPrimitivePicker => iced::Size::new(760.0, 600.0),
+        ModalId::LibraryDocumentOptions => iced::Size::new(580.0, 480.0),
+        ModalId::LibraryCreateOptions => iced::Size::new(520.0, 340.0),
+        ModalId::LibraryUpdates => iced::Size::new(680.0, 460.0),
+        ModalId::LibraryCloseConfirm => iced::Size::new(560.0, 400.0),
+        ModalId::LibraryDeleteConfirm => iced::Size::new(520.0, 260.0),
+        ModalId::LibraryRecovery => iced::Size::new(600.0, 340.0),
+        ModalId::NetColorCustom => iced::Size::new(600.0, 520.0),
     }
 }
 

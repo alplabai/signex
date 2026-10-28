@@ -46,10 +46,17 @@ impl Signex {
             // net-colour palette, the parameter manager). Its in-window
             // card ignores Esc too, so swallowing the key keeps the two
             // spellings of one gesture agreeing.
-            InputTarget::DetachedModal(modal) => match self.detached_modal_escape_message(modal) {
-                Some(msg) => self.update(msg),
-                None => Task::none(),
-            },
+            InputTarget::DetachedModal(modal) => {
+                // The per-browser library dialogs answer for the browser that
+                // opened the window, not for the first one with a dialog open.
+                let bound = window
+                    .filter(|id| self.ui_state.library_modal_owners.contains_key(id))
+                    .and_then(|id| self.window_close_message(id, modal));
+                match bound.or_else(|| self.detached_modal_escape_message(modal)) {
+                    Some(msg) => self.update(msg),
+                    None => Task::none(),
+                }
+            }
 
             // #554 — neither of these paints an overlay stack
             // (`view/mod.rs` renders a panel body / an editor surface and

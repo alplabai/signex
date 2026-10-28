@@ -689,6 +689,28 @@ impl Signex {
         match choice {
             ProjectCloseChoice::Cancel => Task::none(),
             ProjectCloseChoice::DiscardAll => {
+                // Discard only what the user was shown. An edit made since
+                // (a window that was not locked, a route nobody thought of)
+                // is NOT in the list: refresh the confirm, keep it open, and
+                // leave every recovery copy alone.
+                self.sync_editor_dirty_paths();
+                let mut live: Vec<std::path::PathBuf> =
+                    self.document_state.dirty_paths.iter().cloned().collect();
+                live.sort();
+                let live_rows = self.library.dirty_editors();
+                let unseen = live.iter().any(|p| !state.dirty_paths.contains(p))
+                    || live_rows.iter().any(|r| !state.dirty_rows.contains(r));
+                if unseen {
+                    crate::diagnostics::log_warning(
+                        "Exit: unsaved edits changed since the prompt; review the list and \
+                         confirm again. Nothing was discarded",
+                    );
+                    self.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState {
+                        dirty_paths: live,
+                        dirty_rows: live_rows,
+                    });
+                    return Task::none();
+                }
                 // The user declined to keep these edits, so their
                 // recovery copies go too, and are gone before the exit.
                 let cleanup = self.autosave_discard_all();

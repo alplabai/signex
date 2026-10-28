@@ -193,3 +193,110 @@ fn a_notice_raised_over_a_detached_dialog_gets_its_own_window() {
     assert!(app.detached_window_of(ModalId::ErrorNotice).is_none());
     assert!(app.detached_window_of(ModalId::RenameDialog).is_some());
 }
+
+#[test]
+fn discard_all_discards_only_what_the_confirm_listed() {
+    let (mut app, main) = quit_app();
+    raise_quit_confirm(&mut app, main);
+    // An edit lands after the confirm opened, through a route nobody locked.
+    let late = std::path::PathBuf::from("/p/late.snxsch");
+    app.document_state.dirty_paths.insert(late.clone());
+    let task = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+    // Nothing was discarded and the app did not exit: the confirm is back,
+    // listing the new item.
+    let confirm = app.ui_state.app_quit_confirm.as_ref().expect("re-prompted");
+    assert!(
+        confirm.dirty_paths.contains(&late),
+        "the new item is listed"
+    );
+    assert!(app.document_state.dirty_paths.contains(&late));
+    assert!(
+        app.document_state
+            .dirty_paths
+            .contains(std::path::Path::new("/p/board.snxsch")),
+        "the first item is untouched"
+    );
+    // Only the window bookkeeping ran: no close, no exit, no recovery sweep.
+    assert!(task.units() <= 1, "units: {}", task.units());
+
+    // Answering again, now with the full list, discards.
+    let task = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+    assert!(app.ui_state.app_quit_confirm.is_none());
+    assert!(task.units() > 1, "now it exits");
+}
+
+#[test]
+fn a_lock_closes_the_menus_and_the_palette_behind_it() {
+    let (mut app, _main) = quit_app();
+    app.ui_state.command_palette.open = true;
+    app.ui_state.panel_list_open = true;
+    app.interaction_state.context_menu = Some(crate::app::ContextMenuState { x: 10.0, y: 10.0 });
+    let _ = app.sync_detached_modals();
+    assert!(app.interaction_state.context_menu.is_some(), "no lock yet");
+    app.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState {
+        dirty_paths: vec!["/p/board.snxsch".into()],
+        dirty_rows: Vec::new(),
+    });
+    let _ = app.sync_detached_modals();
+    assert!(app.locking_confirm_window().is_some());
+    assert!(app.interaction_state.context_menu.is_none());
+    assert!(!app.ui_state.command_palette.open);
+    assert!(!app.ui_state.panel_list_open);
+}
+
+#[test]
+fn the_locking_window_is_the_topmost_dialog_every_time() {
+    let (mut app, main) = quit_app();
+    app.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+        target_path: "p.snxsch".into(),
+        tree_path: vec![0],
+        project_id: None,
+        buffer: "p".into(),
+        error: None,
+        is_project_rename: false,
+    });
+    raise_quit_confirm(&mut app, main);
+    let quit = app
+        .detached_window_of(ModalId::AppQuitConfirm)
+        .expect("quit window");
+    for _ in 0..20 {
+        assert_eq!(
+            app.locking_confirm_window(),
+            Some(quit),
+            "Esc acts on the quit confirm"
+        );
+    }
+}
+
+#[test]
+fn a_recovery_prompt_whose_window_vanishes_twice_stays_in_the_window() {
+    let (mut app, _main) = quit_app();
+    app.document_state
+        .autosave
+        .offer(crate::autosave::RecoveryOffer {
+            path: "p.snxsch".into(),
+            age_secs: 90,
+            older_than_file: false,
+        });
+    for expected_windows in [1usize, 1] {
+        let _ = app.sync_detached_modals();
+        let id = app
+            .detached_window_of(ModalId::AutosaveRecovery)
+            .expect("window");
+        assert_eq!(app.ui_state.windows.len(), expected_windows);
+        let _ = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(id)));
+    }
+    let _ = app.sync_detached_modals();
+    assert!(
+        app.detached_window_of(ModalId::AutosaveRecovery).is_none(),
+        "no third window: the prompt paints in the main window"
+    );
+    assert!(
+        app.document_state.autosave.current_offer().is_some(),
+        "never decided for the user"
+    );
+}

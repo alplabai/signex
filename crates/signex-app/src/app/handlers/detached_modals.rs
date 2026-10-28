@@ -7,7 +7,7 @@ use crate::app::Message;
 use crate::app::state::{ModalId, Signex, WindowKind};
 
 /// Dialogs whose window follows their open state, whatever code flips it.
-const FOLLOWED: [ModalId; 15] = [
+const FOLLOWED: [ModalId; 23] = [
     ModalId::FindReplace,
     ModalId::RenameDialog,
     ModalId::RemoveDialog,
@@ -23,11 +23,19 @@ const FOLLOWED: [ModalId; 15] = [
     ModalId::AutosaveRecovery,
     ModalId::ProjectCloseConfirm,
     ModalId::AppQuitConfirm,
+    ModalId::LibraryPicker,
+    ModalId::LibraryPrimitivePicker,
+    ModalId::LibraryDocumentOptions,
+    ModalId::LibraryCreateOptions,
+    ModalId::LibraryUpdates,
+    ModalId::LibraryCloseConfirm,
+    ModalId::LibraryRecovery,
+    ModalId::NetColorCustom,
 ];
 
 /// Confirm-class dialogs among the detached ones: while one is open the
 /// main window takes no input.
-const LOCKING: [ModalId; 9] = [
+const LOCKING: [ModalId; 12] = [
     ModalId::RenameDialog,
     ModalId::RemoveDialog,
     ModalId::AnnotateResetConfirm,
@@ -37,6 +45,9 @@ const LOCKING: [ModalId; 9] = [
     ModalId::AutosaveRecovery,
     ModalId::ProjectCloseConfirm,
     ModalId::AppQuitConfirm,
+    ModalId::LibraryCloseConfirm,
+    ModalId::LibraryDeleteConfirm,
+    ModalId::LibraryRecovery,
 ];
 
 /// Take keyboard focus away from whatever text input holds it, in every window.
@@ -70,6 +81,16 @@ impl Signex {
             ModalId::AutosaveRecovery => self.document_state.autosave.current_offer().is_some(),
             ModalId::ProjectCloseConfirm => ui.project_close_confirm.is_some(),
             ModalId::AppQuitConfirm => ui.app_quit_confirm.is_some(),
+            ModalId::LibraryPicker => self.library.picker.is_some(),
+            ModalId::LibraryPrimitivePicker => self.library.primitive_picker.is_some(),
+            ModalId::LibraryDocumentOptions => self.library.document_options.is_some(),
+            ModalId::LibraryCreateOptions => self.library.create_options.is_some(),
+            ModalId::LibraryUpdates => self.library.library_updates.is_some(),
+            ModalId::LibraryCloseConfirm => self.library.close_library_confirm.is_some(),
+            ModalId::LibraryRecovery => self.library.recovery.is_some(),
+            ModalId::NetColorCustom => ui.net_color_custom.show,
+            // One window per browser, followed by `sync_browser_modals`.
+            ModalId::LibraryEditRow | ModalId::LibraryDeleteConfirm => return None,
             ModalId::AnnotateDialog
             | ModalId::AnnotateResetConfirm
             | ModalId::ErcDialog
@@ -94,20 +115,160 @@ impl Signex {
             let Some(open) = self.followed_modal_open(modal) else {
                 continue;
             };
+            let recovery = matches!(modal, ModalId::AutosaveRecovery | ModalId::LibraryRecovery);
+            if recovery
+                && !open
+                && self.followed_modal_open(ModalId::AutosaveRecovery) != Some(true)
+                && self.followed_modal_open(ModalId::LibraryRecovery) != Some(true)
+            {
+                self.ui_state.recovery_window_vanished = 0;
+            }
+            // A recovery prompt whose window keeps vanishing stays in the window.
+            if recovery && open && self.ui_state.recovery_window_vanished >= 2 {
+                continue;
+            }
             match (open, self.modal_detached(modal)) {
                 (true, false) => tasks.push(self.handle_detach_modal(modal)),
                 (false, true) => tasks.push(self.close_detached_modal(modal)),
                 (true, true) | (false, false) => {}
             }
         }
+        tasks.extend(self.sync_browser_modals());
         // A text field that had keyboard focus keeps taking typing under the
         // lock, so release it once when a confirm dialog locks the windows.
         let locked = self.locking_confirm_window().is_some();
         if locked && !self.ui_state.lock_unfocused {
-            tasks.push(unfocus_text_inputs());
+            self.close_transient_ui_for_lock();
+            // First in the batch: a dialog's own autofocus, started by its
+            // window opening, must not be undone by this.
+            tasks.insert(0, unfocus_text_inputs());
         }
         self.ui_state.lock_unfocused = locked;
         (!tasks.is_empty()).then(|| Task::batch(tasks))
+    }
+
+    /// Open and close the windows of the per-browser dialogs (edit row, delete
+    /// confirm): one window per browser that has one open, bound to that
+    /// browser, closed when the browser's dialog (or the browser) is gone.
+    fn sync_browser_modals(&mut self) -> Vec<Task<Message>> {
+        let mut tasks = Vec::new();
+        for modal in [ModalId::LibraryEditRow, ModalId::LibraryDeleteConfirm] {
+            let mut open: Vec<std::path::PathBuf> = self
+                .library
+                .library_browsers
+                .iter()
+                .filter(|(_, b)| match modal {
+                    ModalId::LibraryEditRow => b.edit_modal.is_some(),
+                    _ => b.delete_confirm.is_some(),
+                })
+                .map(|(path, _)| path.clone())
+                .collect();
+            open.sort();
+            for path in &open {
+                if self.browser_modal_window(modal, path).is_none() {
+                    tasks.push(self.detach_browser_modal(modal, path.clone()));
+                }
+            }
+            let stale: Vec<iced::window::Id> = self
+                .ui_state
+                .windows
+                .iter()
+                .filter_map(|(id, kind)| match kind {
+                    WindowKind::DetachedModal(m) if *m == modal => Some(*id),
+                    _ => None,
+                })
+                .filter(|id| {
+                    self.ui_state
+                        .library_modal_owners
+                        .get(id)
+                        .is_none_or(|owner| !open.contains(owner))
+                })
+                .collect();
+            for id in stale {
+                self.ui_state.library_modal_owners.remove(&id);
+                self.ui_state.windows.remove(&id);
+                tasks.push(iced::window::close(id));
+            }
+        }
+        tasks
+    }
+
+    /// The window showing `modal` for the browser at `path`.
+    pub(crate) fn browser_modal_window(
+        &self,
+        modal: ModalId,
+        path: &std::path::Path,
+    ) -> Option<iced::window::Id> {
+        self.ui_state.windows.iter().find_map(|(id, kind)| {
+            (matches!(kind, WindowKind::DetachedModal(m) if *m == modal)
+                && self
+                    .ui_state
+                    .library_modal_owners
+                    .get(id)
+                    .map(|p| p.as_path())
+                    == Some(path))
+            .then_some(*id)
+        })
+    }
+
+    fn detach_browser_modal(&mut self, modal: ModalId, path: std::path::PathBuf) -> Task<Message> {
+        let (id, open_task) =
+            iced::window::open(crate::app::handlers::erc::detached_modal_settings(
+                crate::app::handlers::erc::modal_size(modal),
+            ));
+        self.ui_state
+            .windows
+            .insert(id, WindowKind::DetachedModal(modal));
+        self.ui_state.library_modal_owners.insert(id, path);
+        open_task.map(move |settled_id| {
+            Message::Window(crate::app::WindowMsg::DetachedModalOpened {
+                modal,
+                id: settled_id,
+            })
+        })
+    }
+
+    /// What closing `window` (the OS close button, or Esc typed in it) sends:
+    /// the dialog's own cancel, addressed to the browser or recovery it shows.
+    pub(crate) fn window_close_message(
+        &self,
+        window: iced::window::Id,
+        modal: ModalId,
+    ) -> Option<Message> {
+        use crate::library::messages::{BrowserEditMsg, LibraryMessage};
+        let owner = self.ui_state.library_modal_owners.get(&window).cloned();
+        match (modal, owner) {
+            (ModalId::LibraryEditRow, Some(library_path)) => {
+                Some(Message::Library(LibraryMessage::BrowserEdit {
+                    library_path,
+                    msg: BrowserEditMsg::Cancel,
+                }))
+            }
+            (ModalId::LibraryDeleteConfirm, Some(library_path)) => {
+                Some(Message::Library(LibraryMessage::BrowserDeleteRowCancel {
+                    library_path,
+                }))
+            }
+            (ModalId::LibraryRecovery, _) => self.recovery_cancel_message(),
+            (modal, _) => Self::detached_modal_close_message(modal),
+        }
+    }
+
+    /// The recovery dialog's Cancel / Decide-later choice, whichever kind is open.
+    fn recovery_cancel_message(&self) -> Option<Message> {
+        use crate::library::messages::LibraryMessage as L;
+        use crate::library::recovery::{
+            BrokenBindingChoice, GitMissingChoice, LibraryMissingChoice, RecoveryDialog,
+        };
+        Some(Message::Library(match self.library.recovery.as_ref()? {
+            RecoveryDialog::LibraryMissing { .. } => {
+                L::RecoveryLibraryMissing(LibraryMissingChoice::Cancel)
+            }
+            RecoveryDialog::GitMissing { .. } => L::RecoveryGitMissing(GitMissingChoice::Cancel),
+            RecoveryDialog::BrokenPrimitiveBinding { .. } => {
+                L::RecoveryBrokenBinding(BrokenBindingChoice::Cancel)
+            }
+        }))
     }
 
     /// The window `modal` lives in, if it is detached.
@@ -117,16 +278,56 @@ impl Signex {
         })
     }
 
+    /// A recovery prompt's window went away without an answer. The prompt is
+    /// never decided for the user: it comes back, but only twice.
+    pub(crate) fn note_recovery_window_vanished(&mut self) {
+        self.ui_state.recovery_window_vanished += 1;
+        if self.ui_state.recovery_window_vanished == 2 {
+            crate::diagnostics::log_warning(
+                "A recovery prompt's window closed twice without an answer; \
+                 it now stays in the main window",
+            );
+        }
+    }
+
+    /// A lock starting closes what could still be acted on through it: the
+    /// command palette, context menus, the Active Bar menu and an in-place
+    /// text edit.
+    fn close_transient_ui_for_lock(&mut self) {
+        self.ui_state.command_palette.open = false;
+        self.ui_state.panel_list_open = false;
+        let interaction = &mut self.interaction_state;
+        interaction.context_menu = None;
+        interaction.tab_context_menu = None;
+        interaction.project_tree_context_menu = None;
+        interaction.active_bar_menu = None;
+        interaction.grid_picker = None;
+        interaction.editing_text = None;
+    }
+
     /// The window of the open confirm dialog that locks the main window, if
     /// it lives in its own window.
     pub(crate) fn locking_confirm_window(&self) -> Option<iced::window::Id> {
+        // Deterministic: the dialog that paints topmost, the one Esc acts on
+        // (ties, e.g. two browsers' delete confirms, by window id text).
+        let rank = |modal: ModalId| {
+            crate::app::bootstrap::modal_overlay_id(modal).and_then(|overlay| {
+                crate::app::view::overlay_id::PAINT_ORDER
+                    .iter()
+                    .position(|o| *o == overlay)
+            })
+        };
         self.ui_state
             .windows
             .iter()
-            .find_map(|(id, kind)| match kind {
-                WindowKind::DetachedModal(modal) if LOCKING.contains(modal) => Some(*id),
+            .filter_map(|(id, kind)| match kind {
+                WindowKind::DetachedModal(modal) if LOCKING.contains(modal) => {
+                    Some((rank(*modal), format!("{id:?}"), *id))
+                }
                 _ => None,
             })
+            .max_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)))
+            .map(|(_, _, id)| id)
     }
 }
 
@@ -246,7 +447,38 @@ mod tests {
                     dirty_rows: Vec::new(),
                 })
             }
-            ModalId::NetlistIncompletePrompt => panic!("needs an export context"),
+            ModalId::LibraryPicker => app.library.picker = Some(Default::default()),
+            ModalId::LibraryCreateOptions => {
+                app.library.create_options =
+                    Some(crate::library::state::LibraryCreateOptionsState {
+                        project_path: "p.snxprj".into(),
+                        lib_path: "l.snxlib".into(),
+                        enable_git: false,
+                        use_lfs: false,
+                    })
+            }
+            ModalId::LibraryCloseConfirm => {
+                app.library.close_library_confirm =
+                    Some(crate::library::state::CloseLibraryConfirmState {
+                        library_path: "l.snxlib".into(),
+                        library_name: "l".into(),
+                        dirty_editors: Vec::new(),
+                    })
+            }
+            ModalId::LibraryRecovery => {
+                app.library.recovery =
+                    Some(crate::library::recovery::RecoveryDialog::LibraryMissing {
+                        path: "l.snxlib".into(),
+                    })
+            }
+            ModalId::NetColorCustom => app.ui_state.net_color_custom.show = true,
+            ModalId::NetlistIncompletePrompt
+            | ModalId::LibraryPrimitivePicker
+            | ModalId::LibraryDocumentOptions
+            | ModalId::LibraryUpdates => panic!("needs a heavier fixture"),
+            ModalId::LibraryEditRow | ModalId::LibraryDeleteConfirm => {
+                panic!("per-browser: see the browser tests")
+            }
             ModalId::CreateChildSheet => {
                 ui.create_child_sheet_confirm =
                     Some(crate::app::contracts::CreateChildSheetConfirmState {
@@ -266,9 +498,15 @@ mod tests {
     /// Every followed dialog the fixtures can open (the netlist prompt needs a
     /// whole export context and has its own test).
     fn testable() -> impl Iterator<Item = ModalId> {
-        FOLLOWED
-            .into_iter()
-            .filter(|m| *m != ModalId::NetlistIncompletePrompt)
+        FOLLOWED.into_iter().filter(|m| {
+            !matches!(
+                m,
+                ModalId::NetlistIncompletePrompt
+                    | ModalId::LibraryPrimitivePicker
+                    | ModalId::LibraryDocumentOptions
+                    | ModalId::LibraryUpdates
+            )
+        })
     }
 
     fn window_of(app: &Signex, modal: ModalId) -> Option<iced::window::Id> {
@@ -294,7 +532,10 @@ mod tests {
 
             // The dialog's own close message (what the OS close button and
             // the in-dialog close send) clears the state and the window.
-            let close = Signex::detached_modal_close_message(modal).expect("a close message");
+            let id = window_of(&app, modal).expect("window");
+            let close = app
+                .window_close_message(id, modal)
+                .expect("a close message");
             let _ = app.update(close);
             assert_eq!(app.followed_modal_open(modal), Some(false), "{modal:?}");
             assert!(window_of(&app, modal).is_none(), "{modal:?} window stays");
@@ -338,7 +579,7 @@ mod tests {
             let _ = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(id)));
             // A recovery offer is only ever answered by the user: its window
             // vanishing keeps it (the sync shows it again).
-            let expected = modal == ModalId::AutosaveRecovery;
+            let expected = matches!(modal, ModalId::AutosaveRecovery | ModalId::LibraryRecovery);
             assert_eq!(app.followed_modal_open(modal), Some(expected), "{modal:?}");
         }
     }

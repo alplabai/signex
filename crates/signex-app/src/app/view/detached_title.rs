@@ -32,6 +32,16 @@ pub(crate) fn detached_modal_title(modal: ModalId) -> &'static str {
         ModalId::AutosaveRecovery => "Recover Unsaved Edits",
         ModalId::ProjectCloseConfirm => "Close Project",
         ModalId::AppQuitConfirm => "Exit Signex",
+        ModalId::LibraryPicker => "Open Library",
+        ModalId::LibraryEditRow => "Edit Component Details",
+        ModalId::LibraryPrimitivePicker => "Pick Primitive",
+        ModalId::LibraryDocumentOptions => "Document Options",
+        ModalId::LibraryCreateOptions => "Library Options",
+        ModalId::LibraryUpdates => "Library Updates Available",
+        ModalId::LibraryCloseConfirm => "Close Library",
+        ModalId::LibraryDeleteConfirm => "Delete Component",
+        ModalId::LibraryRecovery => "Library Recovery",
+        ModalId::NetColorCustom => "Custom Net Colour",
     }
 }
 
