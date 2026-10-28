@@ -383,3 +383,39 @@ fn refusal_leaves_the_version_untouched() {
     assert_eq!(engine.document().symbols[0].library_version, "");
     assert_eq!(engine.document().lib_symbols[ID].description, "old");
 }
+
+#[test]
+fn undo_snapshots_share_lib_symbols_and_a_replace_does_not_bleed_into_them() {
+    let mut engine = engine_with_wired_pin_2();
+    let held = engine.document().lib_symbols.clone();
+
+    // An edit that leaves the table alone: live document and the history
+    // snapshot still share one allocation.
+    engine
+        .execute(Command::PlaceNoConnect {
+            no_connect: signex_types::schematic::NoConnect {
+                uuid: uuid::Uuid::new_v4(),
+                position: Point::new(0.0, 0.0),
+            },
+        })
+        .unwrap();
+    assert!(engine.document().lib_symbols.shares_storage_with(&held));
+
+    // Mutating the table copies it on write: the held copy and the undo
+    // snapshot keep the old description.
+    engine
+        .execute(Command::ReplaceLibSymbol {
+            lib_symbol: lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]),
+            library_versions: vec![],
+        })
+        .unwrap();
+    assert_eq!(held[ID].description, "old");
+    assert_eq!(engine.document().lib_symbols[ID].description, "new");
+
+    engine.undo().unwrap();
+    assert_eq!(engine.document().lib_symbols[ID].description, "old");
+    assert!(engine.document().lib_symbols.shares_storage_with(&held));
+    engine.redo().unwrap();
+    assert_eq!(engine.document().lib_symbols[ID].description, "new");
+    assert_eq!(held[ID].description, "old");
+}

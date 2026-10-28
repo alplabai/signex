@@ -421,6 +421,20 @@ pub enum AnnotateMode {
 }
 
 impl Command {
+    /// Whether executing this command reads the pre-edit sheet beyond
+    /// recording it: the move/turn commands check their rubber-banded result
+    /// against the nets as they were.
+    pub(crate) fn reads_pre_image(&self) -> bool {
+        matches!(
+            self,
+            Self::MoveSelection { .. }
+                | Self::MoveEach { .. }
+                | Self::RotateSelection { .. }
+                | Self::MirrorSelection { .. }
+                | Self::TransformSelection { .. }
+        )
+    }
+
     pub fn kind(&self) -> CommandKind {
         match self {
             Command::ReplaceDocument { .. } => CommandKind::ReplaceDocument,
