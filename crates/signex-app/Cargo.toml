@@ -21,6 +21,9 @@ signex-renderer = { workspace = true }
 signex-gfx = { workspace = true }
 iced = { workspace = true }
 iced_aw = { workspace = true }
+# Runs the "unfocus" widget operation when a confirm dialog locks a window;
+# tests also drive an `iced::Task` to completion with it (dock_layout_persist).
+iced_runtime = "0.14"
 num-traits = "0.2"
 unicode-normalization = "0.1"
 serde = { workspace = true }
@@ -96,9 +99,6 @@ signex-library = { workspace = true, features = ["test-identity"] }
 git2 = { workspace = true }
 # Names `url::Url` in a fake `DistributorAdapter` (pricing refresh tests).
 url = "2"
-# Drives an `iced::Task` to completion without the iced runtime, so a
-# regression test can observe what a `Task` really does (dock_layout_persist).
-iced_runtime = "0.14"
 # A headless renderer for laying a widget tree out in a unit test, so text
 # is measured with real fonts (`layout_probe`, #623). Already in the lock
 # file through `iced`'s default `tiny-skia` feature.
@@ -117,6 +117,12 @@ winres = "0.1"
 # Already in the dependency graph (tokio, winit and git2 pull it); only
 # the constant is used, no `unsafe`.
 libc = "0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# The system menu bar (NSMenu), built from the declarative menu model; see
+# docs/MENU_BAR.md, "Native macOS menu". No default features: they only pull
+# the Linux gtk/libxdo backends.
+muda = { version = "0.20", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 # DwmSetWindowAttribute for DWMWA_WINDOW_CORNER_PREFERENCE — used by

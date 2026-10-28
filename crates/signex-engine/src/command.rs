@@ -1,6 +1,6 @@
 use signex_types::schematic::{
     AnnotateOrder, Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LibSymbol, NoConnect,
-    SchematicSheet, SelectedItem, StrokeColor, Symbol, TextNote, Wire,
+    SchematicSheet, SelectedItem, SheetPin, StrokeColor, Symbol, TextNote, Wire,
 };
 use uuid::Uuid;
 
@@ -66,6 +66,7 @@ pub enum CommandKind {
     RegisterLibSymbol,
     ReplaceLibSymbol,
     PlaceChildSheet,
+    PlaceSheetPin,
     PlaceJunction,
     PlaceNoConnect,
     PlaceNoErcDirective,
@@ -239,6 +240,13 @@ pub enum Command {
     /// [`EngineError::EmptyChildSheetFilename`] when `filename` is blank.
     PlaceChildSheet {
         child_sheet: ChildSheet,
+    },
+    /// Add a hand-placed entry (pin) to the sheet symbol `sheet_id`. Refused
+    /// with a name error when the name is blank or the symbol already has an
+    /// entry of that name; an unknown `sheet_id` changes nothing. Undoable.
+    PlaceSheetPin {
+        sheet_id: Uuid,
+        pin: SheetPin,
     },
     PlaceJunction {
         junction: Junction,
@@ -461,6 +469,7 @@ impl Command {
             Command::RegisterLibSymbol { .. } => CommandKind::RegisterLibSymbol,
             Command::ReplaceLibSymbol { .. } => CommandKind::ReplaceLibSymbol,
             Command::PlaceChildSheet { .. } => CommandKind::PlaceChildSheet,
+            Command::PlaceSheetPin { .. } => CommandKind::PlaceSheetPin,
             Command::PlaceJunction { .. } => CommandKind::PlaceJunction,
             Command::PlaceNoConnect { .. } => CommandKind::PlaceNoConnect,
             Command::PlaceNoErcDirective { .. } => CommandKind::PlaceNoErcDirective,

@@ -26,6 +26,10 @@ pub enum EngineError {
     DuplicateChildSheetName(String),
     #[error("another sheet symbol already points at '{0}'")]
     DuplicateChildSheetFile(String),
+    #[error("a sheet entry needs a name")]
+    EmptySheetEntryName,
+    #[error("this sheet symbol already has an entry named '{0}'")]
+    DuplicateSheetEntryName(String),
     #[error("failed to open schematic: {0}")]
     OpenFailed(#[source] anyhow::Error),
     #[error("designator counter for prefix {prefix:?} would pass u32::MAX; annotate refused")]

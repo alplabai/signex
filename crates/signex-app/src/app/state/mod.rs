@@ -55,6 +55,9 @@ pub struct Signex {
     /// `document_state` so the library dispatcher can mutate it
     /// without colliding with schematic / PCB engine borrows.
     pub library: crate::library::LibraryState,
+    /// The macOS system menu bar built from the menu model; inert elsewhere
+    /// (docs/MENU_BAR.md, "Native macOS menu").
+    pub(crate) native_menu: crate::menu_bar::native::NativeMenuState,
 }
 
 /// Role of a non-main window opened by Signex. Phase 2 adds detached
@@ -330,6 +333,44 @@ pub enum ModalId {
     /// v0.18.14.1 — Custom Selection Filter modal (8-row checkbox
     /// table; opens from the Properties `Custom…` button).
     SelectionFilterCustom,
+    /// Help ▸ About Signex.
+    About,
+    /// The keyboard-shortcuts reference sheet (F1).
+    KeyboardShortcuts,
+    /// Tools ▸ Passive Network Calculator.
+    PassiveCalculator,
+    /// The first-run onboarding tour.
+    FirstRunTour,
+    /// "Create Sheet": where to write the file of a sheet symbol (confirm
+    /// class).
+    CreateChildSheet,
+    /// The error card (confirm class): one at a time.
+    ErrorNotice,
+    /// The netlist-incomplete "export anyway?" prompt (confirm class).
+    NetlistIncompletePrompt,
+    /// The autosave recovery prompt (confirm class).
+    AutosaveRecovery,
+    /// "Close Project - Unsaved Edits" (confirm class, on the data-loss path).
+    ProjectCloseConfirm,
+    /// "Exit Signex - Unsaved Edits" (confirm class, on the data-loss path).
+    AppQuitConfirm,
+    // Library dialogs. Edit row and delete confirm are bound to ONE library
+    // browser per window (`UiState::library_modal_owners`); the rest are
+    // single-instance.
+    LibraryPicker,
+    LibraryEditRow,
+    LibraryPrimitivePicker,
+    LibraryDocumentOptions,
+    LibraryCreateOptions,
+    LibraryUpdates,
+    /// Close library with unsaved drafts (confirm class).
+    LibraryCloseConfirm,
+    /// Delete the selected library row (confirm class).
+    LibraryDeleteConfirm,
+    /// Library recovery (confirm class); never auto-decided.
+    LibraryRecovery,
+    /// The custom net colour picker.
+    NetColorCustom,
 }
 
 pub use signex_types::schematic::AnnotateOrder;
