@@ -12,6 +12,7 @@ use super::*;
 
 mod bars;
 mod modals;
+pub(super) mod read_only_badge;
 
 impl Signex {
     /// Hover tooltip card showing the placed symbol's designator,

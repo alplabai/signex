@@ -28,6 +28,7 @@ mod project_tab;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
 mod pcb_dirty_adapter;
 pub(crate) mod project_sheets;
+mod read_only_refusal;
 pub mod restore_job;
 mod runtime;
 mod selection_request;

@@ -866,3 +866,34 @@ fn save_all_reports_the_restoring_file_and_still_saves_the_others() {
     app.try_save_dirty_path(&other).expect("other file saves");
     assert!(other.exists());
 }
+
+/// A restored `snxsch/1.7` blob is read-only: it matches disk and can never
+/// be saved, so the tab must not stay dirty and quit must not ask (#1402).
+#[test]
+fn restoring_a_newer_minor_schematic_leaves_it_clean_and_quit_does_not_prompt() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("a.snxsch");
+    let current = signex_types::format::SnxSchematic::new(Default::default())
+        .write_string()
+        .expect("encode");
+    let newer = current.replacen("snxsch/1", "snxsch/1.7", 1);
+    assert!(newer.contains("snxsch/1.7"), "{newer}");
+    let sha = commit_revision(dir.path(), &path, &newer);
+    commit_revision(dir.path(), &path, &current);
+    let mut app = open_tab(dir.path(), &path, TabKind::Schematic);
+    let mut engine =
+        signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default()).unwrap();
+    engine.set_path(Some(path.clone()));
+    app.document_state.engines.insert(path.clone(), engine);
+    app.document_state.active_path = Some(path.clone());
+
+    let messages = click_restore(&mut app, &sha);
+    finish_restore(&mut app, messages);
+
+    let engine = &app.document_state.engines[&path];
+    assert!(engine.document().is_read_only(), "the restored sheet loads");
+    assert!(!app.document_state.tabs[0].dirty);
+    assert!(!app.document_state.dirty_paths.contains(&path));
+    let _task = app.handle_app_quit_requested();
+    assert!(app.ui_state.app_quit_confirm.is_none(), "quit must not ask");
+}
