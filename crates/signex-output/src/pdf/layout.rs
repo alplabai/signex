@@ -6,7 +6,8 @@
 use super::{Margins, PdfOptions, PdfScale};
 use crate::SheetSnapshot;
 
-/// Bounding box of all schematic content (wires, symbols, labels) in mm.
+/// Bounding box of all schematic content (wires, buses, symbols, labels,
+/// junctions, notes, child sheets) in mm.
 ///
 /// Returns `(x_min, y_min, x_max, y_max)`. Falls back to `(0, 0, 100, 100)`
 /// when the sheet is empty.
@@ -38,6 +39,32 @@ pub fn schematic_bbox(sheet: &SheetSnapshot) -> (f64, f64, f64, f64) {
         extend(label.position.x, label.position.y);
     }
 
+    let sch = &sheet.schematic;
+    for bus in &sch.buses {
+        extend(bus.start.x, bus.start.y);
+        extend(bus.end.x, bus.end.y);
+    }
+    for entry in &sch.bus_entries {
+        extend(entry.position.x, entry.position.y);
+        extend(
+            entry.position.x + entry.size.0,
+            entry.position.y + entry.size.1,
+        );
+    }
+    for j in &sch.junctions {
+        extend(j.position.x, j.position.y);
+    }
+    for nc in &sch.no_connects {
+        extend(nc.position.x, nc.position.y);
+    }
+    for note in &sch.text_notes {
+        extend(note.position.x, note.position.y);
+    }
+    for cs in &sch.child_sheets {
+        extend(cs.position.x, cs.position.y);
+        extend(cs.position.x + cs.size.0, cs.position.y + cs.size.1);
+    }
+
     if x_min.is_infinite() || x_max.is_infinite() {
         (0.0, 0.0, 100.0, 100.0)
     } else {
@@ -49,7 +76,15 @@ pub fn schematic_bbox(sheet: &SheetSnapshot) -> (f64, f64, f64, f64) {
 /// its box is then a placeholder, not geometry.
 fn sheet_is_empty(sheet: &SheetSnapshot) -> bool {
     let s = &sheet.schematic;
-    s.wires.is_empty() && s.symbols.is_empty() && s.labels.is_empty()
+    s.wires.is_empty()
+        && s.symbols.is_empty()
+        && s.labels.is_empty()
+        && s.buses.is_empty()
+        && s.bus_entries.is_empty()
+        && s.junctions.is_empty()
+        && s.no_connects.is_empty()
+        && s.text_notes.is_empty()
+        && s.child_sheets.is_empty()
 }
 
 /// The sheet's paper `(width_mm, height_mm)`, read through the shared
@@ -219,6 +254,17 @@ mod tests {
             sheet_count: 1,
             placement: Default::default(),
         }
+    }
+
+    #[test]
+    fn bbox_covers_buses() {
+        let mut sheet = sheet_with_wire("A4");
+        sheet.schematic.buses.push(signex_types::schematic::Bus {
+            uuid: uuid::Uuid::nil(),
+            start: Point::new(10.0, 5.0),
+            end: Point::new(230.0, 120.0),
+        });
+        assert_eq!(schematic_bbox(&sheet), (10.0, 5.0, 230.0, 120.0));
     }
 
     #[test]

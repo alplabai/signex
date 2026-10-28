@@ -212,7 +212,7 @@ fn power_port_pins_of(sheet: &SchematicSheet, with_flags: bool) -> Vec<(Point, &
         if !sym.is_power || sym.value.is_empty() || (!with_flags && is_power_flag(&sym.lib_id)) {
             continue;
         }
-        let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) else {
+        let Some(lib_sym) = sheet.resolve_lib_symbol(sym) else {
             continue;
         };
         let xform = SymbolTransform::from_symbol(sym);
@@ -550,7 +550,7 @@ pub(crate) fn collect_terminals(
     let gate = connected_points(sheet);
     let mut net_terms: HashMap<Key, Vec<Terminal>> = HashMap::new();
     for sym in &sheet.symbols {
-        let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) else {
+        let Some(lib_sym) = sheet.resolve_lib_symbol(sym) else {
             continue;
         };
         let xform = SymbolTransform::from_symbol(sym);

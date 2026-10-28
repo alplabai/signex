@@ -354,3 +354,47 @@ fn a_pinned_file_with_the_wrong_bytes_is_not_committed() {
         "a mismatched file was committed"
     );
 }
+
+/// #1522 -- the pin scan skips rows whose `datasheet` cell cannot pin a PDF.
+/// A pin in a further document (a labelled list cell) must still count, and a
+/// row with a plain URL beside it must not hide it.
+#[test]
+fn a_pin_in_a_further_document_is_committed_beside_url_rows() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (file, adapter, library_id) = mounted_library(tmp.path(), true);
+    let mut url_row = row(library_id);
+    url_row.internal_pn = InternalPn::new("R-URL");
+    url_row.datasheet = DatasheetRef::url("https://example.com/ds.pdf");
+    adapter.insert_row(TABLE, url_row, "seed url").unwrap();
+    let seed = row(library_id);
+    adapter.insert_row(TABLE, seed.clone(), "seed").unwrap();
+
+    let hash = store_datasheet(&file, PDF).unwrap();
+    let rel = datasheet_asset_rel_path(&hash).unwrap();
+    let mut pinned = adapter.read_row(TABLE, seed.row_id.into()).unwrap();
+    pinned.more_datasheets = vec![signex_library::component::DatasheetDoc::new(
+        "Errata",
+        DatasheetRef::hash_pinned(hash, "errata.pdf"),
+    )];
+
+    adapter.update_row(TABLE, pinned, "pin errata").unwrap();
+
+    assert!(head_tree_has(&file, &rel), "{rel} not in HEAD");
+}
+
+/// #1522 -- a hand-edited cell that JSON-escapes the pin's kind still pins
+/// the PDF, so the cheap prefilter must not skip it.
+#[test]
+fn an_escaped_pin_kind_is_still_committed_on_another_rows_save() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (file, adapter, library_id) = mounted_library(tmp.path(), true);
+    let (rel, mut b) = dangling_pin_of_row_a(&adapter, &file, library_id, PDF);
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(text.contains("hash_pinned"));
+    std::fs::write(&file, text.replace("hash_pinned", "hash\\u005fpinned")).unwrap();
+
+    b.datasheet_label = "edited".into();
+    adapter.update_row(TABLE, b, "edit b").unwrap();
+
+    assert!(head_tree_has(&file, &rel), "{rel} not in HEAD");
+}
