@@ -722,7 +722,7 @@ pub trait LibraryAdapter: Send + Sync {
 
     /// Per-primitive git history.
     ///
-    /// Returns up to 50 entries from `git log --follow --max-count 50
+    /// Returns up to 50 entries from `git log --max-count 50
     /// -- <primitive_path>`, newest first. `primitive_path` may be
     /// absolute or relative to [`Self::root_dir`]; absolute paths
     /// outside `root_dir` are rejected with

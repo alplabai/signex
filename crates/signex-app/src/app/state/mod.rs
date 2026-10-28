@@ -7,6 +7,7 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod case_fold;
+pub(crate) mod dir_case;
 mod interaction;
 pub(crate) mod library_entry;
 mod link_policy;
@@ -364,8 +365,6 @@ pub enum ModalId {
     PrintPreview,
     /// BOM Export preview modal (File → Export → Bill of Materials…).
     BomPreview,
-    /// Project Options metadata modal (Projects-panel root → Project Options...).
-    ProjectOptions,
     /// Enable Version Control confirm modal (Projects-panel root →
     /// Enable Version Control...).
     EnableVersionControl,
@@ -402,7 +401,7 @@ impl std::fmt::Display for ProjectId {
 }
 
 /// One loaded project in the multi-project workspace. `path` is the
-/// canonical identity (`.standard_pro` / `.snxprj` location on disk); `data`
+/// canonical identity (`.snxprj` location on disk); `data`
 /// is the parsed project contents. Multiple projects with different
 /// `path`s coexist in `DocumentState.projects`; two identical `path`s
 /// at once is a loader bug (existing `open_project_file` de-dupes).
@@ -426,6 +425,10 @@ pub struct LoadedProject {
     pub case_fold: scope::CaseFold,
     /// The volume probe has reported; the first answer wins.
     pub case_probed: bool,
+    /// The probe DECIDED (not undecided, failed or a stat error): only then is
+    /// `case_fold` a fact about the volume rather than the host default, and
+    /// only then does document identity trust it (#1447).
+    pub case_decided: bool,
 }
 
 impl LoadedProject {
@@ -589,6 +592,9 @@ pub struct DocumentState {
     /// Undo/redo of each project's net-class table (#1042). The table is
     /// project data, so it has its own history beside the per-sheet engines.
     pub net_class_history: std::collections::HashMap<ProjectId, signex_engine::NetClassHistory>,
+    /// Project tab state per loaded project (#1202): selected section and
+    /// the General history. Outlives the tab, dropped with the project.
+    pub project_tabs: std::collections::HashMap<ProjectId, crate::app::ProjectTabState>,
     /// Net-class picks made from a sheet's Properties panel, keyed by that
     /// sheet, so Ctrl+Z on it can interleave them with its engine edits (#1220).
     pub net_class_picks: std::collections::HashMap<PathBuf, net_class_picks::NetClassPickSteps>,
@@ -679,6 +685,9 @@ pub struct DocumentState {
     /// spawned; cleared in both the `Ok` and `Err` arms of
     /// `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished`.
     pub pending_opens: crate::app::document_read::InFlightReads,
+    /// What the directory case probes of loose documents reported, and the
+    /// opens and saves waiting on one (#1447).
+    pub dir_case: dir_case::DirCases,
     /// #859 — History restores running on a worker, keyed by the document
     /// path. A second restore click for the same document is ignored until
     /// the first completes; closing the project or all documents cancels it.
@@ -943,7 +952,7 @@ pub struct PreviewState {
     pub variants: Vec<String>,
     /// Quality preset shown in the Settings tab dropdown. Mapped to
     /// `pdf_options.dpi` at export time; the preview always rasterises
-    /// at 96 DPI for speed.
+    /// at `PdfQuality::preview_dpi` (72/144/200) for speed.
     pub quality: PdfQuality,
     /// Typed text of the page-setup fields (custom size, margins, percent)
     /// plus the reason the last edit was rejected or clamped.

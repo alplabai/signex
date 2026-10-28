@@ -12,6 +12,9 @@ pub struct ErcMarker {
     pub x_mm: f64,
     pub y_mm: f64,
     pub severity: ErcSeverity,
+    /// Net-level finding: drawn as a ring-and-diamond in the theme's net
+    /// colour, unlike the filled severity disc of a point finding.
+    pub net_level: bool,
 }
 
 pub fn draw_erc_markers(
@@ -26,6 +29,10 @@ pub fn draw_erc_markers(
 
     let mut overlays = OverlayInputs::default();
     for marker in markers {
+        if marker.net_level {
+            push_net_marker(&mut overlays, marker, transform, colors);
+            continue;
+        }
         let (fill, stroke) = match marker.severity {
             ErcSeverity::Error => (
                 Color::from_rgba(0.95, 0.25, 0.25, 0.6),
@@ -100,4 +107,34 @@ pub fn draw_erc_markers(
         DirtyFlags::OVERLAY,
         transform,
     );
+}
+
+/// The net-level marker: an open ring with a diamond around it, in the
+/// theme's net-label colour. Severity does not recolour it, so it reads as
+/// "this whole net" and cannot be mistaken for a point marker.
+fn push_net_marker(
+    overlays: &mut OverlayInputs,
+    marker: &ErcMarker,
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+) {
+    let color = to_rgba(to_iced(&colors.net_label));
+    let (cx, cy) = (marker.x_mm as f32, marker.y_mm as f32);
+    overlays.snap_circles.push(OverlayCircleInput {
+        center: [cx, cy],
+        radius_mm: screen_px_to_world_mm(9.0, transform.scale) as f32,
+        stroke_width_mm: screen_px_to_world_mm(2.0, transform.scale) as f32,
+        color,
+    });
+    let r = screen_px_to_world_mm(14.0, transform.scale) as f32;
+    let width_mm = screen_px_to_world_mm(2.0, transform.scale) as f32;
+    let corners = [[cx, cy - r], [cx + r, cy], [cx, cy + r], [cx - r, cy]];
+    for i in 0..4 {
+        overlays.preview_lines.push(OverlayLineInput {
+            p0: corners[i],
+            p1: corners[(i + 1) % 4],
+            width_mm,
+            color,
+        });
+    }
 }

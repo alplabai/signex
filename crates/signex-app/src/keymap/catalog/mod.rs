@@ -230,8 +230,40 @@ pub fn all_command_ids() -> impl Iterator<Item = &'static str> {
     all_metadata().map(|metadata| metadata.id)
 }
 
+/// Id -> metadata index over every table, built once on first lookup.
+///
+/// The catalog is `const` data, so the index can never go stale. On a
+/// duplicate id the first table entry wins, matching the linear `find`
+/// it replaces. Menu rows, the shortcuts modal and the Active Bar
+/// dropdown all resolve ids per row per frame (#1380).
+fn metadata_index() -> &'static std::collections::HashMap<&'static str, &'static CommandMetadata> {
+    static INDEX: std::sync::OnceLock<
+        std::collections::HashMap<&'static str, &'static CommandMetadata>,
+    > = std::sync::OnceLock::new();
+    INDEX.get_or_init(|| {
+        let mut index = std::collections::HashMap::new();
+        for metadata in all_metadata() {
+            index.entry(metadata.id).or_insert(metadata);
+        }
+        index
+    })
+}
+
 pub fn metadata_for(command: &AppCommandId) -> Option<&'static CommandMetadata> {
-    all_metadata().find(|metadata| metadata.id == command.as_str())
+    metadata_for_str(command.as_str())
+}
+
+/// [`metadata_for`] for a bare id string, so a per-row caller holding a
+/// `&str` does not allocate an `AppCommandId` just to look it up.
+pub fn metadata_for_str(id: &str) -> Option<&'static CommandMetadata> {
+    metadata_index().get(id).copied()
+}
+
+/// The linear scan `metadata_for` used before the index; kept so a test
+/// can prove the two agree for every catalog id.
+#[cfg(test)]
+fn metadata_for_linear(id: &str) -> Option<&'static CommandMetadata> {
+    all_metadata().find(|metadata| metadata.id == id)
 }
 
 /// `General`-group commands that act without an editor: file and tab
@@ -363,6 +395,25 @@ mod tests {
             .find(|metadata| metadata.id == id)
             .unwrap_or_else(|| panic!("missing command metadata for `{id}`"))
             .group
+    }
+
+    #[test]
+    fn indexed_metadata_lookup_equals_the_linear_scan_for_every_id() {
+        let mut count = 0;
+        for metadata in all_metadata() {
+            let command = AppCommandId::new(metadata.id).expect("catalog ids are valid");
+            let indexed = metadata_for(&command).expect("indexed lookup finds every catalog id");
+            let linear = metadata_for_linear(metadata.id).expect("linear finds it");
+            assert!(
+                std::ptr::eq(indexed, linear),
+                "`{}` resolved differently",
+                metadata.id
+            );
+            count += 1;
+        }
+        assert!(count > 100, "catalog unexpectedly small: {count}");
+        let unknown = AppCommandId::new("definitely_not_a_command").expect("valid id shape");
+        assert!(metadata_for(&unknown).is_none());
     }
 
     #[test]

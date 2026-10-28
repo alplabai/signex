@@ -907,6 +907,7 @@ mod tests {
             id: ProjectId(id),
             path: dir.join("p.snxprj"),
             data: signex_types::project::ProjectData {
+                description: None,
                 name: format!("p{id}"),
                 dir: dir.to_string_lossy().into_owned(),
                 schematic_root: Some(sheet.to_string()),
@@ -931,6 +932,7 @@ mod tests {
             pending_libraries: HashMap::new(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         }
     }
 

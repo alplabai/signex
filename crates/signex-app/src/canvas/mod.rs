@@ -78,6 +78,14 @@ pub struct CanvasState {
 
 // ─── CanvasSlot (the Program) ────────────────────────────
 
+/// The inputs `CanvasSlot::designators` is a function of: sheet path, engine
+/// `(instance, revision)` and the shown placement.
+pub type DesignatorsKey = (
+    std::path::PathBuf,
+    Option<(u64, u64)>,
+    Option<signex_types::schematic::InstancePath>,
+);
+
 /// The canvas program that handles input and rendering.
 /// Holds references to app state needed for drawing (theme colors, etc).
 pub struct CanvasSlot {
@@ -149,6 +157,10 @@ pub struct CanvasSlot {
     /// `reference`. Empty for a tab with no recorded placement. Set by the app
     /// from the engine; drawn in place of `reference`.
     pub designators: std::collections::HashMap<uuid::Uuid, String>,
+    /// What `designators` was last computed from (sheet path, engine
+    /// instance and revision, shown placement); `refresh_canvas_designators`
+    /// skips the recompute while it still matches (#1383).
+    pub designators_key: Option<DesignatorsKey>,
     /// ERC violations to highlight on the canvas — Altium-style marker
     /// dots + primary-item halos. Synced from `ui_state.erc_violations`
     /// after each ERC run so the overlay renders without the canvas
@@ -233,6 +245,7 @@ impl CanvasSlot {
             paper_height_mm: 210.0,
             sheet_frame: Vec::new(),
             designators: std::collections::HashMap::new(),
+            designators_key: None,
             erc_markers: Vec::new(),
             pending_net_color: None,
             lasso_polygon: None,
@@ -505,6 +518,15 @@ impl<'a> SchematicCanvas<'a> {
                     cy - oy,
                     self.prefs.snap_enabled,
                     self.prefs.snap_grid_mm,
+                    self.prefs.snap_hotspots.then(|| {
+                        signex_types::schematic::hotspot_capture_radius(
+                            if self.prefs.snap_enabled {
+                                self.prefs.snap_grid_mm
+                            } else {
+                                0.0
+                            },
+                        )
+                    }),
                 )
             })
     }
@@ -852,6 +874,7 @@ mod tests {
             x: 10.0,
             y: 10.0,
             severity: ErcMarkerSeverity::Error,
+            net_level: false,
         });
         let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
         assert!(view.selected.is_empty());

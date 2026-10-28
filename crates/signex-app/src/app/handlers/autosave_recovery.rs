@@ -51,6 +51,19 @@ impl Signex {
         Task::batch(due.iter().map(|path| self.start_recovery_check(path)))
     }
 
+    /// Startup, before any document opens: finish the recovery-copy moves a
+    /// previous run left journalled (#1510). A move that still fails stays
+    /// journalled and its copy stays untouched at the old key, for the next
+    /// start to retry. It is not handed to the live state: a document opened
+    /// at the new path finds nothing to offer, and a move landing later would
+    /// put the copy under a key the session may already write to.
+    pub(crate) fn autosave_finish_pending_moves(&mut self) {
+        let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
+            return;
+        };
+        crate::autosave::pending_move::finish_all(&dir);
+    }
+
     /// Startup: remove temp files a crashed write stranded in the
     /// recovery folder. Recovery copies themselves are reconciled when
     /// their document opens, never by age.

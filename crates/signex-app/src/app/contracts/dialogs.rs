@@ -260,9 +260,10 @@ pub enum ContextMenuMsg {
     SubmenuEnterPanel,
     /// Hover left the open submenu panel — starts the close timer.
     SubmenuLeavePanel,
-    /// 50 ms tick fired by the subscription while the context menu is
-    /// open; promotes a mature `pending_submenu` into an actual open
-    /// and a mature `pending_submenu_close` into an actual close.
+    /// Tick (50 ms) fired by the subscription while the context menu is
+    /// open; promotes a `pending_submenu` that has hovered long enough into
+    /// an actual open, and closes a submenu once `submenu_unhovered_since`
+    /// has aged.
     SubmenuTickHover,
 }
 
@@ -342,7 +343,7 @@ pub struct ExportWriteOutcome {
 #[derive(Debug, Clone)]
 pub enum SelectionFilterMsg {
     /// v0.18.14.1 — Custom Selection Filter modal launcher. Opens
-    /// the 8-row checkbox table over the active footprint editor.
+    /// the checkbox table of selection kinds over the active footprint editor.
     OpenCustom,
     /// v0.18.14.1 — Custom Selection Filter modal: Cancel / Esc.
     /// Discards the in-flight draft.
@@ -442,6 +443,13 @@ pub enum FileMsg {
     /// The off-thread volume probes of a Save All finished; its writes
     /// start now (#1216).
     SaveAllProbed(Box<SaveAllPlan>),
+    /// The off-thread identity probe of a loose document's directory finished
+    /// (#1447): the case rule open and Ctrl+S use to tell whether two
+    /// spellings are one file.
+    DirCaseProbed {
+        dir: PathBuf,
+        answer: crate::app::state::project_case::CaseProbeOutcome,
+    },
     /// Every write a Save All started has completed; carries what to do
     /// next (close the project, quit) and the failures already known.
     SaveAllSettled(Box<SaveAllSettle>),
@@ -503,11 +511,10 @@ pub enum ProjectMsg {
     /// confirmation modal, shown when the user tries to exit Signex
     /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.
     AppQuitConfirm(ProjectCloseChoice),
-    /// Dismiss the Project Options metadata modal.
-    CloseOptions,
-    /// The user picked a designator standard in Project Options (#1232);
-    /// `None` is "Library designator" (no standard).
-    DesignatorStandardPicked(Option<signex_types::designator::DesignatorStandard>),
+    /// A Project tab message (#1202), routed to the `project_tab` slice.
+    Tab(crate::app::ProjectTabMsg),
+    /// The off-thread `.snxprj` write a Project tab Ctrl+S started finished.
+    FileSaved(Box<crate::persist::ProjectSaveDone>),
     /// Result of the `Add Existing to Project…` file picker. Carries
     /// the owning project's id plus the user's picks (`None` on
     /// cancel, otherwise one or more paths from `pick_files`) so the

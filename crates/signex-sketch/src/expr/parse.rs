@@ -684,7 +684,7 @@ pub fn parse(src: &str) -> Result<ExprNode, ExprError> {
 
 // =========================================================================
 // Smoke tests — keep these light; the heavy suite lives in
-// `tests/expr_parser.rs`.
+// `tests/integration/expr_parser.rs`.
 // =========================================================================
 
 #[cfg(test)]

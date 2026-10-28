@@ -28,6 +28,7 @@
 //! the legacy schema in favour of user-defined columns.
 
 pub mod project;
+mod symbol_index;
 mod symbol_problems;
 
 pub use symbol_problems::SymbolFileProblem;
@@ -111,6 +112,9 @@ pub struct LocalGitAdapter {
     git_lock: Mutex<()>,
     /// `.snxsym` containers the last symbol scan could not read (#690).
     symbol_problems: Mutex<symbol_problems::SymbolProblemLedger>,
+    /// uuid -> `.snxsym` container path, a hint only: every use re-reads
+    /// the file and falls back to a rescan on mismatch (#1362).
+    symbol_index: symbol_index::SymbolIndex,
     /// `.snxfpt` files already warned about, keyed by (path, mtime) (#924).
     skipped_footprints: Mutex<std::collections::HashSet<(PathBuf, std::time::SystemTime)>>,
     /// Stamp and content hash of the `.snxlib` text behind `library_file`
@@ -224,6 +228,7 @@ impl LocalGitAdapter {
             manifest_synth,
             git_lock: Mutex::new(()),
             symbol_problems: Mutex::default(),
+            symbol_index: Default::default(),
             skipped_footprints: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
@@ -269,6 +274,7 @@ impl LocalGitAdapter {
             manifest_synth,
             git_lock: Mutex::new(()),
             symbol_problems: Mutex::default(),
+            symbol_index: Default::default(),
             skipped_footprints: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
@@ -375,6 +381,7 @@ impl LocalGitAdapter {
             manifest_synth,
             git_lock: Mutex::new(()),
             symbol_problems: Mutex::default(),
+            symbol_index: Default::default(),
             skipped_footprints: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),

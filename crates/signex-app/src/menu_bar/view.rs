@@ -4,7 +4,7 @@ use super::*;
 
 // ─── View: Menu Bar ──────────────────────────────────────────
 
-pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMessage> {
+pub fn view(tokens: &ThemeTokens, ctx: MenuContext<'_>) -> Element<'static, MenuMessage> {
     let mc = MenuColors::from_tokens(tokens);
     // `leaf_if(enabled, ..)` wraps `leaf`/`leaf_disabled` — enabled items
     // dispatch their message, disabled items render greyed-out like

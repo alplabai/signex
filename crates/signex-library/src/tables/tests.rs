@@ -104,6 +104,7 @@ fn mk_row(internal_pn: &str, class: &str) -> ComponentRow {
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Released,
         symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
@@ -153,6 +154,17 @@ fn tsv_roundtrip_preserves_every_document() {
     assert_eq!(back, vec![row.clone()]);
     assert_eq!(back[0].datasheet_label, "TI");
     assert_eq!(back[0].more_datasheets.len(), 2);
+}
+
+/// The description is a plain schema column and round-trips with quotes
+/// and non-ASCII text.
+#[test]
+fn a_description_round_trips() {
+    let mut row = mk_row("R1", "resistor");
+    row.description = "100 nF, \"X7R\", 50 V µ".into();
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    write_table(tmp.path(), std::slice::from_ref(&row)).unwrap();
+    assert_eq!(read_table(tmp.path()).unwrap(), vec![row]);
 }
 
 /// A row with one unlabelled document keeps the single-object cell it

@@ -61,6 +61,12 @@ impl Signex {
     /// live preview (e.g. the experimental PCB GPU render toggle).
     pub(crate) fn handle_preferences_close_requested(&mut self) -> Task<Message> {
         if self.ui_state.preferences_dirty {
+            // The footer's "Unsaved changes" bar is already visible; the log
+            // line says why a dismiss (OS close, X, Esc) did nothing, once
+            // per attempt.
+            crate::diagnostics::log_warning(
+                "Preferences has unsaved changes; Save or Discard & Close before closing",
+            );
             return Task::none();
         }
         self.ui_state.preferences_open = false;
@@ -81,6 +87,8 @@ impl Signex {
         self.ui_state.preferences_draft_pcb_gpu_render = self.ui_state.pcb_gpu_render;
         self.ui_state.preferences_draft_annotate_undo = self.ui_state.annotate_undo;
         self.ui_state.preferences_draft_move_keeps_wires = self.ui_state.move_keeps_wires;
+        self.ui_state.preferences_draft_window_controls_placement =
+            self.ui_state.window_controls_placement;
         self.ui_state.preferences_draft_autosave_enabled = self.ui_state.autosave_enabled;
         // #629 — the three Symbol Editor settings. Before they had
         // committed fields there was nothing to seed them from, so a
@@ -127,7 +135,15 @@ impl Signex {
     fn commit_erc_severity_draft(&mut self) {
         let ui = &mut self.ui_state;
         let mut changed = false;
-        for rule in signex_erc::RuleKind::ALL {
+        // Walk the maps' own keys, not `RuleKind::ALL`, so a rule missing
+        // from that list can never have its edit dropped.
+        let rules: std::collections::HashSet<signex_erc::RuleKind> = ui
+            .preferences_draft_erc_severity
+            .keys()
+            .chain(ui.preferences_seed_erc_severity.keys())
+            .copied()
+            .collect();
+        for rule in rules {
             let draft = ui.preferences_draft_erc_severity.get(&rule).copied();
             if draft == ui.preferences_seed_erc_severity.get(&rule).copied() {
                 continue;
@@ -176,7 +192,7 @@ impl Signex {
     /// never assign `preferences_dirty` from an ad-hoc comparison; that
     /// drift class is exactly what let imperative edits be clobbered back
     /// to "clean" (review #308 finding 1).
-    fn recompute_preferences_dirty(&mut self) {
+    pub(crate) fn recompute_preferences_dirty(&mut self) {
         self.ui_state.preferences_dirty = self.ui_state.preferences_has_unsaved_changes();
     }
 
@@ -236,6 +252,7 @@ impl Signex {
         use crate::preferences::PrefMsg;
 
         match msg {
+            PrefMsg::Noop => {}
             PrefMsg::Nav(nav) => {
                 self.ui_state.preferences_nav = nav;
             }
@@ -270,6 +287,8 @@ impl Signex {
                 self.ui_state.pcb_gpu_render = self.ui_state.preferences_draft_pcb_gpu_render;
                 self.ui_state.annotate_undo = self.ui_state.preferences_draft_annotate_undo;
                 self.ui_state.move_keeps_wires = self.ui_state.preferences_draft_move_keeps_wires;
+                self.ui_state.window_controls_placement =
+                    self.ui_state.preferences_draft_window_controls_placement;
                 self.ui_state.autosave_enabled = self.ui_state.preferences_draft_autosave_enabled;
                 // #629 — the three Symbol Editor settings commit here like
                 // every other appearance draft, instead of writing
@@ -302,6 +321,9 @@ impl Signex {
                 crate::fonts::write_grid_style_pref(self.ui_state.grid_style);
                 crate::fonts::write_annotate_undo_pref(self.ui_state.annotate_undo);
                 crate::fonts::write_move_keeps_wires_pref(self.ui_state.move_keeps_wires);
+                crate::fonts::write_window_controls_placement_pref(
+                    self.ui_state.window_controls_placement,
+                );
                 crate::fonts::write_autosave_enabled_pref(self.ui_state.autosave_enabled);
                 crate::fonts::write_pcb_gpu_render_pref(self.ui_state.pcb_gpu_render);
                 let theme = self.ui_state.theme_id;
@@ -393,7 +415,7 @@ impl Signex {
                 }
                 match crate::keymap::save_profile_set(&keymap_profiles) {
                     Ok(()) => {
-                        self.ui_state.keymap_profiles = keymap_profiles;
+                        self.ui_state.set_keymap_profiles(keymap_profiles);
                         self.ui_state.active_keymap =
                             std::sync::Arc::new(self.ui_state.keymap_profiles.compile_active());
                         self.ui_state.preferences_keymap_recorder = None;
@@ -470,6 +492,10 @@ impl Signex {
             }
             PrefMsg::DraftMoveKeepsWires(enabled) => {
                 self.ui_state.preferences_draft_move_keeps_wires = enabled;
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftWindowControlsPlacement(placement) => {
+                self.ui_state.preferences_draft_window_controls_placement = placement;
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftPcbGpuRender(enabled) => {
@@ -795,7 +821,6 @@ impl Signex {
             | PrefMsg::KeymapProfileLoaded(..)
             | PrefMsg::KeymapExportProfile
             | PrefMsg::KeymapExportFinished(..)
-            | PrefMsg::KeymapBindingChanged { .. }
             | PrefMsg::KeymapRecorderOpen { .. }
             | PrefMsg::KeymapRecorderCancel
             | PrefMsg::KeymapRecorderStart

@@ -141,6 +141,10 @@ impl Signex {
                 let task = self.begin_save_all_planned(*plan);
                 iced::Task::batch([task, self.finish_update()])
             }
+            FileMsg::DirCaseProbed { dir, answer } => {
+                let task = self.handle_dir_case_probed(dir, answer);
+                iced::Task::batch([task, self.finish_update()])
+            }
             FileMsg::SaveAllSettled(settle) => {
                 let task = self.handle_save_all_settled(*settle);
                 iced::Task::batch([task, self.finish_update()])

@@ -92,6 +92,9 @@ mod preferences_prefs_recovery;
 #[path = "regression/preferences_symbol_drafts.rs"]
 mod preferences_symbol_drafts;
 
+#[path = "regression/preferences_window_controls.rs"]
+mod preferences_window_controls;
+
 #[path = "regression/undo_marker_divergence.rs"]
 mod undo_marker_divergence;
 
@@ -340,3 +343,13 @@ mod sheet_frame_canvas;
 // BOM opens the BOM dialog.
 #[path = "regression/planned_tools.rs"]
 mod planned_tools;
+
+// #1202 — the Project document tab replaces the Project Options modal.
+#[path = "regression/project_tab.rs"]
+mod project_tab;
+#[path = "regression/project_tab_rename.rs"]
+mod project_tab_rename;
+#[path = "regression/project_tab_saves.rs"]
+mod project_tab_saves;
+#[path = "regression/project_tab_support.rs"]
+mod project_tab_support;

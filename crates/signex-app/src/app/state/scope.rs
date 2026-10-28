@@ -443,6 +443,7 @@ mod tests {
             id: ProjectId(id),
             path: PathBuf::from(dir).join("proj.snxprj"),
             data: ProjectData {
+                description: None,
                 name: "proj".to_string(),
                 dir: dir.to_string(),
                 schematic_root: filenames.first().map(|f| (*f).to_string()),
@@ -470,6 +471,7 @@ mod tests {
             pending_libraries: std::collections::HashMap::new(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         }
     }
 
