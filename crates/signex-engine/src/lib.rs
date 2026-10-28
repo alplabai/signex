@@ -51,7 +51,8 @@ pub use command::{
 };
 pub use error::EngineError;
 pub use exec::change_component::{
-    ComponentChangePreview, ComponentReplacement, change_component_preview,
+    ComponentChangePreview, ComponentReplacement, DataChange, change_component_preview,
+    placed_unit_ids,
 };
 pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
 pub use find::{

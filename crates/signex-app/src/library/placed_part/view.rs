@@ -63,6 +63,14 @@ pub fn preview_lines(preview: &ComponentChangePreview) -> Vec<PreviewLine> {
             list(&preview.gained)
         )));
     }
+    for lost in &preview.changed_data {
+        let new = if lost.new.is_empty() {
+            "cleared"
+        } else {
+            lost.new.as_str()
+        };
+        lines.push(warn(format!("{} {} \u{2192} {new}", lost.label, lost.old)));
+    }
     if preview.is_clean() {
         lines.push(PreviewLine {
             kind: LineKind::Info,
@@ -307,6 +315,34 @@ mod tests {
     }
 
     #[test]
+    fn part_data_that_is_cleared_or_changed_is_warned_about_with_its_old_value() {
+        let preview = ComponentChangePreview {
+            changed_data: vec![
+                signex_engine::DataChange {
+                    label: "Footprint".into(),
+                    old: "R_0603".into(),
+                    new: String::new(),
+                },
+                signex_engine::DataChange {
+                    label: "MPN".into(),
+                    old: "OLD".into(),
+                    new: "NEW".into(),
+                },
+            ],
+            ..Default::default()
+        };
+        let warnings: Vec<String> = preview_lines(&preview)
+            .into_iter()
+            .filter(|l| l.kind == LineKind::Warning)
+            .map(|l| l.text)
+            .collect();
+        assert_eq!(
+            warnings,
+            ["Footprint R_0603 \u{2192} cleared", "MPN OLD \u{2192} NEW"]
+        );
+    }
+
+    #[test]
     fn lost_connections_are_warned_about_first_and_the_confirm_says_so() {
         let preview = ComponentChangePreview {
             mapping: PinMapping {
@@ -319,6 +355,7 @@ mod tests {
             missing_unit: Some(2),
             replaced: vec!["Footprint".into(), "MPN".into()],
             kept: vec!["Designator".into(), "Tolerance".into()],
+            changed_data: Vec::new(),
         };
         let lines = preview_lines(&preview);
         let warnings: Vec<&str> = lines

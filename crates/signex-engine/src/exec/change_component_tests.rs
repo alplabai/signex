@@ -1,7 +1,7 @@
 //! `Command::ChangeComponent` (#1260): the swap, its single undo step, and
 //! the preview of what it does to connected pins.
 
-use super::change_component::{ComponentReplacement, change_component_preview};
+use super::change_component::{ComponentReplacement, DataChange, change_component_preview};
 use crate::test_support::test_sheet;
 use crate::{Command, Engine};
 use signex_types::schematic::{
@@ -391,4 +391,50 @@ fn preview_reports_a_unit_the_new_part_lacks() {
     engine.set_document(doc);
     let p = change_component_preview(engine.document(), id, &replacement(swap_pins()));
     assert_eq!(p.missing_unit, Some(3));
+}
+
+fn change(label: &str, old: &str, new: &str) -> DataChange {
+    DataChange {
+        label: label.into(),
+        old: old.into(),
+        new: new.into(),
+    }
+}
+
+#[test]
+fn the_preview_names_the_old_value_of_part_data_that_is_cleared_or_changed() {
+    let (engine, id) = engine_with_wired_pin_2();
+    let mut r = replacement(swap_pins());
+    r.footprint = String::new();
+    let p = change_component_preview(engine.document(), id, &r);
+    assert!(
+        p.changed_data.contains(&change("Footprint", "R_0603", "")),
+        "{:?}",
+        p.changed_data
+    );
+    assert!(
+        p.changed_data
+            .contains(&change("Value", "OLD-MPN", "NEW-MPN"))
+    );
+    assert!(
+        p.changed_data.iter().all(|c| !c.old.is_empty()),
+        "filling an empty field loses nothing: {:?}",
+        p.changed_data
+    );
+}
+
+#[test]
+fn the_part_data_preview_covers_every_unit() {
+    let (mut engine, first, _second) = engine_with_two_units();
+    let mut doc = engine.document().clone();
+    doc.symbols[1].footprint = "FP-OF-UNIT-2".into();
+    engine.set_document(doc);
+    let mut r = two_unit_replacement();
+    r.footprint = String::new();
+    let p = change_component_preview(engine.document(), first, &r);
+    assert!(p.changed_data.contains(&change("Footprint", "R_0603", "")));
+    assert!(
+        p.changed_data
+            .contains(&change("Footprint", "FP-OF-UNIT-2", ""))
+    );
 }

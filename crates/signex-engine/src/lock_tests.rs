@@ -466,3 +466,43 @@ fn deleting_a_wire_on_a_locked_pin_is_still_allowed() {
 fn item_of(uuid: Uuid) -> SelectedItem {
     SelectedItem::new(uuid, SelectedKind::Symbol)
 }
+
+/// U1 unit 1 (free) and unit 2 (locked), one part drawn as two units.
+fn engine_with_a_locked_second_unit() -> Engine {
+    let unit = |n: u128, unit: u32, locked: bool| Symbol {
+        uuid: id(n),
+        reference: "U1".into(),
+        lib_id: "L:OLD".into(),
+        position: Point::new(10.0 * n as f64, 10.0),
+        unit,
+        locked,
+        ..Default::default()
+    };
+    let sheet = SchematicSheet {
+        symbols: vec![unit(1, 1, false), unit(2, 2, true)],
+        ..Default::default()
+    };
+    Engine::new(sheet).expect("engine")
+}
+
+#[test]
+fn changing_the_component_of_a_free_unit_is_refused_while_a_sibling_unit_is_locked() {
+    let mut engine = engine_with_a_locked_second_unit();
+    let before = format!("{:?}", engine.document());
+    let message = locked_error(engine.execute(Command::ChangeComponent {
+        symbol_id: id(1),
+        replacement: crate::ComponentReplacement {
+            lib_symbol: lib_symbol_named("L:NEW"),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
+            value: "NEW".into(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            fields: Vec::new(),
+        },
+    }));
+    assert!(message.contains("U1 is locked"), "{message}");
+    assert_eq!(format!("{:?}", engine.document()), before);
+    assert!(engine.undo().is_ok_and(|undone| undone.is_none()));
+}

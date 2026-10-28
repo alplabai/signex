@@ -34,31 +34,44 @@ fn open_url(url: &str, part: &str) -> Result<(), String> {
     })
 }
 
-/// A UNC share, a verbatim or a device path: `is_file` on one of those can
-/// reach out to a network host, so it is refused on the string alone.
-fn is_remote_or_device_path(path: &Path) -> bool {
-    let text = path.to_string_lossy();
-    ["\\\\", "//", "\\??\\"]
-        .iter()
-        .any(|prefix| text.starts_with(prefix))
+/// Whether `path` is exactly one plain file name directly under `assets_dir`.
+/// Decided on the text alone, before any filesystem call: the library root
+/// is the user's own choice (a team library may sit on `\\\\server\\libs`), but
+/// the document's name comes from the row and is untrusted, so a UNC,
+/// verbatim or device path, a separator or a `..` in it is refused.
+fn is_plain_name_under(path: &Path, assets_dir: &Path) -> bool {
+    use std::path::Component;
+    let Ok(rest) = path.strip_prefix(assets_dir) else {
+        return false;
+    };
+    let mut parts = rest.components();
+    let (Some(Component::Normal(name)), None) = (parts.next(), parts.next()) else {
+        return false;
+    };
+    let name = name.to_string_lossy();
+    !name.contains(['\\', '/', ':'])
 }
 
-/// Why a pinned file may not be opened, as the end of an advice line.
+/// Why a pinned file may not be opened, as the end of an advice line; the
+/// canonical path to launch when it may.
 ///
-/// It must be a `.pdf` that really sits inside the library's datasheet
-/// folder (symlinks resolved), is a regular file and carries the PDF header
-/// `store_datasheet` demands. Nothing touches the filesystem before the path
-/// text passes the remote-path test.
-fn check_pinned(path: &Path, assets_dir: &Path) -> Result<(), &'static str> {
+/// It must be a plain `.pdf` name that really sits inside the library's
+/// datasheet folder, must not be a symlink (the launcher would follow it to
+/// whatever it names), is a regular file, and carries the PDF header
+/// `store_datasheet` demands. The extension is judged again on the resolved
+/// path, which is also what is launched.
+fn check_pinned(path: &Path, assets_dir: &Path) -> Result<std::path::PathBuf, &'static str> {
     use std::io::Read as _;
-    if is_remote_or_device_path(path) || is_remote_or_device_path(assets_dir) {
+    if !is_plain_name_under(path, assets_dir) {
         return Err("its path is not allowed");
     }
-    let is_pdf_name = path
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("pdf"));
-    if !is_pdf_name {
+    let has_pdf_extension = |p: &Path| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf"));
+    if !has_pdf_extension(path) {
         return Err("it is not a .pdf file");
+    }
+    let link = std::fs::symlink_metadata(path).map_err(|_| "its file is missing")?;
+    if link.file_type().is_symlink() {
+        return Err("it is a link, not the pinned file");
     }
     let real = path.canonicalize().map_err(|_| "its file is missing")?;
     let root = assets_dir
@@ -66,6 +79,9 @@ fn check_pinned(path: &Path, assets_dir: &Path) -> Result<(), &'static str> {
         .map_err(|_| "the library's datasheet folder is missing")?;
     if !real.starts_with(&root) {
         return Err("it is not inside the library's datasheet folder");
+    }
+    if !has_pdf_extension(&real) {
+        return Err("it is not a .pdf file");
     }
     if !real.is_file() {
         return Err("it is not a regular file");
@@ -77,16 +93,16 @@ fn check_pinned(path: &Path, assets_dir: &Path) -> Result<(), &'static str> {
     if !signex_library::is_pdf(&head) {
         return Err("it is not a PDF");
     }
-    Ok(())
+    Ok(real)
 }
 
 /// How much of the file is read to look for the PDF header.
 const PDF_HEAD_BYTES: u64 = 1024;
 
 fn open_pinned(path: &Path, assets_dir: &Path, part: &str) -> Result<(), String> {
-    check_pinned(path, assets_dir)
+    let real = check_pinned(path, assets_dir)
         .map_err(|why| format!("Re-pin the datasheet of {part} in its library row: {why}."))?;
-    launch(path).map_err(|e| {
+    launch(&real).map_err(|e| {
         format!("Install a PDF viewer to open the datasheet of {part}: it did not launch ({e}).")
     })
 }
@@ -216,7 +232,7 @@ mod tests {
         std::fs::write(&outside, b"%PDF-1.7 x").unwrap();
         let advice = refusal(&pinned(&outside, &l.assets));
         assert_advice_without_path(&advice);
-        assert!(advice.contains("datasheet folder"), "{advice}");
+        assert!(advice.contains("not allowed"), "{advice}");
     }
 
     #[cfg(unix)]
@@ -229,7 +245,7 @@ mod tests {
         std::os::unix::fs::symlink(&target, &link).unwrap();
         let advice = refusal(&pinned(&link, &l.assets));
         assert_advice_without_path(&advice);
-        assert!(advice.contains("datasheet folder"), "{advice}");
+        assert!(advice.contains("link"), "{advice}");
     }
 
     #[test]
@@ -242,6 +258,44 @@ mod tests {
         ] {
             let advice = refusal(&pinned(Path::new(bad), Path::new("/lib/assets/datasheets")));
             assert_advice_without_path(&advice);
+            assert!(advice.contains("not allowed"), "{bad}: {advice}");
+        }
+    }
+
+    /// The probe of the review: `<hash>.pdf` is a symlink to a script that
+    /// starts with the PDF magic. Name, folder and header all pass on the link
+    /// itself; the launcher would follow it to the script.
+    #[cfg(unix)]
+    #[test]
+    fn a_pdf_named_symlink_to_a_script_inside_the_folder_is_refused() {
+        let l = lib();
+        let script = l.assets.join("run.command");
+        std::fs::write(&script, b"%PDF-1.7\n#!/bin/sh\necho owned\n").unwrap();
+        let link = l.assets.join(format!("{}.pdf", "a".repeat(64)));
+        std::os::unix::fs::symlink(&script, &link).unwrap();
+        let advice = refusal(&pinned(&link, &l.assets));
+        assert_advice_without_path(&advice);
+    }
+
+    #[test]
+    fn a_library_on_a_network_share_is_not_refused_for_its_root() {
+        // Team libraries live on `//server/libs`: the share is the user's
+        // choice. Only the document's own name is untrusted.
+        let root = Path::new("//server/libs/main/assets/datasheets");
+        let file = root.join(format!("{}.pdf", "b".repeat(64)));
+        let advice = refusal(&pinned(&file, root));
+        assert!(!advice.contains("not allowed"), "{advice}");
+    }
+
+    #[test]
+    fn a_document_name_that_escapes_the_folder_is_refused() {
+        let root = Path::new("/lib/assets/datasheets");
+        for bad in [
+            "/lib/assets/datasheets/../../etc/x.pdf",
+            "/lib/assets/datasheets/sub/x.pdf",
+            r"/lib/assets/datasheets/\\srv\share\x.pdf",
+        ] {
+            let advice = refusal(&pinned(Path::new(bad), root));
             assert!(advice.contains("not allowed"), "{bad}: {advice}");
         }
     }

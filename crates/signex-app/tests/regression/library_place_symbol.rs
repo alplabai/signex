@@ -199,7 +199,11 @@ fn build_in_mode(
             Some((lib, sym)) => PrimitiveRef::new(lib, sym),
             None => PrimitiveRef::new(library_id, sym_uuid),
         },
-        footprint_ref: None,
+        // A `-fp` library's row binds a footprint, to test what a swap does
+        // with the footprint text.
+        footprint_ref: name
+            .ends_with("-fp")
+            .then(|| PrimitiveRef::new(library_id, Uuid::new_v4())),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Acme", "TWO-1"),

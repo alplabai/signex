@@ -386,9 +386,18 @@ fn wire_pins(app: &mut Signex, numbers: &[&str]) {
 /// A sheet holding the fixture's part `reference`, its pins `wired`, and the
 /// replacement library open next to it.
 fn change_setup(reference: &str, replacement: Symbol, wired: &[&str]) -> (Signex, Fixture) {
+    change_setup_in("lib-new", reference, replacement, wired)
+}
+
+fn change_setup_in(
+    library: &str,
+    reference: &str,
+    replacement: Symbol,
+    wired: &[&str],
+) -> (Signex, Fixture) {
     ensure_logger();
     let old = fixture();
-    let new = fixture_with_symbol("lib-new", replacement);
+    let new = fixture_with_symbol(library, replacement);
     let mut app = app_with_libraries(&[&old, &new]);
     place(&mut app, &old);
     rename(&mut app, reference);
@@ -695,8 +704,7 @@ fn units_on_another_sheet_of_the_project_refuse_the_change() {
     request(&mut app, PlacedPartAction::ChangeComponent);
 
     assert!(logged(&[
-        "Change Component works on one sheet",
-        "ZM2",
+        "Change Component works on one sheet; units of ZM2 are also on",
         "sheet-two.snxsch"
     ]));
     assert!(app.library.picker.is_none());
@@ -792,10 +800,7 @@ fn the_part_data_of_the_new_row_replaces_the_old_and_user_parameters_stay() {
     send(&mut app, PlacedPartMsg::ChangeConfirmed);
 
     let sym = &doc(&app).symbols[0];
-    assert_ne!(
-        sym.footprint, "OLD-FOOTPRINT",
-        "the old part's footprint is gone"
-    );
+    assert_eq!(sym.footprint, "", "the old part's footprint is gone");
     assert_eq!(sym.fields.get("MPN").map(String::as_str), Some("TWO-1"));
     assert_eq!(
         sym.fields.get("Manufacturer").map(String::as_str),
@@ -885,4 +890,52 @@ fn join_project_with_a_second_sheet(app: &mut Signex) -> PathBuf {
         case_decided: false,
     });
     PathBuf::from("sheet-two.snxsch")
+}
+
+#[test]
+fn a_row_that_binds_a_footprint_does_not_put_a_third_footprint_format_on_the_symbol() {
+    // The netlist, the BOM and the hover card print `Symbol.footprint`
+    // verbatim, so it must stay what a fresh placement leaves: empty.
+    let (mut app, new) = change_setup_in("lib-new-fp", "ZF1", renumbered(), &[]);
+    set_symbol(&mut app, |s| s.footprint = "R_0603".into());
+    request(&mut app, PlacedPartAction::ChangeComponent);
+    pick_part(&mut app, &new);
+
+    send(&mut app, PlacedPartMsg::ChangeConfirmed);
+
+    assert_eq!(doc(&app).symbols[0].footprint, "");
+}
+
+#[test]
+fn a_sibling_unit_on_a_sheet_that_is_not_open_refuses_the_change() {
+    // The project declares a second page nobody opened, so no engine holds
+    // it: units of the part could be there, and a swap would split the part.
+    let (mut app, _new) = change_setup("ZM4", renumbered(), &[]);
+    join_project_with_a_second_sheet(&mut app);
+
+    request(&mut app, PlacedPartAction::ChangeComponent);
+
+    assert!(logged(&[
+        "Open every sheet of the project to change ZM4",
+        "sheet-two.snxsch"
+    ]));
+    assert!(app.library.picker.is_none());
+}
+
+#[test]
+fn a_locked_sibling_unit_refuses_the_change_before_the_picker_opens() {
+    let (mut app, _new) = change_setup("ZL1", renumbered(), &[]);
+    add_second_unit(&mut app);
+    let mut d = doc(&app).clone();
+    d.symbols[1].locked = true;
+    app.document_state
+        .active_engine_mut()
+        .unwrap()
+        .set_document(d);
+    select_first(&mut app);
+
+    request(&mut app, PlacedPartAction::ChangeComponent);
+
+    assert!(logged(&["Unlock ZL1", "a unit of it is locked"]));
+    assert!(app.library.picker.is_none());
 }

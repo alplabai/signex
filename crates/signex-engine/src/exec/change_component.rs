@@ -44,6 +44,18 @@ pub struct ComponentChangePreview {
     pub replaced: Vec<String>,
     /// What stays: the designator and parameters the new part lacks.
     pub kept: Vec<String>,
+    /// Non-empty part data that is cleared or overwritten, with its old
+    /// value, over every placed unit.
+    pub changed_data: Vec<DataChange>,
+}
+
+/// One part-data field whose current value is lost by the swap.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DataChange {
+    pub label: String,
+    pub old: String,
+    /// Empty when the field is cleared.
+    pub new: String,
 }
 
 impl ComponentChangePreview {
@@ -72,6 +84,14 @@ fn placed_units(doc: &SchematicSheet, symbol_id: Uuid) -> Vec<&Symbol> {
                     && s.reference.trim() == reference
                     && s.lib_id == target.lib_id)
         })
+        .collect()
+}
+
+/// The uuids of [`placed_units`].
+pub fn placed_unit_ids(doc: &SchematicSheet, symbol_id: Uuid) -> Vec<Uuid> {
+    placed_units(doc, symbol_id)
+        .iter()
+        .map(|s| s.uuid)
         .collect()
 }
 
@@ -129,31 +149,47 @@ fn unit_preview(
     preview
 }
 
-/// What replacing the part data of `target` with `replacement` changes, and
-/// what stays.
-fn data_changes(target: &Symbol, replacement: &ComponentReplacement) -> (Vec<String>, Vec<String>) {
+/// What replacing the part data of every unit with `replacement` changes
+/// (labels), what stays, and which non-empty values are lost.
+fn data_changes(
+    units: &[&Symbol],
+    replacement: &ComponentReplacement,
+) -> (Vec<String>, Vec<String>, Vec<DataChange>) {
     let mut replaced = Vec::new();
-    let mut check = |label: &str, differs: bool| {
-        if differs {
-            replaced.push(label.to_string());
-        }
-    };
-    check("Value", target.value != replacement.value);
-    check("Footprint", target.footprint != replacement.footprint);
-    check("Datasheet", target.datasheet != replacement.datasheet);
-    for (key, value) in &replacement.fields {
-        let current = target.fields.get(key).map_or("", String::as_str);
-        check(key, current != value);
-    }
+    let mut changed = Vec::new();
     let mut kept = vec!["Designator".to_string()];
-    let mut parameters: Vec<&String> = target
-        .fields
-        .keys()
-        .filter(|k| !replacement.fields.iter().any(|(key, _)| key == *k))
-        .collect();
-    parameters.sort();
-    kept.extend(parameters.into_iter().cloned());
-    (replaced, kept)
+    for unit in units {
+        let mut check = |label: &str, old: &str, new: &str| {
+            if old == new {
+                return;
+            }
+            push_new(&mut replaced, label.to_string());
+            let lost = DataChange {
+                label: label.to_string(),
+                old: old.to_string(),
+                new: new.to_string(),
+            };
+            if !old.is_empty() && !changed.contains(&lost) {
+                changed.push(lost);
+            }
+        };
+        check("Value", &unit.value, &replacement.value);
+        check("Footprint", &unit.footprint, &replacement.footprint);
+        check("Datasheet", &unit.datasheet, &replacement.datasheet);
+        for (key, value) in &replacement.fields {
+            check(key, unit.fields.get(key).map_or("", String::as_str), value);
+        }
+        let mut parameters: Vec<&String> = unit
+            .fields
+            .keys()
+            .filter(|k| !replacement.fields.iter().any(|(key, _)| key == *k))
+            .collect();
+        parameters.sort();
+        for key in parameters {
+            push_new(&mut kept, key.clone());
+        }
+    }
+    (replaced, kept, changed)
 }
 
 /// What swapping the part of placed symbol `symbol_id` for `replacement`
@@ -166,9 +202,9 @@ pub fn change_component_preview(
     replacement: &ComponentReplacement,
 ) -> ComponentChangePreview {
     let units = placed_units(doc, symbol_id);
-    let Some(target) = units.iter().find(|s| s.uuid == symbol_id) else {
+    if units.is_empty() {
         return ComponentChangePreview::default();
-    };
+    }
     let new_drawing = doc
         .lib_symbols
         .get(&replacement.lib_symbol.id)
@@ -203,7 +239,7 @@ pub fn change_component_preview(
         .map(|p| p.old.clone())
         .collect();
     preview.mapping.unmatched.retain(|k| !paired.contains(k));
-    (preview.replaced, preview.kept) = data_changes(target, replacement);
+    (preview.replaced, preview.kept, preview.changed_data) = data_changes(&units, replacement);
     preview
 }
 

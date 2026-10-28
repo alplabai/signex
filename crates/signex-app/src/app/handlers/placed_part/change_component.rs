@@ -6,11 +6,14 @@
 use iced::Task;
 use signex_engine::{
     Command, ComponentChangePreview, ComponentReplacement, change_component_preview,
+    placed_unit_ids,
 };
+use signex_types::schematic::Symbol;
 use uuid::Uuid;
 
 use super::{PlacedPart, part_name};
 use crate::app::contracts::Message;
+use crate::app::project_sheets::project_pages;
 use crate::app::state::Signex;
 use crate::library::PickerState;
 use crate::library::messages::{
@@ -22,18 +25,8 @@ use crate::library::state::{ChangePreview, PickerMode};
 impl Signex {
     pub(super) fn start_change_component(&mut self, part: PlacedPart) -> Task<Message> {
         let name = part_name(&part.symbol);
-        if part.symbol.locked {
-            crate::diagnostics::log_warning(format!(
-                "Unlock {name} in Properties to change its component: it is locked."
-            ));
-            return Task::none();
-        }
-        let elsewhere = self.units_on_other_sheets(&part);
-        if !elsewhere.is_empty() {
-            crate::diagnostics::log_warning(format!(
-                "Change Component works on one sheet; units of {name} are on other sheets: {}",
-                elsewhere.join(", ")
-            ));
+        if let Some(advice) = self.change_blocker(&part.target, &part.symbol) {
+            crate::diagnostics::log_warning(advice);
             return Task::none();
         }
         if self.library.open_libraries.is_empty() {
@@ -180,6 +173,16 @@ impl Signex {
             self.drop_change(&reference, "the sheet or part changed meanwhile");
             return Task::none();
         };
+        let blocker = doc
+            .symbols
+            .iter()
+            .find(|s| s.uuid == target.symbol_id)
+            .and_then(|symbol| self.change_blocker(&target, symbol));
+        if let Some(advice) = blocker {
+            self.library.picker = None;
+            crate::diagnostics::log_warning(advice);
+            return Task::none();
+        }
         let fresh = change_component_preview(doc, target.symbol_id, &replacement);
         if fresh != shown {
             crate::diagnostics::log_warning(format!(
@@ -232,38 +235,71 @@ impl Signex {
         }
     }
 
-    /// Where the other units of the part (same designator, same drawing)
-    /// sit on the project's other open sheets: one name per sheet.
-    fn units_on_other_sheets(&self, part: &PlacedPart) -> Vec<String> {
-        let reference = part.symbol.reference.trim();
-        if reference.is_empty() {
-            return Vec::new();
-        }
+    /// Why the part cannot be changed as a whole right now, as an advice
+    /// line: a unit of it is locked, units of it are on other sheets of the
+    /// project, or a sheet of the project is not open so that cannot be told.
+    /// Nothing here reads a file: every declared page must already have an
+    /// engine, otherwise the user is asked to open it.
+    fn change_blocker(&self, target: &PlacedPartTarget, symbol: &Symbol) -> Option<String> {
+        let name = part_name(symbol);
         let docs = &self.document_state;
-        let owner = docs
-            .document_project(&part.target.sheet)
-            .map(|p| p.path.clone());
-        let mut sheets: Vec<String> = docs
-            .engines
-            .iter()
-            .filter(|(path, _)| **path != part.target.sheet)
-            .filter(|(path, _)| {
-                owner.is_some() && docs.document_project(path).map(|p| p.path.clone()) == owner
-            })
-            .filter(|(_, engine)| {
-                engine
-                    .document()
-                    .symbols
-                    .iter()
-                    .any(|s| s.reference.trim() == reference && s.lib_id == part.symbol.lib_id)
-            })
-            .map(|(path, _)| {
-                path.file_name()
-                    .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
-            })
-            .collect();
-        sheets.sort();
-        sheets
+        if let Some(doc) = self.target_document(target)
+            && placed_unit_ids(doc, target.symbol_id)
+                .iter()
+                .any(|id| doc.symbols.iter().any(|s| s.uuid == *id && s.locked))
+        {
+            return Some(format!(
+                "Unlock {name} in Properties to change its component: a unit of it is locked."
+            ));
+        }
+        let reference = symbol.reference.trim();
+        let project = docs.document_project(&target.sheet);
+        let owner = project.map(|p| p.path.clone());
+        let mut candidates = project_pages(project);
+        candidates.extend(
+            docs.engines
+                .keys()
+                .filter(|path| {
+                    owner.is_some() && docs.document_project(path).map(|p| p.path.clone()) == owner
+                })
+                .cloned(),
+        );
+        candidates.retain(|path| *path != target.sheet);
+        candidates.sort();
+        candidates.dedup();
+        let file = |path: &std::path::Path| {
+            path.file_name()
+                .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+        };
+        let mut also_on = Vec::new();
+        let mut not_open = Vec::new();
+        for path in &candidates {
+            match docs.engines.get(path) {
+                Some(engine) => {
+                    let holds_a_unit =
+                        !reference.is_empty()
+                            && engine.document().symbols.iter().any(|s| {
+                                s.reference.trim() == reference && s.lib_id == symbol.lib_id
+                            });
+                    if holds_a_unit {
+                        also_on.push(file(path));
+                    }
+                }
+                None => not_open.push(file(path)),
+            }
+        }
+        if !also_on.is_empty() {
+            return Some(format!(
+                "Change Component works on one sheet; units of {name} are also on: {}",
+                also_on.join(", ")
+            ));
+        }
+        (!not_open.is_empty() && !reference.is_empty()).then(|| {
+            format!(
+                "Open every sheet of the project to change {name}: not open: {}",
+                not_open.join(", ")
+            )
+        })
     }
 
     /// The sheet of `target`, if it is still the active one on the engine
@@ -311,7 +347,8 @@ fn replacement_of(resolved: &ResolvedPlacement) -> ComponentReplacement {
         row_id: Some(resolved.row_id),
         library_version: resolved.library_version.clone(),
         value: resolved.value.clone(),
-        footprint: resolved.footprint.clone(),
+        // As a fresh placement leaves it; the row owns the footprint.
+        footprint: String::new(),
         datasheet: resolved.datasheet.clone(),
         fields: resolved.fields.clone(),
     }

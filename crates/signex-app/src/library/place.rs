@@ -77,11 +77,6 @@ pub fn resolve_placement_of(
         prefix: signex_types::designator::placement_prefix(&symbol.designator),
         class: row.class.as_str().to_owned(),
         prefix_override: row.designator_prefix_override().map(str::to_owned),
-        footprint: row
-            .footprint_ref
-            .as_ref()
-            .map(lib_id_of)
-            .unwrap_or_default(),
         datasheet: match &row.datasheet {
             signex_library::DatasheetRef::Url { url } => url.trim().to_string(),
             signex_library::DatasheetRef::HashPinned { .. } => String::new(),
