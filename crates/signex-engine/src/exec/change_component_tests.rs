@@ -244,7 +244,7 @@ fn engine_with_two_units() -> (Engine, Uuid, Uuid) {
         end: Point::new(50.0, 10.0),
         ..Default::default()
     });
-    let mut engine = Engine::new(doc).unwrap();
+    let engine = Engine::new(doc).unwrap();
     (engine, first, second)
 }
 
