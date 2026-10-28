@@ -30,7 +30,7 @@ mod tolerant_clip;
 pub mod triangulate;
 
 pub use aabb_index::{Aabb, AabbIndex};
-pub use boolean_general::{BoolOp, polygon_op};
+pub use boolean_general::{BoolOp, PolygonOpError, polygon_op};
 pub use curves::{arc_arc_intersections, arc_circle_intersections, circle_circle_intersections};
 pub use offset::{CornerStyle, offset_polygon};
 pub use point::{point_in_polygon, point_to_segment_distance, point_to_segment_distance_sq};

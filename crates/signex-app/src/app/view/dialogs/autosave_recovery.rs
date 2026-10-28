@@ -20,13 +20,34 @@ impl Signex {
         &self,
         offer: &RecoveryOffer,
     ) -> Element<'_, Message> {
+        wrap_modal(
+            self.autosave_recovery_card(offer, false),
+            (0.0, 0.0),
+            self.ui_state.window_size,
+            (520.0, 250.0),
+        )
+    }
+
+    /// The prompt as the content of its own OS window (no header, fills it).
+    pub(in crate::app::view) fn view_autosave_recovery_window(
+        &self,
+        offer: &RecoveryOffer,
+    ) -> Element<'_, Message> {
+        self.autosave_recovery_card(offer, true)
+    }
+
+    fn autosave_recovery_card(
+        &self,
+        offer: &RecoveryOffer,
+        windowed: bool,
+    ) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
         let later = Message::Autosave(AutosaveMsg::Recovery(RecoveryChoice::Later));
 
-        let header = container(
+        let header_content = container(
             row![
                 text("Recover Unsaved Edits")
                     .size(MODAL_HEADER_TITLE_SIZE)
@@ -39,6 +60,11 @@ impl Signex {
         .padding(MODAL_HEADER_PADDING)
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens));
+        let header: Element<'_, Message> = if windowed {
+            super::widgets::os_title_bar_slot()
+        } else {
+            header_content.into()
+        };
 
         let name = offer
             .path
@@ -105,15 +131,18 @@ impl Signex {
                 )
                 .padding([14, 14]),
             ]
-            .width(520),
+            .width(if windowed {
+                Length::Fill
+            } else {
+                Length::Fixed(520.0)
+            }),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
-        wrap_modal(
-            dialog.into(),
-            (0.0, 0.0),
-            self.ui_state.window_size,
-            (520.0, 250.0),
-        )
+        if windowed {
+            dialog.width(Length::Fill).height(Length::Fill).into()
+        } else {
+            dialog.into()
+        }
     }
 }

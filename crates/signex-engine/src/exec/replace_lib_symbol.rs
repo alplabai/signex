@@ -2,10 +2,10 @@
 //! symbol for the library's current one, refusing when that would drop
 //! connectivity.
 
-use super::pin_changes::{instance_pin_changes, unit_missing};
+use super::pin_changes::{instance_pin_changes, shown_pins, unit_missing};
 use crate::*;
 use signex_net::connected_points;
-use signex_types::schematic::{LibPin, LibSymbol};
+use signex_types::schematic::LibSymbol;
 
 /// `"<reference> pin <key>"` for every pin of a placed instance of
 /// `fresh.id` that would lose its connection (an old connected pin that
@@ -14,14 +14,13 @@ use signex_types::schematic::{LibPin, LibSymbol};
 fn connected_pins_changed(doc: &SchematicSheet, fresh: &LibSymbol) -> Vec<String> {
     // No embedded copy means no known old pins: a placed instance then draws
     // none, so every fresh pin on a connection is a newly gained one.
-    let old_pins: &[LibPin] = doc
-        .lib_symbols
-        .get(&fresh.id)
-        .map_or(&[], |old| old.pins.as_slice());
+    let old_lib = doc.lib_symbols.get(&fresh.id);
     let gate = connected_points(doc);
     let mut lost = Vec::new();
     for sym in doc.symbols.iter().filter(|s| s.lib_id == fresh.id) {
-        let changes = instance_pin_changes(doc, &gate, sym, old_pins, &fresh.pins);
+        let old_pins = shown_pins(old_lib, sym);
+        let new_pins = shown_pins(Some(fresh), sym);
+        let changes = instance_pin_changes(doc, &gate, sym, &old_pins, &new_pins);
         lost.extend(
             changes
                 .lost

@@ -1,5 +1,6 @@
 use super::*;
 
+mod body_style_info;
 mod designators;
 #[cfg(test)]
 pub(crate) mod designators_tests;
@@ -278,6 +279,13 @@ impl Signex {
                         .push(("Library Drift".into(), "Yes".into()));
                 }
             }
+            self.document_state
+                .panel_ctx
+                .selection_info
+                .extend(body_style_info::body_style_info(
+                    engine.document(),
+                    details.selected_uuid,
+                ));
             // The library row's documents for a placed symbol (#1231).
             if details.selected_kind == signex_types::schematic::SelectedKind::Symbol
                 && let Some(symbol) = engine

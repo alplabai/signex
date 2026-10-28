@@ -170,6 +170,28 @@ never places into it. A sheet written by a newer Signex is read-only in this
 build: Signex says so in the Messages panel and does not attach the part. With
 no schematic open, Signex shows a **Place Failed** notice instead.
 
+### Normal and alternate (De Morgan) bodies
+
+Some library symbols, mostly logic gates, have a second body that draws the
+same part in its De Morgan form. Select a placed symbol and use the **Body**
+row of **Properties**: **Normal** or **Alternate (De Morgan)**. The row is
+read-only, with a tooltip, when the library symbol has no alternate body. A
+symbol that stores Alternate but whose library symbol has none reads
+"Alternate (not in symbol; drawn as Normal)" and can be set back to Normal.
+
+Switching body redraws the symbol, and the netlist, ERC, exports and
+hit-testing all follow the body shown. Pins that are not wired may move.
+Signex refuses the switch, and says why in the **Messages** panel, when a
+wired pin would be lost, moved, or land on a new connection; remove those
+wires first. One **Undo** reverts a switch.
+
+In the symbol editor, the toolbar **Body** buttons (**Normal**, **Alternate**)
+choose which body is shown and which body new pins and shapes are added to.
+**Both bodies** marks the selection as common to both; **This body only**
+pins it to the body shown. Updating a library symbol from its library never
+silently drops a placed symbol's Alternate choice: the update is refused when
+it would disturb a wired pin, and otherwise the choice is kept.
+
 **Datasheets.** A part's Component Preview tab has a **Datasheet** tab that
 holds one or more documents: a datasheet per manufacturer, an errata, an
 application note. Each document is a URL or a pinned PDF, with an optional
@@ -382,6 +404,33 @@ is not overwritten with stale text. If you open, save or close a document, or cl
 project, while a project Replace is still reading the sheets, it is cancelled with a
 Messages line and changes nothing; run it again.
 
+### Search everywhere
+
+The command palette (`Ctrl+Shift+P`) is also the project's search box. Type a
+designator, a net name or a sheet name and the palette lists, besides the
+commands and panels:
+
+- **Designators** from every sheet of the project, including sheets you have
+  not opened. A sheet placed more than once gives one row per placement,
+  labelled "placement 2 of 3".
+- **Nets**, from the project's connectivity. A net's row jumps to one of its
+  terminals.
+- **Sheets**: child sheets that the project's page list does not name, and a
+  row for each placement of a sheet that is placed more than once. A page
+  placed once is already listed as a file.
+
+Choosing a row opens its sheet at that placement, selects the item and zooms
+to where it is now. This only moves the view; nothing in any document changes.
+
+The designator, net and sheet rows come from an index the palette builds in the
+background when it opens, so for a moment after opening it may show only the
+active sheet's designators. The index is rebuilt when documents change, and
+rows from the index of a different project are never shown. If a row points at
+a sheet that has since been renamed or deleted, the Messages panel says it
+could not be opened and nothing else is opened in its place; if the symbol is
+gone but the sheet is still there, the sheet opens and the Messages panel says
+the item is no longer on it.
+
 ## 9. Run ERC
 
 ERC (electrical rules check) scans the design for wiring mistakes, such as
@@ -422,6 +471,12 @@ greyed out when no schematic is open.
 
 Edits are held in memory until you save. Undo is `Ctrl+Z` and redo is
 `Ctrl+Y`.
+
+A sheet written by a newer Signex opens read-only. Its tab shows a muted
+"read-only" label (the tooltip gives the reason) and a badge sits in the corner
+of the canvas. Edits to it are refused and the tab never turns dirty, so there
+is nothing to lose at save time. Messages says once per opened sheet which file
+was not changed. Open the file in the newer Signex to edit it.
 
 ## 11. Export PDF and BOM
 

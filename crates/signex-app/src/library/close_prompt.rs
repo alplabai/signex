@@ -27,6 +27,7 @@ pub fn view<'a>(
     state: &'a LibraryState,
     confirm: &'a CloseLibraryConfirmState,
     tokens: &'a ThemeTokens,
+    windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let ts = TypeScale::default();
     let sp = Spacing::default();
@@ -112,8 +113,14 @@ pub fn view<'a>(
 
     container(
         column![header, body, Space::new().height(Length::Fill), footer]
-            .width(Length::Fixed(super::modal_chrome::CLOSE_PROMPT_W))
-            .height(Length::Fixed(super::modal_chrome::CLOSE_PROMPT_H)),
+            .width(super::card_len(
+                windowed,
+                super::modal_chrome::CLOSE_PROMPT_W,
+            ))
+            .height(super::card_len(
+                windowed,
+                super::modal_chrome::CLOSE_PROMPT_H,
+            )),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

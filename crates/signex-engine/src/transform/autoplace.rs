@@ -1,6 +1,7 @@
 //! Field autoplace algorithm (reference/value text placement).
 
 use super::wire_index::WireIndex;
+use signex_types::schematic::shown_on;
 
 // ---------------------------------------------------------------------------
 // Field autoplace (v0.12 cleanroom rewrite — Wave 2.5)
@@ -62,7 +63,7 @@ pub(super) fn autoplace_fields(
         }
     };
     for g in &lib.graphics {
-        if g.unit != 0 && g.unit != symbol.unit {
+        if !shown_on(lib, g.unit, g.body_style, symbol) {
             continue;
         }
         for (lx, ly) in graphic_extent_points(&g.graphic) {
@@ -83,7 +84,7 @@ pub(super) fn autoplace_fields(
     // 2. Outer bbox = body + visible pin endpoints.
     let mut outer_bbox = body_bbox;
     for p in &lib.pins {
-        if p.unit != 0 && p.unit != symbol.unit {
+        if !shown_on(lib, p.unit, p.body_style, symbol) {
             continue;
         }
         if !p.pin.visible {
@@ -104,7 +105,7 @@ pub(super) fn autoplace_fields(
     // 3. Count pins per side relative to the body centre.
     let (mut pins_right, mut pins_left, mut pins_top, mut pins_bottom) = (0u32, 0u32, 0u32, 0u32);
     for p in &lib.pins {
-        if p.unit != 0 && p.unit != symbol.unit {
+        if !shown_on(lib, p.unit, p.body_style, symbol) {
             continue;
         }
         let (wx, wy) = transform_local_point(symbol, p.pin.position.x, p.pin.position.y);

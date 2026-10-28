@@ -84,6 +84,7 @@ pub fn labels_hidden(mut p: SymbolPin) -> SymbolPin {
 
 fn graphic(kind: SymbolGraphicKind, fill: Option<[u8; 4]>) -> SymbolGraphic {
     SymbolGraphic {
+        body_style: 1,
         kind,
         stroke_width: STROKE_MM,
         fill,

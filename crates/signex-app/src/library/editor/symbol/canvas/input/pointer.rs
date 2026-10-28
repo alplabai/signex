@@ -366,7 +366,7 @@ impl SymbolCanvas<'_> {
                     cx,
                     cy,
                     kind,
-                    self.active_part,
+                    self.view,
                     &self.selection_filter,
                 );
                 return Some(match result {

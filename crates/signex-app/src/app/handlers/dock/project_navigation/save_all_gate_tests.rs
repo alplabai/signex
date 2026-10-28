@@ -160,6 +160,7 @@ fn variant_spellings(dir: &Path) -> (Signex, PathBuf, PathBuf) {
     std::fs::write(&upper, b"on-disk").unwrap();
     let mut app = project_app(dir);
     app.document_state.projects[0].case_fold = CaseFold::from_probe(true);
+    app.document_state.projects[0].case_decided = true;
     hold_dirty(&mut app, &upper, "A4");
     hold_dirty(&mut app, &lower, "A3");
     (app, upper, lower)
