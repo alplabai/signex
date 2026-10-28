@@ -135,7 +135,7 @@ fn project_replace_all_is_one_undo_step_across_sheets() {
     assert_eq!(first_label(&app, &child), "CHILD_X");
     undo(&mut app);
     assert_eq!(first_label(&app, &top), "TOP_NET");
-    assert_eq!(first_label(&app, &child), "CHILD_NET");
+    assert_parked_child_back_on_disk(&app, &child);
 
     // The same step, undone from the other sheet.
     let (mut app, _dir, top, child) = after_replace();
@@ -147,6 +147,21 @@ fn project_replace_all_is_one_undo_step_across_sheets() {
     undo(&mut app);
     assert_eq!(first_label(&app, &child), "CHILD_NET");
     assert_eq!(first_label(&app, &top), "TOP_NET");
+}
+
+/// An undone replace hands a parked closed sheet back to the disk: no engine
+/// holds it, and the file still has the label the replace changed.
+fn assert_parked_child_back_on_disk(app: &Signex, child: &Path) {
+    assert!(
+        !app.document_state.engines.contains_key(child),
+        "the clean parked engine is dropped"
+    );
+    assert!(!app.document_state.dirty_paths.contains(child));
+    assert!(
+        std::fs::read_to_string(child)
+            .unwrap()
+            .contains("CHILD_NET")
+    );
 }
 
 #[test]
@@ -435,24 +450,20 @@ fn a_double_replace_all_replaces_once_and_a_stale_prepared_is_ignored() {
 }
 
 #[test]
-fn undo_then_redo_of_a_replace_that_parked_a_closed_sheet() {
+fn undo_of_a_replace_that_parked_a_closed_sheet_refuses_the_redo() {
     let (mut app, _dir, top, child) = after_replace();
     assert!(app.document_state.dirty_paths.contains(&child));
 
     undo(&mut app);
-    assert_eq!(first_label(&app, &child), "CHILD_NET");
-    assert!(
-        !app.document_state.dirty_paths.contains(&child),
-        "back at what was loaded from disk, so nothing to save"
-    );
+    assert_parked_child_back_on_disk(&app, &child);
+    assert_eq!(first_label(&app, &top), "TOP_NET");
 
+    // The parked sheet's history went with its engine, so the group cannot be
+    // redone whole; nothing moves and the user is told.
     let _ = app.update(crate::app::Message::Edit(crate::app::EditMsg::Redo));
-    assert_eq!(first_label(&app, &child), "CHILD_X");
-    assert_eq!(first_label(&app, &top), "TOP_X");
-    assert!(
-        app.document_state.dirty_paths.contains(&child),
-        "redo is an unsaved edit"
-    );
+    assert_eq!(first_label(&app, &top), "TOP_NET");
+    assert!(!app.document_state.engines.contains_key(&child));
+    assert!(logged("Cannot redo the project-wide replace"));
 }
 
 #[test]
