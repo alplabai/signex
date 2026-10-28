@@ -516,6 +516,7 @@ fn draw_scene(
             // decision here.
             SceneBucket::Arcs
             | SceneBucket::Drawings
+            | SceneBucket::DrawingsFront
             | SceneBucket::Texts
             | SceneBucket::ErcMarkerLines
             | SceneBucket::ErcMarkerCircles

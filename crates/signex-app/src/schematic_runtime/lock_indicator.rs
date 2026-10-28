@@ -70,6 +70,7 @@ pub fn draw_lock_indicators(
         overlays,
         erc_markers: Vec::new(),
         drawings: Vec::new(),
+        drawings_front: Vec::new(),
         wire_color_overrides: HashMap::new(),
         wire_line_styles: HashMap::new(),
     };

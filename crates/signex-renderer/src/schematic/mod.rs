@@ -129,6 +129,8 @@ pub struct SchematicSnapshot {
     /// Sheet drawings, already lowered to scene primitives, in file paint
     /// order (#1579).
     pub drawings: Vec<OrderedItem>,
+    /// Drawings placed above the circuit, in file paint order (#1583).
+    pub drawings_front: Vec<OrderedItem>,
     pub labels: Vec<TextInput>,
     pub pin_texts: Vec<TextInput>,
     pub reference_value_texts: Vec<TextInput>,
@@ -303,6 +305,7 @@ mod tests {
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
             drawings: Vec::new(),
+            drawings_front: Vec::new(),
             wire_color_overrides: HashMap::new(),
             wire_line_styles: HashMap::new(),
         }
@@ -362,6 +365,7 @@ mod tests {
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
             drawings: Vec::new(),
+            drawings_front: Vec::new(),
             wire_color_overrides: overrides,
             wire_line_styles: HashMap::new(),
         };
@@ -407,6 +411,7 @@ mod tests {
             },
             erc_markers: vec![make_erc_marker([2.8, 2.8], 0.25, Severity::Warning)],
             drawings: Vec::new(),
+            drawings_front: Vec::new(),
             wire_color_overrides: HashMap::new(),
             wire_line_styles: HashMap::new(),
         };
@@ -500,6 +505,7 @@ mod tests {
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
             drawings: Vec::new(),
+            drawings_front: Vec::new(),
             wire_color_overrides: HashMap::new(),
             wire_line_styles: HashMap::new(),
         };
@@ -529,6 +535,7 @@ mod tests {
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
             drawings: Vec::new(),
+            drawings_front: Vec::new(),
             wire_color_overrides: HashMap::new(),
             wire_line_styles: HashMap::new(),
         };
@@ -567,6 +574,7 @@ mod tests {
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
             drawings: Vec::new(),
+            drawings_front: Vec::new(),
             wire_color_overrides: HashMap::new(),
             wire_line_styles: HashMap::new(),
         };
@@ -605,6 +613,7 @@ mod tests {
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
             drawings: Vec::new(),
+            drawings_front: Vec::new(),
             wire_color_overrides: HashMap::new(),
             wire_line_styles: HashMap::new(),
         };
@@ -646,6 +655,7 @@ mod tests {
             },
             erc_markers: Vec::new(),
             drawings: Vec::new(),
+            drawings_front: Vec::new(),
             wire_color_overrides: HashMap::new(),
             wire_line_styles: HashMap::new(),
         };
@@ -679,6 +689,7 @@ mod tests {
             arcs: Vec::new(),
             polygons: Vec::new(),
             drawings: Vec::new(),
+            drawings_front: Vec::new(),
             labels: Vec::new(),
             pin_texts: Vec::new(),
             reference_value_texts: Vec::new(),
@@ -732,6 +743,7 @@ mod tests {
             overlays: OverlayInputs::default(),
             erc_markers: markers,
             drawings: Vec::new(),
+            drawings_front: Vec::new(),
             wire_color_overrides: HashMap::new(),
             wire_line_styles: HashMap::new(),
         };
@@ -776,6 +788,7 @@ mod tests {
             overlays: OverlayInputs::default(),
             erc_markers: vec![make_erc_marker([1.0, 1.0], 0.25, Severity::Error)],
             drawings: Vec::new(),
+            drawings_front: Vec::new(),
             wire_color_overrides: HashMap::new(),
             wire_line_styles: HashMap::new(),
         };

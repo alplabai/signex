@@ -119,6 +119,8 @@ pub struct PanelContext {
     /// drawing is selected. Feeds the mini preview canvas in the
     /// Properties panel so the shape renders true-to-life.
     pub selected_drawing: Option<signex_types::schematic::SchDrawing>,
+    /// Where that drawing sits against the circuit (#1583).
+    pub selected_drawing_placement: signex_types::schematic::DrawingPlacement,
     /// The live ChildSheet matching `selected_uuid` when a single
     /// hierarchical sheet is selected. Powers the editable
     /// border/fill colour pickers and stroke-width input.

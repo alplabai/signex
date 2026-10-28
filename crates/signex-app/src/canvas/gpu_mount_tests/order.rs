@@ -156,3 +156,57 @@ fn a_filled_drawing_circle_has_separate_fill_and_stroke_colours() {
         );
     }
 }
+
+/// A drawing placed above the circuit covers a wire; the same drawing left
+/// behind does not.
+#[test]
+fn an_above_drawing_covers_a_wire_and_a_behind_one_does_not_on_gpu_and_cpu() {
+    let mut gpu = gpu();
+    let rect = red_rect(10.0, 14.0);
+    let mut above = sheet_of(vec![rect.clone()]);
+    above.drawing_placements.insert(
+        rect.uuid(),
+        signex_types::schematic::DrawingPlacement::Above,
+    );
+    above.wires.push(wire_across(12.0));
+    let mut behind = sheet_of(vec![rect]);
+    behind.wires.push(wire_across(12.0));
+    let on_wire = world(12.5, 12.0);
+
+    for (name, layer) in [("GPU", Layer::Stack), ("CPU", Layer::Cpu)] {
+        let covered = frame_of(&mut gpu, layer, &above).px(on_wire.0, on_wire.1);
+        assert!(
+            is_red(covered),
+            "{name}: the above rect must cover the wire: {covered:?}"
+        );
+    }
+    for (name, layer) in [("GPU", Layer::Stack), ("CPU", Layer::Cpu)] {
+        let under = frame_of(&mut gpu, layer, &behind).px(on_wire.0, on_wire.1);
+        assert!(
+            !is_red(under),
+            "{name}: the behind rect covered the wire: {under:?}"
+        );
+    }
+}
+
+/// Above drawings still keep file order among themselves.
+#[test]
+fn above_drawings_keep_file_order_among_themselves_on_gpu_and_cpu() {
+    let mut gpu = gpu();
+    let (line, rect) = (drawing_line(12.0, 0.6), red_rect(10.0, 14.0));
+    let mut sheet = sheet_of(vec![line.clone(), rect.clone()]);
+    for d in [&line, &rect] {
+        sheet
+            .drawing_placements
+            .insert(d.uuid(), signex_types::schematic::DrawingPlacement::Above);
+    }
+    let inside = world(12.5, 12.0);
+
+    for (name, layer) in [("GPU", Layer::Stack), ("CPU", Layer::Cpu)] {
+        let px = frame_of(&mut gpu, layer, &sheet).px(inside.0, inside.1);
+        assert!(
+            is_red(px),
+            "{name}: later above drawing covers the earlier: {px:?}"
+        );
+    }
+}

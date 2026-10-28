@@ -42,8 +42,8 @@ use std::path::{Path, PathBuf};
 
 pub use annotation::AnnotateScope;
 pub use command::{
-    AnnotateMode, Command, CommandKind, MirrorAxis, ReorderDirection, SelectionTransform,
-    SheetPort, SymbolTextField, TextTarget,
+    AnnotateMode, Command, CommandKind, DrawingArrange, MirrorAxis, ReorderDirection,
+    SelectionTransform, SheetPort, SymbolTextField, TextTarget,
 };
 pub use error::EngineError;
 pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
@@ -408,6 +408,9 @@ impl Engine {
             | Command::SetSheetFrame { .. }
             | Command::SetTitleBlockField { .. }
             | Command::SetDocumentFontFamily { .. } => self.exec_structure(before, cmd),
+            Command::ArrangeDrawings { .. } | Command::SetDrawingPlacement { .. } => {
+                self.exec_drawings(before, cmd)
+            }
         };
         self.note_command_result(&result);
         result

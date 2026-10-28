@@ -6,7 +6,7 @@ use super::items::{
 };
 use super::{MenuEntry, MenuMessage};
 use crate::app::command::enablement::cycle_grid_menu_enabled;
-use crate::menu_bar::MenuContext;
+use crate::menu_bar::{MenuContext, enabled};
 
 const SEP: MenuEntry = MenuEntry::Separator;
 
@@ -126,6 +126,7 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
             cmd("delete_selection", "Delete", "Del"),
             MenuMessage::Delete,
         ),
+        submenu("Arrange", arrange(ctx)),
         SEP,
         cmd_item_gated(
             ctx,
@@ -138,6 +139,38 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
             ctx,
             cmd("find_and_replace", "Find and Replace", "Ctrl+H"),
             MenuMessage::Replace,
+        ),
+    ]
+}
+
+/// Edit ▸ Arrange: order the selected drawings. Circuit elements in the
+/// selection are ignored, and with no drawing selected the rows are greyed.
+/// No default shortcut, so these are plain rows gated by their commands; a
+/// binding the user adds in the keymap still runs the command.
+fn arrange(ctx: &MenuContext) -> Vec<MenuEntry> {
+    let row = |label: &str, command: &str, action: MenuMessage| {
+        item_if(label, action, enabled(ctx, command))
+    };
+    vec![
+        row(
+            "Bring to Front",
+            "bring_drawings_to_front",
+            MenuMessage::BringDrawingsToFront,
+        ),
+        row(
+            "Send to Back",
+            "send_drawings_to_back",
+            MenuMessage::SendDrawingsToBack,
+        ),
+        row(
+            "Bring Forward",
+            "bring_drawings_forward",
+            MenuMessage::BringDrawingsForward,
+        ),
+        row(
+            "Send Backward",
+            "send_drawings_backward",
+            MenuMessage::SendDrawingsBackward,
         ),
     ]
 }

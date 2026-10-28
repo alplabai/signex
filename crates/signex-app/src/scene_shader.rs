@@ -206,6 +206,8 @@ pub struct ScenePipeline {
     polygon: PolygonPipeline,
     /// Drawings in file paint order; reuses the four pipelines above (#1579).
     ordered: OrderedPipeline,
+    /// Drawings placed above the circuit (#1583).
+    ordered_front: OrderedPipeline,
     text: GlyphonTextPipeline,
     /// Scene generation currently resident in the instance buffers, or `None`
     /// if geometry has never been uploaded. When a frame's primitive carries
@@ -231,6 +233,7 @@ impl shader::Pipeline for ScenePipeline {
             arc: ArcPipeline::new(device, format, layout),
             polygon: PolygonPipeline::new(device, format, layout),
             ordered: OrderedPipeline::new(device),
+            ordered_front: OrderedPipeline::new(device),
             text: GlyphonTextPipeline::new(device, queue, format),
             camera,
             uploaded_generation: None,
@@ -347,6 +350,9 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         if !geometry_is_current {
             pipeline.polygon.upload(device, queue, &self.scene.polygons);
             pipeline.ordered.upload(device, queue, &self.scene.drawings);
+            pipeline
+                .ordered_front
+                .upload(device, queue, &self.scene.drawings_front);
             pipeline.line.upload(device, queue, &self.scene.lines);
             pipeline.arc.upload(device, queue, &self.scene.arcs);
             pipeline.circle.upload(device, queue, &self.scene.circles);
@@ -430,6 +436,16 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
             match bucket {
                 SceneBucket::Polygons => pipeline.polygon.draw(render_pass, camera),
                 SceneBucket::Drawings => pipeline.ordered.draw_runs(
+                    render_pass,
+                    camera,
+                    &KindPipelines {
+                        line: &pipeline.line,
+                        circle: &pipeline.circle,
+                        arc: &pipeline.arc,
+                        polygon: &pipeline.polygon,
+                    },
+                ),
+                SceneBucket::DrawingsFront => pipeline.ordered_front.draw_runs(
                     render_pass,
                     camera,
                     &KindPipelines {

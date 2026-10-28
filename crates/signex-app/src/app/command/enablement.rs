@@ -43,6 +43,9 @@ pub(crate) struct CommandContext {
     pub has_footprint_editor: bool,
     /// The main window's schematic canvas has a selection.
     pub has_selection: bool,
+    /// The selection holds at least one schematic drawing, which the
+    /// Arrange commands act on (#1583).
+    pub has_drawing_selection: bool,
     /// A wire or polyline draw has uncommitted vertices, which
     /// Backspace / Delete pops even with nothing selected.
     pub drawing: bool,
@@ -67,6 +70,12 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         "undo" => ctx.can_undo,
         "redo" => ctx.can_redo,
         "cut" | "copy" | "duplicate" => ctx.has_selection,
+        // Arrange acts on drawings only; a selection of circuit elements
+        // leaves it nothing to do (#1583).
+        "bring_drawings_to_front"
+        | "send_drawings_to_back"
+        | "bring_drawings_forward"
+        | "send_drawings_backward" => ctx.has_schematic && ctx.has_drawing_selection,
         // E edits the selected object in the schematic and in the
         // footprint / symbol editors, whose selections `has_selection`
         // does not read, so a keystroke must not be dropped there.
@@ -158,6 +167,7 @@ impl Signex {
             has_symbol_editor: matches!(active_kind, Some(TabKind::SymbolEditor(_))),
             has_footprint_editor: matches!(active_kind, Some(TabKind::FootprintEditor(_))),
             has_selection: !self.interaction_state.active_canvas().selected.is_empty(),
+            has_drawing_selection: !self.selected_drawing_ids().is_empty(),
             drawing: self.interaction_state.wire_drawing
                 || !self.interaction_state.polyline_points.is_empty(),
             can_undo,
@@ -498,7 +508,7 @@ mod tests {
     /// default arm would let a second key bypass the gate.
     #[test]
     fn ids_that_resolve_to_the_same_message_share_their_enablement() {
-        let facts: [fn(&mut CommandContext); 10] = [
+        let facts: [fn(&mut CommandContext); 11] = [
             |c| c.has_schematic = true,
             |c| c.has_pcb = true,
             |c| c.undocked_has_canvas = true,
@@ -506,6 +516,7 @@ mod tests {
             |c| c.has_symbol_editor = true,
             |c| c.has_footprint_editor = true,
             |c| c.has_selection = true,
+            |c| c.has_drawing_selection = true,
             |c| c.can_undo = true,
             |c| c.can_redo = true,
             |c| c.project_dirty = true,

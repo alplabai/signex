@@ -287,6 +287,9 @@ pub trait SceneUploadTarget {
     /// Drawings in paint order; the cull must keep that order. Dirty-gated by
     /// `DirtyFlags::DRAWINGS`.
     fn upload_drawings(&mut self, drawings: &[OrderedItem]);
+    /// Drawings placed above the circuit; dirty-gated by
+    /// `DirtyFlags::DRAWINGS` together with [`Self::upload_drawings`].
+    fn upload_drawings_front(&mut self, drawings: &[OrderedItem]);
     fn upload_texts(
         &mut self,
         texts: &[TextItem],
@@ -360,6 +363,10 @@ pub fn apply_dirty_uploads_with_culling<T: SceneUploadTarget>(
         let drawings = cull_items(&scene.drawings, viewport, ordered_envelope);
         target.upload_drawings(drawings.as_ref());
         counters.drawing_uploads += 1;
+
+        // Same dirty category and the same counter: one upload decision.
+        let front = cull_items(&scene.drawings_front, viewport, ordered_envelope);
+        target.upload_drawings_front(front.as_ref());
     }
 
     if dirty.contains(DirtyFlags::TEXT) {

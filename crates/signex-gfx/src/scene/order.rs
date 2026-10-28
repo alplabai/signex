@@ -63,6 +63,10 @@ pub enum SceneBucket {
     /// `Polygons`) so they stay under every circuit element. Maps to
     /// `Scene::drawings`.
     Drawings,
+    /// Mixed-kind drawings placed above the circuit, in file paint order:
+    /// after every circuit bucket, before `Texts`. Maps to
+    /// `Scene::drawings_front`.
+    DrawingsFront,
     Texts,
     OverlayLines,
     OverlayCircles,
@@ -85,6 +89,7 @@ pub const GPU_SCENE_DRAW_ORDER: &[SceneBucket] = &[
     SceneBucket::Arcs,
     SceneBucket::Circles,
     SceneBucket::TopPolygons,
+    SceneBucket::DrawingsFront,
     SceneBucket::Texts,
 ];
 
@@ -122,6 +127,7 @@ pub const CPU_SCHEMATIC_DRAW_ORDER: &[SceneBucket] = &[
     SceneBucket::Arcs,
     SceneBucket::Circles,
     SceneBucket::TopPolygons,
+    SceneBucket::DrawingsFront,
     SceneBucket::Texts,
     SceneBucket::OverlayLines,
     SceneBucket::OverlayCircles,
@@ -170,6 +176,7 @@ mod tests {
             SceneBucket::Arcs,
             SceneBucket::Circles,
             SceneBucket::TopPolygons,
+            SceneBucket::DrawingsFront,
             SceneBucket::Texts,
         ];
         assert_eq!(GPU_SCENE_DRAW_ORDER, expected);
@@ -248,6 +255,7 @@ mod tests {
             SceneBucket::Arcs,
             SceneBucket::Circles,
             SceneBucket::TopPolygons,
+            SceneBucket::DrawingsFront,
             SceneBucket::Texts,
             SceneBucket::OverlayLines,
             SceneBucket::OverlayCircles,
@@ -271,6 +279,7 @@ mod tests {
             SceneBucket::Polygons,
             SceneBucket::Drawings,
             SceneBucket::TopPolygons,
+            SceneBucket::DrawingsFront,
             SceneBucket::Texts,
             SceneBucket::OverlayLines,
             SceneBucket::OverlayCircles,
@@ -302,6 +311,7 @@ mod tests {
             SceneBucket::Polygons,
             SceneBucket::Drawings,
             SceneBucket::TopPolygons,
+            SceneBucket::DrawingsFront,
             SceneBucket::Texts,
         ];
         let above = [
@@ -355,7 +365,10 @@ mod tests {
             .filter(|bucket| {
                 !matches!(
                     bucket,
-                    SceneBucket::Arcs | SceneBucket::Texts | SceneBucket::Drawings
+                    SceneBucket::Arcs
+                        | SceneBucket::Texts
+                        | SceneBucket::Drawings
+                        | SceneBucket::DrawingsFront
                 )
             })
             .collect();
@@ -418,13 +431,40 @@ mod tests {
         }
     }
 
+    /// Drawings placed above the circuit paint over every circuit bucket,
+    /// pads included, and under text, on both paths that draw them (#1583).
+    #[test]
+    fn front_drawings_draw_after_the_circuit_and_before_text() {
+        for order in [GPU_SCENE_DRAW_ORDER, CPU_SCHEMATIC_DRAW_ORDER] {
+            let front = index_of(order, SceneBucket::DrawingsFront).unwrap();
+            for circuit in [
+                SceneBucket::Polygons,
+                SceneBucket::Lines,
+                SceneBucket::Arcs,
+                SceneBucket::Circles,
+                SceneBucket::TopPolygons,
+            ] {
+                assert!(
+                    index_of(order, circuit).unwrap() < front,
+                    "{circuit:?} must draw under front drawings"
+                );
+            }
+            assert!(front < index_of(order, SceneBucket::Texts).unwrap());
+        }
+    }
+
     /// The GPU path composites arc, text and drawings buckets the PCB CPU path
     /// never emits. Harmless today (PCB scenes carry none of them) but a real
     /// parity axis: if the PCB scene ever grows one, the CPU renderer must gain
     /// the bucket too.
     #[test]
     fn gpu_draws_buckets_the_pcb_cpu_path_omits() {
-        for bucket in [SceneBucket::Arcs, SceneBucket::Texts, SceneBucket::Drawings] {
+        for bucket in [
+            SceneBucket::Arcs,
+            SceneBucket::Texts,
+            SceneBucket::Drawings,
+            SceneBucket::DrawingsFront,
+        ] {
             assert!(GPU_SCENE_DRAW_ORDER.contains(&bucket));
             assert!(!CPU_PCB_DRAW_ORDER.contains(&bucket));
         }

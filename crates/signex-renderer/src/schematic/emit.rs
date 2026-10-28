@@ -89,6 +89,10 @@ pub(super) fn emit_polygons(snapshot: &SchematicSnapshot, scene: &mut Scene) {
 pub(super) fn emit_drawings(snapshot: &SchematicSnapshot, scene: &mut Scene) {
     scene.drawings.clear();
     scene.drawings.extend_from_slice(&snapshot.drawings);
+    scene.drawings_front.clear();
+    scene
+        .drawings_front
+        .extend_from_slice(&snapshot.drawings_front);
 }
 
 pub(super) fn emit_text_bucket(texts: &[TextInput], output: &mut Vec<TextItem>) {

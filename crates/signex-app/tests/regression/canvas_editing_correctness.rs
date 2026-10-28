@@ -42,6 +42,7 @@ fn empty_sheet() -> SchematicSheet {
         title_block: HashMap::new(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
+        drawing_placements: Default::default(),
         frame: Default::default(),
         font_family: None,
     }

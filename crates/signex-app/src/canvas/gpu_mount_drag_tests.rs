@@ -111,6 +111,7 @@ fn is_blank(scene: &Scene) -> bool {
         && scene.arcs.is_empty()
         && scene.polygons.is_empty()
         && scene.drawings.is_empty()
+        && scene.drawings_front.is_empty()
         && scene.texts.is_empty()
 }
 
@@ -146,6 +147,12 @@ fn multiset(scenes: &[&Scene]) -> Vec<String> {
         }
         all.extend(scene.arcs.iter().map(|x| format!("arc {x:?}")));
         all.extend(scene.drawings.iter().map(|x| format!("drawing {x:?}")));
+        all.extend(
+            scene
+                .drawings_front
+                .iter()
+                .map(|x| format!("front drawing {x:?}")),
+        );
         all.extend(scene.texts.iter().map(|x| format!("text {x:?}")));
     }
     all.sort();

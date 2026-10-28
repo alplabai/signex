@@ -29,6 +29,8 @@ pub enum ContextAction {
     /// existing Active Bar handler so all the placement / transform
     /// logic stays in one place.
     ActiveBar(crate::active_bar::ActiveBarAction),
+    /// Reorder the selected drawings from the Arrange submenu (#1583).
+    ArrangeDrawings(signex_engine::DrawingArrange),
 }
 
 /// Which click-to-open submenu is currently expanded inside the right-
@@ -38,6 +40,9 @@ pub enum ContextAction {
 pub enum ContextSubmenu {
     Place,
     Align,
+    /// "Arrange ›": order the selected drawings (#1583). Shown only when the
+    /// selection holds a drawing.
+    Arrange,
     /// Project-tree → "Add New to Project ›" launcher. Items are
     /// version-tagged placeholders today; they do not create documents yet.
     AddNewToProject,

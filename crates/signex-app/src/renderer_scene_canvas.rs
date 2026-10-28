@@ -512,7 +512,10 @@ pub fn draw_scene_with_world_to_screen<F>(
     for &bucket in CPU_SCHEMATIC_DRAW_ORDER {
         match bucket {
             SceneBucket::Drawings => {
-                draw_drawings(frame, &scene.drawings, world_to_screen, options)
+                draw_drawings(frame, &scene.drawings, world_to_screen, options);
+            }
+            SceneBucket::DrawingsFront => {
+                draw_drawings(frame, &scene.drawings_front, world_to_screen, options);
             }
             SceneBucket::Lines => draw_line_bucket(frame, &scene.lines, world_to_screen, options),
             SceneBucket::Circles => {

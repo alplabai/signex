@@ -83,6 +83,18 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "draw_graphic_line" => Message::Tool(ToolMessage::SelectTool(Tool::Line)),
         "draw_hierarchical_sheet" => Message::Tool(ToolMessage::SelectTool(Tool::Sheet)),
         "duplicate" => Message::Edit(EditMsg::Duplicate),
+        "bring_drawings_to_front" => Message::Edit(EditMsg::ArrangeDrawings(
+            signex_engine::DrawingArrange::ToFront,
+        )),
+        "send_drawings_to_back" => Message::Edit(EditMsg::ArrangeDrawings(
+            signex_engine::DrawingArrange::ToBack,
+        )),
+        "bring_drawings_forward" => Message::Edit(EditMsg::ArrangeDrawings(
+            signex_engine::DrawingArrange::Forward,
+        )),
+        "send_drawings_backward" => Message::Edit(EditMsg::ArrangeDrawings(
+            signex_engine::DrawingArrange::Backward,
+        )),
         // Docking the Properties panel IS how this app shows the
         // selection's properties: the status bar's
         // `OpenPropertiesForSelection` and the canvas context menu's

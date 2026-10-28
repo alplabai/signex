@@ -22,6 +22,7 @@ struct MockUploadTarget {
     uploaded_polygons: usize,
     uploaded_top_polygons: usize,
     uploaded_drawings: usize,
+    uploaded_drawings_front: usize,
     uploaded_drawing_items: Vec<OrderedItem>,
     uploaded_texts: usize,
     uploaded_overlay_lines: usize,
@@ -69,6 +70,10 @@ impl SceneUploadTarget for MockUploadTarget {
         self.uploaded_drawings = drawings.len();
         self.uploaded_drawing_items = drawings.to_vec();
         self.calls.drawing_uploads += 1;
+    }
+
+    fn upload_drawings_front(&mut self, drawings: &[OrderedItem]) {
+        self.uploaded_drawings_front = drawings.len();
     }
 
     fn upload_texts(

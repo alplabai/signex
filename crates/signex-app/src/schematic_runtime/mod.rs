@@ -14,9 +14,9 @@ use signex_renderer::schematic::{
 use signex_renderer::theme::ResolvedTheme;
 use signex_types::net_class::NetLineStyle;
 use signex_types::schematic::{
-    Aabb, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
-    SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle, field_effective_style,
-    text_aabb_with_width, text_height_mm,
+    Aabb, DrawingPlacement, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet,
+    SelectedItem, SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle,
+    field_effective_style, text_aabb_with_width, text_height_mm,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
@@ -332,6 +332,7 @@ pub fn draw_power_port_preview(
         overlays: OverlayInputs::default(),
         erc_markers: Vec::new(),
         drawings: Vec::new(),
+        drawings_front: Vec::new(),
         wire_color_overrides: HashMap::new(),
         wire_line_styles: HashMap::new(),
     };
@@ -422,6 +423,7 @@ pub(crate) fn build_schematic_scene(
         && renderer_snapshot.arcs.is_empty()
         && renderer_snapshot.polygons.is_empty()
         && renderer_snapshot.drawings.is_empty()
+        && renderer_snapshot.drawings_front.is_empty()
         && renderer_snapshot.labels.is_empty()
         && renderer_snapshot.pin_texts.is_empty()
         && renderer_snapshot.reference_value_texts.is_empty()

@@ -307,6 +307,7 @@ pub fn build_renderer_snapshot(
     }
 
     let mut drawings = Vec::with_capacity(snapshot.drawings.len());
+    let mut drawings_front = Vec::new();
     for drawing in &snapshot.drawings {
         let bbox = drawing_aabb(drawing);
         let min = transform.world_to_screen((bbox.min_x, bbox.min_y));
@@ -316,7 +317,11 @@ pub fn build_renderer_snapshot(
         if !rect_visible(rect_min, size, bounds) {
             continue;
         }
-        drawings::push_drawing(drawing, colors, focus_set, transform.scale, &mut drawings);
+        let out = match snapshot.drawing_placement(drawing.uuid()) {
+            DrawingPlacement::Behind => &mut drawings,
+            DrawingPlacement::Above => &mut drawings_front,
+        };
+        drawings::push_drawing(drawing, colors, focus_set, transform.scale, out);
     }
 
     for label in &snapshot.labels {
@@ -418,6 +423,7 @@ pub fn build_renderer_snapshot(
         overlays: OverlayInputs::default(),
         erc_markers: Vec::new(),
         drawings,
+        drawings_front,
         wire_color_overrides: HashMap::new(),
         wire_line_styles,
     }

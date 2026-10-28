@@ -30,6 +30,10 @@ pub struct Scene {
     /// keep that order (#1579). The backmost bucket: under `polygons` and
     /// every stroke bucket. Covered by [`DirtyFlags::DRAWINGS`].
     pub drawings: Vec<OrderedItem>,
+    /// Drawings placed above the circuit (#1583): the same ordered runs as
+    /// [`Self::drawings`], but composited after every circuit bucket and
+    /// before text. Covered by [`DirtyFlags::DRAWINGS`].
+    pub drawings_front: Vec<OrderedItem>,
     pub texts: Vec<TextItem>,
     pub overlay_lines: Vec<LineSegment>,
     pub overlay_circles: Vec<Circle>,
@@ -48,6 +52,7 @@ impl Scene {
         self.polygons.clear();
         self.top_polygons.clear();
         self.drawings.clear();
+        self.drawings_front.clear();
         self.texts.clear();
         self.overlay_lines.clear();
         self.overlay_circles.clear();
@@ -65,6 +70,7 @@ impl Scene {
             && self.polygons.is_empty()
             && self.top_polygons.is_empty()
             && self.drawings.is_empty()
+            && self.drawings_front.is_empty()
             && self.texts.is_empty()
             && self.overlay_lines.is_empty()
             && self.overlay_circles.is_empty()

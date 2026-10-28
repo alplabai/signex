@@ -181,3 +181,40 @@ fn a_sub_pixel_circle_keeps_the_radius_floor() {
         ring.radius
     );
 }
+
+/// A drawing placed above the circuit goes to its own bucket, and each
+/// bucket keeps file order among its own drawings.
+#[test]
+fn above_drawings_go_to_the_front_bucket_in_file_order() {
+    let (a, b, c) = (line(1.0), rect(FillType::None), line(2.0));
+    let mut sheet = empty_snapshot();
+    sheet
+        .drawing_placements
+        .insert(b.uuid(), DrawingPlacement::Above);
+    sheet.drawings = vec![a, b, c];
+    let transform = ScreenTransform {
+        offset_x: 0.0,
+        offset_y: 0.0,
+        scale: SCALE,
+    };
+    let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
+
+    let scene = build_schematic_scene(
+        &sheet,
+        &transform,
+        &canvas_colors(ThemeId::Signex),
+        bounds,
+        None,
+        SceneOverrides::default(),
+    )
+    .expect("drawings draw something");
+
+    assert_eq!(
+        scene.drawings.iter().map(kind).collect::<Vec<_>>(),
+        ["line", "line"]
+    );
+    assert_eq!(
+        scene.drawings_front.iter().map(kind).collect::<Vec<_>>(),
+        ["polygon"]
+    );
+}
