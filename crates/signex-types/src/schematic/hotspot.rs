@@ -38,11 +38,11 @@ pub fn snap_to_hotspot(sheet: &SchematicSheet, point: Point, radius: f64) -> Opt
         }
     };
     for sym in &sheet.symbols {
-        let Some(lib) = sheet.lib_symbols.get(&sym.lib_id) else {
+        let Some(lib) = sheet.resolve_lib_symbol(sym) else {
             continue;
         };
         let xform = SymbolTransform::from_symbol(sym);
-        for lp in instance_pins(lib, sym) {
+        for lp in instance_pins(&lib, sym) {
             consider(xform.apply(lp.pin.position));
         }
     }

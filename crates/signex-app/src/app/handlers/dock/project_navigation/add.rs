@@ -339,24 +339,21 @@ impl Signex {
     fn mount_added_libraries(&mut self, paths: Vec<std::path::PathBuf>) -> iced::Task<Message> {
         use crate::library::mount::{MountIntent, MountRequest, spawn_pending_mounts};
         let mut cold = Vec::new();
+        let mut tasks = Vec::new();
         for path in paths {
             match self.library.request_mount(&path, MountIntent::Silent) {
                 MountRequest::Spawn => cold.push(path),
                 // Already mounted: rescan it the way project open does, so
                 // primitive files written by another process show up.
-                MountRequest::AlreadyMounted => {
-                    if let Err(e) = self.library.refresh_components(&path) {
-                        crate::diagnostics::log_warning(format!(
-                            "Add Existing: refresh of already-mounted library {} failed ({e}); \
-                             its cache may be stale",
-                            path.display()
-                        ));
-                    }
-                }
+                MountRequest::AlreadyMounted => tasks.push(self.refresh_library_task(
+                    &path,
+                    crate::library::refresh::RefreshFollowUp::Nothing,
+                )),
                 MountRequest::InFlight => {}
             }
         }
-        spawn_pending_mounts(cold)
+        tasks.push(spawn_pending_mounts(cold));
+        iced::Task::batch(tasks)
     }
 
     /// The project a project-tree path points into, as a stable id. The tree

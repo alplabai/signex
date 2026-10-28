@@ -53,17 +53,18 @@ impl BomComponent {
         include_dnp || !self.dnp || self.variant_fitted == Some(true)
     }
 
-    /// The fitted state, which drives `fitted_qty` and purchasing: the
-    /// variant override, else the base fields, else "fitted unless the part
-    /// is marked DNP, left out of the BOM or off the board". It is only a
-    /// quantity; which parts are listed is decided by
-    /// [`BomEngineOptions::admits`], and a part let in by
-    /// `include_excluded_from_bom` / `include_not_on_board` with no explicit
-    /// fitted state still counts as not fitted.
+    /// The fitted state, which drives `fitted_qty` and purchasing: never for
+    /// a part left out of the BOM or off the board (even with an explicit
+    /// fitted field), otherwise the variant override, else the base fields,
+    /// else "fitted unless the part is marked DNP". It is only a quantity;
+    /// which parts are listed is decided by [`BomEngineOptions::admits`].
     pub fn is_fitted(&self) -> bool {
-        self.variant_fitted
-            .or(self.base_fitted)
-            .unwrap_or(!self.dnp && self.in_bom && self.on_board)
+        self.in_bom
+            && self.on_board
+            && self
+                .variant_fitted
+                .or(self.base_fitted)
+                .unwrap_or(!self.dnp)
     }
 
     /// Whether a variant override or base field explicitly marks the part as
@@ -941,8 +942,10 @@ mod tests {
             );
             assert_eq!(table.rows.len(), 1);
             assert_eq!(table.rows[0].references, vec!["R5"]);
-            assert_eq!(table.rows[0].fitted_qty, 1);
-            assert_eq!(table.rows[0].not_fitted_qty, 0);
+            // Listed, but never fitted (so never purchased) despite the
+            // explicit variant override.
+            assert_eq!(table.rows[0].fitted_qty, 0);
+            assert_eq!(table.rows[0].not_fitted_qty, 1);
         }
     }
 
