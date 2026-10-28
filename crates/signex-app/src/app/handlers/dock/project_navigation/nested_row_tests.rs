@@ -6,7 +6,7 @@ use signex_widgets::tree_view::{TreeKey, TreeMsg};
 
 use super::*;
 use crate::app::ProjectTreeAction;
-use crate::app::handlers::menu::export::tests::{app_workspace, open_with, sheet_with_net};
+use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::hierarchy_fixture::{DIR, hierarchical_app};
 use crate::app::runtime::sheet_tree_tests::settle;
 
@@ -83,35 +83,64 @@ fn a_nested_row_survives_a_new_row_inserted_before_it() {
     assert_eq!(app.tree_path_to_file_path(&path), Some(leaf_path()));
 }
 
-#[test]
-fn activating_a_missing_row_offers_to_create_the_sheet_instead_of_opening() {
-    let dir = "/w/tree-create-sheet";
-    let mut app = app_workspace(dir, &["top.snxsch"]);
-    open_with(
-        &mut app.document_state,
-        &PathBuf::from(dir).join("top.snxsch"),
-        sheet_with_net("R_TOP", "N", &["ghost-1618.snxsch"]),
-    );
+/// `top` (open, on disk) places `child`, which is not on disk.
+fn app_with_missing_child(tmp: &std::path::Path, child: &str) -> (Signex, TreeKey) {
+    crate::app::runtime::sheet_tree_tests::write_sheet(tmp, "top.snxsch", &[child]);
+    let dir = tmp.to_string_lossy().into_owned();
+    let mut app = app_workspace(&dir, &["top.snxsch"]);
+    assert!(app.open_or_focus_sheet_path(tmp.join("top.snxsch")));
     settle(&mut app, false);
     let key = vec![
         app.document_state.projects[0].id.to_string(),
         "Source Documents".to_string(),
         "top.snxsch".to_string(),
-        "ghost-1618.snxsch".to_string(),
+        child.to_string(),
     ];
-    let before = crate::diagnostics::logged_count("ghost-1618.snxsch is referenced by");
+    (app, key)
+}
 
-    let first = select(&mut app, &key);
+fn double_click(app: &mut Signex, key: &TreeKey) -> Task<Message> {
+    let first = select(app, key);
     assert_eq!(first.units(), 0);
-    let activated = select(&mut app, &key);
+    select(app, key)
+}
+
+#[test]
+fn activating_a_missing_row_opens_the_create_sheet_dialog() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (mut app, key) = app_with_missing_child(tmp.path(), "ghost.snxsch");
+
+    let activated = double_click(&mut app, &key);
 
     assert_eq!(activated.units(), 0, "no read of a file that is not there");
     assert!(
-        app.pending_open_under(&PathBuf::from(dir).join("ghost-1618.snxsch"))
+        app.pending_open_under(&tmp.path().join("ghost.snxsch"))
             .is_none()
     );
+    let dialog = app
+        .ui_state
+        .create_child_sheet_confirm
+        .as_ref()
+        .expect("the Create Sheet dialog opens");
+    assert_eq!(dialog.parent, tmp.path().join("top.snxsch"));
+    assert_eq!(dialog.path_text, "ghost.snxsch");
+}
+
+#[test]
+fn a_missing_row_whose_file_now_exists_is_refused_not_offered() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (mut app, key) = app_with_missing_child(tmp.path(), "later.snxsch");
+    crate::app::runtime::sheet_tree_tests::write_sheet(tmp.path(), "later.snxsch", &[]);
+    let before = crate::diagnostics::logged_count("later.snxsch already exists");
+
+    let activated = double_click(&mut app, &key);
+
+    assert_eq!(activated.units(), 0);
+    assert!(app.ui_state.create_child_sheet_confirm.is_none());
     assert_eq!(
-        crate::diagnostics::logged_count("ghost-1618.snxsch is referenced by"),
-        before + 1
+        crate::diagnostics::logged_count("later.snxsch already exists"),
+        before + 1,
+        "the refusal reaches the Messages panel"
     );
+    assert!(tmp.path().join("later.snxsch").exists(), "left untouched");
 }

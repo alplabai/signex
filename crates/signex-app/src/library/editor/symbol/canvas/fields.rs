@@ -22,7 +22,7 @@ impl SymbolCanvas<'_> {
                     Some(SymbolSelection::All) => true,
                     _ => false,
                 };
-                let [x, y] = state::field_pos(self.symbol, key, self.active_part);
+                let [x, y] = state::field_pos(self.symbol, key, self.view);
                 signex_renderer::schematic::TextInput {
                     content: state::field_text(self.symbol, key).to_owned(),
                     position: [x as f32, y as f32],

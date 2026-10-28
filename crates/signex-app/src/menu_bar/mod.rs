@@ -339,6 +339,7 @@ impl MenuColors {
 }
 
 pub mod model;
+pub(crate) mod native;
 mod view;
 
 pub use view::view;

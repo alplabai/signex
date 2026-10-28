@@ -4,6 +4,7 @@ use super::super::super::*;
 
 mod add;
 pub(crate) mod add_io;
+pub(crate) use add::register_sheet_entry;
 #[cfg(test)]
 mod add_library_tests;
 #[cfg(test)]

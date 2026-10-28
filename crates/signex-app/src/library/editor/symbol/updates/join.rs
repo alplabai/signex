@@ -23,7 +23,7 @@ pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     }
 
     let mut indices =
-        state::join_source_indices(editor.primitive(), editor.active_part, &editor.selected);
+        state::join_source_indices(editor.primitive(), editor.view(), &editor.selected);
     if indices.is_empty() {
         return;
     }
@@ -32,8 +32,7 @@ pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
 
     // One shared predicate gates both the context-menu row's `enabled`
     // flag and this op, so they can never drift apart.
-    if !state::selection_is_join_eligible(editor.primitive(), editor.active_part, &editor.selected)
-    {
+    if !state::selection_is_join_eligible(editor.primitive(), editor.view(), &editor.selected) {
         // Distinguish the mixed-part-number case (surfaced) from
         // every other ineligibility reason — non-Line/Arc graphic,
         // stale index, or too few sources (a lone Line can never
@@ -48,12 +47,14 @@ pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
         return;
     }
 
-    let (segments, stroke_width, part_number) = {
+    let active_body = editor.view().body_tag();
+    let (segments, stroke_width, part_number, body_style) = {
         let sym = editor.primitive();
         let part_number = state::common_graphic_part_number(sym, &indices)
             .expect("selection_is_join_eligible guarantees a common part number");
+        let body_style = state::joined_graphic_body_style(sym, &indices, active_body);
         let (segments, stroke_width) = segments_for(sym, &indices);
-        (segments, stroke_width, part_number)
+        (segments, stroke_width, part_number, body_style)
     };
 
     let (ring, auto_closed_gap_mm) = match resolve_ring_with_auto_close(&segments) {
@@ -64,7 +65,14 @@ pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
         }
     };
 
-    splice_selection_into_polygon(editor, &indices, ring, stroke_width, part_number);
+    splice_selection_into_polygon(
+        editor,
+        &indices,
+        ring,
+        stroke_width,
+        part_number,
+        body_style,
+    );
     // Success + information, not an error: an auto-closed join
     // synthesized a new edge the user didn't draw — worth telling
     // them, since it's a silent-but-consequential change to their
@@ -111,6 +119,7 @@ fn splice_selection_into_polygon(
     ring: Vec<[f64; 2]>,
     stroke_width: f64,
     part_number: u8,
+    body_style: u8,
 ) {
     push_undo(editor);
 
@@ -121,6 +130,7 @@ fn splice_selection_into_polygon(
     }
 
     editor.primitive_mut().graphics.push(SymbolGraphic {
+        body_style,
         kind: SymbolGraphicKind::Polygon { vertices: ring },
         stroke_width,
         fill: None,
@@ -204,6 +214,7 @@ mod tests {
 
     fn push_line(editor: &mut SymEditor, from: [f64; 2], to: [f64; 2]) -> usize {
         editor.primitive_mut().graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Line { from, to },
             stroke_width: 0.15,
             fill: None,
@@ -319,6 +330,7 @@ mod tests {
         push_line(&mut editor, p0, p1);
         push_line(&mut editor, p1, p2);
         editor.primitive_mut().graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Arc {
                 center: [0.0, 4.0],
                 radius: 4.0,
@@ -385,6 +397,7 @@ mod tests {
         let mut editor = new_editor();
         push_line(&mut editor, [0.0, 0.0], [4.0, 0.0]);
         editor.primitive_mut().graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Rectangle {
                 from: [0.0, 0.0],
                 to: [2.0, 2.0],
@@ -411,6 +424,7 @@ mod tests {
     fn stroke_width_is_max_of_sources() {
         let mut editor = new_editor();
         editor.primitive_mut().graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Line {
                 from: [0.0, 0.0],
                 to: [4.0, 0.0],
@@ -420,6 +434,7 @@ mod tests {
             part_number: 0,
         });
         editor.primitive_mut().graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Line {
                 from: [4.0, 0.0],
                 to: [2.0, 3.0],
@@ -429,6 +444,7 @@ mod tests {
             part_number: 0,
         });
         editor.primitive_mut().graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Line {
                 from: [2.0, 3.0],
                 to: [0.0, 0.0],
@@ -481,6 +497,7 @@ mod tests {
         let mut editor = new_editor();
         push_line(&mut editor, [0.0, 0.0], [4.0, 0.0]); // part 0
         editor.primitive_mut().graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Line {
                 from: [4.0, 0.0],
                 to: [4.0, 4.0],
@@ -554,6 +571,7 @@ mod tests {
     fn single_arc_selection_is_eligible_and_self_closes() {
         let mut editor = new_editor();
         editor.primitive_mut().graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Arc {
                 center: [0.0, 0.0],
                 radius: 2.0,

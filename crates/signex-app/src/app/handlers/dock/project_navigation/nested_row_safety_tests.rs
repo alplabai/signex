@@ -229,16 +229,13 @@ fn an_unreadable_child_row_still_resolves_to_its_file() {
 
 #[test]
 fn a_symbol_naming_a_file_without_the_sheet_extension_is_still_activatable() {
-    let dir = "/w/nested-odd-ext";
-    let mut app = app_workspace(dir, &["top.snxsch"]);
-    open_with(
-        &mut app.document_state,
-        &PathBuf::from(dir).join("top.snxsch"),
-        sheet_with_net("R_TOP", "N", &["notes-1618.txt"]),
-    );
+    let tmp = tempfile::tempdir().expect("tempdir");
+    write_sheet(tmp.path(), "top.snxsch", &["notes-1618.txt"]);
+    let dir = tmp.path().to_string_lossy().into_owned();
+    let mut app = app_workspace(&dir, &["top.snxsch"]);
+    assert!(app.open_or_focus_sheet_path(tmp.path().join("top.snxsch")));
     settle(&mut app, false);
     let key = key(&app, &["top.snxsch", "notes-1618.txt"]);
-    let before = crate::diagnostics::logged_count("notes-1618.txt is referenced by");
 
     for _ in 0..2 {
         let msg =
@@ -249,9 +246,8 @@ fn a_symbol_naming_a_file_without_the_sheet_extension_is_still_activatable() {
         assert_eq!(task.units(), 0);
     }
 
-    assert_eq!(
-        crate::diagnostics::logged_count("notes-1618.txt is referenced by"),
-        before + 1,
+    assert!(
+        app.ui_state.create_child_sheet_confirm.is_some(),
         "the double-click is answered, not ignored"
     );
 }

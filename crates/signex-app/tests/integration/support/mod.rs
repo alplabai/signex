@@ -122,6 +122,7 @@ fn make_symbol(index: usize) -> Symbol {
     }
 
     s.graphics.push(SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [-10.16, 10.16],
             to: [10.16, -10.16],
@@ -133,6 +134,7 @@ fn make_symbol(index: usize) -> Symbol {
     for k in 0..4 {
         let y = 6.35 - k as f64 * 1.27;
         s.graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Line {
                 from: [-8.89, y],
                 to: [8.89, y],
@@ -143,6 +145,7 @@ fn make_symbol(index: usize) -> Symbol {
         });
     }
     s.graphics.push(SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Text {
             position: [0.0, 11.43],
             content: format!("IC-{index:05}"),
@@ -153,6 +156,7 @@ fn make_symbol(index: usize) -> Symbol {
         part_number: 0,
     });
     s.graphics.push(SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Text {
             position: [0.0, -11.43],
             content: "SOIC-16".into(),

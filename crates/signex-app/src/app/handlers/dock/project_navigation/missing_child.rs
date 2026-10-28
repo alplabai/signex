@@ -54,15 +54,52 @@ impl Signex {
         refused
     }
 
-    /// Offer to create the child sheet a symbol on `missing.parent` names.
+    /// Open the Create Sheet dialog (#1275) for the symbol on `missing.parent`
+    /// that names `missing.child`.
     ///
-    /// The Create Sheet dialog (#1275) is not on this branch yet; until it
-    /// lands this says why nothing opens instead of failing in a read error.
+    /// The row was marked missing by an earlier file-status check, so the file
+    /// is looked for again first: one that has appeared since is never offered
+    /// for creation. The dialog's own create path refuses an existing file
+    /// too, and writes without overwriting.
     pub(super) fn offer_create_child_sheet(&mut self, missing: &MissingChildSheet) {
-        crate::diagnostics::log_warning(format!(
-            "Sheet {} is referenced by {} but does not exist; creating it needs the Create Sheet dialog",
-            missing.child.display(),
-            missing.parent.display()
-        ));
+        if missing.child.exists() {
+            crate::diagnostics::log_warning(format!(
+                "Sheet {} already exists, so it was not offered for creation; it opens normally                  once the tree refreshes",
+                missing.child.display()
+            ));
+            self.document_state.project_fs.invalidate();
+            return;
+        }
+        // The dialog acts on the focused sheet's document, as from the canvas.
+        let parent_focused = self.active_tab_path().as_deref() == Some(missing.parent.as_path())
+            || self.open_or_focus_sheet_path(missing.parent.clone());
+        let symbol = parent_focused
+            .then(|| self.symbol_placing(&missing.child))
+            .flatten();
+        match symbol {
+            Some(symbol) => self.open_create_child_sheet_dialog(symbol, true),
+            None => crate::diagnostics::log_warning(format!(
+                "Sheet {} cannot be created from the tree: {} could not be opened or no longer                  has a sheet symbol for it",
+                missing.child.display(),
+                missing.parent.display()
+            )),
+        }
+    }
+
+    /// The sheet symbol on the focused sheet whose file is `child`.
+    fn symbol_placing(&self, child: &std::path::Path) -> Option<uuid::Uuid> {
+        let engine = self.document_state.active_engine()?;
+        let parent = self.active_tab_path()?;
+        let dir = parent.parent()?;
+        let wanted = crate::app::project_sheets::lexically_normalize(child);
+        engine
+            .document()
+            .child_sheets
+            .iter()
+            .find(|c| {
+                crate::app::project_sheets::resolve_child_reference(dir, &c.filename)
+                    .is_some_and(|p| p == wanted)
+            })
+            .map(|c| c.uuid)
     }
 }

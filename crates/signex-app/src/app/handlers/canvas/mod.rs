@@ -3,6 +3,11 @@ use signex_types::coord::Unit;
 
 use super::super::*;
 
+mod child_sheet_create;
+#[cfg(test)]
+mod child_sheet_create_tests;
+mod child_sheet_path;
+pub(crate) use child_sheet_path::relative_within;
 mod clicked;
 mod descend;
 mod double_clicked;

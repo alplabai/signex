@@ -28,8 +28,12 @@ mod load_gateway;
 mod mutation_gateway;
 mod project_tab;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
+pub mod palette_index;
+#[cfg(test)]
+mod palette_index_tests;
 mod pcb_dirty_adapter;
 pub(crate) mod project_sheets;
+mod read_only_refusal;
 pub mod restore_job;
 mod runtime;
 mod selection_request;
@@ -82,6 +86,9 @@ impl Signex {
         }
         let before = self.active_tab_path();
         let mut tasks = vec![self.dispatch_update(message)];
+        tasks.extend(self.sync_detached_modals());
+        #[cfg(target_os = "macos")]
+        self.sync_native_menu();
         // Any activation path (select, open, close-neighbour, Ctrl+Tab)
         // ends here: scroll the tab strip to the newly active tab.
         if self.active_tab_path() != before {
