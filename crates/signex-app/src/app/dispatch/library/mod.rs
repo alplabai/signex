@@ -152,7 +152,6 @@ impl Signex {
                 self.handle_browser_confirm_add_table(library_path)
             }
 
-            LibraryMessage::ToggleLibraryTreeNode(idx) => self.handle_toggle_library_tree_node(idx),
             LibraryMessage::OpenComponentRow {
                 library_path,
                 table,

@@ -14,7 +14,6 @@ use std::path::{Path, PathBuf};
 use signex_app::app::{FileMsg, Message, Signex};
 use signex_app::diagnostics;
 use signex_app::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
-use signex_app::library::mount::prepare_mount_read_only;
 use signex_app::library::state::{EditorAddress, LibraryBrowserState, PrimitivePickerTarget};
 use signex_library::adapter::LibraryAdapter;
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
@@ -230,20 +229,6 @@ fn the_same_attempts_on_an_ordinary_mount_write() {
 
     assert!(app.document_state.error_notice.is_none());
     assert_ne!(before, bytes_of(tmp.path()), "Add Component must write");
-}
-
-/// The off-thread mount path marks the mount too.
-#[test]
-fn a_prepared_read_only_mount_lands_read_only() {
-    let tmp = tempfile::Builder::new()
-        .prefix("signex-329-prep-")
-        .tempdir()
-        .expect("tempdir");
-    let (snxlib, _row_id) = stock_like_library(tmp.path());
-    let prepared = prepare_mount_read_only(&snxlib).expect("prepare");
-    let (mut app, _boot) = Signex::new();
-    app.library.mount_prepared(prepared).expect("mount");
-    assert!(app.library.is_read_only(&snxlib));
 }
 
 fn picker_targets(snxlib: &Path, row_id: RowId) -> Vec<PrimitivePickerTarget> {

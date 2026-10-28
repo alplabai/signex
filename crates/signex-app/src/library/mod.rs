@@ -1,17 +1,23 @@
-//! `signex-app`'s library subsystem (DBLib model — v0.9-refactor-2).
+//! `signex-app`'s library subsystem (DBLib model).
 //!
 //! Wires the [`signex_library`] crate (data + adapters) into the iced
 //! UI. Components are TSV rows under `<lib>/tables/<category>.tsv`,
 //! addressed by [`crate::library::state::EditorAddress`]. This module
 //! owns:
 //!
-//! * the **left-dock Library panel** — open libraries with inline
-//!   per-table row grids (see `panel.rs`);
-//! * the **Place Component picker modal** (`picker.rs`);
-//! * the **Component Preview tab** (`editor/`) — read-only Symbol +
-//!   Footprint render plus 5 tabs (Preview / Parameters / Supply /
-//!   Datasheet / Simulation). Symbol / Footprint editing happens via
-//!   the standalone `.snxsym` / `.snxfpt` document tabs;
+//! * the **left-dock Library panel** (`panel.rs`) — a flat list of
+//!   open libraries, each opening its Library Browser tab;
+//! * the **Library Browser** (`browser/`) and the **Place Component
+//!   picker modal** (`picker.rs`, `place.rs`);
+//! * the **Component Preview tab** (`component_preview/`, `editor/`) —
+//!   Symbol + Footprint render plus Preview / Parameters / Supply /
+//!   Datasheet / Simulation tabs; primitive editing happens in the
+//!   standalone `.snxsym` / `.snxfpt` document tabs;
+//! * **mounting** (`mount.rs`, off-thread), **drift / update**
+//!   (`drift.rs`, `updates_dialog.rs`), **dangling-reference** checks
+//!   (`dangling.rs`), **pricing** (`pricing.rs`, `bom_prices.rs`),
+//!   external-change polling (`external_poll.rs`) and **recovery**
+//!   (`recovery.rs`);
 //! * the **Distributor APIs settings** panel
 //!   (`settings/distributor_apis.rs`).
 
@@ -58,7 +64,7 @@ pub use messages::{
     BrowserEditMsg, EditorMsg, LibraryMessage, PickerMsg, PrimitivePickerMsg, SettingsMsg,
 };
 pub use state::{
-    ComponentEditorState, ComponentPreviewState, ComponentsMountSource, ComponentsPanelState,
-    DeleteConfirmState, EditRowModalState, LibraryBrowserState, LibraryState, OpenLibrary,
-    PickerState, PreviewTab, PrimitivePickerState, PrimitivePickerTarget,
+    ComponentPreviewState, ComponentsMountSource, ComponentsPanelState, DeleteConfirmState,
+    EditRowModalState, LibraryBrowserState, LibraryState, OpenLibrary, PickerState, PreviewTab,
+    PrimitivePickerState, PrimitivePickerTarget,
 };

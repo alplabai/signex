@@ -1,8 +1,9 @@
 //! Primitive picker modal — Pick Symbol / Pick Footprint.
 //!
-//! Listing source: every mounted library's primitives surfaced via
-//! `LibraryAdapter::list_symbols` (resp. `list_footprints`). Filtering
-//! is case-insensitive across the primitive name.
+//! Listing source: every mounted library's cached primitive summaries
+//! (`OpenLibrary::cached_symbols` / `cached_footprints` / `cached_sims`),
+//! so the view does no disk IO. Filtering is case-insensitive across the
+//! primitive name and its UUID.
 //!
 //! Shape:
 //!
@@ -90,8 +91,11 @@ pub fn view<'a>(
                 if needle.is_empty() {
                     return true;
                 }
-                s.name.to_lowercase().contains(&needle)
-                    || s.uuid.simple().to_string().contains(&needle)
+                contains_ci(&s.name, &needle)
+                    || s.uuid
+                        .simple()
+                        .encode_lower(&mut uuid::Uuid::encode_buffer())
+                        .contains(needle.as_str())
             })
             .collect();
         if filtered.is_empty() {
@@ -250,4 +254,35 @@ pub fn view<'a>(
     .style(crate::styles::modal_card(tokens))
     .clip(true)
     .into()
+}
+
+/// Case-insensitive substring test against an already-lowercased
+/// `needle`, without allocating for ASCII needles (this runs per
+/// primitive per frame).
+fn contains_ci(hay: &str, needle: &str) -> bool {
+    if needle.is_ascii() {
+        let n = needle.as_bytes();
+        if n.is_empty() {
+            return true;
+        }
+        return hay
+            .as_bytes()
+            .windows(n.len())
+            .any(|w| w.eq_ignore_ascii_case(n));
+    }
+    hay.to_lowercase().contains(needle)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::contains_ci;
+
+    #[test]
+    fn contains_ci_matches_case_insensitively() {
+        assert!(contains_ci("LM317_Adj", "lm317"));
+        assert!(contains_ci("Résistor", "résis"));
+        assert!(contains_ci("anything", ""));
+        assert!(!contains_ci("LM317", "lm7"));
+        assert!(!contains_ci("ab", "abc"));
+    }
 }

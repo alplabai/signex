@@ -1,12 +1,12 @@
 //! Settings → Library → Distributor APIs panel.
 //!
-//! Spec (v0.9-library-plan.md §14a.2):
-//!
-//! - DigiKey: OAuth2 PKCE — Phase 1 stubs the connect button.
-//! - Mouser: API key in keyring — Phase 1 takes the user's key in
-//!   memory + a Test button.
+//! - DigiKey: OAuth2 PKCE via the Connect button (see `digikey_oauth`);
+//!   client id/secret come from `SIGNEX_DIGIKEY_CLIENT_ID` /
+//!   `SIGNEX_DIGIKEY_CLIENT_SECRET`, tokens are kept in the keyring.
+//! - Mouser: API key field + a Test button; a verified key is saved to the keyring.
 //! - LCSC, JLCPCB: no key required.
-//! - Order-of-preference list — Phase 1 holds it in memory only.
+//! - Order-of-preference list — persisted to `distributors.toml`
+//!   (see `persistence`).
 
 use iced::widget::{Space, button, column, container, row, text, text_input};
 use iced::{Border, Element, Length, Theme};
@@ -21,9 +21,6 @@ use super::super::state::DistributorSettings;
 
 /// Render the Distributor APIs panel. Mounts inside the existing
 /// Preferences modal under a Library section.
-///
-/// Phase 1 ships this panel; Phase 2 wires it into the
-/// `crate::preferences` modal as a dedicated pref pane.
 pub fn view<'a>(
     settings: &'a DistributorSettings,
     tokens: &'a ThemeTokens,
