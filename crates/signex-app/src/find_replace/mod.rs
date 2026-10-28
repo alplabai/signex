@@ -6,6 +6,7 @@ mod state;
 mod view;
 
 pub use state::{
-    FindMatch, FindReplaceMsg, FindReplaceState, FindScope, ProjectScan, ReplaceJob, ReplacePrep,
+    ChildSheetSignature, FindMatch, FindReplaceMsg, FindReplaceState, FindScope, ProjectScan,
+    ReplaceJob, ReplacePrep,
 };
 pub use view::view;

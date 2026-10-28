@@ -13,7 +13,10 @@ use crate::app::view::dialogs::{
     MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_CLOSE_X_ICON,
     MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
 };
-use crate::styles::MODAL_CORNER_RADIUS;
+use crate::styles::{MODAL_CORNER_RADIUS, Spacing, TypeScale};
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 mod annotation;
 mod appearance;
@@ -548,7 +551,7 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
         container(
             row![
                 text(item.label())
-                    .size(12)
+                    .size(TS.label)
                     .style(move |theme: &Theme| text::Style {
                         color: Some(if is_active {
                             theme.extended_palette().primary.base.text
@@ -559,7 +562,7 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
             ]
             .align_y(iced::Alignment::Center),
         )
-        .padding([6, 12])
+        .padding([6.0, SP.l])
         .width(Length::Fill),
     )
     .padding(0)
@@ -709,10 +712,10 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
         return None;
     }
     let footer_row: Element<'a, PrefMsg> = row![
-        text("● Unsaved changes").size(11).style(text_warning),
+        text("● Unsaved changes").size(TS.body).style(text_warning),
         Space::new().width(Length::Fill),
         discard_btn(),
-        Space::new().width(12),
+        Space::new().width(SP.l),
         save_btn(),
     ]
     .align_y(iced::Alignment::Center)
@@ -788,7 +791,7 @@ fn build_prefs_file_banner<'a>(
     // Making the text the fluid child inverts that: the button is the
     // only `Shrink` child in the first pass, takes its natural width, and
     // the text wraps into what remains.
-    let mut lines = column![].spacing(4).width(Length::Fill);
+    let mut lines = column![].spacing(SP.s).width(Length::Fill);
     if let Some(error) = load_error {
         // Name the real file, resolved through the same accessor the
         // probe and the recovery use, so the path the user is told to
@@ -796,7 +799,7 @@ fn build_prefs_file_banner<'a>(
         let path = crate::fonts::prefs_file_path().display().to_string();
         lines = lines.push(
             text(format!("Your preferences file at {path} {error}."))
-                .size(11)
+                .size(TS.body)
                 .style(text_warning),
         );
         // Scoped to what `prefs.json` actually backs. The banner spans
@@ -813,20 +816,20 @@ fn build_prefs_file_banner<'a>(
                  has not been altered — repair it by hand, or start a fresh one and keep \
                  the old file beside it.",
             )
-            .size(10)
+            .size(TS.caption)
             .style(text_muted),
         );
     }
     if !status.is_empty() {
-        lines = lines.push(text(status).size(10).style(text_muted));
+        lines = lines.push(text(status).size(TS.caption).style(text_muted));
     }
 
-    let mut strip = row![lines].spacing(16).align_y(iced::Alignment::Center);
+    let mut strip = row![lines].spacing(SP.xl).align_y(iced::Alignment::Center);
     // Offered only while the file is actually broken: once it loads, the
     // banner is a result line and there is nothing left to reset.
     if load_error.is_some() {
         strip = strip.push(
-            button(text("Start a fresh preferences file").size(11))
+            button(text("Start a fresh preferences file").size(TS.body))
                 .padding([7, 14])
                 .on_press(PrefMsg::ResetPrefsFile)
                 // NOT `secondary_button_style` — that fills with
@@ -848,7 +851,7 @@ fn build_prefs_file_banner<'a>(
             // strip is one line inside a fixed `FOOTER_H`, this one grows
             // to two or three wrapped lines and would otherwise sit flush
             // against the divider above and the nav column below.
-            .padding([12, 16])
+            .padding([SP.l, SP.xl])
             .style(move |theme: &Theme| {
                 let palette = theme.extended_palette();
                 container::Style {
@@ -866,16 +869,16 @@ fn build_prefs_file_banner<'a>(
 }
 
 fn save_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("Save").size(12))
-        .padding([8, 20])
+    button(text("Save").size(TS.label))
+        .padding([SP.m, 20.0])
         .on_press(PrefMsg::Save)
         .style(success_button_style)
         .into()
 }
 
 fn discard_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("Discard & Close").size(12))
-        .padding([8, 16])
+    button(text("Discard & Close").size(TS.label))
+        .padding([SP.m, SP.xl])
         .on_press(PrefMsg::DiscardAndClose)
         .style(danger_button_style)
         .into()

@@ -435,33 +435,10 @@ fn commit_diff_stats_for_path(
 }
 
 fn history_entry_from_commit(commit: &git2::Commit<'_>, stats: CommitPathStats) -> HistoryEntry {
-    use chrono::TimeZone;
-    let author = commit.author();
-    let when = author.when();
-    let time = chrono::Utc
-        .timestamp_opt(when.seconds(), 0)
-        .single()
-        .unwrap_or_else(chrono::Utc::now);
-    let full = commit.message().unwrap_or_default();
-    let (subject, body) = match full.find('\n') {
-        Some(i) => {
-            let s = &full[..i];
-            let rest = full[i + 1..].trim_start_matches('\n').to_string();
-            (s.to_string(), rest)
-        }
-        None => (full.to_string(), String::new()),
-    };
-    let parent_shas: Vec<String> = commit.parent_ids().map(|o| o.to_string()).collect();
     HistoryEntry {
-        sha: commit.id().to_string(),
-        author_name: author.name().unwrap_or("").to_string(),
-        author_email: author.email().unwrap_or("").to_string(),
-        time,
-        subject,
-        body,
-        parent_shas,
         files_changed: stats.files_changed,
         additions: stats.additions,
         deletions: stats.deletions,
+        ..HistoryEntry::from_commit(commit)
     }
 }
