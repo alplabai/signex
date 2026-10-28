@@ -17,6 +17,10 @@ use iced::widget::svg::Handle;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// A keyboard-command row: clicking it dispatches `action` through the
 /// context-menu message bridge. `shortcut` renders right-aligned (empty
 /// = no hint); `icon` is optional (the widget still reserves the glyph
@@ -113,7 +117,7 @@ pub(super) fn submenu_launcher(
     let arrow_c = crate::styles::ti(tokens.text_secondary);
 
     let mut row = iced::widget::row![]
-        .spacing(8)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center)
         .width(Length::Fill);
     match icon {
@@ -131,7 +135,7 @@ pub(super) fn submenu_launcher(
     row = row
         .push(
             iced::widget::text(label.to_string())
-                .size(13)
+                .size(TS.title)
                 .color(text_c)
                 .wrapping(iced::widget::text::Wrapping::None),
         )
@@ -144,7 +148,7 @@ pub(super) fn submenu_launcher(
 
     let btn = iced::widget::button(
         iced::widget::container(row)
-            .padding([5, 12])
+            .padding([5.0, SP.l])
             .width(Length::Fill),
     )
     .padding(0)

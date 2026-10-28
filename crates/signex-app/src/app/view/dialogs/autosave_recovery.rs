@@ -11,6 +11,10 @@ use super::widgets::{close_x_button, primary_button, secondary_button, wrap_moda
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 use crate::autosave::{AutosaveMsg, RecoveryChoice, RecoveryOffer, describe_age};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 impl Signex {
     pub(in crate::app::view) fn view_autosave_recovery(
         &self,
@@ -47,17 +51,17 @@ impl Signex {
                  saved file.",
                 describe_age(offer.age_secs)
             ))
-            .size(12)
+            .size(TS.label)
             .color(text_c),
         ]
-        .spacing(8);
+        .spacing(SP.m);
         if offer.older_than_file {
             body = body.push(
                 text(format!(
                     "{name} was saved after this copy was written. Restore replaces that \
                      newer saved work in the editor with the older copy."
                 ))
-                .size(12)
+                .size(TS.label)
                 .color(crate::styles::ti(tokens.warning)),
             );
         }
@@ -69,7 +73,7 @@ impl Signex {
                  this file is opened, and pauses autosave for this document for the rest of the \
                  session.",
             )
-            .size(11)
+            .size(TS.body)
             .color(text_muted),
         );
 
