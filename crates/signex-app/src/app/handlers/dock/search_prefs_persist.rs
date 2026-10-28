@@ -60,6 +60,9 @@ impl Signex {
         // A pricing walk must not write into a library after quit, and an
         // in-flight save + commit is waited for.
         let next = self.wait_for_pricing_then(next);
+        // Profile edits still queued (the machine's rules, a profile edited in
+        // Preferences) are written before the process goes.
+        let next = self.wait_for_profile_writes_then(next);
         let search = self.flush_search_prefs_then(next);
         // After the document saves: a save supersedes its recovery copy, and
         // the removal that follows must finish before the process exits.

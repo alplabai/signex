@@ -1,15 +1,18 @@
 //! Tests for GPU smoke passes.
 use super::composite::run_grid_overlay_text_composite_smoke_pass_with;
 use super::{
-    ARC_READBACK_PX, ARC_READBACK_SCALE, CompositeStage, run_arc_readback_smoke_pass,
-    run_arc_smoke_pass, run_arc_smoke_pass_with, run_grid_overlay_text_composite_smoke_pass,
-    run_grid_smoke_pass, run_grid_smoke_pass_with, run_line_circle_smoke_pass,
-    run_line_readback_smoke_pass, run_polygon_readback_smoke_pass, run_polygon_smoke_pass,
-    run_polygon_smoke_pass_with, run_text_geometry_composite_smoke_pass, run_text_smoke_pass,
-    run_text_smoke_pass_with,
+    ARC_READBACK_PX, ARC_READBACK_SCALE, CompositeStage, POLYGON_SQUARE_PX, POLYGON_SQUARE_SCALE,
+    run_arc_readback_smoke_pass, run_arc_smoke_pass, run_arc_smoke_pass_with,
+    run_grid_overlay_text_composite_smoke_pass, run_grid_smoke_pass, run_grid_smoke_pass_with,
+    run_line_circle_smoke_pass, run_line_readback_smoke_pass, run_ordered_readback_smoke_pass,
+    run_polygon_readback_smoke_pass, run_polygon_smoke_pass, run_polygon_smoke_pass_with,
+    run_polygon_square_readback_smoke_pass, run_text_geometry_composite_smoke_pass,
+    run_text_smoke_pass, run_text_smoke_pass_with,
 };
 use crate::primitive::arc::Arc;
+use crate::primitive::circle::Circle;
 use crate::primitive::line::LineSegment;
+use crate::primitive::ordered::OrderedItem;
 use crate::primitive::polygon::GpuPolygon;
 use crate::primitive::text::{TextHAlign, TextItem, TextVAlign};
 
@@ -592,4 +595,370 @@ fn a_full_turn_arc_lights_all_four_quadrants() {
         "circle interior should be dark, red={}",
         reds[0]
     );
+}
+
+/// A regular `sides`-gon around the middle of the square readback target.
+fn ring_polygon(radius_mm: f32, sides: usize, width_mm: f32, stroke: [f32; 4]) -> GpuPolygon {
+    let c = POLYGON_SQUARE_PX as f32 / POLYGON_SQUARE_SCALE / 2.0;
+    GpuPolygon {
+        holes: Vec::new(),
+        vertices: (0..sides)
+            .map(|i| {
+                let t = std::f32::consts::TAU * i as f32 / sides as f32;
+                [c + radius_mm * t.cos(), c + radius_mm * t.sin()]
+            })
+            .collect(),
+        fill_color: [0.0; 4],
+        stroke_color: Some(stroke),
+        stroke_width: width_mm,
+    }
+}
+
+/// Pixels well inside the stroke band of [`ring_polygon`] (radius `r` px, half
+/// the band `h` px), all around it, clear of the band's edges.
+fn band_samples(r_px: f32, h_px: f32) -> Vec<(u32, u32)> {
+    let c = POLYGON_SQUARE_PX as f32 / 2.0;
+    let mut out = Vec::new();
+    for step in 0..72 {
+        let t = std::f32::consts::TAU * (step as f32 + 0.37) / 72.0;
+        for frac in [-0.6, 0.0, 0.6] {
+            let rr = r_px + frac * h_px;
+            out.push(((c + rr * t.cos()) as u32, (c + rr * t.sin()) as u32));
+        }
+    }
+    out
+}
+
+/// A stroke thicker than its edges are long used to leave gaps between the edge
+/// rectangles, so a tiny circle's outline vanished (#199). Mitered corners close
+/// them, and since neighbouring edges then share their corner exactly, a
+/// translucent stroke is blended once everywhere, not twice at the joints.
+///
+/// 48 sides at radius 4 mm (16 px) have 2.1 px edges under a 3.2 px half-width
+/// stroke: well into the mitered regime, and wide enough that the band's inner
+/// offset does not cross itself.
+#[test]
+fn a_stroke_thicker_than_its_edges_has_no_gap_and_no_double_blend() {
+    let samples = band_samples(16.0, 3.2);
+
+    let opaque = ring_polygon(4.0, 48, 1.6, [1.0, 0.0, 0.0, 1.0]);
+    let reds = on_gpu(run_polygon_square_readback_smoke_pass(opaque, &samples))
+        .expect("opaque ring readback");
+    let gaps = reds.iter().filter(|red| **red < 240).count();
+    assert_eq!(
+        gaps,
+        0,
+        "{gaps} of {} band pixels are not covered",
+        reds.len()
+    );
+
+    // 50% red over black: one layer reads 127; a second blend would read 191.
+    let translucent = ring_polygon(4.0, 48, 1.6, [1.0, 0.0, 0.0, 0.5]);
+    let reds = on_gpu(run_polygon_square_readback_smoke_pass(
+        translucent,
+        &samples,
+    ))
+    .expect("translucent ring readback");
+    for (sample, red) in samples.iter().zip(&reds) {
+        assert!(
+            (110..=145).contains(red),
+            "band pixel {sample:?} reads {red}: below 110 is a gap, above 145 a double blend"
+        );
+    }
+}
+
+/// Between the two regimes (`0 < w < 1`: the edge is longer than the half-width
+/// but shorter than twice it) a corner only moves part way to the miter point.
+/// That is not the exact join of the test above, and a translucent stroke may
+/// still double-blend on the inside, so this asserts only the weaker promise:
+/// no gap anywhere in the band. 0.75 mm chords under a 1 mm stroke are the
+/// ratio of 0.15 mm chords under a 0.2 mm one (`w` about 0.5), at a size the
+/// 4 px/mm target can resolve.
+#[test]
+fn a_partly_mitered_stroke_leaves_no_gap_in_its_band() {
+    let sides = 50;
+    let radius_mm = 6.0;
+    let width_mm = 1.0;
+    let r_px = radius_mm * POLYGON_SQUARE_SCALE;
+    let h_px = width_mm * POLYGON_SQUARE_SCALE / 2.0;
+    let c = POLYGON_SQUARE_PX as f32 / 2.0;
+    let mut samples = Vec::new();
+    for step in 0..360 {
+        let t = std::f32::consts::TAU * step as f32 / 360.0;
+        // Inside the band by more than a pixel centre can be off the sample.
+        for frac in [-0.6, -0.3, 0.0, 0.3, 0.6] {
+            let rr = r_px + frac * h_px;
+            samples.push(((c + rr * t.cos()) as u32, (c + rr * t.sin()) as u32));
+        }
+    }
+
+    let ring = ring_polygon(radius_mm, sides, width_mm, [1.0, 0.0, 0.0, 1.0]);
+    let reds = on_gpu(run_polygon_square_readback_smoke_pass(ring, &samples))
+        .expect("partial-w ring readback");
+
+    let gaps = reds.iter().filter(|red| **red < 240).count();
+    assert_eq!(
+        gaps,
+        0,
+        "{gaps} of {} band pixels are not covered",
+        reds.len()
+    );
+}
+
+/// Half the stroke of the join-band tests below, in pixels, and the scale they
+/// draw at (`POLYGON_SQUARE_SCALE` px per mm).
+const JOIN_HALF_PX: f32 = 3.2;
+
+/// A rounded square around the middle of the target: long straight edges
+/// joined by arcs whose chords are about two pixels, so a corner pairs a long
+/// edge with a short one.
+fn rounded_square(half_mm: f32, radius_mm: f32) -> Vec<[f32; 2]> {
+    let c = POLYGON_SQUARE_PX as f32 / POLYGON_SQUARE_SCALE / 2.0;
+    let inner = half_mm - radius_mm;
+    let steps = 12;
+    let mut ring = Vec::new();
+    for (quarter, (sx, sy)) in [(1.0, 1.0), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)]
+        .into_iter()
+        .enumerate()
+    {
+        for step in 0..=steps {
+            let t = (quarter as f32 + step as f32 / steps as f32) * std::f32::consts::FRAC_PI_2;
+            // Quarter `q` sweeps the angles q*90 .. (q+1)*90 around its corner.
+            ring.push([
+                c + sx * inner + radius_mm * t.cos(),
+                c + sy * inner + radius_mm * t.sin(),
+            ]);
+        }
+    }
+    ring
+}
+
+/// Pixels on the stroke band at every vertex that touches an edge shorter than
+/// twice the half-width (the mitered regime): on the corner's own bisector, on
+/// the centreline and half a half-width to either side.
+fn join_samples(ring: &[[f32; 2]]) -> Vec<(u32, u32)> {
+    let scale = POLYGON_SQUARE_SCALE;
+    let normal = |a: [f32; 2], b: [f32; 2]| {
+        let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+        let len = (dx * dx + dy * dy).sqrt();
+        ([-dy / len, dx / len], len * scale)
+    };
+    let mut out = Vec::new();
+    for i in 0..ring.len() {
+        let (prev, p, next) = (
+            ring[(i + ring.len() - 1) % ring.len()],
+            ring[i],
+            ring[(i + 1) % ring.len()],
+        );
+        let ((n1, l1), (n2, l2)) = (normal(prev, p), normal(p, next));
+        if l1.min(l2) >= 2.0 * JOIN_HALF_PX {
+            continue;
+        }
+        let (bx, by) = (n1[0] + n2[0], n1[1] + n2[1]);
+        let blen = (bx * bx + by * by).sqrt();
+        for frac in [-0.5, 0.0, 0.5] {
+            let d = frac * JOIN_HALF_PX / blen;
+            out.push((
+                (p[0] * scale + bx * d) as u32,
+                (p[1] * scale + by * d) as u32,
+            ));
+        }
+    }
+    out
+}
+
+/// Every join-band pixel of `polygon` reads one 50% layer: no gap, no double
+/// blend, whichever of its edges are long and whichever short.
+fn assert_one_layer_at_joins(polygon: GpuPolygon, samples: &[(u32, u32)]) {
+    assert!(samples.len() >= 6, "the shape has joins to sample");
+    let reds = on_gpu(run_polygon_square_readback_smoke_pass(polygon, samples))
+        .expect("join band readback");
+    let bad: Vec<_> = samples
+        .iter()
+        .zip(&reds)
+        .filter(|(_, red)| !(110..=145).contains(*red))
+        .collect();
+    assert!(
+        bad.is_empty(),
+        "{} of {} join pixels are not one 50% layer (below 110 a gap, above 145 a double blend): {bad:?}",
+        bad.len(),
+        samples.len()
+    );
+}
+
+fn half_red_stroke(ring: Vec<[f32; 2]>, holes: Vec<Vec<[f32; 2]>>) -> GpuPolygon {
+    GpuPolygon {
+        vertices: ring,
+        holes,
+        fill_color: [0.0; 4],
+        stroke_color: Some([1.0, 0.0, 0.0, 0.5]),
+        stroke_width: 2.0 * JOIN_HALF_PX / POLYGON_SQUARE_SCALE,
+    }
+}
+
+/// A square with every corner cut by a short diagonal, so each cut joins two
+/// long edges through an edge no longer than the half-width: fully mitered
+/// (a part-way miter overlaps on the inside by design).
+fn chamfered_square(half_mm: f32, cut_mm: f32) -> Vec<[f32; 2]> {
+    let c = POLYGON_SQUARE_PX as f32 / POLYGON_SQUARE_SCALE / 2.0;
+    let (lo, hi) = (c - half_mm, c + half_mm);
+    vec![
+        [lo + cut_mm, lo],
+        [hi - cut_mm, lo],
+        [hi, lo + cut_mm],
+        [hi, hi - cut_mm],
+        [hi - cut_mm, hi],
+        [lo + cut_mm, hi],
+        [lo, hi - cut_mm],
+        [lo, lo + cut_mm],
+    ]
+}
+
+/// A corner that joins a short edge to a long one: the long edge's quad used to
+/// keep its plain corner while the short edge's moved to the miter point, so
+/// the two missed each other (a notch outside, a double blend inside).
+#[test]
+fn a_long_edge_meeting_a_short_one_joins_the_band_exactly() {
+    let ring = chamfered_square(6.0, 0.5);
+    let samples = join_samples(&ring);
+    assert_one_layer_at_joins(half_red_stroke(ring, Vec::new()), &samples);
+}
+
+/// Long edges joined by arcs of two-pixel chords: the turns are gentle, but
+/// the join must stay exact all the way round.
+#[test]
+fn a_rounded_square_joins_the_band_exactly() {
+    let ring = rounded_square(6.0, 4.0);
+    let samples = join_samples(&ring);
+    assert_one_layer_at_joins(half_red_stroke(ring, Vec::new()), &samples);
+}
+
+/// An L whose reflex corner is cut by a short diagonal: the chamfer's two
+/// corners join it to long edges at a reflex and a convex turn.
+#[test]
+fn an_l_outline_with_a_short_reflex_cut_joins_the_band_exactly() {
+    let chamfer = 0.5;
+    let ring = vec![
+        [2.0, 2.0],
+        [14.0, 2.0],
+        [14.0, 7.0],
+        [8.0 + chamfer, 7.0],
+        [8.0, 7.0 + chamfer],
+        [8.0, 14.0],
+        [2.0, 14.0],
+    ];
+    let samples = join_samples(&ring);
+    assert_one_layer_at_joins(half_red_stroke(ring, Vec::new()), &samples);
+}
+
+/// A hole's outline is a stroke ring of its own, with the same joins.
+#[test]
+fn a_polygon_with_a_hole_joins_the_hole_band_exactly() {
+    let hole = chamfered_square(3.0, 0.5);
+    let samples = join_samples(&hole);
+    let outer = vec![[1.5, 1.5], [14.5, 1.5], [14.5, 14.5], [1.5, 14.5]];
+    assert_one_layer_at_joins(half_red_stroke(outer, vec![hole]), &samples);
+}
+
+/// World mm at the middle of the 64 px, 4 px/mm readback target, and its pixel.
+const ORDERED_CENTRE_MM: f32 = POLYGON_SQUARE_PX as f32 / POLYGON_SQUARE_SCALE / 2.0;
+const ORDERED_CENTRE_PX: (u32, u32) = (POLYGON_SQUARE_PX / 2, POLYGON_SQUARE_PX / 2);
+
+fn centre_circle(radius_mm: f32, stroke_width: f32, rgba: [f32; 4]) -> OrderedItem {
+    OrderedItem::Circle(Circle {
+        center: [ORDERED_CENTRE_MM; 2],
+        radius: radius_mm,
+        stroke_width,
+        color: rgba,
+    })
+}
+
+/// A rectangle covering the whole target, filled `rgba`.
+fn full_rect(rgba: [f32; 4]) -> OrderedItem {
+    let edge = ORDERED_CENTRE_MM * 2.0;
+    OrderedItem::Polygon(GpuPolygon {
+        vertices: vec![[0.0, 0.0], [edge, 0.0], [edge, edge], [0.0, edge]],
+        fill_color: rgba,
+        ..GpuPolygon::default()
+    })
+}
+
+/// The red channel of one pixel after `source` is blended over a backdrop of
+/// red `backdrop` (alpha blending: `src * a + dst * (1 - a)`).
+fn blended_red(source: f32, alpha: f32, backdrop: f32) -> f32 {
+    source * alpha + backdrop * (1.0 - alpha)
+}
+
+fn centre_red(items: Vec<OrderedItem>) -> u8 {
+    on_gpu(run_ordered_readback_smoke_pass(items, &[ORDERED_CENTRE_PX])).expect("ordered readback")
+        [0]
+}
+
+fn assert_red_near(got: u8, expected: f32) {
+    let expected = (expected * 255.0).round();
+    assert!(
+        (f32::from(got) - expected).abs() <= 3.0,
+        "centre reads red {got}, expected about {expected}"
+    );
+}
+
+/// The reason the bucket exists (#1579): kinds interleave in LIST order, not
+/// in pipeline order. A translucent disc over an opaque rectangle blends with
+/// it; the reversed list leaves the rectangle on top and the disc invisible
+/// at the centre. The two orders must differ, and each must match the blend a
+/// painter would compute.
+#[test]
+fn ordered_drawings_blend_in_list_order_across_kinds() {
+    let rect = [0.8, 0.0, 0.0, 1.0];
+    let disc = [0.2, 0.0, 0.0, 0.5];
+
+    let disc_over_rect = centre_red(vec![full_rect(rect), centre_circle(3.0, 0.0, disc)]);
+    assert_red_near(disc_over_rect, blended_red(0.2, 0.5, 0.8));
+
+    let rect_over_disc = centre_red(vec![centre_circle(3.0, 0.0, disc), full_rect(rect)]);
+    assert_red_near(rect_over_disc, 0.8);
+
+    assert_ne!(disc_over_rect, rect_over_disc);
+}
+
+/// A drawing circle is a fill disc then a ring, as two instances. With a ring
+/// wider than the circle's diameter the centre lies inside the stroke, so it
+/// must read the stroke colour, not the fill (the CPU 40-gon crossover bug
+/// this replaces).
+#[test]
+fn a_ring_wider_than_its_diameter_covers_the_fill_at_the_centre() {
+    let fill = [0.2, 0.0, 0.0, 1.0];
+    let stroke = [1.0, 0.0, 0.0, 1.0];
+    let radius = 0.5;
+    let wider_than_diameter = 4.0 * radius;
+
+    let red = centre_red(vec![
+        centre_circle(radius, 0.0, fill),
+        centre_circle(radius, wider_than_diameter, stroke),
+    ]);
+
+    assert_red_near(red, 1.0);
+}
+
+/// A run that starts past the first instance (`first_instance != 0`) must
+/// draw ITS instances: the circle after the line is instance 1 of the circle
+/// buffer, and it paints over instance 0 at the centre.
+#[test]
+fn a_later_run_draws_its_own_instances_not_the_first() {
+    let far_line = OrderedItem::Line(LineSegment {
+        p0: [1.0, 1.0],
+        p1: [2.0, 1.0],
+        width: 0.2,
+        color: [1.0; 4],
+        style: 0,
+        _pad: 0,
+    });
+
+    let red = centre_red(vec![
+        centre_circle(3.0, 0.0, [0.4, 0.0, 0.0, 1.0]),
+        far_line,
+        centre_circle(3.0, 0.0, [0.9, 0.0, 0.0, 1.0]),
+    ]);
+
+    assert_red_near(red, 0.9);
 }

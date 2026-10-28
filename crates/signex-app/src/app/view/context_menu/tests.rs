@@ -108,8 +108,8 @@ fn dd_msg_row_carries_message_and_optional_shortcut() {
 fn canvas_menu_grows_and_gates_on_selection() {
     let tokens = theme_tokens(TID);
     let sc = shortcuts();
-    let with = canvas_menu_entries(TID, &tokens, true, false, None, &sc);
-    let without = canvas_menu_entries(TID, &tokens, false, false, None, &sc);
+    let with = canvas_menu_entries(TID, &tokens, true, false, false, None, &sc);
+    let without = canvas_menu_entries(TID, &tokens, false, false, false, None, &sc);
 
     // Clipboard + find rows are always present.
     for row in ["Find Text...", "Cut", "Copy", "Paste", "Paste Special"] {
@@ -128,8 +128,8 @@ fn canvas_menu_grows_and_gates_on_selection() {
 fn canvas_child_sheet_adds_open_row() {
     let tokens = theme_tokens(TID);
     let sc = shortcuts();
-    let plain = canvas_menu_entries(TID, &tokens, false, false, None, &sc);
-    let child = canvas_menu_entries(TID, &tokens, false, true, None, &sc);
+    let plain = canvas_menu_entries(TID, &tokens, false, false, false, None, &sc);
+    let child = canvas_menu_entries(TID, &tokens, false, true, false, None, &sc);
     assert!(!has_row(&plain, "Open Child Sheet"));
     assert!(has_row(&child, "Open Child Sheet"));
     assert!(!has_row(&plain, "Sync Sheet Pins"));
@@ -339,7 +339,7 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
 #[test]
 fn canvas_row_text_is_byte_identical_to_the_old_literals() {
     let tokens = theme_tokens(TID);
-    let rows = canvas_menu_entries(TID, &tokens, true, true, None, &shortcuts());
+    let rows = canvas_menu_entries(TID, &tokens, true, true, false, None, &shortcuts());
     for expected in [
         "Find Text...",
         "Cut",
@@ -369,7 +369,7 @@ fn shared_command_ids_read_the_same_label_on_every_surface() {
     // Context-menu canvas ids: label comes from the catalog, so the menu
     // bar's lookup of the same id must agree with the row.
     let tokens = theme_tokens(TID);
-    let rows = canvas_menu_entries(TID, &tokens, true, true, None, &shortcuts());
+    let rows = canvas_menu_entries(TID, &tokens, true, true, false, None, &shortcuts());
     for (id, row_label) in [
         ("cut", "Cut"),
         ("copy", "Copy"),
@@ -398,5 +398,26 @@ fn shared_command_ids_read_the_same_label_on_every_surface() {
     ] {
         assert!(id_for_action(&action).is_some(), "{action:?} lost its id");
         assert_eq!(action_label(&action, "<missing>"), row_label);
+    }
+}
+
+/// The Arrange launcher appears only when the selection holds a drawing, and
+/// its submenu rows reorder drawings (#1583).
+#[test]
+fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
+    let tokens = theme_tokens(TID);
+    let sc = shortcuts();
+    let with = canvas_menu_entries(TID, &tokens, true, false, true, None, &sc);
+    let without = canvas_menu_entries(TID, &tokens, true, false, false, None, &sc);
+    assert_eq!(customs(&with), customs(&without) + 1);
+
+    let rows = super::submenu::arrange_entries();
+    for label in [
+        "Bring to Front",
+        "Send to Back",
+        "Bring Forward",
+        "Send Backward",
+    ] {
+        assert!(has_row(&rows, label), "missing {label}");
     }
 }

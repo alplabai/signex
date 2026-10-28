@@ -30,9 +30,8 @@ impl Signex {
             // Recoverable failures open their recovery dialog; anything
             // else must still reach the user, so raise the error card.
             if !route_open_error(&mut self.library, &path, &e) {
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
-                    format!("Cannot open library {}: {e}", path.display()),
-                ));
+                self.document_state.error_notice =
+                    Some(open_error_notice(&self.library, &path, "open library", &e));
             }
         }
         Task::none()

@@ -44,6 +44,12 @@ pub(crate) fn route_open_error(
     path: &std::path::Path,
     err: &LibraryError,
 ) -> bool {
+    // A read-only (stock) library must never reach a flow that writes
+    // to it: no git re-init, no repair. The caller shows the plain
+    // explanation from `open_error_notice` instead (#814).
+    if state.is_read_only_target(path) {
+        return false;
+    }
     let dialog = match err {
         LibraryError::NotFound(msg) if msg.contains("no .snxlib") => {
             Some(RecoveryDialog::LibraryMissing {
@@ -71,6 +77,30 @@ pub(crate) fn route_open_error(
         }
         _ => false,
     }
+}
+
+/// Error card for a failed library open. A read-only (stock) library
+/// gets a plain explanation instead of the raw error, since no recovery
+/// is offered for it.
+pub(crate) fn open_error_notice(
+    state: &LibraryState,
+    path: &std::path::Path,
+    action: &str,
+    err: &LibraryError,
+) -> crate::app::state::ErrorNotice {
+    if state.is_read_only_target(path) {
+        return read_only_repair_notice(path, &format!("could not be opened ({err})"));
+    }
+    crate::app::state::ErrorNotice::open(format!("Cannot {action} {}: {err}", path.display()))
+}
+
+/// Error card for a recovery attempt against a read-only (stock) library.
+fn read_only_repair_notice(path: &std::path::Path, what: &str) -> crate::app::state::ErrorNotice {
+    crate::app::state::ErrorNotice::open(format!(
+        "The library at {} ships with Signex and {what}. \
+         It is read-only and cannot be repaired from here; reinstall Signex to restore it.",
+        path.display()
+    ))
 }
 
 /// Handle the user's choice from the *Library missing* recovery dialog.
@@ -159,6 +189,14 @@ pub(super) fn handle_recovery_git_missing(
                     return Task::none();
                 }
             };
+            if app.library.is_read_only_target(&path) {
+                // Defence in depth: the dialog is never opened for a
+                // read-only library, but never write to one regardless.
+                app.library.recovery = None;
+                app.document_state.error_notice =
+                    Some(read_only_repair_notice(&path, "cannot be re-initialised"));
+                return Task::none();
+            }
             match LocalGitAdapter::recover_init(&path) {
                 Ok(_) => {
                     app.library.recovery = None;

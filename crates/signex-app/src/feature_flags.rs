@@ -78,7 +78,8 @@ pub const PCB_GPU_RENDER_DEFAULT: bool = false;
 ///
 /// Held `false` until the mount is signed off. Read at the mount site in
 /// `app/view/mod.rs`, which picks [`crate::canvas::gpu_mount`] over the plain
-/// CPU canvas, so flipping it is the whole change.
+/// CPU canvas. What must be true before it flips is the default-flip checklist
+/// on #199 (issue comment 6467949284), not this line alone.
 pub const SCHEMATIC_GPU_RENDER_ENABLED: bool = false;
 
 #[cfg(test)]

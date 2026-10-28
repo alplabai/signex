@@ -19,6 +19,10 @@ use crate::menu_bar::cmd_label;
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Keyboard-shortcut hints for the canvas menu, resolved from the active
 /// keymap profile (with the historic Altium defaults as fallbacks) before
 /// the pure builder runs.
@@ -80,8 +84,8 @@ impl Signex {
             let row_label = *label;
             let row_step = *step_mm;
             let btn = button(
-                container(text(row_label).size(11).color(lbl_color))
-                    .padding([4, 12])
+                container(text(row_label).size(TS.body).color(lbl_color))
+                    .padding([SP.s, SP.l])
                     .width(iced::Length::Fill),
             )
             .padding(0)
@@ -105,7 +109,7 @@ impl Signex {
         }
 
         container(col)
-            .padding(4)
+            .padding(SP.s)
             .style(move |_: &iced::Theme| iced::widget::container::Style {
                 background: Some(iced::Background::Color(panel_bg)),
                 border: iced::Border {
@@ -128,6 +132,7 @@ impl Signex {
             .selected
             .iter()
             .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet);
+        let drawing_selected = !self.selected_drawing_ids().is_empty();
         let active_submenu = self.interaction_state.context_submenu;
         // Shortcut hints read from the active keymap profile, falling
         // back to the historic Altium defaults when a command is unbound.
@@ -144,6 +149,7 @@ impl Signex {
             tokens,
             has_selection,
             child_sheet_selected,
+            drawing_selected,
             active_submenu,
             &sc,
         );
@@ -188,6 +194,7 @@ pub(super) fn canvas_menu_entries(
     tokens: &ThemeTokens,
     has_selection: bool,
     child_sheet_selected: bool,
+    drawing_selected: bool,
     active_submenu: Option<ContextSubmenu>,
     sc: &CanvasShortcuts,
 ) -> Vec<DropdownEntry<Message>> {
@@ -241,6 +248,15 @@ pub(super) fn canvas_menu_entries(
             ContextSubmenu::Align,
             active_submenu == Some(ContextSubmenu::Align),
         ));
+        if drawing_selected {
+            v.push(submenu_launcher(
+                tokens,
+                None,
+                "Arrange",
+                ContextSubmenu::Arrange,
+                active_submenu == Some(ContextSubmenu::Arrange),
+            ));
+        }
         v.push(dd_disabled(
             Some(ic::icon_dd_unions(tid)),
             "Unions",

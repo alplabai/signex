@@ -22,6 +22,10 @@ mod table;
 
 pub(in crate::app) use table::{default_column_width, sorted_row_order};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 impl Signex {
     pub(in crate::app::view) fn view_bom_preview(&self) -> Element<'_, Message> {
         let dialog = self.view_bom_preview_body_inner(true);
@@ -108,16 +112,18 @@ impl Signex {
         // on the right.
         let variant_dropdown: Element<'_, Message> = if preview.variants.is_empty() {
             text(format!("Variant: {}", active_variant_label))
-                .size(11)
+                .size(TS.body)
                 .color(text_muted)
                 .into()
         } else {
             container(
                 row![
                     Space::new().width(Length::Fill),
-                    text(active_variant_label.clone()).size(11).color(text_c),
+                    text(active_variant_label.clone())
+                        .size(TS.body)
+                        .color(text_c),
                     Space::new().width(Length::Fill),
-                    text("\u{25BE}").size(10).color(text_c),
+                    text("\u{25BE}").size(TS.caption).color(text_c),
                 ]
                 .align_y(iced::Alignment::Center),
             )
@@ -138,7 +144,7 @@ impl Signex {
             .into()
         };
         let info_badge: Element<'_, Message> =
-            container(text("i").size(11).color(iced::Color::WHITE))
+            container(text("i").size(TS.body).color(iced::Color::WHITE))
                 .width(20)
                 .height(20)
                 .align_x(iced::alignment::Horizontal::Center)
@@ -164,7 +170,7 @@ impl Signex {
             ]
             .align_y(iced::Alignment::Center),
         )
-        .padding([8, 14])
+        .padding([SP.m, 14.0])
         .width(Length::Fill)
         .style(crate::styles::toolbar_strip(tokens));
 
@@ -177,7 +183,7 @@ impl Signex {
             container(body)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .padding([6, 8]),
+                .padding([6.0, SP.m]),
             container(Space::new())
                 .width(1)
                 .height(Length::Fill)
@@ -205,19 +211,22 @@ impl Signex {
                         signex_output::BomIssueSeverity::Warning
                     };
                     text(label)
-                        .size(10)
+                        .size(TS.caption)
                         .color(rules::severity_color(severity, text_muted))
                         .into()
                 }
-                None => text("No BOM issues").size(10).color(text_muted).into(),
+                None => text("No BOM issues")
+                    .size(TS.caption)
+                    .color(text_muted)
+                    .into(),
             };
         let footer = container(
             row![
-                text(status_label).size(10).color(text_muted),
+                text(status_label).size(TS.caption).color(text_muted),
                 Space::new().width(12),
-                text("|").size(10).color(text_muted),
+                text("|").size(TS.caption).color(text_muted),
                 Space::new().width(12),
-                text(variant_label).size(10).color(text_muted),
+                text(variant_label).size(TS.caption).color(text_muted),
                 Space::new().width(Length::Fill),
                 issue_badge,
                 Space::new().width(12),
