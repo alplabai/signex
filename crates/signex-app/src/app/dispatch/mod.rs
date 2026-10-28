@@ -55,14 +55,19 @@ impl Signex {
             Message::CanvasEvent(event) => {
                 if self.ui_state.first_run_tour_open {
                     self.ui_state.first_run_tour_open = false;
-                    crate::fonts::write_first_run_tour_dismissed(true);
+                    let save = overlay::dismiss_first_run_tour_task();
+                    return Task::batch([save, self.handle_canvas_interaction_event(event)]);
                 }
                 self.handle_canvas_interaction_event(event)
             }
             Message::CanvasEventInWindow { window_id, event } => {
                 if self.ui_state.first_run_tour_open {
                     self.ui_state.first_run_tour_open = false;
-                    crate::fonts::write_first_run_tour_dismissed(true);
+                    let save = overlay::dismiss_first_run_tour_task();
+                    return Task::batch([
+                        save,
+                        self.handle_canvas_event_in_window(window_id, event),
+                    ]);
                 }
                 self.handle_canvas_event_in_window(window_id, event)
             }
@@ -286,6 +291,12 @@ impl Signex {
             }
             WindowMsg::UndockTab(idx) => self.handle_undock_tab(idx),
             WindowMsg::UndockedTabOpened { path, id } => {
+                // The entry was inserted when the open was requested; if
+                // the window closed before the OS confirmed the open, do
+                // not resurrect it (stale window + canvas leak).
+                if !self.ui_state.windows.contains_key(&id) {
+                    return Task::none();
+                }
                 let title = self
                     .document_state
                     .tabs
@@ -359,6 +370,12 @@ impl Signex {
             }
             WindowMsg::DetachFloatingPanel(idx) => self.handle_detach_floating_panel(idx),
             WindowMsg::DetachedPanelOpened { kind, id } => {
+                // The entry was inserted when the open was requested; if
+                // the window closed before the OS confirmed the open, do
+                // not resurrect it (stale window + canvas leak).
+                if !self.ui_state.windows.contains_key(&id) {
+                    return Task::none();
+                }
                 self.ui_state
                     .windows
                     .insert(id, super::state::WindowKind::DetachedPanel(kind));
@@ -425,9 +442,9 @@ impl Signex {
                 } else {
                     self.ui_state.net_colors.remove(&net);
                 }
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_content_cache();
+                for canvas in self.interaction_state.all_schematic_canvases_mut() {
+                    canvas.clear_content_cache();
+                }
                 Task::none()
             }
             NetColorMsg::CustomShow(show) => {
@@ -452,10 +469,11 @@ impl Signex {
                 Task::none()
             }
             NetColorMsg::CustomChannel(chan, s) => {
-                // Parse as u8; silently ignore invalid input so the
-                // text_input doesn't reject intermediate values like
-                // the empty string while the user types.
-                let parsed = s.trim().parse::<u16>().unwrap_or(0).min(255) as u8;
+                // Parse as u8; unparsable input (e.g. the empty string
+                // while the user types) resets the channel to 0 and
+                // values above 255 (however large) clamp to 255, so the text_input never
+                // rejects an intermediate value.
+                let parsed = s.trim().parse::<u64>().unwrap_or(0).min(255) as u8;
                 let draft = &mut self.ui_state.net_color_custom.draft;
                 let v = parsed as f32 / 255.0;
                 match chan {

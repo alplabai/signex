@@ -15,7 +15,7 @@ fn context_with(bindings: Vec<ShortcutBinding>) -> MenuContext {
         bindings,
     };
     MenuContext {
-        active_keymap: Some(CompiledKeymap::compile(&profile)),
+        active_keymap: Some(std::sync::Arc::new(CompiledKeymap::compile(&profile))),
         ..MenuContext::default()
     }
 }

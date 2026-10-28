@@ -30,7 +30,7 @@ fn app_with_prefix_chord() -> Signex {
     };
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
-    app.ui_state.active_keymap = CompiledKeymap::compile(&profile);
+    app.ui_state.active_keymap = std::sync::Arc::new(CompiledKeymap::compile(&profile));
     app
 }
 
@@ -293,6 +293,6 @@ fn app_with_shifted_chord() -> Signex {
     };
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
-    app.ui_state.active_keymap = CompiledKeymap::compile(&profile);
+    app.ui_state.active_keymap = std::sync::Arc::new(CompiledKeymap::compile(&profile));
     app
 }

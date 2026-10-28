@@ -1,3 +1,4 @@
+// Own process: builds a wgpu device; two in one process SIGSEGV on lavapipe, #889.
 //! Phase 6 regression and golden fixtures for renderer hardening.
 //!
 //! CLEAN ROOM DECLARATION

@@ -116,7 +116,6 @@ pub enum MenuMessage {
     ImportAltium,
     Save,
     SaveAs,
-    PrintPreview,
     ExportPdf,
     ExportNetlist,
     ExportBom,
@@ -148,11 +147,6 @@ pub enum MenuMessage {
     /// as `AddLibrarySymbol` but mints `Footprint::empty()` and
     /// opens a `.snxfpt` tab.
     AddLibraryFootprint,
-    /// Legacy File ▸ Library ▸ New Component… — preserved only as
-    /// a thunk for the old menu wiring; the menu bar no longer
-    /// surfaces it. Component creation lives on the project tree
-    /// (see `AddLibraryComponent`).
-    LibraryNewComponent,
     // Edit
     Undo,
     Redo,
@@ -204,7 +198,7 @@ pub enum MenuMessage {
     /// close/reopen. Routed to `OverlayMsg::OpenPassiveCalculator`.
     OpenPassiveCalculator,
     /// Open the Keyboard Shortcuts reference modal — a single page
-    /// listing every binding from `shortcuts.rs`, callable from
+    /// listing every binding from the active keymap profile, callable from
     /// Help ▸ Keyboard Shortcuts and from F1.
     OpenKeyboardShortcuts,
     /// Tools ▸ New Part — bumps the active `.snxsym` symbol's max
@@ -249,7 +243,7 @@ pub struct MenuContext {
     /// per-window scale tracking lands.
     pub scale_factor: f32,
     /// Active committed shortcut profile for menu shortcut labels.
-    pub active_keymap: Option<CompiledKeymap>,
+    pub active_keymap: Option<std::sync::Arc<CompiledKeymap>>,
     /// File ▸ Open Recent entries, most recent first.
     pub recent_projects: Vec<std::path::PathBuf>,
 }

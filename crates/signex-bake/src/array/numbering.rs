@@ -2,19 +2,18 @@
 //! the 1D  (Linear) and the 2D
 //!  (Grid). Polar reuses the 1D form.
 
-use std::collections::BTreeMap;
-
 use signex_sketch::array::NumberingScheme;
-use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
+
+use crate::eval_util::strip_eq_prefix;
 
 /// Resolve the pad number for the i-th instance of a linear array.
 pub(super) fn derive_pad_number(
     numbering: &NumberingScheme,
     i: usize,
-    params_ast: &BTreeMap<String, ExprNode>,
+    ctx: &mut EvalContext,
     warnings: &mut Vec<String>,
     source: SketchEntityId,
 ) -> String {
@@ -22,7 +21,7 @@ pub(super) fn derive_pad_number(
         NumberingScheme::LinearIncrement {
             start_expr,
             step_expr,
-        } => match linear_increment_number(start_expr, step_expr, i, params_ast) {
+        } => match linear_increment_number(start_expr, step_expr, i, ctx) {
             Ok(number) => number,
             Err(why) => {
                 record_numbering_warning(
@@ -68,14 +67,11 @@ pub(super) fn linear_increment_number(
     start_expr: &str,
     step_expr: &str,
     i: usize,
-    params_ast: &BTreeMap<String, ExprNode>,
+    ctx: &mut EvalContext,
 ) -> Result<String, String> {
-    let ctx = EvalContext {
-        params: params_ast.clone(),
-        array_index: Some((i, 0)),
-    };
-    let start = eval_numbering_expr("start", start_expr, &ctx)?;
-    let step = eval_numbering_expr("step", step_expr, &ctx)?;
+    ctx.array_index = Some((i, 0));
+    let start = eval_numbering_expr("start", start_expr, ctx)?;
+    let step = eval_numbering_expr("step", step_expr, ctx)?;
     let n = (start + i as f64 * step).round() as i64;
     Ok(format!("{}", n))
 }
@@ -111,13 +107,6 @@ fn record_numbering_warning(warnings: &mut Vec<String>, message: String) {
     warnings.push(message);
 }
 
-/// Strip the optional Altium-style leading `=` and surrounding
-/// whitespace so authored expressions like `= count` parse cleanly.
-pub(super) fn strip_eq_prefix(src: &str) -> &str {
-    let s = src.trim();
-    s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s)
-}
-
 /// v0.22 Phase B3 — bake `ArrayKind::Grid`. Walks `(i, j)` with
 /// `i in 0..nx` and `j in 0..ny`, per-instance offset
 /// `(i * dx, j * dy)` from the source. Optional `depopulation` is a
@@ -131,7 +120,7 @@ pub(super) fn derive_pad_number_2d(
     i: usize,
     j: usize,
     nx: usize,
-    params_ast: &BTreeMap<String, ExprNode>,
+    ctx: &mut EvalContext,
     warnings: &mut Vec<String>,
     source: SketchEntityId,
 ) -> String {
@@ -143,7 +132,7 @@ pub(super) fn derive_pad_number_2d(
         } => {
             // Row-major: (j, i) → idx = j*nx + i.
             let idx = j * nx + i;
-            match linear_increment_number(start_expr, step_expr, idx, params_ast) {
+            match linear_increment_number(start_expr, step_expr, idx, ctx) {
                 Ok(number) => number,
                 Err(why) => {
                     record_numbering_warning(
@@ -161,6 +150,14 @@ pub(super) fn derive_pad_number_2d(
             start_row,
             start_col,
         } => {
+            if !signex_sketch::array::is_valid_bga_start_row(*skip_letters, *start_row) {
+                record_numbering_warning(
+                    warnings,
+                    format!(
+                        "grid array source {source}: BGA start_row '{start_row}' is not in the row alphabet; rows start at 'A' instead",
+                    ),
+                );
+            }
             let row = bga_row_letter(j as u32, *skip_letters, *start_row);
             let col = (i as u32) + *start_col;
             format!("{row}{col}")
@@ -182,6 +179,14 @@ pub(super) fn derive_pad_number_2d(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
+
+    fn test_ctx() -> EvalContext {
+        EvalContext {
+            params: BTreeMap::new(),
+            array_index: None,
+        }
+    }
 
     fn broken_scheme() -> NumberingScheme {
         // `1 +` is a syntactically invalid expression — the realistic
@@ -193,6 +198,30 @@ mod tests {
     }
 
     #[test]
+    fn invalid_bga_start_row_is_reported() {
+        let mut warnings = Vec::new();
+        let source = SketchEntityId::new();
+        let mut ctx = test_ctx();
+        let scheme = NumberingScheme::BgaRowCol {
+            skip_letters: true,
+            start_row: 'I',
+            start_col: 1,
+        };
+        let n = derive_pad_number_2d(&scheme, 0, 0, 2, &mut ctx, &mut warnings, source);
+        assert_eq!(n, "A1");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].contains("start_row 'I'"), "{warnings:?}");
+        let ok = NumberingScheme::BgaRowCol {
+            skip_letters: true,
+            start_row: 'B',
+            start_col: 1,
+        };
+        let mut w2 = Vec::new();
+        derive_pad_number_2d(&ok, 0, 0, 2, &mut ctx, &mut w2, source);
+        assert!(w2.is_empty());
+    }
+
+    #[test]
     fn linear_increment_expression_error_is_reported_not_swallowed() {
         // GH #599 — an unparseable start expression used to renumber
         // the array 0, 1, 2, … with `warnings` left empty, so an
@@ -200,9 +229,9 @@ mod tests {
         // and the bake reported success.
         let mut warnings = Vec::new();
         let source = SketchEntityId::new();
-        let params = BTreeMap::new();
+        let mut ctx = test_ctx();
 
-        let number = derive_pad_number(&broken_scheme(), 0, &params, &mut warnings, source);
+        let number = derive_pad_number(&broken_scheme(), 0, &mut ctx, &mut warnings, source);
 
         assert_eq!(number, "0", "fallback numbering is unchanged");
         assert_eq!(warnings.len(), 1, "expected one warning, got {warnings:?}");
@@ -223,11 +252,11 @@ mod tests {
         // member.
         let mut warnings = Vec::new();
         let source = SketchEntityId::new();
-        let params = BTreeMap::new();
+        let mut ctx = test_ctx();
         let scheme = broken_scheme();
 
         for i in 0..5 {
-            let number = derive_pad_number(&scheme, i, &params, &mut warnings, source);
+            let number = derive_pad_number(&scheme, i, &mut ctx, &mut warnings, source);
             assert_eq!(number, format!("{i}"));
         }
 
@@ -244,10 +273,10 @@ mod tests {
         // row-major fallback.
         let mut warnings = Vec::new();
         let source = SketchEntityId::new();
-        let params = BTreeMap::new();
+        let mut ctx = test_ctx();
 
         let number =
-            derive_pad_number_2d(&broken_scheme(), 1, 0, 2, &params, &mut warnings, source);
+            derive_pad_number_2d(&broken_scheme(), 1, 0, 2, &mut ctx, &mut warnings, source);
 
         assert_eq!(number, "2", "row-major fallback numbering is unchanged");
         assert_eq!(warnings.len(), 1, "expected one warning, got {warnings:?}");
@@ -261,13 +290,13 @@ mod tests {
     fn linear_increment_valid_expression_stays_silent() {
         let mut warnings = Vec::new();
         let source = SketchEntityId::new();
-        let params = BTreeMap::new();
+        let mut ctx = test_ctx();
         let scheme = NumberingScheme::LinearIncrement {
             start_expr: "= 10".to_string(),
             step_expr: "2".to_string(),
         };
 
-        let number = derive_pad_number(&scheme, 3, &params, &mut warnings, source);
+        let number = derive_pad_number(&scheme, 3, &mut ctx, &mut warnings, source);
 
         assert_eq!(number, "16", "start 10 + i(3) * step 2");
         assert!(warnings.is_empty(), "no warning expected, got {warnings:?}");

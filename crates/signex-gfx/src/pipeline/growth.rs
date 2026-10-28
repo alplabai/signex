@@ -4,6 +4,18 @@
 //! This module was written without reference to GPL-licensed software.
 //! Sources: wgpu/WGSL public docs.
 
+/// Static growth configuration for a single instance/vertex buffer: *how*
+/// to grow it, as opposed to `buffer`/`capacity` (its current state) or
+/// `required` (how many elements this particular call needs). Built once
+/// per call site in `circle.rs`/`line.rs`/`polygon.rs`/`arc.rs` and passed
+/// by reference since `ensure_capacity` only reads it.
+pub(crate) struct GrowthParams {
+    pub elem_size: usize,
+    pub label: &'static str,
+    pub usage: wgpu::BufferUsages,
+    pub max_buffer_size: u64,
+}
+
 /// Grow `buffer` (and its element `capacity`) so it can hold `required`
 /// elements of `elem_size` bytes, clamped so the allocation never exceeds the
 /// device's `max_buffer_size`.
@@ -21,18 +33,6 @@
 /// unless clamped), so the caller can truncate its upload slice and set its
 /// draw count to the returned value. Logs once per process the first time a
 /// clamp happens.
-/// Static growth configuration for a single instance/vertex buffer: *how*
-/// to grow it, as opposed to `buffer`/`capacity` (its current state) or
-/// `required` (how many elements this particular call needs). Built once
-/// per call site in `circle.rs`/`line.rs`/`polygon.rs`/`arc.rs` and passed
-/// by reference since `ensure_capacity` only reads it.
-pub(crate) struct GrowthParams {
-    pub elem_size: usize,
-    pub label: &'static str,
-    pub usage: wgpu::BufferUsages,
-    pub max_buffer_size: u64,
-}
-
 pub(crate) fn ensure_capacity(
     device: &wgpu::Device,
     buffer: &mut wgpu::Buffer,

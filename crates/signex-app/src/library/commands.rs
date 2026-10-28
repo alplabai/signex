@@ -10,10 +10,9 @@ use std::path::PathBuf;
 
 use signex_library::adapters::local_git::LibraryInitOptions;
 use signex_library::{
-    ComponentClass, ComponentRow, ComponentSummary, DatasheetRef, FORMAT_TOKEN, InternalPn,
-    LibraryError, LibrarySection, LifecycleState, LocalGitAdapter, ManufacturerPart, ParamMap,
-    PlmReserved, PrimitiveRef, RowId, SnxlibManifest, UsersConfig, WorkflowConfig,
-    hash_row_content,
+    ComponentClass, ComponentRow, DatasheetRef, FORMAT_TOKEN, InternalPn, LibraryError,
+    LibrarySection, LifecycleState, LocalGitAdapter, ManufacturerPart, ParamMap, PlmReserved,
+    PrimitiveRef, RowId, SnxlibManifest, UsersConfig, WorkflowConfig, hash_row_content,
 };
 // Legacy `Manifest` / `LibraryMeta` / `LibraryMode` imports were retired
 // when `LocalGitAdapter::init` switched to the new `SnxlibManifest`
@@ -451,7 +450,7 @@ pub struct AutoMountOutcome {
 /// inline before, so re-running it would be the same pure duplicate work
 /// #528 removed: it roughly doubled every project open, costing a
 /// six-medium-library project 795.7 ms of its 1 622.571 ms mount.
-/// `tests/library_open_cache.rs` pins both halves — that the cold path
+/// `tests/integration/library_open_cache.rs` pins both halves — that the cold path
 /// primes everything, and that the warm path still rescans the primitive
 /// directories.
 pub fn auto_mount_project_libraries(
@@ -673,30 +672,6 @@ fn report_unbound_row(internal_pn: &str, unbound: &[&str]) {
         "New component {name} has no {} bound. Use Pick Symbol / Pick Footprint in the library browser or Properties panel.",
         unbound.join(" and no "),
     );
-}
-
-/// Re-run a query against every open library — picker filter helper.
-pub fn list_components_filtered(
-    state: &LibraryState,
-    text_filter: &str,
-) -> Vec<(PathBuf, ComponentSummary)> {
-    let needle = text_filter.trim().to_lowercase();
-    state
-        .all_components()
-        .into_iter()
-        .filter(|(_path, summary)| {
-            if needle.is_empty() {
-                return true;
-            }
-            summary
-                .internal_pn
-                .as_str()
-                .to_lowercase()
-                .contains(&needle)
-                || summary.mpn.to_lowercase().contains(&needle)
-                || summary.description.to_lowercase().contains(&needle)
-        })
-        .collect()
 }
 
 /// Stub: emit `tracing::info!` with the use-site coordinates the

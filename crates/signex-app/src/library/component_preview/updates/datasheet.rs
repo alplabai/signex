@@ -3,14 +3,15 @@
 //! Owns the Datasheet tab's actions over the row's document list
 //! (`row.documents()`, primary first, #1231): switching a document
 //! between URL and pinned-PDF modes, live URL and label entry, applying
-//! an upload result by content-hashing the picked bytes, and adding,
+//! an upload result by pinning the picked PDF and staging its bytes (they are
+//! written on Save, #1332), and adding,
 //! removing and reordering documents.
 
 use signex_library::{DatasheetDoc, DatasheetRef};
 
 use crate::library::ComponentPreviewState;
 use crate::library::editor::datasheet_picker::DatasheetMode;
-use crate::library::messages::{DatasheetMsg, PickedPdf};
+use crate::library::messages::{DatasheetMsg, PickedFile, PickedPdf};
 
 /// Apply one Datasheet-tab message to the row. Opening the upload dialog
 /// is the dispatcher's (it starts a task) and changes nothing here.
@@ -19,7 +20,8 @@ pub(super) fn apply(state: &mut ComponentPreviewState, msg: DatasheetMsg) {
         DatasheetMsg::SetMode(index, mode) => set_mode(state, index, mode),
         DatasheetMsg::SetUrl(index, url) => set_url(state, index, url),
         DatasheetMsg::SetLabel(index, label) => set_label(state, index, label),
-        DatasheetMsg::UploadDialog(_) => {}
+        // The dispatcher's: the dialog and the save write are tasks.
+        DatasheetMsg::UploadDialog(_) | DatasheetMsg::AssetsStored { .. } => {}
         DatasheetMsg::UploadResult(picked) => {
             let PickedPdf {
                 index,
@@ -28,9 +30,18 @@ pub(super) fn apply(state: &mut ComponentPreviewState, msg: DatasheetMsg) {
             } = *picked;
             apply_upload_result(state, index, &picked_for, file);
         }
-        DatasheetMsg::Add => add(state),
-        DatasheetMsg::Remove(index) => remove(state, index),
-        DatasheetMsg::Move { from, to } => move_to(state, from, to),
+        DatasheetMsg::Add => {
+            state.datasheet_errors.clear();
+            add(state);
+        }
+        DatasheetMsg::Remove(index) => {
+            state.datasheet_errors.clear();
+            remove(state, index);
+        }
+        DatasheetMsg::Move { from, to } => {
+            state.datasheet_errors.clear();
+            move_to(state, from, to);
+        }
     }
 }
 
@@ -65,6 +76,7 @@ fn edit_document(
 /// the current value is of the other kind, so re-selecting the active
 /// mode is a no-op and does not clobber the existing value.
 pub(super) fn set_mode(state: &mut ComponentPreviewState, index: usize, mode: DatasheetMode) {
+    state.datasheet_errors.remove(&index);
     edit_document(state, index, |doc| match (mode, &doc.source) {
         (DatasheetMode::Url, DatasheetRef::Url { .. })
         | (DatasheetMode::PinnedPdf, DatasheetRef::HashPinned { .. }) => {}
@@ -97,19 +109,24 @@ pub(super) fn set_label(state: &mut ComponentPreviewState, index: usize, label: 
     edit_document(state, index, |doc| doc.label = label);
 }
 
-/// Apply the result of a pinned-PDF upload: hash the bytes with SHA-256
-/// and pin the document the dialog was opened for. The list may have
-/// changed while the dialog was open, so that document is found again: at
-/// `index` if it is still there, else wherever it moved. A document that
-/// was removed or edited meanwhile takes nothing, and the pick is reported
-/// as dropped. A cancelled pick (`None`) leaves the row untouched.
+/// Apply the result of a pinned-PDF upload: pin the document the dialog
+/// was opened for to the picked PDF and stage its bytes on the editor. The
+/// bytes are written to the library only when the row is saved. The list
+/// may have changed while the dialog was open, so that document is found
+/// again: at `index` if it is still there, else wherever it moved. A
+/// document that was removed or edited meanwhile takes nothing (neither a
+/// pin nor an error), and the pick is reported as dropped. A cancelled pick
+/// (`None`) leaves the row untouched and clears the document's error; a
+/// refused file (not a PDF, unreadable) records the reason for the
+/// document instead of pinning.
 pub(super) fn apply_upload_result(
     state: &mut ComponentPreviewState,
     index: usize,
     picked_for: &DatasheetDoc,
-    file: Option<(Vec<u8>, String)>,
+    file: Option<Result<PickedFile, String>>,
 ) {
-    let Some((bytes, filename)) = file else {
+    let Some(file) = file else {
+        state.datasheet_errors.remove(&index);
         return;
     };
     let docs = state.row.documents();
@@ -121,18 +138,27 @@ pub(super) fn apply_upload_result(
     let Some(target) = target else {
         tracing::warn!(
             target: "signex::library",
-            "the PDF {filename} was not pinned: the document it was picked for was removed \
+            "the picked PDF was not pinned: the document it was picked for was removed \
              or changed while the file dialog was open"
         );
         return;
     };
-    use sha2::Digest;
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(&bytes);
-    let hash = format!("{:x}", hasher.finalize());
-    edit_document(state, target, |doc| {
-        doc.source = DatasheetRef::hash_pinned(hash, filename);
-    });
+    match file {
+        Err(reason) => {
+            state.datasheet_errors.insert(target, reason);
+        }
+        Ok(PickedFile { asset, filename }) => {
+            state.datasheet_errors.remove(&target);
+            let hash = asset.hash.clone();
+            state.staged_datasheets.insert(hash.clone(), asset);
+            edit_document(state, target, |doc| {
+                doc.source = DatasheetRef::hash_pinned(hash, filename);
+            });
+            // A replaced pick is spent: only PDFs the row pins (or the copy
+            // being saved pins) stay staged.
+            state.prune_staged_datasheets();
+        }
+    }
 }
 
 /// Append an empty URL document after the last one.
@@ -238,8 +264,103 @@ mod tests {
         assert!(state.row.more_datasheets.is_empty());
     }
 
-    fn pdf(name: &str) -> Option<(Vec<u8>, String)> {
-        Some((b"%PDF".to_vec(), name.into()))
+    fn picked(bytes: &[u8], name: &str) -> PickedFile {
+        PickedFile {
+            asset: signex_library::PdfAsset::from_bytes(bytes.to_vec()).unwrap(),
+            filename: name.into(),
+        }
+    }
+
+    fn pdf(name: &str) -> Option<Result<PickedFile, String>> {
+        Some(Ok(picked(b"%PDF-1.4 datasheet", name)))
+    }
+
+    fn refused() -> Option<Result<PickedFile, String>> {
+        Some(Err("this file is not a PDF".into()))
+    }
+
+    #[test]
+    fn a_pick_stages_the_bytes_under_their_hash_and_pins_the_row() {
+        let mut state = fixture();
+        set_mode(&mut state, 0, DatasheetMode::PinnedPdf);
+        let doc = state.row.documents()[0].clone();
+        apply_upload_result(&mut state, 0, &doc, pdf("ds.pdf"));
+        let DatasheetRef::HashPinned { hash, filename } = state.row.datasheet.clone() else {
+            panic!("not pinned");
+        };
+        assert_eq!(filename, "ds.pdf");
+        assert_eq!(
+            state.staged_datasheets[&hash].bytes.as_ref(),
+            b"%PDF-1.4 datasheet"
+        );
+        assert_eq!(state.staged_assets_in_use().len(), 1);
+        assert!(state.dirty);
+    }
+
+    #[test]
+    fn a_replaced_pick_is_no_longer_in_use() {
+        let mut state = fixture();
+        set_mode(&mut state, 0, DatasheetMode::PinnedPdf);
+        let doc = state.row.documents()[0].clone();
+        apply_upload_result(&mut state, 0, &doc, pdf("a.pdf"));
+        let doc = state.row.documents()[0].clone();
+        let second = Some(Ok(picked(b"%PDF-1.4 second", "b.pdf")));
+        apply_upload_result(&mut state, 0, &doc, second);
+        assert_eq!(
+            state.staged_datasheets.len(),
+            1,
+            "the replaced pick is pruned"
+        );
+        let used = state.staged_assets_in_use();
+        assert_eq!(used.len(), 1);
+        assert_eq!(used[0].bytes.as_ref(), b"%PDF-1.4 second");
+        set_url(&mut state, 0, "https://x.example/d.pdf".into());
+        assert!(state.staged_assets_in_use().is_empty());
+    }
+
+    #[test]
+    fn a_refused_file_pins_nothing_and_its_error_clears_on_cancel_and_mode_change() {
+        let mut state = fixture();
+        set_mode(&mut state, 0, DatasheetMode::PinnedPdf);
+        let doc = state.row.documents()[0].clone();
+        state.dirty = false;
+        apply_upload_result(&mut state, 0, &doc, refused());
+        assert_eq!(state.datasheet_errors[&0], "this file is not a PDF");
+        assert!(state.staged_datasheets.is_empty() && !state.dirty);
+        assert_eq!(state.row.documents()[0], doc);
+
+        apply_upload_result(&mut state, 0, &doc, None);
+        assert!(state.datasheet_errors.is_empty(), "cancel clears");
+
+        apply_upload_result(&mut state, 0, &doc, refused());
+        set_mode(&mut state, 0, DatasheetMode::Url);
+        assert!(state.datasheet_errors.is_empty(), "mode change clears");
+
+        let current = state.row.documents()[0].clone();
+        apply_upload_result(&mut state, 0, &current, refused());
+        apply(&mut state, DatasheetMsg::Add);
+        assert!(state.datasheet_errors.is_empty(), "reshaping clears");
+    }
+
+    #[test]
+    fn a_good_pick_clears_the_documents_error() {
+        let mut state = fixture();
+        set_mode(&mut state, 0, DatasheetMode::PinnedPdf);
+        let doc = state.row.documents()[0].clone();
+        apply_upload_result(&mut state, 0, &doc, refused());
+        apply_upload_result(&mut state, 0, &doc, pdf("ds.pdf"));
+        assert!(state.datasheet_errors.is_empty());
+    }
+
+    #[test]
+    fn a_refused_file_for_a_removed_document_records_nothing() {
+        let mut state = fixture();
+        add(&mut state);
+        set_label(&mut state, 1, "Errata".into());
+        let errata = state.row.documents()[1].clone();
+        remove(&mut state, 1);
+        apply_upload_result(&mut state, 1, &errata, refused());
+        assert!(state.datasheet_errors.is_empty());
     }
 
     #[test]

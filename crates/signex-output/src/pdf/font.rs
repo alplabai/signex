@@ -3,6 +3,7 @@
 //!
 //! The faces are embedded in the PDF as Type0 fonts by `embed.rs`.
 
+use std::sync::OnceLock;
 use ttf_parser::Face;
 
 use crate::template::FontStyle;
@@ -76,9 +77,26 @@ impl PdfFont {
         }
     }
 
-    /// Parse the TTF face for metadata (ascent, descent, bbox, etc.).
-    pub fn face(&self) -> Option<Face<'static>> {
-        Face::parse(self.font_bytes(), 0).ok()
+    /// The parsed TTF face for metadata (ascent, descent, bbox, etc.).
+    ///
+    /// Each embedded font is parsed once and shared; the bytes are
+    /// `'static` and immutable, so the cache holds no document state.
+    pub fn face(&self) -> Option<&'static Face<'static>> {
+        static FACES: [OnceLock<Option<Face<'static>>>; 4] = [
+            OnceLock::new(),
+            OnceLock::new(),
+            OnceLock::new(),
+            OnceLock::new(),
+        ];
+        let slot = match self {
+            PdfFont::RobotoRegular => 0,
+            PdfFont::RobotoBold => 1,
+            PdfFont::IosevkaRegular => 2,
+            PdfFont::IosevkaBold => 3,
+        };
+        FACES[slot]
+            .get_or_init(|| Face::parse(self.font_bytes(), 0).ok())
+            .as_ref()
     }
 }
 

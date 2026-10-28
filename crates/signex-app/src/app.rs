@@ -18,6 +18,7 @@ pub mod command_palette;
 pub mod contracts;
 mod dir_listing;
 pub(crate) mod dispatch;
+pub mod document_read;
 mod documents;
 mod handlers;
 mod helpers;
@@ -25,6 +26,7 @@ mod load_gateway;
 mod mutation_gateway;
 mod pcb_dirty_adapter;
 pub(crate) mod project_sheets;
+pub mod restore_job;
 mod runtime;
 mod selection_request;
 pub(crate) mod sheet_hierarchy;
@@ -40,13 +42,14 @@ pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, BomPreviewMsg, CommandPaletteMsg, ContextAction,
     ContextMenuMsg, ContextMenuState, ContextSubmenu, DragTarget, EditMsg, EnableVersionControlMsg,
     EnableVersionControlOutcome, EnableVersionControlState, ErcMsg, ExcludeDirtyChoice, ExportMsg,
-    FileMsg, GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg, LibraryRowRef,
-    Message, MoveSelectionMsg, NetColorMsg, OverlayMsg, ParameterManagerMsg, PreferencesMsg,
-    PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg, ProjectOptionsState,
-    ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
-    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
-    SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
-    TextEditState, TrackItem, UiMsg, VersionControlScope, WindowMsg,
+    FileMsg, GitCommitFailure, GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg,
+    LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, OverlayMsg, ParameterManagerMsg,
+    PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg,
+    ProjectOptionsState, ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState,
+    RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg,
+    SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
+    TabContextMenuState, TextEditMsg, TextEditState, TrackItem, UiMsg, VersionControlScope,
+    WindowMsg,
 };
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,
@@ -80,6 +83,10 @@ impl Signex {
             let docs = &self.document_state;
             tasks.push(tab_bar::reveal_active_tab(docs.active_tab, docs.tabs.len()));
         }
+        // Every schematic open queued a look for an earlier run's recovery
+        // copy; start them whichever path opened the tab (#1208).
+        let checks = self.start_due_recovery_checks();
+        tasks.push(checks);
         // `refresh_panel_ctx` only records what the project tree needs from
         // the disk; the probe that fetches it starts here (#111).
         if let Some(probe) = self.start_project_fs_probe(false) {

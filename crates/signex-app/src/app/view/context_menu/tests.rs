@@ -424,7 +424,7 @@ fn an_unbound_command_gets_no_shortcut_hint_not_the_hardcoded_fallback() {
         }],
     };
     let (mut app, _boot) = crate::app::Signex::new();
-    app.ui_state.active_keymap = CompiledKeymap::compile(&profile);
+    app.ui_state.active_keymap = std::sync::Arc::new(CompiledKeymap::compile(&profile));
 
     assert_eq!(app.keymap_shortcut_label("copy", "Ctrl+C"), "");
     assert_eq!(

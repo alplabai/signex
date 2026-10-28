@@ -2,7 +2,11 @@
 //! path, a bound row surviving an in-place add, and the project's volume case
 //! rule deciding what "the same library" and "inside the project" mean.
 
-#[path = "../../../../../tests/support/mod.rs"]
+#[expect(
+    dead_code,
+    reason = "this target includes the shared support module but uses only part of it"
+)]
+#[path = "../../../../../tests/integration/support/mod.rs"]
 mod support;
 
 use super::add_tests::{add_existing, run_task, two_projects};
@@ -81,6 +85,7 @@ fn a_case_variant_of_a_registered_library_is_not_registered_twice() {
     let variant = d1.path().join("LIBS").join("Lib").join("Lib.snxlib");
     let task = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
         project_id: app.document_state.projects[0].id,
+        project_dir: std::path::PathBuf::new(),
         results: Ok(vec![Ok(variant)]),
     }));
     run_task(&mut app, task);

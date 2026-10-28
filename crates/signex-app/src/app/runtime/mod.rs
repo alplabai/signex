@@ -74,6 +74,7 @@ impl Signex {
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
         self.sync_panel_ctx_mirrors();
+        self.library.sync_view_caches();
         let class_styles = self.refresh_net_class_styles();
         self.sync_label_class_pick();
         self.sync_diagnostics_panel_ctx();
@@ -149,6 +150,7 @@ impl Signex {
             .and_then(|t| t.project_id)
         {
             self.document_state.active_project = Some(pid);
+            self.drop_pending_profile_update_for_other_project();
         }
 
         self.sync_visible_document_from_active_tab();
@@ -197,6 +199,7 @@ impl Signex {
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();
+        self.document_state.panel_ctx.symbol_choices.clear();
         self.document_state.panel_ctx.selected_uuid = None;
         self.document_state.panel_ctx.selected_kind = None;
         self.document_state.panel_ctx.selected_drawing = None;
@@ -241,6 +244,15 @@ impl Signex {
                     }
                 }
             }
+            // The drawings a placed symbol's row offers (#1230).
+            let choices = engine
+                .document()
+                .symbols
+                .iter()
+                .find(|s| s.uuid == details.selected_uuid)
+                .map(|s| self.symbol_choices_for(s))
+                .unwrap_or_default();
+            self.document_state.panel_ctx.symbol_choices = choices;
             // Library name + drift for a placed library symbol (#912).
             if let Some(lib_id) = self
                 .document_state
@@ -391,6 +403,8 @@ impl Signex {
             zoom_step: self.ui_state.effective_zoom_step(),
             move_keeps_wires: self.ui_state.move_keeps_wires,
             draw_mode: self.interaction_state.draw_mode,
+            current_tool: self.interaction_state.current_tool,
+            window_width: self.ui_state.window_size.0,
             wire_color_overrides: &self.ui_state.wire_color_overrides,
             wire_class_styles: self.ui_state.net_class_styles.styles(),
             selection_filters: &self.interaction_state.selection_filters,
@@ -415,15 +429,39 @@ impl Signex {
             canvas.canvas_colors = colors;
             canvas.clear_content_cache();
         }
-        self.interaction_state
-            .active_canvas_mut()
-            .clear_content_cache();
+        for canvas in self.interaction_state.all_schematic_canvases_mut() {
+            canvas.clear_content_cache();
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #1350 - theme, grid and net-colour changes reach undocked schematic
+    /// canvases, not just the main one.
+    #[test]
+    fn appearance_changes_invalidate_undocked_schematic_canvases() {
+        let (mut app, _t) = Signex::new();
+        let win = iced::window::Id::unique();
+        app.interaction_state
+            .canvases
+            .insert(win, crate::canvas::CanvasSlot::new());
+
+        app.update_canvas_theme();
+        let _ = app.update(Message::Ui(UiMsg::GridToggle));
+
+        let slot = &app.interaction_state.canvases[&win];
+        assert_eq!(slot.content_cache_clears, 1);
+        assert_eq!(slot.bg_cache_clears, 1);
+
+        let _ = app.update(Message::NetColor(NetColorMsg::Set {
+            net: "N1".into(),
+            color: None,
+        }));
+        assert_eq!(app.interaction_state.canvases[&win].content_cache_clears, 2);
+    }
 
     /// #682 — bootstrap seeds the PCB canvas from the loaded grid state, so
     /// a saved grid-off (or a non-default size) holds before any update.

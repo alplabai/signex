@@ -10,24 +10,19 @@
 use iced::widget::{Column, container, row, scrollable, text};
 use iced::{Color, Element, Length};
 
-use super::{GraphicKindSummary, PanelMsg, SymbolEditorPanelContext, SymbolEditorSelection};
+use super::{
+    GraphicKindSummary, NumericDraft, PanelMsg, SymbolEditorPanelContext, SymbolEditorSelection,
+};
 
 mod graphic;
 mod pin;
 mod symbol;
 
-/// The value a numeric text input commits: the typed number, or `keep`
-/// (the value already stored) when the text is mid-edit or refused. A
-/// `nan` / `inf` / overflowing entry is refused and reported to the
-/// Messages panel rather than stored.
-fn typed_or_keep(text: &str, keep: f64) -> f64 {
-    crate::numeric_field::parse_field_f64(text).unwrap_or(keep)
-}
-
 /// Properties panel content for the active `.snxsym` standalone editor
 /// tab. Mirrors Altium SchLib's right-dock Properties.
 pub(super) fn view_symbol_editor_properties<'a>(
     sym: &'a SymbolEditorPanelContext,
+    draft: Option<&NumericDraft>,
     muted: Color,
     primary: Color,
     border_c: Color,
@@ -60,10 +55,17 @@ pub(super) fn view_symbol_editor_properties<'a>(
             col = symbol::view_symbol_selection(col, sym, muted, primary, border_c);
         }
         SymbolEditorSelection::Pin(pin) => {
-            col = pin::view_pin_selection(col, pin, muted, primary, border_c);
+            col = pin::view_pin_selection(col, pin, draft, muted, primary, border_c);
         }
         SymbolEditorSelection::Graphic(g) => {
-            col = graphic::view_graphic_selection(col, g, muted, border_c, sym.graphic_fill_picker);
+            col = graphic::view_graphic_selection(
+                col,
+                g,
+                draft,
+                muted,
+                border_c,
+                sym.graphic_fill_picker,
+            );
         }
         SymbolEditorSelection::FieldReference => {
             col = col.push(prop_row_static(
@@ -138,32 +140,4 @@ fn prop_row_static<'a>(
     .padding([3, 8])
     .width(Length::Fill)
     .into()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::typed_or_keep;
-
-    /// #828 -- the pin X / Y / length and graphic-field inputs keep the
-    /// stored value for every non-finite entry.
-    #[test]
-    fn non_finite_entries_keep_the_stored_value() {
-        for bad in ["nan", "NaN", "inf", "-inf", "infinity", "1e999", "-1e999"] {
-            assert_eq!(typed_or_keep(bad, 2.54), 2.54, "{bad:?}");
-        }
-    }
-
-    #[test]
-    fn ordinary_entries_commit() {
-        assert_eq!(typed_or_keep(" 1.5 ", 2.54), 1.5);
-        assert_eq!(typed_or_keep("-3", 2.54), -3.0);
-        assert_eq!(typed_or_keep("1.", 2.54), 1.0);
-    }
-
-    #[test]
-    fn mid_edit_text_keeps_the_stored_value() {
-        assert_eq!(typed_or_keep("", 2.54), 2.54);
-        assert_eq!(typed_or_keep("-", 2.54), 2.54);
-        assert_eq!(typed_or_keep("1,5", 2.54), 2.54);
-    }
 }

@@ -39,8 +39,7 @@ pub enum ContextSubmenu {
     Place,
     Align,
     /// Project-tree → "Add New to Project ›" launcher. Items are
-    /// version-tagged placeholders today — actual document creation
-    /// lands with project-write support in v0.9.
+    /// version-tagged placeholders today; they do not create documents yet.
     AddNewToProject,
 }
 
@@ -179,6 +178,19 @@ pub enum SaveAllNext {
     },
     /// Close the main window; the tail of the app-quit Save All.
     Quit,
+}
+
+/// A Save All whose loose documents' volumes have been probed off-thread;
+/// it is started, with `probes`, when this message arrives (#1216).
+#[derive(Debug, Clone)]
+pub struct SaveAllPlan {
+    pub context: String,
+    pub paths: Vec<std::path::PathBuf>,
+    pub rows: Vec<crate::library::state::EditorAddress>,
+    pub next: SaveAllNext,
+    /// Directory -> whether its volume ignores case, for every directory
+    /// the probe could decide. An undecided one is absent.
+    pub probes: std::collections::HashMap<std::path::PathBuf, bool>,
 }
 
 /// The tail of a Save All, sent when its writes have completed.

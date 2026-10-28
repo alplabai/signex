@@ -7,9 +7,13 @@ use thiserror::Error;
 use uuid::Uuid;
 
 mod annotation;
+mod rule_profile;
 mod rules;
 mod unknown;
 pub use annotation::AnnotationSettings;
+pub use rule_profile::{
+    RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
+};
 pub use rules::{ErcRules, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef};
 pub use unknown::UnknownJson;
 
@@ -316,6 +320,48 @@ mod tests {
     }
 
     #[test]
+    fn parse_project_errors_on_conflict_marker_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Merge.snxprj");
+        std::fs::write(
+            &path,
+            "<<<<<<< HEAD
+{ \"name\": \"A\" }
+=======
+{}
+>>>>>>> x
+",
+        )
+        .unwrap();
+        assert!(matches!(
+            parse_project(&path),
+            Err(ProjectError::Corrupt { .. })
+        ));
+    }
+
+    #[test]
+    fn parse_project_reads_bom_prefixed_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Bom.snxprj");
+        std::fs::write(
+            &path,
+            "\u{feff}{ \"name\": \"Bom\", \"dir\": \"\", \"schematic_root\": \"X.snxsch\", \"pcb_file\": null }",
+        )
+        .unwrap();
+        let data = parse_project(&path).unwrap();
+        assert_eq!(data.schematic_root.as_deref(), Some("X.snxsch"));
+    }
+
+    #[test]
+    fn parse_project_errors_on_non_utf8() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Bin.snxprj");
+        std::fs::write(&path, [0xffu8, 0xfe, b'{']).unwrap();
+        let err = parse_project(&path).unwrap_err();
+        assert!(matches!(err, ProjectError::Corrupt { .. }), "got {err:?}");
+    }
+
+    #[test]
     fn library_entry_round_trips_through_serde() {
         let entry = LibraryEntry {
             path: PathBuf::from("MyLib.snxlib"),
@@ -493,9 +539,23 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         path: path.display().to_string(),
         source,
     })?;
-    let trimmed = std::str::from_utf8(&bytes)
-        .map(|s| s.trim_start())
-        .unwrap_or("");
+    // Non-UTF-8 content is not a valid project file: refuse it rather than
+    // probing the directory, which would yield an empty project that the
+    // next save writes over the file.
+    let text = std::str::from_utf8(&bytes).map_err(|err| ProjectError::Corrupt {
+        path: path.display().to_string(),
+        reason: err.to_string(),
+    })?;
+    // Editors on Windows prepend a UTF-8 BOM; it is not part of the JSON.
+    let trimmed = text.trim_start_matches('\u{feff}').trim_start();
+    if !trimmed.is_empty() && !trimmed.starts_with('{') {
+        // Merge-conflict markers, NUL padding, stray text: refuse rather
+        // than probe, or the next save overwrites recoverable content.
+        return Err(ProjectError::Corrupt {
+            path: path.display().to_string(),
+            reason: "not a JSON project file".into(),
+        });
+    }
     if trimmed.starts_with('{') {
         // The file is meant to be JSON. If it parses, use it. If it does
         // NOT, return an error instead of falling through to the
@@ -506,7 +566,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
             path: path.display().to_string(),
             reason: err.to_string(),
         };
-        let mut value = serde_json::from_slice::<Value>(&bytes).map_err(corrupt)?;
+        let mut value = serde_json::from_str::<Value>(trimmed).map_err(corrupt)?;
         let token = value.as_object_mut().and_then(|map| map.remove(FORMAT_KEY));
         check_format_token(path, token.as_ref())?;
         let rules = value.as_object_mut().and_then(|map| map.remove(RULES_KEY));

@@ -1,3 +1,4 @@
+// Standalone binary: ci.yml runs it by name (`--test integration_db -- --ignored`).
 //! Integration tests covering DB schema migrations + the `/tables`
 //! and `/rows` HTTP routes for the DBLib row model.
 //!

@@ -190,11 +190,17 @@ pub fn segment_segment_intersection(p: Segment2, q: Segment2) -> SegmentIntersec
         let from = p.at(lo);
         let to = p.at(hi);
         if (hi - lo).abs() <= DEFAULT_TOL {
-            // Single touch point.
+            // Single touch point: report its parameter along `q` too.
+            let s_len_sq = s.0 * s.0 + s.1 * s.1;
+            let t1 = if s_len_sq <= DEFAULT_TOL {
+                0.0
+            } else {
+                (((from.x - q.a.x) * s.0 + (from.y - q.a.y) * s.1) / s_len_sq).clamp(0.0, 1.0)
+            };
             return SegmentIntersection::Point {
                 pt: from,
                 t0: lo,
-                t1: 0.0,
+                t1,
             };
         }
         return SegmentIntersection::Overlap { from, to };
@@ -334,6 +340,22 @@ mod tests {
                 assert!(close(to, p(2.0, 0.0), 1e-9));
             }
             other => panic!("expected Overlap, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn colinear_single_touch_reports_parameter_along_second_segment() {
+        // s1 ends where s2 (stored reversed) starts: the touch is at
+        // the far end of s2, so t1 must be 1, not a placeholder 0.
+        let s1 = Segment2::new(p(0.0, 0.0), p(1.0, 0.0));
+        let s2 = Segment2::new(p(2.0, 0.0), p(1.0, 0.0));
+        match segment_segment_intersection(s1, s2) {
+            SegmentIntersection::Point { pt, t0, t1 } => {
+                assert!(close(pt, p(1.0, 0.0), 1e-9));
+                assert!((t0 - 1.0).abs() < 1e-9, "t0 = {t0}");
+                assert!((t1 - 1.0).abs() < 1e-9, "t1 = {t1}");
+            }
+            other => panic!("expected Point, got {other:?}"),
         }
     }
 

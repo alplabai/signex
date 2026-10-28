@@ -226,7 +226,6 @@ impl Signex {
                 world_x,
                 world_y,
             ) {
-                use crate::schematic_runtime::text::expand_char_escapes;
                 let edit_info =
                     match hit.kind {
                         SelectedKind::Label => snapshot
@@ -255,10 +254,7 @@ impl Signex {
                             }),
                         _ => None,
                     };
-                if let Some((raw_text, kind, wx, wy)) = edit_info {
-                    // Show the user the visible form (e.g. "/OE"), not
-                    // the Standard-escaped storage form ("{slash}OE").
-                    let display_text = expand_char_escapes(&raw_text);
+                if let Some((display_text, kind, wx, wy)) = edit_info {
                     self.interaction_state.editing_text = Some(TextEditState {
                         uuid: hit.uuid,
                         kind,

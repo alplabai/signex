@@ -18,7 +18,7 @@ pub fn parse(src: &str) -> Result<Vec<RuleAst>, Vec<DslError>> {
         Ok(rules) => Ok(rules),
         Err(errors) => Err(errors
             .into_iter()
-            .map(|(offset, message)| DslError::Parse(offset, offset, message))
+            .map(|(start, end, message)| DslError::Parse(start, end, message))
             .collect()),
     }
 }
