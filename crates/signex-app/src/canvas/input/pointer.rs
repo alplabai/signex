@@ -179,13 +179,18 @@ impl SchematicCanvas<'_> {
             if let (Some(origin), Some(current)) = (state.move_origin, state.move_current) {
                 let dx = current.0 - origin.0;
                 let dy = current.1 - origin.1;
+                let connections = state.move_connections();
                 state.move_dragging = false;
                 state.move_origin = None;
                 state.move_current = None;
                 state.click_on_selected = false;
                 if dx.abs() > 0.01 || dy.abs() > 0.01 {
                     return Some(canvas::Action::publish(Message::CanvasEvent(
-                        CanvasEvent::MoveSelected { dx, dy },
+                        CanvasEvent::MoveSelected {
+                            dx,
+                            dy,
+                            connections,
+                        },
                     )));
                 }
             }
@@ -219,6 +224,7 @@ impl SchematicCanvas<'_> {
                         y1: start.1.min(end.1),
                         x2: start.0.max(end.0),
                         y2: start.1.max(end.1),
+                        direction: BoxDirection::of_drag(start.0, end.0),
                     },
                 )));
             }

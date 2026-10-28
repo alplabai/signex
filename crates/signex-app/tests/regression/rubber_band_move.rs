@@ -6,7 +6,7 @@
 
 use signex_app::active_bar::{ActiveBarAction, ActiveBarMsg};
 use signex_app::app::{Message, MoveSelectionMsg, Signex};
-use signex_app::canvas::CanvasEvent;
+use signex_app::canvas::{CanvasEvent, MoveConnections};
 use signex_types::schematic::{
     LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, SchematicSheet, SelectedItem,
     SelectedKind, Symbol, Wire,
@@ -136,7 +136,11 @@ fn assert_connected_after_dy(segs: &[Segment], dy: f64) {
 }
 
 fn drop_by(app: &mut Signex, dx: f64, dy: f64) {
-    let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected { dx, dy }));
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
+        dx,
+        dy,
+        connections: Default::default(),
+    }));
 }
 
 #[test]
@@ -310,4 +314,86 @@ fn the_rotate_is_one_undo_step_and_off_leaves_wires_behind() {
     app.ui_state.move_keeps_wires = false;
     press_space(&mut app);
     assert_eq!(segments(&app, &path), before, "plain rotate");
+}
+
+// ── #1266: wire behaviour per gesture ──────────────────────────────────
+
+fn drop_with(app: &mut Signex, connections: MoveConnections) {
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
+        dx: 0.0,
+        dy: 10.0,
+        connections,
+    }));
+}
+
+#[test]
+fn the_flip_modifier_detaches_one_drag_when_the_preference_keeps_wires() {
+    let (mut app, path, _) = app_with_resistor();
+    let before = segments(&app, &path);
+    drop_with(&mut app, MoveConnections::Flipped);
+    assert_eq!(symbol_y(&app, &path), 60.0);
+    assert_eq!(
+        segments(&app, &path),
+        before,
+        "plain translate for this drag"
+    );
+
+    // The gesture flipped, the preference did not.
+    assert!(app.ui_state.move_keeps_wires);
+}
+
+#[test]
+fn the_flip_modifier_keeps_wires_for_one_drag_when_the_preference_is_off() {
+    let (mut app, path, _) = app_with_resistor();
+    app.ui_state.move_keeps_wires = false;
+    drop_with(&mut app, MoveConnections::Flipped);
+    assert_connected_after_dy(&segments(&app, &path), 10.0);
+    assert!(!app.ui_state.move_keeps_wires, "the preference stays off");
+}
+
+#[test]
+fn a_keep_connections_drag_ignores_the_preference() {
+    let (mut app, path, _) = app_with_resistor();
+    app.ui_state.move_keeps_wires = false;
+    drop_with(&mut app, MoveConnections::Keep);
+    assert_connected_after_dy(&segments(&app, &path), 10.0);
+}
+
+#[test]
+fn a_flipped_drag_is_one_undo_step() {
+    let (mut app, path, _) = app_with_resistor();
+    app.ui_state.move_keeps_wires = false;
+    let before = segments(&app, &path);
+    drop_with(&mut app, MoveConnections::Flipped);
+    let _ = app.update(Message::Edit(signex_app::app::EditMsg::Undo));
+    assert_eq!(segments(&app, &path), before);
+    assert_eq!(symbol_y(&app, &path), 50.0);
+}
+
+#[test]
+fn g_arms_a_drag_that_keeps_connections_and_esc_disarms_it() {
+    use signex_app::keymap::{KeyStroke, KeyToken, Modifiers};
+    let (mut app, _path, _) = app_with_resistor();
+    app.ui_state
+        .keymap_profiles
+        .set_active_profile("classic")
+        .expect("classic profile");
+    app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
+
+    let _ = app.update(Message::Ui(signex_app::app::UiMsg::KeymapStroke {
+        window: None,
+        stroke: KeyStroke {
+            modifiers: Modifiers::default(),
+            key: KeyToken::Character("g".into()),
+        },
+    }));
+    let canvas = app.interaction_state.active_canvas();
+    assert!(canvas.keep_connections_next, "G must arm the keep intent");
+    assert!(canvas.move_pick.is_some(), "and the object pick");
+
+    let _ = app.update(Message::Input(signex_app::app::InputMsg::EscapePressed {
+        window: None,
+    }));
+    let canvas = app.interaction_state.active_canvas();
+    assert!(!canvas.keep_connections_next && canvas.move_pick.is_none());
 }

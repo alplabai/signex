@@ -263,7 +263,13 @@ fn static_plus_moving_equal_the_shifted_full_scene() {
     let slot = slot_with_wire_selected();
     let mut state = CanvasState::default();
     let lifted = slot.selected.clone();
-    state.start_floating_move((12.5, 5.0), slot.move_epoch, lifted.clone(), lifted);
+    state.start_floating_move(
+        (12.5, 5.0),
+        slot.move_epoch,
+        lifted.clone(),
+        lifted,
+        Default::default(),
+    );
     rig(&slot, |p| {
         drag_to(&p.overlay, &mut state, 120.0);
         // The first step of a float: a snapped delta, nearly nothing.
@@ -335,7 +341,13 @@ fn a_redraw_request_after_an_app_message_leaves_no_blank_sheet() {
     let mut slot = slot_with_wire_selected();
     let mut state = CanvasState::default();
     let lifted = slot.selected.clone();
-    state.start_floating_move((12.5, 5.0), slot.move_epoch, lifted.clone(), lifted);
+    state.start_floating_move(
+        (12.5, 5.0),
+        slot.move_epoch,
+        lifted.clone(),
+        lifted,
+        Default::default(),
+    );
     let full = rig(&slot, |p| {
         let full = content(p).scene.lines.len();
         drag_to(&p.overlay, &mut state, 150.0);
@@ -356,7 +368,13 @@ fn a_redraw_request_after_an_app_message_leaves_no_blank_sheet() {
     let mut slot = slot_with_wire_selected();
     let mut state = CanvasState::default();
     let lifted = slot.selected.clone();
-    state.start_floating_move((12.5, 5.0), slot.move_epoch, lifted.clone(), lifted);
+    state.start_floating_move(
+        (12.5, 5.0),
+        slot.move_epoch,
+        lifted.clone(),
+        lifted,
+        Default::default(),
+    );
     rig(&slot, |p| {
         drag_to(&p.overlay, &mut state, 150.0);
         assert!(drag_is_live(p));
@@ -384,7 +402,13 @@ fn a_before_to_lifted_selection_flip_draws_the_item_once() {
         SelectedKind::Junction,
     )];
     slot.selected = before.clone();
-    state.start_floating_move((12.5, 5.0), slot.move_epoch, lifted.clone(), before);
+    state.start_floating_move(
+        (12.5, 5.0),
+        slot.move_epoch,
+        lifted.clone(),
+        before,
+        Default::default(),
+    );
     let full = rig(&slot, |p| content(p).scene.lines.len());
     rig(&slot, |p| {
         drag_to(&p.overlay, &mut state, 150.0);
