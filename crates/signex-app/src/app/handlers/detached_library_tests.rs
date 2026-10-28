@@ -1,7 +1,7 @@
 //! The library dialogs in their own windows: the per-browser ones stay bound
 //! to the browser that opened them (docs/DETACHED_MODALS.md).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::app::state::ModalId;
 use crate::app::{InputMsg, Message, Signex, WindowMsg};
@@ -30,12 +30,12 @@ fn two_browsers() -> (Signex, iced::window::Id, [PathBuf; 2]) {
     (app, main, paths)
 }
 
-fn window_for(app: &Signex, path: &PathBuf) -> iced::window::Id {
+fn window_for(app: &Signex, path: &Path) -> iced::window::Id {
     app.browser_modal_window(ModalId::LibraryDeleteConfirm, path)
         .expect("a window bound to the browser")
 }
 
-fn delete_open(app: &Signex, path: &PathBuf) -> bool {
+fn delete_open(app: &Signex, path: &Path) -> bool {
     app.library.library_browsers[path].delete_confirm.is_some()
 }
 

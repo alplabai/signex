@@ -260,14 +260,13 @@ impl Signex {
                             // Never auto-decided: the sync shows it again.
                             ModalId::LibraryRecovery => self.note_recovery_window_vanished(),
                             ModalId::LibraryEditRow | ModalId::LibraryDeleteConfirm => {
-                                if let Some(path) = owner {
-                                    if let Some(browser) =
+                                if let Some(path) = owner
+                                    && let Some(browser) =
                                         self.library.library_browsers.get_mut(&path)
-                                    {
-                                        match modal {
-                                            ModalId::LibraryEditRow => browser.edit_modal = None,
-                                            _ => browser.delete_confirm = None,
-                                        }
+                                {
+                                    match modal {
+                                        ModalId::LibraryEditRow => browser.edit_modal = None,
+                                        _ => browser.delete_confirm = None,
                                     }
                                 }
                             }

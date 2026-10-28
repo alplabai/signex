@@ -69,6 +69,11 @@ Confirm and warning dialogs lock the main window; tool windows do not.
 | Autosave recovery | locking | Decide later (copy kept; the offer returns if its window vanishes) | `detached_modals`, `detached_confirm_tests` |
 | Project-close confirm | locking | Cancel (never Discard) | `detached_modals`, `detached_confirm_tests` |
 | App-quit confirm | locking | Cancel (never Discard or exit) | `detached_confirm_tests`, `tests/regression/project.rs` |
+| Close-library confirm | locking | Cancel (drafts untouched) | `detached_modals` |
+| Library delete confirm (per browser) | locking | Cancel for THAT browser; nothing deleted | `detached_library_tests` |
+| Library recovery | locking | Cancel (never a decision that deletes or rebinds; returns if its window vanishes, twice at most, then stays in the window) | `detached_library_tests`, `detached_confirm_tests` |
+| Library picker, primitive picker, document options, create options, updates, custom net colour | tool | Cancel, no write | `detached_modals` (picker, create options, net colour), `detached_library_tests` (net colour) |
+| Library edit row (per browser) | tool | Cancel for THAT browser | same code path as delete confirm; no edit-row fixture |
 | Find / Replace, Grid Properties, Custom Selection Filter, Enable Version Control, About, Shortcuts, Calculator | tool | close | `detached_modals` |
 
 ## The quit and data-loss path
@@ -83,13 +88,27 @@ everything open, and closing the confirm's own window is Cancel. The main
 window's own close event (`SecondaryWindowClosed(main)`) is still the one
 that ends the app.
 
+## Per-browser library dialogs
+
+Edit row and delete confirm belong to one library browser each. Every browser
+that has one open gets its own window (`UiState::library_modal_owners` maps the
+window to the browser); the window shows and answers for THAT browser, and
+closing the window or the browser cancels it. The in-window card paints the
+first browser that has one open and no window of its own.
+
+## What the lock closes
+
+A lock starting closes the command palette, context menus, the Active Bar menu,
+the grid picker, the panel list and an in-place text edit, and releases text
+focus. The lock layer sits above the non-modal chrome and below the dialogs.
+Discard All on the quit confirm discards only what the confirm listed: an edit
+made since (through any route) refreshes the confirm and keeps every recovery
+copy; the project-close confirm already re-prompts the same way.
+
 ## Still in the window
 
 Command palette, context menus, dropdown pickers, Active Bar menus, the grid
 picker, the panel list, text edit, drag ghosts and the first-run tour stay in
-the main window. Not yet detached: the custom net colour picker and the nine
-library dialogs (library picker, edit row, primitive picker, document options,
-create options, updates, close-library confirm, delete confirm, library
-recovery). The library ones are keyed by browser (`self.library.*`, the first
-browser with an open dialog is the one painted) and need their windows bound to
-the browser that opened them before they can follow the same rule.
+the main window. Primitive picker, document options, updates and the edit row
+have no fixture in the generic tests (their windows share the code of the ones
+that do).
