@@ -111,7 +111,6 @@ impl Signex {
             crate::dock::DockLayoutSnapshot::capture(&dock),
         );
 
-        let initial_component_filter = crate::fonts::read_component_filter_from(prefs);
         let search_prefs = crate::persist::SearchPrefsSync::new(std::sync::Arc::new(
             crate::fonts::PrefsSearchStore::user_prefs(),
         ));
@@ -242,6 +241,8 @@ impl Signex {
                 active_keymap,
                 keymap_pending_sequence: Vec::new(),
                 keymap_pending_target: None,
+                keymap_chord_wait: None,
+                keymap_chord_generation: 0,
                 canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
                 canvas_font_size: 11.0,
                 canvas_font_bold: false,
@@ -287,6 +288,14 @@ impl Signex {
                 window_controls_placement_at_boot: window_controls_placement,
                 desktop_button_layout: None,
                 main_window_mode: iced::window::Mode::Windowed,
+                focused_window: None,
+                main_window_opened: false,
+                lock_unfocused: false,
+                modal_window_sizes: Default::default(),
+                quit_confirm_refreshed: false,
+                edit_row_window_vanished: Default::default(),
+                recovery_window_vanished: 0,
+                library_modal_owners: Default::default(),
                 main_window_monitor_size: None,
                 autosave_enabled,
                 preferences_draft_autosave_enabled: autosave_enabled,
@@ -316,6 +325,7 @@ impl Signex {
                 rename_dialog: None,
                 remove_dialog: None,
                 project_close_confirm: None,
+                create_child_sheet_confirm: None,
                 app_quit_confirm: None,
                 enable_version_control: None,
                 grid_properties: None,
@@ -387,6 +397,7 @@ impl Signex {
                 ownership: Default::default(),
                 erc_fallback_noted: Default::default(),
                 profile_drift_noted: Default::default(),
+                read_only_refusal_noted: Default::default(),
                 rules_history: Default::default(),
                 missing_fonts: Default::default(),
                 tabs: vec![],
@@ -445,7 +456,6 @@ impl Signex {
 
                     properties_tab: 0,
                     net_classes: Default::default(),
-                    selected_component: None,
                     project_tree: vec![],
                     project_tree_builds: 0,
                     project_tree_selected: None,
@@ -474,7 +484,6 @@ impl Signex {
                     paper_edge_drafts: Vec::new(),
                     numeric_draft: None,
                     title_block_sheet: None,
-                    component_filter: initial_component_filter,
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
                     erc_diagnostics: Vec::new(),
@@ -511,7 +520,8 @@ impl Signex {
                 bom_preview: None,
                 pending_git_commits: Vec::new(),
                 inflight_git_commits: std::collections::HashSet::new(),
-                requeued_git_commits: std::collections::HashMap::new(),
+                unbound_git_commits: std::collections::HashSet::new(),
+                git_commit_sequences: std::collections::HashMap::new(),
                 active_git_repos: std::collections::HashSet::new(),
                 paused_git_projects: std::collections::HashSet::new(),
                 pending_opens: Default::default(),
@@ -580,6 +590,7 @@ impl Signex {
                 },
                 ..Default::default()
             },
+            native_menu: Default::default(),
         };
         // The PCB canvas starts from the loaded grid state, not its own
         // defaults, so the first frame honours a saved "grid off" (#682).

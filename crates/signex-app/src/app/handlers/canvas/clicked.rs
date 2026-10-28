@@ -160,8 +160,7 @@ impl Signex {
                         }
                     }
                 }
-                if diff {
-                    self.record_net_color_undo();
+                if diff && self.record_net_color_undo() {
                     for uuid in net_wire_uuids {
                         if pending.a == 0 {
                             self.ui_state.wire_color_overrides.remove(&uuid);
@@ -347,6 +346,7 @@ impl Signex {
                         mirror_x: false,
                         mirror_y: false,
                         unit: 1,
+                        body_style: Default::default(),
                         is_power: true,
                         ref_text: None,
                         val_text: Some(signex_types::schematic::TextProp {
@@ -375,9 +375,6 @@ impl Signex {
                     };
                     self.apply_engine_commands(signex_engine::place_power_port(sym), false, false);
                 }
-            }
-            Tool::Component => {
-                let _ = self.place_selected_component(wx, wy);
             }
             Tool::NoConnect => {
                 let nc = signex_types::schematic::NoConnect {
@@ -469,6 +466,7 @@ impl Signex {
                 }
             }
             Tool::Sheet => self.place_sheet_click(wx, wy),
+            Tool::SheetEntry => self.place_sheet_entry_click(wx, wy),
             Tool::Rectangle => {
                 // Two-click: corner → opposite-corner →
                 // SchDrawing::Rect. Rearms blank for the

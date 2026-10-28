@@ -50,6 +50,12 @@ pub struct RefreshStart {
 }
 
 impl LibrarySnapshot {
+    /// The picker summaries this read produced.
+    #[cfg(test)]
+    pub(super) fn summaries(&self) -> &[ComponentSummary] {
+        &self.summaries
+    }
+
     /// Read the library at `root` through `adapter`. Pure with respect to
     /// app state; safe on any thread.
     pub fn read(adapter: &dyn LibraryAdapter, root: &Path) -> Result<Self, LibraryError> {
@@ -62,10 +68,7 @@ impl LibrarySnapshot {
         } = scan_tables(
             adapter,
             names,
-            |row| ComponentSummary {
-                description: String::new(),
-                ..summarize_row(row)
-            },
+            summarize_row,
             // To the Messages panel, not only the log: prices silently
             // missing from the browser look like "never refreshed".
             |name, e| {

@@ -24,6 +24,7 @@ fn pin(part_number: u8, orientation: PinOrientation, electrical: PinDirection) -
 
 fn line_graphic(part_number: u8, from: [f64; 2], to: [f64; 2]) -> SymbolGraphic {
     SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Line { from, to },
         stroke_width: 0.2,
         fill: None,
@@ -238,6 +239,7 @@ fn fill_none_and_some_map_to_fill_type() {
     let mut sym = Symbol::empty("FILL-CHECK");
     sym.graphics = vec![
         SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Rectangle {
                 from: [0.0, 0.0],
                 to: [1.0, 1.0],
@@ -247,6 +249,7 @@ fn fill_none_and_some_map_to_fill_type() {
             part_number: 0,
         },
         SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Rectangle {
                 from: [0.0, 0.0],
                 to: [1.0, 1.0],
@@ -316,6 +319,7 @@ fn pin_shape_style_uses_outside_edge_symbol_as_the_authoritative_slot() {
 fn arc_converts_to_three_points_along_the_ccw_sweep() {
     let mut sym = Symbol::empty("ARC-CHECK");
     sym.graphics = vec![SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Arc {
             center: [0.0, 0.0],
             radius: 1.0,
@@ -350,6 +354,7 @@ fn arc_converts_to_three_points_along_the_ccw_sweep() {
 fn polygon_closes_explicitly_when_converted_to_polyline() {
     let mut sym = Symbol::empty("POLY-CHECK");
     sym.graphics = vec![SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Polygon {
             vertices: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]],
         },

@@ -12,11 +12,16 @@
 //! token, so a tab switch in flight discards any pending result).
 
 use chrono::Utc;
-use iced::widget::{Column, button, column, container, scrollable, text};
+use iced::widget::{Column, button, column, container, text};
 use iced::{Border, Color, Element, Length, Theme};
 use signex_widgets::theme_ext;
 
 use super::{PanelContext, PanelMsg};
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// In-flight render state for the History panel. Owned by
 /// [`crate::app::DocumentState`] and projected into
@@ -166,8 +171,8 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         }
     };
 
-    let body = container(inner).padding(8).width(Length::Fill);
-    scrollable(body)
+    let body = container(inner).padding(SP.m).width(Length::Fill);
+    super::panel_scrollable(body)
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
@@ -183,8 +188,8 @@ fn message_card<'a, M: 'a>(
     border_c: iced::Color,
     bg: Option<iced::Background>,
 ) -> Element<'a, M> {
-    container(text(msg.into()).size(12).color(muted))
-        .padding([6, 8])
+    container(text(msg.into()).size(TS.label).color(muted))
+        .padding([6.0, SP.m])
         .width(Length::Fill)
         .style(move |_theme: &iced::Theme| container::Style {
             background: bg,
@@ -216,21 +221,23 @@ fn commit_card<'a>(
     bg: Option<iced::Background>,
 ) -> Element<'a, PanelMsg> {
     let header = iced::widget::row![
-        text(entry.author_name.clone()).size(12).color(primary),
+        text(entry.author_name.clone())
+            .size(TS.label)
+            .color(primary),
         iced::widget::Space::new().width(Length::Fill),
         text(format_relative_simple(entry.time, now))
-            .size(11)
+            .size(TS.body)
             .color(muted),
     ]
-    .spacing(8);
+    .spacing(SP.m);
 
     let restore_label = if confirming {
         "Discard unsaved edits and restore"
     } else {
         "Restore this version"
     };
-    let restore_btn = button(text(restore_label).size(10).color(muted))
-        .padding([2, 6])
+    let restore_btn = button(text(restore_label).size(TS.caption).color(muted))
+        .padding([SP.xs, 6.0])
         .on_press(PanelMsg::HistoryRestoreClicked {
             sha: entry.sha.clone(),
         })
@@ -246,15 +253,15 @@ fn commit_card<'a>(
         });
 
     let mut footer = iced::widget::row![
-        text(short_sha(&entry.sha)).size(11).color(muted),
+        text(short_sha(&entry.sha)).size(TS.body).color(muted),
         iced::widget::Space::new().width(Length::Fill),
     ]
     .align_y(iced::Alignment::Center)
-    .spacing(8);
+    .spacing(SP.m);
     if confirming {
         footer = footer.push(
-            button(text("Cancel").size(10).color(muted))
-                .padding([2, 6])
+            button(text("Cancel").size(TS.caption).color(muted))
+                .padding([SP.xs, 6.0])
                 .on_press(PanelMsg::HistoryRestoreCancelled)
                 .style(move |_t: &Theme, _| iced::widget::button::Style {
                     background: None,
@@ -272,13 +279,13 @@ fn commit_card<'a>(
 
     let card_inner = column![
         header,
-        text(entry.subject.clone()).size(13).color(primary),
+        text(entry.subject.clone()).size(TS.title).color(primary),
         footer,
     ]
-    .spacing(2);
+    .spacing(SP.xs);
 
     container(card_inner)
-        .padding([6, 8])
+        .padding([6.0, SP.m])
         .width(Length::Fill)
         .style(move |_theme: &Theme| container::Style {
             background: bg,
@@ -337,12 +344,12 @@ fn working_tree_card<'a, M: 'a>(
     bg: Option<iced::Background>,
 ) -> Element<'a, M> {
     let inner = column![
-        text("Working tree").size(12).color(primary),
-        text("Uncommitted changes").size(11).color(muted),
+        text("Working tree").size(TS.label).color(primary),
+        text("Uncommitted changes").size(TS.body).color(muted),
     ]
-    .spacing(2);
+    .spacing(SP.xs);
     container(inner)
-        .padding([6, 8])
+        .padding([6.0, SP.m])
         .width(Length::Fill)
         .style(move |_theme: &iced::Theme| container::Style {
             background: bg,

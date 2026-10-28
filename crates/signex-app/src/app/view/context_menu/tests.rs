@@ -401,6 +401,39 @@ fn shared_command_ids_read_the_same_label_on_every_surface() {
     }
 }
 
+// #1378 — the hardcoded fallback is for commands the keymap is silent
+// about, not for ones the user unbound.
+#[test]
+fn a_command_the_keymap_does_not_bind_gets_no_shortcut_hint() {
+    use crate::keymap::{
+        AppCommandId, CompiledKeymap, ShortcutBinding, ShortcutBindingAction, ShortcutContext,
+        ShortcutProfile, ShortcutProfileKind, ShortcutTrigger,
+    };
+    let copy = AppCommandId::new("copy").unwrap();
+    let profile = ShortcutProfile {
+        id: "t".to_string(),
+        name: "T".to_string(),
+        kind: ShortcutProfileKind::Custom,
+        schema_version: 1,
+        description: None,
+        base_profile: None,
+        bindings: vec![ShortcutBinding {
+            action: ShortcutBindingAction::Unbind(copy),
+            context: ShortcutContext::Global,
+            triggers: vec![ShortcutTrigger::parse("Ctrl+C").unwrap()],
+        }],
+    };
+    let (mut app, _boot) = crate::app::Signex::new();
+    app.ui_state.active_keymap = std::sync::Arc::new(CompiledKeymap::compile(&profile));
+
+    assert_eq!(app.keymap_shortcut_label("copy"), "");
+    assert_eq!(
+        app.keymap_shortcut_label("cut"),
+        "",
+        "a command the active keymap never binds has no hint either"
+    );
+}
+
 /// The Arrange launcher appears only when the selection holds a drawing, and
 /// its submenu rows reorder drawings (#1583).
 #[test]

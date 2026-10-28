@@ -68,6 +68,7 @@ impl Action {
     fn label(self, open_shortcut: &str) -> String {
         match self {
             Action::NewProject => "New Project".to_string(),
+            Action::OpenProject if open_shortcut.is_empty() => "Open Project…".to_string(),
             Action::OpenProject => format!("Open Project…  ({open_shortcut})"),
             Action::OpenSampleProject => "Open Sample Project".to_string(),
             Action::KeyboardShortcuts => "Keyboard Shortcuts (F1)".to_string(),
@@ -249,6 +250,12 @@ mod tests {
             .collect();
         assert_eq!(order, ["proj0.snxprj", "proj1.snxprj"]);
         assert!(texts.iter().any(|t| t.text == "Recent"));
+    }
+
+    #[test]
+    fn an_unbound_open_shortcut_leaves_no_empty_parentheses() {
+        assert_eq!(Action::OpenProject.label(""), "Open Project…");
+        assert_eq!(Action::OpenProject.label("F2"), "Open Project…  (F2)");
     }
 
     #[test]

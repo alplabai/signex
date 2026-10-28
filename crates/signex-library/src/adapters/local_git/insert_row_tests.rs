@@ -164,6 +164,7 @@ fn history_subject_drops_a_trailing_carriage_return() {
         .unwrap();
     let entry = HistoryEntry::from_commit(&repo.find_commit(id).unwrap());
     assert_eq!(entry.subject, "x");
+    assert!(entry.body.starts_with("body"), "{:?}", entry.body);
 }
 
 #[test]

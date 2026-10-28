@@ -2,6 +2,7 @@ use iced::Task;
 
 use super::*;
 
+pub(crate) mod chord;
 mod command_palette;
 mod document;
 mod escape;
@@ -137,6 +138,11 @@ impl Signex {
             }
             WindowMsg::MainWindowOpened(id) => {
                 self.ui_state.main_window_id = Some(id);
+                self.ui_state.main_window_opened = true;
+                // winit's default menu exists now; ours replaces it on the
+                // sync that ends this update.
+                #[cfg(target_os = "macos")]
+                self.native_menu.arm();
                 // Pull the real initial size from winit — opening the
                 // window at Settings.size doesn't always land at
                 // exactly that size (OS DPI scaling, display clamps).
@@ -162,12 +168,17 @@ impl Signex {
                 if self.ui_state.main_window_id == Some(id) {
                     return self.flush_quit_writes_then(iced::exit());
                 }
+                if self.ui_state.focused_window == Some(id) {
+                    self.ui_state.focused_window = None;
+                }
                 let mut layout_persist = Task::none();
                 // Drop the entry and dismiss the backing modal state so
                 // closing the OS window fully exits the modal instead of
                 // reattaching a phantom copy to the main window on the
                 // next view frame. Phase 3 will add undocked-tab cleanup
                 // here too.
+                let owner = self.ui_state.library_modal_owners.remove(&id);
+                self.ui_state.modal_window_sizes.remove(&id);
                 if let Some(kind) = self.ui_state.windows.remove(&id) {
                     use super::state::{ModalId, WindowKind};
                     match kind {
@@ -215,6 +226,68 @@ impl Signex {
                             }
                             ModalId::SelectionFilterCustom => {
                                 self.ui_state.selection_filter_custom = None;
+                            }
+                            ModalId::About => self.ui_state.about_open = false,
+                            ModalId::KeyboardShortcuts => {
+                                self.ui_state.keyboard_shortcuts_open = false
+                            }
+                            ModalId::PassiveCalculator => {
+                                self.ui_state.passive_calculator_open = false
+                            }
+                            ModalId::FirstRunTour => self.ui_state.first_run_tour_open = false,
+                            ModalId::CreateChildSheet => {
+                                self.ui_state.create_child_sheet_confirm = None
+                            }
+                            // A window that went away without a close
+                            // request is a Cancel, never a Discard.
+                            ModalId::ErrorNotice => self.document_state.error_notice = None,
+                            ModalId::NetlistIncompletePrompt => {
+                                self.document_state.netlist_incomplete_prompt = None
+                            }
+                            ModalId::AutosaveRecovery => self.note_recovery_window_vanished(),
+                            ModalId::ProjectCloseConfirm => {
+                                self.ui_state.project_close_confirm = None
+                            }
+                            ModalId::AppQuitConfirm => self.ui_state.app_quit_confirm = None,
+                            // A window that vanished without a close request
+                            // is a Cancel: nothing is written or deleted.
+                            ModalId::LibraryPicker => self.library.picker = None,
+                            ModalId::LibraryPrimitivePicker => self.library.primitive_picker = None,
+                            ModalId::LibraryDocumentOptions => self.library.document_options = None,
+                            ModalId::LibraryCreateOptions => self.library.create_options = None,
+                            ModalId::LibraryUpdates => self.library.library_updates = None,
+                            ModalId::LibraryCloseConfirm => {
+                                self.library.close_library_confirm = None
+                            }
+                            ModalId::NetColorCustom => self.ui_state.net_color_custom.show = false,
+                            // Never auto-decided: the sync shows it again.
+                            ModalId::LibraryRecovery => self.note_recovery_window_vanished(),
+                            // The edit form keeps its typed text: the window comes
+                            // back, twice at most, then it stays in the window.
+                            ModalId::LibraryEditRow => {
+                                if let Some(path) = owner {
+                                    let count = self
+                                        .ui_state
+                                        .edit_row_window_vanished
+                                        .entry(path)
+                                        .or_insert(0);
+                                    *count += 1;
+                                    if *count == 2 {
+                                        crate::diagnostics::log_warning(
+                                            "An Edit Component Details window closed twice \
+                                             unanswered; it now stays in the main window",
+                                        );
+                                    }
+                                }
+                            }
+                            // A confirm that vanished is a Cancel.
+                            ModalId::LibraryDeleteConfirm => {
+                                if let Some(path) = owner
+                                    && let Some(browser) =
+                                        self.library.library_browsers.get_mut(&path)
+                                {
+                                    browser.delete_confirm = None;
+                                }
                             }
                         },
                         // Closing an undocked-tab window is the reattach
@@ -403,6 +476,21 @@ impl Signex {
                 None => Task::none(),
             },
             WindowMsg::CloseMainWindow => self.handle_app_quit_requested(),
+            WindowMsg::LockedWindowClicked => match self.locking_confirm_window() {
+                Some(id) => iced::window::gain_focus(id),
+                None => Task::none(),
+            },
+            WindowMsg::WindowFocused(id) => {
+                self.ui_state.focused_window = Some(id);
+                Task::none()
+            }
+            WindowMsg::WindowUnfocused(id) => {
+                if self.ui_state.focused_window == Some(id) {
+                    self.ui_state.focused_window = None;
+                }
+                Task::none()
+            }
+            WindowMsg::NativeMenuItemActivated(id) => self.handle_native_menu_activated(&id),
             WindowMsg::ControlsLayoutDetected(layout) => {
                 self.handle_controls_layout_detected(layout)
             }
@@ -423,7 +511,7 @@ impl Signex {
                     self.handle_app_quit_requested()
                 } else if let Some(super::state::WindowKind::DetachedModal(modal)) =
                     self.ui_state.windows.get(&id).cloned()
-                    && let Some(close) = Self::detached_modal_close_message(modal)
+                    && let Some(close) = self.window_close_message(id, modal)
                 {
                     // The native close button of a detached modal runs
                     // the modal's own close message, so the dirty guard

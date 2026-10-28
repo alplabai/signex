@@ -43,13 +43,13 @@ pub fn field_text(sym: &Symbol, key: FieldKey) -> &str {
 /// puts the designator just above the top-left of the body extent and
 /// the value just below its bottom-left. The default comes from the
 /// active part's extent, while a stored position is shared by all parts.
-pub fn field_pos(sym: &Symbol, key: FieldKey, active_part: u8) -> [f64; 2] {
+pub fn field_pos(sym: &Symbol, key: FieldKey, view: PartView) -> [f64; 2] {
     let stored = match key {
         FieldKey::Reference => sym.designator_pos,
         FieldKey::Value => sym.comment_pos,
     };
     stored.unwrap_or_else(|| {
-        let (min_x, min_y, _, max_y) = body_extent(sym, active_part);
+        let (min_x, min_y, _, max_y) = body_extent(sym, view);
         match key {
             // Text hangs down from its anchor, so lift it by one line.
             FieldKey::Reference => [min_x, max_y + FIELD_GAP_MM + FIELD_TEXT_SIZE_MM],
@@ -61,9 +61,9 @@ pub fn field_pos(sym: &Symbol, key: FieldKey, active_part: u8) -> [f64; 2] {
 /// Estimated drawn bounds `(xmin, xmax, ymin, ymax)` of a field's text,
 /// padded for grabbing. Same rule as a `Text` graphic (left / top
 /// anchored) so the hit box tracks what the canvas draws.
-pub fn field_bounds(sym: &Symbol, key: FieldKey, active_part: u8) -> (f64, f64, f64, f64) {
+pub fn field_bounds(sym: &Symbol, key: FieldKey, view: PartView) -> (f64, f64, f64, f64) {
     text_bounds(
-        &field_pos(sym, key, active_part),
+        &field_pos(sym, key, view),
         field_text(sym, key),
         FIELD_TEXT_SIZE_MM,
         FIELD_HIT_PAD_MM,
@@ -76,7 +76,7 @@ pub fn hit_test_field(
     sym: &Symbol,
     x: f64,
     y: f64,
-    active_part: u8,
+    view: PartView,
     filter: &SymbolSelectionFilter,
 ) -> Option<FieldKey> {
     [
@@ -87,7 +87,7 @@ pub fn hit_test_field(
     .filter(|&(_, selectable)| selectable)
     .map(|(key, _)| key)
     .find(|&key| {
-        let (x0, x1, y0, y1) = field_bounds(sym, key, active_part);
+        let (x0, x1, y0, y1) = field_bounds(sym, key, view);
         x >= x0 && x <= x1 && y >= y0 && y <= y1
     })
 }
@@ -104,8 +104,8 @@ pub fn move_field_to(sym: &mut Symbol, key: FieldKey, x: f64, y: f64) {
 /// Whether putting a field's anchor at `(x, y)` would leave it where it
 /// already is (within float noise), so a click with cursor jitter does not
 /// turn a default placement into a stored position.
-pub fn field_move_is_noop(sym: &Symbol, key: FieldKey, active_part: u8, x: f64, y: f64) -> bool {
-    let [fx, fy] = field_pos(sym, key, active_part);
+pub fn field_move_is_noop(sym: &Symbol, key: FieldKey, view: PartView, x: f64, y: f64) -> bool {
+    let [fx, fy] = field_pos(sym, key, view);
     (fx - x).abs() < 1e-9 && (fy - y).abs() < 1e-9
 }
 
@@ -125,19 +125,15 @@ pub fn shift_placed_fields(sym: &mut Symbol, dx: f64, dy: f64) {
 }
 
 /// `(min_x, min_y, max_x, max_y)` of the pins and graphics visible on
-/// `active_part` (not the fields themselves).
-fn body_extent(sym: &Symbol, active_part: u8) -> (f64, f64, f64, f64) {
+/// `view` (not the fields themselves).
+fn body_extent(sym: &Symbol, view: PartView) -> (f64, f64, f64, f64) {
     let mut pts: Vec<[f64; 2]> = Vec::new();
-    for pin in sym.pins.iter().filter(|p| pin_on_part(p, active_part)) {
+    for pin in sym.pins.iter().filter(|p| pin_on_part(p, view)) {
         let (dx, dy) = super::rotation::pin_body_delta(pin);
         pts.push(pin.position);
         pts.push([pin.position[0] + dx, pin.position[1] + dy]);
     }
-    for g in sym
-        .graphics
-        .iter()
-        .filter(|g| graphic_on_part(g, active_part))
-    {
+    for g in sym.graphics.iter().filter(|g| graphic_on_part(g, view)) {
         match &g.kind {
             SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
                 pts.extend([*from, *to]);

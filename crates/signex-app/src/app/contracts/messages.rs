@@ -81,6 +81,16 @@ pub enum WindowMsg {
     MinimizeMainWindow,
     ToggleMaximizeMainWindow,
     CloseMainWindow,
+    /// The locked main window (or an undocked tab) was clicked while a
+    /// confirm dialog in its own window is open: raise that dialog.
+    LockedWindowClicked,
+    /// A window gained keyboard focus.
+    WindowFocused(iced::window::Id),
+    /// A window lost keyboard focus.
+    WindowUnfocused(iced::window::Id),
+    /// A row of the macOS system menu bar was chosen; carries the row's
+    /// stable id (`menu_bar::native`). Only the macOS subscription sends it.
+    NativeMenuItemActivated(String),
     /// The Linux startup probe finished: the buttons the desktop lists, or
     /// `None` when it could not be read, or the probe's failure reason.
     ControlsLayoutDetected(Result<Option<crate::chrome::desktop::DesktopButtonLayout>, String>),
@@ -119,6 +129,14 @@ pub enum CommandPaletteMsg {
     /// Execute the currently selected entry. Wired to Enter and to
     /// `text_input::on_submit`.
     ExecuteSelected,
+    /// The project search index finished building off-thread. `generation`
+    /// is the request it answers; an older one is dropped.
+    IndexBuilt {
+        generation: u64,
+        result: std::sync::Arc<
+            Result<std::sync::Arc<crate::app::palette_index::ProjectSearchIndex>, String>,
+        >,
+    },
 }
 
 /// In-canvas text-edit message family (ADR-0001 D3). Namespaced under
@@ -279,6 +297,12 @@ pub enum UiMsg {
         window: Option<iced::window::Id>,
         stroke: crate::keymap::KeyStroke,
     },
+    /// The chord timeout elapsed for a complete shortcut that was waiting
+    /// on a longer chord (#1378). `generation` names the wait it belongs to.
+    KeymapChordTimedOut { generation: u64 },
+    /// A pointer press or a window focus change abandoned a pending chord
+    /// (#1378).
+    KeymapChordCancelled,
     /// The background scan of installed font families finished (#510). Text
     /// whose document names a family redraws with it, and open documents
     /// are checked for families this machine lacks.

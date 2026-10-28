@@ -2,6 +2,8 @@ use iced::Task;
 
 mod committed_writes;
 mod keymap;
+#[cfg(test)]
+mod keymap_tests;
 mod profiles;
 #[cfg(test)]
 mod profiles_tests;
@@ -152,6 +154,39 @@ impl Signex {
     fn refresh_keymap_backup(&mut self) {
         self.ui_state.keymap_backup =
             crate::keymap::existing_backup_profiles_path().map(|bak| bak.display().to_string());
+    }
+
+    /// The backup the Preferences row currently shows: what Restore and
+    /// Discard act on. They never re-scan the directory, since a newer
+    /// backup (the one Apply just wrote) is a different file from the one
+    /// the user is looking at. When the shown file is gone the action is
+    /// refused, the row is refreshed, and the status line says so.
+    fn displayed_keymap_backup(&mut self, action: &str) -> Option<std::path::PathBuf> {
+        let Some(shown) = self.ui_state.keymap_backup.clone() else {
+            self.refresh_keymap_backup();
+            self.ui_state.preferences_keymap_status =
+                format!("There is no keyboard-shortcuts backup to {action}.");
+            return None;
+        };
+        let path = std::path::PathBuf::from(shown);
+        match std::fs::symlink_metadata(&path) {
+            Ok(_) => Some(path),
+            Err(error) => {
+                tracing::warn!(
+                    target: "signex::keymap",
+                    path = %path.display(),
+                    error = %error,
+                    "the keyboard-shortcuts backup shown in Preferences is no longer there; \
+                     nothing was changed"
+                );
+                self.refresh_keymap_backup();
+                self.ui_state.preferences_keymap_status = format!(
+                    "The backup at {} is no longer there, so nothing was changed.",
+                    path.display()
+                );
+                None
+            }
+        }
     }
 
     /// Re-read `prefs.json`'s health into the banner flag (#602).
@@ -369,11 +404,17 @@ impl Signex {
                 if self.ui_state.keymap_load_error.is_some() {
                     match crate::keymap::back_up_profile_file() {
                         Ok(Some(bak)) => {
+                            self.ui_state.keymap_backup = Some(bak.display().to_string());
                             backup_note =
                                 format!(" The previous file was kept as {}.", bak.display());
                         }
                         Ok(None) => {}
                         Err(error) => {
+                            // Reason first, and short: Messages cuts at 157 bytes.
+                            tracing::error!(
+                                target: "signex::keymap",
+                                "keymap backup failed, file left untouched: {error}"
+                            );
                             self.ui_state.preferences_keymap_status = format!(
                                 "Could not save keyboard shortcuts: the existing file could \
                                  not be backed up first, so it was left untouched rather than \

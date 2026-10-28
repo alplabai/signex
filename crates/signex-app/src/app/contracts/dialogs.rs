@@ -459,7 +459,7 @@ pub enum FileMsg {
         sha: String,
         edit_stamp: crate::app::restore_job::EditStamp,
         result: Result<
-            Box<crate::app::restore_job::RestoreJobDocument>,
+            Box<crate::app::restore_job::RestoredFile>,
             crate::app::restore_job::RestoreFailure,
         >,
     },
@@ -585,6 +585,26 @@ pub enum ProjectMsg {
         project_id: crate::app::state::ProjectId,
         path: std::path::PathBuf,
         result: Result<(), String>,
+    },
+    /// The Create Sheet dialog's path field was edited.
+    CreateChildSheetPathChanged(String),
+    /// "Browse..." in the Create Sheet dialog.
+    CreateChildSheetBrowse,
+    /// The native save dialog of "Browse..." answered (`None`: cancelled).
+    CreateChildSheetBrowsed(Option<std::path::PathBuf>),
+    /// The Create Sheet dialog was answered: Create, or Later (`create:
+    /// false`, which also closes the window).
+    CreateChildSheetAnswered { create: bool },
+    /// "Open it" in the Create Sheet dialog, for a path that already exists.
+    CreateChildSheetOpenExisting,
+    /// The off-thread write of a child sheet created from a symbol finished.
+    /// `project_id` is the project owning the parent sheet, if any.
+    ChildSheetCreated {
+        project_id: Option<crate::app::state::ProjectId>,
+        parent: std::path::PathBuf,
+        symbol: uuid::Uuid,
+        path: std::path::PathBuf,
+        result: Result<(), crate::app::contracts::ChildSheetWriteError>,
     },
     /// v0.23 — Async project-git commit completed. The dispatcher
     /// removes the `(project_root, rel_path)` entry from

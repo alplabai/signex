@@ -240,6 +240,7 @@ pub enum PrefMsg {
     KeymapExportFinished(Result<std::path::PathBuf, String>),
     /// Open the chord recorder for a specific binding.
     KeymapRecorderOpen {
+        slot: crate::keymap::BindingSlot,
         command: crate::keymap::AppCommandId,
         label: String,
         context: crate::keymap::ShortcutContext,

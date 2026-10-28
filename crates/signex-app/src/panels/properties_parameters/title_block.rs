@@ -6,6 +6,11 @@
 //! is a draft that never reaches the document or undo.
 
 use super::super::*;
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// One editable title-block field, with the key it is stored under in the
 /// sheet's `title_block` map. The first four keys are the ones sheets have
@@ -123,11 +128,11 @@ pub fn view_title_block_section<'a>(
                             )
                             .on_input(move |s| PanelMsg::TitleBlockTyping(field, s))
                             .on_submit(PanelMsg::CommitTitleBlockField(field))
-                            .size(11)
-                            .padding(4)
+                            .size(TS.body)
+                            .padding(SP.s)
                             .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
                         ]
-                        .spacing(8.0)
+                        .spacing(SP.m)
                         .align_y(iced::Alignment::Center),
                     )
                     .padding([2, PROPERTY_ROW_PAD_X])
@@ -135,8 +140,12 @@ pub fn view_title_block_section<'a>(
                 );
             }
             c = c.push(
-                container(text("Press Enter to apply a field.").size(10).color(muted))
-                    .padding([3, 8]),
+                container(
+                    text("Press Enter to apply a field.")
+                        .size(TS.caption)
+                        .color(muted),
+                )
+                .padding([3.0, SP.m]),
             );
             c
         },

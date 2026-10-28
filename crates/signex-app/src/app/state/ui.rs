@@ -88,6 +88,12 @@ pub struct UiState {
     /// and a `pub` field carrying it would leak a private type out of the
     /// crate's interface. Nothing outside needs to read it.
     pub(crate) keymap_pending_target: Option<crate::app::dispatch::input::InputTarget>,
+    /// Set while the pending chord is a complete shortcut waiting out
+    /// `CHORD_TIMEOUT` for a longer one (#1378). Gates the timer and the
+    /// pointer-cancel subscriptions, so they cost nothing when idle.
+    pub(crate) keymap_chord_wait: Option<crate::app::dispatch::chord::ChordWait>,
+    /// Source of `ChordWait::generation`.
+    pub(crate) keymap_chord_generation: u64,
     pub canvas_font_name: String,
     pub canvas_font_size: f32,
     pub canvas_font_bold: bool,
@@ -164,6 +170,29 @@ pub struct UiState {
     pub desktop_button_layout: Option<crate::chrome::desktop::DesktopButtonLayout>,
     /// Last known mode of the main window (fullscreen hides the macOS inset).
     pub main_window_mode: iced::window::Mode,
+    /// The window that has keyboard focus, `None` while none of ours does.
+    /// The system menu bar acts on it (docs/MENU_BAR.md, "Native macOS menu").
+    pub focused_window: Option<iced::window::Id>,
+    /// The main window has opened (`MainWindowOpened`): dialogs may open
+    /// their own windows from here on.
+    pub main_window_opened: bool,
+    /// Text inputs were unfocused for the confirm dialog that now locks the
+    /// main window (once per lock).
+    pub lock_unfocused: bool,
+    /// The size each content-sized dialog window was last given.
+    pub modal_window_sizes: std::collections::HashMap<iced::window::Id, (f32, f32)>,
+    /// The quit confirm was refreshed because the unsaved list changed after it
+    /// opened (Discard All discarded nothing); the dialog says so.
+    pub quit_confirm_refreshed: bool,
+    /// How often an Edit Component Details window vanished unanswered, per
+    /// browser; after two it stays in the window so typed text is not lost.
+    pub edit_row_window_vanished: std::collections::HashMap<std::path::PathBuf, u8>,
+    /// How often a recovery prompt's window vanished without being answered;
+    /// after two it stays in the main window instead of reopening.
+    pub recovery_window_vanished: u8,
+    /// Which library browser opened each per-browser dialog window (edit row,
+    /// delete confirm): the window reads and answers for THAT browser.
+    pub library_modal_owners: std::collections::HashMap<iced::window::Id, std::path::PathBuf>,
     /// Logical size of the monitor holding the main window, when known.
     pub main_window_monitor_size: Option<iced::Size>,
     /// Opt-in autosave of recovery copies (#104). Off by default.
@@ -322,6 +351,8 @@ pub struct UiState {
     /// close request that intersects `dirty_paths`. Cleared on any
     /// of the three button choices.
     pub project_close_confirm: Option<crate::app::ProjectCloseConfirmState>,
+    /// "Create the missing sheet?" confirm; `Some` while it is up.
+    pub create_child_sheet_confirm: Option<crate::app::contracts::CreateChildSheetConfirmState>,
     /// "Exit Signex — Unsaved Edits" confirmation modal. `Some` while
     /// the user is being asked to save / discard / cancel an app-exit
     /// request that intersects `dirty_paths`. Cleared on any of the

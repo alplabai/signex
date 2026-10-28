@@ -85,6 +85,37 @@ pub(in crate::app::view) fn draggable_header<'a>(
         .into()
 }
 
+impl Signex {
+    /// `px` for the card in the main window, the full width in the dialog's
+    /// own window (the window is the frame, so no fixed card width survives).
+    pub(in crate::app::view) fn dialog_width(
+        &self,
+        modal: super::super::super::state::ModalId,
+        px: f32,
+    ) -> Length {
+        if self.modal_detached(modal) {
+            Length::Fill
+        } else {
+            Length::Fixed(px)
+        }
+    }
+
+    /// The header of `modal`'s body: the draggable in-window strip while the
+    /// card paints in the main window, the empty slot once it lives in its own
+    /// OS window (whose native title bar carries the title and the close).
+    pub(in crate::app::view) fn modal_header<'a>(
+        &self,
+        header_content: Element<'a, Message>,
+        modal: super::super::super::state::ModalId,
+    ) -> Element<'a, Message> {
+        if self.modal_detached(modal) {
+            os_title_bar_slot()
+        } else {
+            draggable_header(header_content, modal, self.interaction_state.last_mouse_pos)
+        }
+    }
+}
+
 /// Header slot for a modal body shown in its own OS window. The window
 /// carries a native title bar (title, close button, move and raise), so
 /// the body draws no header of its own: an empty zero-height slot keeps

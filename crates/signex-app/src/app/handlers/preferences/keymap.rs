@@ -33,6 +33,9 @@ impl Signex {
                 self.ui_state.preferences_keymap_search = query;
             }
             PrefMsg::KeymapProfileSelected(id) => {
+                // #1378 - the recorder holds a slot into the profile it was
+                // opened on; any change of profile set makes it stale.
+                self.ui_state.preferences_keymap_recorder = None;
                 match self
                     .ui_state
                     .preferences_keymap_editor
@@ -49,6 +52,9 @@ impl Signex {
                 }
             }
             PrefMsg::KeymapCreateCustomProfile => {
+                // #1378 - the recorder holds a slot into the profile it was
+                // opened on; any change of profile set makes it stale.
+                self.ui_state.preferences_keymap_recorder = None;
                 // Pick the first free `custom-N` id so repeated forks
                 // don't collide with an existing draft.
                 let profiles = self.ui_state.preferences_keymap_editor.profiles();
@@ -83,6 +89,9 @@ impl Signex {
                 }
             }
             PrefMsg::KeymapDeleteActiveProfile => {
+                // #1378 - the recorder holds a slot into the profile it was
+                // opened on; any change of profile set makes it stale.
+                self.ui_state.preferences_keymap_recorder = None;
                 let active_id = self
                     .ui_state
                     .preferences_keymap_editor
@@ -109,10 +118,7 @@ impl Signex {
                 }
             }
             PrefMsg::KeymapRestoreFromBackup => {
-                let Some(bak) = crate::keymap::existing_backup_profiles_path() else {
-                    self.refresh_keymap_backup();
-                    self.ui_state.preferences_keymap_status =
-                        "There is no keyboard-shortcuts backup to restore from.".to_string();
+                let Some(bak) = self.displayed_keymap_backup("restore from") else {
                     return Task::none();
                 };
                 // Read it through the normal loader rather than copying
@@ -145,6 +151,7 @@ impl Signex {
                 };
                 match crate::keymap::restore_profiles_at(&live, &restored.set) {
                     Ok(previous) => {
+                        self.ui_state.preferences_keymap_recorder = None;
                         self.ui_state.set_keymap_profiles(restored.set.clone());
                         self.ui_state.preferences_keymap_editor =
                             crate::keymap::KeymapEditorModel::new(restored.set);
@@ -196,10 +203,7 @@ impl Signex {
                 }
             }
             PrefMsg::KeymapDiscardBackup => {
-                let Some(bak) = crate::keymap::existing_backup_profiles_path() else {
-                    self.refresh_keymap_backup();
-                    self.ui_state.preferences_keymap_status =
-                        "There is no keyboard-shortcuts backup to discard.".to_string();
+                let Some(bak) = self.displayed_keymap_backup("discard") else {
                     return Task::none();
                 };
                 match crate::keymap::discard_profile_backup_at(&bak) {
@@ -246,6 +250,9 @@ impl Signex {
                 });
             }
             PrefMsg::KeymapProfileLoaded(source) => {
+                // #1378 - the recorder holds a slot into the profile it was
+                // opened on; any change of profile set makes it stale.
+                self.ui_state.preferences_keymap_recorder = None;
                 match crate::keymap::import_custom_profile(&source).and_then(|profile| {
                     self.ui_state
                         .preferences_keymap_editor
@@ -315,13 +322,14 @@ impl Signex {
                 };
             }
             PrefMsg::KeymapRecorderOpen {
+                slot,
                 command,
                 label,
                 context,
                 trigger,
             } => {
                 self.ui_state.preferences_keymap_recorder = Some(
-                    crate::app::KeymapRecorderState::new(command, label, context, trigger),
+                    crate::app::KeymapRecorderState::new(slot, command, label, context, trigger),
                 );
                 self.ui_state.preferences_keymap_status.clear();
             }
@@ -378,11 +386,11 @@ impl Signex {
                     return Task::none();
                 }
                 let trigger = recorder.trigger_text();
-                match self.ui_state.preferences_keymap_editor.edit_active_trigger(
-                    recorder.command,
-                    recorder.context,
-                    trigger,
-                ) {
+                match self
+                    .ui_state
+                    .preferences_keymap_editor
+                    .edit_active_trigger(recorder.slot, trigger)
+                {
                     Ok(()) => {
                         self.ui_state.preferences_keymap_status.clear();
                         self.recompute_preferences_dirty();

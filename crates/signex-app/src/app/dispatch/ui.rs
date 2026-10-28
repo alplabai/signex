@@ -183,6 +183,11 @@ impl Signex {
                 self.finish_update()
             }
             UiMsg::KeymapStroke { window, stroke } => self.resolve_keymap_stroke(window, stroke),
+            UiMsg::KeymapChordTimedOut { generation } => self.resolve_chord_timeout(generation),
+            UiMsg::KeymapChordCancelled => {
+                self.cancel_pending_chord();
+                Task::none()
+            }
             UiMsg::InstalledFontsScanned => {
                 self.handle_installed_fonts_scanned();
                 self.finish_update()

@@ -97,8 +97,11 @@ impl Signex {
         } {
             let open = open_sheets_snapshot(&self.document_state);
             let assembly = assemble_navigator(&open, request);
-            // The follow-up it would start is the next loop turn.
-            drop(self.handle_navigator_assembled(generation, Ok(Box::new(assembly))));
+            // A follow-up it started runs inline as the next loop turn instead.
+            let follow_up = self.handle_navigator_assembled(generation, Ok(Box::new(assembly)));
+            if follow_up.units() > 0 {
+                self.document_state.navigator_job.abandon_running();
+            }
         }
     }
 
@@ -359,7 +362,7 @@ mod tests {
         assert!(app.start_navigator_assembly().is_none(), "one at a time");
 
         let next = app.handle_navigator_assembled(stale, Ok(assembly(&stale_fp)));
-        drop(next);
+        assert_eq!(next.units(), 1, "the latest request starts");
         assert!(
             app.document_state.panel_ctx.navigator.hierarchy.is_none(),
             "the stale answer must not land"
