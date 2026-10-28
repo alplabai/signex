@@ -9,6 +9,10 @@ use crate::chrome::controls::{
 };
 use crate::chrome::desktop::{DesktopButtonLayout, detect};
 
+/// How long winit's fullscreen exit animation takes to finish on macOS,
+/// with margin.
+const FULLSCREEN_EXIT_SETTLE: std::time::Duration = std::time::Duration::from_millis(900);
+
 impl Signex {
     /// The layout the strip draws right now. Pure over `ui_state`.
     pub(crate) fn window_controls_layout(&self) -> WindowControlsLayout {
@@ -46,6 +50,26 @@ impl Signex {
             },
             |layout| Message::Window(WindowMsg::ControlsLayoutDetected(layout)),
         )
+    }
+
+    /// Read the main window's mode now and, while it is stored as
+    /// fullscreen, once more after the exit animation. winit only clears its
+    /// fullscreen state at the end of that animation, so the queries its
+    /// resize events trigger still read `Fullscreen` and no later resize
+    /// arrives. The delayed task sleeps first and queries after, so the last
+    /// answer is always the current mode.
+    pub(crate) fn main_window_mode_task(&self, id: iced::window::Id) -> Task<Message> {
+        let query = move || {
+            iced::window::mode(id).map(|m| Message::Window(WindowMsg::MainWindowModeChanged(m)))
+        };
+        if self.ui_state.main_window_mode != iced::window::Mode::Fullscreen {
+            return query();
+        }
+        // The `async` block keeps the timer lazy: `sleep` needs a runtime
+        // only once polled, not when the task is built.
+        let settled = Task::future(async { tokio::time::sleep(FULLSCREEN_EXIT_SETTLE).await })
+            .then(move |()| query());
+        Task::batch([query(), settled])
     }
 
     /// The probe landed. No answer is normal on desktops that expose
@@ -103,6 +127,20 @@ mod tests {
             assert!(!layout.leading.is_empty());
             assert!(layout.trailing.is_empty());
         }
+    }
+
+    /// Only a window stored as fullscreen schedules the deferred re-query.
+    #[test]
+    fn a_resize_while_fullscreen_also_schedules_a_deferred_mode_query() {
+        let (mut app, _task) = Signex::new();
+        let id = iced::window::Id::unique();
+
+        app.ui_state.main_window_mode = iced::window::Mode::Windowed;
+        let windowed = app.main_window_mode_task(id).units();
+        app.ui_state.main_window_mode = iced::window::Mode::Fullscreen;
+        let fullscreen = app.main_window_mode_task(id).units();
+
+        assert!(fullscreen > windowed, "{fullscreen} vs {windowed}");
     }
 
     #[test]

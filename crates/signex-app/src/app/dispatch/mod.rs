@@ -123,9 +123,7 @@ impl Signex {
                     // cross-monitor drag.
                     let scale_task = iced::window::scale_factor(id)
                         .map(|s| Message::Window(WindowMsg::MainWindowScaleChanged(s)));
-                    let mode_task = iced::window::mode(id)
-                        .map(|m| Message::Window(WindowMsg::MainWindowModeChanged(m)));
-                    return Task::batch([scale_task, mode_task]);
+                    return Task::batch([scale_task, self.main_window_mode_task(id)]);
                 }
                 Task::none()
             }
