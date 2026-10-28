@@ -183,8 +183,15 @@ impl LibraryFile {
     ) -> Result<String, LibraryFileError> {
         // Kept text (#1435) is only ever written by the full write, which
         // edits it in place; the canonical text would drop its unknown keys.
+        // The caller takes the full write for such a file.
+        debug_assert!(
+            !self.layout.keeps_text(),
+            "a row write of a file that keeps text"
+        );
         if self.layout.keeps_text() {
-            return self.write();
+            return Err(LibraryFileError::WrittenDocumentDiffers {
+                table: "(kept text needs the full write)".to_string(),
+            });
         }
         if let Some(index) = changed {
             let entry = &self.tables[table];

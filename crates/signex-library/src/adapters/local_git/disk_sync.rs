@@ -157,16 +157,15 @@ impl LocalGitAdapter {
         Ok(())
     }
 
-    /// Record the stamp and text of a file put back on disk, without taking
-    /// it as this adapter's own checked write.
-    pub(super) fn note_restored(&self, text: &str) -> Result<(), LibraryError> {
-        let stamp = DiskStamp::of(&self.file_path)?;
-        *self
+    /// Forget what is known about the file, so the next access reloads it.
+    /// For a file put back on disk whose bytes need not be what memory was
+    /// parsed from.
+    pub(super) fn forget_disk(&self) {
+        let mut known = self
             .disk_stamp
             .lock()
-            .map_err(|_| LibraryError::Backend("disk_stamp lock poisoned".into()))? =
-            Some(KnownDisk::new(stamp, text));
-        Ok(())
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *known = None;
     }
 
     /// Whether memory holds what this adapter last wrote, with no load from

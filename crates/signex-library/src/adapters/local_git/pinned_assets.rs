@@ -140,15 +140,11 @@ impl LocalGitAdapter {
             ));
         }
         **guard = previous_file;
-        // The restored text is not taken as this adapter's own checked
-        // write, so the next edit goes through the full write (#416).
-        if let Err(stamp_err) = self.note_restored(&String::from_utf8_lossy(&previous)) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %self.file_path.display(),
-                "restored, but the disk stamp could not be recorded: {stamp_err}"
-            );
-        }
+        // `previous` was read after the reload, so another writer's bytes
+        // may be what went back on disk: the next access reloads them
+        // rather than trusting memory, and, as a load, it takes the full
+        // write (#416).
+        self.forget_disk();
         LibraryError::Backend(format!(
             "the row was not saved: its datasheet PDF could not be committed ({commit_err})"
         ))
