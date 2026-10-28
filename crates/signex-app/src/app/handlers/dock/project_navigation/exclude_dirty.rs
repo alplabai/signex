@@ -241,6 +241,10 @@ impl Signex {
             self.refresh_panel_ctx();
             return iced::Task::none();
         };
+        if self.refuse_remove(&state, crate::app::RemoveChoice::ExcludeFromProject) {
+            self.refresh_panel_ctx();
+            return iced::Task::none();
+        }
         self.sync_editor_dirty_paths();
         let fold = self.dialog_fold(&state);
         let docs = self.unsaved_documents(&state.target_path, fold);

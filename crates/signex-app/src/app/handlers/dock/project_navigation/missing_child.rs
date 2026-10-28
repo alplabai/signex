@@ -15,32 +15,43 @@ pub(super) struct MissingChildSheet {
     pub(super) child: std::path::PathBuf,
 }
 
-/// Source Documents rows sit at `[project, Source Documents, page]`; a nested
-/// child is one level deeper at least.
-const FIRST_NESTED_DEPTH: usize = 4;
-
 impl Signex {
     /// The missing child the row at `tree_path` stands for, or `None` for any
     /// other row — including a *listed* page whose file is gone, which keeps
     /// reporting through the normal open.
     pub(super) fn missing_child_sheet_at(&self, tree_path: &[usize]) -> Option<MissingChildSheet> {
-        if tree_path.len() < FIRST_NESTED_DEPTH {
+        let row = self.sheet_info_at(tree_path)?;
+        if !(row.is_child_reference && row.missing) {
             return None;
         }
-        let node = signex_widgets::tree_view::get_node(
-            self.document_state.panel_ctx.project_tree.as_slice(),
-            tree_path,
-        )?;
-        let is_missing_sheet = node.label.ends_with("  (missing)")
-            && matches!(node.icon, signex_widgets::tree_view::TreeIcon::SnxSchematic);
-        if !is_missing_sheet {
-            return None;
-        }
-        let parent_path = &tree_path[..tree_path.len() - 1];
+        let parent_path = tree_path.split_last()?.1;
         Some(MissingChildSheet {
             parent: self.tree_path_to_file_path(parent_path)?,
             child: self.tree_path_to_file_path(tree_path)?,
         })
+    }
+
+    /// Say why Remove or Rename does nothing on a missing symbol row: there is
+    /// no file to act on, and the symbol belongs to its parent sheet.
+    /// A `.snxprj` page can still be excluded (`listed_ok`).
+    pub(super) fn refuse_on_missing_child(
+        &self,
+        tree_path: &[usize],
+        action: &str,
+        listed_ok: bool,
+    ) -> bool {
+        let refused = self.missing_child_sheet_at(tree_path).is_some()
+            && !(listed_ok
+                && self
+                    .sheet_info_at(tree_path)
+                    .is_some_and(|r| r.in_project_list));
+        if refused {
+            crate::diagnostics::log_warning(format!(
+                "{action} cancelled: the sheet does not exist yet. Create it from this row, \
+                 or change the sheet symbol on its parent."
+            ));
+        }
+        refused
     }
 
     /// Offer to create the child sheet a symbol on `missing.parent` names.

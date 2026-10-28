@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use super::super::*;
-use crate::app::project_sheets::lexically_normalize;
+use crate::app::project_sheets::{lexically_normalize, project_pages, project_root_sheet_path};
 use crate::app::sheet_hierarchy::{SheetHierarchy, SheetNode, SheetNodeKind};
 use crate::app::state::LoadedProject;
 use crate::app::state::project_fs::ProjectFsFacts;
@@ -30,37 +30,55 @@ pub(super) struct RowMarks<'a> {
 }
 
 impl Signex {
-    /// The walk the Projects tree wants: every project that declares a root,
-    /// and what each open sheet references now.
+    /// The walk the Projects tree wants: one job per project, rooted at its
+    /// declared root or, without one, its first listed page, carrying what
+    /// the open sheets under the project reference now.
     pub(super) fn hierarchy_request(&self) -> HierarchyRequest {
         let document = &self.document_state;
         let jobs = document
             .projects
             .iter()
             .filter_map(|p| {
+                let pages = project_pages(Some(p));
+                let root = project_root_sheet_path(p).or_else(|| pages.first().cloned())?;
+                let mut open_refs: Vec<_> = document
+                    .engines
+                    .iter()
+                    .filter(|(path, _)| path.starts_with(p.dir()) || pages.contains(path))
+                    .map(|(path, engine)| {
+                        let refs = engine
+                            .document()
+                            .child_sheets
+                            .iter()
+                            .map(|c| (c.name.clone(), c.filename.clone(), c.uuid))
+                            .collect();
+                        (path.clone(), refs)
+                    })
+                    .collect();
+                open_refs.sort_by(|a, b| a.0.cmp(&b.0));
                 Some(HierarchyJob {
                     id: p.id,
-                    root: crate::app::project_sheets::project_root_sheet_path(p)?,
-                    pages: crate::app::project_sheets::project_pages(Some(p)),
+                    root,
+                    pages,
                     fold: p.case_fold,
+                    open_refs,
                 })
             })
             .collect();
-        let mut open_refs: Vec<_> = document
-            .engines
+        HierarchyRequest { jobs }
+    }
+
+    /// The files the last walks placed, to be stat-ed so a sheet that appears
+    /// or goes is noticed (and shown) without waiting for another walk.
+    pub(super) fn hierarchy_exists_paths(&self) -> Vec<PathBuf> {
+        let facts = &self.document_state.project_fs.facts;
+        self.document_state
+            .projects
             .iter()
-            .map(|(path, engine)| {
-                let refs = engine
-                    .document()
-                    .child_sheets
-                    .iter()
-                    .map(|c| (c.name.clone(), c.filename.clone(), c.uuid))
-                    .collect();
-                (path.clone(), refs)
-            })
-            .collect();
-        open_refs.sort_by(|a, b| a.0.cmp(&b.0));
-        HierarchyRequest { jobs, open_refs }
+            .filter_map(|p| facts.hierarchy_of(p.id))
+            .flat_map(SheetHierarchy::node_paths)
+            .map(Path::to_path_buf)
+            .collect()
     }
 }
 
@@ -72,61 +90,24 @@ pub(super) fn project_sheet_rows(
     marks: &RowMarks<'_>,
 ) -> Vec<SheetInfo> {
     let dir = project.dir();
-    let hierarchy = facts.hierarchy_of(project.id);
     let fold = project.case_fold;
+    let hierarchy = facts.hierarchy_of(project.id);
     let key_of = |path: &Path| path_key_with(&lexically_normalize(path), fold);
-
-    let tops: HashMap<String, &SheetNode> = hierarchy
-        .into_iter()
-        .flat_map(SheetHierarchy::top_level)
-        .map(|node| (key_of(&node.path), node))
-        .collect();
     let listed: Vec<(&signex_types::project::SheetEntry, String)> = project
         .data
         .sheets
         .iter()
         .map(|entry| (entry, key_of(&dir.join(&entry.filename))))
         .collect();
-
-    // Which listed page roots a subtree: the project root first, then pages
-    // no symbol references, then whatever is left (a loop of loose pages).
-    let referenced: HashSet<String> = hierarchy
-        .into_iter()
-        .flat_map(SheetHierarchy::top_level)
-        .flat_map(|top| top.children.iter())
-        .flat_map(|child| placed_keys(child, &key_of))
-        .collect();
-    let root_key = hierarchy
-        .and_then(|h| h.root.as_ref())
-        .map(|node| key_of(&node.path));
-    let by_priority = |key: &str| -> u8 {
-        if root_key.as_deref() == Some(key) {
-            0
-        } else if !referenced.contains(key) {
-            1
-        } else {
-            2
-        }
+    let ctx = RowCtx {
+        dir,
+        facts,
+        marks,
+        fold,
+        listed: listed.iter().map(|(_, key)| key.clone()).collect(),
     };
-    let mut order: Vec<usize> = (0..listed.len()).collect();
-    order.sort_by_key(|&i| by_priority(&listed[i].1));
 
-    let mut placed: HashSet<String> = HashSet::new();
-    let mut top_children: HashMap<usize, Vec<SheetInfo>> = HashMap::new();
-    for i in order {
-        let key = &listed[i].1;
-        if placed.insert(key.clone()) {
-            let rows = tops
-                .get(key)
-                .map(|node| child_rows(node, dir, fold, marks, &mut placed))
-                .unwrap_or_default();
-            top_children.insert(i, rows);
-        } else if top_keys_listed_twice(&top_children, &listed, key) {
-            // The `.snxprj` lists the file twice: both entries stay rows.
-            top_children.insert(i, Vec::new());
-        }
-    }
-
+    let mut top_children = nest_children(&listed, hierarchy, &ctx);
     listed
         .iter()
         .enumerate()
@@ -134,6 +115,7 @@ pub(super) fn project_sheet_rows(
             let children = top_children.remove(&i)?;
             let abs = dir.join(&entry.filename);
             let mut info = row(&entry.name, &entry.filename, &abs, marks);
+            info.in_project_list = true;
             info.sym_count = entry.symbols_count;
             info.wire_count = entry.wires_count;
             info.label_count = entry.labels_count;
@@ -144,49 +126,115 @@ pub(super) fn project_sheet_rows(
         .collect()
 }
 
-/// Whether an earlier entry with `key` is itself a top-level row.
-fn top_keys_listed_twice(
-    top_children: &HashMap<usize, Vec<SheetInfo>>,
+/// What every row of one project is built against.
+struct RowCtx<'a> {
+    dir: &'a Path,
+    facts: &'a ProjectFsFacts,
+    marks: &'a RowMarks<'a>,
+    fold: CaseFold,
+    /// Keys of the `.snxprj` pages.
+    listed: HashSet<String>,
+}
+
+impl RowCtx<'_> {
+    fn key(&self, path: &Path) -> String {
+        path_key_with(&lexically_normalize(path), self.fold)
+    }
+}
+
+/// For each listed page that stays a top-level row (by index), the rows nested
+/// under it. A page placed by another sheet is nested there and has no entry.
+///
+/// Subtrees are claimed in this order: the project root, pages no symbol
+/// references, then whatever is left (a loop of loose pages), so a file lands
+/// under its real parent and not under an unrelated loose page.
+fn nest_children(
     listed: &[(&signex_types::project::SheetEntry, String)],
-    key: &str,
-) -> bool {
-    top_children.keys().any(|&i| listed[i].1 == key)
+    hierarchy: Option<&SheetHierarchy>,
+    ctx: &RowCtx<'_>,
+) -> HashMap<usize, Vec<SheetInfo>> {
+    let tops: HashMap<String, &SheetNode> = hierarchy
+        .into_iter()
+        .flat_map(SheetHierarchy::top_level)
+        .map(|node| (ctx.key(&node.path), node))
+        .collect();
+    let referenced: HashSet<String> = hierarchy
+        .into_iter()
+        .flat_map(SheetHierarchy::top_level)
+        .flat_map(|top| top.children.iter())
+        .flat_map(|child| placed_keys(child, ctx))
+        .collect();
+    let root_key = hierarchy
+        .and_then(|h| h.root.as_ref())
+        .map(|node| ctx.key(&node.path));
+    let priority = |key: &str| -> u8 {
+        if root_key.as_deref() == Some(key) {
+            0
+        } else if !referenced.contains(key) {
+            1
+        } else {
+            2
+        }
+    };
+    let mut order: Vec<usize> = (0..listed.len()).collect();
+    order.sort_by_key(|&i| priority(&listed[i].1));
+
+    let mut placed: HashSet<String> = HashSet::new();
+    let mut top_children: HashMap<usize, Vec<SheetInfo>> = HashMap::new();
+    for i in order {
+        let key = &listed[i].1;
+        if placed.insert(key.clone()) {
+            let rows = tops
+                .get(key)
+                .map(|node| child_rows(node, ctx, &mut placed))
+                .unwrap_or_default();
+            top_children.insert(i, rows);
+        } else if top_children
+            .keys()
+            .any(|&earlier| listed[earlier].1 == *key)
+        {
+            // The `.snxprj` lists the file twice: both entries stay rows.
+            top_children.insert(i, Vec::new());
+        }
+    }
+    top_children
 }
 
 /// Keys of every file a subtree places (cycles and refused references excluded).
-fn placed_keys<'a>(node: &'a SheetNode, key_of: &'a dyn Fn(&Path) -> String) -> Vec<String> {
+fn placed_keys(node: &SheetNode, ctx: &RowCtx<'_>) -> Vec<String> {
     if matches!(node.kind, SheetNodeKind::Cycle | SheetNodeKind::Rejected) {
         return Vec::new();
     }
-    let mut keys = vec![key_of(&node.path)];
+    let mut keys = vec![ctx.key(&node.path)];
     for child in &node.children {
-        keys.extend(placed_keys(child, key_of));
+        keys.extend(placed_keys(child, ctx));
     }
     keys
 }
 
 /// The rows under `node`, depth first, each file the first time it is met.
-fn child_rows(
-    node: &SheetNode,
-    dir: &Path,
-    fold: CaseFold,
-    marks: &RowMarks<'_>,
-    placed: &mut HashSet<String>,
-) -> Vec<SheetInfo> {
+fn child_rows(node: &SheetNode, ctx: &RowCtx<'_>, placed: &mut HashSet<String>) -> Vec<SheetInfo> {
     let mut rows = Vec::new();
     for child in &node.children {
         if matches!(child.kind, SheetNodeKind::Cycle | SheetNodeKind::Rejected) {
             continue;
         }
-        let key = path_key_with(&lexically_normalize(&child.path), fold);
-        if !placed.insert(key) {
+        let key = ctx.key(&child.path);
+        if !placed.insert(key.clone()) {
             continue;
         }
-        let relative = relative_to(&child.path, dir).unwrap_or_else(|| child.filename.clone());
-        let mut info = row(&child.name, &relative, &child.path, marks);
-        info.missing = child.kind == SheetNodeKind::Missing;
+        let relative = relative_to(&child.path, ctx.dir).unwrap_or_else(|| child.filename.clone());
+        let mut info = row(&child.name, &relative, &child.path, ctx.marks);
+        info.in_project_list = ctx.listed.contains(&key);
         info.is_child_reference = true;
-        info.children = child_rows(child, dir, fold, marks, placed);
+        info.unreadable = child.kind == SheetNodeKind::Unreadable;
+        // A symbol whose file the walk found absent is missing until a newer
+        // file-status check sees it. A file the walk read stays unmarked: one
+        // that is open but not saved yet is not a sheet to create, and one
+        // deleted since sends its project back through the walk.
+        info.missing =
+            child.kind == SheetNodeKind::Missing && !ctx.facts.knows_present(&child.path);
+        info.children = child_rows(child, ctx, placed);
         rows.push(info);
     }
     rows
@@ -213,7 +261,9 @@ fn row(name: &str, filename: &str, abs: &Path, marks: &RowMarks<'_>) -> SheetInf
         is_dirty: marks.dirty.contains(abs),
         is_active: marks.active.is_some_and(|active| active == abs),
         missing: false,
+        unreadable: false,
         is_child_reference: false,
+        in_project_list: false,
         children: Vec::new(),
     }
 }

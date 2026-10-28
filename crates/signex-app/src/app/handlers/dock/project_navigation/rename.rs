@@ -5,6 +5,9 @@ use crate::app::state::library_entry::{entry_resolves_to, with_new_leaf};
 
 impl Signex {
     pub(super) fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {
+        if self.refuse_on_missing_child(&tree_path, "Rename", false) {
+            return;
+        }
         let Some(target_path) = self.tree_path_to_file_path(&tree_path) else {
             crate::diagnostics::log_warning(
                 "Rename cancelled: the selected project-tree row no longer resolves to a file.",
@@ -162,6 +165,29 @@ impl Signex {
             .filter(|_| is_sheet)
             .map(|&idx| self.plan_reference_rewrites(idx, &state.target_path, new_name))
             .unwrap_or_default();
+
+        // Another open project's sheets that place this file are not re-pointed
+        // by this rename: refuse rather than leave their symbols dangling.
+        if is_sheet {
+            let owner = state.project_id.or_else(|| {
+                let idx = *state.tree_path.first()?;
+                self.document_state.projects.get(idx).map(|p| p.id)
+            });
+            let foreign = self.other_sheet_parents(&state.target_path, None, owner);
+            if !foreign.is_empty() {
+                let names: Vec<String> = foreign.iter().map(|p| p.display().to_string()).collect();
+                crate::diagnostics::log_warning(format!(
+                    "Rename of {} refused: another open project places it ({}).",
+                    state.target_path.display(),
+                    names.join(", ")
+                ));
+                self.set_rename_error(&format!(
+                    "Another open project places this sheet and would be left pointing at the old name: {}",
+                    names.join(", ")
+                ));
+                return iced::Task::none();
+            }
+        }
 
         // A write still running for this sheet would recreate the old file
         // (or land after the move); let it finish first. Same bounded wait

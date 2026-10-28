@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use signex_widgets::tree_view::TreeNode;
 
 use crate::app::Signex;
-use crate::app::handlers::menu::export::tests::tree_nesting_pins::hierarchical_app;
 use crate::app::handlers::menu::export::tests::{app_workspace, open_with, sheet_with_net};
+use crate::app::hierarchy_fixture::hierarchical_app;
 use crate::app::state::project_fs::probe;
 
 /// Run the probe the way its Task would, then deliver the answer.
@@ -36,7 +36,7 @@ fn source_documents(app: &Signex) -> &[TreeNode] {
     &app.document_state.panel_ctx.project_tree[0].children[0].children
 }
 
-fn write_sheet(dir: &Path, name: &str, children: &[&str]) {
+pub(crate) fn write_sheet(dir: &Path, name: &str, children: &[&str]) {
     let sheet = sheet_with_net("R1", "N", children);
     let text = signex_types::format::SnxSchematic::new(sheet)
         .write_string()
@@ -153,4 +153,54 @@ fn a_symbol_without_a_file_is_a_missing_row_under_its_parent() {
     let top = &source_documents(&app)[0];
     assert_eq!(top.children[0].label, "sub/ghost.snxsch  (missing)");
     assert_eq!(top.children[0].key, "sub/ghost.snxsch");
+}
+
+#[test]
+fn a_missing_row_follows_the_file_being_created_and_stops_offering_create() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    write_sheet(tmp.path(), "top.snxsch", &["later.snxsch"]);
+    let dir = tmp.path().to_string_lossy().into_owned();
+    let mut app = app_workspace(&dir, &["top.snxsch"]);
+    settle(&mut app, false);
+    settle(&mut app, true);
+    assert_eq!(
+        source_documents(&app)[0].children[0].label,
+        "later.snxsch  (missing)"
+    );
+
+    write_sheet(tmp.path(), "later.snxsch", &[]);
+    settle(&mut app, true);
+
+    let top = &source_documents(&app)[0];
+    assert_eq!(top.children[0].label, "later.snxsch", "no longer missing");
+    let info = &app.document_state.panel_ctx.projects[0].sheets[0].children[0];
+    assert!(info.is_child_reference && !info.missing);
+}
+
+#[test]
+fn an_unreadable_child_is_marked() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    write_sheet(tmp.path(), "top.snxsch", &["broken.snxsch"]);
+    std::fs::write(tmp.path().join("broken.snxsch"), "not a sheet").expect("write");
+    let dir = tmp.path().to_string_lossy().into_owned();
+    let mut app = app_workspace(&dir, &["top.snxsch"]);
+    settle(&mut app, false);
+
+    let child = &source_documents(&app)[0].children[0];
+    assert_eq!(child.label, "broken.snxsch  (unreadable)");
+}
+
+#[test]
+fn a_project_without_a_declared_root_nests_under_its_first_page() {
+    let mut app = hierarchical_app();
+    app.document_state.projects[0].data.schematic_root = None;
+    settle(&mut app, false);
+
+    assert_eq!(
+        shape(&app),
+        [
+            ("top.snxsch".to_string(), vec!["mid.snxsch".to_string()]),
+            ("other.snxsch".to_string(), vec![])
+        ]
+    );
 }

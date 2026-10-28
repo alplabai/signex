@@ -122,6 +122,9 @@ impl Signex {
             }
         }
         request.hierarchy = self.hierarchy_request();
+        request.exists.extend(self.hierarchy_exists_paths());
+        request.exists.sort();
+        request.exists.dedup();
         request
     }
 

@@ -21,41 +21,42 @@ use crate::app::sheet_hierarchy::{SheetHierarchy, build_sheet_hierarchy};
 /// One sheet symbol of an open sheet: `(name, file, uuid)`.
 pub type ChildRef = (String, String, Uuid);
 
-/// One project whose hierarchy is wanted.
+/// One project whose hierarchy is wanted, and everything its walk reads.
+/// Equal jobs give equal answers, so an unchanged job is not walked again.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HierarchyJob {
     pub id: ProjectId,
     pub root: PathBuf,
     pub pages: Vec<PathBuf>,
     pub fold: CaseFold,
+    /// The open sheets that can belong to this project (those under its
+    /// folder) and the symbols they carry now, sorted by path.
+    pub open_refs: Vec<(PathBuf, Vec<ChildRef>)>,
 }
 
-/// What the walk is built from. Equal requests give equal answers, so an
-/// unchanged request is not walked again.
+/// The projects to walk.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HierarchyRequest {
     pub jobs: Vec<HierarchyJob>,
-    /// Every open sheet and the symbols it carries now, sorted by path.
-    pub open_refs: Vec<(PathBuf, Vec<ChildRef>)>,
 }
 
 /// Walk each requested project. Blocking: call it off the UI thread.
 pub fn walk_hierarchies(request: &HierarchyRequest) -> HashMap<ProjectId, SheetHierarchy> {
-    let open: OpenSheets = request
-        .open_refs
-        .iter()
-        .map(|(path, refs)| {
-            let sheet = SchematicSheet {
-                child_sheets: refs.iter().map(child_sheet).collect(),
-                ..SchematicSheet::default()
-            };
-            (path.clone(), sheet)
-        })
-        .collect();
     request
         .jobs
         .iter()
         .map(|job| {
+            let open: OpenSheets = job
+                .open_refs
+                .iter()
+                .map(|(path, refs)| {
+                    let sheet = SchematicSheet {
+                        child_sheets: refs.iter().map(child_sheet).collect(),
+                        ..SchematicSheet::default()
+                    };
+                    (path.clone(), sheet)
+                })
+                .collect();
             let set = assemble_project_sheets_from(&open, &job.pages, &job.root, job.fold);
             let hierarchy = build_sheet_hierarchy(
                 &set.sheets,

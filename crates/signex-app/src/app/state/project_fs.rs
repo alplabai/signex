@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use super::ProjectId;
-use super::project_hierarchy::{HierarchyRequest, walk_hierarchies};
+use super::project_hierarchy::{HierarchyJob, HierarchyRequest, walk_hierarchies};
 use crate::app::sheet_hierarchy::SheetHierarchy;
 
 /// A probe still unanswered after this long is presumed hung (a dead network
@@ -40,6 +40,11 @@ impl ProjectFsFacts {
     /// does not flash `(missing)` before its first probe lands.
     pub fn is_missing(&self, path: &Path) -> bool {
         self.exists.get(path) == Some(&false)
+    }
+
+    /// True once a probe saw that `path` exists. Unprobed is not known.
+    pub fn knows_present(&self, path: &Path) -> bool {
+        self.exists.get(path) == Some(&true)
     }
 
     /// True once a probe saw that `dir` has no `.git`. Unprobed reads as
@@ -146,12 +151,13 @@ pub struct ProjectFsCache {
     generation: u64,
     /// The last finished probe's worker died; warn once per streak.
     failing: bool,
-    /// The hierarchy request the facts' hierarchies answer. A probe walks the
-    /// sheets only when the wanted one differs: the poll tick would otherwise
-    /// parse every sheet of every project each time it fired.
-    hierarchy_done: HierarchyRequest,
-    /// The request the running probe walks, taken on success.
-    hierarchy_inflight: Option<HierarchyRequest>,
+    /// The job each project's hierarchy was last walked for. A probe walks a
+    /// project only when its wanted job differs (or a file the walk placed
+    /// appeared or went): the poll tick and a save would otherwise parse every
+    /// sheet of every project each time.
+    hierarchy_done: HashMap<ProjectId, HierarchyJob>,
+    /// The jobs the running probe walks, recorded as done when it lands.
+    hierarchy_inflight: Vec<HierarchyJob>,
 }
 
 /// What a finished probe means for the caller.
@@ -176,8 +182,6 @@ impl ProjectFsCache {
     /// rename the app did itself): re-probe on the next update.
     pub fn invalidate(&mut self) {
         self.stale = true;
-        // A save or a created sheet changes what the walk reads.
-        self.hierarchy_done = HierarchyRequest::default();
     }
 
     /// Claim the next probe, if one may start: none while another runs, and
@@ -195,12 +199,11 @@ impl ProjectFsCache {
         self.in_flight = Some((self.generation, Instant::now()));
         self.stale = false;
         let mut request = self.wanted.clone();
-        self.hierarchy_inflight = None;
-        if request.hierarchy == self.hierarchy_done {
-            request.hierarchy = HierarchyRequest::default();
-        } else {
-            self.hierarchy_inflight = Some(request.hierarchy.clone());
-        }
+        request
+            .hierarchy
+            .jobs
+            .retain(|job| self.hierarchy_done.get(&job.id) != Some(job));
+        self.hierarchy_inflight = request.hierarchy.jobs.clone();
         Some((self.generation, request))
     }
 
@@ -218,7 +221,7 @@ impl ProjectFsCache {
             return ProbeFinish::default();
         }
         self.in_flight = None;
-        let walked = self.hierarchy_inflight.take();
+        let walked = std::mem::take(&mut self.hierarchy_inflight);
         match facts {
             Err(reason) => {
                 let first = !std::mem::replace(&mut self.failing, true);
@@ -229,11 +232,7 @@ impl ProjectFsCache {
             }
             Ok(mut f) => {
                 self.failing = false;
-                match walked {
-                    Some(done) => self.hierarchy_done = done,
-                    // Not walked this time: the previous answers still stand.
-                    None => f.hierarchies = std::mem::take(&mut self.facts.hierarchies),
-                }
+                self.keep_unwalked_hierarchies(&mut f, walked);
                 let changed = f != self.facts;
                 if changed {
                     self.facts = f;
@@ -243,6 +242,32 @@ impl ProjectFsCache {
                     warning: None,
                 }
             }
+        }
+    }
+
+    /// A project not walked this time keeps its last hierarchy, unless a file
+    /// that hierarchy placed appeared or went since: then it is walked again
+    /// on the next probe, which `stale` brings forward.
+    fn keep_unwalked_hierarchies(&mut self, f: &mut ProjectFsFacts, walked: Vec<HierarchyJob>) {
+        let wanted: HashSet<ProjectId> = self.wanted.hierarchy.jobs.iter().map(|j| j.id).collect();
+        self.hierarchy_done.retain(|id, _| wanted.contains(id));
+        let walked_ids: HashSet<ProjectId> = walked.iter().map(|j| j.id).collect();
+        for job in walked {
+            self.hierarchy_done.insert(job.id, job);
+        }
+        for (id, hierarchy) in std::mem::take(&mut self.facts.hierarchies) {
+            if walked_ids.contains(&id) || !wanted.contains(&id) {
+                continue;
+            }
+            let flipped = hierarchy.node_paths().into_iter().any(|path| {
+                let before = self.facts.exists.get(path);
+                before.is_some() && before != f.exists.get(path)
+            });
+            if flipped {
+                self.hierarchy_done.remove(&id);
+                self.stale = true;
+            }
+            f.hierarchies.insert(id, hierarchy);
         }
     }
 
@@ -360,5 +385,86 @@ mod tests {
         }
         assert!(!message_touches_disk(&Message::Rename(RenameMsg::Close)));
         assert!(!message_touches_disk(&Message::Remove(RemoveMsg::Close)));
+    }
+
+    fn job(id: ProjectId) -> HierarchyJob {
+        HierarchyJob {
+            id,
+            root: PathBuf::from("/p/root.snxsch"),
+            pages: vec![PathBuf::from("/p/root.snxsch")],
+            fold: Default::default(),
+            open_refs: Vec::new(),
+        }
+    }
+
+    fn watching_jobs(ids: &[ProjectId]) -> ProjectFsCache {
+        let mut cache = ProjectFsCache::default();
+        cache.want(ProjectFsRequest {
+            exists: vec![PathBuf::from("/p/root.snxsch")],
+            hierarchy: HierarchyRequest {
+                jobs: ids.iter().copied().map(job).collect(),
+            },
+        });
+        cache
+    }
+
+    /// 1618: a save, or a poll tick, walks no project whose job is unchanged;
+    /// a changed job walks only its own project.
+    #[test]
+    fn only_a_project_whose_job_changed_is_walked_again() {
+        let (a, b) = (ProjectId(1), ProjectId(2));
+        let mut cache = watching_jobs(&[a, b]);
+        let (generation, request) = cache.begin_probe(false).unwrap();
+        assert_eq!(request.hierarchy.jobs.len(), 2);
+        cache.finish_probe(generation, Ok(probe(&request)));
+
+        cache.invalidate();
+        let (generation, request) = cache.begin_probe(true).unwrap();
+        assert!(request.hierarchy.jobs.is_empty(), "a save re-walks nothing");
+        cache.finish_probe(generation, Ok(probe(&request)));
+
+        let mut changed = job(b);
+        changed.pages.push(PathBuf::from("/p/more.snxsch"));
+        cache.want(ProjectFsRequest {
+            exists: vec![PathBuf::from("/p/root.snxsch")],
+            hierarchy: HierarchyRequest {
+                jobs: vec![job(a), changed],
+            },
+        });
+        let (_, request) = cache.begin_probe(false).unwrap();
+        let walked: Vec<ProjectId> = request.hierarchy.jobs.iter().map(|j| j.id).collect();
+        assert_eq!(walked, [b]);
+    }
+
+    /// 1618: a disk-changing message arriving while a probe runs is not lost,
+    /// and a placed file that went in between sends its project back through
+    /// the walk.
+    #[test]
+    fn a_change_during_a_running_probe_is_picked_up_by_the_next() {
+        let a = ProjectId(1);
+        let mut cache = watching_jobs(&[a]);
+        let (generation, request) = cache.begin_probe(false).unwrap();
+        cache.invalidate();
+        cache.finish_probe(generation, Ok(probe(&request)));
+        assert!(cache.begin_probe(false).is_some(), "the invalidate stands");
+    }
+
+    /// 1618: the file a hierarchy placed appearing sends it back through the
+    /// walk, so a missing child that was created stops reading as missing.
+    #[test]
+    fn a_placed_file_appearing_walks_its_project_again() {
+        let a = ProjectId(1);
+        let mut cache = watching_jobs(&[a]);
+        let (generation, request) = cache.begin_probe(false).unwrap();
+        cache.finish_probe(generation, Ok(probe(&request)));
+        assert!(cache.begin_probe(false).is_none(), "settled");
+
+        let (generation, request) = cache.begin_probe(true).unwrap();
+        assert!(request.hierarchy.jobs.is_empty());
+        let mut created = probe(&request);
+        created.exists.insert(PathBuf::from("/p/root.snxsch"), true);
+        cache.finish_probe(generation, Ok(created));
+        let (_, request) = cache.begin_probe(false).expect("a re-walk is due");
+        assert_eq!(request.hierarchy.jobs.len(), 1);
     }
 }

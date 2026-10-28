@@ -6,8 +6,8 @@ use signex_widgets::tree_view::{TreeKey, TreeMsg};
 
 use super::*;
 use crate::app::ProjectTreeAction;
-use crate::app::handlers::menu::export::tests::tree_nesting_pins::{DIR, hierarchical_app};
 use crate::app::handlers::menu::export::tests::{app_workspace, open_with, sheet_with_net};
+use crate::app::hierarchy_fixture::{DIR, hierarchical_app};
 use crate::app::runtime::sheet_tree_tests::settle;
 
 /// The key of `leaf.snxsch`, nested `top -> mid -> leaf`.

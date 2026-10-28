@@ -37,6 +37,11 @@ pub struct SheetInfo {
     /// its parent references (#1618). With `missing` it is a symbol whose
     /// file does not exist: activating it offers to create the sheet.
     pub is_child_reference: bool,
+    /// True when the sheet is one of the `.snxprj` pages. A nested row that is
+    /// not has no project entry to exclude or rename.
+    pub in_project_list: bool,
+    /// The file exists but could not be read or parsed.
+    pub unreadable: bool,
     /// The sheets this sheet's symbols reference, nested under it.
     pub children: Vec<SheetInfo>,
 }
@@ -152,12 +157,28 @@ fn missing_label(filename: &str, is_missing: bool) -> String {
     }
 }
 
+/// [`missing_label`], plus the `(unreadable)` mark of a sheet the walk could
+/// not read.
+fn sheet_label(sheet: &SheetInfo) -> String {
+    if sheet.unreadable {
+        format!("{}  (unreadable)", sheet.filename)
+    } else {
+        missing_label(&sheet.filename, sheet.missing)
+    }
+}
+
 /// The row for a sheet and, nested under it, the sheets its symbols place
 /// (#1618). A page keeps its file name as key; a nested row is keyed by its
 /// file too, which is unique among siblings because a file is shown once.
 fn sheet_node(sheet: &SheetInfo) -> TreeNode {
-    let icon = TreeIcon::for_path(&sheet.filename);
-    let label = missing_label(&sheet.filename, sheet.missing);
+    // A symbol's file is a sheet whatever its extension says, so the row can
+    // be activated.
+    let icon = if sheet.is_child_reference {
+        TreeIcon::SnxSchematic
+    } else {
+        TreeIcon::for_path(&sheet.filename)
+    };
+    let label = sheet_label(sheet);
     let node = if sheet.children.is_empty() {
         TreeNode::leaf(label, icon)
     } else {
