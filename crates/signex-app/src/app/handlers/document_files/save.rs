@@ -68,6 +68,9 @@ pub(crate) fn log_foreign_column_offenders(error: &anyhow::Error) {
 
 impl Signex {
     pub(crate) fn save_active_document(&mut self) -> Result<iced::Task<Message>> {
+        if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab) {
+            self.refuse_save_while_restoring(&tab.path.clone())?;
+        }
         // Standalone `.snxsym` / `.snxfpt` document tabs route Ctrl+S
         // through `save_primitive_tab_at` so JSON persistence happens
         // before the generic schematic-save handler runs (it would
@@ -226,6 +229,10 @@ impl Signex {
         from_path: &std::path::Path,
         path: PathBuf,
     ) -> Result<iced::Task<Message>> {
+        self.refuse_save_while_restoring(from_path)?;
+        // The target may be a document whose restore is still running (even
+        // one cancelled): the restore would overwrite what this writes.
+        self.refuse_save_while_restoring(&path)?;
         match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(tab) if matches!(tab.kind, TabKind::Schematic) && tab.path == from_path => {}
             _ => anyhow::bail!(
@@ -295,6 +302,10 @@ impl Signex {
             super::primitive_extension(from_path),
         );
         let to_path = resolved.as_path();
+        // Re-keying onto a file whose restore is still running (even a
+        // cancelled one) would let the restore overwrite this save; say so
+        // before the generic "already open" refusal can.
+        self.refuse_save_while_restoring(to_path)?;
         if to_path != picked_path {
             if to_path.exists() {
                 crate::diagnostics::log_warning(format!(

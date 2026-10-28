@@ -784,6 +784,7 @@ fn the_project_patch_does_not_flush_other_unsaved_edits() {
 /// project stays dirty and the Messages panel says it needs saving.
 #[test]
 fn a_never_saved_project_is_not_created_by_the_rename() {
+    let _ = diagnostics::init_logging();
     let mut f = unsaved_fixture();
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
 
@@ -870,6 +871,7 @@ fn duplicate_entries_for_the_library_are_all_repointed() {
 /// Discard and Save will do.
 #[test]
 fn a_shared_disk_entry_gets_an_explicit_warning_and_a_dirty_project() {
+    let _ = diagnostics::init_logging();
     let mut f = fixture();
     let mut on_disk = parse_project(&f.prj).unwrap();
     on_disk.libraries[0].kind = LibraryEntryKind::Shared;

@@ -15,6 +15,7 @@ pub mod alternate_symbol_edit;
 pub mod cascade;
 pub mod component;
 pub mod dangling;
+pub mod datasheet_asset;
 pub mod diff;
 pub mod distributor;
 #[cfg(feature = "distributors-community")]
@@ -45,7 +46,7 @@ pub mod where_used;
 
 pub use adapter::{
     ComponentSummary, FileRewrite, HistoryEntry, LibraryAdapter, LibraryError, LibraryQuery,
-    PrimitiveSummary, rewrite_file,
+    PrimitiveSummary, Versioned, rewrite_file,
 };
 pub use adapters::library_set::{LibrarySet, UnresolvedRefs};
 pub use adapters::read_only::ReadOnlyAdapter;
@@ -68,6 +69,10 @@ pub use component::{
     ROW_SCHEMA_HEADER, ROW_SCHEMA_REFUSED_CODE,
 };
 pub use dangling::{DanglingRef, RefSlot, dangling_row_refs};
+pub use datasheet_asset::{
+    DATASHEET_ASSET_DIR, MAX_DATASHEET_BYTES, NotAPdf, PdfAsset, datasheet_asset_path,
+    datasheet_asset_rel_path, datasheet_hash, is_pdf, store_datasheet,
+};
 pub use diff::{
     AlternateSymbolDiff, BumpKind, LifecycleDiff, ListDiff, ParameterDiff, PinMapDiff, RowDiff,
     auto_bump_kind, diff_rows,

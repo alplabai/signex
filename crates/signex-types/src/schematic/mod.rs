@@ -413,7 +413,7 @@ pub enum LabelType {
 // Text property (for reference/value fields)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TextProp {
     pub position: Point,
     pub rotation: f64,
@@ -431,7 +431,7 @@ pub struct TextProp {
     pub hidden: bool,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct SymbolInstance {
     #[serde(default)]
     pub project: String,
@@ -443,7 +443,7 @@ pub struct SymbolInstance {
     pub unit: u32,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct SheetInstance {
     #[serde(default)]
     pub project: String,
@@ -637,7 +637,7 @@ pub struct Pin {
 // Symbol instance
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Symbol {
     pub uuid: Uuid,
     pub lib_id: String,

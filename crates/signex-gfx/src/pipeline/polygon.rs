@@ -42,9 +42,9 @@ impl PolygonVertex {
 /// come last and composite on top of the fill under alpha blending, matching
 /// the CPU `draw_polygons` order (fill, then stroke).
 ///
-/// so misdrew any 3/6/9-vertex pour. Fill uses `signex_sketch::ear_clip`
-/// (below), which is exact for concave contours too — the CPU path
-/// (`frame.fill`, lyon) tessellates the same contour, so the two now agree.
+/// Fill uses `signex_sketch::ear_clip` (below), which is exact for concave
+/// contours too — the CPU path (`frame.fill`, lyon) tessellates the same
+/// contour, so the two agree.
 ///
 /// `pub(crate)` (rather than private) so `scene::scenario_tests`'s full-board
 /// scenario can exercise this exact CPU-side vertex generation instead of

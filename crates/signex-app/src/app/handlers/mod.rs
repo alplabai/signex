@@ -1,5 +1,6 @@
 pub mod active_bar;
 pub mod autosave;
+pub mod autosave_pcb;
 pub mod autosave_primitives;
 pub mod autosave_recovery;
 pub mod canvas;

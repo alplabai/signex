@@ -38,6 +38,7 @@ mod alternate_symbols;
 mod browser;
 mod component_preview;
 mod components_panel;
+mod datasheet_save;
 mod document_options;
 mod editor;
 mod external_edits;
@@ -393,6 +394,7 @@ impl Signex {
             LibraryMessage::LibraryUpdatesSkipAll => self.handle_library_updates_skip_all(),
             LibraryMessage::LibraryUpdatesCancel => {
                 self.library.library_updates = None;
+                self.show_next_queued_updates();
                 Task::none()
             }
 

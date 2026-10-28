@@ -20,16 +20,12 @@ const PROBE_DEADLINE: Duration = crate::library::external_poll::POLL_TIMEOUT;
 pub struct ProjectFsRequest {
     /// Paths whose existence marks a `(missing)` row.
     pub exists: Vec<PathBuf>,
-    /// Directories to list, with the extension (no dot) whose file stems
-    /// are wanted.
-    pub listings: Vec<(PathBuf, &'static str)>,
 }
 
 /// The answer to a [`ProjectFsRequest`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProjectFsFacts {
     exists: HashMap<PathBuf, bool>,
-    listings: HashMap<PathBuf, Vec<String>>,
 }
 
 impl ProjectFsFacts {
@@ -49,11 +45,6 @@ impl ProjectFsFacts {
     /// so the UI does not wait for the next probe to see it.
     pub fn set_exists(&mut self, path: PathBuf, exists: bool) {
         self.exists.insert(path, exists);
-    }
-
-    /// Sorted file stems of the last listing of `dir`; empty before one lands.
-    pub fn names_in(&self, dir: &Path) -> Vec<String> {
-        self.listings.get(dir).cloned().unwrap_or_default()
     }
 }
 
@@ -76,19 +67,6 @@ pub fn probe(request: &ProjectFsRequest) -> ProjectFsFacts {
     let mut facts = ProjectFsFacts::default();
     for path in request.exists.iter().collect::<HashSet<_>>() {
         facts.exists.insert(path.clone(), path.exists());
-    }
-    for (dir, ext) in &request.listings {
-        let context = dir
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("library");
-        let mut names: Vec<String> = crate::app::dir_listing::list_dir_or_report(dir, context)
-            .into_iter()
-            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some(*ext))
-            .filter_map(|p| p.file_stem().and_then(|s| s.to_str()).map(str::to_string))
-            .collect();
-        names.sort();
-        facts.listings.insert(dir.clone(), names);
     }
     facts
 }
@@ -256,7 +234,6 @@ mod tests {
         let mut cache = ProjectFsCache::default();
         cache.want(ProjectFsRequest {
             exists: vec![PathBuf::from("a")],
-            listings: Vec::new(),
         });
         cache
     }

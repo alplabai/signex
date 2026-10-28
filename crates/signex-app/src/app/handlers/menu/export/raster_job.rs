@@ -2,10 +2,14 @@
 //!
 //! `update()` only snapshots the export context and options into a
 //! [`PreviewRasterJob`]; the render runs on a blocking thread inside a `Task`
-//! and comes back as `PrintPreviewMsg::Rasterized`, which is applied only if
-//! it is still the newest request (see `PreviewState::apply_raster`). A job
-//! superseded before it starts skips the render, and the previous task is
-//! aborted when a new one launches, so fast typing cannot pile up renders.
+//! and comes back as a `PrintPreviewMsg`, applied only if it is still the
+//! newest request (see `PreviewState::apply_raster`). A job superseded before
+//! it starts skips the render, and the previous task is aborted when a new
+//! one launches, so fast typing cannot pile up renders.
+//!
+//! Rasterising is lazy: a layout job lays out every page (cheap) but draws
+//! only the page on screen; any other page is drawn by a page job when the
+//! user navigates to it.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -15,40 +19,91 @@ use signex_output::{ExportContext, PreviewOptions, PreviewRasterizer};
 
 use super::super::super::super::*;
 
+/// What a job draws.
+enum RasterWork {
+    /// Lay out all pages, drawing the one at `focus` (clamped to the layout).
+    Layout { focus: usize },
+    /// Draw the page at `position` of an already laid-out preview.
+    Page { position: usize },
+}
+
 /// Everything a rasterisation needs, detached from the live app state.
 pub(super) struct PreviewRasterJob {
     generation: u64,
     latest: Arc<AtomicU64>,
-    pub(super) ctx: ExportContext,
+    pub(super) ctx: Arc<ExportContext>,
     options: PreviewOptions,
+    work: RasterWork,
 }
 
 impl PreviewRasterJob {
-    pub(super) fn new(
+    /// A job that lays out the preview and draws page `focus`.
+    pub(super) fn layout(
         generation: u64,
         latest: Arc<AtomicU64>,
-        ctx: ExportContext,
+        ctx: Arc<ExportContext>,
         options: PreviewOptions,
+        focus: usize,
     ) -> Self {
         Self {
             generation,
             latest,
             ctx,
             options,
+            work: RasterWork::Layout { focus },
+        }
+    }
+
+    /// A job that draws one page of the preview laid out for `generation`.
+    pub(super) fn page(
+        generation: u64,
+        latest: Arc<AtomicU64>,
+        ctx: Arc<ExportContext>,
+        options: PreviewOptions,
+        position: usize,
+    ) -> Self {
+        Self {
+            generation,
+            latest,
+            ctx,
+            options,
+            work: RasterWork::Page { position },
         }
     }
 
     /// Render now, on the calling thread.
     pub(super) fn run(self) -> PrintPreviewMsg {
+        let generation = self.generation;
         // Queued behind a newer request: nobody will apply this result.
-        let pages = if self.latest.load(Ordering::SeqCst) == self.generation {
-            PreviewRasterizer.rasterize(&self.ctx, &self.options)
-        } else {
-            Vec::new()
-        };
-        PrintPreviewMsg::Rasterized {
-            generation: self.generation,
-            pages: Arc::new(pages),
+        let superseded = self.latest.load(Ordering::SeqCst) != generation;
+        match self.work {
+            RasterWork::Layout { focus } => {
+                let (outline, pages) = if superseded {
+                    (Vec::new(), Vec::new())
+                } else {
+                    let outline = PreviewRasterizer.outline(&self.ctx, &self.options);
+                    let focus = focus.min(outline.len().saturating_sub(1));
+                    let pages =
+                        PreviewRasterizer.rasterize_pages(&self.ctx, &self.options, &[focus]);
+                    (outline, pages)
+                };
+                PrintPreviewMsg::Rasterized {
+                    generation,
+                    outline: Arc::new(outline),
+                    pages: Arc::new(pages),
+                }
+            }
+            RasterWork::Page { position } => {
+                let pages = if superseded {
+                    Vec::new()
+                } else {
+                    PreviewRasterizer.rasterize_pages(&self.ctx, &self.options, &[position])
+                };
+                PrintPreviewMsg::PagesRasterized {
+                    generation,
+                    pages: Arc::new(pages),
+                }
+            }
         }
     }
 
@@ -76,6 +131,7 @@ fn worker_failure(generation: u64, error: tokio::task::JoinError) -> PrintPrevie
     if error.is_cancelled() {
         return PrintPreviewMsg::Rasterized {
             generation,
+            outline: Arc::new(Vec::new()),
             pages: Arc::new(Vec::new()),
         };
     }
@@ -119,20 +175,25 @@ impl Signex {
 }
 
 impl Signex {
-    /// Apply a finished background rasterisation. A result superseded by a
-    /// newer request, or arriving after the modal closed, is dropped.
+    /// Apply a finished background layout. A result superseded by a newer
+    /// request, or arriving after the modal closed, is dropped. The page on
+    /// screen is drawn if the user navigated off the one the job drew.
     pub(crate) fn handle_print_preview_rasterized(
         &mut self,
         generation: u64,
-        pages: Arc<Vec<signex_output::PreviewPage>>,
-    ) {
+        outline: &[signex_output::PreviewPageInfo],
+        pages: Arc<Vec<(usize, signex_output::PreviewPage)>>,
+    ) -> Task<Message> {
         let Some(preview) = self.document_state.preview.as_mut() else {
-            return;
+            return Task::none();
         };
         let pages = Arc::try_unwrap(pages).unwrap_or_else(|shared| (*shared).clone());
-        let outcome = preview.apply_raster(generation, pages);
+        let outcome = preview.apply_raster(generation, outline, pages);
         if outcome == crate::app::state::RasterOutcome::Applied {
-            log::info!("Print preview: rendered {} page(s)", preview.pages.len());
+            log::info!(
+                "Print preview: laid out {} page(s), drew the shown one",
+                preview.pages.len()
+            );
         }
         if outcome == crate::app::state::RasterOutcome::Empty {
             // Only a real empty range reaches here; a crashed render is
@@ -142,6 +203,45 @@ impl Signex {
                 "Preview has no pages for the selected range. Check page range input.".to_string(),
             ));
         }
+        self.rasterize_selected_preview_page()
+    }
+
+    /// Apply pages drawn on demand; a result for a superseded layout is
+    /// dropped.
+    pub(crate) fn handle_print_preview_pages_rasterized(
+        &mut self,
+        generation: u64,
+        pages: Arc<Vec<(usize, signex_output::PreviewPage)>>,
+    ) {
+        let Some(preview) = self.document_state.preview.as_mut() else {
+            return;
+        };
+        let pages = Arc::try_unwrap(pages).unwrap_or_else(|shared| (*shared).clone());
+        if !preview.apply_pages(generation, pages) {
+            log::debug!("Print preview: dropped a superseded page render");
+        }
+    }
+
+    /// Draw the selected page in the background if it has not been drawn (or
+    /// asked for) yet. Shares the current generation, so it does not cancel
+    /// the renders already running for it.
+    pub(crate) fn rasterize_selected_preview_page(&mut self) -> Task<Message> {
+        let Some(request) = self
+            .document_state
+            .preview
+            .as_mut()
+            .and_then(|preview| preview.take_selected_page_request())
+        else {
+            return Task::none();
+        };
+        let (_, latest) = self.document_state.raster_queue.current();
+        self.launch_raster(PreviewRasterJob::page(
+            request.generation,
+            latest,
+            request.ctx,
+            request.options,
+            request.position,
+        ))
     }
 }
 
@@ -155,6 +255,9 @@ impl Signex {
         if !preview.is_current_raster(generation) {
             log::debug!("Print preview: dropped a superseded render failure: {reason}");
             return;
+        }
+        if let Some(preview) = self.document_state.preview.as_mut() {
+            preview.forget_requested_pages();
         }
         crate::diagnostics::log_error(
             "Print preview render failed",

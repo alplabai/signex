@@ -1183,7 +1183,7 @@ fn opening_snxfpt_does_not_create_editable_tab_when_gated() {
     let fpt = tmp.path().join("gated.snxfpt");
     write_valid_snxfpt(&fpt, "GATED");
     let (mut app, _t) = Signex::new();
-    let _ = app.update(Message::File(FileMsg::Opened(Some(fpt.clone()))));
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Opened(Some(fpt.clone()))));
     let opened_footprint_tab = app
         .document_state
         .tabs
@@ -1213,7 +1213,7 @@ fn opening_snxsym_still_creates_editable_tab() {
     let sym = tmp.path().join("control.snxsym");
     write_valid_snxsym(&sym, "CONTROL");
     let (mut app, _t) = Signex::new();
-    let _ = app.update(Message::File(FileMsg::Opened(Some(sym.clone()))));
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Opened(Some(sym.clone()))));
     // Positive control: the symbol editor is the headline feature of
     // v0.13.0 and must open regardless of the footprint gate.
     assert!(
@@ -1246,7 +1246,7 @@ fn a_corrupt_snxsym_raises_the_error_card_naming_the_file() {
     fs::write(&sym, b"this is not a symbol envelope\x00\xff").expect("write corrupt .snxsym");
     let (mut app, _t) = Signex::new();
 
-    let _ = app.update(Message::File(FileMsg::Opened(Some(sym.clone()))));
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Opened(Some(sym.clone()))));
 
     let notice = app
         .document_state
@@ -1278,7 +1278,7 @@ fn a_valid_snxsym_leaves_the_error_card_clear() {
     write_valid_snxsym(&sym, "FINE");
     let (mut app, _t) = Signex::new();
 
-    let _ = app.update(Message::File(FileMsg::Opened(Some(sym))));
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Opened(Some(sym))));
 
     assert!(
         app.document_state.error_notice.is_none(),
@@ -1293,7 +1293,7 @@ fn dismissing_the_card_clears_it() {
     let sym = tmp.path().join("corrupt.snxsym");
     fs::write(&sym, b"not a symbol envelope").expect("write corrupt .snxsym");
     let (mut app, _t) = Signex::new();
-    let _ = app.update(Message::File(FileMsg::Opened(Some(sym))));
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Opened(Some(sym))));
     assert!(
         app.document_state.error_notice.is_some(),
         "card should be up"

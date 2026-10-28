@@ -313,6 +313,11 @@ pub struct UiState {
     pub erc_run_generation: u64,
     /// An ERC run is in flight; the ERC panel shows "Running…".
     pub erc_running: bool,
+    /// The rule set the newest ERC run used, for the report header (#1085).
+    pub erc_run_rule_set: Option<signex_output::ErcReportRuleSet>,
+    /// An "Update from profile" waiting for the user's confirmation, with the
+    /// diff it would apply (#1085). Nothing is changed until confirmed.
+    pub pending_profile_update: Option<crate::app::state::PendingProfileUpdate>,
     /// Per-rule severity override — if empty, the rule's default is used.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,

@@ -202,8 +202,13 @@ impl Signex {
             .map(|p| p.case_fold)
             .unwrap_or_default();
         let under = |p: &PathBuf| crate::app::state::scope::path_is_under(p, &job.old_dir, fold);
-        if ds.pending_opens.iter().any(under) {
+        if ds.pending_opens.paths().any(under) {
             return Some("A file is still opening. Rename the project once it has opened.");
+        }
+        if ds.pending_restores.paths().any(under) {
+            return Some(
+                "A History restore is still running. Rename the project once it has finished.",
+            );
         }
         let git_busy = ds
             .pending_git_commits
