@@ -17,9 +17,10 @@ use crate::expr::ExprError;
 use crate::expr::ast::ExprNode;
 use crate::expr::eval::EvalContext;
 use crate::expr::parse::parse as parse_expr;
+use crate::parameter::resolve_quantities;
 use crate::sketch::SketchData;
 use crate::solver::residual::ResolvedParams;
-use crate::unit::Quantity;
+use crate::unit::{Quantity, UnitFamily};
 
 /// The text of an expression target as the parser sees it.
 fn expression_body(source: &str) -> &str {
@@ -44,16 +45,37 @@ pub(crate) fn parse_calls() -> usize {
     PARSE_CALLS.with(std::cell::Cell::get)
 }
 
-/// The evaluation context of one parameter set. `ResolvedParams` values are
-/// canonical-unit f64 with the unit family implied by the constraint
-/// context; they are injected as Length (mm) since Distance is the dominant
-/// expression-driven case. Angle-only constraints with parameter-driven
-/// targets typically reference the parameter directly via the bare-name
-/// fast path in `resolve_dim`.
-pub(crate) fn build_context(params: &ResolvedParams) -> EvalContext {
+/// The unit family each parameter of `sketch` declares, recovered from its
+/// parameter table because `ResolvedParams` carries bare canonical `f64`s.
+/// A table that does not resolve yields no families (every value a length).
+fn parameter_families(sketch: &SketchData) -> HashMap<String, UnitFamily> {
+    resolve_quantities(&sketch.parameters)
+        .map(|resolved| {
+            resolved
+                .into_iter()
+                .map(|(name, q)| (name, q.unit.family()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The evaluation context of one parameter set. Each value is injected in
+/// the unit family `families` records for it (angle, count or length); a
+/// parameter without a recorded family is a length in mm.
+pub(crate) fn build_context(
+    params: &ResolvedParams,
+    families: &HashMap<String, UnitFamily>,
+) -> EvalContext {
     let params_ast: BTreeMap<String, ExprNode> = params
         .iter()
-        .map(|(name, value)| (name.clone(), ExprNode::Literal(Quantity::length(*value))))
+        .map(|(name, &value)| {
+            let quantity = match families.get(name) {
+                Some(UnitFamily::Angle) => Quantity::angle(value),
+                Some(UnitFamily::Count) => Quantity::count(value),
+                Some(UnitFamily::Length) | None => Quantity::length(value),
+            };
+            (name.clone(), ExprNode::Literal(quantity))
+        })
         .collect();
     EvalContext {
         params: params_ast,
@@ -71,6 +93,7 @@ struct CapturedContext {
 #[derive(Debug, Default, Clone)]
 pub struct DimCache {
     parsed: HashMap<String, Result<ExprNode, ExprError>>,
+    families: HashMap<String, UnitFamily>,
     captured: OnceLock<CapturedContext>,
 }
 
@@ -92,6 +115,7 @@ impl DimCache {
         }
         Self {
             parsed,
+            families: parameter_families(sketch),
             captured: OnceLock::new(),
         }
     }
@@ -108,7 +132,7 @@ impl DimCache {
     pub(crate) fn context(&self, params: &ResolvedParams) -> Option<&EvalContext> {
         let captured = self.captured.get_or_init(|| CapturedContext {
             values: params.clone(),
-            context: build_context(params),
+            context: build_context(params, &self.families),
         });
         (captured.values == *params).then_some(&captured.context)
     }
@@ -206,6 +230,43 @@ mod tests {
         let other = ResolvedParams::from([("width".to_owned(), 1.0)]);
         assert!(cache.context(&other).is_none());
         assert!(cache.context(&params()).is_some());
+    }
+
+    fn eval_cached(sketch: &SketchData, body: &str) -> crate::unit::Quantity {
+        let resolved = crate::parameter::resolve(&sketch.parameters).expect("parameters resolve");
+        let cache = DimCache::for_sketch(sketch);
+        let ctx = cache.context(&resolved).expect("context");
+        crate::expr::eval::eval(&parse_expr(body).expect("parses"), ctx).expect("evaluates")
+    }
+
+    #[test]
+    fn a_count_parameter_keeps_its_family_in_a_dimension() {
+        let (mut data, a, b) = expression_sketch("= pitch * (pin_count - 1)");
+        data.parameters.insert("pitch", "1.27mm");
+        data.parameters.insert("pin_count", "4");
+        let resolved = crate::parameter::resolve(&data.parameters).expect("resolves");
+        let solved = Solver::default().solve(&data, &resolved).expect("solves");
+        let (ax, ay) = point(&solved, &data, a);
+        let (bx, by) = point(&solved, &data, b);
+        assert!(((bx - ax).hypot(by - ay) - 3.81).abs() < 1e-9);
+    }
+
+    #[test]
+    fn an_angle_parameter_keeps_its_family_in_an_expression() {
+        let mut data = SketchData::default();
+        data.parameters.insert("apex", "30deg");
+        let q = eval_cached(&data, "apex + 15deg");
+        assert_eq!(q.unit.family(), UnitFamily::Angle);
+        assert!((q.as_rad().expect("rad") - 45f64.to_radians()).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_count_parameter_is_a_ratio_in_an_expression() {
+        let mut data = SketchData::default();
+        data.parameters.insert("pin_count", "4");
+        let q = eval_cached(&data, "pin_count / 2");
+        assert_eq!(q.unit.family(), UnitFamily::Count);
+        assert_eq!(q.value, 2.0);
     }
 
     #[test]

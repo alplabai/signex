@@ -45,16 +45,10 @@ pub type ResolvedParams = HashMap<String, f64>;
 /// calls. The optional Altium-style `=` prefix is stripped before
 /// parsing.
 ///
-/// `ResolvedParams` values are injected into the eval context as
-/// `Literal(Quantity::length(v))`. This works cleanly for length-
-/// family expressions (Distance constraints) where each parameter
-/// is a length in mm. Angle-family parameters work the same way at
-/// the bare-name lookup level (`= apex_angle`); for parameter-driven
-/// arithmetic on angles, write the literal unit explicitly
-/// (e.g. `= apex_angle * 1rad / 1rad` reduces back to the raw
-/// canonical value, but the more idiomatic form is to keep the
-/// expression inline rather than chained through a Length-typed
-/// parameter table).
+/// `ResolvedParams` carries bare canonical values, so this uncached entry
+/// point injects every one as a length in mm. A solve reads the unit family
+/// of each parameter from the sketch's parameter table through its
+/// [`DimCache`], so count and angle parameters keep their family there.
 pub fn resolve_dim(target: &DimTarget, params: &ResolvedParams) -> Result<f64, SketchError> {
     resolve_dim_with(target, params, None)
 }
@@ -104,7 +98,7 @@ fn resolve_dim_with(
             let ctx = match cache.and_then(|c| c.context(params)) {
                 Some(ctx) => ctx,
                 None => {
-                    owned = dim_cache::build_context(params);
+                    owned = dim_cache::build_context(params, &HashMap::new());
                     &owned
                 }
             };
