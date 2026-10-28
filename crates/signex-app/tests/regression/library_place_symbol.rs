@@ -82,6 +82,11 @@ fn build_with(name: &str, symbol_ref: Option<(Uuid, Uuid)>, symbol: Symbol) -> F
     build_with_class(name, symbol_ref, symbol, "IC", ParamMap::new())
 }
 
+/// A library named `name` whose single row binds `symbol`.
+pub(crate) fn fixture_with_symbol(name: &str, symbol: Symbol) -> Fixture {
+    build_with(name, None, symbol)
+}
+
 /// A library whose symbol carries designator letters `designator` (`R?`).
 pub(crate) fn fixture_with_designator(designator: &str) -> Fixture {
     let mut symbol = two_unit_symbol();

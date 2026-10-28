@@ -404,6 +404,9 @@ impl PrimitivePickerTarget {
 /// [`crate::app::Signex`] as a single field so the dispatcher can
 /// borrow it independently of the rest of `DocumentState`.
 pub struct LibraryState {
+    /// Shows a datasheet in the platform's viewer. A field so a test can
+    /// record what would open instead of launching a browser (#1301).
+    pub datasheet_opener: crate::library::placed_part::OpenDatasheet,
     /// Embedded-vs-library symbol drift per open sheet (#912).
     pub drift: super::drift::DriftState,
     /// Latest switch request per placed symbol (#1230).

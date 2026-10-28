@@ -52,6 +52,7 @@ impl Default for LibraryState {
         // `<config_dir>/signex/distributors.toml`.
         settings.preferred_order = super::super::settings::persistence::load_preferred_order();
         Self {
+            datasheet_opener: crate::library::placed_part::opener::open,
             drift: Default::default(),
             symbol_choice_requests: Default::default(),
             set: LibrarySet::new(),

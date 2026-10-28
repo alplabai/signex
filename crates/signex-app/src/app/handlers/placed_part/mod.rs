@@ -23,6 +23,15 @@ pub(crate) struct PlacedPart {
     pub(crate) symbol: Symbol,
 }
 
+/// How messages name the part: its designator, or "the part" for one that
+/// has none yet.
+pub(super) fn part_name(symbol: &Symbol) -> String {
+    match symbol.reference.trim() {
+        "" => "the part".to_string(),
+        reference => reference.to_string(),
+    }
+}
+
 impl Signex {
     /// The one selected symbol of the active sheet, unless it is a power
     /// port (those carry no library part).

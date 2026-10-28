@@ -2,8 +2,6 @@
 //! of Change Component (#1260) and the datasheet list (#1301). The default
 //! is the plain Place Component list.
 
-use std::path::PathBuf;
-
 use signex_engine::ComponentChangePreview;
 
 use crate::library::messages::{PlacedPartTarget, ResolvedPlacement};
@@ -27,7 +25,6 @@ pub enum PickerMode {
 pub struct ChangePreview {
     pub target: PlacedPartTarget,
     pub reference: String,
-    pub library_path: PathBuf,
     pub resolved: ResolvedPlacement,
     pub preview: ComponentChangePreview,
 }
