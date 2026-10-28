@@ -47,6 +47,9 @@ impl Signex {
                 tokio::task::spawn_blocking(detect)
                     .await
                     .map_err(|error| error.to_string())
+                    .and_then(|probe| {
+                        probe.map_err(|_| "gsettings timed out and was killed".to_string())
+                    })
             },
             |layout| Message::Window(WindowMsg::ControlsLayoutDetected(layout)),
         )

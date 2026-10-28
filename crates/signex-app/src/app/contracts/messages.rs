@@ -27,10 +27,10 @@ pub enum WindowMsg {
     /// the modal or tab to the main window's overlay stack.
     SecondaryWindowClosed(iced::window::Id),
     /// OS-level close request (native close button, Alt+F4, taskbar
-    /// close) for a window. In `iced::daemon` mode windows do NOT
-    /// auto-close on this event, so the app decides what to do: the
-    /// main window routes through the unsaved-changes guard
-    /// (`CloseMainWindow`); every other window closes directly.
+    /// close) for a window. Windows do not auto-close on it, because every
+    /// `window::open` sets `exit_on_close_request: false`; the app decides.
+    /// The main window goes through the unsaved-changes guard, a detached
+    /// modal through its own close path, any other window closes directly.
     WindowCloseRequested(iced::window::Id),
     /// Pop a modal out of the main window into its own OS window. Altium
     /// triggers this when the user drags the modal's title bar past the

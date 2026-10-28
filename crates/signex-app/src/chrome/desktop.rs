@@ -1,8 +1,12 @@
 //! The window-button arrangement a Linux desktop asks for: GNOME's
 //! `button-layout` setting and KDE's `kwinrc` decoration keys. The parsers
-//! are pure; [`detect`] is the blocking IO shell around them.
+//! are pure; [`detect`] is the blocking IO shell around them, and it bounds
+//! the `gsettings` child so a dead D-Bus session cannot hang it.
 
 use super::controls::WindowButton;
+use crate::ignore::IgnoreResult as _;
+use std::process::{Command, Output, Stdio};
+use std::time::{Duration, Instant};
 
 /// Which buttons the desktop lists on each side of the title bar. The first
 /// entry of each list is nearest the window's left edge.
@@ -114,26 +118,68 @@ pub fn desktop_family(xdg_current_desktop: &str) -> DesktopFamily {
     }
 }
 
+/// How long `gsettings` may take before it is killed. It answers in
+/// milliseconds; only a dead D-Bus session makes it stall.
+const GSETTINGS_TIMEOUT: Duration = Duration::from_secs(2);
+const POLL_INTERVAL: Duration = Duration::from_millis(20);
+
+/// The probe child did not finish in time and was killed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProbeTimedOut;
+
 /// Ask the running desktop (blocking: spawns `gsettings`, reads a file).
-/// `None` on desktops with no known source, which is normal.
-pub fn detect() -> Option<DesktopButtonLayout> {
+/// `Ok(None)` on desktops with no known source, which is normal.
+pub fn detect() -> Result<Option<DesktopButtonLayout>, ProbeTimedOut> {
     let current = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
     match desktop_family(&current) {
-        DesktopFamily::Kde => detect_kde(),
+        DesktopFamily::Kde => Ok(detect_kde()),
         DesktopFamily::GnomeLike => detect_gnome(),
-        DesktopFamily::Other => None,
+        DesktopFamily::Other => Ok(None),
     }
 }
 
-fn detect_gnome() -> Option<DesktopButtonLayout> {
-    let output = std::process::Command::new("gsettings")
-        .args(["get", "org.gnome.desktop.wm.preferences", "button-layout"])
-        .output()
-        .ok()?;
+fn detect_gnome() -> Result<Option<DesktopButtonLayout>, ProbeTimedOut> {
+    let mut command = Command::new("gsettings");
+    command.args(["get", "org.gnome.desktop.wm.preferences", "button-layout"]);
+    let Some(output) = output_within(command, GSETTINGS_TIMEOUT)? else {
+        return Ok(None);
+    };
     if !output.status.success() {
-        return None;
+        return Ok(None);
     }
-    parse_gnome_button_layout(&String::from_utf8_lossy(&output.stdout))
+    Ok(parse_gnome_button_layout(&String::from_utf8_lossy(
+        &output.stdout,
+    )))
+}
+
+/// Run `command` and collect its stdout, killing it after `limit`.
+/// `Ok(None)` when it could not be started or waited on, which callers treat
+/// like any other unreadable source.
+fn output_within(mut command: Command, limit: Duration) -> Result<Option<Output>, ProbeTimedOut> {
+    let Ok(mut child) = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        return Ok(None);
+    };
+    let deadline = Instant::now() + limit;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return Ok(child.wait_with_output().ok()),
+            Ok(None) if Instant::now() >= deadline => {
+                // Best effort: the child may have exited since the poll.
+                child
+                    .kill()
+                    .ignore("the timed-out probe child may already be gone");
+                child.wait().ignore("reaping the killed probe child");
+                return Err(ProbeTimedOut);
+            }
+            Ok(None) => std::thread::sleep(POLL_INTERVAL),
+            Err(_) => return Ok(None),
+        }
+    }
 }
 
 fn detect_kde() -> Option<DesktopButtonLayout> {
@@ -148,6 +194,28 @@ fn detect_kde() -> Option<DesktopButtonLayout> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn a_stalled_probe_child_is_killed_at_the_deadline() {
+        let mut stalled = Command::new("sleep");
+        stalled.arg("30");
+        let started = Instant::now();
+        let result = output_within(stalled, Duration::from_millis(100));
+        assert_eq!(result.map(|o| o.is_some()), Err(ProbeTimedOut));
+        assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_quick_probe_child_returns_its_output() {
+        let mut quick = Command::new("echo");
+        quick.arg("hi");
+        let output = output_within(quick, Duration::from_secs(10))
+            .expect("no timeout")
+            .expect("echo runs");
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "hi");
+    }
     use WindowButton::{Close, Maximize, Minimize};
 
     fn layout(leading: &[WindowButton], trailing: &[WindowButton]) -> Option<DesktopButtonLayout> {
