@@ -11,6 +11,10 @@ use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Element, Length, Theme};
 use signex_types::theme::ThemeId;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     let PrefsView {
         draft_theme,
@@ -22,11 +26,13 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_symbol_pin_selection,
         draft_zoom_step_percent,
         draft_ui_scale_percent,
+        draft_window_controls_placement,
+        window_controls_restart_note,
         custom_name,
         theme_status,
         ..
     } = v;
-    let mut col = column![].spacing(0).padding([16, 20]);
+    let mut col = column![].spacing(0).padding([SP.xl, 20.0]);
 
     // ── Section: Theme ──
     col = col.push(section_title("Theme"));
@@ -120,7 +126,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     // so the row keeps its old height until there is something to say.
     if !theme_status.is_empty() {
         col = col.push(Space::new().height(6));
-        col = col.push(text(theme_status).size(10).style(text_muted));
+        col = col.push(text(theme_status).size(TS.caption).style(text_muted));
     }
 
     // ── Divider ──
@@ -134,9 +140,9 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("UI Font").size(12).style(text_primary),
+                text("UI Font").size(TS.label).style(text_primary),
                 text("Applies to all panels and menus. Requires restart.")
-                    .size(10)
+                    .size(TS.caption)
                     .style(text_muted),
             ]
             .spacing(3)
@@ -158,6 +164,17 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     );
     col = col.push(Space::new().height(20));
 
+    // ── Section: Window controls ──
+    col = col.push(h_sep());
+    col = col.push(Space::new().height(16));
+    col = col.push(section_title("Window controls"));
+    col = col.push(Space::new().height(10));
+    col = col.push(window_controls_row(
+        draft_window_controls_placement,
+        window_controls_restart_note,
+    ));
+    col = col.push(Space::new().height(20));
+
     // ── Section: Schematic Editor ──
     col = col.push(h_sep());
     col = col.push(Space::new().height(16));
@@ -166,9 +183,9 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("Grid Style").size(12).style(text_primary),
+                text("Grid Style").size(TS.label).style(text_primary),
                 text("Appearance of snap points on the schematic canvas.")
-                    .size(10)
+                    .size(TS.caption)
                     .style(text_muted),
             ]
             .spacing(3)
@@ -195,10 +212,10 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         row![
             column![
                 text("GPU Render (experimental)")
-                    .size(12)
+                    .size(TS.label)
                     .style(text_primary),
                 text("Draw the PCB canvas on the GPU (shader) instead of the CPU. Applies immediately.")
-                    .size(10)
+                    .size(TS.caption)
                     .style(text_muted),
                 // This used to carry a second line naming the known GPU gaps.
                 // The last of them is closed: dashed lines, concave fills and
@@ -226,12 +243,12 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("Default Grid Size").size(12).style(text_primary),
+                text("Default Grid Size").size(TS.label).style(text_primary),
                 text(
                     "Applied when a symbol library is first opened. \
                       Can be changed per-library from the canvas status bar."
                 )
-                .size(10)
+                .size(TS.caption)
                 .style(text_muted),
             ]
             .spacing(3)
@@ -263,9 +280,9 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("Grid Style").size(12).style(text_primary),
+                text("Grid Style").size(TS.label).style(text_primary),
                 text("Appearance of snap points on the symbol editor canvas.")
-                    .size(10)
+                    .size(TS.caption)
                     .style(text_muted),
             ]
             .spacing(3)
@@ -285,9 +302,9 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("Pin Selection").size(12).style(text_primary),
+                text("Pin Selection").size(TS.label).style(text_primary),
                 text("How a click selects a pin on the symbol editor canvas — the pin body only, or its name and number labels too.")
-                    .size(10)
+                    .size(TS.caption)
                     .style(text_muted),
             ]
             .spacing(3)
@@ -311,12 +328,12 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("Interface scale").size(12).style(text_primary),
+                text("Interface scale").size(TS.label).style(text_primary),
                 text(
                     "Scales text, panels, menus and dialogs on top of the display \
                      scale. Applied to every window when you save."
                 )
-                .size(10)
+                .size(TS.caption)
                 .style(text_muted),
             ]
             .spacing(3)
@@ -330,7 +347,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             .step(crate::ui_scale::UI_SCALE_STEP_PERCENT)
             .width(140),
             text(format!("{draft_ui_scale_percent}%"))
-                .size(12)
+                .size(TS.label)
                 .style(text_primary)
                 .width(100)
                 .align_x(iced::alignment::Horizontal::Right),
@@ -346,12 +363,12 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("Zoom speed").size(12).style(text_primary),
+                text("Zoom speed").size(TS.label).style(text_primary),
                 text(
                     "How far one mouse-wheel notch zooms on the schematic, PCB, \
                       symbol and footprint canvases."
                 )
-                .size(10)
+                .size(TS.caption)
                 .style(text_muted),
             ]
             .spacing(3)
@@ -365,7 +382,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             )
             .width(140),
             text(format!("{draft_zoom_step_percent}% per notch"))
-                .size(12)
+                .size(TS.label)
                 .style(text_primary)
                 .width(100)
                 .align_x(iced::alignment::Horizontal::Right),
@@ -410,15 +427,15 @@ fn theme_card<'a>(
     button(
         container(
             column![
-                text(label).size(12).style(title_style),
+                text(label).size(TS.label).style(title_style),
                 text(desc)
-                    .size(10)
+                    .size(TS.caption)
                     .style(desc_style)
                     .wrapping(iced::widget::text::Wrapping::None),
             ]
-            .spacing(4),
+            .spacing(SP.s),
         )
-        .padding([10, 12])
+        .padding([10.0, SP.l])
         .width(Length::Fill),
     )
     .padding(0)
@@ -451,17 +468,53 @@ fn theme_card<'a>(
 }
 
 fn import_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("⬆ Import Theme…").size(11))
-        .padding([5, 12])
+    button(text("⬆ Import Theme…").size(TS.body))
+        .padding([5.0, SP.l])
         .on_press(PrefMsg::ImportTheme)
         .style(primary_button_style)
         .into()
 }
 
 fn export_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("⬇ Export Theme…").size(11))
-        .padding([5, 12])
+    button(text("⬇ Export Theme…").size(TS.body))
+        .padding([5.0, SP.l])
         .on_press(PrefMsg::ExportTheme)
         .style(primary_button_style)
         .into()
+}
+
+/// Where the minimize / maximize / close buttons go, with a restart note
+/// when the drafted choice changes how macOS creates the window.
+fn window_controls_row<'a>(
+    draft: crate::chrome::controls::WindowControlsPlacement,
+    restart_note: bool,
+) -> Element<'a, PrefMsg> {
+    let mut help = column![
+        text("Window buttons").size(TS.label).style(text_primary),
+        text("Where minimize, maximize and close sit. Automatic follows your system.")
+            .size(TS.caption)
+            .style(text_muted),
+    ]
+    .spacing(3)
+    .width(200);
+    if restart_note {
+        help = help.push(
+            text("Takes effect after restart.")
+                .size(TS.caption)
+                .style(text_muted),
+        );
+    }
+    row![
+        help,
+        Space::new().width(Length::Fill),
+        iced::widget::pick_list(
+            crate::chrome::controls::WindowControlsPlacement::ALL,
+            Some(draft),
+            PrefMsg::DraftWindowControlsPlacement,
+        )
+        .text_size(12)
+        .width(200),
+    ]
+    .align_y(iced::Alignment::Center)
+    .into()
 }

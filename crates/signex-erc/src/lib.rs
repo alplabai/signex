@@ -27,16 +27,19 @@ pub mod engine;
 #[cfg(test)]
 mod fixtures;
 mod hierarchy;
+mod net_finding;
 mod overrides;
 pub mod pin_matrix;
 mod project_names;
 pub mod project_rules;
 pub mod rule;
 mod rules;
+pub mod waivers;
 
 pub use context::ErcContext;
 pub use diagnostic::{Diagnostic, LocationSpace};
 pub use hierarchy::HierarchyMemo;
+pub use net_finding::{NetFinding, NetFindingPin};
 pub use overrides::apply_overrides;
 pub use pin_matrix::{ErcConfig, PinAxis, PinMatrix};
 pub use project_names::{ProjectNetNames, project_net_multiple_names};
@@ -250,6 +253,9 @@ pub struct Violation {
     pub primary: Option<SelectedItem>,
     /// Optional peer — the "other" object in two-object rules.
     pub peer: Option<SelectedItem>,
+    /// For a net-level finding: the net it is about. Such a finding is
+    /// waived per net, never by a No-ERC directive on one of its pins.
+    pub net: Option<NetFinding>,
 }
 
 impl Violation {
@@ -273,6 +279,7 @@ impl Violation {
             owner_sheet: None,
             primary: None,
             peer: None,
+            net: None,
         }
     }
 

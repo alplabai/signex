@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::app::contracts::{SaveAllNext, SaveAllPlan};
+use crate::app::state::project_case::CaseProbeOutcome;
 use crate::app::state::scope::CaseFold;
 use crate::app::{FileMsg, Message, Signex, SymbolDocument, TabInfo, TabKind};
 use crate::persist::run_task::outputs;
@@ -56,16 +57,24 @@ fn save_all_probed(
         rows: Vec::new(),
         next: SaveAllNext::Quit,
         probes,
+        undecided: Vec::new(),
     })
 }
 
 /// A Save All probed against the real filesystem, synchronously.
-fn save_all(app: &mut Signex, paths: &[PathBuf]) -> iced::Task<Message> {
-    let probes = super::save_all::probe_dirs(app.loose_parent_dirs(paths));
-    save_all_probed(app, paths, probes)
+pub(super) fn save_all(app: &mut Signex, paths: &[PathBuf]) -> iced::Task<Message> {
+    let (probes, undecided) = super::save_all::probe_dirs(app.loose_parent_dirs(paths));
+    app.begin_save_all_planned(SaveAllPlan {
+        context: "Save All".into(),
+        paths: paths.to_vec(),
+        rows: Vec::new(),
+        next: SaveAllNext::Quit,
+        probes,
+        undecided,
+    })
 }
 
-fn feed(app: &mut Signex, messages: Vec<Message>) {
+pub(super) fn feed(app: &mut Signex, messages: Vec<Message>) {
     for message in messages {
         let _ = app.update(message);
     }
@@ -187,7 +196,7 @@ fn quit_waits_for_the_writes_of_a_running_save_all() {
 
 /// Feed every completion in `messages` and hand back what the settle at
 /// their end returns: a task with no units means nothing closed.
-fn feed_then_settle(app: &mut Signex, messages: Vec<Message>) -> iced::Task<Message> {
+pub(super) fn feed_then_settle(app: &mut Signex, messages: Vec<Message>) -> iced::Task<Message> {
     let mut settled = None;
     for message in messages {
         match message {
@@ -319,7 +328,10 @@ fn kept_paths_compare_without_regard_to_order() {
 
 /// Two engines for one file, held as `Lib`/`lib`; the second carries a
 /// different edit (paper size) when `edit_second` is set.
-fn app_with_two_engine_variants(dir: &Path, edit_second: bool) -> (Signex, PathBuf, PathBuf) {
+pub(super) fn app_with_two_engine_variants(
+    dir: &Path,
+    edit_second: bool,
+) -> (Signex, PathBuf, PathBuf) {
     let upper = dir.join("Lib.snxsch");
     let lower = dir.join("lib.snxsch");
     // A project probed as case-folding pins the volume rule on every host.
@@ -446,7 +458,7 @@ fn loose_identical_variants(dir: &Path) -> (Signex, PathBuf, PathBuf) {
 
 /// Counts the document writes a Save All issues, performing each for real.
 #[derive(Default)]
-struct CountingSink(std::sync::Mutex<Vec<PathBuf>>);
+pub(super) struct CountingSink(pub(super) std::sync::Mutex<Vec<PathBuf>>);
 
 impl crate::persist::DocumentSink for CountingSink {
     fn write(&self, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
@@ -455,7 +467,7 @@ impl crate::persist::DocumentSink for CountingSink {
     }
 }
 
-fn count_writes(app: &mut Signex) -> std::sync::Arc<CountingSink> {
+pub(super) fn count_writes(app: &mut Signex) -> std::sync::Arc<CountingSink> {
     let sink = std::sync::Arc::new(CountingSink::default());
     app.document_state.document_saves = crate::persist::DocumentSaves::new(sink.clone());
     sink
@@ -486,11 +498,19 @@ fn loose_identical_variants_collapse_when_the_directory_probe_says_so() {
 }
 
 /// The mirror image: a directory that probes case-sensitive keeps the two
-/// spellings apart on any host, so a host that folds by default (Windows)
-/// goes red if `fold_for_save` reverts to the host default.
+/// spellings apart, so a host that folds by default (Windows) goes red if
+/// Save All reverts to the host default.
+///
+/// The probe result is fed in, but the writes still hit the real volume: on a
+/// case-insensitive one (APFS on the macOS runners, #1576) `Lib.snxsch` and
+/// `lib.snxsch` really are one file, so the premise only holds where the temp
+/// directory is genuinely case-sensitive.
 #[test]
 fn loose_identical_variants_stay_apart_when_the_directory_probe_says_so() {
     let dir = tempfile::tempdir().expect("tempdir");
+    if crate::app::state::volume_case::directory_ignores_case(dir.path()) {
+        return;
+    }
     let (mut app, upper, lower) = loose_identical_variants(dir.path());
     let sink = count_writes(&mut app);
     let probes = HashMap::from([(dir.path().to_path_buf(), false)]);
@@ -536,13 +556,28 @@ fn begin_save_all_probes_the_loose_directory_then_saves_both_spellings() {
     }
 }
 
+/// #1505 — a directory the probe cannot decide is one file for Save All,
+/// open and Ctrl+S alike (they all read `identity_fold_for`), so Save All
+/// writes the case-variant pair once on every host and agrees with open.
 #[test]
-fn an_undecided_probe_keeps_the_host_default_fold() {
-    let (app, _task) = Signex::new();
-    let path = Path::new("/w/Lib.snxsch");
-    let fold = |probes| app.fold_for_save(path, &probes).fold_case;
+fn an_undecided_directory_folds_for_save_all_as_it_does_for_open_and_ctrl_s() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, lower) = loose_identical_variants(dir.path());
+    let sink = count_writes(&mut app);
 
-    assert_eq!(fold(HashMap::new()), CaseFold::host_default().fold_case);
-    assert!(fold(HashMap::from([(PathBuf::from("/w"), true)])));
-    assert!(!fold(HashMap::from([(PathBuf::from("/w"), false)])));
+    let task = app.begin_save_all_planned(SaveAllPlan {
+        context: "Save All".into(),
+        paths: vec![upper.clone(), lower.clone()],
+        rows: Vec::new(),
+        next: SaveAllNext::Quit,
+        probes: HashMap::new(),
+        undecided: vec![(dir.path().to_path_buf(), CaseProbeOutcome::Undecided)],
+    });
+    feed(&mut app, outputs(task));
+
+    assert!(
+        app.identity_fold_for(&lower).fold_case,
+        "open and Ctrl+S fold"
+    );
+    assert_eq!(*sink.0.lock().unwrap(), vec![upper], "one file, one write");
 }

@@ -66,16 +66,7 @@ impl LibraryAdapter for LocalGitAdapter {
         if new_trimmed.is_empty() {
             return Err(LibraryError::Backend("table name cannot be empty".into()));
         }
-        if new_trimmed.chars().any(|c| {
-            matches!(
-                c,
-                '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
-            )
-        }) {
-            return Err(LibraryError::Backend(format!(
-                "table name {new_trimmed:?} contains illegal characters"
-            )));
-        }
+        check_table_name(&new_trimmed)?;
         if old_owned == new_trimmed {
             return Ok(());
         }
@@ -231,19 +222,7 @@ impl LibraryAdapter for LocalGitAdapter {
         if trimmed.is_empty() {
             return Err(LibraryError::Backend("table name cannot be empty".into()));
         }
-        // Reject the same characters we reject elsewhere for filenames /
-        // identifiers — avoids surprising the user with a name they can't
-        // see in their file browser.
-        if trimmed.chars().any(|c| {
-            matches!(
-                c,
-                '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
-            )
-        }) {
-            return Err(LibraryError::Backend(format!(
-                "table name {trimmed:?} contains illegal characters"
-            )));
-        }
+        check_table_name(trimmed)?;
         let owned = trimmed.to_string();
         let fallback = format!("create empty table {owned}");
         self.mutate_library_file(
@@ -307,10 +286,16 @@ impl LibraryAdapter for LocalGitAdapter {
         let table_owned = table.to_string();
         let row_id = row.row_id;
         let lib_row = component_to_library_row(&row)?;
+        let new_row_id = row_id.to_string();
+        let new_pn = row.internal_pn.to_string();
         let fallback = format!("insert row {row_id} into {table_owned}");
         self.save_row_edit(
             table,
             |lf| {
+                if !lf.tables.contains_key(&table_owned) {
+                    check_table_name(&table_owned)?;
+                }
+                check_insert_unique(lf, &new_row_id, &new_pn)?;
                 let entry = lf
                     .tables
                     .entry(table_owned.clone())
@@ -353,10 +338,12 @@ impl LibraryAdapter for LocalGitAdapter {
         let base = row.server_revision;
         let lib_row = component_to_library_row(&row)?;
         let new_base = row_base(&lib_row);
+        let new_pn = row.internal_pn.to_string();
         let fallback = format!("update row {row_id} in {table_owned}");
         self.save_row_edit(
             table,
             |lf| {
+                check_pn_change(lf, &table_owned, &row_id.to_string(), &new_pn)?;
                 let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
                     LibraryError::NotFound(format!("table {table_owned} not in library"))
                 })?;
@@ -482,10 +469,10 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
-        for (_, file) in self.scan_symbol_files()? {
-            if let Some(sym) = file.get_symbol(uuid) {
-                return Ok(sym.clone());
-            }
+        if let Some((_, file)) = self.locate_symbol_file(uuid)?
+            && let Some(sym) = file.get_symbol(uuid)
+        {
+            return Ok(sym.clone());
         }
         if let Some(err) = self.symbol_lookup_undetermined(uuid) {
             return Err(err);
@@ -656,7 +643,7 @@ impl LibraryAdapter for LocalGitAdapter {
     fn history(&self, primitive_path: &Path) -> Result<Vec<HistoryEntry>, LibraryError> {
         // Stage 17 scaffold: walk the repo's commit graph newest-first
         // and keep commits whose tree differs from at least one parent
-        // at `primitive_path`. Mirrors `git log --follow --max-count 50
+        // at `primitive_path`. Mirrors `git log --max-count 50
         // -- <path>` semantics (per `v0.9-snxlib-as-file-plan.md` §3
         // "Performance"), minus the rename-follow heuristic — git2
         // doesn't expose `--follow` directly so a future stage layers
@@ -725,8 +712,29 @@ impl LibraryAdapter for LocalGitAdapter {
                 continue;
             }
 
-            entries.push(commit_to_history_entry(&commit));
+            entries.push(HistoryEntry::from_commit(&commit));
         }
         Ok(entries)
     }
+}
+
+/// Refuse a table name that is empty or holds a character a file browser
+/// or the `.snxlib` table header cannot carry; shared by every table
+/// write so a bad name fails the same way everywhere.
+fn check_table_name(name: &str) -> Result<(), LibraryError> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err(LibraryError::Backend("table name cannot be empty".into()));
+    }
+    if trimmed.chars().any(|c| {
+        matches!(
+            c,
+            '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
+        )
+    }) {
+        return Err(LibraryError::Backend(format!(
+            "table name {trimmed:?} contains illegal characters"
+        )));
+    }
+    Ok(())
 }

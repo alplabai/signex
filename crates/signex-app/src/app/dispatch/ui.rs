@@ -6,6 +6,21 @@ impl Signex {
     pub(super) fn dispatch_ui_message(&mut self, message: UiMsg) -> Task<Message> {
         match message {
             UiMsg::Noop => Task::none(),
+            UiMsg::MenuInWindow { window, msg } => {
+                let command = match msg {
+                    MenuMessage::Undo => "undo",
+                    MenuMessage::Redo => "redo",
+                    other => return self.update(Message::Menu(other)),
+                };
+                match crate::keymap::AppCommandId::new(command) {
+                    Ok(id) => self.dispatch_command(
+                        &id,
+                        crate::app::command::CommandArgs::none(),
+                        Some(window),
+                    ),
+                    Err(_) => Task::none(),
+                }
+            }
             UiMsg::HistoryLoaded {
                 generation,
                 path,
@@ -20,8 +35,8 @@ impl Signex {
                 Task::batch([save, self.finish_update()])
             }
             UiMsg::UnitCycled | UiMsg::StatusBar(StatusBarRequest::CycleUnit) => {
-                self.handle_unit_cycle_request();
-                self.finish_update()
+                let save = self.handle_unit_cycle_request();
+                Task::batch([save, self.finish_update()])
             }
             UiMsg::GridToggle | UiMsg::StatusBar(StatusBarRequest::ToggleGrid) => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
@@ -78,7 +93,11 @@ impl Signex {
                 self.finish_update()
             }
             UiMsg::GridCycle => {
-                let cycled = self.cycle_grid_size();
+                let cycled = self.cycle_grid_size(true);
+                Task::batch([cycled, self.finish_update()])
+            }
+            UiMsg::GridCycleBackward => {
+                let cycled = self.cycle_grid_size(false);
                 Task::batch([cycled, self.finish_update()])
             }
             UiMsg::GridPickerOpen => {
@@ -411,12 +430,30 @@ impl Signex {
         window_id: iced::window::Id,
         event: crate::canvas::CanvasEvent,
     ) -> iced::Task<Message> {
+        self.run_in_window(window_id, false, |app| {
+            app.handle_canvas_interaction_event(event)
+        })
+    }
+
+    /// Run `handler` with `window_id`'s canvas and document swapped into
+    /// the main slots, as [`Self::handle_canvas_event_in_window`] describes.
+    ///
+    /// A PCB window always points `active_tab` at its tab. `retarget_tab`
+    /// does the same for a schematic window, for a handler that picks its
+    /// target by the active tab's kind (undo, #1546); a canvas event leaves
+    /// it alone, so a sheet it opens stays the main window's active tab.
+    pub(crate) fn run_in_window(
+        &mut self,
+        window_id: iced::window::Id,
+        retarget_tab: bool,
+        handler: impl FnOnce(&mut Self) -> iced::Task<Message>,
+    ) -> iced::Task<Message> {
         use crate::app::state::WindowKind;
         use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
         // Main window → run the handler directly on the legacy canvas.
         if self.ui_state.main_window_id == Some(window_id) {
-            return self.handle_canvas_interaction_event(event);
+            return handler(self);
         }
 
         // Unknown window (closed mid-queue, or never had a canvas) —
@@ -475,8 +512,11 @@ impl Signex {
             .map(|tab| tab.path.clone());
         let mut swapped_pcb =
             pcb_tab.and_then(|_| self.interaction_state.pcb_canvases.remove(&window_id));
-        if let (Some(pcb), Some(index)) = (swapped_pcb.as_mut(), pcb_tab) {
+        if let Some(pcb) = swapped_pcb.as_mut() {
             std::mem::swap(&mut self.interaction_state.pcb_canvas, pcb);
+        }
+        let retargeted_tab = pcb_tab.filter(|_| retarget_tab || swapped_pcb.is_some());
+        if let Some(index) = retargeted_tab {
             self.document_state.active_tab = index;
         }
         let saved_active_path = self.document_state.active_path.take();
@@ -492,9 +532,7 @@ impl Signex {
         // that a panicking handler may leave `self` in a partially
         // mutated state, which is fine as long as the swap itself
         // unwinds deterministically below.
-        let task_result = catch_unwind(AssertUnwindSafe(|| {
-            self.handle_canvas_interaction_event(event)
-        }));
+        let task_result = catch_unwind(AssertUnwindSafe(|| handler(self)));
 
         // Always-run cleanup (runs on success, error return, or panic
         // via resume_unwind below): swap the canvases back and restore
@@ -508,6 +546,8 @@ impl Signex {
         if let Some(mut pcb) = swapped_pcb {
             std::mem::swap(&mut self.interaction_state.pcb_canvas, &mut pcb);
             self.interaction_state.pcb_canvases.insert(window_id, pcb);
+        }
+        if retargeted_tab.is_some() {
             let tabs = &self.document_state.tabs;
             self.document_state.active_tab = saved_active_tab_path
                 .and_then(|path| tabs.iter().position(|tab| tab.path == path))

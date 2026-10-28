@@ -24,6 +24,8 @@ mod handlers;
 mod helpers;
 mod load_gateway;
 mod mutation_gateway;
+mod project_tab;
+pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
 mod pcb_dirty_adapter;
 pub(crate) mod project_sheets;
 pub mod restore_job;
@@ -32,10 +34,11 @@ mod selection_request;
 pub(crate) mod sheet_hierarchy;
 mod state;
 pub(crate) use state::library_entry;
+pub(crate) use state::rule_profile_ui;
 pub(crate) mod stitched_netlist;
 mod symbol_history;
 mod undo_groups;
-pub use undo_groups::UndoGroupSheets;
+pub use undo_groups::{UndoGroupKind, UndoGroupSheets};
 pub(crate) mod view;
 
 pub use contracts::{
@@ -45,11 +48,10 @@ pub use contracts::{
     FileMsg, GitCommitFailure, GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg,
     LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, OverlayMsg, ParameterManagerMsg,
     PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg,
-    ProjectOptionsState, ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState,
-    RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg,
-    SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
-    TabContextMenuState, TextEditMsg, TextEditState, TrackItem, UiMsg, VersionControlScope,
-    WindowMsg,
+    ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
+    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
+    SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
+    TextEditState, TrackItem, UiMsg, VersionControlScope, WindowMsg,
 };
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,
@@ -58,6 +60,7 @@ pub use documents::{
 };
 pub(crate) use handlers::selection_workflow::passes_filter;
 pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};
+pub use state::project_case::CaseProbeOutcome;
 pub use state::{
     CaseFold, DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
     PreviewState, ProjectId, Signex, UiState,
@@ -91,6 +94,11 @@ impl Signex {
         // the disk; the probe that fetches it starts here (#111).
         if let Some(probe) = self.start_project_fs_probe(false) {
             tasks.push(probe);
+        }
+        // Likewise the Navigator hierarchy: the refresh records the request,
+        // the sheet reads run here off-thread (#1470).
+        if let Some(assembly) = self.start_navigator_assembly() {
+            tasks.push(assembly);
         }
         if tasks.len() == 1 {
             return tasks.pop().expect("one task");

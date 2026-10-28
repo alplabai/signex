@@ -7,6 +7,8 @@ pub(crate) mod add_io;
 #[cfg(test)]
 mod add_library_tests;
 #[cfg(test)]
+mod add_subdir_tests;
+#[cfg(test)]
 mod add_tests;
 mod close_project;
 #[cfg(test)]
@@ -24,6 +26,8 @@ mod project_rename_fs;
 #[cfg(test)]
 mod project_rename_inflight_tests;
 #[cfg(test)]
+mod project_rename_recovery_tests;
+#[cfg(test)]
 mod project_rename_tests;
 mod remove;
 mod remove_guard;
@@ -31,10 +35,14 @@ mod rename;
 mod rename_library;
 mod save_all;
 #[cfg(test)]
+mod save_all_case_variant_tests;
+#[cfg(test)]
 mod save_all_gate_tests;
 #[cfg(test)]
 mod save_all_tests;
 mod sheet_references;
+#[cfg(test)]
+mod subdir_entry_tests;
 mod version_control;
 
 impl Signex {
@@ -246,7 +254,9 @@ impl Signex {
                 self.open_project_rename_dialog(tree_path);
             }
             ProjectTreeAction::OpenProjectOptions(tree_path) => {
-                self.open_project_options_dialog(tree_path);
+                if let Some(&project_idx) = tree_path.first() {
+                    self.open_project_tab(project_idx);
+                }
             }
             ProjectTreeAction::AddExistingToProject(tree_path) => {
                 return self.add_existing_to_project(tree_path);

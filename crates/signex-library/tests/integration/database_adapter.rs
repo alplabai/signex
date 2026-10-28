@@ -536,6 +536,7 @@ fn mk_row(pn: &str, class: &str) -> ComponentRow {
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::url("https://example.com"),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),

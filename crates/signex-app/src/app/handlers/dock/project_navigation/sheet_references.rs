@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use super::*;
 use crate::app::project_sheets::{assemble_project_sheets, project_root_sheet_path};
+use crate::app::state::library_entry::with_new_leaf;
 use crate::app::state::scope::path_key_with;
 
 /// One parent-sheet reference to re-point: `parent` holds a child entry whose
@@ -29,15 +30,6 @@ pub(super) struct ReferencePlan {
     /// Project sheets that could not be read or parsed, so whether they
     /// reference the renamed file is unknown. Reported, never skipped silently.
     pub(super) unchecked: Vec<String>,
-}
-
-/// `filename` with its last path component replaced by `new_name`, keeping any
-/// directory prefix the parent used to reach the child.
-fn with_new_leaf(filename: &str, new_name: &str) -> String {
-    match filename.rfind(['/', '\\']) {
-        Some(idx) => format!("{}{new_name}", &filename[..=idx]),
-        None => new_name.to_string(),
-    }
 }
 
 /// What applying a [`ReferencePlan`] could not finish.
@@ -179,7 +171,7 @@ impl Signex {
                 .sheet;
             let engine = signex_engine::Engine::new_with_path(sheet, Some(parent.clone()))
                 .map_err(|e| format!("could not be loaded: {e}"))?;
-            self.document_state.engines.insert(parent.clone(), engine);
+            self.document_state.insert_engine(parent.clone(), engine);
             self.adopt_net_colors_of(parent);
             self.clear_net_color_steps(parent);
         }
@@ -196,7 +188,7 @@ impl Signex {
         // own the path for the rest of the session and shadow a later open.
         if loaded_here && !matches!(&result, Ok(done) if done.changed) {
             self.forget_net_colors_of(parent);
-            self.document_state.engines.remove(parent);
+            self.document_state.remove_engine(parent);
         }
         let result = result?;
         if result.changed {
@@ -221,8 +213,9 @@ impl Signex {
 
 #[cfg(test)]
 mod tests {
-    use super::{ReferenceRewrite, rename_incomplete_detail, with_new_leaf};
+    use super::{ReferenceRewrite, rename_incomplete_detail};
     use crate::app::Signex;
+    use crate::app::state::library_entry::with_new_leaf;
 
     #[test]
     fn rename_incomplete_detail_is_clean_text() {

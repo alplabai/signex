@@ -7,6 +7,7 @@
 
 use signex_types::schematic::{Point, SelectedItem};
 
+use crate::net_finding::NetFinding;
 use crate::rule::RuleId;
 use crate::{RuleKind, Severity, Violation};
 
@@ -25,6 +26,10 @@ pub enum LocationSpace {
     Unplaced,
     /// A point in a child sheet's own coordinate space.
     ChildSheet,
+    /// A net-level finding anchored at the net's representative pin. The
+    /// point is real but belongs to the net, not to that pin, so a positional
+    /// No-ERC directive never matches it.
+    Net,
 }
 
 #[derive(Debug, Clone)]
@@ -45,6 +50,8 @@ pub struct Diagnostic {
     pub owner_sheet: Option<signex_net::SheetKey>,
     pub primary: Option<SelectedItem>,
     pub peer: Option<SelectedItem>,
+    /// The net a net-level finding is about (see [`NetFinding`]).
+    pub net: Option<NetFinding>,
 }
 
 impl Diagnostic {
@@ -61,7 +68,23 @@ impl Diagnostic {
             owner_sheet: None,
             primary: None,
             peer: None,
+            net: None,
         }
+    }
+
+    /// Make this a net-level finding: it carries the net and, when the net
+    /// has a pin, sits at the net's representative pin (never at a fake
+    /// origin point). No-ERC directives never suppress it.
+    pub fn for_net(mut self, net: NetFinding) -> Self {
+        match net.representative() {
+            Some(pin) => {
+                self.location = pin.position;
+                self.location_space = LocationSpace::Net;
+            }
+            None => self.location_space = LocationSpace::Unplaced,
+        }
+        self.net = Some(net);
+        self
     }
 
     /// Mark `location` as a placeholder or a foreign-sheet point so a No-ERC
@@ -120,6 +143,7 @@ impl From<Diagnostic> for Violation {
             owner_sheet: d.owner_sheet,
             primary: d.primary,
             peer: d.peer,
+            net: d.net,
         }
     }
 }

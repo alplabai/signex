@@ -366,7 +366,7 @@ fn draw_lines(
     for line in visible(lines, extents, view) {
         let p0 = world_to_screen(camera, bounds, line.p0);
         let p1 = world_to_screen(camera, bounds, line.p1);
-        let width = (line.width * camera.scale).max(0.5);
+        let width = crate::renderer_scene_canvas::min_stroke_px(line.width * camera.scale);
         let color = color_from_rgba(line.color);
 
         if line.is_dashed() {
@@ -393,8 +393,10 @@ fn draw_circles(
 ) {
     for circle in visible(circles, extents, view) {
         let center = world_to_screen(camera, bounds, circle.center);
-        let radius = (circle.radius * camera.scale).max(0.5);
-        let stroke_width = (circle.stroke_width * camera.scale).max(0.5);
+        let radius =
+            (circle.radius * camera.scale).max(crate::renderer_scene_canvas::MIN_RADIUS_PX);
+        let stroke_width =
+            crate::renderer_scene_canvas::min_stroke_px(circle.stroke_width * camera.scale);
         let color = color_from_rgba(circle.color);
         let path = canvas::Path::circle(center, radius);
 
@@ -435,7 +437,9 @@ fn draw_polygons(
             frame.stroke(
                 &path,
                 canvas::Stroke::default()
-                    .with_width((polygon.stroke_width * camera.scale).max(0.5))
+                    .with_width(crate::renderer_scene_canvas::min_stroke_px(
+                        polygon.stroke_width * camera.scale,
+                    ))
                     .with_color(color_from_rgba(stroke_color)),
             );
         }
@@ -507,9 +511,12 @@ fn draw_scene(
                 camera,
                 bounds,
             ),
-            // The PCB CPU path emits no arc, text, or ERC buckets. Handled for
-            // exhaustiveness so adding a Scene bucket forces a decision here.
+            // The PCB CPU path emits no arc, drawings, text, or ERC buckets.
+            // Handled for exhaustiveness so adding a Scene bucket forces a
+            // decision here.
             SceneBucket::Arcs
+            | SceneBucket::Drawings
+            | SceneBucket::DrawingsFront
             | SceneBucket::Texts
             | SceneBucket::ErcMarkerLines
             | SceneBucket::ErcMarkerCircles
@@ -927,7 +934,7 @@ mod tests {
 
         // CPU reference: a DRC marker is the one thing an otherwise-empty
         // board contributes to `overlay_polygons`, distinctly coloured by
-        // severity (`ColorSlot::ErcError`) and nothing else lands in the
+        // severity (`ColorSlot::DrcError`) and nothing else lands in the
         // plain `polygons` bucket for an empty board.
         let cpu_scene = canvas.build_scene(&snapshot);
         assert_eq!(

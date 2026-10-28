@@ -306,14 +306,9 @@ pub fn build_renderer_snapshot(
         }
     }
 
+    let mut drawings = Vec::with_capacity(snapshot.drawings.len());
+    let mut drawings_front = Vec::new();
     for drawing in &snapshot.drawings {
-        let uuid = match drawing {
-            SchDrawing::Line { uuid, .. }
-            | SchDrawing::Rect { uuid, .. }
-            | SchDrawing::Circle { uuid, .. }
-            | SchDrawing::Arc { uuid, .. }
-            | SchDrawing::Polyline { uuid, .. } => *uuid,
-        };
         let bbox = drawing_aabb(drawing);
         let min = transform.world_to_screen((bbox.min_x, bbox.min_y));
         let max = transform.world_to_screen((bbox.max_x, bbox.max_y));
@@ -322,135 +317,11 @@ pub fn build_renderer_snapshot(
         if !rect_visible(rect_min, size, bounds) {
             continue;
         }
-
-        let base_color = focus_color(to_iced(&colors.body), focus_set, uuid);
-        match drawing {
-            SchDrawing::Line {
-                start,
-                end,
-                width,
-                stroke_color,
-                ..
-            } => {
-                wires.push(WireInput {
-                    id: renderer_id(uuid),
-                    p0: [start.x as f32, start.y as f32],
-                    p1: [end.x as f32, end.y as f32],
-                    width_mm: width.max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM)
-                        as f32,
-                    explicit_color: Some(to_rgba(resolve_stroke_color(stroke_color, base_color))),
-                });
-            }
-            SchDrawing::Rect {
-                start,
-                end,
-                width,
-                fill,
-                stroke_color,
-                ..
-            } => {
-                polygons.push(PolygonInput {
-                    vertices: vec![
-                        [start.x as f32, start.y as f32],
-                        [end.x as f32, start.y as f32],
-                        [end.x as f32, end.y as f32],
-                        [start.x as f32, end.y as f32],
-                    ],
-                    fill_color: fill_color_for(*fill, stroke_color, colors)
-                        .map(to_rgba)
-                        .unwrap_or([0.0, 0.0, 0.0, 0.0]),
-                    stroke_color: Some(to_rgba(resolve_stroke_color(stroke_color, base_color))),
-                    stroke_width_mm: width
-                        .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM)
-                        as f32,
-                });
-            }
-            SchDrawing::Circle {
-                center,
-                radius,
-                width,
-                fill,
-                stroke_color,
-                ..
-            } => {
-                polygons.push(PolygonInput {
-                    vertices: circle_vertices(
-                        [center.x, center.y],
-                        radius.max(screen_px_to_world_mm(
-                            signex_types::schematic::SCHEMATIC_RENDER_DRAWING_MIN_CIRCLE_RADIUS_PX,
-                            transform.scale,
-                        )) as f32,
-                        40,
-                    ),
-                    fill_color: fill_color_for(*fill, stroke_color, colors)
-                        .map(to_rgba)
-                        .unwrap_or([0.0, 0.0, 0.0, 0.0]),
-                    stroke_color: Some(to_rgba(resolve_stroke_color(stroke_color, base_color))),
-                    stroke_width_mm: width
-                        .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM)
-                        as f32,
-                });
-            }
-            SchDrawing::Arc {
-                start,
-                mid,
-                end,
-                width,
-                stroke_color,
-                ..
-            } => push_arc(
-                [*start, *mid, *end],
-                ArcStroke {
-                    id: renderer_id(uuid),
-                    width_mm: width.max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM)
-                        as f32,
-                    color: to_rgba(resolve_stroke_color(stroke_color, base_color)),
-                },
-                transform.scale,
-                &mut arcs,
-                &mut wires,
-            ),
-            SchDrawing::Polyline {
-                points,
-                width,
-                fill,
-                stroke_color,
-                ..
-            } => {
-                if points.len() < 2 {
-                    continue;
-                }
-
-                let stroke = to_rgba(resolve_stroke_color(stroke_color, base_color));
-                let width_mm =
-                    width.max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM) as f32;
-                if matches!(fill, FillType::None) {
-                    for idx in 1..points.len() {
-                        let p0 = points[idx - 1];
-                        let p1 = points[idx];
-                        wires.push(WireInput {
-                            id: renderer_id(uuid).saturating_add(idx as u64),
-                            p0: [p0.x as f32, p0.y as f32],
-                            p1: [p1.x as f32, p1.y as f32],
-                            width_mm,
-                            explicit_color: Some(stroke),
-                        });
-                    }
-                } else {
-                    polygons.push(PolygonInput {
-                        vertices: points
-                            .iter()
-                            .map(|point| [point.x as f32, point.y as f32])
-                            .collect(),
-                        fill_color: fill_color_for(*fill, stroke_color, colors)
-                            .map(to_rgba)
-                            .unwrap_or([0.0, 0.0, 0.0, 0.0]),
-                        stroke_color: Some(stroke),
-                        stroke_width_mm: width_mm,
-                    });
-                }
-            }
-        }
+        let out = match snapshot.drawing_placement(drawing.uuid()) {
+            DrawingPlacement::Behind => &mut drawings,
+            DrawingPlacement::Above => &mut drawings_front,
+        };
+        drawings::push_drawing(drawing, colors, focus_set, transform.scale, out);
     }
 
     for label in &snapshot.labels {
@@ -525,7 +396,10 @@ pub fn build_renderer_snapshot(
         }
 
         parameter_texts.push(TextInput {
-            content: note.text.clone(),
+            content: match overrides.special_strings {
+                Some(special) => special.resolve(&note.text),
+                None => note.text.clone(),
+            },
             position: [note.position.x as f32, note.position.y as f32],
             size_mm: note
                 .font_size
@@ -551,6 +425,8 @@ pub fn build_renderer_snapshot(
         parameter_texts,
         overlays: OverlayInputs::default(),
         erc_markers: Vec::new(),
+        drawings,
+        drawings_front,
         wire_color_overrides: HashMap::new(),
         wire_line_styles,
     }
@@ -619,16 +495,46 @@ pub(super) struct ArcStroke {
     pub color: [f32; 4],
 }
 
+/// Where the arc from `start` through `mid` to `end` lies; `None` when the
+/// points are collinear and it degenerates to two straight segments.
+pub(super) struct ArcGeometry {
+    pub center: [f32; 2],
+    pub radius_mm: f32,
+    pub start_angle_rad: f32,
+    pub end_angle_rad: f32,
+}
+
+pub(super) fn arc_geometry([start, mid, end]: [Point; 3], scale: f32) -> Option<ArcGeometry> {
+    let (cx, cy, r) = circumcircle(start, mid, end)?;
+    let a0 = (start.y - cy).atan2(start.x - cx);
+    let am = (mid.y - cy).atan2(mid.x - cx);
+    let a1 = (end.y - cy).atan2(end.x - cx);
+    let (start_angle, end_angle) = if arc_sweeps_through_mid(a0, am, a1) {
+        (a0, a1)
+    } else {
+        (a1, a0)
+    };
+    Some(ArcGeometry {
+        center: [cx as f32, cy as f32],
+        radius_mm: r.max(screen_px_to_world_mm(
+            signex_types::schematic::SCHEMATIC_RENDER_DRAWING_MIN_ARC_RADIUS_PX,
+            scale,
+        )) as f32,
+        start_angle_rad: start_angle as f32,
+        end_angle_rad: end_angle as f32,
+    })
+}
+
 /// Push the arc from `start` through `mid` to `end`; collinear points fall
 /// back to the two straight segments.
 pub(super) fn push_arc(
-    [start, mid, end]: [Point; 3],
+    points @ [start, mid, end]: [Point; 3],
     stroke: ArcStroke,
     scale: f32,
     arcs: &mut Vec<ArcInput>,
     wires: &mut Vec<WireInput>,
 ) {
-    let Some((cx, cy, r)) = circumcircle(start, mid, end) else {
+    let Some(geometry) = arc_geometry(points, scale) else {
         for (i, (p0, p1)) in [(start, mid), (mid, end)].into_iter().enumerate() {
             wires.push(WireInput {
                 id: stroke.id.saturating_add(i as u64),
@@ -640,22 +546,11 @@ pub(super) fn push_arc(
         }
         return;
     };
-    let a0 = (start.y - cy).atan2(start.x - cx);
-    let am = (mid.y - cy).atan2(mid.x - cx);
-    let a1 = (end.y - cy).atan2(end.x - cx);
-    let (start_angle, end_angle) = if arc_sweeps_through_mid(a0, am, a1) {
-        (a0, a1)
-    } else {
-        (a1, a0)
-    };
     arcs.push(ArcInput {
-        center: [cx as f32, cy as f32],
-        radius_mm: r.max(screen_px_to_world_mm(
-            signex_types::schematic::SCHEMATIC_RENDER_DRAWING_MIN_ARC_RADIUS_PX,
-            scale,
-        )) as f32,
-        start_angle_rad: start_angle as f32,
-        end_angle_rad: end_angle as f32,
+        center: geometry.center,
+        radius_mm: geometry.radius_mm,
+        start_angle_rad: geometry.start_angle_rad,
+        end_angle_rad: geometry.end_angle_rad,
         width_mm: stroke.width_mm,
         color: stroke.color,
     });

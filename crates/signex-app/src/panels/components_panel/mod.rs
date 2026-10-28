@@ -9,8 +9,8 @@
 //! 2. **Installed** — session-scoped, opened via the "+ Add Library…"
 //!    button on the Installed section header. Wiped on app close.
 //! 3. **Global** — persisted across launches via
-//!    `<config_dir>/signex/global_libraries.toml`. Loaded + mounted at
-//!    startup by [`global_prefs::load_and_mount_all`].
+//!    `<config_dir>/signex/global_libraries.toml`. Loaded at startup by
+//!    [`global_prefs::load`] and mounted off the UI thread.
 //!
 //! All three sources read from the same `LibraryState::open_libraries`
 //! Vec — `LibraryState::mount_source_for` does the bucketing at view
@@ -43,6 +43,9 @@ pub mod stock;
 const PANEL_TEXT_SIZE: f32 = 11.0;
 const SECTION_HEADER_TEXT_SIZE: f32 = 12.0;
 const ROW_TEXT_SIZE: f32 = 10.0;
+/// Most rows built per library per frame; the rest are summarised by a
+/// "N more — refine search" row so a huge library cannot stall the view.
+const MAX_ROWS_PER_LIBRARY: usize = 200;
 
 const SVG_CHEVRON_RIGHT: &[u8] =
     br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l5 4-5 4z" fill="currentColor"/></svg>"#;
@@ -223,7 +226,12 @@ fn view_section<'a>(
         } else {
             let needle = state.components_panel.filter.trim().to_lowercase();
             for lib in libs_for_source.iter().copied() {
-                section_col = section_col.push(view_library_block(lib, &needle, tokens));
+                section_col = section_col.push(view_library_block(
+                    lib,
+                    &state.components_panel,
+                    &needle,
+                    tokens,
+                ));
                 section_col = section_col.push(thin_sep(border_c));
             }
         }
@@ -239,6 +247,7 @@ fn view_section<'a>(
 /// Preview tab opens — same flow the project tree uses.
 fn view_library_block<'a>(
     lib: &'a OpenLibrary,
+    panel: &'a crate::library::state::ComponentsPanelState,
     needle: &str,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
@@ -266,29 +275,40 @@ fn view_library_block<'a>(
         .padding([4, 16]),
     );
 
-    // Flatten every cached row across every table. Lowercase the needle
-    // and library name once per block, not once per row (#1353).
-    let needle_lc = needle.to_lowercase();
-    let lib_name_lc = lib.display_name.to_lowercase();
-    let mut rendered = 0usize;
-    for (table, rows) in &lib.tables {
-        for r in rows {
-            if !row_matches(r, &lib_name_lc, &needle_lc) {
-                continue;
-            }
-            rendered += 1;
-            col = col.push(view_row_button(
-                lib.root.clone(),
-                table.clone(),
-                r,
-                text_c,
-                muted,
-                hover_c,
-            ));
-        }
+    // Rows come from the cache `update` keeps current (lowercase keys and
+    // the filtered list), so a frame does no per-row string work and
+    // builds widgets for at most `MAX_ROWS_PER_LIBRARY` rows (#1353).
+    let rows = &panel.rows;
+    let matched = rows.visible_count(&lib.root);
+    for (table, index) in rows.visible_rows(&lib.root, MAX_ROWS_PER_LIBRARY) {
+        let Some(r) = lib.tables.get(table).and_then(|t| t.get(index)) else {
+            continue;
+        };
+        col = col.push(view_row_button(
+            lib.root.clone(),
+            table.to_owned(),
+            r,
+            text_c,
+            muted,
+            hover_c,
+        ));
     }
 
-    if rendered == 0 && !needle.is_empty() {
+    if matched > MAX_ROWS_PER_LIBRARY {
+        col = col.push(
+            container(
+                text(format!(
+                    "{} more — refine search",
+                    matched - MAX_ROWS_PER_LIBRARY
+                ))
+                .size(ROW_TEXT_SIZE)
+                .color(muted),
+            )
+            .padding([2, 28]),
+        );
+    }
+
+    if matched == 0 && !needle.is_empty() {
         col = col.push(
             container(
                 text("(no matches in this library)")
@@ -300,27 +320,6 @@ fn view_library_block<'a>(
     }
 
     col.into()
-}
-
-/// Substring filter — case-insensitive match on mpn / manufacturer /
-/// internal_pn / library name. Empty needle = match everything.
-/// `library_name_lc` and `needle_lc` must already be lowercased by the
-/// caller so a per-frame row scan does no per-row allocation for them.
-/// Stage 9 deliberately keeps this trivial; the rich `mpn:` /
-/// `lifecycle:` syntax is a follow-up.
-fn row_matches(row: &ComponentRow, library_name_lc: &str, needle_lc: &str) -> bool {
-    debug_assert!(needle_lc == needle_lc.to_lowercase());
-    debug_assert!(library_name_lc == library_name_lc.to_lowercase());
-    if needle_lc.is_empty() || library_name_lc.contains(needle_lc) {
-        return true;
-    }
-    row.primary_mpn.mpn.to_lowercase().contains(needle_lc)
-        || row
-            .primary_mpn
-            .manufacturer
-            .to_lowercase()
-            .contains(needle_lc)
-        || row.internal_pn.as_str().to_lowercase().contains(needle_lc)
 }
 
 /// One row — the label button fires `OpenComponentRow` on click; the
@@ -438,6 +437,7 @@ mod tests {
             class: ComponentClass::generic(),
             datasheet: DatasheetRef::default(),
             datasheet_label: String::new(),
+            description: String::new(),
             more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
             symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::new_v4()),
@@ -461,49 +461,58 @@ mod tests {
         }
     }
 
+    /// More rows than the cap: the view builds the cap's worth and says how
+    /// many it left out; the rest stay reachable by narrowing the filter.
     #[test]
-    fn row_matches_empty_needle_passes_everything() {
-        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(row_matches(&row, "mylib", ""));
-    }
+    fn rows_beyond_the_cap_collapse_into_a_refine_search_row() {
+        let total = 250;
+        let mut state = LibraryState::default();
+        let rows = (0..total)
+            .map(|i| fixture_row(&format!("PN-{i}"), "MPN", "Mfr"))
+            .collect();
+        state.open_libraries.push(OpenLibrary {
+            root: PathBuf::from("/tmp/big.snxlib"),
+            display_name: "big".into(),
+            library_id: uuid::Uuid::new_v4(),
+            tables: std::collections::HashMap::from([("t".to_owned(), rows)]),
+            cached_components: Vec::new(),
+            cached_symbols: Vec::new(),
+            cached_footprints: Vec::new(),
+            cached_sims: Vec::new(),
+            cached_classes: Vec::new(),
+            observed_stamp: None,
+            dangling: Default::default(),
+            pricing: Default::default(),
+            own_edit_stamp: None,
+            display: Default::default(),
+        });
+        state.touch_data();
+        state.sync_view_caches();
 
-    #[test]
-    fn row_matches_mpn_substring() {
-        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(row_matches(&row, "mylib", "era"));
-        assert!(row_matches(&row, "mylib", "3aed"));
-    }
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let window = iced::Size::new(600.0, 100_000.0);
+        fn build<'a>(
+            state: &'a LibraryState,
+            tokens: &'a ThemeTokens,
+        ) -> Element<'a, LibraryMessage> {
+            view_library_block(
+                &state.open_libraries[0],
+                &state.components_panel,
+                "",
+                tokens,
+            )
+        }
+        let texts = crate::layout_probe::lay_out_texts(build(&state, &tokens), window);
+        let places = texts.iter().filter(|t| t.text == "Place").count();
+        assert_eq!(places, 200);
+        crate::layout_probe::find(&texts, "50 more — refine search");
 
-    #[test]
-    fn row_matches_manufacturer_case_insensitive() {
-        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(row_matches(&row, "mylib", "panasonic"));
-        assert!(row_matches(&row, "mylib", "pana"));
-    }
-
-    #[test]
-    fn row_matches_internal_pn() {
-        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(row_matches(&row, "mylib", "0805"));
-    }
-
-    #[test]
-    fn row_matches_library_name() {
-        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(row_matches(&row, "passives_lib", "passives"));
-    }
-
-    #[test]
-    fn row_matches_library_name_only_hit() {
-        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(row_matches(&row, "passives_lib", "ives_l"));
-        assert!(!row_matches(&row, "other_lib", "ives_l"));
-    }
-
-    #[test]
-    fn row_matches_no_hit_returns_false() {
-        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(!row_matches(&row, "mylib", "zzz_no_such_thing"));
+        // Narrowing the filter below the cap removes the summary row.
+        state.components_panel.filter = "pn-7".into();
+        state.sync_view_caches();
+        let texts = crate::layout_probe::lay_out_texts(build(&state, &tokens), window);
+        assert!(texts.iter().all(|t| !t.text.contains("refine search")));
+        assert_eq!(texts.iter().filter(|t| t.text == "Place").count(), 11);
     }
 
     #[test]

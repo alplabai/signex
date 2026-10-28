@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 
 use super::columns::{ColumnKind, GridColumn, derive_columns, row_matches_filter};
 use super::price::PriceView;
-use super::sort::sort_by_cell_key;
+use super::sort::{CellSortKey, sort_by_cell_key};
 use super::*;
 use crate::library::state::{BrowserSort, OpenLibrary};
 
@@ -102,8 +102,8 @@ impl BrowserViewCache {
             sort_by_cell_key(
                 &mut visible,
                 |&i| match column.kind {
-                    ColumnKind::Price => prices.sort_value(&rows[i]),
-                    _ => column.kind.cell_value(&rows[i]),
+                    ColumnKind::Price => CellSortKey::from_cell(&prices.sort_value(&rows[i])),
+                    _ => column.kind.sort_key_for(&rows[i]),
                 },
                 sort.descending,
             );
@@ -137,6 +137,26 @@ impl BrowserViewCache {
 }
 
 impl LibraryState {
+    /// Position of the browser's selected row within the filtered, sorted
+    /// grid rows, if the selection is one of them.
+    pub(crate) fn browser_row_position_of_selection(
+        &self,
+        library_path: &std::path::Path,
+    ) -> Option<usize> {
+        let browser = self.library_browsers.get(library_path)?;
+        let selected = browser.selected_row?;
+        let lib = self
+            .open_libraries
+            .iter()
+            .find(|l| l.root == library_path)?;
+        let rows = lib.tables.get(active_table(lib, browser))?;
+        let cache = browser.view_cache.as_ref()?;
+        cache
+            .visible
+            .iter()
+            .position(|&i| rows.get(i).is_some_and(|r| r.row_id == selected.as_uuid()))
+    }
+
     /// Bring every browser tab's cache up to date; a tab rebuilds only when
     /// a key input changed.
     pub(in crate::library) fn sync_browser_caches(&mut self) {

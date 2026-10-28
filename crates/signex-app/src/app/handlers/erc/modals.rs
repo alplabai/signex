@@ -17,6 +17,7 @@ impl Signex {
     pub(crate) fn handle_close_erc_dialog(&mut self) -> Task<Message> {
         self.ui_state.erc_dialog_open = false;
         self.ui_state.pending_profile_update = None;
+        self.ui_state.save_profile_dialog = None;
         self.close_detached_modal(super::super::super::state::ModalId::ErcDialog)
     }
 
@@ -26,37 +27,15 @@ impl Signex {
         severity: signex_erc::Severity,
     ) -> Task<Message> {
         // A project that stores its own rules is edited in place (undoable,
-        // saved with the `.snxprj`); the machine preferences stay untouched.
+        // saved with the `.snxprj`); the machine's rules stay untouched.
         if self.edit_project_erc_rules(|rules| {
             signex_erc::project_rules::set_severity(rules, rule, severity)
         }) {
             return Task::none();
         }
-        // Store the choice verbatim: a rule that grades its own findings
-        // (BadHierSheetPin) must be flattenable to its default level too. The
-        // one exception is an on/off-only row (Pin type conflict), whose
-        // severities come from the pin matrix.
-        self.ui_state
-            .erc_severity_override
-            .insert(rule, rule.normalize_override(severity));
-        // Persist so the override survives restart. Silent on I/O errors —
-        // this is a preference, not critical state.
-        crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
-        // Keep an open Preferences ERC pane and its dirty baseline in step
-        // with the committed change.
-        let stored = self.ui_state.erc_severity_override.get(&rule).copied();
-        for map in [
-            &mut self.ui_state.preferences_draft_erc_severity,
-            &mut self.ui_state.preferences_seed_erc_severity,
-        ] {
-            match stored {
-                Some(s) => map.insert(rule, s),
-                None => map.remove(&rule),
-            };
-        }
-        // A pending Preferences edit of this rule may now equal the seed.
-        self.recompute_preferences_dirty();
-        Task::none()
+        // No rules in the project: the edit goes to the machine's rules, the
+        // `User Default` profile (#1608).
+        self.set_machine_severity(rule, severity)
     }
 
     pub(crate) fn handle_open_annotate_reset_confirm(&mut self) -> Task<Message> {
@@ -93,6 +72,18 @@ impl Signex {
         let Some(tab) = self.document_state.tabs.get(idx) else {
             return Task::none();
         };
+        // A Project tab stays docked (#1202): commands typed in an undocked
+        // window act on the main window's active tab, so Ctrl+Z / Ctrl+S
+        // there would reach another document.
+        if tab.kind.as_project().is_some() {
+            // End the tab drag so the next move past the edge does not ask
+            // (and log the refusal) again.
+            self.ui_state.tab_dragging = None;
+            crate::diagnostics::log_warning(
+                "The Project tab stays in the main window; it cannot be undocked yet",
+            );
+            return Task::none();
+        }
         let path = tab.path.clone();
         // Component Preview tabs undock to a window with
         // `WindowKind::ComponentEditor` so the editor view dispatch
@@ -138,6 +129,7 @@ impl Signex {
             size,
             resizable: true,
             decorations: true,
+            exit_on_close_request: false,
             ..Default::default()
         });
         // Stash immediately so the first frame in the new window has a
@@ -188,6 +180,7 @@ impl Signex {
             size,
             resizable: true,
             decorations: true,
+            exit_on_close_request: false,
             ..Default::default()
         });
         self.ui_state.windows.insert(
@@ -213,6 +206,7 @@ impl Signex {
             ModalId::AnnotateResetConfirm => {
                 Some(Message::Annotate(AnnotateMsg::CloseResetConfirm))
             }
+            ModalId::ReprefixConfirm => Some(Message::Annotate(AnnotateMsg::ReprefixCancelled)),
             ModalId::ErcDialog => Some(Message::Erc(ErcMsg::CloseDialog)),
             ModalId::MoveSelection => Some(Message::MoveSelection(MoveSelectionMsg::Close)),
             ModalId::NetColorPalette => Some(Message::NetColor(NetColorMsg::Close)),
@@ -225,7 +219,6 @@ impl Signex {
             ModalId::FindReplace
             | ModalId::RenameDialog
             | ModalId::RemoveDialog
-            | ModalId::ProjectOptions
             | ModalId::EnableVersionControl
             | ModalId::GridProperties
             | ModalId::SelectionFilterCustom => None,
@@ -278,6 +271,7 @@ impl Signex {
             ModalId::AnnotateDialog => iced::Size::new(1100.0, 760.0),
             ModalId::ErcDialog => iced::Size::new(1000.0, 600.0),
             ModalId::AnnotateResetConfirm => iced::Size::new(420.0, 180.0),
+            ModalId::ReprefixConfirm => iced::Size::new(560.0, 520.0),
             ModalId::MoveSelection => iced::Size::new(420.0, 240.0),
             ModalId::NetColorPalette => iced::Size::new(520.0, 480.0),
             ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
@@ -287,7 +281,6 @@ impl Signex {
             ModalId::RemoveDialog => iced::Size::new(560.0, 260.0),
             ModalId::PrintPreview => iced::Size::new(1100.0, 780.0),
             ModalId::BomPreview => iced::Size::new(1180.0, 760.0),
-            ModalId::ProjectOptions => iced::Size::new(520.0, 400.0),
             ModalId::EnableVersionControl => iced::Size::new(560.0, 480.0),
             ModalId::GridProperties => iced::Size::new(480.0, 280.0),
             ModalId::SelectionFilterCustom => iced::Size::new(440.0, 380.0),
@@ -423,6 +416,9 @@ pub(crate) fn detached_modal_settings(size: iced::Size) -> iced::window::Setting
         size,
         resizable: true,
         decorations: true,
+        // The close request must reach `WindowCloseRequested`, which runs
+        // the modal's own close message (the Preferences dirty guard).
+        exit_on_close_request: false,
         level: iced::window::Level::Normal,
         ..Default::default()
     }
@@ -460,5 +456,6 @@ mod tests {
         assert_eq!(s.size, size);
         assert!(s.resizable);
         assert!(s.decorations);
+        assert!(!s.exit_on_close_request);
     }
 }

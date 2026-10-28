@@ -2,7 +2,7 @@
 //! refreshes after each update, not from the project: assigning a net to a
 //! class (or undoing it) changes what the canvas is handed, with no IO.
 
-use signex_app::app::{LoadedProject, Message, ResolveFailed, Signex, UiMsg};
+use signex_app::app::{LoadedProject, Message, Signex, UiMsg};
 use signex_app::dock::DockMessage;
 use signex_app::panels::{NetClassMsg, PanelMsg};
 use signex_types::net_class::{NetClass, NetLineStyle};
@@ -104,6 +104,7 @@ fn fixture() -> Signex {
         path: dir.join("P.snxprj"),
         data: ProjectData {
             name: "P".to_string(),
+            description: None,
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: None,
             pcb_file: None,
@@ -122,11 +123,13 @@ fn fixture() -> Signex {
             net_classes: vec![power],
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
     let mut engine = signex_engine::Engine::new(vcc_sheet()).expect("engine");
@@ -201,10 +204,9 @@ fn a_failed_background_resolution_keeps_what_is_drawn_and_is_asked_again() {
             .contains_key(&WIRE_ID)
     );
 
-    let failed = ResolveFailed {
-        projects: vec![project],
-        reason: "the net-class style task failed".to_string(),
-    };
+    let failed = app
+        .net_class_failure_of_current_request(project, "the net-class style task failed")
+        .expect("a request was made");
     let _ = app.update(Message::Ui(UiMsg::NetClassStylesResolved(
         std::sync::Arc::new(Err(failed)),
     )));

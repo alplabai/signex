@@ -42,6 +42,7 @@ fn app_with_libraries(
         id,
         path: project_path.to_path_buf(),
         data: ProjectData {
+            description: None,
             name: "Board".into(),
             dir: project_dir.to_string_lossy().into_owned(),
             schematic_root: None,
@@ -54,11 +55,13 @@ fn app_with_libraries(
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
     // Any message that republishes the panel context builds the tree.

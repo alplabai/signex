@@ -1,539 +1,19 @@
-//! Menu-bar view builder. Split from `menu_bar.rs` as pure code motion.
+//! Menu-bar view: renders the declarative [`MenuBarModel`] as iced_aw menus
+//! plus the Signex wordmark. What the menus contain lives in `model/`.
 
+use super::model::{Menu as MenuModel, MenuBarModel, MenuEntry, MenuItem, menu_bar_model};
 use super::*;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
+type MenuItemView = Item<'static, MenuMessage, Theme, iced::Renderer>;
 
 // ─── View: Menu Bar ──────────────────────────────────────────
 
-pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMessage> {
+pub fn view(tokens: &ThemeTokens, ctx: MenuContext<'_>) -> Element<'static, MenuMessage> {
     let mc = MenuColors::from_tokens(tokens);
-    // `leaf_if(enabled, ..)` wraps `leaf`/`leaf_stub` — enabled items
-    // dispatch their message, disabled items render greyed-out like
-    // the stub entries so Annotate / ERC / Save can't fire when no
-    // schematic is loaded.
-    let leaf_if = |label: &str,
-                   shortcut: Option<String>,
-                   msg: MenuMessage,
-                   enabled: bool|
-     -> Item<'static, MenuMessage, Theme, iced::Renderer> {
-        if enabled {
-            leaf(label, shortcut, msg, mc)
-        } else {
-            leaf_stub(label, shortcut, mc)
-        }
-    };
-
-    let menu_template = |items| {
-        Menu::new(items)
-            .max_width(DROPDOWN_WIDTH)
-            // Sit a couple of pixels below the bar — offset(0) overlaps
-            // the bar's bottom row because the dropdown's 1px border
-            // paints on the same pixel as the bar's baseline.
-            .offset(2.0)
-            .spacing(2.0)
-            // iced_aw paints the dropdown's background quad at
-            // `items.x - padding.left` (see `pad_rectangle` in
-            // `iced_aw/src/widget/menu/menu_tree.rs`). Any positive
-            // left-padding here drags the visible dropdown LEFT of the
-            // root button's highlight box. Zero on the left keeps the
-            // dropdown's left border flush with the root's layout
-            // bounds, matching Altium's alignment.
-            .padding(iced::Padding {
-                top: 5.0,
-                right: 5.0,
-                bottom: 5.0,
-                left: 0.0,
-            })
-    };
-
-    let export_menu = Item::with_menu(
-        submenu_item_btn("Export", mc),
-        menu_template(vec![
-            leaf_if(
-                &cmd_label("print", "PDF…"),
-                shortcut_for(&ctx, "print", "Ctrl+P"),
-                MenuMessage::ExportPdf,
-                enabled(&ctx, "print"),
-            ),
-            leaf_if(
-                "Netlist (Protel .NET)...",
-                None,
-                MenuMessage::ExportNetlist,
-                ctx.commands.has_schematic,
-            ),
-            leaf_if(
-                "Bill of Materials…",
-                None,
-                MenuMessage::ExportBom,
-                ctx.commands.has_schematic,
-            ),
-            leaf_if(
-                "ERC Report…",
-                None,
-                MenuMessage::ExportErcReport,
-                ctx.commands.has_schematic,
-            ),
-        ]),
-    );
-
-    let import_menu = Item::with_menu(
-        submenu_item_btn("Import", mc),
-        menu_template(vec![leaf(
-            "Altium Project...",
-            None,
-            MenuMessage::ImportAltium,
-            mc,
-        )]),
-    );
-
-    // v0.9 Library submenu — open / place. New-component creation
-    // moved to the project tree → right-click → Library ▸ Add New
-    // ▸ Component flow, so File ▸ Library only carries "open
-    // libraries outside the active project" + the canvas-side place
-    // picker.
-    let library_menu = Item::with_menu(
-        submenu_item_btn("Library", mc),
-        menu_template(vec![
-            leaf("Open Library...", None, MenuMessage::LibraryOpenLibrary, mc),
-            separator(mc),
-            leaf_if(
-                "Place Component...",
-                None,
-                MenuMessage::LibraryPlaceComponent,
-                ctx.commands.has_schematic,
-            ),
-        ]),
-    );
-
-    // File ▸ Open Recent — filename as the label, newest first. A project
-    // that has vanished since is still listed; choosing it drops it with a
-    // notice (`handle_open_recent_project`).
-    let mut recent_items: Vec<_> = ctx
-        .recent_projects
-        .iter()
-        .map(|path| {
-            let label = path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_else(|| path.display().to_string());
-            leaf(
-                &label,
-                None,
-                MenuMessage::OpenRecentProject(path.clone()),
-                mc,
-            )
-        })
-        .collect();
-    if recent_items.is_empty() {
-        recent_items.push(leaf_stub("No recent projects", None, mc));
-    }
-    recent_items.push(separator(mc));
-    recent_items.push(leaf_if(
-        "Clear Recent",
-        None,
-        MenuMessage::ClearRecentProjects,
-        !ctx.recent_projects.is_empty(),
-    ));
-    let recent_menu = Item::with_menu(
-        submenu_item_btn("Open Recent", mc),
-        menu_template(recent_items),
-    );
-
-    let file_menu = Item::with_menu(
-        root_btn("File", mc),
-        menu_template(vec![
-            leaf(
-                &cmd_label("new_document", "New Project"),
-                shortcut_for(&ctx, "new_document", "Ctrl+N"),
-                MenuMessage::NewProject,
-                mc,
-            ),
-            leaf(
-                &cmd_label("open_document", "Open..."),
-                shortcut_for(&ctx, "open_document", "Ctrl+O"),
-                MenuMessage::OpenProject,
-                mc,
-            ),
-            recent_menu,
-            separator(mc),
-            // v0.14.2: Save / Save As also enabled for any standalone
-            // primitive editor tab (`.snxsym` / `.snxfpt`). The
-            // dispatcher in `save_active_document` already handles
-            // those tab kinds; previously the menu greyed itself out
-            // because the gate only checked for an active schematic.
-            leaf_if(
-                &cmd_label("save_document", "Save"),
-                shortcut_for(&ctx, "save_document", "Ctrl+S"),
-                MenuMessage::Save,
-                enabled(&ctx, "save_document"),
-            ),
-            leaf_if(
-                &cmd_label("save_document_as", "Save As..."),
-                shortcut_for(&ctx, "save_document_as", "Ctrl+Shift+S"),
-                MenuMessage::SaveAs,
-                enabled(&ctx, "save_document_as"),
-            ),
-            separator(mc),
-            library_menu,
-            separator(mc),
-            // Print Preview... previously lived here as a top-level
-            // leaf duplicating Export → PDF's shortcut. Consolidated
-            // under Export → PDF so there's one surface that opens the
-            // same preview flow. Ctrl+P (the former top-level shortcut)
-            // still opens the preview, via the keymap command bridge
-            // (`app/command/bridge.rs`); only the menu row moves.
-            import_menu,
-            export_menu,
-            separator(mc),
-            leaf("Exit", None, MenuMessage::Exit, mc),
-        ]),
-    );
-
-    let edit_menu = Item::with_menu(
-        root_btn("Edit", mc),
-        menu_template(vec![
-            leaf_if(
-                &cmd_label("undo", "Undo"),
-                shortcut_for(&ctx, "undo", "Ctrl+Z"),
-                MenuMessage::Undo,
-                enabled(&ctx, "undo"),
-            ),
-            leaf_if(
-                &cmd_label("redo", "Redo"),
-                shortcut_for(&ctx, "redo", "Ctrl+Y"),
-                MenuMessage::Redo,
-                enabled(&ctx, "redo"),
-            ),
-            separator(mc),
-            leaf_if(
-                &cmd_label("cut", "Cut"),
-                shortcut_for(&ctx, "cut", "Ctrl+X"),
-                MenuMessage::Cut,
-                enabled(&ctx, "cut"),
-            ),
-            leaf_if(
-                &cmd_label("copy", "Copy"),
-                shortcut_for(&ctx, "copy", "Ctrl+C"),
-                MenuMessage::Copy,
-                enabled(&ctx, "copy"),
-            ),
-            leaf_if(
-                &cmd_label("paste", "Paste"),
-                shortcut_for(&ctx, "paste", "Ctrl+V"),
-                MenuMessage::Paste,
-                enabled(&ctx, "paste"),
-            ),
-            leaf_if(
-                &cmd_label("smart_paste", "Paste Special"),
-                shortcut_for(&ctx, "smart_paste", "Shift+Ctrl+V"),
-                MenuMessage::SmartPaste,
-                enabled(&ctx, "smart_paste"),
-            ),
-            leaf_if(
-                &cmd_label("duplicate", "Duplicate"),
-                shortcut_for(&ctx, "duplicate", "Ctrl+D"),
-                MenuMessage::Duplicate,
-                enabled(&ctx, "duplicate"),
-            ),
-            leaf_if(
-                &cmd_label("delete_selection", "Delete"),
-                shortcut_for(&ctx, "delete_selection", "Del"),
-                MenuMessage::Delete,
-                enabled(&ctx, "delete_selection"),
-            ),
-            separator(mc),
-            leaf_if(
-                &cmd_label("select_all", "Select All"),
-                shortcut_for(&ctx, "select_all", "Ctrl+A"),
-                MenuMessage::SelectAll,
-                enabled(&ctx, "select_all"),
-            ),
-            separator(mc),
-            leaf_if(
-                &cmd_label("find", "Find"),
-                shortcut_for(&ctx, "find", "Ctrl+F"),
-                MenuMessage::Find,
-                enabled(&ctx, "find"),
-            ),
-            leaf_if(
-                &cmd_label("find_and_replace", "Find and Replace"),
-                shortcut_for(&ctx, "find_and_replace", "Ctrl+H"),
-                MenuMessage::Replace,
-                enabled(&ctx, "find_and_replace"),
-            ),
-        ]),
-    );
-
-    let view_menu = Item::with_menu(
-        root_btn("View", mc),
-        menu_template(vec![
-            leaf_stub(
-                &cmd_label("zoom_in_at_cursor", "Zoom In"),
-                shortcut_for(&ctx, "zoom_in_at_cursor", "Ctrl+="),
-                mc,
-            ),
-            leaf_stub(
-                &cmd_label("zoom_out_at_cursor", "Zoom Out"),
-                shortcut_for(&ctx, "zoom_out_at_cursor", "Ctrl+-"),
-                mc,
-            ),
-            leaf_if(
-                &cmd_label("zoom_to_fit", "Fit All"),
-                shortcut_for(&ctx, "zoom_to_fit", "Home"),
-                MenuMessage::ZoomFit,
-                enabled(&ctx, "zoom_to_fit"),
-            ),
-            separator(mc),
-            leaf_if(
-                &cmd_label("toggle_visible_grid", "Toggle Grid"),
-                shortcut_for(&ctx, "toggle_visible_grid", "Shift+Ctrl+G"),
-                MenuMessage::ToggleGrid,
-                enabled(&ctx, "toggle_visible_grid"),
-            ),
-            leaf_if(
-                &cmd_label("cycle_snap_grid_forward", "Cycle Grid Size"),
-                shortcut_for(&ctx, "cycle_snap_grid_forward", "G"),
-                MenuMessage::CycleGrid,
-                crate::app::command::enablement::cycle_grid_menu_enabled(&ctx.commands),
-            ),
-            leaf_if(
-                &cmd_label("toggle_auto_focus", "AutoFocus (dim unselected)"),
-                shortcut_for(&ctx, "toggle_auto_focus", "F9"),
-                MenuMessage::ToggleAutoFocus,
-                enabled(&ctx, "toggle_auto_focus"),
-            ),
-            separator(mc),
-            // Panel-open entries are always available — panels work
-            // without an active document (show empty state).
-            leaf("Projects", None, MenuMessage::OpenProjectsPanel, mc),
-            leaf("Components", None, MenuMessage::OpenComponentsPanel, mc),
-            leaf("Navigator", None, MenuMessage::OpenNavigatorPanel, mc),
-            leaf("Properties", None, MenuMessage::OpenPropertiesPanel, mc),
-            leaf("ERC", None, MenuMessage::OpenErcPanel, mc),
-            leaf("Messages", None, MenuMessage::OpenMessagesPanel, mc),
-            leaf("Signal", None, MenuMessage::OpenSignalPanel, mc),
-        ]),
-    );
-
-    let place_menu = Item::with_menu(
-        root_btn("Place", mc),
-        menu_template(vec![
-            leaf_if(
-                &cmd_label("place_wire", "Wire"),
-                shortcut_for(&ctx, "place_wire", "W"),
-                MenuMessage::PlaceWire,
-                enabled(&ctx, "place_wire"),
-            ),
-            leaf_if(
-                &cmd_label("place_bus", "Bus"),
-                shortcut_for(&ctx, "place_bus", "B"),
-                MenuMessage::PlaceBus,
-                enabled(&ctx, "place_bus"),
-            ),
-            leaf_if(
-                &cmd_label("place_net_label", "Net Label"),
-                shortcut_for(&ctx, "place_net_label", "L"),
-                MenuMessage::PlaceLabel,
-                enabled(&ctx, "place_net_label"),
-            ),
-            separator(mc),
-            leaf_if(
-                &cmd_label("open_components_panel", "Component..."),
-                shortcut_for(&ctx, "open_components_panel", "P"),
-                MenuMessage::PlaceComponent,
-                enabled(&ctx, "open_components_panel"),
-            ),
-            leaf_stub("Power Port", None, mc),
-            separator(mc),
-            leaf_stub("Text", None, mc),
-            leaf_stub("No Connect", None, mc),
-            leaf_stub("Sheet Entry", None, mc),
-        ]),
-    );
-
-    // Design → Annotation submenu mirrors Altium's Annotation cascade.
-    // Every entry gated on `has_schematic` — annotating without a
-    // project open is nonsense.
-    let annotation_submenu: Item<'static, MenuMessage, Theme, iced::Renderer> = Item::with_menu(
-        submenu_item_btn("Annotation", mc),
-        menu_template(vec![
-            leaf_if(
-                "Annotate Schematics...",
-                None,
-                MenuMessage::Annotate,
-                ctx.commands.has_schematic,
-            ),
-            leaf_if(
-                "Reset Schematic Designators...",
-                None,
-                MenuMessage::AnnotateReset,
-                ctx.commands.has_schematic,
-            ),
-            leaf_if(
-                "Reset Duplicate Schematic Designators...",
-                None,
-                MenuMessage::AnnotateResetDuplicates,
-                ctx.commands.has_schematic,
-            ),
-            separator(mc),
-            leaf_if(
-                &cmd_label("annotate_schematic_quietly", "Annotate Schematics Quietly"),
-                shortcut_for(&ctx, "annotate_schematic_quietly", "Alt+A"),
-                MenuMessage::AnnotateQuietly,
-                enabled(&ctx, "annotate_schematic_quietly"),
-            ),
-            leaf_if(
-                &cmd_label(
-                    "force_annotate_all_schematics",
-                    "Force Annotate All Schematics",
-                ),
-                shortcut_for(&ctx, "force_annotate_all_schematics", "Shift+Alt+A"),
-                MenuMessage::AnnotateForceAll,
-                enabled(&ctx, "force_annotate_all_schematics"),
-            ),
-            separator(mc),
-            leaf_stub("Back Annotate Schematics...", None, mc),
-            leaf_stub("Number Schematic Sheets...", None, mc),
-        ]),
-    );
-
-    let design_menu = Item::with_menu(
-        root_btn("Design", mc),
-        menu_template(vec![
-            annotation_submenu,
-            separator(mc),
-            leaf_if(
-                &cmd_label("run_erc", "Electrical Rules Check"),
-                shortcut_for(&ctx, "run_erc", "F8"),
-                MenuMessage::Erc,
-                enabled(&ctx, "run_erc"),
-            ),
-            separator(mc),
-            leaf_stub("Generate BOM", None, mc),
-        ]),
-    );
-
-    let tools_menu = Item::with_menu(
-        root_btn("Tools", mc),
-        menu_template(vec![
-            leaf_stub("Assign Footprints", None, mc),
-            leaf_stub("Library Editor", None, mc),
-            separator(mc),
-            leaf_stub("Design Rule Check", None, mc),
-            leaf_stub("Net Inspector", None, mc),
-            separator(mc),
-            leaf_if(
-                "Up Hierarchy",
-                None,
-                MenuMessage::AscendToParentSheet,
-                ctx.commands.has_schematic,
-            ),
-            separator(mc),
-            // Multi-part component flow — only meaningful when the
-            // active tab is a `.snxsym` standalone editor; the
-            // dispatcher silently no-ops on non-Symbol tabs.
-            leaf("New Part", None, MenuMessage::ToolsNewPart, mc),
-            leaf("Remove Part", None, MenuMessage::ToolsRemovePart, mc),
-            separator(mc),
-            // Document Options — Altium SchLib parity. Sheet color
-            // / grid / unit per `.snxlib`. Greyed when not on a
-            // primitive editor tab.
-            leaf(
-                "Document Options...",
-                None,
-                MenuMessage::ToolsDocumentOptions,
-                mc,
-            ),
-            separator(mc),
-            leaf(
-                "Passive Network Calculator...",
-                None,
-                MenuMessage::OpenPassiveCalculator,
-                mc,
-            ),
-            separator(mc),
-            leaf(
-                &cmd_label("open_preferences", "Preferences..."),
-                shortcut_for(&ctx, "open_preferences", "Ctrl+,"),
-                MenuMessage::OpenPreferences,
-                mc,
-            ),
-        ]),
-    );
-
-    let window_menu = Item::with_menu(
-        root_btn("Window", mc),
-        menu_template(vec![
-            leaf_stub("Tile Horizontally", None, mc),
-            leaf_stub("Tile Vertically", None, mc),
-            separator(mc),
-            leaf_stub("Close All Documents", None, mc),
-        ]),
-    );
-
-    let help_menu = Item::with_menu(
-        root_btn("Help", mc),
-        menu_template(vec![
-            leaf("About Signex", None, MenuMessage::OpenAbout, mc),
-            leaf("Documentation", None, MenuMessage::OpenDocumentation, mc),
-            leaf("Report an Issue", None, MenuMessage::ReportIssue, mc),
-            leaf(
-                "Open Sample Project",
-                None,
-                MenuMessage::OpenSampleProject,
-                mc,
-            ),
-            separator(mc),
-            leaf(
-                &cmd_label("show_current_command_hotkeys", "Keyboard Shortcuts"),
-                shortcut_for(&ctx, "show_current_command_hotkeys", "F1"),
-                MenuMessage::OpenKeyboardShortcuts,
-                mc,
-            ),
-        ]),
-    );
-
-    let mb: MenuBar<'static, MenuMessage, Theme, iced::Renderer> = MenuBar::new(vec![
-        file_menu,
-        edit_menu,
-        view_menu,
-        place_menu,
-        design_menu,
-        tools_menu,
-        window_menu,
-        help_menu,
-    ])
-    .spacing(1.0)
-    .padding([1, 4])
-    .close_on_item_click_global(true)
-    .close_on_background_click_global(true)
-    // `Backdrop` paints `styling.path` behind the active root while its
-    // dropdown is open, so "File / Edit / Place / …" stays visibly lit
-    // after the pointer leaves the root and enters the submenu — matches
-    // Altium. `FakeHovering` (the default) only affects items inside the
-    // dropdown and leaves the root dark.
-    .draw_path(DrawPath::Backdrop)
-    .style(move |_theme: &Theme, _status| menu_style::Style {
-        bar_background: Background::Color(mc.toolbar_bg),
-        bar_border: Border::default(),
-        bar_shadow: iced::Shadow::default(),
-        menu_background: Background::Color(mc.panel_bg),
-        menu_border: Border {
-            width: 1.0,
-            radius: 4.0.into(),
-            color: mc.border,
-        },
-        menu_shadow: iced::Shadow {
-            color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
-            offset: iced::Vector::new(2.0, 4.0),
-            blur_radius: 8.0,
-        },
-        path: Background::Color(mc.hover),
-        path_border: Border {
-            width: 1.0,
-            radius: 2.0.into(),
-            color: mc.border,
-        },
-    });
+    let mb = render_menu_bar(&menu_bar_model(&ctx), mc);
 
     // Wordmark — white on dark themes, near-black on light themes. Picked
     // by toolbar background luminance so custom themes also resolve
@@ -564,4 +44,112 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
         .spacing(10)
         .align_y(iced::Alignment::Center)
         .into()
+}
+
+fn render_menu_bar(
+    model: &MenuBarModel,
+    mc: MenuColors,
+) -> MenuBar<'static, MenuMessage, Theme, iced::Renderer> {
+    MenuBar::new(
+        model
+            .menus
+            .iter()
+            .map(|menu| render_root(menu, mc))
+            .collect(),
+    )
+    .spacing(1.0)
+    .padding([1.0, SP.s])
+    .close_on_item_click_global(true)
+    .close_on_background_click_global(true)
+    // `Backdrop` paints `styling.path` behind the active root while its
+    // dropdown is open, so "File / Edit / Place / …" stays visibly lit
+    // after the pointer leaves the root and enters the submenu — matches
+    // Altium. `FakeHovering` (the default) only affects items inside the
+    // dropdown and leaves the root dark.
+    .draw_path(DrawPath::Backdrop)
+    .style(move |_theme: &Theme, _status| bar_style(mc))
+}
+
+fn bar_style(mc: MenuColors) -> menu_style::Style {
+    menu_style::Style {
+        bar_background: Background::Color(mc.toolbar_bg),
+        bar_border: Border::default(),
+        bar_shadow: iced::Shadow::default(),
+        menu_background: Background::Color(mc.panel_bg),
+        menu_border: Border {
+            width: 1.0,
+            radius: 4.0.into(),
+            color: mc.border,
+        },
+        menu_shadow: iced::Shadow {
+            color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
+            offset: iced::Vector::new(2.0, 4.0),
+            blur_radius: 8.0,
+        },
+        path: Background::Color(mc.hover),
+        path_border: Border {
+            width: 1.0,
+            radius: 2.0.into(),
+            color: mc.border,
+        },
+    }
+}
+
+fn render_root(menu: &MenuModel, mc: MenuColors) -> MenuItemView {
+    Item::with_menu(root_btn(&menu.title, mc), render_dropdown(menu, mc))
+}
+
+fn render_submenu(menu: &MenuModel, mc: MenuColors) -> MenuItemView {
+    Item::with_menu(submenu_item_btn(&menu.title, mc), render_dropdown(menu, mc))
+}
+
+fn render_dropdown(
+    menu: &MenuModel,
+    mc: MenuColors,
+) -> Menu<'static, MenuMessage, Theme, iced::Renderer> {
+    let items = menu
+        .entries
+        .iter()
+        .map(|entry| render_entry(entry, mc))
+        .collect();
+    Menu::new(items)
+        .max_width(DROPDOWN_WIDTH)
+        // Sit a couple of pixels below the bar — offset(0) overlaps
+        // the bar's bottom row because the dropdown's 1px border
+        // paints on the same pixel as the bar's baseline.
+        .offset(2.0)
+        .spacing(2.0)
+        // iced_aw paints the dropdown's background quad at
+        // `items.x - padding.left` (see `pad_rectangle` in
+        // `iced_aw/src/widget/menu/menu_tree.rs`). Any positive
+        // left-padding here drags the visible dropdown LEFT of the
+        // root button's highlight box. Zero on the left keeps the
+        // dropdown's left border flush with the root's layout
+        // bounds, matching Altium's alignment.
+        .padding(iced::Padding {
+            top: 5.0,
+            right: 5.0,
+            bottom: 5.0,
+            left: 0.0,
+        })
+}
+
+fn render_entry(entry: &MenuEntry, mc: MenuColors) -> MenuItemView {
+    match entry {
+        MenuEntry::Item(item) => render_item(item, mc),
+        MenuEntry::Submenu(menu) => render_submenu(menu, mc),
+        MenuEntry::Separator => separator(mc),
+    }
+}
+
+/// A row dispatches only when it has a handler and is enabled; otherwise it
+/// renders greyed out with no press handler.
+fn render_item(item: &MenuItem, mc: MenuColors) -> MenuItemView {
+    let shortcut = item.shortcut.as_ref().map(|s| s.text.clone());
+    Item::new(menu_item_btn(
+        &item.label,
+        shortcut,
+        item.dispatches().cloned(),
+        mc,
+    ))
 }

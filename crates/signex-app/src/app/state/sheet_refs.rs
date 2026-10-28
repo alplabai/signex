@@ -694,6 +694,7 @@ mod tests {
             title_block: HashMap::new(),
             lib_symbols: Default::default(),
             net_colors: HashMap::new(),
+            drawing_placements: Default::default(),
             frame: Default::default(),
             unknown: Default::default(),
             font_family: None,
@@ -907,6 +908,7 @@ mod tests {
             id: ProjectId(id),
             path: dir.join("p.snxprj"),
             data: signex_types::project::ProjectData {
+                description: None,
                 name: format!("p{id}"),
                 dir: dir.to_string_lossy().into_owned(),
                 schematic_root: Some(sheet.to_string()),
@@ -926,11 +928,13 @@ mod tests {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                parameters: Default::default(),
                 unknown: Default::default(),
             },
             pending_libraries: HashMap::new(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         }
     }
 

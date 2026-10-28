@@ -31,6 +31,7 @@ impl Signex {
             target,
             filter: String::new(),
             error: None,
+            scroll_y: 0.0,
         });
         Task::none()
     }
@@ -43,6 +44,12 @@ impl Signex {
                 if let Some(picker) = self.library.primitive_picker.as_mut() {
                     picker.filter = s;
                     picker.error = None;
+                }
+                Task::none()
+            }
+            PrimitivePickerMsg::Scrolled(offset_y) => {
+                if let Some(picker) = self.library.primitive_picker.as_mut() {
+                    picker.scroll_y = offset_y;
                 }
                 Task::none()
             }

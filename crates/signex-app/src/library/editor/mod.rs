@@ -39,6 +39,10 @@ use signex_widgets::theme_ext;
 use super::messages::{EditorMsg, LibraryMessage};
 use super::state::{ComponentPreviewState, EditorAddress, LibraryState, PreviewTab};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Render a Component Preview surface — five tabs (Preview / Parameters
 /// / Supply / Datasheet / Simulation), all read-only for Symbol+
 /// Footprint. The active tab body fills the panel; the header strip
@@ -78,16 +82,16 @@ fn view_header<'a>(
     let row_id_label = format!("row: {}", state.row.row_id);
     container(
         row![
-            text("Component Preview — ").size(13).color(muted),
-            text(title).size(13).color(text_c),
+            text("Component Preview — ").size(TS.title).color(muted),
+            text(title).size(TS.title).color(text_c),
             Space::new().width(Length::Fill),
-            text(row_id_label).size(11).color(muted),
+            text(row_id_label).size(TS.body).color(muted),
             Space::new().width(8),
             close_btn(address, tokens),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([8, 14])
+    .padding([SP.m, 14.0])
     .style(crate::styles::modal_header_strip(tokens))
     .into()
 }
@@ -106,7 +110,7 @@ fn view_tabs<'a>(
         } else {
             iced::Color::TRANSPARENT
         };
-        let label = container(text(tab.label()).size(11).color(text_c)).padding([3, 10]);
+        let label = container(text(tab.label()).size(TS.body).color(text_c)).padding([3, 10]);
         let address_for_msg = address.clone();
         let tab_for_msg = *tab;
         let inner_btn = button(label)
@@ -126,7 +130,7 @@ fn view_tabs<'a>(
         row_widget = row_widget.push(inner_btn);
     }
     container(row_widget)
-        .padding([2, 4])
+        .padding([SP.xs, SP.s])
         .width(Length::Fill)
         .style(crate::styles::tab_bar_strip(tokens))
         .into()
@@ -178,7 +182,7 @@ fn view_footer<'a>(
     if read_only {
         return container(
             text("Read-only library - this component cannot be changed.")
-                .size(11)
+                .size(TS.body)
                 .color(muted),
         )
         .padding([10, 14])
@@ -188,7 +192,7 @@ fn view_footer<'a>(
     }
 
     let primary = |label: &'static str, msg: EditorMsg, addr: &EditorAddress| {
-        button(container(text(label).size(11).color(iced::Color::WHITE)).padding([4, 14]))
+        button(container(text(label).size(TS.body).color(iced::Color::WHITE)).padding([SP.s, 14.0]))
             .on_press(LibraryMessage::EditorEvent {
                 library_path: addr.library_path.clone(),
                 table: addr.table.clone(),
@@ -209,7 +213,7 @@ fn view_footer<'a>(
             })
     };
     let secondary = |label: &'static str, msg: EditorMsg, addr: &EditorAddress| {
-        button(container(text(label).size(11).color(text_c)).padding([4, 14]))
+        button(container(text(label).size(TS.body).color(text_c)).padding([SP.s, 14.0]))
             .on_press(LibraryMessage::EditorEvent {
                 library_path: addr.library_path.clone(),
                 table: addr.table.clone(),
@@ -231,7 +235,7 @@ fn view_footer<'a>(
     };
 
     let dirty_marker: Element<'_, LibraryMessage> = if state.dirty {
-        text("• unsaved").size(11).color(muted).into()
+        text("• unsaved").size(TS.body).color(muted).into()
     } else {
         Space::new().width(0).into()
     };
@@ -243,7 +247,9 @@ fn view_footer<'a>(
     } else if state.reload_confirming {
         row![
             Space::new().width(12),
-            text("Discard your edits and reload?").size(11).color(muted),
+            text("Discard your edits and reload?")
+                .size(TS.body)
+                .color(muted),
             Space::new().width(8),
             primary("Reload", EditorMsg::ReloadConfirmed, &address),
             Space::new().width(8),
@@ -278,7 +284,7 @@ fn view_footer<'a>(
 fn close_btn<'a>(address: EditorAddress, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
-    button(container(text("\u{00D7}".to_string()).size(14).color(text_c)).padding([0, 6]))
+    button(container(text("\u{00D7}".to_string()).size(TS.heading).color(text_c)).padding([0, 6]))
         .on_press(LibraryMessage::EditorEvent {
             library_path: address.library_path,
             table: address.table,
@@ -322,9 +328,13 @@ pub(crate) fn placeholder_card<'a>(
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let mut col = column![text(title).size(14).color(text_c), Space::new().height(8),].spacing(4);
+    let mut col = column![
+        text(title).size(TS.heading).color(text_c),
+        Space::new().height(8),
+    ]
+    .spacing(SP.s);
     for todo in todos {
-        col = col.push(text(format!("• {todo}")).size(11).color(muted));
+        col = col.push(text(format!("• {todo}")).size(TS.body).color(muted));
     }
     container(col)
         .padding(14)

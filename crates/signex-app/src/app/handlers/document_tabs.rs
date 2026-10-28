@@ -122,6 +122,24 @@ impl Signex {
         Task::none()
     }
 
+    /// Activate the next / previous document tab of any kind, wrapping.
+    pub(crate) fn step_document_tab(&mut self, forward: bool) -> Task<Message> {
+        let count = self.document_state.tabs.len();
+        let active = self.document_state.active_tab;
+        if count < 2 || active >= count {
+            return Task::none();
+        }
+        let next = if forward {
+            (active + 1) % count
+        } else {
+            (active + count - 1) % count
+        };
+        self.park_active_schematic_session();
+        self.document_state.active_tab = next;
+        self.sync_active_tab();
+        Task::none()
+    }
+
     /// Close a tab and discard its in-flight draft. Callers that already
     /// resolved unsaved work (Close Project / Remove / Discard All) rely on
     /// this dropping the draft.
@@ -194,12 +212,22 @@ impl Signex {
         // Park dirty engines: when the file is in `dirty_paths`, keep its
         // engine entry alive so reopening the tab restores the in-memory
         // edits. Drop the engine only when the file is clean.
+        self.document_state.note_documents_changed();
         if !self.document_state.dirty_paths.contains(&closing_path) {
             self.forget_net_colors_of(&closing_path);
-            self.document_state.engines.remove(&closing_path);
+            self.document_state.remove_engine(&closing_path);
         }
         if self.document_state.active_path.as_ref() == Some(&closing_path) {
             self.document_state.active_path = None;
+        }
+        // The part on the cursor was armed for this sheet.
+        if self
+            .interaction_state
+            .placement
+            .as_ref()
+            .is_some_and(|s| s.target_sheet == closing_path)
+        {
+            self.cancel_placement_session();
         }
         // A loose sheet's designator note is keyed by its own path; forget it
         // so reopening the sheet says it again (a project's is forgotten on

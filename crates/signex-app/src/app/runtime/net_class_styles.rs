@@ -26,7 +26,6 @@ use crate::app::state::net_class_styles::{
     ProjectKey, ResolveFailed, ResolvedProject, ResolvedStyles,
 };
 use crate::app::state::project_case::fold_of;
-use crate::app::state::scope;
 use crate::app::state::{DocumentState, ProjectId};
 
 use super::Signex;
@@ -120,10 +119,9 @@ fn plan_projects(document: &DocumentState) -> Vec<PlannedProject> {
         stamp: u64,
         paths: Vec<PathBuf>,
     }
-    let refs = document.child_sheet_refs();
     let mut open: std::collections::HashMap<ProjectId, Open> = Default::default();
     for (path, engine) in &document.engines {
-        let Some(project) = scope::project_owning_sheet(&document.projects, &refs, path) else {
+        let Some(project) = document.document_project(path) else {
             continue;
         };
         let mut hasher = DefaultHasher::new();
@@ -231,7 +229,11 @@ impl Signex {
             self.apply_net_class_styles(&Ok(resolved));
             return Task::none();
         }
-        let projects = job.jobs.iter().map(|j| j.project).collect::<Vec<_>>();
+        let projects = job
+            .jobs
+            .iter()
+            .map(|j| (j.project, j.key.clone()))
+            .collect::<Vec<_>>();
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || job.run())
@@ -279,6 +281,22 @@ impl Signex {
         }
     }
 
+    /// The failure a dead worker would report for `project`'s current request,
+    /// for a regression test that cannot name a [`ProjectKey`].
+    #[doc(hidden)]
+    #[must_use]
+    pub fn net_class_failure_of_current_request(
+        &self,
+        project: ProjectId,
+        reason: &str,
+    ) -> Option<ResolveFailed> {
+        let key = self.ui_state.net_class_styles.wanted_key(project)?.clone();
+        Some(ResolveFailed {
+            projects: vec![(project, key)],
+            reason: reason.to_string(),
+        })
+    }
+
     /// Resolve and apply the net-class styles on this thread, for a regression
     /// test that has no async runtime to run the spawned task.
     #[doc(hidden)]
@@ -286,7 +304,6 @@ impl Signex {
         // The update that came before planned a task this test never ran;
         // treat it as lost so the same inputs are planned again.
         self.ui_state.net_class_styles.give_up_pending();
-        self.ui_state.net_class_styles.reopen_gate();
         if let Some(job) = self.plan_net_class_refresh() {
             let resolved = job.run();
             self.apply_net_class_styles(&Ok(resolved));

@@ -26,6 +26,8 @@ shrink.
 | --- | --- | --- | --- | --- |
 | `autoplace_fields` | Autoplace fields | edit | — | `O` |
 | `break_wire` | Break wire | modify | `E W` | — |
+| `bring_drawings_forward` | Bring drawings forward | edit | — | — |
+| `bring_drawings_to_front` | Bring drawings to front | edit | — | — |
 | `cancel_current_tool` | Cancel current stage / exit placement mode | interactive | `Escape` | `Escape` |
 | `center_on_cursor` | Center on cursor | view | — | `F4` |
 | `center_view_at_cursor` | Center/redraw view around cursor | view | `Home` | — |
@@ -56,7 +58,7 @@ shrink.
 | `find` | Find | search | — | `Ctrl+F` |
 | `find_and_replace` | Find and replace | search | `Ctrl+H` | — |
 | `find_next` | Find next | search | `F3` | `F3` |
-| `find_previous` | Find previous | search | — | `Shift+F3` |
+| `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
 | `find_similar_objects` | Find Similar Objects | select | `Shift+F` | — |
 | `find_text` | Find text | search | `Ctrl+F` | — |
 | `import_graphics` | Import graphics | library | — | `Ctrl+Shift+F` |
@@ -84,7 +86,7 @@ shrink.
 | `print` | Print | file | `Ctrl+P` | `Ctrl+P` |
 | `redo` | Redo | edit | `Ctrl+Y` | `Ctrl+Y` |
 | `refresh_view` | Refresh/redraw | view | `End` | `F5` |
-| `remove_last_vertex` | Remove last placed vertex while drawing | interactive | `Backspace`, `Delete` | — |
+| `remove_last_vertex` | Remove last placed vertex while drawing | interactive | `Backspace` | — |
 | `repeat_last_item` | Repeat last item | edit | — | `Insert` |
 | `report_manager_bom` | Report Manager / BOM | reports | `R I` | — |
 | `reset_local_coordinates` | Reset local coordinates | view | — | `Space` |
@@ -96,6 +98,8 @@ shrink.
 | `select_all` | Select all | select | `Ctrl+A` | `Ctrl+A` |
 | `select_expand_connection` | Select / expand connection | select | — | `Ctrl+4` |
 | `select_node_or_connection_item` | Select node / connection item under cursor | select | — | `Alt+3` |
+| `send_drawings_backward` | Send drawings backward | edit | — | — |
+| `send_drawings_to_back` | Send drawings to back | edit | — | — |
 | `show_all_design_objects` | Show all design objects | view | `Ctrl+PageDown` | — |
 | `show_current_command_hotkeys` | Show graphical editing hotkey list for current command | help | `F1` | — |
 | `show_current_command_shortcuts` | Show valid shortcuts for the current interactive command | help | `Shift+F1` | — |

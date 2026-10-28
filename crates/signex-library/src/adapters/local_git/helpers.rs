@@ -29,14 +29,26 @@ const GIT_LOCK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
 /// `removed_rel_path` is dropped from the new tree (and the index) in the
 /// same commit, so a file moved to `rel_path` is recorded as a rename
 /// rather than left tracked at its old name.
+///
+/// `content` is the exact bytes to commit for `rel_path`; `None` commits the
+/// working-tree file as it is when this runs.
 pub(super) fn stage_and_commit(
     repo: &git2::Repository,
     removed_rel_path: Option<&Path>,
     rel_path: &Path,
+    content: Option<&[u8]>,
     signature: &git2::Signature<'_>,
     message: &str,
 ) -> Result<Option<git2::Oid>, git2::Error> {
-    stage_and_commit_with(repo, removed_rel_path, rel_path, &[], signature, message)
+    stage_and_commit_with(
+        repo,
+        removed_rel_path,
+        rel_path,
+        content,
+        &[],
+        signature,
+        message,
+    )
 }
 
 /// [`stage_and_commit`] that also puts `extra_rel_paths` (working-tree
@@ -45,6 +57,7 @@ pub(super) fn stage_and_commit_with(
     repo: &git2::Repository,
     removed_rel_path: Option<&Path>,
     rel_path: &Path,
+    content: Option<&[u8]>,
     extra_rel_paths: &[&Path],
     signature: &git2::Signature<'_>,
     message: &str,
@@ -57,15 +70,20 @@ pub(super) fn stage_and_commit_with(
     // what the index needs afterwards. That blob is the file as `git add`
     // stores it: the disk bytes after the clean filters (`core.autocrlf`,
     // `text`/`eol` attributes), as before. Built in memory only; the tree
-    // is still made from HEAD's, never the index.
-    let main_entry = staged_entry(repo, rel_path);
+    // is still made from HEAD's, never the index. Supplied bytes are never
+    // staged from the working file, which may have moved on since.
+    let main_entry = match content {
+        Some(_) => None,
+        None => staged_entry(repo, rel_path).ok(),
+    };
     let staged_blob = match &main_entry {
-        Ok(entry) if !super::lfs::is_lfs_path(repo, rel_path)? => Some(entry.id),
+        Some(entry) if !super::lfs::is_lfs_path(repo, rel_path)? => Some(entry.id),
         _ => None,
     };
-    let blob = match staged_blob {
-        Some(id) => id,
-        None => super::lfs::blob_for_path(repo, workdir, rel_path)?,
+    let blob = match (content, staged_blob) {
+        (Some(bytes), _) => super::lfs::blob_for_bytes(repo, rel_path, bytes)?,
+        (None, Some(id)) => id,
+        (None, None) => super::lfs::blob_for_path(repo, workdir, rel_path)?,
     };
     // An unborn HEAD (fresh repo) is the only legitimate "no parent" case.
     let parent = match repo.head() {
@@ -105,7 +123,7 @@ pub(super) fn stage_and_commit_with(
     // (shown as a change by `git status`), never a wrong commit.
     // The index is re-read on every attempt, so an entry another process
     // staged while we waited for its `index.lock` is kept (#900).
-    let mut main_entry = main_entry.ok();
+    let mut main_entry = main_entry;
     if let Some(entry) = main_entry.as_mut() {
         // An LFS path's entry records the pointer that was committed.
         entry.id = blob;
@@ -126,12 +144,28 @@ pub(super) fn stage_and_commit_with(
                 continue;
             }
             index.add_path(path)?;
-            // `add_path` stores the raw bytes; an LFS path's entry records
-            // the pointer that was committed.
+            // `add_path` stores the raw bytes of the working file together
+            // with its stat data; an LFS path's entry records the pointer
+            // that was committed. When the caller supplied the bytes for
+            // `rel_path`, the working file may have moved on since: pairing
+            // the committed blob id with that file's stat would make git trust
+            // the cache and call it clean, hiding the file's real content from
+            // every later checkout or reset. Zeroed stat data forces git to
+            // re-hash the file and report it modified. The extra files are
+            // always committed from the working tree, so they match.
+            let working_differs = content.is_some()
+                && *path == rel_path
+                && super::lfs::working_blob_id(repo, workdir, path).ok() != Some(*blob);
             if let Some(mut entry) = index.get_path(path, 0)
-                && entry.id != *blob
+                && (entry.id != *blob || working_differs)
             {
                 entry.id = *blob;
+                if working_differs {
+                    entry.ctime = git2::IndexTime::new(0, 0);
+                    entry.mtime = git2::IndexTime::new(0, 0);
+                    entry.file_size = 0;
+                    entry.ino = 0;
+                }
                 index.add(&entry)?;
             }
         }
@@ -275,35 +309,72 @@ fn stale_lock(git_dir: &Path) -> Option<std::path::PathBuf> {
         .find(|path| path.extension().is_some_and(|e| e == "lock") && is_stale(path))
 }
 
-/// Project a `git2::Commit` onto the trait-level [`HistoryEntry`].
-///
-/// Diff-stat fields (`additions`, `deletions`, `files_changed`) stay
-/// at the scaffold defaults — Stage 17 ships the list shape without
-/// the lazy diff plumbing. The author timestamp is preferred over
-/// the committer's so rebases/cherry-picks don't visually skew the
-/// "12 minutes ago" labels.
-pub(super) fn commit_to_history_entry(commit: &git2::Commit<'_>) -> HistoryEntry {
-    let author = commit.author();
-    let secs = author.when().seconds();
-    let time =
-        chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0).unwrap_or_else(chrono::Utc::now);
-    let raw = commit.message().unwrap_or("");
-    let (subject, body) = match raw.find("\n\n") {
-        Some(i) => (raw[..i].trim_end().to_string(), raw[i + 2..].to_string()),
-        None => (raw.trim_end().to_string(), String::new()),
-    };
-    HistoryEntry {
-        sha: commit.id().to_string(),
-        author_name: author.name().unwrap_or_default().to_string(),
-        author_email: author.email().unwrap_or_default().to_string(),
-        time,
-        subject,
-        body,
-        parent_shas: commit.parent_ids().map(|id| id.to_string()).collect(),
-        files_changed: Vec::new(),
-        additions: 0,
-        deletions: 0,
+/// Refuse an insert whose `row_id` or `internal_pn` is already stored in
+/// any table of `lf`; the part number is the library-wide key.
+pub(super) fn check_insert_unique(
+    lf: &LibraryFile,
+    row_id: &str,
+    internal_pn: &str,
+) -> Result<(), LibraryError> {
+    for (name, table) in &lf.tables {
+        for stored in &table.rows {
+            if stored.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(row_id) {
+                return Err(LibraryError::Conflict(format!(
+                    "row {row_id} already exists in table {name:?}"
+                )));
+            }
+        }
     }
+    check_pn_unique(lf, internal_pn, None)
+}
+
+/// [`check_pn_unique`] for an edit, run only when the PN changes from the
+/// stored row's (trimmed), so a library that already holds duplicate PNs
+/// still lets their other fields be edited.
+pub(super) fn check_pn_change(
+    lf: &LibraryFile,
+    table: &str,
+    row_id: &str,
+    internal_pn: &str,
+) -> Result<(), LibraryError> {
+    let stored_pn = lf.tables.get(table).and_then(|t| {
+        t.rows
+            .iter()
+            .find(|r| r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(row_id))
+            .and_then(|r| r.cells.get("internal_pn"))
+    });
+    if stored_pn.is_some_and(|s| s.trim() == internal_pn.trim()) {
+        return Ok(());
+    }
+    check_pn_unique(lf, internal_pn, Some(row_id))
+}
+
+/// Refuse a part number another row already holds. A blank PN is a draft
+/// the user has not filled in yet, so it never conflicts. `except_row_id`
+/// names the row being edited, which may keep its own PN. Both sides are
+/// compared trimmed, so `"PN-A "` clashes with `"PN-A"`; the comparison
+/// stays case-sensitive because part numbers can be case-significant.
+pub(super) fn check_pn_unique(
+    lf: &LibraryFile,
+    internal_pn: &str,
+    except_row_id: Option<&str>,
+) -> Result<(), LibraryError> {
+    let wanted = internal_pn.trim();
+    if wanted.is_empty() {
+        return Ok(());
+    }
+    for (name, table) in &lf.tables {
+        for stored in &table.rows {
+            let own = except_row_id.is_some()
+                && stored.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == except_row_id;
+            if !own && stored.cells.get("internal_pn").map(|s| s.trim()) == Some(wanted) {
+                return Err(LibraryError::Conflict(format!(
+                    "internal_pn {internal_pn:?} already exists in table {name:?}"
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// True if `commit` modified `rel_path` relative to *any* of its

@@ -6,6 +6,9 @@ use signex_output::{MarginEdge, PageSize, PageSizeKind, PdfScale, PdfScaleMode};
 
 use super::super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Body text size of the modal's compact controls.
 const FIELD_TEXT: f32 = 11.0;
 /// Numeric field width, in multiples of the text size (fits `5080.00`).
@@ -19,7 +22,7 @@ impl Signex {
     ) -> Element<'static, Message> {
         iced::widget::text_input("", value)
             .on_input(move |v| Message::PrintPreview(on_input(v)))
-            .padding([4, 8])
+            .padding([SP.s, SP.m])
             .size(FIELD_TEXT + 1.0)
             .width(FIELD_TEXT * FIELD_WIDTH_EM)
             .into()
@@ -74,7 +77,7 @@ impl Signex {
             size_picker,
             orientation_control,
         ]
-        .spacing(8)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center);
 
         if matches!(current_size, PageSize::Custom { .. }) {
@@ -138,7 +141,7 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
-        let mut margins = row![].spacing(8).align_y(iced::Alignment::Center);
+        let mut margins = row![].spacing(SP.m).align_y(iced::Alignment::Center);
         for edge in MarginEdge::ALL {
             margins = margins.push(text(edge.to_string()).size(FIELD_TEXT).color(text_muted));
             margins = margins.push(
@@ -161,9 +164,9 @@ impl Signex {
                     Space::new().height(6),
                     self.view_pdf_page_setup_notice(preview),
                 ]
-                .spacing(2),
+                .spacing(SP.xs),
             )
-            .padding([8, 12]),
+            .padding([SP.m, SP.l]),
         ]
         .into()
     }

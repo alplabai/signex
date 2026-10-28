@@ -1,10 +1,8 @@
 //! Disk JSON cache for `DistributorPart` records.
 //!
 //! - Layout: `<root>/<provider>/<mpn>.json` (one JSON file per part).
-//! - Default TTL: **24 hours** for metadata. Datasheet URLs cached
-//!   indefinitely (the URL is stored as part of the same JSON; the
-//!   indefinite-ness is a property of the URL not changing — we re-read
-//!   stale entries explicitly when the caller wants a refresh).
+//! - Default TTL: **24 hours**. The whole entry (datasheet URL included,
+//!   it is part of the same JSON) expires at the TTL.
 //! - Tests use a temp dir, never `~/.signex/`.
 //!
 //! `DistributorCache::with_root` is the test-friendly constructor;
@@ -56,33 +54,31 @@ impl DistributorCache {
 
     /// Compute the on-disk path for a `(provider, mpn)` entry.
     ///
-    /// M2: directory-traversal hardening. The MPN is partially trusted
-    /// (vendor-supplied via API responses we don't control), so we:
-    /// 1. Replace path separators with `_` (preserves the original `/`/`\`
-    ///    sanitisation that allowed legitimate slashes in MPNs).
-    /// 2. Reject any MPN containing `..` (parent-dir escape).
-    /// 3. Verify the canonicalised result still lives under `self.root`.
-    ///
-    /// On rejection the path can't be derived; callers should treat the
-    /// error as "this MPN cannot be cached" and return live results
-    /// without persisting them.
+    /// The MPN is partially trusted (vendor-supplied), so it is encoded
+    /// injectively: every byte outside `[A-Za-z0-9-._]` becomes `%XX`. That
+    /// keeps `A/B` and `A_B` distinct, makes the name valid on Windows
+    /// (no `:*?"<>|`), and cannot contain a path separator, so no traversal
+    /// check on the MPN is needed. Callers should go through `put`/`get`,
+    /// which also verify the result stays under `self.root`.
     pub fn entry_path(&self, provider: &str, mpn: &str) -> PathBuf {
-        let safe_mpn = mpn.replace(['/', '\\'], "_");
-        // Path is always derived from `self.root`; `validate_entry_path`
-        // surfaces the rejection. Production callers must invoke `put`/`get`
-        // which run the validation check, but we keep the bare path-builder
-        // pure (no Result) to preserve the existing public surface.
+        let mut safe_mpn = String::with_capacity(mpn.len());
+        for b in mpn.bytes() {
+            if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_') {
+                safe_mpn.push(b as char);
+            } else {
+                safe_mpn.push_str(&format!("%{b:02X}"));
+            }
+        }
         self.root.join(provider).join(format!("{safe_mpn}.json"))
     }
 
-    /// M2: enforce that `mpn` produces a path strictly inside `self.root`.
-    /// Any rejection bubbles up as `CacheError::Io(InvalidInput)` so callers
-    /// can branch on it without parsing strings.
+    /// Enforce that the entry lies strictly inside `self.root`. Rejection
+    /// bubbles up as `CacheError::Io(InvalidInput)`.
     fn validate_entry_path(&self, provider: &str, mpn: &str) -> Result<PathBuf, CacheError> {
-        if mpn.contains("..") || provider.contains("..") {
+        if provider.contains("..") {
             return Err(CacheError::Io(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
-                "cache key contains parent-directory traversal token (..)",
+                "cache provider contains parent-directory traversal token (..)",
             )));
         }
         let path = self.entry_path(provider, mpn);
@@ -126,6 +122,10 @@ impl DistributorCache {
         }
         let bytes = std::fs::read(&path)?;
         let part: DistributorPart = serde_json::from_slice(&bytes)?;
+        // A file under this key holding a different part is a miss, not a hit.
+        if part.mpn != mpn {
+            return Ok(None);
+        }
 
         // TTL check based on `captured_at`. If TTL is zero, every entry is
         // considered expired — useful for forcing a refresh.
@@ -194,6 +194,20 @@ mod tests {
         }
     }
 
+    /// `A/B` and `A_B` are different parts and must not share a cache file;
+    /// a mislabelled file under a key is a miss.
+    #[test]
+    fn distinct_mpns_do_not_collide_and_mismatch_is_a_miss() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+        let ttl = Duration::from_secs(60);
+        cache.put("p", &part("A/B")).unwrap();
+        assert!(cache.get("p", "A_B", ttl).unwrap().is_none());
+        assert!(cache.get("p", "A/B", ttl).unwrap().is_some());
+        std::fs::copy(cache.entry_path("p", "A/B"), cache.entry_path("p", "C")).unwrap();
+        assert!(cache.get("p", "C", ttl).unwrap().is_none());
+    }
+
     /// Overwriting an existing entry replaces it and leaves no `*.tmp`
     /// sibling behind. (Crash-safety itself is not observable in a unit test.)
     #[test]
@@ -219,7 +233,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cache = DistributorCache::with_root(dir.path()).unwrap();
         let p = cache.entry_path("digikey", "311-10.0K/CRCT");
-        assert_eq!(p.file_name().unwrap(), "311-10.0K_CRCT.json");
+        assert_eq!(p.file_name().unwrap(), "311-10.0K%2FCRCT.json");
+    }
+
+    /// Windows-reserved characters round-trip through `put`/`get`.
+    #[test]
+    fn windows_reserved_chars_are_cacheable() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+        let mpn = "A:B*C?D<E>F|G..H";
+        cache.put("p", &part(mpn)).unwrap();
+        assert!(cache.get("p", mpn, DEFAULT_TTL).unwrap().is_some());
     }
 
     #[test]
@@ -237,20 +261,19 @@ mod tests {
     /// vendor-supplied response can't escape the cache root and overwrite
     /// arbitrary files.
     #[test]
-    fn entry_path_rejects_parent_dir_traversal() {
+    fn entry_path_contains_parent_dir_traversal() {
         let dir = tempfile::tempdir().unwrap();
         let cache = DistributorCache::with_root(dir.path()).unwrap();
 
-        // Direct check via `put`: rejection surfaces as InvalidInput.
-        let err = cache.put("lcsc", &part("../../etc/passwd")).unwrap_err();
-        match err {
-            CacheError::Io(e) => assert_eq!(e.kind(), std::io::ErrorKind::InvalidInput),
-            other => panic!("expected Io(InvalidInput), got {other:?}"),
-        }
+        // A hostile MPN is encoded into a single file name under the root.
+        let evil = "../../etc/passwd";
+        cache.put("lcsc", &part(evil)).unwrap();
+        let path = cache.entry_path("lcsc", evil);
+        assert_eq!(path.parent().unwrap(), dir.path().join("lcsc"));
+        assert!(cache.get("lcsc", evil, DEFAULT_TTL).unwrap().is_some());
 
-        // The same protection applies to reads and invalidations so
-        // attackers can't probe filesystem state through a cache miss.
-        assert!(cache.get("lcsc", "..", DEFAULT_TTL).is_err());
+        // A traversing provider is rejected on every op.
+        assert!(cache.get("..", "x", DEFAULT_TTL).is_err());
         assert!(cache.invalidate("..", "anything").is_err());
     }
 

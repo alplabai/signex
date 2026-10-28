@@ -11,6 +11,10 @@ use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::{MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_CLOSE_X_ICON};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
 
 /// Gap kept between a modal and the window edge, in logical px.
@@ -90,7 +94,7 @@ pub(crate) fn os_title_bar_slot<'a>() -> Element<'a, Message> {
 }
 
 /// Compact X close button for borderless modal headers. Matches the
-/// main-window chrome close (`view/mod.rs::view_main_window_chrome`):
+/// main-window chrome close (`view/chrome/buttons.rs::windows_button`):
 /// no border, fully transparent at rest, Windows-native red bg + white
 /// icon on hover. The `_text_color` argument is kept for API
 /// compatibility with existing call sites — it is intentionally
@@ -101,7 +105,7 @@ pub(crate) fn close_x_button(
     _text_color: Color,
 ) -> Element<'static, Message> {
     // Use the same SVG and footprint as the main-window chrome close
-    // (`view::view_main_window_chrome::chrome_btn`) so the modal X is
+    // (`view/chrome/buttons.rs::windows_button`) so the modal X is
     // visually identical to the OS-window X, including stroke weight,
     // hit-box dimensions, and red-on-hover behaviour. Glyph is
     // ALWAYS white per design — `_text_color` is ignored for the
@@ -165,7 +169,7 @@ fn close_button(
     text_color: Color,
     border: Color,
 ) -> Element<'_, Message> {
-    button(container(text(label.to_string()).size(11).color(text_color)).padding([3, 10]))
+    button(container(text(label.to_string()).size(TS.body).color(text_color)).padding([3, 10]))
         .on_press(message)
         .style(move |_: &Theme, _| button::Style {
             background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),
@@ -186,13 +190,13 @@ fn close_button(
 pub(super) fn section_header(title: &str, muted: Color) -> Element<'_, Message> {
     container(
         row![
-            text("\u{25BE}").size(10).color(muted),
+            text("\u{25BE}").size(TS.caption).color(muted),
             Space::new().width(6),
-            text(title.to_string()).size(11).color(muted),
+            text(title.to_string()).size(TS.body).color(muted),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([6, 12])
+    .padding([6.0, SP.l])
     .width(Length::Fill)
     .style(move |_: &Theme| container::Style {
         background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.025))),
@@ -218,7 +222,7 @@ pub(super) fn secondary_button_maybe(
     text_color: Color,
     border: Color,
 ) -> Element<'_, Message> {
-    button(container(text(label.to_string()).size(11).color(text_color)).padding([5, 14]))
+    button(container(text(label.to_string()).size(TS.body).color(text_color)).padding([5, 14]))
         .on_press_maybe(message)
         .style(move |_: &Theme, _| button::Style {
             background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
@@ -263,7 +267,7 @@ pub(super) fn primary_button_themed(
     } else {
         Color::from_rgba(1.0, 1.0, 1.0, 0.4)
     };
-    let mut b = button(container(text(label.to_string()).size(11).color(fg)).padding([5, 14]))
+    let mut b = button(container(text(label.to_string()).size(TS.body).color(fg)).padding([5, 14]))
         .style(move |_: &Theme, _| button::Style {
             background: Some(Background::Color(bg)),
             border: Border {

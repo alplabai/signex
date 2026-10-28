@@ -142,28 +142,39 @@ impl ConstraintKind {
         }
     }
 
-    /// Every entity this constraint names, in field order.
-    pub fn entity_refs(&self) -> Vec<SketchEntityId> {
+    /// Every entity this constraint names, in field order. Allocation-free.
+    pub fn entities(&self) -> impl Iterator<Item = SketchEntityId> {
         use ConstraintKind::*;
-        match self {
-            Coincident { p1, p2 } | DistancePtPt { p1, p2, .. } => vec![*p1, *p2],
+        let slots: [Option<SketchEntityId>; 3] = match self {
+            Coincident { p1, p2 } | DistancePtPt { p1, p2, .. } => [Some(*p1), Some(*p2), None],
             PointOnLine { point, line }
             | DistancePtLine { point, line, .. }
-            | Midpoint { point, line } => vec![*point, *line],
-            PointOnArc { point, arc } => vec![*point, *arc],
-            DistancePtCircle { point, circle, .. } => vec![*point, *circle],
-            Horizontal { line } | Vertical { line } => vec![*line],
+            | Midpoint { point, line } => [Some(*point), Some(*line), None],
+            PointOnArc { point, arc } => [Some(*point), Some(*arc), None],
+            DistancePtCircle { point, circle, .. } => [Some(*point), Some(*circle), None],
+            Horizontal { line } | Vertical { line } => [Some(*line), None, None],
             Parallel { l1, l2 }
             | Perpendicular { l1, l2 }
             | Angle { l1, l2, .. }
-            | EqualLength { l1, l2 } => vec![*l1, *l2],
-            EqualRadius { e1, e2 } => vec![*e1, *e2],
-            TangentLineArc { line, arc } => vec![*line, *arc],
-            TangentArcArc { a1, a2, .. } => vec![*a1, *a2],
-            SymmetricAboutLine { p1, p2, line } => vec![*p1, *p2, *line],
-            SymmetricAboutPoint { p1, p2, center } => vec![*p1, *p2, *center],
-            Fixed { point } => vec![*point],
-        }
+            | EqualLength { l1, l2 } => [Some(*l1), Some(*l2), None],
+            EqualRadius { e1, e2 } => [Some(*e1), Some(*e2), None],
+            TangentLineArc { line, arc } => [Some(*line), Some(*arc), None],
+            TangentArcArc { a1, a2, .. } => [Some(*a1), Some(*a2), None],
+            SymmetricAboutLine { p1, p2, line } => [Some(*p1), Some(*p2), Some(*line)],
+            SymmetricAboutPoint { p1, p2, center } => [Some(*p1), Some(*p2), Some(*center)],
+            Fixed { point } => [Some(*point), None, None],
+        };
+        slots.into_iter().flatten()
+    }
+
+    /// Every entity this constraint names, in field order.
+    pub fn entity_refs(&self) -> Vec<SketchEntityId> {
+        self.entities().collect()
+    }
+
+    /// Whether this constraint names `id`.
+    pub fn touches(&self, id: SketchEntityId) -> bool {
+        self.entities().any(|e| e == id)
     }
 
     /// Number of scalar residuals this constraint contributes.

@@ -109,7 +109,22 @@ impl LocalGitProjectAdapter {
         rel_path: &Path,
         message: &str,
     ) -> Result<Option<git2::Oid>, LibraryError> {
-        self.commit_staged(None, rel_path, message)
+        self.commit_staged(None, rel_path, None, message)
+    }
+
+    /// Like [`Self::commit_path`], but commits exactly `content` as the file
+    /// `rel_path` instead of reading the working tree. A save that knows the
+    /// bytes it wrote uses this so a later edit to the file (an external
+    /// editor, a History restore) cannot change what the commit records. A
+    /// `filter=lfs` path stores `content` as an LFS object and commits its
+    /// pointer, as [`Self::commit_path`] does for the file.
+    pub fn commit_path_with_bytes(
+        &self,
+        rel_path: &Path,
+        content: &[u8],
+        message: &str,
+    ) -> Result<Option<git2::Oid>, LibraryError> {
+        self.commit_staged(None, rel_path, Some(content), message)
     }
 
     /// Commit `rel_path` and drop `removed_rel_path` from the tree and the
@@ -123,13 +138,14 @@ impl LocalGitProjectAdapter {
         rel_path: &Path,
         message: &str,
     ) -> Result<Option<git2::Oid>, LibraryError> {
-        self.commit_staged(Some(removed_rel_path), rel_path, message)
+        self.commit_staged(Some(removed_rel_path), rel_path, None, message)
     }
 
     fn commit_staged(
         &self,
         removed_rel_path: Option<&Path>,
         rel_path: &Path,
+        content: Option<&[u8]>,
         message: &str,
     ) -> Result<Option<git2::Oid>, LibraryError> {
         // v0.23 — reject obviously dangerous `rel_path`. Internal
@@ -171,6 +187,7 @@ impl LocalGitProjectAdapter {
                 &repo,
                 removed_rel_path,
                 rel_path,
+                content,
                 &sig,
                 &final_message,
             )
@@ -286,7 +303,10 @@ impl LocalGitProjectAdapter {
         Ok(entries)
     }
 
-    /// Restore `rel_path` to the state captured by `commit_oid`.
+    /// Restore `rel_path` to the state captured by `commit_oid`, and return
+    /// the bytes written. A caller that commits the restore passes them to
+    /// [`Self::commit_path_with_bytes`], so the commit records the revision
+    /// that was restored even if the file is edited again before it runs.
     /// Atomic write — staging file + rename, working tree stays
     /// consistent if the rename fails. A file inside one of the project's
     /// libraries is written under that library's write lock, so another
@@ -297,7 +317,11 @@ impl LocalGitProjectAdapter {
     /// differs per kind: a schematic is left dirty and commits on the next
     /// Save; a PCB, footprint or symbol commits "Restore X" through
     /// [`commit_path`] at once.
-    pub fn restore_at(&self, rel_path: &Path, commit_oid: git2::Oid) -> Result<(), LibraryError> {
+    pub fn restore_at(
+        &self,
+        rel_path: &Path,
+        commit_oid: git2::Oid,
+    ) -> Result<Vec<u8>, LibraryError> {
         let repo = git2::Repository::open(&self.project_root)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
         let commit = repo
@@ -331,7 +355,7 @@ impl LocalGitProjectAdapter {
                 LibraryError::Backend(format!("atomic write {}: {e}", abs.display()))
             })?,
         }
-        Ok(())
+        Ok(content.to_vec())
     }
 
     /// Project root that this adapter manages.
@@ -344,7 +368,7 @@ impl LocalGitProjectAdapter {
     /// callers (notably `signex-app`) that don't depend on `git2`
     /// directly and just have the short/full SHA string from the
     /// History panel widget.
-    pub fn restore_at_from_sha(&self, rel_path: &Path, sha: &str) -> Result<(), LibraryError> {
+    pub fn restore_at_from_sha(&self, rel_path: &Path, sha: &str) -> Result<Vec<u8>, LibraryError> {
         let oid = git2::Oid::from_str(sha)
             .map_err(|e| LibraryError::Backend(format!("invalid sha `{sha}`: {e}")))?;
         self.restore_at(rel_path, oid)
@@ -435,33 +459,10 @@ fn commit_diff_stats_for_path(
 }
 
 fn history_entry_from_commit(commit: &git2::Commit<'_>, stats: CommitPathStats) -> HistoryEntry {
-    use chrono::TimeZone;
-    let author = commit.author();
-    let when = author.when();
-    let time = chrono::Utc
-        .timestamp_opt(when.seconds(), 0)
-        .single()
-        .unwrap_or_else(chrono::Utc::now);
-    let full = commit.message().unwrap_or_default();
-    let (subject, body) = match full.find('\n') {
-        Some(i) => {
-            let s = &full[..i];
-            let rest = full[i + 1..].trim_start_matches('\n').to_string();
-            (s.to_string(), rest)
-        }
-        None => (full.to_string(), String::new()),
-    };
-    let parent_shas: Vec<String> = commit.parent_ids().map(|o| o.to_string()).collect();
     HistoryEntry {
-        sha: commit.id().to_string(),
-        author_name: author.name().unwrap_or("").to_string(),
-        author_email: author.email().unwrap_or("").to_string(),
-        time,
-        subject,
-        body,
-        parent_shas,
         files_changed: stats.files_changed,
         additions: stats.additions,
         deletions: stats.deletions,
+        ..HistoryEntry::from_commit(commit)
     }
 }

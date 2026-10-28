@@ -8,7 +8,7 @@
 //! Extracted verbatim from the SVG exporter (`svg/mod.rs`); pure code
 //! motion, zero behaviour change.
 
-use super::drawings::push_sch_drawing_path;
+use super::drawings::push_placed_drawings;
 use super::family::alias_for_family;
 use super::geometry::{path_to_tiny_skia, rect_path};
 use super::labels::{
@@ -23,8 +23,8 @@ use crate::SheetSnapshot;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::{ColourMode, PdfOptions};
 use signex_types::markup::ExpressionEvalContext;
-use signex_types::schematic::LabelType;
 use signex_types::schematic::field_effective_style;
+use signex_types::schematic::{DrawingPlacement, LabelType};
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use tiny_skia::{Color, FillRule, Paint, Pixmap, Stroke};
@@ -77,6 +77,14 @@ impl SvgRenderContext {
                 stroke_width: 1.0,
             },
         ));
+
+        push_placed_drawings(
+            &mut elements,
+            &sheet.schematic,
+            DrawingPlacement::Behind,
+            &xform,
+            palette,
+        );
 
         // Base primitives
         for wire in &sheet.schematic.wires {
@@ -238,7 +246,12 @@ impl SvgRenderContext {
                     v_align: valign_to_svg(note.justify_v),
                     rotation_deg: note.rotation as f32,
                     fill_rgb: palette.note_text,
-                    text: normalize_standard_text(&note.text),
+                    text: normalize_standard_text(
+                        &match eval_inputs.and_then(|e| e.special_strings) {
+                            Some(special) => crate::resolve(&note.text, special),
+                            None => note.text.clone(),
+                        },
+                    ),
                 });
             }
         }
@@ -289,10 +302,6 @@ impl SvgRenderContext {
                     text: normalize_standard_text(&child.filename),
                 });
             }
-        }
-
-        for drawing in &sheet.schematic.drawings {
-            push_sch_drawing_path(&mut elements, drawing, &xform, palette);
         }
 
         // Full symbol body graphics from library definitions.
@@ -402,6 +411,14 @@ impl SvgRenderContext {
                 });
             }
         }
+
+        push_placed_drawings(
+            &mut elements,
+            &sheet.schematic,
+            DrawingPlacement::Above,
+            &xform,
+            palette,
+        );
 
         Self {
             width,

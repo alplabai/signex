@@ -165,6 +165,59 @@ const CLAIM_ORDER: [InputConsumer; 6] = [
     InputConsumer::Keymap,
 ];
 
+/// A key the app claims before the keymap profile is consulted, whatever
+/// modifiers are held. The claim fns and the Keyboard Shortcuts pane's
+/// "overridden" marker both read these, so there is one list.
+pub(crate) struct FixedKey {
+    named: keyboard::key::Named,
+    /// What the key does, shown in the pane's "overridden by" note.
+    pub(crate) action: &'static str,
+}
+
+impl FixedKey {
+    fn matches(&self, key: &keyboard::Key) -> bool {
+        matches!(key.as_ref(), keyboard::Key::Named(named) if named == self.named)
+    }
+}
+
+const ESCAPE_KEY: FixedKey = FixedKey {
+    named: keyboard::key::Named::Escape,
+    action: "Esc (cancel / close)",
+};
+const SHORTCUTS_SHEET_KEY: FixedKey = FixedKey {
+    named: keyboard::key::Named::F1,
+    action: "F1 (Keyboard Shortcuts)",
+};
+
+/// Every fixed key, for [`shadowing_fixed_key`].
+const FIXED_APP_KEYS: [FixedKey; 2] = [ESCAPE_KEY, SHORTCUTS_SHEET_KEY];
+
+/// The fixed app key that claims `stroke` before any profile binding can
+/// see it, if any. A chord containing such a stroke is unreachable.
+pub(crate) fn shadowing_fixed_key(stroke: &KeyStroke) -> Option<&'static str> {
+    FIXED_APP_KEYS
+        .iter()
+        .find(|fixed| {
+            KeyStroke::from_iced(
+                &keyboard::Key::Named(fixed.named),
+                keyboard::Modifiers::empty(),
+            )
+            .is_some_and(|fixed_stroke| fixed_stroke.key == stroke.key)
+        })
+        .map(|fixed| fixed.action)
+}
+
+/// [`shadowing_fixed_key`] over a trigger's display text (`"Ctrl+F1"`,
+/// `"P W"`); pointer gestures and unparsable text are never shadowed.
+pub(crate) fn shadowing_fixed_key_for_trigger(trigger: &str) -> Option<&'static str> {
+    match crate::keymap::ShortcutTrigger::parse(trigger) {
+        Ok(crate::keymap::ShortcutTrigger::KeySequence(strokes)) => {
+            strokes.iter().find_map(shadowing_fixed_key)
+        }
+        _ => None,
+    }
+}
+
 impl Signex {
     /// Classify the window an input event landed in.
     ///
@@ -358,14 +411,12 @@ impl Signex {
         let keyboard::Event::KeyPressed { key, .. } = event else {
             return Claim::Pass;
         };
-        match key.as_ref() {
-            keyboard::Key::Named(keyboard::key::Named::Escape) => {
-                Claim::Consume(Message::Input(InputMsg::EscapePressed {
-                    window: Some(window),
-                }))
-            }
-            _ => Claim::Pass,
+        if !ESCAPE_KEY.matches(key) {
+            return Claim::Pass;
         }
+        Claim::Consume(Message::Input(InputMsg::EscapePressed {
+            window: Some(window),
+        }))
     }
 
     /// F1 toggles the keyboard-shortcuts sheet: open if closed, close if
@@ -375,7 +426,7 @@ impl Signex {
         let keyboard::Event::KeyPressed { key, .. } = event else {
             return Claim::Pass;
         };
-        if !matches!(key.as_ref(), keyboard::Key::Named(keyboard::key::Named::F1)) {
+        if !SHORTCUTS_SHEET_KEY.matches(key) {
             return Claim::Pass;
         }
         // #555 — a dead key where the sheet cannot appear. Toggling it

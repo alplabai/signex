@@ -1,7 +1,7 @@
 //! Edit Component Details modal — full row editor invoked by
 //! the "Edit Details" button in the Library Browser action row.
 //!
-//! `view_delete_confirm` (Deliverable D) lands in this same module.
+//! `view_delete_confirm` lives in this module too.
 
 use std::collections::BTreeMap;
 
@@ -17,8 +17,9 @@ use super::messages::{BrowserEditMsg, LibraryMessage};
 use super::modal_chrome::close_x;
 use super::state::{DeleteConfirmState, EditRowModalState};
 
-const MODAL_W: f32 = 720.0;
-const MODAL_H: f32 = 640.0;
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 const CONFIRM_W: f32 = 480.0;
 const CONFIRM_H: f32 = 230.0;
@@ -67,7 +68,7 @@ pub fn view<'a>(
     let title = format!("Edit Component — {}", edit.draft.internal_pn.as_str());
     let header = container(
         row![
-            text(title).size(14).color(text_c),
+            text(title).size(TS.heading).color(text_c),
             Space::new().width(Length::Fill),
             close_x(
                 LibraryMessage::BrowserEdit {
@@ -94,7 +95,7 @@ pub fn view<'a>(
             move |s| send(BrowserEditMsg::SetInternalPn(s))
         })
         .padding(6)
-        .size(12);
+        .size(TS.label);
 
     let class_picks: Vec<ClassPick> = classes
         .iter()
@@ -136,10 +137,10 @@ pub fn view<'a>(
                 move |s| send(BrowserEditMsg::SetDatasheetUrl(s))
             })
             .padding(6)
-            .size(12)
+            .size(TS.label)
             .into(),
         DatasheetRef::HashPinned { filename, .. } => text(format!("Pinned PDF: {filename}"))
-            .size(12)
+            .size(TS.label)
             .color(muted)
             .into(),
     };
@@ -150,7 +151,7 @@ pub fn view<'a>(
             move |s| send(BrowserEditMsg::SetManufacturer(s))
         })
         .padding(6)
-        .size(12);
+        .size(TS.label);
 
     let mpn_input = text_input("MPN", &edit.draft.primary_mpn.mpn)
         .on_input({
@@ -158,7 +159,15 @@ pub fn view<'a>(
             move |s| send(BrowserEditMsg::SetMpn(s))
         })
         .padding(6)
-        .size(12);
+        .size(TS.label);
+
+    let description_input = text_input("e.g. 100 nF 50 V X7R 0603", &edit.draft.description)
+        .on_input({
+            let send = send.clone();
+            move |s| send(BrowserEditMsg::SetDescription(s))
+        })
+        .padding(6)
+        .size(TS.label);
 
     // Tags row (Stage 18) — comma-separated free-form tokens.
     // The buffer flushes to `parameters["tags"]` on Save (see
@@ -169,7 +178,7 @@ pub fn view<'a>(
             move |s| send(BrowserEditMsg::SetTags(s))
         })
         .padding(6)
-        .size(12);
+        .size(TS.label);
 
     // Symbol / Footprint ref rows.
     let symbol_short = short_uuid(&edit.draft.symbol_ref.uuid);
@@ -179,7 +188,7 @@ pub fn view<'a>(
         format!("symbol uuid {}", symbol_short)
     };
     let symbol_btn =
-        button(container(text("Pick Symbol…").size(11).color(text_c)).padding([4, 12]))
+        button(container(text("Pick Symbol…").size(TS.body).color(text_c)).padding([SP.s, SP.l]))
             .on_press(send.clone()(BrowserEditMsg::OpenSymbolPicker))
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -198,29 +207,30 @@ pub fn view<'a>(
         Some(r) => format!("footprint uuid {}", short_uuid(&r.uuid)),
         None => "Unbound (optional)".to_string(),
     };
-    let footprint_btn =
-        button(container(text("Pick Footprint…").size(11).color(text_c)).padding([4, 12]))
-            .on_press(send.clone()(BrowserEditMsg::OpenFootprintPicker))
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            });
+    let footprint_btn = button(
+        container(text("Pick Footprint…").size(TS.body).color(text_c)).padding([SP.s, SP.l]),
+    )
+    .on_press(send.clone()(BrowserEditMsg::OpenFootprintPicker))
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(iced::Color::from_rgba(
+            1.0, 1.0, 1.0, 0.04,
+        ))),
+        text_color: text_c,
+        border: Border {
+            width: 1.0,
+            radius: 3.0.into(),
+            color: border,
+        },
+        ..iced::widget::button::Style::default()
+    });
 
     let labelled =
         |lbl: &'a str, body: Element<'a, LibraryMessage>| -> Element<'a, LibraryMessage> {
             column![
-                text(lbl).size(10).color(muted),
-                container(body).padding([2, 0])
+                text(lbl).size(TS.caption).color(muted),
+                container(body).padding([SP.xs, 0.0])
             ]
-            .spacing(2)
+            .spacing(SP.xs)
             .into()
         };
 
@@ -242,23 +252,23 @@ pub fn view<'a>(
 
     let symbol_row = row![
         text(symbol_label)
-            .size(11)
+            .size(TS.body)
             .color(text_c)
             .width(Length::Fill),
         symbol_btn,
     ]
     .align_y(iced::Alignment::Center)
-    .padding([4, 0]);
+    .padding([SP.s, 0.0]);
 
     let footprint_row = row![
         text(footprint_label)
-            .size(11)
+            .size(TS.body)
             .color(text_c)
             .width(Length::Fill),
         footprint_btn,
     ]
     .align_y(iced::Alignment::Center)
-    .padding([4, 0]);
+    .padding([SP.s, 0.0]);
 
     // Parameters table.
     let params_section = view_params_section(edit, tokens, send.clone());
@@ -270,18 +280,20 @@ pub fn view<'a>(
         Space::new().height(8),
         mfr_mpn_row,
         Space::new().height(8),
+        labelled("Description", description_input.into()),
+        Space::new().height(8),
         labelled("Tags (comma-separated)", tags_input.into()),
         Space::new().height(12),
-        text("Symbol ref").size(10).color(muted),
+        text("Symbol ref").size(TS.caption).color(muted),
         symbol_row,
         Space::new().height(6),
-        text("Footprint ref").size(10).color(muted),
+        text("Footprint ref").size(TS.caption).color(muted),
         footprint_row,
         Space::new().height(12),
         params_section,
     ]
     .spacing(0)
-    .padding([14, 16]);
+    .padding([14.0, SP.xl]);
 
     let body = container(
         scrollable(form_body)
@@ -294,50 +306,52 @@ pub fn view<'a>(
     let error_row: Element<'_, LibraryMessage> = if let Some(err) = edit.error.as_ref() {
         container(
             text(err.clone())
-                .size(11)
+                .size(TS.body)
                 .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
         )
-        .padding([4, 16])
+        .padding([SP.s, SP.xl])
         .into()
     } else {
         Space::new().height(0).into()
     };
 
-    let cancel_btn = button(container(text("Cancel").size(11).color(text_c)).padding([4, 14]))
-        .on_press(send.clone()(BrowserEditMsg::Cancel))
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color: text_c,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            ..iced::widget::button::Style::default()
-        });
-
-    let save_btn =
-        button(container(text("Save").size(11).color(iced::Color::WHITE)).padding([4, 14]))
-            .on_press(send(BrowserEditMsg::Save))
+    let cancel_btn =
+        button(container(text("Cancel").size(TS.body).color(text_c)).padding([SP.s, 14.0]))
+            .on_press(send.clone()(BrowserEditMsg::Cancel))
             .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgb(
-                    0.00, 0.47, 0.84,
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.04,
                 ))),
-                text_color: iced::Color::WHITE,
+                text_color: text_c,
                 border: Border {
-                    width: 0.0,
+                    width: 1.0,
                     radius: 3.0.into(),
-                    ..Border::default()
+                    color: border,
                 },
                 ..iced::widget::button::Style::default()
             });
 
+    let save_btn = button(
+        container(text("Save").size(TS.body).color(iced::Color::WHITE)).padding([SP.s, 14.0]),
+    )
+    .on_press(send(BrowserEditMsg::Save))
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(iced::Color::from_rgb(
+            0.00, 0.47, 0.84,
+        ))),
+        text_color: iced::Color::WHITE,
+        border: Border {
+            width: 0.0,
+            radius: 3.0.into(),
+            ..Border::default()
+        },
+        ..iced::widget::button::Style::default()
+    });
+
     // Offered once a save was refused because the row changed on the
     // server; discarding the draft asks first.
     let plain_btn = |label: &'static str, msg: BrowserEditMsg| {
-        button(container(text(label).size(11).color(text_c)).padding([4, 14]))
+        button(container(text(label).size(TS.body).color(text_c)).padding([SP.s, 14.0]))
             .on_press(send.clone()(msg))
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -357,7 +371,7 @@ pub fn view<'a>(
     } else if edit.reload_confirming {
         row![
             text("Discard your edits and reload?")
-                .size(11)
+                .size(TS.body)
                 .color(text_c),
             Space::new().width(8),
             plain_btn("Reload", BrowserEditMsg::ReloadConfirmed),
@@ -385,8 +399,8 @@ pub fn view<'a>(
 
     container(
         column![header, body, error_row, footer]
-            .width(Length::Fixed(MODAL_W))
-            .height(Length::Fixed(MODAL_H)),
+            .width(Length::Fixed(super::modal_chrome::EDIT_ROW_W))
+            .height(Length::Fixed(super::modal_chrome::EDIT_ROW_H)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
@@ -403,8 +417,11 @@ fn view_params_section<'a>(
     let border = theme_ext::border_color(tokens);
 
     let header = row![
-        text("Parameters").size(11).color(muted).width(Length::Fill),
-        button(container(text("+ Add Parameter").size(11).color(text_c)).padding([3, 10]))
+        text("Parameters")
+            .size(TS.body)
+            .color(muted)
+            .width(Length::Fill),
+        button(container(text("+ Add Parameter").size(TS.body).color(text_c)).padding([3, 10]))
             .on_press(send.clone()(BrowserEditMsg::AddParam))
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -426,20 +443,20 @@ fn view_params_section<'a>(
     let header_row = container(
         row![
             text("Key")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(3)),
             text("Value")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(3)),
             text("Unit")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
-            text("").size(10).width(Length::Fixed(40.0)),
+            text("").size(TS.caption).width(Length::Fixed(40.0)),
         ]
-        .padding([2, 6]),
+        .padding([SP.xs, 6.0]),
     )
     .style(move |_: &Theme| iced::widget::container::Style {
         background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -463,7 +480,9 @@ fn view_params_section<'a>(
         .filter(|(k, _)| k.as_str() != "tags")
         .collect();
     if visible_params.is_empty() {
-        col = col.push(container(text("No parameters yet.").size(11).color(muted)).padding([8, 6]));
+        col = col.push(
+            container(text("No parameters yet.").size(TS.body).color(muted)).padding([SP.m, 6.0]),
+        );
     } else {
         // Iterate in BTreeMap key order for stable layout.
         let entries = visible_params;
@@ -493,8 +512,8 @@ fn view_params_section<'a>(
                     let key_c = key_owned.clone();
                     send_c(BrowserEditMsg::CommitParam { key: key_c })
                 })
-                .padding(4)
-                .size(11);
+                .padding(SP.s)
+                .size(TS.body);
 
             let send_u = send.clone();
             let key_for_u = key_owned.clone();
@@ -510,43 +529,44 @@ fn view_params_section<'a>(
                     let key_c = key_owned.clone();
                     send_c(BrowserEditMsg::CommitParam { key: key_c })
                 })
-                .padding(4)
-                .size(11);
+                .padding(SP.s)
+                .size(TS.body);
 
             let send_del = send.clone();
             let key_for_del = key_owned.clone();
-            let delete_btn = button(container(text("✕").size(11).color(muted)).padding([2, 8]))
-                .on_press_with(move || {
-                    send_del(BrowserEditMsg::DeleteParam {
-                        key: key_for_del.clone(),
+            let delete_btn =
+                button(container(text("✕").size(TS.body).color(muted)).padding([SP.xs, SP.m]))
+                    .on_press_with(move || {
+                        send_del(BrowserEditMsg::DeleteParam {
+                            key: key_for_del.clone(),
+                        })
                     })
-                })
-                .style(move |_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.04,
-                    ))),
-                    text_color: muted,
-                    border: Border {
-                        width: 1.0,
-                        radius: 3.0.into(),
-                        color: border,
-                    },
-                    ..iced::widget::button::Style::default()
-                });
+                    .style(move |_: &Theme, _| iced::widget::button::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.04,
+                        ))),
+                        text_color: muted,
+                        border: Border {
+                            width: 1.0,
+                            radius: 3.0.into(),
+                            color: border,
+                        },
+                        ..iced::widget::button::Style::default()
+                    });
 
             col = col.push(
                 row![
-                    container(text(key_owned.clone()).size(11).color(text_c))
-                        .padding([2, 6])
+                    container(text(key_owned.clone()).size(TS.body).color(text_c))
+                        .padding([SP.xs, 6.0])
                         .width(Length::FillPortion(3)),
                     container(val_input)
-                        .padding([2, 4])
+                        .padding([SP.xs, SP.s])
                         .width(Length::FillPortion(3)),
                     container(unit_input)
-                        .padding([2, 4])
+                        .padding([SP.xs, SP.s])
                         .width(Length::FillPortion(2)),
                     container(delete_btn)
-                        .padding([2, 6])
+                        .padding([SP.xs, 6.0])
                         .width(Length::Fixed(40.0)),
                 ]
                 .align_y(iced::Alignment::Center),
@@ -585,7 +605,7 @@ pub fn view_delete_confirm<'a>(
 
     let header = container(
         row![
-            text("Delete Component?").size(14).color(text_c),
+            text("Delete Component?").size(TS.heading).color(text_c),
             Space::new().width(Length::Fill),
         ]
         .align_y(iced::Alignment::Center),
@@ -594,58 +614,60 @@ pub fn view_delete_confirm<'a>(
     .style(crate::styles::modal_header_strip(tokens));
 
     let msg_label = format!(
-        "Delete row {} from {}? This cannot be undone from the UI (TSV file is git-tracked, so `git restore` recovers it).",
+        "Delete row {} from {}? This cannot be undone from the UI.",
         confirm.internal_pn, confirm.table,
     );
 
     let body = container(
-        column![text(msg_label).size(11).color(text_c)]
-            .padding([14, 16])
+        column![text(msg_label).size(TS.body).color(text_c)]
+            .padding([14.0, SP.xl])
             .width(Length::Fill),
     )
     .width(Length::Fill)
     .height(Length::Fill);
 
     let lib_path_cancel = library_path.to_path_buf();
-    let cancel_btn = button(container(text("Cancel").size(11).color(text_c)).padding([4, 14]))
-        .on_press(LibraryMessage::BrowserDeleteRowCancel {
-            library_path: lib_path_cancel,
-        })
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color: text_c,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            ..iced::widget::button::Style::default()
-        });
+    let cancel_btn =
+        button(container(text("Cancel").size(TS.body).color(text_c)).padding([SP.s, 14.0]))
+            .on_press(LibraryMessage::BrowserDeleteRowCancel {
+                library_path: lib_path_cancel,
+            })
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.04,
+                ))),
+                text_color: text_c,
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border,
+                },
+                ..iced::widget::button::Style::default()
+            });
 
     let lib_path_del = library_path.to_path_buf();
     let table = confirm.table.clone();
     let row_id = confirm.row_id;
-    let delete_btn =
-        button(container(text("Delete").size(11).color(iced::Color::WHITE)).padding([4, 14]))
-            .on_press(LibraryMessage::BrowserDeleteRowConfirm {
-                library_path: lib_path_del,
-                table,
-                row_id,
-            })
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgb(
-                    0.85, 0.30, 0.30,
-                ))),
-                text_color: iced::Color::WHITE,
-                border: Border {
-                    width: 0.0,
-                    radius: 3.0.into(),
-                    ..Border::default()
-                },
-                ..iced::widget::button::Style::default()
-            });
+    let delete_btn = button(
+        container(text("Delete").size(TS.body).color(iced::Color::WHITE)).padding([SP.s, 14.0]),
+    )
+    .on_press(LibraryMessage::BrowserDeleteRowConfirm {
+        library_path: lib_path_del,
+        table,
+        row_id,
+    })
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(iced::Color::from_rgb(
+            0.85, 0.30, 0.30,
+        ))),
+        text_color: iced::Color::WHITE,
+        border: Border {
+            width: 0.0,
+            radius: 3.0.into(),
+            ..Border::default()
+        },
+        ..iced::widget::button::Style::default()
+    });
 
     let footer = container(
         row![

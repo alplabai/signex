@@ -5,13 +5,17 @@ use crate::annotate_undo::AnnotateUndo;
 use iced::widget::{Space, column, pick_list, row, text};
 use iced::{Element, Length};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 const ANNOTATE_UNDO_HELP: &str = "How many undo steps one annotate run is. One step reverts every sheet the run touched together from whichever sheet Ctrl+Z is pressed on; per sheet undoes each sheet on its own. Applies to the next annotate run.";
 
 pub(super) fn content_annotation<'a>(draft: AnnotateUndo) -> Element<'a, PrefMsg> {
     let setting = row![
         column![
-            text("Annotate undo").size(12).style(text_primary),
-            text(ANNOTATE_UNDO_HELP).size(10).style(text_muted),
+            text("Annotate undo").size(TS.label).style(text_primary),
+            text(ANNOTATE_UNDO_HELP).size(TS.caption).style(text_muted),
         ]
         .spacing(3)
         .width(320),
@@ -25,7 +29,7 @@ pub(super) fn content_annotation<'a>(draft: AnnotateUndo) -> Element<'a, PrefMsg
         Space::new().height(10),
         setting,
     ]
-    .padding([16, 20])
+    .padding([SP.xl, 20.0])
     .into()
 }
 

@@ -40,9 +40,12 @@ pub(in crate::canvas) struct Float {
 
 /// A selection compared as a set: an edit that only reorders the same
 /// items is not a different selection.
-type SelectionSet = std::collections::HashSet<signex_types::schematic::SelectedItem>;
+pub(super) type SelectionSet = std::collections::HashSet<signex_types::schematic::SelectedItem>;
 
-fn same_selection(set: &SelectionSet, selected: &[signex_types::schematic::SelectedItem]) -> bool {
+pub(super) fn same_selection(
+    set: &SelectionSet,
+    selected: &[signex_types::schematic::SelectedItem],
+) -> bool {
     selected.len() == set.len() && selected.iter().all(|item| set.contains(item))
 }
 
@@ -231,6 +234,7 @@ mod tests {
             title_block: Default::default(),
             lib_symbols: Default::default(),
             net_colors: Default::default(),
+            drawing_placements: Default::default(),
             frame: Default::default(),
             font_family: None,
         };

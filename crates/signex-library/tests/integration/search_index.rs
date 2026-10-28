@@ -55,6 +55,7 @@ fn fresh_row(
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::url(""),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Released,
         symbol_ref: PrimitiveRef::new(lib, Uuid::nil()),
@@ -304,6 +305,21 @@ fn index_persists_across_drop_and_reopen() {
         "reopened index should still answer queries"
     );
     assert_eq!(hits[0].internal_pn.as_str(), "C0805_10uF_25V_X7R");
+}
+
+/// #1593: on Windows, reopening an index right after dropping it could fail the
+/// next commit with `Access is denied`. Hammer drop + reopen + commit.
+#[test]
+fn repeated_drop_reopen_commit_does_not_fail() {
+    let _guard = serial_guard();
+    let dir = tempfile::tempdir().unwrap();
+    let corpus = fixture_corpus();
+    for i in 0..50 {
+        let idx = TantivySearchIndex::open(dir.path()).unwrap_or_else(|e| panic!("open #{i}: {e}"));
+        idx.add_or_update(&corpus[i % corpus.len()])
+            .unwrap_or_else(|e| panic!("add #{i}: {e}"));
+        idx.commit().unwrap_or_else(|e| panic!("commit #{i}: {e}"));
+    }
 }
 
 #[test]

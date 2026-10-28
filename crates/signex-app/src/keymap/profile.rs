@@ -4,7 +4,7 @@ use crate::keymap::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     error::Error,
     fmt, io,
     path::{Path, PathBuf},
@@ -179,6 +179,44 @@ impl ShortcutProfileSet {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CompiledKeymap {
     bindings: Vec<CompiledBinding>,
+    /// Per-command menu label, derived from `bindings` at compile time so
+    /// `shortcut_label` is a map hit instead of a reverse scan plus a
+    /// `String` join per menu row per frame (#1380).
+    labels: BTreeMap<AppCommandId, String>,
+}
+
+/// Per command, the label of its last `Command` binding that no later
+/// `Unbind` of the same command, context and strokes shadows. A command
+/// with no such binding has no entry.
+fn label_index(bindings: &[CompiledBinding]) -> BTreeMap<AppCommandId, String> {
+    let mut labels = BTreeMap::new();
+    // Reverse scan; `unbinds` holds the unbinds that come after the
+    // binding under inspection.
+    let mut unbinds: BTreeSet<(&AppCommandId, ShortcutContext, &[KeyStroke])> = BTreeSet::new();
+    for binding in bindings.iter().rev() {
+        match &binding.action {
+            ShortcutBindingAction::Unbind(command) => {
+                unbinds.insert((command, binding.context, &binding.sequence));
+            }
+            ShortcutBindingAction::Command(command) => {
+                let shadowed =
+                    unbinds.contains(&(command, binding.context, binding.sequence.as_slice()));
+                if !shadowed && !labels.contains_key(command) {
+                    labels.insert(command.clone(), display_sequence(&binding.sequence));
+                }
+            }
+            ShortcutBindingAction::NoAction => {}
+        }
+    }
+    labels
+}
+
+fn display_sequence(sequence: &[KeyStroke]) -> String {
+    sequence
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 impl CompiledKeymap {
@@ -200,7 +238,8 @@ impl CompiledKeymap {
                 }
             }
         }
-        Self { bindings }
+        let labels = label_index(&bindings);
+        Self { bindings, labels }
     }
 
     pub fn lookup(&self, input: &[KeyStroke], contexts: &[ShortcutContext]) -> KeyLookup {
@@ -235,36 +274,28 @@ impl CompiledKeymap {
     }
 
     pub fn shortcut_label(&self, command: &AppCommandId) -> Option<String> {
-        // The last matching binding wins (later profile layers / sections
-        // override earlier ones), hence the reversed scan.
-        let binding = self
-            .bindings
-            .iter()
-            .rev()
-            .find(|binding| binding.action.command() == Some(command))?;
-        match &binding.action {
-            ShortcutBindingAction::Command(_) => Some(
-                binding
-                    .sequence
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(" "),
-            ),
-            ShortcutBindingAction::Unbind(_) | ShortcutBindingAction::NoAction => None,
-        }
+        self.labels.get(command).cloned()
     }
 
-    /// True when the profile's winning binding for `command` is an
-    /// explicit `Unbind` — the user took the shortcut away, as opposed to
-    /// the command never having been bound at all (#1378). Same
-    /// last-binding-wins rule as [`Self::shortcut_label`].
-    pub fn is_unbound(&self, command: &AppCommandId) -> bool {
+    /// A quadratic restatement of the label rule, kept so a test can prove
+    /// the index agrees with it.
+    #[cfg(test)]
+    pub(crate) fn shortcut_label_linear(&self, command: &AppCommandId) -> Option<String> {
         self.bindings
             .iter()
+            .enumerate()
             .rev()
-            .find(|binding| binding.action.command() == Some(command))
-            .is_some_and(|binding| matches!(binding.action, ShortcutBindingAction::Unbind(_)))
+            .find_map(|(index, binding)| {
+                let ShortcutBindingAction::Command(bound) = &binding.action else {
+                    return None;
+                };
+                let shadowed = self.bindings[index + 1..].iter().any(|later| {
+                    matches!(&later.action, ShortcutBindingAction::Unbind(c) if c == bound)
+                        && later.context == binding.context
+                        && later.sequence == binding.sequence
+                });
+                (bound == command && !shadowed).then(|| display_sequence(&binding.sequence))
+            })
     }
 
     pub fn conflicts(&self) -> Vec<BindingConflict> {

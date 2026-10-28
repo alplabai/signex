@@ -81,6 +81,10 @@ impl Signex {
                 self.handle_selection_duplicate_requested();
                 self.finish_update()
             }
+            EditMsg::ArrangeDrawings(arrange) => {
+                self.handle_drawings_arrange_requested(arrange);
+                self.finish_update()
+            }
         }
     }
 
@@ -139,6 +143,10 @@ impl Signex {
             }
             FileMsg::SaveAllProbed(plan) => {
                 let task = self.begin_save_all_planned(*plan);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            FileMsg::DirCaseProbed { dir, answer } => {
+                let task = self.handle_dir_case_probed(dir, answer);
                 iced::Task::batch([task, self.finish_update()])
             }
             FileMsg::SaveAllSettled(settle) => {

@@ -158,6 +158,11 @@ impl Signex {
     }
 
     pub(crate) fn handle_undo_requested(&mut self) {
+        // A Project tab undoes its own section edits (#1202).
+        if let Some(project_id) = self.active_project_tab() {
+            self.step_project_tab_history(project_id, true);
+            return;
+        }
         // If the active tab is a symbol editor, delegate undo to it.
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
@@ -208,6 +213,11 @@ impl Signex {
     }
 
     pub(crate) fn handle_redo_requested(&mut self) {
+        // A Project tab redoes its own section edits (#1202).
+        if let Some(project_id) = self.active_project_tab() {
+            self.step_project_tab_history(project_id, false);
+            return;
+        }
         // If the active tab is a symbol editor, delegate redo to it.
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
@@ -256,6 +266,17 @@ impl Signex {
         edit: crate::app::contracts::DrawingFieldEdit,
     ) -> iced::Task<crate::app::Message> {
         use signex_types::schematic::SchDrawing;
+        if let crate::app::contracts::DrawingFieldEdit::Placement(placement) = edit {
+            self.apply_engine_command(
+                signex_engine::Command::SetDrawingPlacement {
+                    ids: vec![target_uuid],
+                    placement,
+                },
+                true,
+                true,
+            );
+            return iced::Task::none();
+        }
         let Some(engine) = self.document_state.active_engine() else {
             return iced::Task::none();
         };
@@ -343,8 +364,10 @@ fn apply_drawing_edit(
         // Rect position / size — preserved by repositioning start/end.
         (SchDrawing::Rect { start, end, .. }, E::RectStartX(v)) => {
             let w_mm = (start.x.max(end.x)) - (start.x.min(end.x));
-            *start = Point::new(v, start.y.min(end.y));
-            *end = Point::new(v + w_mm, start.y.max(end.y));
+            let y0 = start.y.min(end.y);
+            let y1 = start.y.max(end.y);
+            *start = Point::new(v, y0);
+            *end = Point::new(v + w_mm, y1);
         }
         (SchDrawing::Rect { start, end, .. }, E::RectStartY(v)) => {
             let h_mm = (end.y - start.y).abs();
@@ -445,3 +468,5 @@ mod net_color_persist;
 mod net_color_persist_tests;
 #[cfg(test)]
 mod net_color_undo_order_tests;
+#[cfg(test)]
+mod rect_edit_tests;

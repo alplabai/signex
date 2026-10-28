@@ -13,7 +13,7 @@
 //! custom rows + the add-new control.
 //!
 //! Numeric / measurement edits go through a per-row `String` buffer on
-//! `ComponentPreviewState.params_edit_buf`, following the
+//! the editor's `params_edit_buf`, following the
 //! `reference_erasable_numeric_input` pattern.
 
 use std::collections::BTreeSet;
@@ -26,6 +26,10 @@ use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage, ParamKindMsg};
 use super::super::state::{ComponentPreviewState, EditorAddress, LibraryState};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Resolve the parameter template for a preview state by walking
 /// `LibraryState.open_libraries` for the matching `library_path`, then
@@ -66,7 +70,7 @@ pub fn view<'a>(
     };
 
     let mut body = column![
-        text(header_label).size(13).color(text_c),
+        text(header_label).size(TS.title).color(text_c),
         Space::new().height(10),
     ]
     .spacing(0)
@@ -85,7 +89,7 @@ pub fn view<'a>(
     if let Some(t) = template {
         // ── Required ────────────────────────────────────────────────
         if !t.required_params.is_empty() {
-            body = body.push(text("Required").size(11).color(muted));
+            body = body.push(text("Required").size(TS.body).color(muted));
             body = body.push(Space::new().height(6));
             for slot in &t.required_params {
                 body = body.push(template_row(state, slot, true, tokens, &address));
@@ -95,7 +99,7 @@ pub fn view<'a>(
         }
         // ── Optional ────────────────────────────────────────────────
         if !t.optional_params.is_empty() {
-            body = body.push(text("Optional").size(11).color(muted));
+            body = body.push(text("Optional").size(TS.body).color(muted));
             body = body.push(Space::new().height(6));
             for slot in &t.optional_params {
                 body = body.push(template_row(state, slot, false, tokens, &address));
@@ -109,7 +113,7 @@ pub fn view<'a>(
                 "No template for class `{}` — populate with custom parameters.",
                 state.row.class.as_str()
             ))
-            .size(11)
+            .size(TS.body)
             .color(muted),
         );
         body = body.push(Space::new().height(10));
@@ -123,11 +127,11 @@ pub fn view<'a>(
         .filter(|k| !template_keys.contains(k.as_str()))
         .collect();
 
-    body = body.push(text("Custom").size(11).color(muted));
+    body = body.push(text("Custom").size(TS.body).color(muted));
     body = body.push(Space::new().height(6));
 
     if custom_keys.is_empty() {
-        body = body.push(text("No custom parameters yet.").size(11).color(muted));
+        body = body.push(text("No custom parameters yet.").size(TS.body).color(muted));
         body = body.push(Space::new().height(6));
     } else {
         for key in custom_keys {
@@ -162,15 +166,15 @@ fn template_row<'a>(
     let label_color = if required { text_c } else { muted };
     let present = state.row.parameters.contains_key(&slot.name);
 
-    let label = container(text(slot.name.clone()).size(11).color(label_color))
+    let label = container(text(slot.name.clone()).size(TS.body).color(label_color))
         .width(Length::FillPortion(3));
 
     let editor_widget: Element<'a, LibraryMessage> =
         slot_input(state, &slot.name, slot.kind, slot.unit.clone(), address);
 
     let unit_label: Element<'a, LibraryMessage> = match (&slot.unit, slot.kind) {
-        (Some(u), ParamKind::Measurement) => container(text(u.clone()).size(11).color(muted))
-            .padding([0, 8])
+        (Some(u), ParamKind::Measurement) => container(text(u.clone()).size(TS.body).color(muted))
+            .padding([0.0, SP.m])
             .width(Length::Fixed(60.0))
             .into(),
         _ => Space::new().width(Length::Fixed(60.0)).into(),
@@ -178,7 +182,7 @@ fn template_row<'a>(
 
     let status: Element<'a, LibraryMessage> = if required && !present {
         let amber = iced::Color::from_rgb(0.95, 0.70, 0.18);
-        container(text("\u{2717} missing").size(11).color(amber))
+        container(text("\u{2717} missing").size(TS.body).color(amber))
             .width(Length::Fixed(110.0))
             .into()
     } else {
@@ -192,7 +196,7 @@ fn template_row<'a>(
         status,
     ]
     .align_y(iced::Alignment::Center)
-    .spacing(8)
+    .spacing(SP.m)
     .width(Length::Fill)
     .into()
 }
@@ -221,13 +225,13 @@ fn custom_row<'a>(
     };
 
     let label =
-        container(text(name.to_string()).size(11).color(text_c)).width(Length::FillPortion(3));
+        container(text(name.to_string()).size(TS.body).color(text_c)).width(Length::FillPortion(3));
 
     let editor_widget = slot_input(state, name, kind, unit.clone(), address);
 
     let unit_label: Element<'a, LibraryMessage> = match (unit, kind) {
-        (Some(u), ParamKind::Measurement) => container(text(u).size(11).color(muted))
-            .padding([0, 8])
+        (Some(u), ParamKind::Measurement) => container(text(u).size(TS.body).color(muted))
+            .padding([0.0, SP.m])
             .width(Length::Fixed(60.0))
             .into(),
         _ => Space::new().width(Length::Fixed(60.0)).into(),
@@ -237,31 +241,32 @@ fn custom_row<'a>(
     let table = address.table.clone();
     let row_id = address.row_id;
     let name_owned = name.to_string();
-    let remove_btn = button(container(text("\u{00D7}").size(13).color(muted)).padding([0, 6]))
-        .on_press(LibraryMessage::EditorEvent {
-            library_path: lib_path,
-            table,
-            row_id,
-            msg: EditorMsg::ParamRemove { name: name_owned },
-        })
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => {
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10)
+    let remove_btn =
+        button(container(text("\u{00D7}").size(TS.title).color(muted)).padding([0, 6]))
+            .on_press(LibraryMessage::EditorEvent {
+                library_path: lib_path,
+                table,
+                row_id,
+                msg: EditorMsg::ParamRemove { name: name_owned },
+            })
+            .style(move |_: &Theme, status: iced::widget::button::Status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered => {
+                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10)
+                    }
+                    _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.03),
+                };
+                iced::widget::button::Style {
+                    background: Some(iced::Background::Color(bg)),
+                    text_color: muted,
+                    border: Border {
+                        width: 1.0,
+                        radius: 3.0.into(),
+                        color: theme_ext::border_color(tokens),
+                    },
+                    ..iced::widget::button::Style::default()
                 }
-                _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.03),
-            };
-            iced::widget::button::Style {
-                background: Some(iced::Background::Color(bg)),
-                text_color: muted,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: theme_ext::border_color(tokens),
-                },
-                ..iced::widget::button::Style::default()
-            }
-        });
+            });
 
     let status_block: Element<'a, LibraryMessage> =
         container(remove_btn).width(Length::Fixed(110.0)).into();
@@ -273,7 +278,7 @@ fn custom_row<'a>(
         status_block,
     ]
     .align_y(iced::Alignment::Center)
-    .spacing(8)
+    .spacing(SP.m)
     .width(Length::Fill)
     .into()
 }
@@ -311,8 +316,8 @@ fn slot_input<'a>(
                         value: s,
                     },
                 })
-                .padding([4, 8])
-                .size(11)
+                .padding([SP.s, SP.m])
+                .size(TS.body)
                 .into()
         }
         ParamKind::Number => {
@@ -350,8 +355,8 @@ fn slot_input<'a>(
                         name: name_for_submit,
                     },
                 })
-                .padding([4, 8])
-                .size(11)
+                .padding([SP.s, SP.m])
+                .size(TS.body)
                 .into()
         }
         ParamKind::Bool => {
@@ -367,8 +372,8 @@ fn slot_input<'a>(
                         value: v,
                     },
                 })
-                .size(14)
-                .spacing(4)
+                .size(TS.heading)
+                .spacing(SP.s)
                 .into()
         }
         ParamKind::Measurement => {
@@ -410,8 +415,8 @@ fn slot_input<'a>(
                         unit: unit_for_submit,
                     },
                 })
-                .padding([4, 8])
-                .size(11)
+                .padding([SP.s, SP.m])
+                .size(TS.body)
                 .into()
         }
     }
@@ -421,12 +426,7 @@ fn slot_input<'a>(
 /// per-row buffer is empty. Replaces the previous `ParamValue::display`
 /// method whose name collided with type inference.
 fn display_param(v: &ParamValue) -> String {
-    match v {
-        ParamValue::Text(s) => s.clone(),
-        ParamValue::Number(n) => n.to_string(),
-        ParamValue::Bool(b) => b.to_string(),
-        ParamValue::Measurement { value, unit } => format!("{value} {unit}"),
-    }
+    ParamValue::display(v)
 }
 
 /// Inline "+ Add custom parameter" row — text input + four kind buttons
@@ -457,7 +457,7 @@ fn add_custom_row<'a>(
         let lib_path = lib_path.clone();
         let table = table.clone();
         let kind_for_msg = kind;
-        button(container(text(label).size(11).color(text_c)).padding([3, 10]))
+        button(container(text(label).size(TS.body).color(text_c)).padding([3, 10]))
             .on_press(LibraryMessage::EditorEvent {
                 library_path: lib_path,
                 table,
@@ -498,12 +498,12 @@ fn add_custom_row<'a>(
                 msg: EditorMsg::ParamNewNameChanged(s),
             })
             .padding([3, 6])
-            .size(11)
+            .size(TS.body)
             .width(Length::Fixed(160.0))
     };
 
     row![
-        text("[+ Add custom parameter]").size(11).color(muted),
+        text("[+ Add custom parameter]").size(TS.body).color(muted),
         Space::new().width(8),
         name_input,
         Space::new().width(8),

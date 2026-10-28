@@ -6,6 +6,10 @@
 
 use super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 impl Signex {
     /// Export-error modal — plain "something went wrong, here's the
     /// message" dialog with an OK button. Sits on top of the print-preview
@@ -23,7 +27,7 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
         let err_red = iced::Color::from_rgb(0.85, 0.25, 0.25);
 
-        let ok_btn = button(text("OK").size(12).color(iced::Color::WHITE))
+        let ok_btn = button(text("OK").size(TS.label).color(iced::Color::WHITE))
             .padding([6, 20])
             .on_press(Message::Overlay(OverlayMsg::DismissErrorNotice))
             .style(
@@ -42,11 +46,11 @@ impl Signex {
             row![
                 text("\u{26A0}").size(24).color(err_red),
                 iced::widget::Space::new().width(10),
-                text(notice.title.clone()).size(14).color(text_c),
+                text(notice.title.clone()).size(TS.heading).color(text_c),
             ]
             .align_y(iced::Alignment::Center),
             iced::widget::Space::new().height(8),
-            text(notice.detail.clone()).size(12).color(text_c),
+            text(notice.detail.clone()).size(TS.label).color(text_c),
             iced::widget::Space::new().height(12),
             row![iced::widget::Space::new().width(Length::Fill), ok_btn,],
         ]
@@ -103,10 +107,10 @@ impl Signex {
         // Loud, deliberate action — mirrors the export-error OK button's red.
         let export_anyway = button(
             text("Export anyway (incomplete)")
-                .size(12)
+                .size(TS.label)
                 .color(iced::Color::WHITE),
         )
-        .padding([6, 16])
+        .padding([6.0, SP.xl])
         .on_press(Message::Export(ExportMsg::NetlistExportAnyway))
         .style(
             move |_: &iced::Theme, _status| iced::widget::button::Style {
@@ -121,7 +125,7 @@ impl Signex {
         );
 
         // Neutral default — themed panel background + border, no accent.
-        let cancel = button(text("Cancel").size(12).color(text_c))
+        let cancel = button(text("Cancel").size(TS.label).color(text_c))
             .padding([6, 20])
             .on_press(Message::Export(ExportMsg::NetlistCancelIncomplete))
             .style(
@@ -145,7 +149,7 @@ impl Signex {
             row![
                 text("\u{26A0}").size(24).color(warn),
                 iced::widget::Space::new().width(10),
-                text("Netlist is incomplete").size(14).color(text_c),
+                text("Netlist is incomplete").size(TS.heading).color(text_c),
             ]
             .align_y(iced::Alignment::Center),
             iced::widget::Space::new().height(8),
@@ -156,10 +160,10 @@ impl Signex {
                  PCB import cannot tell. You can export it anyway: the file stays \
                  a valid netlist, and the omitted pages are reported in the Messages panel."
             )
-            .size(12)
+            .size(TS.label)
             .color(text_c),
             iced::widget::Space::new().height(8),
-            text(detail).size(11).color(text_muted),
+            text(detail).size(TS.body).color(text_muted),
             iced::widget::Space::new().height(14),
             row![
                 iced::widget::Space::new().width(Length::Fill),
@@ -293,7 +297,7 @@ impl Signex {
         };
 
         // Footer — page count + Export PDF.
-        let export_btn = button(text("Export PDF").size(12).color(iced::Color::WHITE))
+        let export_btn = button(text("Export PDF").size(TS.label).color(iced::Color::WHITE))
             .padding([6, 14])
             .on_press(Message::PrintPreview(PrintPreviewMsg::Export))
             .style(
@@ -310,15 +314,15 @@ impl Signex {
         let footer_caption = if preview.pages.is_empty() {
             "No files selected for export".to_string()
         } else {
-            format!("{} page(s) — preview at 96 DPI", preview.pages.len())
+            format!("{} page(s)", preview.pages.len())
         };
         let footer = container(
             row![
-                text(footer_caption).size(11).color(text_muted),
+                text(footer_caption).size(TS.body).color(text_muted),
                 Space::new().width(Length::Fill),
                 export_btn,
             ]
-            .spacing(8)
+            .spacing(SP.m)
             .align_y(iced::Alignment::Center),
         )
         .padding([10, 14]);

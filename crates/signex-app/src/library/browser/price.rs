@@ -127,6 +127,7 @@ mod tests {
             class: signex_library::ComponentClass::new("resistor"),
             datasheet: Default::default(),
             datasheet_label: String::new(),
+            description: String::new(),
             more_datasheets: Vec::new(),
             state: signex_library::LifecycleState::Draft,
             symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
@@ -233,7 +234,11 @@ mod tests {
         let view = PriceView::new(&pricing, Utc::now(), &rows);
         // The grid's own comparator, fed the column's own cells.
         let mut order: Vec<&ComponentRow> = rows.iter().collect();
-        super::super::sort::sort_by_cell_key(&mut order, |r| view.sort_value(r), false);
+        super::super::sort::sort_by_cell_key(
+            &mut order,
+            |r| super::super::sort::CellSortKey::from_cell(&view.sort_value(r)),
+            false,
+        );
         let skus: Vec<&str> = order.iter().map(|r| r.supply[0].sku.as_str()).collect();
         assert_eq!(
             skus,

@@ -27,10 +27,10 @@ pub enum WindowMsg {
     /// the modal or tab to the main window's overlay stack.
     SecondaryWindowClosed(iced::window::Id),
     /// OS-level close request (native close button, Alt+F4, taskbar
-    /// close) for a window. In `iced::daemon` mode windows do NOT
-    /// auto-close on this event, so the app decides what to do: the
-    /// main window routes through the unsaved-changes guard
-    /// (`CloseMainWindow`); every other window closes directly.
+    /// close) for a window. Windows do not auto-close on it, because every
+    /// `window::open` sets `exit_on_close_request: false`; the app decides.
+    /// The main window goes through the unsaved-changes guard, a detached
+    /// modal through its own close path, any other window closes directly.
     WindowCloseRequested(iced::window::Id),
     /// Pop a modal out of the main window into its own OS window. Altium
     /// triggers this when the user drags the modal's title bar past the
@@ -81,6 +81,15 @@ pub enum WindowMsg {
     MinimizeMainWindow,
     ToggleMaximizeMainWindow,
     CloseMainWindow,
+    /// The Linux startup probe finished: the buttons the desktop lists, or
+    /// `None` when it could not be read, or the probe's failure reason.
+    ControlsLayoutDetected(Result<Option<crate::chrome::desktop::DesktopButtonLayout>, String>),
+    /// The main window's mode (windowed / fullscreen) was read, after a
+    /// resize or a deferred re-query; fullscreen hides the macOS traffic-light inset.
+    MainWindowModeRead(iced::window::Mode),
+    /// The monitor size was read after a resize; together with the mode it
+    /// tells a real fullscreen window from winit's stale flag mid-exit.
+    MainWindowMonitorSizeRead(Option<iced::Size>),
 }
 
 /// Command-palette message family (ADR-0001 D3). Namespaced under
@@ -197,6 +206,13 @@ pub enum UiMsg {
     /// Nothing to do. Produced by widgets / tasks that must emit a
     /// `Message` but carry no event.
     Noop,
+    /// Edit → Undo / Redo clicked in an undocked tab's own menu bar. Runs
+    /// the command against that window's document, as its shortcut does
+    /// (#1550); every other menu row still arrives as `Message::Menu`.
+    MenuInWindow {
+        window: iced::window::Id,
+        msg: MenuMessage,
+    },
     /// Async result of a per-file Git history load issued by the
     /// right-dock History panel. `generation` is the value of
     /// `DocumentState.history.generation` when the load was kicked off;
@@ -216,6 +232,8 @@ pub enum UiMsg {
     GridToggle,
     /// Clear the active canvas background cache (grid density change).
     GridCycle,
+    /// The reverse of [`UiMsg::GridCycle`]: step to the previous grid preset.
+    GridCycleBackward,
     /// v0.18.10 — open the Altium-style grid picker popup at the
     /// current `last_mouse_pos`. Footprint editor only (today);
     /// other contexts fall through to no-op.

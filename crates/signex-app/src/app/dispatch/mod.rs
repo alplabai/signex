@@ -10,7 +10,11 @@ pub(crate) mod input;
 mod keyboard;
 mod keymap;
 pub(crate) mod library;
+#[cfg(test)]
+mod net_color_tests;
 mod overlay;
+#[cfg(test)]
+mod prefs_async_tests;
 mod text_edit;
 mod tool;
 mod ui;
@@ -107,8 +111,8 @@ impl Signex {
     /// Window lifecycle, docking, and native-chrome message family
     /// (namespaced, ADR-0001 D3). Main + secondary window open / close /
     /// resize / scale, detach + reattach of modals, undocked tabs and
-    /// floating panels, and the borderless-chrome drag / resize / minimize
-    /// / maximize buttons. Routed from `dispatch_update`.
+    /// floating panels, and the borderless-chrome drag / resize /
+    /// minimize / maximize buttons. Routed from `dispatch_update`.
     pub(crate) fn dispatch_window_message(&mut self, message: WindowMsg) -> Task<Message> {
         match message {
             WindowMsg::WindowResizedFor(id, w, h) => {
@@ -122,8 +126,9 @@ impl Signex {
                     // re-querying the scale factor here keeps the
                     // wordmark-PNG tier picker in sync after a
                     // cross-monitor drag.
-                    return iced::window::scale_factor(id)
+                    let scale_task = iced::window::scale_factor(id)
                         .map(|s| Message::Window(WindowMsg::MainWindowScaleChanged(s)));
+                    return Task::batch([scale_task, self.main_window_mode_task(id)]);
                 }
                 Task::none()
             }
@@ -172,6 +177,7 @@ impl Signex {
                             ModalId::AnnotateResetConfirm => {
                                 self.ui_state.annotate_reset_confirm = false
                             }
+                            ModalId::ReprefixConfirm => self.ui_state.reprefix_confirm = None,
                             ModalId::ErcDialog => self.ui_state.erc_dialog_open = false,
                             ModalId::Preferences => {
                                 // Backstop for a Preferences window destroyed
@@ -202,9 +208,6 @@ impl Signex {
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
                             ModalId::PrintPreview => self.dismiss_print_preview(),
                             ModalId::BomPreview => self.document_state.bom_preview = None,
-                            ModalId::ProjectOptions => {
-                                self.ui_state.project_options = None;
-                            }
                             ModalId::EnableVersionControl => {
                                 self.close_enable_version_control_dialog();
                             }
@@ -341,6 +344,7 @@ impl Signex {
                     per_window.paper_width_mm,
                     per_window.paper_height_mm,
                 );
+                per_window.special_strings = self.special_strings_for_path(&path);
                 per_window.designators = self.designators_for_path(&path);
                 per_window.fit_to_content();
                 self.interaction_state.canvases.insert(id, per_window);
@@ -400,9 +404,20 @@ impl Signex {
                 None => Task::none(),
             },
             WindowMsg::CloseMainWindow => self.handle_app_quit_requested(),
+            WindowMsg::ControlsLayoutDetected(layout) => {
+                self.handle_controls_layout_detected(layout)
+            }
+            WindowMsg::MainWindowMonitorSizeRead(size) => {
+                self.ui_state.main_window_monitor_size = size;
+                Task::none()
+            }
+            WindowMsg::MainWindowModeRead(mode) => {
+                self.ui_state.main_window_mode = mode;
+                Task::none()
+            }
             WindowMsg::WindowCloseRequested(id) => {
-                // OS close request (Alt+F4 / native close). Daemon mode
-                // does not auto-close, so route the main window through
+                // OS close request (Alt+F4 / native close). Windows are
+                // opened with `exit_on_close_request: false`, so route the main window through
                 // the unsaved-changes guard, a detached modal through its
                 // own close message, and close any other window directly.
                 if self.ui_state.main_window_id == Some(id) {
@@ -464,16 +479,21 @@ impl Signex {
                     b: (c.b * 255.0).round() as u8,
                     a: 255,
                 };
+                self.cancel_placement_session();
                 self.ui_state.pending_net_color = Some(color);
                 self.interaction_state.active_canvas_mut().pending_net_color = Some(color);
                 Task::none()
             }
             NetColorMsg::CustomChannel(chan, s) => {
-                // Parse as u8; unparsable input (e.g. the empty string
-                // while the user types) resets the channel to 0 and
-                // values above 255 (however large) clamp to 255, so the text_input never
-                // rejects an intermediate value.
-                let parsed = s.trim().parse::<u64>().unwrap_or(0).min(255) as u8;
+                // Parse as u8: values above 255 (however large) clamp to
+                // 255. Input that does not parse (e.g. the empty string
+                // while the user types) keeps the channel's previous value,
+                // so the text_input never rejects an intermediate value and
+                // a half-typed edit never zeroes the channel.
+                let Ok(parsed) = s.trim().parse::<u64>() else {
+                    return Task::none();
+                };
+                let parsed = parsed.min(255) as u8;
                 let draft = &mut self.ui_state.net_color_custom.draft;
                 let v = parsed as f32 / 255.0;
                 match chan {

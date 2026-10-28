@@ -60,11 +60,12 @@ impl Default for LibraryState {
             where_used: WhereUsedIndex::new(),
             picker: None,
             settings,
-            expanded: Vec::new(),
             panel_search: String::new(),
             close_library_confirm: None,
+            batch_row_failures: HashMap::new(),
             template_registry: Arc::new(TemplateRegistry::new_with_builtins()),
             library_browsers: HashMap::new(),
+            shown_browser: None,
             primitive_picker: None,
             document_options: None,
             recovery: None,
@@ -75,6 +76,7 @@ impl Default for LibraryState {
             installed_libraries: Vec::new(),
             global_libraries: Vec::new(),
             stock_library: None,
+            stock_library_root: None,
             components_panel: ComponentsPanelState::default(),
             pending_mounts: HashMap::new(),
             external_poll_in_flight: false,
@@ -187,6 +189,27 @@ impl LibraryState {
             .map(|lib| lib.display_name.clone())
     }
 
+    /// True when `path` is, or lies inside, a read-only mount, or is
+    /// exactly (resolved equality, no prefix match) the stock library
+    /// file recorded in `stock_library_root` even when it failed to
+    /// mount. Recovery flows that write (git re-init, binding
+    /// repair) must never run against such a path.
+    pub fn is_read_only_target(&self, path: &Path) -> bool {
+        if self.read_only_library_name_containing(path).is_some() || self.is_read_only(path) {
+            return true;
+        }
+        self.stock_library_root
+            .as_deref()
+            .is_some_and(|root| resolved_path(root) == resolved_path(path))
+    }
+
+    /// Whether `path` is the bundled stock library's file.
+    pub(crate) fn is_stock_root(&self, path: &Path) -> bool {
+        self.stock_library_root
+            .as_deref()
+            .is_some_and(|root| resolved_path(root) == resolved_path(path))
+    }
+
     fn open_library_marked(&mut self, root: PathBuf, read_only: bool) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
             return Ok(());
@@ -211,6 +234,7 @@ impl LibraryState {
         // can still resolve to whichever copy wins. Detecting and
         // surfacing that collision is the Components Panel's job at
         // presentation time.
+        let read_only = read_only || self.is_stock_root(&root);
         if read_only {
             self.set.mount_read_only(Box::new(adapter))?;
         } else {
@@ -242,8 +266,10 @@ impl LibraryState {
                 "open_library: reload_tables failed; library opens with empty cache"
             );
         }
+        if self.is_stock_root(&entry.root) {
+            self.stock_library = Some(entry.root.clone());
+        }
         self.open_libraries.push(entry);
-        self.expanded.push(true);
         self.touch_data();
         self.sweep_dangling_refs();
         Ok(())
@@ -291,9 +317,6 @@ impl LibraryState {
             let entry = self.open_libraries.remove(idx);
             self.touch_data();
             self.set.unmount(entry.library_id);
-            if idx < self.expanded.len() {
-                self.expanded.remove(idx);
-            }
             self.editors.retain(|key, _| key.library_path != root);
             // Names, drift rows and Update must not use an unmounted library.
             self.drift.check_pending = true;
@@ -587,34 +610,33 @@ impl OpenLibrary {
         // extra refresh on the next poll, never a missed one.
         let stamp = signex_library::DiskStamp::of(&self.root).ok();
         let names = adapter.list_tables()?;
-        let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
-        let mut summaries: Vec<ComponentSummary> = Vec::new();
-        for name in names {
-            match adapter.read_table(&name) {
-                Ok(rows) => {
-                    for row in &rows {
-                        summaries.push(ComponentSummary {
-                            row_id: row.row_id,
-                            internal_pn: row.internal_pn.clone(),
-                            mpn: row.primary_mpn.mpn.clone(),
-                            state: row.state,
-                            description: String::new(),
-                        });
-                    }
-                    tables.insert(name, rows);
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        table = %name,
-                        error = %e,
-                        "read_table failed; entry left empty"
-                    );
-                    tables.insert(name, Vec::new());
-                }
-            }
-        }
+        let super::table_scan::TableScan {
+            tables,
+            summaries,
+            pricing,
+        } = super::table_scan::scan_tables(
+            adapter,
+            names,
+            summarize_row,
+            |name, e| {
+                tracing::warn!(
+                    target: "signex::library",
+                    table = %name,
+                    error = %e,
+                    "reload_tables: cached prices could not be read; none are shown"
+                )
+            },
+            |name, e| {
+                tracing::warn!(
+                    target: "signex::library",
+                    table = %name,
+                    error = %e,
+                    "read_table failed; entry left empty"
+                )
+            },
+        );
         self.tables = tables;
+        self.pricing = pricing;
         self.cached_components = summaries;
         self.cached_classes = adapter.library_classes();
         self.observed_stamp = stamp;
@@ -702,5 +724,16 @@ pub(crate) fn resolved_path(path: &Path) -> PathBuf {
                 return path.to_path_buf();
             }
         }
+    }
+}
+
+/// Picker/panel summary for one table row.
+pub(super) fn summarize_row(row: &ComponentRow) -> ComponentSummary {
+    ComponentSummary {
+        row_id: row.row_id,
+        internal_pn: row.internal_pn.clone(),
+        mpn: row.primary_mpn.mpn.clone(),
+        state: row.state,
+        description: row.description.clone(),
     }
 }

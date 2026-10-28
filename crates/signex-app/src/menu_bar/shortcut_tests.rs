@@ -4,7 +4,7 @@ use crate::keymap::{
     ShortcutProfile, ShortcutProfileKind, ShortcutTrigger,
 };
 
-fn context_with(bindings: Vec<ShortcutBinding>) -> MenuContext {
+fn context_with(bindings: Vec<ShortcutBinding>) -> MenuContext<'static> {
     let profile = ShortcutProfile {
         id: "t".to_string(),
         name: "T".to_string(),
@@ -41,12 +41,37 @@ fn an_unbound_command_shows_no_shortcut_not_the_hardcoded_fallback() {
 }
 
 #[test]
-fn a_command_the_keymap_does_not_mention_keeps_its_fallback() {
+fn a_command_the_keymap_does_not_mention_shows_no_hint() {
     let ctx = context_with(vec![]);
+    assert_eq!(shortcut_for(&ctx, "save_document", "Ctrl+S"), None);
+}
+
+#[test]
+fn without_any_active_keymap_the_fallback_stands_in() {
+    let ctx = MenuContext::default();
     assert_eq!(
         shortcut_for(&ctx, "save_document", "Ctrl+S").as_deref(),
         Some("Ctrl+S")
     );
+}
+
+// #1378 item 6: Classic binds P, G and F1 to other commands, so the
+// Altium fallback hints would advertise keys that do something else.
+#[test]
+fn the_classic_profile_shows_no_altium_fallback_hints() {
+    let mut set = crate::keymap::ShortcutProfileSet::built_ins().unwrap();
+    set.set_active_profile("classic").unwrap();
+    let ctx = MenuContext {
+        active_keymap: Some(std::sync::Arc::new(set.compile_active())),
+        ..MenuContext::default()
+    };
+    for (id, fallback) in [
+        ("open_components_panel", "P"),
+        ("cycle_snap_grid_forward", "G"),
+        ("show_current_command_hotkeys", "F1"),
+    ] {
+        assert_eq!(shortcut_for(&ctx, id, fallback), None, "{id}");
+    }
 }
 
 #[test]

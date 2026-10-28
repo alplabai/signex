@@ -140,18 +140,10 @@ impl std::fmt::Debug for PreparedMountCell {
 /// `Task::perform` boundary and `Message` is `Clone` while
 /// [`LibraryError`] is not — the same reason `read_and_parse_schematic`
 /// returns `Result<_, String>`.
+///
+/// Always prepared writable; [`LibraryState::mount_prepared`] mounts the
+/// bundled stock library read-only whatever prepared it.
 pub fn prepare_mount(path: &Path) -> Result<PreparedMount, String> {
-    prepare_mount_marked(path, false)
-}
-
-/// [`prepare_mount`] for the stock library: the prepared adapter is
-/// wrapped read-only, so the mount that lands on [`LibraryState`] refuses
-/// every write with `LibraryError::ReadOnly`.
-pub fn prepare_mount_read_only(path: &Path) -> Result<PreparedMount, String> {
-    prepare_mount_marked(path, true)
-}
-
-fn prepare_mount_marked(path: &Path, read_only: bool) -> Result<PreparedMount, String> {
     let adapter = LocalGitAdapter::open(path).map_err(|e: LibraryError| e.to_string())?;
     let manifest = adapter.manifest();
     let mut entry = OpenLibrary {
@@ -182,11 +174,7 @@ fn prepare_mount_marked(path: &Path, read_only: bool) -> Result<PreparedMount, S
         );
     }
     Ok(PreparedMount {
-        adapter: if read_only {
-            Box::new(signex_library::ReadOnlyAdapter::new(Box::new(adapter)))
-        } else {
-            Box::new(adapter)
-        },
+        adapter: Box::new(adapter),
         entry,
     })
 }
@@ -277,9 +265,18 @@ impl LibraryState {
         // library sharing a `library_id` at different paths both mount
         // fine, by design (`adapters/library_set.rs`, "Resolution
         // semantics").
-        self.set.mount(prepared.adapter)?;
+        // The bundled stock library is always read-only, whichever request
+        // (global entry, project library, Add Library) mounts it first.
+        let stock = self.is_stock_root(&prepared.entry.root);
+        if stock {
+            self.set.mount_read_only(prepared.adapter)?;
+        } else {
+            self.set.mount(prepared.adapter)?;
+        }
+        if stock {
+            self.stock_library = Some(prepared.entry.root.clone());
+        }
         self.open_libraries.push(prepared.entry);
-        self.expanded.push(true);
         self.touch_data();
         self.sweep_dangling_refs();
         Ok(())

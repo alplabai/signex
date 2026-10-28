@@ -18,8 +18,8 @@
 //!    sku, url, remove [×]) plus a `+ Add Listing` trigger.
 //!
 //! Every value mutation flows through `EditorMsg::Supply*` → the
-//! library dispatcher's `apply_inline_edit` arms (see `dispatch/library.rs`),
-//! which write directly to `editor.draft.*` and bump `editor.dirty`.
+//! library dispatcher's `dispatch/library/` handlers, which write to the
+//! editor's draft row and mark it dirty.
 
 use iced::widget::{
     Space, button, column, container, pick_list, row, scrollable, text, text_input,
@@ -31,6 +31,10 @@ use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 const STATUS_OPTS: [AlternateStatus; 4] = [
     AlternateStatus::Primary,
@@ -145,7 +149,7 @@ pub fn view<'a>(
 
 fn section_header<'a>(label: &'a str, tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
-    text(label).size(11).color(muted).into()
+    text(label).size(TS.body).color(muted).into()
 }
 
 // ─────────────────────────── Primary MPN form ──────────────────────────
@@ -190,10 +194,10 @@ fn primary_form<'a>(
         },
     )
     .text_size(12)
-    .padding([4, 8]);
+    .padding([SP.s, SP.m]);
     let status_block: Element<'a, LibraryMessage> =
-        column![text("Status").size(10).color(muted), status_picker,]
-            .spacing(4)
+        column![text("Status").size(TS.caption).color(muted), status_picker,]
+            .spacing(SP.s)
             .into();
 
     let notes_field = labelled_input(
@@ -231,7 +235,7 @@ fn alternates_section<'a>(
     if state.row.alternates.is_empty() {
         col = col.push(
             text("No alternates yet — click \u{2009}+ Add Alternate\u{2009} to start.")
-                .size(11)
+                .size(TS.body)
                 .color(muted),
         );
     } else {
@@ -263,8 +267,8 @@ fn alternate_row<'a>(
     let table_for_mfg = address.table.clone();
     let row_id = address.row_id;
     let mfg_input = text_input("Manufacturer", &alt.manufacturer)
-        .padding([4, 8])
-        .size(12)
+        .padding([SP.s, SP.m])
+        .size(TS.label)
         .width(Length::FillPortion(3))
         .on_input(move |s| LibraryMessage::EditorEvent {
             library_path: lib_path_for_mfg.clone(),
@@ -276,8 +280,8 @@ fn alternate_row<'a>(
     let lib_path_for_mpn = address.library_path.clone();
     let table_for_mpn = address.table.clone();
     let mpn_input = text_input("MPN", &alt.mpn)
-        .padding([4, 8])
-        .size(12)
+        .padding([SP.s, SP.m])
+        .size(TS.label)
         .width(Length::FillPortion(3))
         .on_input(move |s| LibraryMessage::EditorEvent {
             library_path: lib_path_for_mpn.clone(),
@@ -299,15 +303,15 @@ fn alternate_row<'a>(
         },
     )
     .text_size(12)
-    .padding([4, 8])
+    .padding([SP.s, SP.m])
     .width(Length::Fixed(140.0));
 
     let lib_path_for_notes = address.library_path.clone();
     let table_for_notes = address.table.clone();
     let notes_value = alt.notes.clone().unwrap_or_default();
     let notes_input = text_input("notes", &notes_value)
-        .padding([4, 8])
-        .size(12)
+        .padding([SP.s, SP.m])
+        .size(TS.label)
         .width(Length::FillPortion(4))
         .on_input(move |s| LibraryMessage::EditorEvent {
             library_path: lib_path_for_notes.clone(),
@@ -336,7 +340,7 @@ fn alternate_row<'a>(
             remove,
         ]
         .align_y(iced::Alignment::Center)
-        .padding([3, 4]),
+        .padding([3.0, SP.s]),
     )
     .style(move |_: &Theme| iced::widget::container::Style {
         background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -364,27 +368,31 @@ fn listings_section<'a>(
 
     let header = row![
         text("Distributor")
-            .size(10)
+            .size(TS.caption)
             .color(muted)
             .width(Length::Fixed(160.0)),
         Space::new().width(6),
         text("SKU")
-            .size(10)
+            .size(TS.caption)
             .color(muted)
             .width(Length::FillPortion(3)),
         Space::new().width(6),
         text("URL")
-            .size(10)
+            .size(TS.caption)
             .color(muted)
             .width(Length::FillPortion(5)),
         Space::new().width(6),
-        text("").size(10).width(Length::Fixed(28.0)),
+        text("").size(TS.caption).width(Length::Fixed(28.0)),
     ]
-    .padding([2, 4]);
+    .padding([SP.xs, SP.s]);
 
-    let mut rows = column![header].spacing(4);
+    let mut rows = column![header].spacing(SP.s);
     if state.row.supply.is_empty() {
-        rows = rows.push(text("No distributor listings yet.").size(11).color(muted));
+        rows = rows.push(
+            text("No distributor listings yet.")
+                .size(TS.body)
+                .color(muted),
+        );
     } else {
         for (idx, listing) in state.row.supply.iter().enumerate() {
             rows = rows.push(listing_row(
@@ -449,14 +457,14 @@ fn listing_row<'a>(
         },
     )
     .text_size(12)
-    .padding([4, 8])
+    .padding([SP.s, SP.m])
     .width(Length::Fixed(160.0));
 
     let lib_path_for_sku = address.library_path.clone();
     let table_for_sku = address.table.clone();
     let sku_input = text_input("296-1395-1-ND", sku)
-        .padding([4, 8])
-        .size(12)
+        .padding([SP.s, SP.m])
+        .size(TS.label)
         .width(Length::FillPortion(3))
         .on_input(move |s| LibraryMessage::EditorEvent {
             library_path: lib_path_for_sku.clone(),
@@ -468,8 +476,8 @@ fn listing_row<'a>(
     let lib_path_for_url = address.library_path.clone();
     let table_for_url = address.table.clone();
     let url_input = text_input("https://www.distributor.com/...", url)
-        .padding([4, 8])
-        .size(12)
+        .padding([SP.s, SP.m])
+        .size(TS.label)
         .width(Length::FillPortion(5))
         .on_input(move |s| LibraryMessage::EditorEvent {
             library_path: lib_path_for_url.clone(),
@@ -495,7 +503,7 @@ fn listing_row<'a>(
         remove,
     ]
     .align_y(iced::Alignment::Center)
-    .padding([2, 4])
+    .padding([SP.xs, SP.s])
     .into()
 }
 
@@ -514,7 +522,7 @@ fn labelled_input<'a>(
     let table = address.table.clone();
     let row_id = address.row_id;
     column![
-        text(label).size(10).color(muted),
+        text(label).size(TS.caption).color(muted),
         text_input(placeholder, &value)
             .on_input(move |s| LibraryMessage::EditorEvent {
                 library_path: lib_path.clone(),
@@ -522,10 +530,10 @@ fn labelled_input<'a>(
                 row_id,
                 msg: msg(s),
             })
-            .padding([4, 8])
-            .size(12),
+            .padding([SP.s, SP.m])
+            .size(TS.label),
     ]
-    .spacing(4)
+    .spacing(SP.s)
     .width(Length::Fill)
     .into()
 }
@@ -538,7 +546,7 @@ fn add_button<'a>(
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
-    button(container(text(label).size(11).color(text_c)).padding([4, 12]))
+    button(container(text(label).size(TS.body).color(text_c)).padding([SP.s, SP.l]))
         .on_press(LibraryMessage::EditorEvent {
             library_path: address.library_path.clone(),
             table: address.table.clone(),
@@ -574,32 +582,34 @@ fn remove_button<'a>(
     border: iced::Color,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    button(container(text("\u{00D7}".to_string()).size(13).color(text_c)).padding([0, 8]))
-        .on_press(LibraryMessage::EditorEvent {
-            library_path: address.library_path.clone(),
-            table: address.table.clone(),
-            row_id: address.row_id,
-            msg,
-        })
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10),
-                )),
-                _ => Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-            };
-            iced::widget::button::Style {
-                background: bg,
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .into()
+    button(
+        container(text("\u{00D7}".to_string()).size(TS.title).color(text_c)).padding([0.0, SP.m]),
+    )
+    .on_press(LibraryMessage::EditorEvent {
+        library_path: address.library_path.clone(),
+        table: address.table.clone(),
+        row_id: address.row_id,
+        msg,
+    })
+    .style(move |_: &Theme, status: iced::widget::button::Status| {
+        let bg = match status {
+            iced::widget::button::Status::Hovered => Some(iced::Background::Color(
+                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10),
+            )),
+            _ => Some(iced::Background::Color(iced::Color::from_rgba(
+                1.0, 1.0, 1.0, 0.04,
+            ))),
+        };
+        iced::widget::button::Style {
+            background: bg,
+            text_color: text_c,
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+            },
+            ..iced::widget::button::Style::default()
+        }
+    })
+    .into()
 }

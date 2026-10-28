@@ -134,3 +134,15 @@ fn accepts_absolute_path_under_project_dir() {
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].subject, "add nested");
 }
+
+/// A message with a body and no blank separator still shows only its
+/// first line as the subject, same as the library history.
+#[test]
+fn subject_is_the_first_line_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = init_repo(dir.path());
+    let _ = commit_file(&repo, Path::new("f.txt"), "v1", "headline\nmore detail\n");
+    let entries = project_file_history(dir.path(), Path::new("f.txt")).unwrap();
+    assert_eq!(entries[0].subject, "headline");
+    assert_eq!(entries[0].body, "more detail\n");
+}

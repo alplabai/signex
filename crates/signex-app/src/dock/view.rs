@@ -6,7 +6,11 @@ use iced::{Color, Element, Length, Rectangle, Renderer, Theme};
 use super::types::*;
 use crate::icons;
 use crate::panels::{self, PanelKind};
-use crate::styles;
+use crate::styles::{self, Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// Wrap a themed SVG handle into a 14×14 `Svg` widget. Kept as a free
 /// function so every call site reads `svg_icon(icons::icon_close(tid))`
@@ -47,8 +51,8 @@ impl DockArea {
 
         // Left scroll arrow (only when tabs are scrolled)
         if has_overflow {
-            let arrow = button(text("<").size(10))
-                .padding([4, 4])
+            let arrow = button(text("<").size(TS.caption))
+                .padding([SP.s, SP.s])
                 .style(button::text);
             tab_row = tab_row.push(if can_scroll_left {
                 arrow.on_press(DockMessage::TabScroll(position, -1))
@@ -124,11 +128,11 @@ impl DockArea {
             // ~240 px width with several panels in the strip.
             let inner = container(
                 text(label)
-                    .size(11)
+                    .size(TS.body)
                     .color(text_c)
                     .wrapping(iced::widget::text::Wrapping::None),
             )
-            .padding([4, 10]);
+            .padding([SP.s, 10.0]);
             let tab = mouse_area(signex_widgets::tab_pill::TabPill::new(inner, pill_style))
                 .on_enter(DockMessage::TabHoverEnter(position, i))
                 .on_exit(DockMessage::TabHoverExit(position, i))
@@ -140,8 +144,8 @@ impl DockArea {
 
         // Right scroll arrow (only when more tabs are hidden)
         if has_overflow {
-            let arrow = button(text(">").size(10))
-                .padding([4, 4])
+            let arrow = button(text(">").size(TS.caption))
+                .padding([SP.s, SP.s])
                 .style(button::text);
             tab_row = tab_row.push(if can_scroll_right {
                 arrow.on_press(DockMessage::TabScroll(position, 1))
@@ -158,11 +162,11 @@ impl DockArea {
             PanelPosition::Bottom => svg_icon(icons::icon_collapse_down(tid)),
         };
         let close_btn = button(svg_icon(icons::icon_close(tid)))
-            .padding([5, 4])
+            .padding([5.0, SP.s])
             .style(button::text)
             .on_press(DockMessage::ClosePanel(position, region.active));
         let collapse_btn = button(collapse_icon)
-            .padding([5, 4])
+            .padding([5.0, SP.s])
             .style(button::text)
             .on_press(DockMessage::ToggleCollapse(position));
 
@@ -177,7 +181,7 @@ impl DockArea {
         let title_bar = row![
             container(
                 text(active_title)
-                    .size(11)
+                    .size(TS.body)
                     .color(styles::ti(ctx.tokens.text)),
             )
             .padding([5, 10]),
@@ -230,7 +234,7 @@ impl DockArea {
         column![
             container(title_bar)
                 .width(Length::Fill)
-                .padding([0, 4])
+                .padding([0.0, SP.s])
                 .style(styles::tab_bar_strip(&ctx.tokens)),
             container(content)
                 .width(Length::Fill)
@@ -243,7 +247,7 @@ impl DockArea {
             // edge instead of either wrapping or spilling.
             container(tab_strip)
                 .width(Length::Fill)
-                .padding([0, 4])
+                .padding([0.0, SP.s])
                 .clip(true)
                 .style(styles::tab_bar_strip(&ctx.tokens)),
         ]
@@ -261,7 +265,7 @@ impl DockArea {
         let is_vertical = matches!(position, PanelPosition::Left | PanelPosition::Right);
 
         if is_vertical {
-            let mut rail: Column<DockMessage> = Column::new().spacing(2.0);
+            let mut rail: Column<DockMessage> = Column::new().spacing(SP.xs);
 
             // Expand button with SVG arrow
             let tid = ctx.theme_id;
@@ -272,7 +276,7 @@ impl DockArea {
             };
             rail = rail.push(
                 button(expand_icon)
-                    .padding(4)
+                    .padding(SP.s)
                     .width(RAIL_CANVAS_W)
                     .style(button::text)
                     .on_press(DockMessage::ToggleCollapse(position)),
@@ -307,12 +311,12 @@ impl DockArea {
 
             container(rail)
                 .height(Length::Fill)
-                .padding([3, 2])
+                .padding([3.0, SP.xs])
                 .style(styles::collapsed_rail(&ctx.tokens))
                 .into()
         } else {
             // Bottom panel collapsed: horizontal thin strip with tab labels
-            let mut rail = row![].spacing(2.0);
+            let mut rail = row![].spacing(SP.xs);
 
             for (i, panel) in region.panels.iter().enumerate() {
                 let label = panel.label();
@@ -324,8 +328,8 @@ impl DockArea {
                 };
 
                 rail = rail.push(
-                    button(text(label).size(10).color(text_c))
-                        .padding([2, 8])
+                    button(text(label).size(TS.caption).color(text_c))
+                        .padding([SP.xs, SP.m])
                         .on_press(DockMessage::SelectTab(position, i))
                         .style(button::text),
                 );
@@ -334,7 +338,7 @@ impl DockArea {
             container(rail)
                 .width(Length::Fill)
                 .height(28)
-                .padding([2, 4])
+                .padding([SP.xs, SP.s])
                 .style(styles::collapsed_rail(&ctx.tokens))
                 .into()
         }
@@ -354,15 +358,15 @@ impl DockArea {
         // Title bar with drag handle + close button
         let title_bar_content = container(
             row![
-                container(text(label).size(11).color(styles::ti(ctx.tokens.text)))
-                    .padding([4, 8])
+                container(text(label).size(TS.body).color(styles::ti(ctx.tokens.text)))
+                    .padding([SP.s, SP.m])
                     .width(Length::Fill),
                 button(svg_icon(icons::icon_close(ctx.theme_id)))
-                    .padding([4, 4])
+                    .padding([SP.s, SP.s])
                     .style(button::text)
                     .on_press(DockMessage::DockFloating(idx)),
             ]
-            .spacing(2)
+            .spacing(SP.xs)
             .align_y(iced::Alignment::Center),
         )
         .width(fp.width)

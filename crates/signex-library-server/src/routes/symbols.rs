@@ -3,8 +3,8 @@
 //! Per `v0.9-refactor-2-plan.md` §9 Step D3, primitives are addressed by
 //! `(library_id, uuid)` tuples. The wire format is the JSON-serialised
 //! `Symbol` struct from `signex-library`. Routes are bearer-token gated like
-//! the existing `/components` family — `router_with_state` slots them into
-//! the protected sub-router.
+//! the other routes — `router_with_state` slots them into the protected
+//! sub-router.
 
 use axum::{
     Json, Router,
@@ -17,7 +17,7 @@ use serde::Deserialize;
 use signex_library::primitive::Symbol;
 use uuid::Uuid;
 
-use crate::db::{AppState, PrimitiveSummary};
+use crate::db::{AppState, Page, PrimitiveSummary};
 use crate::routes::error::ApiError;
 use crate::routes::primitives::{already_exists, require_same_uuid, subject, with_etag};
 use crate::routes::rows::{applied, base_revision};
@@ -34,6 +34,9 @@ struct ListQuery {
     /// open library's primitives. Unset → return every symbol the server
     /// knows about.
     library_id: Option<Uuid>,
+    /// Page size; defaults to and is capped by the server.
+    limit: Option<i64>,
+    offset: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -93,6 +96,8 @@ async fn list_symbols(
     State(state): State<AppState>,
     Query(q): Query<ListQuery>,
 ) -> Result<Json<Vec<PrimitiveSummary>>, ApiError> {
-    let summaries = state.list_symbols(q.library_id).await?;
+    let summaries = state
+        .list_symbols(q.library_id, Page::new(q.limit, q.offset))
+        .await?;
     Ok(Json(summaries))
 }

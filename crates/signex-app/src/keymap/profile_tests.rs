@@ -644,3 +644,111 @@ fn an_unbind_binding_does_not_make_a_shorter_chord_wait() {
     assert_eq!(lookup.command.as_ref(), Some(&save));
     assert!(!lookup.pending, "an Unbind must not hold the command back");
 }
+
+/// #1379 - a built-in profile must not bind one stroke to two commands in
+/// the same context; the later one silently wins at lookup.
+#[test]
+fn no_built_in_profile_binds_a_stroke_to_two_commands() {
+    for id in ["classic", "altium"] {
+        let mut set = ShortcutProfileSet::built_ins().unwrap();
+        set.set_active_profile(id).unwrap();
+        let conflicts = set.compile_active().conflicts();
+        assert!(
+            conflicts.is_empty(),
+            "{id} has conflicting bindings: {conflicts:?}"
+        );
+    }
+}
+
+#[test]
+fn shortcut_label_index_equals_the_reverse_scan_for_every_catalog_id() {
+    let set = ShortcutProfileSet::built_ins().unwrap();
+    for id in set.profiles().map(|profile| profile.id.clone()) {
+        let mut set = set.clone();
+        set.set_active_profile(id).unwrap();
+        let keymap = set.compile_active();
+        let mut labelled = 0;
+        for command_id in crate::keymap::all_command_ids() {
+            let command = AppCommandId::new(command_id).unwrap();
+            let indexed = keymap.shortcut_label(&command);
+            assert_eq!(
+                indexed,
+                keymap.shortcut_label_linear(&command),
+                "{command_id}"
+            );
+            labelled += usize::from(indexed.is_some());
+        }
+        assert!(labelled > 20, "too few labelled commands: {labelled}");
+    }
+}
+
+#[test]
+fn shortcut_label_index_follows_a_recompiled_keymap() {
+    let mut set = ShortcutProfileSet::built_ins().unwrap();
+    let save = AppCommandId::new("save_document").unwrap();
+    let before = set.compile_active().shortcut_label(&save);
+    set.active_profile_mut()
+        .bindings
+        .retain(|binding| binding.action.command() != Some(&save));
+    let after = set.compile_active().shortcut_label(&save);
+    assert!(before.is_some());
+    assert_eq!(after, None);
+}
+
+fn bind(action: ShortcutBindingAction, trigger: &str) -> ShortcutBinding {
+    ShortcutBinding {
+        action,
+        context: ShortcutContext::Global,
+        triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+    }
+}
+
+fn custom_profile(bindings: Vec<ShortcutBinding>) -> ShortcutProfile {
+    ShortcutProfile {
+        id: "t".to_string(),
+        name: "T".to_string(),
+        kind: ShortcutProfileKind::Custom,
+        schema_version: 1,
+        description: None,
+        base_profile: None,
+        bindings,
+    }
+}
+
+// An unbind of one trigger must not hide the hint of a trigger that still
+// works (Ctrl+P unbound, F7 live).
+#[test]
+fn an_unbind_of_one_trigger_keeps_the_hint_of_the_surviving_one() {
+    let print = AppCommandId::new("print").unwrap();
+    let keymap = CompiledKeymap::compile(&custom_profile(vec![
+        bind(ShortcutBindingAction::Command(print.clone()), "Ctrl+P"),
+        bind(ShortcutBindingAction::Command(print.clone()), "F7"),
+        bind(ShortcutBindingAction::Unbind(print.clone()), "Ctrl+P"),
+    ]));
+    assert_eq!(keymap.shortcut_label(&print).as_deref(), Some("F7"));
+    assert_eq!(
+        keymap.shortcut_label(&print),
+        keymap.shortcut_label_linear(&print)
+    );
+}
+
+#[test]
+fn a_command_whose_every_binding_is_unbound_has_no_hint() {
+    let print = AppCommandId::new("print").unwrap();
+    let keymap = CompiledKeymap::compile(&custom_profile(vec![
+        bind(ShortcutBindingAction::Command(print.clone()), "Ctrl+P"),
+        bind(ShortcutBindingAction::Unbind(print.clone()), "Ctrl+P"),
+    ]));
+    assert_eq!(keymap.shortcut_label(&print), None);
+    assert_eq!(keymap.shortcut_label_linear(&print), None);
+}
+
+#[test]
+fn a_rebind_after_an_unbind_shows_the_rebound_stroke() {
+    let print = AppCommandId::new("print").unwrap();
+    let keymap = CompiledKeymap::compile(&custom_profile(vec![
+        bind(ShortcutBindingAction::Unbind(print.clone()), "Ctrl+P"),
+        bind(ShortcutBindingAction::Command(print.clone()), "Ctrl+P"),
+    ]));
+    assert_eq!(keymap.shortcut_label(&print).as_deref(), Some("Ctrl+P"));
+}

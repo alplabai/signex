@@ -20,6 +20,14 @@ fn library_path_for_key(
 }
 
 impl Signex {
+    /// Tab title for a document: its file stem, so `sub/Power.snxsch` reads
+    /// `Power`, the same as `rekey_open_document` titles it after a rename.
+    fn document_title(path: &std::path::Path) -> String {
+        path.file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    }
+
     /// Resolve a project-tree path (indices) to the file path on disk
     /// for the leaf node at that position. Multi-root aware: the first
     /// index picks which project's directory to resolve against, so a
@@ -134,7 +142,7 @@ impl Signex {
         };
         // One document per file: a spelling of the path a tab already holds
         // reuses that tab (#1149).
-        let file_path = self.resolve_held_spelling(file_path);
+        let file_path = self.resolve_held_spelling_now(file_path);
 
         // F23 — orphan `.snxlib` entries (registered on the project but
         // missing on disk) still flow through to the Library Browser
@@ -163,7 +171,7 @@ impl Signex {
         // The file read + parse of a schematic / PCB runs on a worker; the
         // tab is installed by `handle_document_read_finished` (#859).
         if filename.ends_with(".snxsch") {
-            let title = filename.trim_end_matches(".snxsch").to_string();
+            let title = Self::document_title(&file_path);
             // If we parked an engine for this file (closed while dirty),
             // restore it instead of reparsing — Altium parity. Re-parsing
             // would silently discard the user's in-memory edits, which is
@@ -178,7 +186,7 @@ impl Signex {
         }
 
         if filename.ends_with(".snxpcb") {
-            let title = filename.trim_end_matches(".snxpcb").to_string();
+            let title = Self::document_title(&file_path);
             return Ok(self.begin_document_read(file_path, ReadJob::TreePcb { title }));
         }
 

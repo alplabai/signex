@@ -10,6 +10,9 @@ use super::*;
 use iced::widget::{Space, button, column, container, text};
 use iced::{Background, Border, Element, Length, Theme};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+
 // ─── Theme-aware text styles ──────────────────────────────────
 // The whole modal shell + text now follow the active theme via
 // `theme.extended_palette()` tokens — the same palette source the keymap
@@ -103,7 +106,7 @@ pub(super) fn success_button_style(theme: &Theme, status: button::Status) -> but
 
 pub(super) fn section_title<'a>(title: &str) -> Element<'a, PrefMsg> {
     column![
-        text(title.to_owned()).size(13).style(text_primary),
+        text(title.to_owned()).size(TS.title).style(text_primary),
         container(Space::new())
             .width(Length::Fill)
             .height(1)

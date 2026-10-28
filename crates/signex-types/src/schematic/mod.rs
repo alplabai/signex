@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -465,7 +465,7 @@ pub struct SheetInstance {
 /// - `body_style == 0` → common to all body styles (normal + De Morgan)
 /// - `body_style == 1` → normal body style (default)
 /// - `body_style == 2` → De Morgan body style
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LibGraphic {
     #[serde(default)]
     pub unit: u32,
@@ -475,7 +475,7 @@ pub struct LibGraphic {
 }
 
 /// A pin inside a library symbol, tagged with unit and body-style.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LibPin {
     #[serde(default)]
     pub unit: u32,
@@ -488,7 +488,7 @@ fn default_body_style() -> u32 {
     1
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LibSymbol {
     pub id: String,
     #[serde(default)]
@@ -525,11 +525,23 @@ pub struct LibSymbol {
     pub pin_name_offset: f64,
 }
 
+impl LibSymbol {
+    /// Whether `other` is the same body: every stored field equal. The one
+    /// comparison behind "the sheet's copy differs from the library's" for
+    /// both a library placement and a paste.
+    pub fn same_body(&self, other: &Self) -> bool {
+        matches!(
+            (serde_json::to_string(self), serde_json::to_string(other)),
+            (Ok(a), Ok(b)) if a == b
+        )
+    }
+}
+
 fn default_true() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Graphic {
     Polyline {
@@ -612,7 +624,7 @@ pub enum Graphic {
 // Pin
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Pin {
     pub direction: PinDirection,
     pub shape_style: PinShapeStyle,
@@ -791,7 +803,9 @@ pub use sheet_frame::{MAX_ZONES, SheetFrameSettings};
 mod sheet_size;
 pub use sheet_size::{MAX_PAGE_EDGE_MM, MIN_CUSTOM_EDGE_MM, SheetOrientation, SheetSize};
 mod hotspot;
-pub use hotspot::{SCHEMATIC_HOTSPOT_RADIUS_MM, hotspot_capture_radius, snap_to_hotspot};
+pub use hotspot::{
+    SCHEMATIC_HOTSPOT_RADIUS_MM, hotspot_capture_radius, snap_move_to_hotspot, snap_to_hotspot,
+};
 mod power_port_symbol;
 pub use power_port_symbol::{PowerPortStyle, power_port_graphics, power_port_lib_symbol};
 mod symbol_geometry;
