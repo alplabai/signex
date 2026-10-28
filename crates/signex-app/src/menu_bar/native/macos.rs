@@ -4,6 +4,9 @@
 //! panics anywhere else, and an `iced::Task` future is not on that thread.
 
 use std::collections::HashMap;
+use std::sync::{Mutex, Once, PoisonError};
+
+use iced::futures::channel::mpsc::UnboundedSender;
 
 use muda::accelerator::{Accelerator as KeyEquivalent, CMD_OR_CTRL, Code};
 use muda::{Menu, MenuId, MenuItem, PredefinedMenuItem, Submenu};
@@ -11,12 +14,11 @@ use muda::{Menu, MenuId, MenuItem, PredefinedMenuItem, Submenu};
 use super::state::{MenuInputs, NativeMenuState, Refresh, plan_refresh};
 use super::{Accelerator, NativeBuild, NativeMenu, NativeMenuSpec, NativeNode, Predefined};
 use crate::diagnostics::{log_info, log_warning};
-use crate::ignore::IgnoreResult;
 
 /// The installed menu and the item handles enablement updates go through.
 pub(super) struct Shell {
     /// Owns the NSMenu; dropping it releases the items.
-    _menu: Menu,
+    menu: Menu,
     items: HashMap<String, MenuItem>,
 }
 
@@ -29,7 +31,7 @@ impl Shell {
         }
         // Replaces winit's default menu, which exists by now.
         menu.init_for_nsapp();
-        Ok(Self { _menu: menu, items })
+        Ok(Self { menu, items })
     }
 }
 
@@ -95,7 +97,8 @@ impl NativeMenuState {
                 }
             }
             (Refresh::Enablement(_) | Refresh::Rebuild, _) => {
-                if !self.rebuild(&spec) {
+                if let Err(error) = self.rebuild(&spec) {
+                    self.fall_back(&error);
                     return;
                 }
             }
@@ -104,35 +107,54 @@ impl NativeMenuState {
         self.applied = Some(spec);
     }
 
-    fn rebuild(&mut self, spec: &NativeMenuSpec) -> bool {
-        match Shell::install(spec) {
-            Ok(shell) => {
-                if !self.installed {
-                    log_info("Main menu: shown in the system menu bar");
-                }
-                self.shell = Some(shell);
-                self.installed = true;
-                true
-            }
-            Err(error) if self.shell.is_some() => {
-                // The previous menu stays on screen but is now out of date.
-                log_warning(format!(
-                    "Main menu: could not rebuild the system menu bar ({error}); \
-                     it may be out of date"
-                ));
-                self.failed = true;
-                false
-            }
-            Err(error) => {
-                log_warning(format!(
-                    "Main menu: could not install the system menu bar ({error}); \
-                     using the in-window menu"
-                ));
-                self.failed = true;
-                false
-            }
+    fn rebuild(&mut self, spec: &NativeMenuSpec) -> Result<(), muda::Error> {
+        let shell = Shell::install(spec)?;
+        if self.shell.is_none() {
+            log_info("Main menu: shown in the system menu bar");
         }
+        self.shell = Some(shell);
+        Ok(())
     }
+
+    /// Installing or rebuilding failed: take the system menu down (a stale
+    /// one would fire a frozen action map), forget it, and let the
+    /// in-window row come back.
+    fn fall_back(&mut self, error: &muda::Error) {
+        if let Some(shell) = self.shell.take() {
+            shell.menu.remove_for_nsapp();
+        }
+        self.actions.clear();
+        self.applied = None;
+        self.failed = true;
+        log_warning(format!(
+            "Main menu: could not build the system menu bar ({error}); \
+             using the in-window menu"
+        ));
+    }
+}
+
+/// Who gets the ids muda reports. muda's event handler can be set only once
+/// per process, so it is installed once and forwards into this slot, which a
+/// restarted stream refills.
+static SINK: Mutex<Option<UnboundedSender<String>>> = Mutex::new(None);
+
+fn set_sink(sender: Option<UnboundedSender<String>>) {
+    static HANDLER: Once = Once::new();
+    HANDLER.call_once(|| {
+        muda::MenuEvent::set_event_handler(Some(|event: muda::MenuEvent| {
+            let sink = SINK.lock().unwrap_or_else(PoisonError::into_inner);
+            let delivered = sink
+                .as_ref()
+                .is_some_and(|tx| tx.unbounded_send(event.id().0.clone()).is_ok());
+            if !delivered {
+                log_warning(format!(
+                    "Main menu: dropped a click on \"{}\", nothing is listening",
+                    event.id().0
+                ));
+            }
+        }));
+    });
+    *SINK.lock().unwrap_or_else(PoisonError::into_inner) = sender;
 }
 
 /// Stream of activated native item ids, from muda's global event channel.
@@ -141,16 +163,12 @@ pub(crate) fn activations() -> impl iced::futures::Stream<Item = String> {
     iced::stream::channel(16, async |mut output| {
         use iced::futures::{SinkExt, StreamExt, channel::mpsc};
         let (tx, mut rx) = mpsc::unbounded::<String>();
-        muda::MenuEvent::set_event_handler(Some(move |event: muda::MenuEvent| {
-            // The receiver only drops with the subscription.
-            tx.unbounded_send(event.id().0.clone())
-                .ignore("the receiver only drops when the subscription ends");
-        }));
+        set_sink(Some(tx));
         while let Some(id) = rx.next().await {
             if output.send(id).await.is_err() {
                 break;
             }
         }
-        muda::MenuEvent::set_event_handler::<fn(muda::MenuEvent)>(None);
+        set_sink(None);
     })
 }
