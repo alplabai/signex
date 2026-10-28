@@ -448,6 +448,9 @@ use row_edit::RowChange;
 mod write_oracle_tests;
 
 #[cfg(test)]
+mod insert_row_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::library_file::{FORMAT_TOKEN, LibrarySection};

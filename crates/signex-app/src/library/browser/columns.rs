@@ -74,6 +74,22 @@ impl ColumnKind {
     /// [`ColumnKind::Rev`], the value is the bare semver string (the
     /// 🔒/🔓 badge is added at render time, not in the sort key, so
     /// released and unreleased rows still sort by version order).
+    /// Text an editable cell starts from. For a measurement this is the
+    /// stored form (`4700 ohm`, `4.7 kΩ`), not the engineering display:
+    /// the commit reads the typed number in the stored unit, so the cell
+    /// must show that unit and not a rescaled prefix.
+    pub(super) fn edit_seed(&self, r: &ComponentRow) -> String {
+        match self {
+            ColumnKind::Parameter(key) => match r.parameters.get(key) {
+                Some(signex_library::ParamValue::Measurement { value, unit }) => {
+                    format!("{value} {unit}")
+                }
+                _ => self.cell_value(r),
+            },
+            _ => self.cell_value(r),
+        }
+    }
+
     pub(super) fn cell_value(&self, r: &ComponentRow) -> String {
         match self {
             ColumnKind::InternalPn => r.internal_pn.as_str().to_string(),
@@ -322,5 +338,67 @@ mod short_uuid_tests {
     fn short_uuid_is_eight_chars() {
         let id = uuid::Uuid::parse_str("12345678-9abc-def0-1234-56789abcdef0").unwrap();
         assert_eq!(short_uuid(&id), "12345678");
+    }
+}
+
+#[cfg(test)]
+mod edit_seed_tests {
+    use super::*;
+    use signex_library::{
+        ComponentClass, DatasheetRef, InternalPn, LifecycleState, ManufacturerPart, ParamMap,
+        ParamValue, PlmReserved, PrimitiveRef,
+    };
+
+    fn row_with(value: f64, unit: &str) -> ComponentRow {
+        let now = chrono::Utc::now();
+        let mut parameters = ParamMap::new();
+        parameters.insert(
+            "value".into(),
+            ParamValue::Measurement {
+                value,
+                unit: unit.into(),
+            },
+        );
+        ComponentRow {
+            alternate_symbols: Vec::new(),
+            row_id: uuid::Uuid::new_v4(),
+            internal_pn: InternalPn::new("R1"),
+            class: ComponentClass::generic(),
+            datasheet: DatasheetRef::default(),
+            datasheet_label: String::new(),
+            description: String::new(),
+            more_datasheets: Vec::new(),
+            state: LifecycleState::Draft,
+            symbol_ref: PrimitiveRef::new(uuid::Uuid::nil(), uuid::Uuid::nil()),
+            footprint_ref: None,
+            sim_ref: None,
+            pin_map_overrides: Vec::new(),
+            primary_mpn: ManufacturerPart::draft("Acme", "MPN"),
+            alternates: Vec::new(),
+            supply: Vec::new(),
+            parameters,
+            plm: PlmReserved::default(),
+            version: "0.0.1".into(),
+            released: false,
+            symbol_version: String::new(),
+            footprint_version: String::new(),
+            sim_version: String::new(),
+            created: now,
+            updated: now,
+            content_hash: [0u8; 32],
+            server_revision: None,
+        }
+    }
+
+    /// The editable cell shows the stored number and unit, so the number
+    /// a user types is in that unit; the read-only cell may show the
+    /// engineering form.
+    #[test]
+    fn an_editable_measurement_cell_starts_from_the_stored_form() {
+        let key = ColumnKind::Parameter("value".into());
+        let canonical = row_with(4700.0, "ohm");
+        assert_eq!(key.edit_seed(&canonical), "4700 ohm");
+        assert_eq!(key.cell_value(&canonical), "4.7 kΩ");
+        assert_eq!(key.edit_seed(&row_with(4.7, "kΩ")), "4.7 kΩ");
     }
 }

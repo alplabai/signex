@@ -423,6 +423,7 @@ fn deliver(
             window_width: 1400.0,
             wire_color_overrides: &overrides,
             wire_class_styles: &class_styles,
+            wire_class_revision: 0,
             selection_filters: &app.interaction_state.selection_filters,
             placement: with_ghost
                 .then(|| app.interaction_state.placement.as_ref().map(|s| &s.ghost))

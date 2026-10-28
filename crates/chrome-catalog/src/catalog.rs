@@ -25,6 +25,8 @@ struct Catalog {
 pub(crate) enum Message {
     SelectTheme(ThemeId),
     PassiveCalculator(CalculatorMessage),
+    /// A project-tree sample row was interacted with; the samples are static.
+    TreeInteracted,
 }
 
 impl Catalog {
@@ -43,6 +45,7 @@ impl Catalog {
                 self.tokens = theme_tokens(theme_id);
             }
             Message::PassiveCalculator(message) => self.passive_calculator.update(message),
+            Message::TreeInteracted => {}
         }
     }
 

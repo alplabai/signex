@@ -52,6 +52,7 @@ pub enum UndoGroupKind {
     #[default]
     Annotate,
     Reprefix,
+    Replace,
 }
 
 impl UndoGroupSheets {
@@ -59,6 +60,7 @@ impl UndoGroupSheets {
         match self.kind {
             UndoGroupKind::Annotate => "annotate",
             UndoGroupKind::Reprefix => "re-prefix",
+            UndoGroupKind::Replace => "replace",
         }
     }
 
@@ -66,6 +68,24 @@ impl UndoGroupSheets {
         match self.kind {
             UndoGroupKind::Annotate => "Annotate",
             UndoGroupKind::Reprefix => "Re-prefix",
+            UndoGroupKind::Replace => "Replace",
+        }
+    }
+
+    /// What a sheet the step skipped keeps: "keeps its ...".
+    fn kept(&self) -> String {
+        match self.kind {
+            UndoGroupKind::Replace => "replaced text".to_string(),
+            _ => format!("{} designators", self.participle()),
+        }
+    }
+
+    /// What a sheet closed since the step holds: "its ... are whatever was
+    /// last saved".
+    fn holds(&self) -> &'static str {
+        match self.kind {
+            UndoGroupKind::Replace => "text",
+            _ => "designators",
         }
     }
 
@@ -74,6 +94,7 @@ impl UndoGroupSheets {
         match self.kind {
             UndoGroupKind::Annotate => "annotated",
             UndoGroupKind::Reprefix => "re-prefixed",
+            UndoGroupKind::Replace => "replaced",
         }
     }
 }
@@ -144,6 +165,7 @@ impl Signex {
             .cloned()
             .unwrap_or_default();
         let (noun, title, done) = (recorded.noun(), recorded.title(), recorded.participle());
+        let (kept, holds) = (recorded.kept(), recorded.holds());
         if direction == StepDirection::Redo && !recorded.dropped.is_empty() {
             // All or nothing: redoing the other sheets would leave one part
             // under two designators.
@@ -213,14 +235,14 @@ impl Signex {
             crate::diagnostics::log_warning(format!(
                 "{title} {verb} on the other sheets but not on {}: its undo history no \
                  longer holds the {noun} (reopened, or trimmed past the history limit), \
-                 so it keeps its {done} designators.",
+                 so it keeps its {kept}.",
                 file_names(&history_gone),
             ));
         }
         if !closed.is_empty() {
             crate::diagnostics::log_warning(format!(
                 "{title} {verb} on open sheets but not on {}: closed since the {noun}, \
-                 so its designators are whatever was last saved.",
+                 so its {holds} are whatever was last saved.",
                 file_names(&closed),
             ));
         }

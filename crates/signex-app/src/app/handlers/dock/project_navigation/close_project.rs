@@ -237,7 +237,7 @@ impl Signex {
                 .collect();
             for path in sweep {
                 self.forget_net_colors_of(&path);
-                self.document_state.engines.remove(&path);
+                self.document_state.remove_engine(&path);
             }
             self.cancel_placement_session_if_sheet_gone();
         }
@@ -264,6 +264,8 @@ impl Signex {
         // project — the one that now sits in the same slot (was
         // immediately after the closed one), else the previous slot,
         // else None when the workspace is empty.
+        self.document_state.note_documents_changed();
+        self.cancel_replace_job("the project was closed");
         self.document_state.projects.retain(|p| p.id != target_id);
         self.document_state.net_class_history.remove(&target_id);
         self.document_state.project_tabs.remove(&target_id);
@@ -581,7 +583,7 @@ impl Signex {
                     self.document_state
                         .document_saves
                         .forget_where(|p| p == path);
-                    self.document_state.engines.remove(path);
+                    self.document_state.remove_engine(path);
                     self.document_state.dirty_paths.remove(path);
                     if let Some(tab) = self
                         .document_state
