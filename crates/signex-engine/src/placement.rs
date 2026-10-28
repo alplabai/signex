@@ -18,7 +18,7 @@ use crate::{Command, Engine, EngineError, MirrorAxis, SelectionTransform};
 /// A fragment waiting to be placed. Turning returns a new payload.
 #[derive(Debug, Clone)]
 pub struct PlacementPayload {
-    fragment: SchematicSheet,
+    pub(crate) fragment: SchematicSheet,
 }
 
 impl PlacementPayload {
@@ -40,6 +40,14 @@ impl PlacementPayload {
         }
     }
 
+    /// The lone symbol when it sits exactly on the origin (a library part on
+    /// the cursor). A pasted lone symbol need not: it turns about the origin
+    /// like any group, so it stays where the cursor puts the copy.
+    fn lone_symbol_at_origin(&self) -> Option<&signex_types::schematic::Symbol> {
+        self.lone_symbol()
+            .filter(|s| s.position.x == 0.0 && s.position.y == 0.0)
+    }
+
     /// Whether the fragment holds nothing placeable.
     pub fn is_empty(&self) -> bool {
         self.items().is_empty()
@@ -47,8 +55,9 @@ impl PlacementPayload {
 
     /// The payload turned 90 degrees on screen.
     pub fn rotate(&self, clockwise: bool) -> Result<Self, EngineError> {
-        if self.lone_symbol().is_some() {
-            // A lone part turns about its own origin, which stays the cursor.
+        if self.lone_symbol_at_origin().is_some() {
+            // A part on the cursor sits at the origin: it turns in place and
+            // its fields are re-placed around it.
             let angle_degrees = if clockwise { -90.0 } else { 90.0 };
             return self.run(|_, items| Command::RotateSelection {
                 items,
@@ -67,7 +76,7 @@ impl PlacementPayload {
     /// The payload mirrored across `axis` (same pairing as the selection
     /// mirror: `Vertical` flips up/down).
     pub fn mirror(&self, axis: MirrorAxis) -> Result<Self, EngineError> {
-        if self.lone_symbol().is_some() {
+        if self.lone_symbol_at_origin().is_some() {
             return self.run(|_, items| Command::MirrorSelection {
                 items,
                 axis,
@@ -75,6 +84,42 @@ impl PlacementPayload {
             });
         }
         self.transformed(SelectionTransform::Mirror(axis))
+    }
+
+    /// The payload shifted by `(dx, dy)`: a plain translate of every point,
+    /// with no engine command behind it, so no junction is added, dropped or
+    /// retired. What was copied is what lands.
+    #[must_use]
+    pub fn translated(&self, dx: f64, dy: f64) -> Self {
+        let mut f = self.fragment.clone();
+        let shift = |p: &mut Point| {
+            p.x += dx;
+            p.y += dy;
+        };
+        for s in &mut f.symbols {
+            shift(&mut s.position);
+            for text in [&mut s.ref_text, &mut s.val_text].into_iter().flatten() {
+                shift(&mut text.position);
+            }
+        }
+        for w in &mut f.wires {
+            shift(&mut w.start);
+            shift(&mut w.end);
+        }
+        for b in &mut f.buses {
+            shift(&mut b.start);
+            shift(&mut b.end);
+        }
+        f.bus_entries
+            .iter_mut()
+            .for_each(|e| shift(&mut e.position));
+        f.junctions.iter_mut().for_each(|j| shift(&mut j.position));
+        f.no_connects
+            .iter_mut()
+            .for_each(|n| shift(&mut n.position));
+        f.labels.iter_mut().for_each(|l| shift(&mut l.position));
+        f.text_notes.iter_mut().for_each(|t| shift(&mut t.position));
+        Self::new(f)
     }
 
     /// The payload with its stored symbol rotation set to `degrees`
@@ -115,16 +160,37 @@ impl PlacementPayload {
     /// `RegisterLibSymbol` for each body, then one `Place*` per item, every
     /// item under a fresh uuid. Apply them as one batch.
     pub fn place_commands(&self, at: Point) -> Result<Vec<Command>, EngineError> {
-        let moved = self.run(|_, items| Command::MoveSelection {
-            items,
-            dx: at.x,
-            dy: at.y,
-            keep_wires: false,
-        })?;
-        Ok(moved.fresh_place_commands())
+        Ok(self.translated(at.x, at.y).fresh_place_commands())
     }
 
-    fn items(&self) -> Vec<SelectedItem> {
+    /// Every coordinate of every item, for the finiteness check.
+    pub(crate) fn coordinates(&self) -> Vec<f64> {
+        let f = &self.fragment;
+        let mut out = Vec::new();
+        let mut add = |p: &Point| out.extend([p.x, p.y]);
+        for s in &f.symbols {
+            add(&s.position);
+            for text in [&s.ref_text, &s.val_text].into_iter().flatten() {
+                add(&text.position);
+            }
+        }
+        for w in &f.wires {
+            add(&w.start);
+            add(&w.end);
+        }
+        for b in &f.buses {
+            add(&b.start);
+            add(&b.end);
+        }
+        f.bus_entries.iter().for_each(|e| add(&e.position));
+        f.junctions.iter().for_each(|j| add(&j.position));
+        f.no_connects.iter().for_each(|n| add(&n.position));
+        f.labels.iter().for_each(|l| add(&l.position));
+        f.text_notes.iter().for_each(|t| add(&t.position));
+        out
+    }
+
+    pub(crate) fn items(&self) -> Vec<SelectedItem> {
         let f = &self.fragment;
         let uuids = |kind, ids: Vec<Uuid>| {
             ids.into_iter()
@@ -162,15 +228,13 @@ impl PlacementPayload {
         .concat()
     }
 
-    /// Turn the whole fragment about its centre.
+    /// Turn the whole fragment about the cursor point, the fragment origin.
+    /// The origin sits on the grid and the fragment was anchored to it, so an
+    /// on-grid selection stays on the grid through any number of turns.
     fn transformed(&self, transform: SelectionTransform) -> Result<Self, EngineError> {
-        let items = self.items();
-        let centre = Engine::new(self.fragment.clone())?
-            .selection_centre(&items)
-            .unwrap_or_else(|| Point::new(0.0, 0.0));
         self.run(|_, items| Command::TransformSelection {
             items,
-            centre,
+            centre: Point::new(0.0, 0.0),
             transform,
             keep_wires: false,
         })
@@ -182,10 +246,28 @@ impl PlacementPayload {
         &self,
         build: impl FnOnce(&SchematicSheet, Vec<SelectedItem>) -> Command,
     ) -> Result<Self, EngineError> {
-        let mut scratch = Engine::new(self.fragment.clone())?;
+        // The engine tidies junction dots after a turn (mints a missing one,
+        // retires a minted one that no longer sits on a meeting). A payload
+        // is what was copied, so its dots are shielded: all of them count as
+        // user-placed while the command runs, and the result keeps exactly
+        // the original dots, turned, with their original flags.
+        let minted: std::collections::HashMap<Uuid, bool> = self
+            .fragment
+            .junctions
+            .iter()
+            .map(|j| (j.uuid, j.minted))
+            .collect();
+        let mut shielded = self.fragment.clone();
+        shielded.junctions.iter_mut().for_each(|j| j.minted = false);
+        let mut scratch = Engine::new(shielded)?;
         let command = build(&self.fragment, self.items());
         scratch.execute(command)?;
-        Ok(Self::new(scratch.document().clone()))
+        let mut turned = scratch.document().clone();
+        turned.junctions.retain(|j| minted.contains_key(&j.uuid));
+        for j in &mut turned.junctions {
+            j.minted = minted[&j.uuid];
+        }
+        Ok(Self::new(turned))
     }
 
     fn fresh_place_commands(&self) -> Vec<Command> {
@@ -198,6 +280,9 @@ impl PlacementPayload {
             .collect();
         commands.extend(f.symbols.iter().cloned().map(|mut symbol| {
             symbol.uuid = Uuid::new_v4();
+            // A placed copy is a new part: its designators come from its own
+            // `reference`, never the original's per-placement entries (#1138).
+            symbol.instances.clear();
             Command::PlaceSymbol { symbol }
         }));
         commands.extend(f.wires.iter().cloned().map(|mut wire| {
