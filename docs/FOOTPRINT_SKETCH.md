@@ -23,7 +23,9 @@ on a footprint with literal pads leaves them alone.
 
 Legacy gap: a footprint saved by an older build whose tagged entity was
 already deleted has no record and keeps that geometry (it cannot be told
-from imported geometry; there is no migration).
+from imported geometry; there is no migration). The same holds for pads: if
+the first edit in a newer build deletes every entity of a sketch baked by an
+older build, the sketch-baked pads are kept, as they were before.
 
 A non-empty silk bake still replaces the whole of `silk_f` / `silk_b`,
 hand-drawn entries included: baked entries are not marked by origin.
