@@ -658,23 +658,7 @@ impl LibraryAdapter for DatabaseAdapter {
             .send()
             .map_err(|e| self.row_write_transport_error(e))?;
         if !resp.status().is_success() {
-            let status = resp.status();
-            let body: serde_json::Value = resp.json().unwrap_or_default();
-            if let Some(refusal) = schema_refusal(&body) {
-                self.row_schema.forget();
-                return Err(refusal);
-            }
-            // The server's unique index refused a part number (or row id)
-            // another writer got in first with.
-            if status == reqwest::StatusCode::CONFLICT {
-                return Err(LibraryError::Conflict(format!(
-                    "insert_row {table}: {}",
-                    body["error"].as_str().unwrap_or("already exists")
-                )));
-            }
-            return Err(LibraryError::Backend(format!(
-                "insert_row {table}: {status}"
-            )));
+            return Err(write_error(resp, "insert_row", table, &self.row_schema));
         }
         let stored = resp
             .json::<ComponentRow>()

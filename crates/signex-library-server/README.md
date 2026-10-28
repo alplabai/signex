@@ -38,6 +38,34 @@ insecure bind only on an interface the proxy alone can reach. Set
 `SIGNEX_TRUSTED_PROXIES` / `SIGNEX_TRUSTED_PROXY_HEADER` to the proxy, or
 every client shares one rate-limit bucket.
 
+## Part numbers are unique per library
+
+A part number (`internal_pn`, compared with surrounding white space removed and
+case-sensitively) is held by at most one row in a library, across all of its
+tables; a blank one is exempt. The database enforces it with a unique index on
+`component_rows.pn_key`, so two writers racing the same new number end with one
+row and one `409`.
+
+On start-up the server recomputes `pn_key` from the part number in every
+stored row's payload and builds the index (migration 0010). If a library
+already holds the same number twice it refuses to start, names each clash
+(`table/row_id`) and changes nothing. Fix it by giving all but one row of each
+clash a new number **in the payload**, which is what readers return, and in the
+`internal_pn` column, then start again:
+
+```sql
+-- SQLite
+UPDATE component_rows
+   SET payload = json_set(payload, '$.internal_pn', 'NEW-PN'), internal_pn = 'NEW-PN'
+ WHERE library_id = '...' AND table_name = '...' AND row_id = '...';
+
+-- Postgres
+UPDATE component_rows
+   SET payload = jsonb_set(payload::jsonb, '{internal_pn}', to_jsonb('NEW-PN'::text))::text,
+       internal_pn = 'NEW-PN'
+ WHERE library_id = '...' AND table_name = '...' AND row_id = '...';
+```
+
 ## Known limitations (Community Preview)
 
 - **One shared token.** Every client uses the same `SIGNEX_API_TOKEN`; there

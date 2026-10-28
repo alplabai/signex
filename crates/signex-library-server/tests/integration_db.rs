@@ -848,56 +848,154 @@ async fn postgres_racing_posts_of_one_part_number_have_one_winner() {
     assert_racing_same_pn_has_one_winner(state).await;
 }
 
-/// #1613: a database that already holds two rows with one part number is
-/// refused by the migration with the clashing PN named, and no row is lost.
-#[tokio::test]
-async fn migration_refuses_existing_duplicate_part_numbers_without_losing_rows() {
-    let state = fresh_state().await;
-    let pool = state.pool().sqlite().expect("sqlite pool");
-    // Put the schema back to before the index (migration 0009).
-    for sql in [
-        "DROP INDEX idx_component_rows_pn_key",
-        "ALTER TABLE component_rows DROP COLUMN pn_key",
-        "DELETE FROM _sqlx_migrations WHERE version = 9",
-    ] {
-        sqlx::query(sql).execute(pool).await.unwrap();
+async fn exec(state: &AppState, sql: &str) {
+    match state.pool() {
+        signex_library_server::db::DbPool::Sqlite(p) => {
+            sqlx::query(sql).execute(p).await.map(|_| ())
+        }
+        signex_library_server::db::DbPool::Postgres(p) => {
+            sqlx::query(sql).execute(p).await.map(|_| ())
+        }
     }
-    let library_id = Uuid::now_v7().to_string();
-    for (i, pn) in ["DUP-1", "DUP-1 ", "OK-1"].iter().enumerate() {
-        sqlx::query(
-            "INSERT INTO component_rows              (library_id, table_name, row_id, internal_pn, payload, created_at, updated_at)              VALUES (?, 't', ?, ?, '{}', 'x', 'x')",
-        )
-        .bind(&library_id)
-        .bind(format!("row-{i}"))
-        .bind(pn)
-        .execute(pool)
-        .await
-        .unwrap();
+    .unwrap_or_else(|e| panic!("{sql}: {e}"));
+}
+
+/// Store `pn` as `row`'s part number the way an older server would have: no
+/// uniqueness check, `pn_key` left blank.
+async fn seed_row(
+    state: &AppState,
+    library: Uuid,
+    mut row: ComponentRow,
+    pn: &str,
+) -> ComponentRow {
+    row.internal_pn = InternalPn::new(pn);
+    let payload = serde_json::to_string(&row).unwrap().replace('\'', "''");
+    let pn_sql = pn.replace('\'', "''");
+    exec(
+        state,
+        &format!(
+            "INSERT INTO component_rows \
+             (library_id, table_name, row_id, internal_pn, payload, created_at, updated_at) \
+             VALUES ('{library}', 'resistors', '{}', '{pn_sql}', '{payload}', 'x', 'x')",
+            row.row_id
+        ),
+    )
+    .await;
+    row
+}
+
+async fn stored_pn_key(state: &AppState, row: &ComponentRow) -> String {
+    let sql = format!(
+        "SELECT pn_key FROM component_rows WHERE row_id = '{}'",
+        row.row_id
+    );
+    match state.pool() {
+        signex_library_server::db::DbPool::Sqlite(p) => {
+            sqlx::query_scalar(&sql).fetch_one(p).await.unwrap()
+        }
+        signex_library_server::db::DbPool::Postgres(p) => {
+            sqlx::query_scalar(&sql).fetch_one(p).await.unwrap()
+        }
+    }
+}
+
+/// #1613: a database already holding rows with one part number (a padded
+/// copy counts: tab and NBSP are white space to Rust) is refused by the
+/// migration with every clash named and the operator's fix spelled out; no
+/// row is lost, and after the fix is applied to the payload the migration
+/// goes through, `pn_key` follows the payload, and a description-only PUT of
+/// a padded, non-duplicate row is accepted.
+async fn assert_migration_refuses_duplicates_then_accepts_the_fix(state: AppState) {
+    state.migrate().await.expect("fresh migrate");
+    exec(&state, "DROP INDEX idx_component_rows_pn_key").await;
+    exec(&state, "DELETE FROM _sqlx_migrations WHERE version = 10").await;
+    let pg = state.pool().postgres().is_some();
+    let library = Uuid::now_v7();
+    let mut rows = Vec::new();
+    for pn in ["DUP-1", "DUP-1\t", "OK-1", "NB\u{a0}", "NB", "PAD\t"] {
+        rows.push(seed_row(&state, library, fixture_row(pn), pn).await);
     }
 
     let err = state.migrate().await.expect_err("duplicates are refused");
     let msg = err.to_string();
+    assert!(msg.contains("\"DUP-1\"") && msg.contains("\"NB\""), "{msg}");
+    assert!(msg.contains(&library.to_string()), "{msg}");
     assert!(
-        msg.contains("\"DUP-1\" x2") && msg.contains(&library_id),
+        msg.contains(if pg { "jsonb_set" } else { "json_set" }),
         "{msg}"
     );
-    assert!(!msg.contains("OK-1"), "{msg}");
-    let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM component_rows")
-        .fetch_one(pool)
-        .await
-        .unwrap();
-    assert_eq!(rows, 3);
-
-    // Once renumbered, the migration applies and backfills the key.
-    sqlx::query("UPDATE component_rows SET internal_pn = 'DUP-2' WHERE row_id = 'row-1'")
-        .execute(pool)
-        .await
-        .unwrap();
-    state.migrate().await.expect("migrates after renumbering");
-    let key: String =
-        sqlx::query_scalar("SELECT pn_key FROM component_rows WHERE row_id = 'row-1'")
-            .fetch_one(pool)
+    assert!(!msg.contains("OK-1") && !msg.contains("PAD"), "{msg}");
+    for row in &rows {
+        let kept = state
+            .fetch_row(library, "resistors", RowId::from_uuid(row.row_id))
             .await
             .unwrap();
-    assert_eq!(key, "DUP-2");
+        assert!(kept.is_some(), "no row may be lost");
+    }
+
+    // The documented fix: renumber in the payload (and the column).
+    for (row, new_pn) in [(&rows[1], "DUP-2"), (&rows[3], "NB-2")] {
+        let set = if pg {
+            format!(
+                "jsonb_set(payload::jsonb, '{{internal_pn}}', to_jsonb('{new_pn}'::text))::text"
+            )
+        } else {
+            format!("json_set(payload, '$.internal_pn', '{new_pn}')")
+        };
+        exec(
+            &state,
+            &format!(
+                "UPDATE component_rows SET payload = {set}, internal_pn = '{new_pn}' \
+                 WHERE row_id = '{}'",
+                row.row_id
+            ),
+        )
+        .await;
+    }
+    state.migrate().await.expect("migrates after renumbering");
+    let renumbered = state
+        .fetch_row(library, "resistors", RowId::from_uuid(rows[1].row_id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(renumbered.internal_pn, InternalPn::new("DUP-2"));
+    assert_eq!(stored_pn_key(&state, &rows[1]).await, "DUP-2");
+    assert_eq!(stored_pn_key(&state, &rows[5]).await, "PAD");
+
+    // The padded row is alone in its library: editing only its description works.
+    let app = router_with_state(state.clone());
+    let mut edited = state
+        .fetch_row(library, "resistors", RowId::from_uuid(rows[5].row_id))
+        .await
+        .unwrap()
+        .unwrap();
+    edited.description = "edited".into();
+    let resp = app
+        .oneshot(put_request(library, &edited, Some("\"1\"")))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn migration_refuses_existing_duplicate_part_numbers_without_losing_rows() {
+    assert_migration_refuses_duplicates_then_accepts_the_fix(fresh_state().await).await;
+}
+
+/// Same, on Postgres, in a schema of its own so the dropped index and seeded
+/// duplicates never touch the other Postgres tests.
+#[tokio::test]
+#[ignore = "requires SIGNEX_TEST_PG_URL"]
+async fn postgres_migration_refuses_existing_duplicate_part_numbers_without_losing_rows() {
+    ensure_test_token();
+    let url = std::env::var("SIGNEX_TEST_PG_URL")
+        .expect("SIGNEX_TEST_PG_URL must be set to run the ignored Postgres tests");
+    let schema = format!("pn_dup_{}", Uuid::now_v7().simple());
+    let admin = AppState::connect(&url).await.expect("pg connect");
+    exec(&admin, &format!("CREATE SCHEMA {schema}")).await;
+    let sep = if url.contains('?') { '&' } else { '?' };
+    let scoped = format!("{url}{sep}options=-c%20search_path%3D{schema}");
+    let state = AppState::connect(&scoped).await.expect("pg connect");
+    assert_migration_refuses_duplicates_then_accepts_the_fix(state).await;
+    exec(&admin, &format!("DROP SCHEMA {schema} CASCADE")).await;
 }
