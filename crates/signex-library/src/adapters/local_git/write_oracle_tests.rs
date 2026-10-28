@@ -163,7 +163,7 @@ fn model_apply(lf: &mut LibraryFile, edit: &Edit) -> Result<bool, LibraryError> 
         Edit::Update(table, row) => {
             let lib_row = component_to_library_row(row)?;
             let id = row.row_id.to_string();
-            check_pn_unique(lf, &row.internal_pn.to_string(), Some(&id))?;
+            check_pn_change(lf, table, &id, &row.internal_pn.to_string())?;
             let entry = table_of(lf, table)?;
             validate_legacy_header(table, &entry.columns)?;
             let slot = find(entry, &id)

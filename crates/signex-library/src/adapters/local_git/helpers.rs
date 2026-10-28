@@ -294,6 +294,27 @@ pub(super) fn check_insert_unique(
     check_pn_unique(lf, internal_pn, None)
 }
 
+/// [`check_pn_unique`] for an edit, run only when the PN changes from the
+/// stored row's (trimmed), so a library that already holds duplicate PNs
+/// still lets their other fields be edited.
+pub(super) fn check_pn_change(
+    lf: &LibraryFile,
+    table: &str,
+    row_id: &str,
+    internal_pn: &str,
+) -> Result<(), LibraryError> {
+    let stored_pn = lf.tables.get(table).and_then(|t| {
+        t.rows
+            .iter()
+            .find(|r| r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(row_id))
+            .and_then(|r| r.cells.get("internal_pn"))
+    });
+    if stored_pn.is_some_and(|s| s.trim() == internal_pn.trim()) {
+        return Ok(());
+    }
+    check_pn_unique(lf, internal_pn, Some(row_id))
+}
+
 /// Refuse a part number another row already holds. A blank PN is a draft
 /// the user has not filled in yet, so it never conflicts. `except_row_id`
 /// names the row being edited, which may keep its own PN.

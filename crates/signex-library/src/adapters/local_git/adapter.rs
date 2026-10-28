@@ -343,7 +343,7 @@ impl LibraryAdapter for LocalGitAdapter {
         self.save_row_edit(
             table,
             |lf| {
-                check_pn_unique(lf, &new_pn, Some(&row_id.to_string()))?;
+                check_pn_change(lf, &table_owned, &row_id.to_string(), &new_pn)?;
                 let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
                     LibraryError::NotFound(format!("table {table_owned} not in library"))
                 })?;

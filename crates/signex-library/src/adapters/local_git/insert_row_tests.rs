@@ -165,3 +165,47 @@ fn history_subject_drops_a_trailing_carriage_return() {
     let entry = HistoryEntry::from_commit(&repo.find_commit(id).unwrap());
     assert_eq!(entry.subject, "x");
 }
+
+#[test]
+fn legacy_duplicate_part_numbers_stay_editable_but_cannot_be_copied() {
+    let (mut rng, w, _dir, adapter) = world_and_adapter(8);
+    let mut rows = Vec::new();
+    for pn in ["DUP", "PN-C"] {
+        let id = rng.uuid();
+        let mut r = random_row(&mut rng, &w, id);
+        r.internal_pn = InternalPn::new(pn);
+        adapter.insert_row("t", r.clone(), "seed").unwrap();
+        rows.push(r);
+    }
+    // A second row with the same PN, written past `insert_row`.
+    let dup_id = rng.uuid();
+    adapter
+        .mutate_library_file(
+            |lf| {
+                let table = lf.tables.get_mut("t").unwrap();
+                let mut copy = table.rows[0].clone();
+                Arc::make_mut(&mut copy)
+                    .cells
+                    .insert(LEGACY_ROW_ID_COL.into(), dup_id.to_string());
+                table.rows.push(copy);
+                Ok(())
+            },
+            "legacy",
+            "legacy",
+        )
+        .unwrap();
+
+    // Editing another field of a duplicated row works.
+    let mut edit = adapter.read_row("t", RowId::from_uuid(dup_id)).unwrap();
+    edit.description = "edited".into();
+    adapter.update_row("t", edit, "edit").unwrap();
+    // Moving a third row onto the duplicated PN is still refused.
+    let mut clash = adapter
+        .read_row("t", RowId::from_uuid(rows[1].row_id))
+        .unwrap();
+    clash.internal_pn = InternalPn::new("DUP");
+    assert!(matches!(
+        adapter.update_row("t", clash, "clash"),
+        Err(LibraryError::Conflict(_))
+    ));
+}
