@@ -102,7 +102,14 @@ impl CalculatorControl {
                 self.kind = kind;
                 self.active_tab = CalculatorTab::Passive(kind);
             }
-            CalculatorMessage::TabChanged(tab) => self.active_tab = tab,
+            CalculatorMessage::TabChanged(tab) => {
+                // A passive tab selects the kind whose state the edit arms
+                // read through `active_state`; keep the two in step.
+                if let CalculatorTab::Passive(kind) = tab {
+                    self.kind = kind;
+                }
+                self.active_tab = tab;
+            }
             CalculatorMessage::RkmEncoder(message) => self.rkm_encoder.update(message),
             CalculatorMessage::TargetChanged(value) => {
                 let state = self.active_state_mut();
@@ -540,6 +547,18 @@ mod tests {
     // "Target" read 0 and all three deltas were measured against 0 while
     // Nominal / Minimum / Maximum still showed the real network. No
     // error text either, because TargetChanged clears validation_error.
+    #[test]
+    fn switching_to_a_passive_tab_selects_that_kind_for_edits() {
+        let mut control = CalculatorControl::default();
+        control.update(CalculatorMessage::TabChanged(CalculatorTab::Passive(
+            ComponentKind::Capacitor,
+        )));
+        assert_eq!(control.kind, ComponentKind::Capacitor);
+        control.update(CalculatorMessage::TargetChanged("47".into()));
+        assert_eq!(control.state(ComponentKind::Capacitor).target_input, "47");
+        assert_eq!(control.state(ComponentKind::Resistor).target_input, "220");
+    }
+
     #[test]
     fn an_unreadable_target_edit_drops_the_result_it_was_solved_for() {
         let mut control = calculated();

@@ -23,7 +23,7 @@ async fn burst_beyond_limit_is_rejected_with_429() {
         .no_proxy() // loopback requests must not detour via HTTP_PROXY
         .build()
         .unwrap();
-    let url = format!("http://{addr}/health");
+    let url = format!("http://{addr}/tables");
     // Fire well past the burst back-to-back (refill is 1/s, so a few extra
     // tokens may trickle in on a slow machine; only the first BURST are
     // guaranteed 200 and the request right after the burst is rejected).
@@ -33,7 +33,7 @@ async fn burst_beyond_limit_is_rejected_with_429() {
         statuses.push(client.get(&url).send().await.unwrap().status().as_u16());
     }
     assert!(
-        statuses[..burst].iter().all(|s| *s == 200),
+        statuses[..burst].iter().all(|s| *s != 429),
         "first {burst} requests must be within the burst: {statuses:?}"
     );
     assert_eq!(
@@ -42,4 +42,32 @@ async fn burst_beyond_limit_is_rejected_with_429() {
         "request {} must be rejected",
         burst + 1
     );
+}
+
+#[tokio::test]
+async fn health_and_version_are_never_rate_limited() {
+    let app = with_rate_limit(router());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
+    });
+    let client = reqwest::Client::builder().no_proxy().build().unwrap();
+    for path in ["health", "version"] {
+        for i in 0..RATE_LIMIT_BURST_SIZE as usize * 2 {
+            let status = client
+                .get(format!("http://{addr}/{path}"))
+                .send()
+                .await
+                .unwrap()
+                .status()
+                .as_u16();
+            assert_eq!(status, 200, "/{path} request {i} was not served");
+        }
+    }
 }

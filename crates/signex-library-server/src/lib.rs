@@ -209,9 +209,15 @@ pub fn with_rate_limit_trusted(
             governor_for_cleanup.limiter().retain_recent();
         }
     });
-    router.layer(GovernorLayer {
+    let limited = router.layer(GovernorLayer {
         config: governor_conf,
-    })
+    });
+    // Probe endpoints sit outside the governor so a health check is never
+    // answered with 429; every other path falls through to the limited router.
+    Router::new()
+        .route("/health", get(health))
+        .route("/version", get(version))
+        .fallback_service(limited)
 }
 
 /// Constant-time check of an `Authorization: Bearer <token>` header against
