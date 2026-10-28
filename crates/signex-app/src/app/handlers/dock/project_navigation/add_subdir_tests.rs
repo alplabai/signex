@@ -23,6 +23,7 @@ fn add_existing_registers_sheet_and_pcb_from_a_subdirectory_with_their_relative_
         .collect();
     let _ = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
         project_id: target,
+        project_dir: dir.clone(),
         results: Ok(results),
     }));
 

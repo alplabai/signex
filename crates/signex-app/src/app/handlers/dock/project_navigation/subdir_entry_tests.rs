@@ -160,6 +160,7 @@ fn add_sheet(app: &mut Signex, dir: &std::path::Path, sheet: PathBuf, fold: Case
     ))];
     let _ = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
         project_id: id,
+        project_dir: dir.to_path_buf(),
         results: Ok(results),
     }));
 }
@@ -236,6 +237,7 @@ fn a_file_outside_the_project_is_refused_not_registered_by_bare_name() {
 
     let _ = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
         project_id: id,
+        project_dir: std::path::PathBuf::new(),
         results: Ok(vec![Ok(outside)]),
     }));
 
