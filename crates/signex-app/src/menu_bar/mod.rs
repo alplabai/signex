@@ -338,6 +338,7 @@ pub mod model;
 mod view;
 
 pub use view::view;
+
 /// Menu-display label for `command_id`, sourced from the command table's
 /// terse `menu_label` (which falls back to the descriptive `label`). The
 /// `fallback` literal covers a command with no catalog entry so the visible
@@ -437,25 +438,6 @@ fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
             }
         })
         .into()
-}
-
-/// Leaf menu item with an action.
-fn leaf(
-    label: &str,
-    shortcut: Option<String>,
-    msg: MenuMessage,
-    mc: MenuColors,
-) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
-    Item::new(menu_item_btn(label, shortcut, Some(msg), mc))
-}
-
-/// Leaf menu item — disabled/stub (no action yet).
-fn leaf_stub(
-    label: &str,
-    shortcut: Option<String>,
-    mc: MenuColors,
-) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
-    Item::new(menu_item_btn(label, shortcut, None, mc))
 }
 
 /// Menu row that acts as a submenu header — label on the left, right
