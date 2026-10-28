@@ -326,6 +326,7 @@ impl Signex {
         });
         if let Some(id) = maybe_id {
             self.ui_state.windows.remove(&id);
+            self.ui_state.modal_window_sizes.remove(&id);
             iced::window::close(id)
         } else {
             Task::none()

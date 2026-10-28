@@ -73,25 +73,30 @@ impl Signex {
                 }),
             _ => None,
         };
-        height.map_or(fixed, |h| Size::new(fixed.width, h.ceil()))
+        let logical = height.map_or(fixed, |h| Size::new(fixed.width, h.ceil()));
+        // Every window lays out at the interface scale, so it needs that much
+        // more window for the same content.
+        let scale = ui.ui_scale;
+        Size::new(
+            (logical.width * scale).ceil(),
+            (logical.height * scale).ceil(),
+        )
     }
 
-    /// Resize the open windows of the content-sized dialogs whose content
-    /// changed since their window opened.
+    /// Resize every open dialog window whose wanted size changed since its
+    /// window opened (its content, or the interface scale). The first sighting
+    /// is the size the window opened with; windows that are gone are forgotten.
     pub(crate) fn resize_content_sized_modals(&mut self) -> Vec<iced::Task<crate::app::Message>> {
         use crate::app::state::WindowKind;
-        let dynamic = [
-            ModalId::AppQuitConfirm,
-            ModalId::ProjectCloseConfirm,
-            ModalId::ErrorNotice,
-            ModalId::NetlistIncompletePrompt,
-        ];
+        self.ui_state
+            .modal_window_sizes
+            .retain(|id, _| self.ui_state.windows.contains_key(id));
         let windows: Vec<(iced::window::Id, ModalId)> = self
             .ui_state
             .windows
             .iter()
             .filter_map(|(id, kind)| match kind {
-                WindowKind::DetachedModal(m) if dynamic.contains(m) => Some((*id, *m)),
+                WindowKind::DetachedModal(m) => Some((*id, *m)),
                 _ => None,
             })
             .collect();
@@ -103,7 +108,6 @@ impl Signex {
                 self.ui_state
                     .modal_window_sizes
                     .insert(id, (want.width, want.height));
-                // The first sighting is the size the window opened with.
                 if have.is_some() {
                     tasks.push(iced::window::resize(id, want));
                 }
