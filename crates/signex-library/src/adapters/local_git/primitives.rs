@@ -358,8 +358,9 @@ impl LocalGitAdapter {
         // Cached prices follow their rows: a deleted row, or a SKU edited
         // away, takes its prices with it as part of this same save.
         super::helpers::prune_stale_pricing(&mut candidate);
-        // Encode once; the same bytes are written below.
-        let text = candidate.write()?;
+        // Encode once; the same bytes are written below. Rebased, so what
+        // this save removed is gone from the text later saves start from.
+        let text = candidate.write_and_rebase()?;
         // Every row's pins are in `text`, so every pinned PDF that is on
         // disk and not yet in HEAD goes into this commit, whichever row the
         // edit was about (#1471). Read under the write lock.
