@@ -12,8 +12,8 @@ use crate::app::FileMsg;
 use crate::app::contracts::{
     CaseVariants, PinnedSpelling, SaveAllNext, SaveAllPlan, SaveAllSettle,
 };
-use crate::app::state::project_case::{CaseProbeOutcome, undecided_message};
-use crate::app::state::scope::{CaseFold, path_key_with};
+use crate::app::state::project_case::CaseProbeOutcome;
+use crate::app::state::scope::path_key_with;
 use crate::app::state::volume_case::probe_directory_case;
 use std::collections::HashMap;
 
@@ -159,26 +159,6 @@ impl Signex {
         dirs
     }
 
-    /// The volume rule for a write: the owning project's, else the probe of
-    /// the document's own directory (macOS does not fold by default, yet its
-    /// usual volume does, so two spellings of one file would otherwise start
-    /// two racing writes, #1216). A directory the probe could not decide
-    /// keeps the host default; it is never assumed to fold.
-    pub(crate) fn fold_for_save(
-        &self,
-        path: &std::path::Path,
-        probes: &HashMap<std::path::PathBuf, bool>,
-    ) -> CaseFold {
-        let probed = match self.project_owning(path) {
-            None => path.parent().and_then(|dir| probes.get(dir)),
-            Some(_) => None,
-        };
-        match probed {
-            Some(&ignores_case) => CaseFold::from_probe(ignores_case),
-            None => self.fold_for_path(path),
-        }
-    }
-
     /// Start the writes of a [`SaveAllPlan`] whose volumes are probed.
     /// Failures to even start a write, and each write's own failure, are
     /// logged to the Messages panel. The returned task ends with
@@ -192,20 +172,14 @@ impl Signex {
             probes,
             undecided,
         } = plan;
-        for (dir, outcome) in &undecided {
-            crate::diagnostics::log_warning(undecided_message(
-                outcome,
-                dir,
-                CaseFold::host_default(),
-            ));
-        }
-        let (context, paths, rows, probes) = (context.as_str(), &paths[..], &rows[..], &probes);
+        self.record_save_all_probes(&probes, &undecided);
+        let (context, paths, rows) = (context.as_str(), &paths[..], &rows[..]);
         let mut writes = Vec::new();
         // One file reached under several spellings is written once.
         let mut begun = std::collections::HashSet::new();
         let mut case_variants = Vec::new();
         for path in paths {
-            let fold = self.fold_for_save(path, probes);
+            let fold = self.identity_fold_for(path);
             if !begun.insert(path_key_with(path, fold)) {
                 continue;
             }

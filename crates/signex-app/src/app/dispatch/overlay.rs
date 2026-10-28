@@ -166,6 +166,7 @@ impl Signex {
                     || canvas.ghost_symbol.is_some()
                     || canvas.ghost_text.is_some()
                     || canvas.placement_paused
+                    || self.interaction_state.placement.is_some()
                     || self.interaction_state.pending_power.is_some()
                     || self.interaction_state.pending_port.is_some()
                     || self.ui_state.pending_net_color.is_some()
@@ -367,6 +368,28 @@ impl Signex {
                 // a lock set built from a list that is out of date. The
                 // buttons are disabled meanwhile.
                 Task::none()
+            }
+            AnnotateMsg::ReprefixPressed if self.annotate_preview_is_loading() => Task::none(),
+            AnnotateMsg::ReprefixPressed => {
+                let task = self.handle_reprefix_pressed();
+                // Its refusals are Messages lines, on screen in this frame.
+                self.sync_diagnostics_panel_ctx();
+                task
+            }
+            AnnotateMsg::ReprefixRowsResolved { generation, result } => {
+                let task = self.handle_reprefix_rows_resolved(generation, &result);
+                self.sync_diagnostics_panel_ctx();
+                task
+            }
+            AnnotateMsg::ReprefixConfirmed => {
+                let task = self.handle_reprefix_confirmed();
+                self.sync_diagnostics_panel_ctx();
+                task
+            }
+            AnnotateMsg::ReprefixCancelled => {
+                let task = self.handle_reprefix_cancelled();
+                self.sync_diagnostics_panel_ctx();
+                task
             }
             AnnotateMsg::Run(mode) => {
                 // The action can rewrite unopened sheets on disk, which the

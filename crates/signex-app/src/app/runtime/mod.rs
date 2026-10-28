@@ -52,6 +52,7 @@ impl Signex {
     }
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
+        self.refresh_placement_reference();
         self.sync_panel_ctx_mirrors();
         let shown_browser = match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(tab) => match &tab.kind {
@@ -82,6 +83,7 @@ impl Signex {
         // Reload the Annotate preview if the documents changed under an open
         // dialog (a no-op while it is closed or already current).
         let annotate_preview = self.refresh_annotate_preview();
+        let reprefix_window = self.drain_reprefix_window_close();
         let instance_note = if std::mem::take(&mut self.document_state.instance_note_due) {
             self.begin_instance_note()
         } else {
@@ -93,6 +95,7 @@ impl Signex {
             commits,
             drift,
             annotate_preview,
+            reprefix_window,
             instance_note,
             class_styles,
         ])
@@ -143,6 +146,10 @@ impl Signex {
             .get(self.document_state.active_tab)
             .and_then(|t| t.project_id)
         {
+            if self.document_state.active_project != Some(pid) {
+                // A Re-prefix request is for one project (#1315).
+                self.invalidate_reprefix();
+            }
             self.document_state.active_project = Some(pid);
             self.drop_pending_profile_update_for_other_project();
         }
@@ -398,6 +405,7 @@ impl Signex {
             wire_color_overrides: &self.ui_state.wire_color_overrides,
             wire_class_styles: self.ui_state.net_class_styles.styles(),
             selection_filters: &self.interaction_state.selection_filters,
+            placement: None,
         }
     }
 

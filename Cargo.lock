@@ -5469,6 +5469,7 @@ dependencies = [
  "iced_aw",
  "iced_runtime",
  "iced_tiny_skia",
+ "iced_wgpu",
  "image",
  "libc",
  "log",
@@ -5577,6 +5578,7 @@ dependencies = [
  "rstar",
  "serde",
  "serde_json",
+ "signex-gfx",
  "signex-sketch",
  "wgpu",
 ]

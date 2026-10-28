@@ -239,6 +239,7 @@ impl Signex {
                 self.forget_net_colors_of(&path);
                 self.document_state.engines.remove(&path);
             }
+            self.cancel_placement_session_if_sheet_gone();
         }
 
         // Forget that this project was noted, so reopening it says it again.
@@ -858,6 +859,7 @@ mod tests {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                parameters: Default::default(),
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),

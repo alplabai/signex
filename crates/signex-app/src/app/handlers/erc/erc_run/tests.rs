@@ -15,6 +15,7 @@ fn outcome_for(path: &str) -> ErcRunOutcome {
             profile_name: None,
             sha256: "outcome-set".into(),
         },
+        waived_hidden: Default::default(),
     }
 }
 
