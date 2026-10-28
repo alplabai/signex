@@ -735,6 +735,7 @@ mod tests {
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),
+            case_decided: false,
             case_fold: Default::default(),
             case_probed: false,
         });

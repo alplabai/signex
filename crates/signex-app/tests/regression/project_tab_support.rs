@@ -52,6 +52,7 @@ pub fn fixture() -> Fixture {
         path: prj.clone(),
         data: parse_project(&prj).unwrap(),
         pending_libraries: Default::default(),
+        case_decided: false,
         case_fold: Default::default(),
         case_probed: false,
     });
