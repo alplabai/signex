@@ -266,6 +266,7 @@ impl Solver {
         let colours = entity_colours(sketch, &result, &jacobian, &result.index, params);
         let over_constraints = over_constraint_ids(sketch, &result, params);
 
+        // Advisory: a failure here must not fail a converged solve.
         let redundant_constraints = redundant_constraint_ids(
             sketch,
             &result.state,
@@ -273,7 +274,14 @@ impl Solver {
             params,
             &over_constraints,
         )
-        .map_err(|e| lm::residual_failure("post-solve redundancy analysis", e))?;
+        .unwrap_or_else(|e| {
+            tracing::warn!(
+                target: "signex::sketch",
+                error = %e,
+                "redundant-constraint analysis failed; none are reported for this solve"
+            );
+            Vec::new()
+        });
 
         Ok(FullSolveOutput {
             result,

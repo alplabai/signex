@@ -1,8 +1,10 @@
 //! #1544 — an empty bake of a sketch-owned kind clears that kind.
 
-use signex_library::primitive::footprint::{Footprint, FpGraphic, FpGraphicKind};
+use signex_library::LayerId;
+use signex_library::primitive::footprint::{Footprint, FpGraphic, FpGraphicKind, FpPour, Polygon};
 use signex_sketch::SketchData;
-use signex_sketch::attr::{BoardCutoutAttr, PourAttr, SilkAttr};
+use signex_sketch::attr::{BoardCutoutAttr, CourtyardAttr, PourAttr, SilkAttr};
+use signex_sketch::baked_kinds::BakedKind;
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
@@ -81,7 +83,7 @@ fn breaking_a_pour_profile_clears_the_baked_pour() {
         state
             .solve_warnings
             .iter()
-            .any(|w| w.contains("pours were cleared")),
+            .any(|w| w.contains("cleared the footprint's pours")),
         "{:?}",
         state.solve_warnings
     );
@@ -151,4 +153,91 @@ fn silk_drawn_by_hand_survives_a_sketch_with_no_silk_entity() {
     let mut state = FootprintEditorState::from_footprint(&fp);
     rebuild(&mut state, &mut fp);
     assert_eq!(fp.silk_f.len(), 1, "hand-drawn silk must be kept");
+}
+
+fn hand_text() -> FpGraphic {
+    FpGraphic {
+        kind: FpGraphicKind::Text {
+            position: [0.0, 0.0],
+            content: "REF".into(),
+            size: 1.0,
+            frame: None,
+        },
+        stroke_width: 0.0,
+        filled: false,
+    }
+}
+
+#[test]
+fn bottom_silk_entity_leaves_hand_placed_top_text_alone() {
+    let (mut fp, edges, _) = square();
+    entity_mut(&mut fp, edges[0]).silk = Some(SilkAttr {
+        layer: SignexLayer::BottomSilk,
+    });
+    fp.silk_f.push(hand_text());
+    let mut state = FootprintEditorState::from_footprint(&fp);
+    rebuild(&mut state, &mut fp);
+    assert_eq!(fp.silk_b.len(), 1);
+    assert_eq!(fp.silk_f.len(), 1, "top silk text must survive");
+}
+
+#[test]
+fn hand_authored_pours_survive_a_sketch_without_pour_entities() {
+    let (mut fp, edges, _) = square();
+    entity_mut(&mut fp, edges[0]).silk = Some(SilkAttr {
+        layer: SignexLayer::TopSilk,
+    });
+    fp.pours.push(FpPour {
+        boundary: Polygon::new(vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]]),
+        layer: LayerId::new("F.Cu"),
+        net: Default::default(),
+        fill_type: Default::default(),
+        thermal_relief: Default::default(),
+        clearance: 0.0,
+        min_thickness: 0.0,
+        priority: 0,
+    });
+    let mut state = FootprintEditorState::from_footprint(&fp);
+    rebuild(&mut state, &mut fp);
+    assert_eq!(fp.pours.len(), 1, "hand-authored pour must be kept");
+    assert!(!fp.sketch.as_ref().unwrap().was_baked(BakedKind::Pours));
+}
+
+#[test]
+fn deleting_the_last_silk_entity_clears_the_baked_outline() {
+    let (mut fp, edges, _) = square();
+    entity_mut(&mut fp, edges[0]).silk = Some(SilkAttr {
+        layer: SignexLayer::TopSilk,
+    });
+    let mut state = FootprintEditorState::from_footprint(&fp);
+    rebuild(&mut state, &mut fp);
+    assert_eq!(fp.silk_f.len(), 1);
+    assert!(fp.sketch.as_ref().unwrap().was_baked(BakedKind::SilkF));
+
+    entity_mut(&mut fp, edges[0]).silk = None;
+    rebuild(&mut state, &mut fp);
+    assert!(fp.silk_f.is_empty(), "deleted outline survived Save");
+    // Ownership ends with the clear: later hand-drawn silk is safe.
+    assert!(!fp.sketch.as_ref().unwrap().was_baked(BakedKind::SilkF));
+}
+
+#[test]
+fn deleting_the_courtyard_entity_clears_and_reports_it() {
+    let (mut fp, edges, _) = square();
+    entity_mut(&mut fp, edges[0]).courtyard = Some(CourtyardAttr);
+    let mut state = FootprintEditorState::from_footprint(&fp);
+    rebuild(&mut state, &mut fp);
+    assert!(!fp.courtyard.points.is_empty());
+
+    entity_mut(&mut fp, edges[0]).courtyard = None;
+    rebuild(&mut state, &mut fp);
+    assert!(fp.courtyard.points.is_empty());
+    assert!(
+        state
+            .solve_warnings
+            .iter()
+            .any(|w| w.contains("cleared the footprint's courtyard")),
+        "{:?}",
+        state.solve_warnings
+    );
 }

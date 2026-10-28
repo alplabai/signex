@@ -50,3 +50,45 @@ fn no_pads_is_an_error() {
         Err(CourtyardOutlineError::NoPads)
     );
 }
+
+/// #1473 — the failure reaches the Messages panel, not only the return value.
+#[test]
+fn a_left_out_pad_is_reported_to_the_messages_panel() {
+    use crate::ignore::IgnoreResult;
+    use crate::library::editor::footprint::updates::apply_footprint_primitive_edit;
+    use crate::library::messages::FootprintEditorMsg;
+    use signex_library::primitive::footprint::{Footprint, FootprintFile};
+
+    crate::diagnostics::init_logging().ignore("the logger may already be installed");
+    let mut editor = crate::app::FootprintDocument::new(
+        std::path::PathBuf::from("courtyard-island.snxfpt"),
+        FootprintFile::from_footprint(Footprint::empty("island")),
+    );
+    for (x, number) in [(0.0, "NEAR1"), (2.0, "NEAR2"), (40.0, "ISLAND_PAD")] {
+        let i = editor.state.add_pad_at(x, 0.0);
+        editor.state.pads[i].size_mm = (2.0, 2.0);
+        editor.state.pads[i].number = number.into();
+    }
+    editor.dirty = false;
+
+    apply_footprint_primitive_edit(&mut editor, FootprintEditorMsg::RecomputeCourtyardOutline);
+
+    let reported = crate::diagnostics::recent_entries()
+        .iter()
+        .any(|e| e.message.contains("ISLAND_PAD") && e.message.contains("Courtyard outline"));
+    assert!(reported, "the left-out pad must reach the Messages panel");
+    assert!(
+        !editor.dirty,
+        "recomputing the outline must not dirty the file"
+    );
+}
+
+/// A pad moved after the outline was computed hides the outline.
+#[test]
+fn the_outline_is_hidden_once_a_pad_moves() {
+    let mut s = row(2, 2.0, (2.0, 2.0));
+    s.recompute_courtyard_outline().expect("one outline");
+    assert!(s.courtyard_outline().is_some());
+    s.pads[0].position_mm.0 += 0.5;
+    assert!(s.courtyard_outline().is_none());
+}

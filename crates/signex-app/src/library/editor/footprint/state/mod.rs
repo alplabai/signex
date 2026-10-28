@@ -169,16 +169,12 @@ pub struct FootprintEditorState {
     /// `true` when the courtyard polygon should track the pad bbox.
     pub auto_fit_courtyard: bool,
     pub courtyard_mm: Option<CourtyardRect>,
-    /// v0.27 — outline-following courtyard polygon, world mm. Set
-    /// by [`FootprintEditorState::recompute_courtyard_outline`]
-    /// which runs the union-of-pad-bboxes through
-    /// `signex_sketch::geom::polygon_op` (Union) then offsets the
-    /// result by `COURTYARD_SLACK_MM` via `offset_polygon`. Drawn
-    /// in preference to the bbox-based `courtyard_mm` when present.
-    /// Cleared whenever pads are added / moved / removed so the
-    /// stale outline doesn't survive the next mutation; the user
-    /// re-runs the action to refresh.
+    /// Outline-following courtyard polygon, world mm, set by
+    /// `recompute_courtyard_outline`. Read it through `courtyard_outline`,
+    /// which hides it once the pads change.
     pub courtyard_outline_mm: Option<Vec<(f64, f64)>>,
+    /// The pads `courtyard_outline_mm` was computed from.
+    pub(super) courtyard_outline_pads: Vec<[f64; 5]>,
     /// Last known cursor world position in mm.
     pub cursor_mm: Option<(f64, f64)>,
     /// Phase 5.3: which editor mode the user has switched to.
@@ -339,6 +335,7 @@ impl FootprintEditorState {
             auto_fit_courtyard: false,
             courtyard_mm: None,
             courtyard_outline_mm: None,
+            courtyard_outline_pads: Vec::new(),
             cursor_mm: None,
             mode: EditorMode::Normal,
             sketch_solver: signex_sketch::solver::Solver::default(),

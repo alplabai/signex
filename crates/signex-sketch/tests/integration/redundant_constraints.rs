@@ -79,3 +79,29 @@ fn a_conflict_is_still_reported_as_over_constrained() {
         .expect_err("5 mm and 10 mm conflict");
     assert!(matches!(err, SolveError::OverConstrained(_)), "{err:?}");
 }
+
+#[test]
+fn coincident_after_point_on_line_is_not_flagged() {
+    // PointOnLine(P, L) then Coincident(P, L.start): the second pins P to
+    // the start point, which PointOnLine alone does not, so it is not free.
+    let mut s = Sketch::new();
+    let a = s.add_point(0.0, 0.0);
+    let b = s.add_point(4.0, 1.0);
+    let p = s.add_point(2.0, 0.5);
+    let line = s.add_line(a, b);
+    s.data.constraints.extend([
+        constraint(ConstraintKind::Fixed { point: a }),
+        constraint(ConstraintKind::Fixed { point: b }),
+        constraint(ConstraintKind::PointOnLine { point: p, line }),
+        constraint(ConstraintKind::Coincident { p1: p, p2: a }),
+    ]);
+
+    let out = common::solver()
+        .solve(&s.data, &ResolvedParams::new())
+        .expect("consistent");
+    assert!(
+        out.redundant_constraints.is_empty(),
+        "{:?}",
+        out.redundant_constraints
+    );
+}

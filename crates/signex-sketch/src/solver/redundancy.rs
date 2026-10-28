@@ -8,6 +8,10 @@
 //! ones, so the constraint owning it restates what the earlier constraints
 //! already fix. The later constraint is the one flagged.
 //!
+//! A constraint is flagged only when EVERY one of its rows is implied by the
+//! constraints before it: a multi-row constraint with one new direction still
+//! removes a degree of freedom, so deleting it would not be free.
+//!
 //! The scan is per connected block of constraints (those sharing a state
 //! column), so sketches with many independent pads cost the sum of small
 //! blocks, not one large matrix.
@@ -31,9 +35,10 @@ use crate::solver::state::EntityIndex;
 /// is under this fraction of its own length.
 const DEPENDENCE_TOL: f64 = 1e-8;
 
-/// Constraints with at least one Jacobian row that is a linear combination
-/// of the rows before it, in constraint order, excluding any listed in
-/// `violated`.
+/// Constraints all of whose Jacobian rows are linear combinations of the
+/// rows of the constraints before them (and the arc closures), in
+/// constraint order. Constraints in `violated` are neither flagged nor
+/// allowed to imply others.
 pub fn redundant_constraint_ids(
     sketch: &SketchData,
     state: &[f64],
@@ -47,26 +52,25 @@ pub fn redundant_constraint_ids(
         .into_iter()
         .map(|row| (None, row))
         .collect();
-    for c in &sketch.constraints {
+    for c in sketch
+        .constraints
+        .iter()
+        .filter(|c| !violated.contains(&c.id))
+    {
         for row in constraint_rows(c, state, index, sketch, params)? {
             rows.push((Some(c.id), row));
         }
     }
 
-    let mut redundant: Vec<ConstraintId> = Vec::new();
+    let mut redundant: HashSet<ConstraintId> = HashSet::new();
     for block in blocks(&rows, state.len()) {
         scan_block(&rows, &block, &mut redundant);
     }
-    let skip: HashSet<ConstraintId> = violated.iter().copied().collect();
-    let flagged: HashSet<ConstraintId> = redundant
-        .into_iter()
-        .filter(|id| !skip.contains(id))
-        .collect();
     Ok(sketch
         .constraints
         .iter()
         .map(|c| c.id)
-        .filter(|id| flagged.contains(id))
+        .filter(|id| redundant.contains(id))
         .collect())
 }
 
@@ -100,11 +104,12 @@ fn blocks(rows: &[(Option<ConstraintId>, SparseRow)], n: usize) -> Vec<Vec<usize
     blocks
 }
 
-/// Reduce one block's rows in order, recording the owner of each dependent row.
+/// Reduce one block in order, a constraint at a time: its rows are tested
+/// against the basis of everything before it, then added to that basis.
 fn scan_block(
     rows: &[(Option<ConstraintId>, SparseRow)],
     block: &[usize],
-    redundant: &mut Vec<ConstraintId>,
+    redundant: &mut HashSet<ConstraintId>,
 ) {
     let mut local: HashMap<usize, usize> = HashMap::new();
     for &i in block {
@@ -113,38 +118,67 @@ fn scan_block(
             local.entry(col).or_insert(next);
         }
     }
-    let width = local.len();
-    let mut basis: Vec<Vec<f64>> = Vec::new();
-    for &i in block {
-        let (owner, row) = &rows[i];
-        let mut v = vec![0.0; width];
-        for &(col, x) in row {
+    let dense = |i: usize| {
+        let mut v = vec![0.0; local.len()];
+        for &(col, x) in &rows[i].1 {
             v[local[&col]] += x;
         }
-        let before = norm(&v);
-        // A row with no gradient says nothing about dependence.
+        v
+    };
+    let mut basis: Vec<Vec<f64>> = Vec::new();
+    let mut start = 0;
+    while start < block.len() {
+        let owner = rows[block[start]].0;
+        let mut end = start + 1;
+        while owner.is_some() && end < block.len() && rows[block[end]].0 == owner {
+            end += 1;
+        }
+        let vectors: Vec<Vec<f64>> = block[start..end].iter().map(|&i| dense(i)).collect();
+        if let Some(id) = owner
+            && implied_by(&vectors, &basis)
+        {
+            redundant.insert(id);
+        }
+        for v in vectors {
+            let before = norm(&v);
+            let v = project_out(v, &basis);
+            let after = norm(&v);
+            if before > RANK_TOL && after > DEPENDENCE_TOL * before {
+                basis.push(v.iter().map(|x| x / after).collect());
+            }
+        }
+        start = end;
+    }
+}
+
+/// Whether every row with a gradient lies in the span of `basis`, and at
+/// least one has a gradient (a constraint that is flat at this state says
+/// nothing).
+fn implied_by(rows: &[Vec<f64>], basis: &[Vec<f64>]) -> bool {
+    let mut any = false;
+    for v in rows {
+        let before = norm(v);
         if before <= RANK_TOL {
             continue;
         }
-        // Two passes keep the projection orthogonal to rounding.
-        for _ in 0..2 {
-            for q in &basis {
-                let dot: f64 = q.iter().zip(&v).map(|(a, b)| a * b).sum();
-                v.iter_mut().zip(q).for_each(|(x, a)| *x -= dot * a);
-            }
-        }
-        let after = norm(&v);
-        if after <= DEPENDENCE_TOL * before {
-            if let Some(id) = owner
-                && !redundant.contains(id)
-            {
-                redundant.push(*id);
-            }
-        } else {
-            v.iter_mut().for_each(|x| *x /= after);
-            basis.push(v);
+        any = true;
+        if norm(&project_out(v.clone(), basis)) > DEPENDENCE_TOL * before {
+            return false;
         }
     }
+    any
+}
+
+/// `v` minus its projection onto the orthonormal `basis`. Two passes keep
+/// the result orthogonal to rounding.
+fn project_out(mut v: Vec<f64>, basis: &[Vec<f64>]) -> Vec<f64> {
+    for _ in 0..2 {
+        for q in basis {
+            let dot: f64 = q.iter().zip(&v).map(|(a, b)| a * b).sum();
+            v.iter_mut().zip(q).for_each(|(x, a)| *x -= dot * a);
+        }
+    }
+    v
 }
 
 fn norm(v: &[f64]) -> f64 {

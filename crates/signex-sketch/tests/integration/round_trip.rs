@@ -813,3 +813,30 @@ fn distance_pt_circle_constraint_round_trip() {
     let back: SketchData = toml::from_str(&s).unwrap();
     assert_eq!(data, back);
 }
+
+#[test]
+fn baked_kinds_round_trip_and_stay_absent_when_empty() {
+    let untouched = SketchData::default();
+    let json = serde_json::to_string(&untouched).unwrap();
+    assert!(!json.contains("baked_kinds"), "{json}");
+
+    let mut baked = SketchData::default();
+    baked.record_baked(signex_sketch::baked_kinds::BakedKind::Pours, true);
+    let json = serde_json::to_string(&baked).unwrap();
+    assert!(json.contains(r#""baked_kinds":["pours"]"#), "{json}");
+    let back: SketchData = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, baked);
+}
+
+#[test]
+fn unknown_baked_kind_tokens_are_preserved() {
+    use signex_sketch::baked_kinds::BakedKind;
+    let json = r#"{"baked_kinds":["pours","from_the_future"]}"#;
+    let mut sketch: SketchData = serde_json::from_str(json).unwrap();
+    sketch.record_baked(BakedKind::Cutouts, true);
+    sketch.record_baked(BakedKind::Pours, false);
+    assert_eq!(sketch.baked_kinds, vec!["from_the_future", "cutouts"]);
+    // A file without the field still loads.
+    let old: SketchData = serde_json::from_str("{}").unwrap();
+    assert!(old.baked_kinds.is_empty());
+}
