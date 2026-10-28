@@ -482,10 +482,10 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
-        for (_, file) in self.scan_symbol_files()? {
-            if let Some(sym) = file.get_symbol(uuid) {
-                return Ok(sym.clone());
-            }
+        if let Some((_, file)) = self.locate_symbol_file(uuid)?
+            && let Some(sym) = file.get_symbol(uuid)
+        {
+            return Ok(sym.clone());
         }
         if let Some(err) = self.symbol_lookup_undetermined(uuid) {
             return Err(err);

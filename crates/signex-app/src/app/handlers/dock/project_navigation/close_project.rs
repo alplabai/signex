@@ -348,9 +348,10 @@ impl Signex {
         if held.len() > 1 {
             self.ensure_variants_agree(&held)?;
         }
-        self.save_held_path(&held[0])?;
+        let target = self.write_target(&held).clone();
+        self.save_held_path(&target)?;
         let key = path_key_with(path, fold);
-        for variant in &held[1..] {
+        for variant in held.iter().filter(|p| **p != target) {
             if let Some(tab) = self
                 .document_state
                 .tabs

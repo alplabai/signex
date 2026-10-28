@@ -263,6 +263,7 @@ impl Signex {
                 panel_list_open: false,
                 preferences_open: false,
                 keyboard_shortcuts_open: false,
+                shortcut_sections: None,
                 about_open: false,
                 recent_projects: crate::recent_projects::RecentProjects::from_paths(
                     crate::fonts::read_recent_projects_from(prefs),
@@ -447,6 +448,7 @@ impl Signex {
                     selected_lib_symbol: None,
                     components_split: 250.0,
                     project_tree: vec![],
+                    project_tree_builds: 0,
                     project_tree_selected: None,
                     navigator: crate::panels::NavigatorModel::default(),
                     library_row_detail: None,

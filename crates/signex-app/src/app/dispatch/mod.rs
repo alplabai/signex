@@ -9,7 +9,11 @@ pub(crate) mod input;
 mod keyboard;
 mod keymap;
 pub(crate) mod library;
+#[cfg(test)]
+mod net_color_tests;
 mod overlay;
+#[cfg(test)]
+mod prefs_async_tests;
 mod text_edit;
 mod tool;
 mod ui;
@@ -477,11 +481,15 @@ impl Signex {
                 Task::none()
             }
             NetColorMsg::CustomChannel(chan, s) => {
-                // Parse as u8; unparsable input (e.g. the empty string
-                // while the user types) resets the channel to 0 and
-                // values above 255 (however large) clamp to 255, so the text_input never
-                // rejects an intermediate value.
-                let parsed = s.trim().parse::<u64>().unwrap_or(0).min(255) as u8;
+                // Parse as u8: values above 255 (however large) clamp to
+                // 255. Input that does not parse (e.g. the empty string
+                // while the user types) keeps the channel's previous value,
+                // so the text_input never rejects an intermediate value and
+                // a half-typed edit never zeroes the channel.
+                let Ok(parsed) = s.trim().parse::<u64>() else {
+                    return Task::none();
+                };
+                let parsed = parsed.min(255) as u8;
                 let draft = &mut self.ui_state.net_color_custom.draft;
                 let v = parsed as f32 / 255.0;
                 match chan {

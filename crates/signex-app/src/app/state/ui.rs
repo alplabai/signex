@@ -95,6 +95,13 @@ pub struct UiState {
     /// active keyboard-shortcut profile. Toggled from the Help menu
     /// and from F1.
     pub keyboard_shortcuts_open: bool,
+    /// Pre-grouped rows for the shortcuts modal, built by
+    /// [`Self::refresh_shortcut_sections`] when the modal opens and again
+    /// whenever `keymap_profiles` is replaced, so `view` does not rebuild
+    /// the editor model every frame (#1380). `None` means "not built":
+    /// the view then computes the sections inline, so a stale cache is
+    /// impossible by construction.
+    pub shortcut_sections: Option<Vec<crate::keyboard_shortcuts_modal::ShortcutSection>>,
     /// Help ▸ About Signex dialog.
     pub about_open: bool,
     /// File ▸ Open Recent — loaded from `prefs.json` at boot, updated on
@@ -470,6 +477,22 @@ impl UiState {
             self.window_size,
             self.main_window_monitor_size,
         )
+    }
+
+    /// Replace the loaded profile set and rebuild the shortcuts-modal
+    /// cache from it, so the cache can never outlive the profiles it was
+    /// built from. (Callers recompile `active_keymap` themselves.)
+    pub fn set_keymap_profiles(&mut self, profiles: crate::keymap::ShortcutProfileSet) {
+        self.keymap_profiles = profiles;
+        self.refresh_shortcut_sections();
+    }
+
+    /// Rebuild the shortcuts-modal cache: built while the modal is open,
+    /// dropped otherwise (the next open rebuilds it).
+    pub fn refresh_shortcut_sections(&mut self) {
+        self.shortcut_sections = self
+            .keyboard_shortcuts_open
+            .then(|| crate::keyboard_shortcuts_modal::build_sections(&self.keymap_profiles));
     }
 
     /// Per-wheel-notch zoom factor every canvas uses. Reads the DRAFT, like

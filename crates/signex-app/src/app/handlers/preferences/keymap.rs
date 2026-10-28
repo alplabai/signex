@@ -145,7 +145,7 @@ impl Signex {
                 };
                 match crate::keymap::restore_profiles_at(&live, &restored.set) {
                     Ok(previous) => {
-                        self.ui_state.keymap_profiles = restored.set.clone();
+                        self.ui_state.set_keymap_profiles(restored.set.clone());
                         self.ui_state.preferences_keymap_editor =
                             crate::keymap::KeymapEditorModel::new(restored.set);
                         self.ui_state.keymap_load_error = None;
