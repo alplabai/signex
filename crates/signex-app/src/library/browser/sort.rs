@@ -1,55 +1,103 @@
 //! Row sorting for the library browser grid.
 //!
-//! Each row's sort key (numeric parse and lowercase form of the display
-//! string) is derived exactly once, then the rows are stably sorted on
+//! Each row's sort key (the `ParamValue`'s quantity, or the numeric parse
+//! and lowercase form of a plain cell) is derived exactly once, then the rows are stably sorted on
 //! the cached keys. Deriving keys inside the comparator would repeat
 //! that allocation and parsing work O(n log n) times per sort.
 
 use std::cmp::Ordering;
 
+use signex_library::ParamValue;
+use signex_types::quantity::{Quantity, compare_for_sort};
+
+/// What a cell is, for ordering. The variants rank in this order.
+enum SortKind {
+    /// A plain number.
+    Number(f64),
+    /// A typed measurement, read from the `ParamValue`.
+    Measured(Quantity),
+    /// Anything else.
+    Text,
+}
+
+impl SortKind {
+    fn rank(&self) -> u8 {
+        match self {
+            SortKind::Number(_) => 0,
+            SortKind::Measured(_) => 1,
+            SortKind::Text => 2,
+        }
+    }
+}
+
 /// Precomputed, comparison-ready form of one cell.
 ///
-/// Ordering is a strict total order: every cell that parses as a
-/// non-NaN `f64` (after trimming) ranks before every other cell; numbers
-/// compare with `f64::total_cmp`, everything else (text, empty cells and
-/// a literal `NaN`) compares case-insensitively. Ranking by kind first is
-/// what keeps mixed columns (`9`, `10`, `10k`) transitive, which
-/// `slice::sort_by` requires. It also avoids the "lexical sort on numeric
-/// columns" problem without needing a typed schema at compare time.
-struct CellSortKey {
-    number: Option<f64>,
+/// Ordering is a strict total order. Plain numbers (any cell that parses
+/// as a non-NaN `f64` after trimming) rank first and compare with
+/// `f64::total_cmp`. Typed measurements follow, by `(unit family, base
+/// value)`, so a column of mixed families clusters by family and a legacy
+/// `{4.7, "kΩ"}` lands beside a canonical `{4700, "ohm"}`. Text, empty
+/// cells and a literal `NaN` rank last, in natural order
+/// (`R2` before `R10`), case-insensitively. Ranking by kind first is
+/// what keeps mixed columns transitive, which `slice::sort_by` requires.
+pub(super) struct CellSortKey {
+    kind: SortKind,
     lowercase: String,
 }
 
 impl CellSortKey {
-    fn new(cell: &str) -> Self {
+    /// Key for a cell known only by its string (a column that is not a
+    /// parameter, or a price).
+    pub(super) fn from_cell(cell: &str) -> Self {
+        let kind = match cell.trim().parse::<f64>().ok().filter(|n| !n.is_nan()) {
+            Some(n) => SortKind::Number(n),
+            None => SortKind::Text,
+        };
         Self {
-            number: cell.trim().parse::<f64>().ok().filter(|n| !n.is_nan()),
+            kind,
             lowercase: cell.to_lowercase(),
         }
     }
 
+    /// Key for a parameter value. A measurement is ordered by its
+    /// base-unit quantity, never by its display text.
+    pub(super) fn from_param(value: &ParamValue) -> Self {
+        match value.as_quantity() {
+            Some(q) => Self {
+                kind: SortKind::Measured(q),
+                lowercase: value.display().to_lowercase(),
+            },
+            None => match value {
+                ParamValue::Number(n) if !n.is_nan() => Self {
+                    kind: SortKind::Number(*n),
+                    lowercase: value.display().to_lowercase(),
+                },
+                other => Self::from_cell(&other.display()),
+            },
+        }
+    }
+
     fn compare(&self, other: &Self) -> Ordering {
-        match (self.number, other.number) {
-            (Some(a), Some(b)) => a.total_cmp(&b),
-            (Some(_), None) => Ordering::Less,
-            (None, Some(_)) => Ordering::Greater,
-            (None, None) => self.lowercase.cmp(&other.lowercase),
+        match (&self.kind, &other.kind) {
+            (SortKind::Number(a), SortKind::Number(b)) => a.total_cmp(b),
+            (SortKind::Measured(a), SortKind::Measured(b)) => compare_for_sort(a, b),
+            (SortKind::Text, SortKind::Text) => {
+                signex_types::designator::compare_references(&self.lowercase, &other.lowercase)
+            }
+            (a, b) => a.rank().cmp(&b.rank()),
         }
     }
 }
 
-/// Stable-sort `items` by the cell string `cell_of` yields, computing
-/// each item's key exactly once.
+/// Stable-sort `items` by the key `key_of` yields, computing each item's
+/// key exactly once.
 pub(super) fn sort_by_cell_key<T>(
     items: &mut Vec<T>,
-    mut cell_of: impl FnMut(&T) -> String,
+    mut key_of: impl FnMut(&T) -> CellSortKey,
     descending: bool,
 ) {
-    let mut keyed: Vec<(CellSortKey, T)> = items
-        .drain(..)
-        .map(|item| (CellSortKey::new(&cell_of(&item)), item))
-        .collect();
+    let mut keyed: Vec<(CellSortKey, T)> =
+        items.drain(..).map(|item| (key_of(&item), item)).collect();
     keyed.sort_by(|(a, _), (b, _)| {
         let ord = a.compare(b);
         if descending { ord.reverse() } else { ord }
@@ -78,7 +126,10 @@ mod tests {
     /// contract `slice::sort_by` may panic on.
     #[test]
     fn comparator_is_a_total_order() {
-        let keys: Vec<CellSortKey> = fixture().iter().map(|c| CellSortKey::new(c)).collect();
+        let keys: Vec<CellSortKey> = fixture()
+            .iter()
+            .map(|c| CellSortKey::from_cell(c))
+            .collect();
         for a in &keys {
             for b in &keys {
                 assert_eq!(a.compare(b), b.compare(a).reverse());
@@ -98,14 +149,14 @@ mod tests {
         let base = fixture();
         let mut items: Vec<String> = (0..64).flat_map(|_| base.iter().cloned()).collect();
         for descending in [true, false] {
-            sort_by_cell_key(&mut items, |s| s.clone(), descending);
+            sort_by_cell_key(&mut items, |s| CellSortKey::from_cell(s), descending);
         }
         let first_text = items
             .iter()
-            .position(|c| CellSortKey::new(c).number.is_none());
+            .position(|c| matches!(CellSortKey::from_cell(c).kind, SortKind::Text));
         let last_number = items
             .iter()
-            .rposition(|c| CellSortKey::new(c).number.is_some());
+            .rposition(|c| matches!(CellSortKey::from_cell(c).kind, SortKind::Number(_)));
         assert!(last_number < first_text, "numbers precede text");
     }
 
@@ -115,7 +166,7 @@ mod tests {
             .iter()
             .map(|s| s.to_string())
             .collect();
-        sort_by_cell_key(&mut items, |s| s.clone(), false);
+        sort_by_cell_key(&mut items, |s| CellSortKey::from_cell(s), false);
         assert_eq!(items, ["-3", "9", "10", "inf", "", "10k", "abc", "NaN"]);
     }
 
@@ -126,7 +177,7 @@ mod tests {
             .enumerate()
             .map(|(i, s)| (i, (*s).to_string()))
             .collect();
-        sort_by_cell_key(&mut items, |(_, cell)| cell.clone(), false);
+        sort_by_cell_key(&mut items, |(_, cell)| CellSortKey::from_cell(cell), false);
         let order: Vec<usize> = items.iter().map(|(i, _)| *i).collect();
         assert_eq!(order, vec![1, 2, 4, 0, 3]);
     }
@@ -134,7 +185,7 @@ mod tests {
     #[test]
     fn numbers_sort_numerically_not_lexically() {
         let mut items: Vec<String> = ["10", "9", "100"].iter().map(|s| s.to_string()).collect();
-        sort_by_cell_key(&mut items, |s| s.clone(), false);
+        sort_by_cell_key(&mut items, |s| CellSortKey::from_cell(s), false);
         assert_eq!(items, ["9", "10", "100"]);
     }
 
@@ -147,7 +198,7 @@ mod tests {
                 &mut items,
                 |v| {
                     calls += 1;
-                    v.to_string()
+                    CellSortKey::from_cell(&v.to_string())
                 },
                 false,
             );

@@ -21,6 +21,7 @@
 mod format;
 mod parse;
 mod prefix;
+mod sort;
 mod unit;
 mod value;
 
@@ -33,5 +34,6 @@ pub use parse::{
     unit_string_matches,
 };
 pub use prefix::SiPrefix;
+pub use sort::{compare_for_sort, sort_key_from_value_text};
 pub use unit::Unit;
 pub use value::Quantity;

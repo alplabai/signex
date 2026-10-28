@@ -240,7 +240,8 @@ fn an_old_project_stays_without_rules_and_clean_through_every_profile_path() {
     let _ = app.handle_profile_drift_checked(id, &Arc::new(Ok(None)));
     let _ = app.handle_profile_update_requested();
     let _ = app.handle_profile_update_confirmed();
-    let _ = app.handle_profile_save_requested("Mine".into());
+    let _ = app.handle_profile_save_dialog_opened();
+    assert!(app.ui_state.save_profile_dialog.is_none());
     assert!(rules(&app).is_none());
     assert!(!is_dirty(&app));
     assert!(app.ui_state.pending_profile_update.is_none());
@@ -253,7 +254,7 @@ fn an_old_project_stays_without_rules_and_clean_through_every_profile_path() {
 fn save_through_handler(app: &mut crate::app::Signex, dir: &std::path::Path, name: &str) {
     let project = app.document_state.projects[0].id;
     let erc = rules(app).unwrap().erc;
-    let result = crate::rule_profiles::save_as_profile(dir, name, erc);
+    let result = crate::rule_profiles::save_named_profile(dir, name, "1.0", erc, false);
     let _ = app.handle_profile_saved(project, &result);
 }
 

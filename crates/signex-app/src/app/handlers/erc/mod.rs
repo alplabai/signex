@@ -16,12 +16,16 @@ mod reprefix_plan;
 pub(crate) use annotate_preview::{AnnotatePreviewCache, AnnotatePreviewLoad};
 pub(crate) use erc_job::ErcRunOutcome;
 pub(crate) use reprefix_confirm::ReprefixConfirm;
+mod machine_rules;
 mod modals;
 mod net_focus;
 mod net_waivers;
 #[cfg(test)]
 mod net_waivers_tests;
+#[cfg(test)]
+mod rule_profile_dialog_tests;
 mod rule_profiles;
+pub(crate) use rule_profiles::blocking;
 #[cfg(test)]
 mod rule_profiles_tests;
 mod rules_edit;
