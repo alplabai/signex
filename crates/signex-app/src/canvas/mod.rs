@@ -18,6 +18,7 @@ pub(crate) mod gpu_mount;
 pub mod grid;
 mod input;
 mod move_pick;
+pub mod placement_ghost;
 mod shape_preview;
 mod shift_selection;
 mod special_strings;
@@ -33,6 +34,7 @@ use iced::{Color, Rectangle, Renderer, Theme};
 pub use camera::Camera;
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 pub use move_pick::MovePick;
+pub use placement_ghost::PlacementGhost;
 pub use shape_preview::ShapePreviewKind;
 pub use special_strings::SpecialStrings;
 
@@ -346,16 +348,6 @@ impl CanvasSlot {
         self.viewport.set(bounds);
     }
 
-    /// World-space point (mm) under the centre of the last-recorded canvas
-    /// viewport. Used to drop a part that was picked from a list rather than
-    /// aimed at the canvas.
-    pub fn view_centre_world(&self) -> (f64, f64) {
-        let bounds = self.viewport.get();
-        let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
-        let world = self.camera.borrow().screen_to_world(centre, bounds);
-        (f64::from(world.x), f64::from(world.y))
-    }
-
     /// View > Zoom In/Out: one `step` notch about the centre; false at the limits.
     pub fn zoom_about_centre(&self, zoom_in: bool, step: f32) -> bool {
         let bounds = self.viewport.get();
@@ -439,6 +431,9 @@ pub struct CanvasViewPrefs<'a> {
     /// [`crate::schematic_runtime::WireStyling`] for the precedence.
     pub wire_class_styles: &'a crate::schematic_runtime::WireClassStyles,
     pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
+    /// Content attached to the cursor, for the window whose document is the
+    /// session's target sheet only (`None` everywhere else).
+    pub placement: Option<&'a PlacementGhost>,
 }
 
 impl CanvasViewPrefs<'_> {
@@ -877,6 +872,7 @@ mod tests {
             wire_color_overrides: overrides,
             wire_class_styles: class_styles,
             selection_filters: filters,
+            placement: None,
         }
     }
 

@@ -144,9 +144,31 @@ To place a part, open a schematic sheet, then either:
   **Place**; or
 - press **Place** at the end of a part's row in the Components panel.
 
-The part is dropped near the centre of the view with the next free
-designator, and one **Undo** removes it. With no schematic open, Signex shows
-a **Place Failed** notice instead.
+The part attaches to the cursor and follows it on the grid. While it is
+attached:
+
+- **Rotate and mirror** it with the keys that rotate and mirror a selection
+  (section 13: `Space` rotates in the default profile; `X` and `Y` mirror). They
+  turn the part on the cursor, not whatever is selected on the sheet.
+- Press `Tab` to open the pre-placement properties in the Properties panel:
+  the value, the designator and the rotation. Placement pauses until you press
+  **Resume**.
+- Click to place it. One click is one **Undo** step. The part stays on the
+  cursor, and each further click places another copy with the next free
+  designator (R1, R2, R3...). A designator typed in the `Tab` form is used for
+  the next click and then counts up from it. If that designator is already on
+  the sheet, the click uses the next free one and the Messages panel says so.
+  A blank value in the `Tab` form is ignored: the part keeps its value.
+  Pressing on the sheet while a part is on the cursor always places it; it
+  never moves or selects what is already there.
+  A part with several units places unit 1 under a new number at each click.
+- Press `Esc` or right-click to let go of the part.
+
+The part belongs to the sheet that was showing when you picked it. Switching to
+another tab, or closing the sheet, lets go of it, and a click on another sheet
+never places into it. A sheet written by a newer Signex is read-only in this
+build: Signex says so in the Messages panel and does not attach the part. With
+no schematic open, Signex shows a **Place Failed** notice instead.
 
 **Datasheets.** A part's Component Preview tab has a **Datasheet** tab that
 holds one or more documents: a datasheet per manufacturer, an errata, an

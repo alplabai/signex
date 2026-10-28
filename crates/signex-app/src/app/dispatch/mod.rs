@@ -478,6 +478,7 @@ impl Signex {
                     b: (c.b * 255.0).round() as u8,
                     a: 255,
                 };
+                self.cancel_placement_session();
                 self.ui_state.pending_net_color = Some(color);
                 self.interaction_state.active_canvas_mut().pending_net_color = Some(color);
                 Task::none()
