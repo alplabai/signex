@@ -143,6 +143,15 @@ impl Signex {
                     dy,
                     self.ui_state.snap_enabled,
                     crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
+                    self.ui_state.snap_hotspots.then(|| {
+                        signex_types::schematic::hotspot_capture_radius(
+                            if self.ui_state.snap_enabled {
+                                crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm)
+                            } else {
+                                0.0
+                            },
+                        )
+                    }),
                 );
                 if (dx.abs() > 0.001 || dy.abs() > 0.001)
                     && !self
