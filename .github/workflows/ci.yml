@@ -18,12 +18,8 @@ on:
   merge_group:
   workflow_dispatch:
 
-# A newer push to a PR cancels its older run. A trunk push gets a group of
-# its own (per SHA): a shared group would cancel, or replace while pending,
-# the run of every merge but the last in a burst, and that run is the only
-# Windows/macOS test of the merged tree (see `test-os`).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -201,15 +197,10 @@ jobs:
   # not a matrix on `test`, because only Linux needs the apt packages and the
   # lavapipe env. The GPU smoke tests get WARP (DX12) on Windows and the
   # runner's Metal device on macOS; no extra install.
-  # Skipped in the merge queue: not required, already run on the PR head, and
-  # run on the merged tree by the trunk push after the merge, which is never
-  # cancelled (see `concurrency`). Every queued PR gets its own merge_group
-  # run, and these two jobs hold 2 of the org's 20 runner slots (macOS: 1 of
-  # 5) for the longest of any job.
   test-os:
     name: test · ${{ matrix.os }}
     needs: changes
-    if: needs.changes.outputs.build == 'true' && github.event_name != 'merge_group'
+    if: needs.changes.outputs.build == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -240,11 +231,10 @@ jobs:
   # exercises the Postgres migrations against a real server. The test is
   # `#[ignore]`d without the URL, hence `--ignored`. Throwaway CI-only
   # credentials on a job-local service container; no secrets.
-  # Skipped in the merge queue for the same reason as `test-os`.
   library-server-pg:
     name: test · library-server postgres
     needs: changes
-    if: needs.changes.outputs.build == 'true' && github.event_name != 'merge_group'
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
