@@ -395,3 +395,54 @@ fn the_drag_ghost_skips_a_locked_item_like_the_commit() {
         engine.document().symbols[1].position.x + 5.0
     );
 }
+
+/// Locked `R1` at (50, 50) with a wire into its left pin, and a free wire
+/// elsewhere.
+fn locked_with_wires() -> (Engine, Uuid, Uuid, Uuid) {
+    use crate::rubber_band_tests::{add_resistor, add_wire};
+    let mut sheet = SchematicSheet::default();
+    let symbol = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    sheet.symbols[0].locked = true;
+    let attached = add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    let free = add_wire(&mut sheet, (0.0, 0.0), (10.0, 0.0));
+    (Engine::new(sheet).expect("engine"), symbol, attached, free)
+}
+
+fn wire_item(uuid: Uuid) -> SelectedItem {
+    SelectedItem::new(uuid, SelectedKind::Wire)
+}
+
+#[test]
+fn a_group_move_leaves_wires_on_a_locked_pin_where_they_are() {
+    let (mut engine, symbol, attached, free) = locked_with_wires();
+    let (pruned, skipped) = engine.without_locked(Command::MoveSelection {
+        items: vec![item_of(symbol), wire_item(attached), wire_item(free)],
+        dx: 0.0,
+        dy: 5.0,
+        keep_wires: true,
+    });
+    assert_eq!(skipped, vec!["R1".to_string()]);
+    engine
+        .execute(pruned.expect("the free wire moves"))
+        .unwrap();
+
+    let doc = engine.document();
+    let wire = |id| doc.wires.iter().find(|w| w.uuid == id).unwrap();
+    assert_eq!((wire(attached).start.y, wire(attached).end.y), (50.0, 50.0));
+    assert_eq!(wire(free).start.y, 5.0);
+    assert_eq!(doc.symbols[0].position, Point::new(50.0, 50.0));
+}
+
+#[test]
+fn deleting_a_wire_on_a_locked_pin_is_still_allowed() {
+    let (engine, _, attached, _) = locked_with_wires();
+    let (pruned, skipped) = engine.without_locked(Command::DeleteSelection {
+        items: vec![wire_item(attached)],
+    });
+    assert!(skipped.is_empty());
+    assert!(pruned.is_some());
+}
+
+fn item_of(uuid: Uuid) -> SelectedItem {
+    SelectedItem::new(uuid, SelectedKind::Symbol)
+}
