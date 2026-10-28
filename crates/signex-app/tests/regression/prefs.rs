@@ -431,3 +431,70 @@ fn prefs_annotate_undo_round_trips_and_missing_key_is_one_step() {
         "writing the key keeps the other preferences"
     );
 }
+
+#[test]
+fn prefs_window_controls_placement_round_trips_and_unknown_is_auto() {
+    use signex_app::chrome::controls::WindowControlsPlacement;
+    let (_tmp, path) = temp_prefs_path();
+    assert_eq!(
+        signex_app::fonts::read_window_controls_placement_pref_at(&path),
+        WindowControlsPlacement::Auto,
+        "no file gives the default"
+    );
+
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, br#"{"window_controls_placement":"sideways"}"#).unwrap();
+    assert_eq!(
+        signex_app::fonts::read_window_controls_placement_pref_at(&path),
+        WindowControlsPlacement::Auto,
+        "an unknown token gives the default"
+    );
+
+    for &placement in WindowControlsPlacement::ALL {
+        signex_app::fonts::write_window_controls_placement_pref_at(&path, placement);
+        assert_eq!(
+            signex_app::fonts::read_window_controls_placement_pref_at(&path),
+            placement
+        );
+    }
+    let raw: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(raw["window_controls_placement"], "trailing");
+}
+
+// ─────────────────────────────────────────────────────────────────
+// #1469 — toggles persist off the UI thread, newest value wins
+// ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn ordered_pref_write_skips_a_stale_write_that_arrives_late() {
+    use signex_app::fonts::OrderedPrefWrite;
+
+    let (_tmp, path) = temp_prefs_path();
+    // Two rapid toggles: the user turned the grid off, then on again.
+    let older = OrderedPrefWrite::new("regression_1469_grid");
+    let newer = OrderedPrefWrite::new("regression_1469_grid");
+
+    // The workers reach the prefs file in the opposite order.
+    assert!(newer.run(|| signex_app::fonts::write_grid_visible_pref_at(&path, true)));
+    assert!(!older.run(|| signex_app::fonts::write_grid_visible_pref_at(&path, false)));
+
+    assert!(
+        signex_app::fonts::read_grid_visible_pref_at(&path),
+        "the late, older write must not overwrite the newest value"
+    );
+}
+
+#[test]
+fn ordered_pref_writes_of_different_keys_do_not_suppress_each_other() {
+    use signex_app::fonts::OrderedPrefWrite;
+
+    let (_tmp, path) = temp_prefs_path();
+    let snap = OrderedPrefWrite::new("regression_1469_snap");
+    let grid = OrderedPrefWrite::new("regression_1469_other_grid");
+
+    assert!(grid.run(|| signex_app::fonts::write_grid_visible_pref_at(&path, false)));
+    assert!(snap.run(|| signex_app::fonts::write_snap_enabled_pref_at(&path, false)));
+
+    assert!(!signex_app::fonts::read_grid_visible_pref_at(&path));
+    assert!(!signex_app::fonts::read_snap_enabled_pref_at(&path));
+}

@@ -7,6 +7,8 @@ use super::*;
 pub struct PickerState {
     pub filter: String,
     pub selected: Option<(PathBuf, ComponentSummary)>,
+    /// The list the picker draws; kept current by `sync_view_caches`.
+    pub rows: PickerRows,
 }
 
 /// Inline form state for "+ New Table…" on the Library Browser
@@ -160,6 +162,14 @@ pub struct ComponentPreviewState {
     /// a reload are refused, and the save commits this copy, so edits made
     /// meanwhile stay unsaved and the editor stays dirty.
     pub saving_row: Option<ComponentRow>,
+    /// Stamp of the save `saving_row` belongs to (`DocumentSaves::mint_generation`),
+    /// so the completion of an older save (the editor was closed and
+    /// reopened meanwhile) cannot act on a newer one. `0` until a save starts.
+    pub saving_generation: u64,
+    /// The Save All (its batch id) the running save belongs to: its outcome
+    /// is recorded for that flow's settle step
+    /// (`LibraryState::batch_row_failures`) instead of raising its own card.
+    pub saving_batch: Option<u64>,
 }
 
 impl ComponentPreviewState {
@@ -184,6 +194,8 @@ impl ComponentPreviewState {
             staged_datasheets: HashMap::new(),
             datasheet_errors: HashMap::new(),
             saving_row: None,
+            saving_generation: 0,
+            saving_batch: None,
         }
     }
 
@@ -237,12 +249,6 @@ impl ComponentPreviewState {
     }
 }
 
-/// Backwards-compatible alias — other slices still refer to
-/// `ComponentEditorState` while their own retarget passes land. Once
-/// every consumer (panel / documents / commands /
-/// dispatch) is on `ComponentPreviewState`, this alias goes away.
-pub type ComponentEditorState = ComponentPreviewState;
-
 /// Distributor APIs Settings panel state.
 #[derive(Debug, Clone)]
 pub struct DistributorSettings {
@@ -288,7 +294,3 @@ impl Default for DistributorSettings {
         }
     }
 }
-
-// `ComponentPreviewState::from_row` is the canonical builder; the legacy
-// `from_head` helper that constructed an editor from a `Component` chain
-// is gone with the v0.9-refactor-2 DBLib model.

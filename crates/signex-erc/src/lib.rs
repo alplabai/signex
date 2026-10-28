@@ -14,7 +14,8 @@
 //!  Vec<Violation>   ← public API
 //! ```
 //!
-//! ERC reads from `signex_types::SchematicSheet` directly.
+//! The projection reads `signex_types::SchematicSheet` directly and derives
+//! connectivity through `signex_net::SheetConnectivity`.
 
 use serde::{Deserialize, Serialize};
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
@@ -26,6 +27,7 @@ pub mod engine;
 #[cfg(test)]
 mod fixtures;
 mod hierarchy;
+mod net_finding;
 mod overrides;
 pub mod pin_matrix;
 mod project_names;
@@ -36,6 +38,7 @@ mod rules;
 pub use context::ErcContext;
 pub use diagnostic::{Diagnostic, LocationSpace};
 pub use hierarchy::HierarchyMemo;
+pub use net_finding::{NetFinding, NetFindingPin};
 pub use overrides::apply_overrides;
 pub use pin_matrix::{ErcConfig, PinAxis, PinMatrix};
 pub use project_names::{ProjectNetNames, project_net_multiple_names};
@@ -66,7 +69,7 @@ pub enum RuleKind {
     MissingPowerFlag,
     /// Two power ports with incompatible nets are shorted together.
     PowerPortShort,
-    /// A symbol or wire sits outside the active sheet's page boundary.
+    /// A symbol sits outside the active sheet's page boundary.
     SymbolOutsideSheet,
     /// A label sits where two or more wires cross with no junction. The
     /// netlist anchors it to exactly one of them by a deterministic tiebreak
@@ -249,6 +252,9 @@ pub struct Violation {
     pub primary: Option<SelectedItem>,
     /// Optional peer — the "other" object in two-object rules.
     pub peer: Option<SelectedItem>,
+    /// For a net-level finding: the net it is about. Such a finding is
+    /// waived per net, never by a No-ERC directive on one of its pins.
+    pub net: Option<NetFinding>,
 }
 
 impl Violation {
@@ -272,6 +278,7 @@ impl Violation {
             owner_sheet: None,
             primary: None,
             peer: None,
+            net: None,
         }
     }
 

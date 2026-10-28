@@ -56,6 +56,7 @@ impl Signex {
             target: crate::library::state::PrimitivePickerTarget::BrowserRow(address),
             filter: String::new(),
             error: None,
+            scroll_y: 0.0,
         });
     }
 
@@ -79,17 +80,13 @@ impl Signex {
             vec![selected_library.clone()]
         };
 
-        let mut loaded_symbols = std::collections::HashMap::new();
-        let mut library_entries = Vec::new();
+        let loaded_symbols: std::collections::HashMap<String, signex_types::schematic::LibSymbol> =
+            std::collections::HashMap::new();
+        let mut library_entries: Vec<crate::panels::LibrarySymbolEntry> = Vec::new();
 
         for library_name in library_names {
             let library_path = library_root.join(format!("{library_name}.standard_sym"));
-            if let Err(error) = Self::append_library_symbols(
-                &library_path,
-                &library_name,
-                &mut library_entries,
-                &mut loaded_symbols,
-            ) {
+            if let Err(error) = Self::append_library_symbols(&library_path, &library_name) {
                 crate::diagnostics::log_error("Failed to load Standard symbol library", &error);
             }
         }
@@ -109,12 +106,7 @@ impl Signex {
         Ok(())
     }
 
-    fn append_library_symbols(
-        library_path: &std::path::Path,
-        library_name: &str,
-        _library_entries: &mut Vec<crate::panels::LibrarySymbolEntry>,
-        _loaded_symbols: &mut std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
-    ) -> Result<()> {
+    fn append_library_symbols(library_path: &std::path::Path, library_name: &str) -> Result<()> {
         // TODO(issue#62): port the legacy `.standard_sym` library browser to
         // the native `.snxlib`/`.snxsym` flow. Until then, the browser is
         // a no-op for foreign libraries — Standard-format libraries are no

@@ -26,6 +26,7 @@ fn app_focused_on(focused: &str) -> Signex {
         id,
         path: PathBuf::from("/w/a/ProjectA.snxprj"),
         data: ProjectData {
+            description: None,
             name: "ProjectA".to_string(),
             dir: "/w/a".to_string(),
             schematic_root: Some("top.snxsch".to_string()),
@@ -53,6 +54,7 @@ fn app_focused_on(focused: &str) -> Signex {
         pending_libraries: std::collections::HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
     let path = PathBuf::from(focused);

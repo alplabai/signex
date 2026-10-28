@@ -110,6 +110,8 @@ impl PrefNav {
 
 #[derive(Debug, Clone)]
 pub enum PrefMsg {
+    /// Inert message: handled by doing nothing.
+    Noop,
     /// Navigate to a category.
     Nav(PrefNav),
     /// Close without saving (only if not dirty; app ignores if dirty).
@@ -131,6 +133,9 @@ pub enum PrefMsg {
     DraftAnnotateUndo(crate::annotate_undo::AnnotateUndo),
     /// Toggle "Keep wires connected when moving". Persisted on Save.
     DraftMoveKeepsWires(bool),
+    /// Choose where the window's minimize / maximize / close buttons go.
+    /// Persisted on Save.
+    DraftWindowControlsPlacement(crate::chrome::controls::WindowControlsPlacement),
     /// Toggle opt-in autosave of recovery copies (#104). Persisted on Save.
     DraftAutosaveEnabled(bool),
     /// Update the default symbol-editor grid size. Persisted on Save.
@@ -226,13 +231,6 @@ pub enum PrefMsg {
     /// `preferences_keymap_status`, where the serialization failure at
     /// the same call site already reported.
     KeymapExportFinished(Result<std::path::PathBuf, String>),
-    /// Direct text edit of a binding's trigger (kept for API parity;
-    /// the recorder is the primary edit path).
-    KeymapBindingChanged {
-        command: crate::keymap::AppCommandId,
-        context: crate::keymap::ShortcutContext,
-        trigger: String,
-    },
     /// Open the chord recorder for a specific binding.
     KeymapRecorderOpen {
         command: crate::keymap::AppCommandId,
@@ -289,6 +287,9 @@ pub struct PrefsView<'a> {
     pub draft_pcb_gpu_render: bool,
     pub draft_annotate_undo: crate::annotate_undo::AnnotateUndo,
     pub draft_move_keeps_wires: bool,
+    pub draft_window_controls_placement: crate::chrome::controls::WindowControlsPlacement,
+    /// Whether the drafted placement only applies after a restart (macOS).
+    pub window_controls_restart_note: bool,
     pub draft_autosave_enabled: bool,
     pub draft_symbol_grid_size_mm: f32,
     pub draft_symbol_grid_style: GridStyle,

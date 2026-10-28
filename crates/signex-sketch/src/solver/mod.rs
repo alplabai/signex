@@ -1,3 +1,5 @@
+pub mod derivatives;
+pub mod dim_cache;
 pub mod dof;
 pub mod jacobian;
 pub mod linalg;
@@ -9,6 +11,8 @@ pub mod state;
 pub mod work;
 
 #[cfg(test)]
+mod derivatives_tests;
+#[cfg(test)]
 mod shrink_tests;
 
 use std::collections::HashMap;
@@ -18,7 +22,7 @@ use crate::id::{ConstraintId, SketchEntityId};
 use crate::sketch::SketchData;
 
 use self::dof::{DofColor, entity_colours, over_constraint_ids};
-use self::jacobian::numerical_jacobian;
+use self::jacobian::jacobian;
 use self::lm::{
     LmFailure, SolveResult, solve_lm_keeping_state, solve_lm_perturbed, undo_retry_offset,
 };
@@ -248,7 +252,7 @@ impl Solver {
         // free sketch has no Jacobian rows (m=0); we still build it
         // so the API surface is consistent. The analysis runs outside the
         // work pool and cannot fail a converged solve.
-        let jacobian = numerical_jacobian(sketch, &result.state, &result.index, params)
+        let jacobian = jacobian(sketch, &result.state, &result.index, params)
             .map_err(|e| lm::residual_failure("post-solve jacobian", e))?;
         meter.record_analysis(result.state.len(), jacobian.len());
 

@@ -173,6 +173,10 @@ pub enum PcbAppEvent {
 const FAMILIES_TRACE_EDITED: &[PcbSliceFamily] =
     &[PcbSliceFamily::Traces, PcbSliceFamily::Ratsnest];
 const FAMILIES_VIA_EDITED: &[PcbSliceFamily] = &[PcbSliceFamily::Vias, PcbSliceFamily::Traces];
+// Traces stay in the set on purpose: a pad edit (size, shape, net) changes
+// where attached trace ends terminate and how they are net-coloured, and
+// the table feeds real `DirtyFlags` (Traces -> LINES), not just an
+// is-empty check. Pads alone would leave stale trace lines on screen.
 const FAMILIES_PAD_EDITED: &[PcbSliceFamily] = &[PcbSliceFamily::Pads, PcbSliceFamily::Traces];
 const FAMILIES_FOOTPRINT_MOVED: &[PcbSliceFamily] = &[PcbSliceFamily::Pads, PcbSliceFamily::Traces];
 const FAMILIES_ZONE_REFILLED: &[PcbSliceFamily] = &[PcbSliceFamily::Zones];
@@ -416,6 +420,16 @@ mod tests {
         assert_eq!(snapshot.zones[0].priority, 2);
         assert_eq!(snapshot.zones[1].priority, 7);
         assert!(snapshot.rule_areas[0].rule_area);
+    }
+
+    #[test]
+    fn drc_markers_resolve_through_drc_slots() {
+        use signex_gfx::style::ColorSlot;
+        assert_eq!(super::emit::drc_slot(Severity::Error), ColorSlot::DrcError);
+        assert_eq!(
+            super::emit::drc_slot(Severity::Warning),
+            ColorSlot::DrcWarning
+        );
     }
 
     #[test]

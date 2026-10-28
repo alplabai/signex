@@ -18,7 +18,7 @@ use signex_sketch::solver::FullSolveOutput;
 use crate::pad::bake_one_pad;
 
 use super::numbering::derive_pad_number_2d;
-use super::numbering::strip_eq_prefix;
+use crate::eval_util::strip_eq_prefix;
 
 /// The grid array's declarative shape: the `(nx, ny)` count expressions
 /// stepped by `(dx, dy)` per axis, its depopulation predicate/list, and
@@ -84,18 +84,16 @@ pub(super) fn bake_grid(
         .transpose()
         .map_err(SketchError::Expr)?;
 
-    let setup_ctx = EvalContext {
+    let mut ctx = EvalContext {
         params: params_ast.clone(),
         array_index: Some((0, 0)),
     };
-    let nx = eval(&nx_ast, &setup_ctx)
-        .map_err(SketchError::Expr)?
-        .value
-        .round() as i64;
-    let ny = eval(&ny_ast, &setup_ctx)
-        .map_err(SketchError::Expr)?
-        .value
-        .round() as i64;
+    let Some(nx) = super::eval_count("grid", "nx_expr", source, &nx_ast, &ctx, warnings)? else {
+        return Ok(());
+    };
+    let Some(ny) = super::eval_count("grid", "ny_expr", source, &ny_ast, &ctx, warnings)? else {
+        return Ok(());
+    };
     if nx <= 0 || ny <= 0 {
         warnings.push(format!(
             "grid array source {source}: nx={nx}, ny={ny} — array skipped"
@@ -110,10 +108,7 @@ pub(super) fn bake_grid(
 
     for j in 0..ny {
         for i in 0..nx {
-            let step_ctx = EvalContext {
-                params: params_ast.clone(),
-                array_index: Some((i, j)),
-            };
+            ctx.array_index = Some((i, j));
 
             // v0.23 — Per-instance suppression list. Skipped
             // independent of the mask predicate so the Properties
@@ -134,7 +129,7 @@ pub(super) fn bake_grid(
             // cell, zero / false skips. Defaults to keep on parse
             // / eval failure (warned).
             if let Some(ast) = mask_ast.as_ref() {
-                match eval(ast, &step_ctx) {
+                match eval(ast, &ctx) {
                     Ok(q) => {
                         if q.value.abs() < 1e-9 {
                             continue;
@@ -146,22 +141,19 @@ pub(super) fn bake_grid(
                 }
             }
 
-            let dx_q = eval(&dx_ast, &step_ctx).map_err(SketchError::Expr)?;
-            let dy_q = eval(&dy_ast, &step_ctx).map_err(SketchError::Expr)?;
-            let dx_mm = dx_q.as_mm().map_err(SketchError::Unit)?;
-            let dy_mm = dy_q.as_mm().map_err(SketchError::Unit)?;
+            let dx_mm = crate::params::eval_length_mm(&dx_ast, &ctx)?;
+            let dy_mm = crate::params::eval_length_mm(&dy_ast, &ctx)?;
 
             let extra_dx = i as f64 * dx_mm;
             let extra_dy = j as f64 * dy_mm;
 
-            let pad_number =
-                derive_pad_number_2d(numbering, i, j, nx, params_ast, warnings, source);
+            let pad_number = derive_pad_number_2d(numbering, i, j, nx, &mut ctx, warnings, source);
+            ctx.array_index = Some((i, j));
 
             let pad = bake_one_pad(
                 source,
                 pad_attr,
-                params_ast,
-                Some((i, j)),
+                &ctx,
                 extra_dx,
                 extra_dy,
                 Some(pad_number),

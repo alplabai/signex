@@ -2,6 +2,9 @@ use super::super::*;
 use super::footprint_ctx::build_footprint_editor_panel_ctx;
 use super::symbol_ctx::build_symbol_editor_panel_ctx;
 
+/// `(lib_symbol_names, placed_symbols)` as held by the panel context.
+type SymbolLists = (Vec<String>, Vec<(String, String, String, String)>);
+
 impl Signex {
     /// F15 — When the active tab is a Library Browser AND a row is
     /// selected in that tab's browser state, build the
@@ -115,11 +118,6 @@ impl Signex {
                 if let Some(lib_dir) = resolved.parent() {
                     request.exists.push(git_marker(lib_dir));
                 }
-                if self.library.library_at(&resolved).is_some() {
-                    let root = resolved.parent().unwrap_or(&resolved);
-                    request.listings.push((root.join("symbols"), "snxsym"));
-                    request.listings.push((root.join("footprints"), "snxfpt"));
-                }
                 request.exists.push(resolved);
             }
         }
@@ -168,6 +166,54 @@ impl Signex {
         panel
     }
 
+    /// Fill `lib_symbol_names` / `placed_symbols`: the lists kept from the
+    /// previous refresh when the engine is unchanged, else rebuilt (#1383).
+    fn fill_symbol_lists(&mut self, kept: Option<SymbolLists>) {
+        let (names, placed) = match kept {
+            Some(lists) => lists,
+            None => {
+                if let Some(snapshot) = self.active_render_snapshot() {
+                    (
+                        snapshot.lib_symbols.keys().cloned().collect(),
+                        snapshot
+                            .symbols
+                            .iter()
+                            .map(|s| {
+                                (
+                                    s.reference.clone(),
+                                    s.value.clone(),
+                                    s.footprint.clone(),
+                                    s.lib_id.clone(),
+                                )
+                            })
+                            .collect(),
+                    )
+                } else {
+                    let placed = self
+                        .active_pcb_snapshot()
+                        .map(|pcb| {
+                            pcb.footprints
+                                .iter()
+                                .map(|f| {
+                                    (
+                                        f.reference.clone(),
+                                        f.value.clone(),
+                                        f.footprint_id.clone(),
+                                        f.layer.clone(),
+                                    )
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    (Vec::new(), placed)
+                }
+            }
+        };
+        let ctx = &mut self.document_state.panel_ctx;
+        ctx.lib_symbol_names = names;
+        ctx.placed_symbols = placed;
+    }
+
     /// Who owns the numeric box `key` and the value it stores now, from the
     /// same projection the Properties panel renders; `None` when the box is
     /// not on screen (other selection, other tab, no placement).
@@ -189,6 +235,7 @@ impl Signex {
     }
 
     pub(crate) fn refresh_panel_ctx(&mut self) {
+        self.drop_pending_profile_update_for_other_project();
         let fs_request = self.project_fs_request();
         self.document_state.project_fs.want(fs_request);
         // The dirty dots below read `dirty_paths`; make sure footprint
@@ -307,36 +354,6 @@ impl Signex {
                         // lands on disk immediately. No in-memory
                         // merging needed; the next refresh after the
                         // dialog confirm picks up the new file.
-                        let (symbols, footprints) = if mounted_lib.is_some() {
-                            // `.snxlib` is a manifest *file* — symbols/
-                            // and footprints/ are SIBLINGS of it inside
-                            // the library's working dir (the `.snxlib`'s
-                            // parent). Joining `resolved` directly would
-                            // build `<project>/<lib>.snxlib/symbols`,
-                            // which is not a real path and silently
-                            // returns empty via the `.ok().flatten()`
-                            // chain — the regression from F34 where
-                            // freshly-created `.snxsym` files never
-                            // appeared in the project tree.
-                            //
-                            // That chain is now `list_dir_or_report`,
-                            // which keeps the same empty result but
-                            // reports anything other than "the
-                            // directory is not there" to the Messages
-                            // panel, so the next wrong path or
-                            // unreadable dir says so instead of
-                            // rendering as a library with no symbols.
-                            let lib_root = resolved
-                                .parent()
-                                .map(std::path::Path::to_path_buf)
-                                .unwrap_or_else(|| resolved.clone());
-                            (
-                                fs_facts.names_in(&lib_root.join("symbols")),
-                                fs_facts.names_in(&lib_root.join("footprints")),
-                            )
-                        } else {
-                            (Vec::new(), Vec::new())
-                        };
                         let resolved_clone = resolved.clone();
                         let is_open = open_paths.contains(&resolved_clone);
                         let is_dirty = dirty_paths.contains(&resolved_clone);
@@ -345,8 +362,6 @@ impl Signex {
                             root: resolved,
                             mounted: mounted_lib.is_some(),
                             missing,
-                            symbols,
-                            footprints,
                             is_open,
                             is_dirty,
                         }
@@ -367,8 +382,6 @@ impl Signex {
                         // disk (they materialise at save time) — not
                         // a missing-orphan situation.
                         missing: false,
-                        symbols: Vec::new(),
-                        footprints: Vec::new(),
                         is_open: false,
                         is_dirty: false,
                     });
@@ -413,6 +426,40 @@ impl Signex {
             })
             .collect();
 
+        // The two symbol lists are O(symbols) string clones; reuse the
+        // previous ones while the active engine is unchanged (#1383).
+        // Keyed on the render cache the lists are built from, not the engine:
+        // the cache can lag an engine edit. Revision 0 means "unknown".
+        let symbol_lists_key = self.document_state.active_engine().and_then(|engine| {
+            let cache = self
+                .interaction_state
+                .active_canvas()
+                .active_render_cache()?;
+            (cache.revision() != 0).then(|| (engine.instance_id(), cache.revision()))
+        });
+        let reuse_symbol_lists = symbol_lists_key.is_some()
+            && symbol_lists_key == self.document_state.panel_ctx.symbol_lists_key;
+        let kept_symbol_lists = reuse_symbol_lists.then(|| {
+            let ctx = &mut self.document_state.panel_ctx;
+            (
+                std::mem::take(&mut ctx.lib_symbol_names),
+                std::mem::take(&mut ctx.placed_symbols),
+            )
+        });
+
+        // The tree is a pure function of `projects`; keep the previous one
+        // (and its expand/collapse state) while they are unchanged (#1383).
+        let (kept_tree, previous_projects, project_tree_builds) = {
+            let ctx = &mut self.document_state.panel_ctx;
+            (
+                std::mem::take(&mut ctx.project_tree),
+                std::mem::take(&mut ctx.projects),
+                ctx.project_tree_builds,
+            )
+        };
+        let tree_unchanged = previous_projects == projects_panel
+            && (project_tree_builds > 0 || projects_panel.is_empty());
+        let kept_project_tree = if tree_unchanged { kept_tree } else { vec![] };
         let active_schematic_snapshot = self.active_render_snapshot();
         let active_pcb_snapshot = self.active_pcb_snapshot();
 
@@ -516,7 +563,9 @@ impl Signex {
             has_schematic: self.has_active_schematic(),
             has_pcb: self.has_active_pcb(),
             paper_size: active_schematic_snapshot
-                .map(|snapshot| snapshot.paper_size.clone())
+                .map(|snapshot| {
+                    crate::app::load_gateway::effective_paper_size(&snapshot.paper_size)
+                })
                 .or_else(|| {
                     active_pcb_snapshot
                         .map(|snapshot| format!("PCB • {} layers", snapshot.layers.len()))
@@ -527,40 +576,9 @@ impl Signex {
             lib_symbol_count: active_schematic_snapshot
                 .map(|snapshot| snapshot.lib_symbols.len())
                 .unwrap_or(0),
-            lib_symbol_names: active_schematic_snapshot
-                .map(|snapshot| snapshot.lib_symbols.keys().cloned().collect())
-                .unwrap_or_default(),
-            placed_symbols: if let Some(snapshot) = active_schematic_snapshot {
-                snapshot
-                    .symbols
-                    .iter()
-                    .map(|symbol| {
-                        (
-                            symbol.reference.clone(),
-                            symbol.value.clone(),
-                            symbol.footprint.clone(),
-                            symbol.lib_id.clone(),
-                        )
-                    })
-                    .collect()
-            } else {
-                active_pcb_snapshot
-                    .map(|snapshot| {
-                        snapshot
-                            .footprints
-                            .iter()
-                            .map(|footprint| {
-                                (
-                                    footprint.reference.clone(),
-                                    footprint.value.clone(),
-                                    footprint.footprint_id.clone(),
-                                    footprint.layer.clone(),
-                                )
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default()
-            },
+            lib_symbol_names: Vec::new(),
+            placed_symbols: Vec::new(),
+            symbol_lists_key,
             tokens: self.tokens_for(self.ui_state.theme_id),
             theme_id: self.ui_state.theme_id,
             unit: self.ui_state.unit,
@@ -591,7 +609,8 @@ impl Signex {
             selected_pins,
             selected_lib_symbol,
             components_split,
-            project_tree: vec![],
+            project_tree: kept_project_tree,
+            project_tree_builds,
             project_tree_selected: self.document_state.panel_ctx.project_tree_selected.clone(),
             navigator,
             library_row_detail: self.compute_library_row_detail(),
@@ -638,8 +657,12 @@ impl Signex {
             footprint_editor: build_footprint_editor_panel_ctx(self),
             history: self.document_state.history.clone(),
         };
-        self.document_state.panel_ctx.project_tree =
-            crate::panels::build_project_tree(&self.document_state.panel_ctx);
+        self.fill_symbol_lists(kept_symbol_lists);
+        if !tree_unchanged {
+            let ctx = &mut self.document_state.panel_ctx;
+            ctx.project_tree = crate::panels::build_project_tree(ctx);
+            ctx.project_tree_builds = ctx.project_tree_builds.wrapping_add(1);
+        }
         // Sheet N of M and the project's title block can change with it.
         self.refresh_canvas_sheet_frame();
         self.refresh_canvas_designators();
@@ -656,6 +679,98 @@ mod tests {
     use crate::app::state::LoadedProject;
     use crate::app::state::project_fs::git_marker;
 
+    /// #1383: an unchanged engine keeps the symbol lists (no per-edit
+    /// O(symbols) re-clone); an edit rebuilds them.
+    #[test]
+    fn symbol_lists_are_reused_until_the_engine_revision_moves() {
+        let (mut app, _task) = Signex::new();
+        app.open_schematic_tab(
+            PathBuf::from("snx-1383.snxsch"),
+            "snx-1383".to_string(),
+            signex_types::schematic::SchematicSheet::default(),
+        );
+        app.refresh_panel_ctx();
+        let key = app.document_state.panel_ctx.symbol_lists_key;
+        assert!(key.is_some(), "schematic engine must key the lists");
+
+        let sentinel = (
+            "Z1".to_string(),
+            String::new(),
+            String::new(),
+            String::new(),
+        );
+        app.document_state.panel_ctx.placed_symbols = vec![sentinel.clone()];
+        app.refresh_panel_ctx();
+        assert_eq!(app.document_state.panel_ctx.placed_symbols, vec![sentinel]);
+
+        app.document_state.panel_ctx.symbol_lists_key = Some((0, 0));
+        app.refresh_panel_ctx();
+        assert!(app.document_state.panel_ctx.placed_symbols.is_empty());
+        assert_eq!(app.document_state.panel_ctx.symbol_lists_key, key);
+    }
+
+    /// #1383: the project tree is rebuilt only when what it shows changes,
+    /// and a changed sheet state does rebuild it.
+    #[test]
+    fn project_tree_is_reused_until_the_projects_change() {
+        let (mut app, _task) = Signex::new();
+        let id = app.document_state.mint_project_id();
+        app.document_state.projects.push(LoadedProject {
+            id,
+            path: PathBuf::from("snx-1383-tree/p.snxprj"),
+            data: ProjectData {
+                name: "p".to_string(),
+                description: None,
+                dir: "snx-1383-tree".to_string(),
+                schematic_root: Some("a.snxsch".to_string()),
+                pcb_file: None,
+                sheets: Vec::new(),
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: Vec::new(),
+                enable_git: false,
+                net_classes: Vec::new(),
+                rules: None,
+                annotation: None,
+                unknown: Default::default(),
+            },
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+            case_decided: false,
+        });
+        app.refresh_panel_ctx();
+        let builds = app.document_state.panel_ctx.project_tree_builds;
+        assert!(builds > 0 && !app.document_state.panel_ctx.project_tree.is_empty());
+
+        app.refresh_panel_ctx();
+        app.refresh_panel_ctx();
+        assert_eq!(app.document_state.panel_ctx.project_tree_builds, builds);
+
+        app.document_state.projects[0].data.pcb_file = Some("b.snxpcb".into());
+        app.refresh_panel_ctx();
+        assert_eq!(app.document_state.panel_ctx.project_tree_builds, builds + 1);
+    }
+
+    /// #1383: a real engine edit moves the key, so the panel lists show the
+    /// placed symbol instead of the reused (stale) ones.
+    #[test]
+    fn symbol_lists_follow_a_real_edit() {
+        let (mut app, _task) = Signex::new();
+        app.open_schematic_tab(
+            PathBuf::from("snx-1383-edit.snxsch"),
+            "snx-1383-edit".to_string(),
+            signex_types::schematic::SchematicSheet::default(),
+        );
+        app.refresh_panel_ctx();
+        assert!(app.document_state.panel_ctx.placed_symbols.is_empty());
+
+        app.document_state.panel_ctx.selected_component = Some("Device:R".to_string());
+        assert!(app.place_selected_component(10.0, 10.0));
+        app.refresh_panel_ctx();
+        assert_eq!(app.document_state.panel_ctx.placed_symbols.len(), 1);
+    }
+
     /// #1098: the probe request must name `<dir>/.git` for the project dir
     /// and each library dir, or the Enable Version Control row never appears.
     #[test]
@@ -667,6 +782,7 @@ mod tests {
             id,
             path: dir.join("P.snxprj"),
             data: ProjectData {
+                description: None,
                 name: "P".to_string(),
                 dir: dir.to_string_lossy().into_owned(),
                 schematic_root: None,
@@ -689,6 +805,7 @@ mod tests {
             pending_libraries: Default::default(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         });
 
         let request = app.project_fs_request();

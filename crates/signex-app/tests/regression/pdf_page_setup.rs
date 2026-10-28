@@ -515,8 +515,27 @@ fn page_setup_is_restored_when_the_modal_reopens_for_the_same_document() {
 #[test]
 fn a_late_result_from_a_closed_preview_cannot_land_on_the_reopened_one() {
     let mut app = app_with_sheet("A4");
-    let stale_pages = preview(&app).pages.clone();
-    assert!(!stale_pages.is_empty());
+    let stale_outline: Vec<signex_output::PreviewPageInfo> = preview(&app)
+        .pages
+        .iter()
+        .map(|slot| signex_output::PreviewPageInfo {
+            page_number: slot.page_number,
+            sheet_count: slot.sheet_count,
+            width_px: slot.width_px,
+            height_px: slot.height_px,
+        })
+        .collect();
+    assert!(!stale_outline.is_empty());
+    let stale_pages = vec![(
+        0,
+        signex_output::PreviewPage {
+            page_number: 1,
+            sheet_count: 1,
+            width_px: 1,
+            height_px: 1,
+            rgba: vec![0, 0, 0, 255],
+        },
+    )];
     let first_generation = preview(&app).raster_generation;
     send(&mut app, PrintPreviewMsg::Close);
 
@@ -528,6 +547,7 @@ fn a_late_result_from_a_closed_preview_cannot_land_on_the_reopened_one() {
     // The old session's result arrives first.
     let late = Message::PrintPreview(PrintPreviewMsg::Rasterized {
         generation: first_generation,
+        outline: std::sync::Arc::new(stale_outline),
         pages: std::sync::Arc::new(stale_pages),
     });
     let follow_up = app.update(late);
@@ -673,6 +693,7 @@ fn closing_the_project_forgets_its_documents_page_setup() {
         id,
         path: tmp.path().join("P.snxprj"),
         data: ProjectData {
+            description: None,
             name: "P".to_string(),
             dir: tmp.path().to_string_lossy().into_owned(),
             schematic_root: Some("page-setup.snxsch".to_string()),
@@ -697,6 +718,7 @@ fn closing_the_project_forgets_its_documents_page_setup() {
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.tabs[0].project_id = Some(id);
 

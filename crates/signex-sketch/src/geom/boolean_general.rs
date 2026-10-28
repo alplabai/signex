@@ -30,8 +30,7 @@
 //! boundary are NOT computed; [`polygon_op`] refuses them with
 //! [`PolygonOpError::BoundaryContact`] instead of guessing. Callers
 //! that need those cases must handle the error (keep the inputs
-//! separate, or pre-perturb them) or fall back to
-//! [`super::boolean::intersect_convex_clip`] when the clip is convex.
+//! separate, or pre-perturb them).
 //! Every other failure (an odd crossing count, a walk that runs out of
 //! steps or hits an intersection with no partner) is also an error,
 //! never a partial ring.

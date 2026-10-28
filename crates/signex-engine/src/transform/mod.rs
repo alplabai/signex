@@ -1,6 +1,6 @@
 use signex_types::{
     rotation2d::normalize_angle_rad,
-    schematic::{SchDrawing, SchematicSheet, SelectedItem, SelectedKind},
+    schematic::{SchDrawing, SelectedItem, SelectedKind},
 };
 
 use crate::command::MirrorAxis;
@@ -167,47 +167,37 @@ impl Engine {
             .cloned()
             .collect();
 
+        // Wire geometry is fixed for this pass (only junctions change), so one
+        // index serves every query.
+        let index = WireIndex::new(&self.document.wires, crate::JUNCTION_TOLERANCE_MM);
         let mut changed = false;
         for wire in touched {
-            let minted =
-                autoplace::junctions_for_wire(&wire, &self.document, crate::JUNCTION_TOLERANCE_MM);
+            let minted = autoplace::junctions_for_wire(&wire, &self.document.junctions, &index);
             changed |= !minted.is_empty();
             // Extend inside the loop so the next wire's dedup sees these.
             self.document.junctions.extend(minted);
         }
 
-        changed |= self.remove_unjustified_minted_junctions();
-        changed
-    }
-
-    /// Drop every minted junction no longer justified by a genuine wire
-    /// meeting (see [`autoplace::wire_meeting_justifies_junction`]).
-    /// User-placed dots (`minted == false`) are never inspected here.
-    fn remove_unjustified_minted_junctions(&mut self) -> bool {
-        let tolerance = crate::JUNCTION_TOLERANCE_MM;
-        let stale: Vec<uuid::Uuid> = self
+        // Every minted dot is revalidated, not only those near `touched`: a
+        // deleted wire is no longer in `touched` yet is exactly what strands
+        // its neighbours' dots (issue #422). The index makes each check O(1).
+        let stale: std::collections::HashSet<uuid::Uuid> = self
             .document
             .junctions
             .iter()
             .filter(|junction| junction.minted)
             .filter(|junction| {
-                !autoplace::wire_meeting_justifies_junction(
-                    junction.position,
-                    &self.document,
-                    tolerance,
-                )
+                !autoplace::wire_meeting_justifies_junction(junction.position, &index)
             })
             .map(|junction| junction.uuid)
             .collect();
-
-        if stale.is_empty() {
-            return false;
+        if !stale.is_empty() {
+            self.document
+                .junctions
+                .retain(|junction| !stale.contains(&junction.uuid));
+            changed = true;
         }
-
-        self.document
-            .junctions
-            .retain(|junction| !stale.contains(&junction.uuid));
-        true
+        changed
     }
 
     pub(super) fn move_selected_item(&mut self, item: &SelectedItem, dx: f64, dy: f64) -> bool {
@@ -433,33 +423,39 @@ impl Engine {
         }
     }
 
+    /// Apply `edit` to one symbol, then re-run field autoplace against the
+    /// pre-edit document. Only that symbol is cloned (not the whole sheet).
+    fn edit_symbol_and_autoplace(
+        &mut self,
+        uuid: uuid::Uuid,
+        edit: impl FnOnce(&mut signex_types::schematic::Symbol),
+    ) -> bool {
+        let Some(index) = self.document.symbols.iter().position(|s| s.uuid == uuid) else {
+            return false;
+        };
+        let mut symbol = self.document.symbols[index].clone();
+        edit(&mut symbol);
+        if let Some(lib) = self.document.lib_symbols.get(&symbol.lib_id) {
+            autoplace_fields(&mut symbol, lib, &self.document);
+        }
+        self.document.symbols[index] = symbol;
+        true
+    }
+
     pub(super) fn rotate_selected_item(&mut self, item: &SelectedItem, angle_degrees: f64) -> bool {
         match item.kind {
-            SelectedKind::Symbol => {
-                let lib_symbols = self.document.lib_symbols.clone();
-                let document_snapshot = self.document.clone();
-                self.document
-                    .symbols
-                    .iter_mut()
-                    .find(|symbol| symbol.uuid == item.uuid)
-                    .map(|symbol| {
-                        // The render path rotates and then mirrors, so with exactly
-                        // one mirror axis set a positive stored angle turns the
-                        // symbol clockwise on screen. Negate the delta there so
-                        // `angle_degrees` always means counter-clockwise on screen.
-                        let on_screen_delta = if symbol.mirror_x != symbol.mirror_y {
-                            -angle_degrees
-                        } else {
-                            angle_degrees
-                        };
-                        symbol.rotation = normalize_degrees(symbol.rotation + on_screen_delta);
-                        if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
-                            autoplace_fields(symbol, lib, &document_snapshot);
-                        }
-                        true
-                    })
-                    .unwrap_or(false)
-            }
+            SelectedKind::Symbol => self.edit_symbol_and_autoplace(item.uuid, |symbol| {
+                // The render path rotates and then mirrors, so with exactly
+                // one mirror axis set a positive stored angle turns the
+                // symbol clockwise on screen. Negate the delta there so
+                // `angle_degrees` always means counter-clockwise on screen.
+                let on_screen_delta = if symbol.mirror_x != symbol.mirror_y {
+                    -angle_degrees
+                } else {
+                    angle_degrees
+                };
+                symbol.rotation = normalize_degrees(symbol.rotation + on_screen_delta);
+            }),
             SelectedKind::SymbolRefField => self
                 .document
                 .symbols
@@ -503,23 +499,10 @@ impl Engine {
     pub(super) fn mirror_selected_item(&mut self, item: &SelectedItem, axis: MirrorAxis) -> bool {
         match item.kind {
             SelectedKind::Symbol => {
-                let lib_symbols = self.document.lib_symbols.clone();
-                let document_snapshot = self.document.clone();
-                self.document
-                    .symbols
-                    .iter_mut()
-                    .find(|symbol| symbol.uuid == item.uuid)
-                    .map(|symbol| {
-                        match axis {
-                            MirrorAxis::Horizontal => symbol.mirror_y = !symbol.mirror_y,
-                            MirrorAxis::Vertical => symbol.mirror_x = !symbol.mirror_x,
-                        }
-                        if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
-                            autoplace_fields(symbol, lib, &document_snapshot);
-                        }
-                        true
-                    })
-                    .unwrap_or(false)
+                self.edit_symbol_and_autoplace(item.uuid, |symbol| match axis {
+                    MirrorAxis::Horizontal => symbol.mirror_y = !symbol.mirror_y,
+                    MirrorAxis::Vertical => symbol.mirror_x = !symbol.mirror_x,
+                })
             }
             SelectedKind::BusEntry => self.mirror_bus_entry(item, axis),
             _ => false,
@@ -537,7 +520,9 @@ mod about_centre;
 mod autoplace;
 mod bus_entry;
 pub(crate) mod rubber_band;
+mod wire_index;
 use autoplace::autoplace_fields;
+use wire_index::WireIndex;
 
 // ---------------------------------------------------------------------------
 // UUID-based collection helpers

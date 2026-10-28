@@ -1,8 +1,4 @@
 //! Close-Project + app-quit lifecycle for the project-navigation dock.
-//!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
 
 use super::*;
 use crate::app::state::ProjectId;
@@ -186,6 +182,16 @@ impl Signex {
         };
         let target_id = project_id;
 
+        // Reads and restores still running for this project's files must not
+        // open or rewrite anything once it is gone (#859).
+        if let Some(project) = self.document_state.projects.get(project_idx) {
+            let dir = project.dir().to_path_buf();
+            self.document_state.pending_opens.cancel_under(&dir);
+            self.document_state
+                .pending_restores
+                .cancel_under_retaining(&dir);
+        }
+
         // A kept document's tab outlives the project it was opened under.
         for tab in &mut self.document_state.tabs {
             if tab.project_id == Some(target_id) && kept.contains(&tab.path) {
@@ -213,8 +219,8 @@ impl Signex {
         // engine that was kept alive by `dirty_paths` would leak
         // through project close. Save All / Discard All have already
         // pruned `dirty_paths` for the project, so this loop just
-        // sweeps the engine map for any path under this project's
-        // directory.
+        // sweeps the engine map for paths directly in this project's
+        // directory or reached through its sheet hierarchy.
         if let Some(project) = self.document_state.projects.get(project_idx) {
             let dir = project.dir().to_path_buf();
             let reach = self.document_state.reach_sets(sheet_refs);
@@ -259,8 +265,10 @@ impl Signex {
         // else None when the workspace is empty.
         self.document_state.projects.retain(|p| p.id != target_id);
         self.document_state.net_class_history.remove(&target_id);
+        self.document_state.project_tabs.remove(&target_id);
         self.forget_net_class_picks_of(target_id);
         self.document_state.rules_history.remove(&target_id);
+        self.document_state.profile_drift_noted.remove(&target_id);
         self.document_state.active_project = self
             .document_state
             .projects
@@ -300,7 +308,7 @@ impl Signex {
     /// here. Returns the failure reason so the caller can tell the user
     /// WHY a file couldn't be saved instead of only naming it.
     #[cfg(test)]
-    pub(super) fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
+    pub(crate) fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
         let fold = self.fold_for_path(path);
         self.try_save_dirty_path_with(path, fold)
     }
@@ -308,7 +316,7 @@ impl Signex {
     /// The project whose directory holds `path`; the deepest one when
     /// directories nest (the inner volume is the one the file lives on). An
     /// empty dir would claim every path, so it is skipped.
-    pub(super) fn project_owning(&self, path: &std::path::Path) -> Option<&LoadedProject> {
+    pub(crate) fn project_owning(&self, path: &std::path::Path) -> Option<&LoadedProject> {
         self.document_state
             .projects
             .iter()
@@ -340,9 +348,10 @@ impl Signex {
         if held.len() > 1 {
             self.ensure_variants_agree(&held)?;
         }
-        self.save_held_path(&held[0])?;
+        let target = self.write_target(&held).clone();
+        self.save_held_path(&target)?;
         let key = path_key_with(path, fold);
-        for variant in &held[1..] {
+        for variant in held.iter().filter(|p| **p != target) {
             if let Some(tab) = self
                 .document_state
                 .tabs
@@ -359,9 +368,10 @@ impl Signex {
     }
 
     /// Ok only when every spelling is a schematic engine and all of them
-    /// encode to the same bytes (so one write loses nothing). Otherwise logs
-    /// the ambiguity to the Messages panel, naming each spelling, and errs.
-    pub(super) fn ensure_variants_agree(&self, held: &[std::path::PathBuf]) -> anyhow::Result<()> {
+    /// encode to the same bytes (so one write loses nothing). Otherwise errs
+    /// with the advice first and the paths last, because Messages clips an
+    /// entry; the caller logs it, so a refusal is one line.
+    pub(crate) fn ensure_variants_agree(&self, held: &[std::path::PathBuf]) -> anyhow::Result<()> {
         let encode = |p: &std::path::PathBuf| -> Option<String> {
             let engine = self.document_state.engines.get(p)?;
             signex_types::format::SnxSchematic::new(engine.document().clone())
@@ -377,19 +387,16 @@ impl Signex {
             .map(|p| p.display().to_string())
             .collect::<Vec<_>>()
             .join(" and ");
-        let message = format!(
-            "{names} are open under different spellings of one file with different \
-             contents; nothing was saved so no edits are overwritten. Close one of \
-             them and retry"
-        );
-        crate::diagnostics::log_warning(message.clone());
-        anyhow::bail!(message)
+        anyhow::bail!(
+            "Nothing was saved, no edits overwritten: one file is open under different \
+             spellings with different contents, close one and retry: {names}"
+        )
     }
 
     /// Every spelling an engine / editor / project is held under that matches
     /// `path` under `fold` (sorted, so the save order is deterministic), or
     /// `path` itself when nothing is held for it.
-    pub(super) fn held_spellings(
+    pub(crate) fn held_spellings(
         &self,
         path: &std::path::Path,
         fold: CaseFold,
@@ -417,6 +424,8 @@ impl Signex {
     /// spelled the way the document is held.
     fn save_held_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
         use anyhow::Context as _;
+        // Reported as this file's failure; the rest of the batch still saves.
+        self.refuse_save_while_restoring(path)?;
         // A write still running for this sheet could land after the one
         // below and put older content on disk; let it finish first.
         self.document_state.document_saves.barrier().wait();
@@ -836,6 +845,7 @@ mod tests {
             id,
             path: dir.join("p.snxprj"),
             data: signex_types::project::ProjectData {
+                description: None,
                 name: "p".into(),
                 dir: dir.to_string_lossy().into_owned(),
                 schematic_root: None,
@@ -853,6 +863,7 @@ mod tests {
             pending_libraries: std::collections::HashMap::new(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         });
         let path = dir.join("lib.snxlib").join("footprints").join("g.snxfpt");
         let file =

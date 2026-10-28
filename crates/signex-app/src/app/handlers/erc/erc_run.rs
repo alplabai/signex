@@ -64,7 +64,8 @@ impl Signex {
     /// if no newer run superseded it (#111).
     pub(crate) fn handle_run_erc(&mut self) -> Task<Message> {
         let (generation, inputs) = self.begin_erc_run();
-        Task::perform(
+        let drift = self.check_profile_drift_task();
+        let run = Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || super::erc_job::run_erc_job(inputs))
                     .await
@@ -76,7 +77,8 @@ impl Signex {
                     result: std::sync::Arc::new(result),
                 })
             },
-        )
+        );
+        Task::batch([run, drift])
     }
 
     /// Run ERC to completion on the calling thread - tests only.
@@ -90,6 +92,7 @@ impl Signex {
     /// Capture the run's inputs from live state (memory only, no IO), claim a
     /// new generation and flag the run as in flight.
     pub(super) fn begin_erc_run(&mut self) -> (u64, super::erc_job::ErcRunInputs) {
+        let rule_set = self.current_rule_set_identity();
         let (overrides, pin_matrix_overrides) = self.erc_rule_settings();
         let ds = &self.document_state;
         let tab_paths = ds
@@ -116,6 +119,7 @@ impl Signex {
             root,
             project_dir: ds.active_document_project().map(|p| p.dir().to_path_buf()),
             overrides,
+            rule_set,
             config: signex_erc::ErcConfig::with_pin_matrix_overrides(&pin_matrix_overrides),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
         };
@@ -144,7 +148,7 @@ impl Signex {
 
     /// Apply a finished run's result - unless a newer run has started since.
     /// Returns whether violations were applied.
-    fn apply_erc_run_result(
+    pub(super) fn apply_erc_run_result(
         &mut self,
         generation: u64,
         result: &Result<super::erc_job::ErcRunOutcome, String>,
@@ -161,6 +165,9 @@ impl Signex {
                 return false;
             }
         };
+        // The rows now in the cache were produced under this rule set; only a
+        // successful, current run may name it in the report header.
+        self.ui_state.erc_run_rule_set = Some(outcome.rule_set.clone());
         for warning in &outcome.warnings {
             crate::diagnostics::log_warning(warning);
         }
@@ -201,18 +208,25 @@ impl Signex {
             .unwrap_or_default();
         // Only a point in THIS sheet's own coordinates may be drawn here; a
         // child-space or unplaced one would land on empty canvas (#956).
+        // A net-level finding is drawn at its net's representative pin with the
+        // distinct net marker; a No-ERC directive never reaches it.
         self.interaction_state.active_canvas_mut().erc_markers = violations
             .iter()
-            .filter(|v| v.location_space == signex_erc::LocationSpace::ThisSheet)
+            .filter(|v| {
+                matches!(
+                    v.location_space,
+                    signex_erc::LocationSpace::ThisSheet | signex_erc::LocationSpace::Net
+                )
+            })
             .map(|v| crate::canvas::ErcMarker {
                 x: v.location.x,
                 y: v.location.y,
+                net_level: v.location_space == signex_erc::LocationSpace::Net,
                 severity: match v.severity {
                     signex_erc::Severity::Error => crate::canvas::ErcMarkerSeverity::Error,
                     signex_erc::Severity::Warning => crate::canvas::ErcMarkerSeverity::Warning,
                     _ => crate::canvas::ErcMarkerSeverity::Info,
                 },
-                primary_uuid: v.primary.as_ref().map(|s| s.uuid),
             })
             .collect();
         self.interaction_state
@@ -255,7 +269,11 @@ impl Signex {
                         world_x: v.location.x,
                         world_y: v.location.y,
                         select: v.primary,
-                        locatable: v.location_space == signex_erc::LocationSpace::ThisSheet,
+                        locatable: matches!(
+                            v.location_space,
+                            signex_erc::LocationSpace::ThisSheet | signex_erc::LocationSpace::Net
+                        ),
+                        net: v.net.clone(),
                     });
                 }
             }
@@ -323,7 +341,7 @@ impl Signex {
             }
             _ => {
                 self.ui_state.erc_focus_global_index = Some(clamped);
-                self.handle_focus_at(target.world_x, target.world_y, target.select)
+                self.focus_erc_entry(&target)
             }
         }
     }
@@ -346,11 +364,11 @@ impl Signex {
         self.ensure_sheet_open_and_active(&target.sheet_path);
 
         self.ui_state.erc_focus_global_index = Some(clamped);
-        self.handle_focus_at(target.world_x, target.world_y, target.select)
+        self.focus_erc_entry(&target)
     }
 
     pub(crate) fn ensure_sheet_open_and_active(&mut self, path: &std::path::Path) {
-        let path = &self.resolve_held_spelling(path.to_path_buf());
+        let path = &self.resolve_held_spelling_now(path.to_path_buf());
         if let Some(index) = self
             .document_state
             .tabs

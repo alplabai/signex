@@ -252,21 +252,17 @@ impl Signex {
             PickerMsg::PanelSearchChanged(_) => {}
             PickerMsg::FilterChanged(s) => {
                 picker.filter = s;
+                self.library.sync_view_caches();
             }
-            PickerMsg::SelectComponent(summary) => {
+            PickerMsg::SelectComponent(row_id) => {
                 // `ComponentSummary` carries `row_id` directly in the
                 // DBLib model; match against that.
-                let path = self
-                    .library
-                    .open_libraries
-                    .iter()
-                    .find(|lib| {
-                        lib.cached_components
-                            .iter()
-                            .any(|c| c.row_id == summary.row_id)
-                    })
-                    .map(|lib| lib.root.clone());
-                picker.selected = path.map(|p| (p, summary));
+                picker.selected = self.library.open_libraries.iter().find_map(|lib| {
+                    lib.cached_components
+                        .iter()
+                        .find(|c| c.row_id == row_id)
+                        .map(|summary| (lib.root.clone(), summary.clone()))
+                });
             }
             PickerMsg::PlaceSelected => {
                 let Some((path, summary)) = picker.selected.clone() else {
@@ -353,6 +349,14 @@ impl Signex {
                 return Task::none();
             }
         };
+        if self.refuse_with_notice_while_project_moves(
+            &path,
+            "create",
+            crate::app::state::ErrorNotice::create,
+        ) {
+            return Task::none();
+        }
+        self.begin_project_write(&path);
         Task::perform(
             {
                 let path = path.clone();
@@ -379,6 +383,7 @@ impl Signex {
         path: std::path::PathBuf,
         result: Result<(), String>,
     ) -> Task<Message> {
+        self.end_project_write(&path);
         if let Err(e) = result {
             crate::diagnostics::log_warning(format!("New library file: {e}"));
             return Task::none();

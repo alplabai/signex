@@ -7,9 +7,13 @@ use thiserror::Error;
 use uuid::Uuid;
 
 mod annotation;
+mod rule_profile;
 mod rules;
 mod unknown;
 pub use annotation::AnnotationSettings;
+pub use rule_profile::{
+    RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
+};
 pub use rules::{ErcRules, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef};
 pub use unknown::UnknownJson;
 
@@ -126,6 +130,12 @@ pub struct SheetEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectData {
     pub name: String,
+    /// Free-text description of the project, edited in the Project tab's
+    /// General section (#1202). `None` (and an empty description, which the
+    /// editor stores as `None`) is skipped on save, so a project that never
+    /// had one re-saves byte-identical.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     pub dir: String,
     pub schematic_root: Option<String>,
     pub pcb_file: Option<String>,
@@ -212,6 +222,8 @@ impl ProjectData {
     }
 }
 
+#[cfg(test)]
+mod description_tests;
 #[cfg(test)]
 mod net_class_tests;
 #[cfg(test)]
@@ -388,6 +400,7 @@ mod tests {
     #[test]
     fn resolve_library_path_joins_project_local() {
         let project = ProjectData {
+            description: None,
             name: "p".into(),
             dir: "/projects/foo".into(),
             schematic_root: None,
@@ -417,6 +430,7 @@ mod tests {
     #[test]
     fn resolve_library_path_keeps_absolute_for_shared() {
         let project = ProjectData {
+            description: None,
             name: "p".into(),
             dir: "/projects/foo".into(),
             schematic_root: None,
@@ -614,6 +628,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
 
     Ok(ProjectData {
         name: project_name,
+        description: None,
         dir: dir.to_string_lossy().to_string(),
         schematic_root,
         pcb_file,
@@ -638,38 +653,41 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
 /// mid-write must never truncate it to a partial file — that would
 /// silently drop the project's contents on the next open.
 pub fn write_project(path: &Path, data: &ProjectData) -> Result<(), ProjectError> {
-    let io_err = |err: serde_json::Error| ProjectError::Io {
+    let json = encode_project(data).map_err(|err| ProjectError::Io {
         path: path.display().to_string(),
         source: std::io::Error::other(err.to_string()),
-    };
+    })?;
+    crate::atomic_io::atomic_write(path, &json).map_err(|source| ProjectError::Io {
+        path: path.display().to_string(),
+        source,
+    })
+}
+
+/// The exact bytes [`write_project`] writes for `data`. Split out so a
+/// caller can encode on one thread and write on another, and compare what
+/// it wrote against the document it holds now.
+pub fn encode_project(data: &ProjectData) -> Result<Vec<u8>, serde_json::Error> {
     // Add the format token. serde_json's map is sorted (no `preserve_order`),
     // so keys come out alphabetically; the first save of an older file reorders it once.
     let mut stamped = serde_json::Map::new();
     stamped.insert(FORMAT_KEY.into(), Value::String(SNXPRJ_FORMAT_V1.into()));
-    if let Value::Object(fields) = serde_json::to_value(data).map_err(io_err)? {
+    if let Value::Object(fields) = serde_json::to_value(data)? {
         stamped.extend(fields);
     }
     // A rule set stored in this session replaces a section kept from a
     // newer build; serde would otherwise let the kept copy win.
     if let Some(rules) = &data.rules {
-        stamped.insert(
-            RULES_KEY.into(),
-            serde_json::to_value(rules).map_err(io_err)?,
-        );
+        stamped.insert(RULES_KEY.into(), serde_json::to_value(rules)?);
     }
     // Same for the annotation settings: an explicit choice replaces an
     // unreadable section kept from a newer build.
     if let Some(annotation) = &data.annotation {
         stamped.insert(
             annotation::ANNOTATION_KEY.into(),
-            serde_json::to_value(annotation).map_err(io_err)?,
+            serde_json::to_value(annotation)?,
         );
     }
-    let json = serde_json::to_vec_pretty(&Value::Object(stamped)).map_err(io_err)?;
-    crate::atomic_io::atomic_write(path, &json).map_err(|source| ProjectError::Io {
-        path: path.display().to_string(),
-        source,
-    })
+    serde_json::to_vec_pretty(&Value::Object(stamped))
 }
 
 /// What [`retarget_library_entry`] did to the project file on disk.

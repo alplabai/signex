@@ -4,7 +4,7 @@ use super::*;
 use iced::widget::column;
 
 /// Per-sheet info for the project tree.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SheetInfo {
     pub name: String,
     pub filename: String,
@@ -33,10 +33,10 @@ pub struct SheetInfo {
 /// Per-project bundle surfaced to the Projects panel. One entry per
 /// `LoadedProject` in `DocumentState.projects`. `build_project_tree`
 /// iterates this list to emit one tree root per project.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ProjectPanelInfo {
     pub id: crate::app::ProjectId,
-    /// Display name (project stem — "MyBoard" from "MyBoard.standard_pro").
+    /// Display name (project stem — "MyBoard" from "MyBoard.snxprj").
     pub name: String,
     /// Root schematic filename shown as the "project file" under each
     /// root, when present.
@@ -83,7 +83,7 @@ pub struct ProjectPanelInfo {
 /// the v0.9 `.snxlib`-as-file model — symbols / footprints / sims
 /// are not surfaced here. Browsing the library's contents is the
 /// Library Browser tab's job; double-clicking the leaf opens it.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LibraryNodeInfo {
     /// Display name for the row — `<entry.path>.file_name()` or the
     /// manifest name when the library is mounted.
@@ -102,16 +102,6 @@ pub struct LibraryNodeInfo {
     /// without double-clicking through to a "Library not mounted"
     /// recovery message.
     pub missing: bool,
-    /// F29 — names of `.snxsym` files inside this library. Populated
-    /// from `OpenLibrary::cached_symbols` when the library is
-    /// mounted. Empty when the library is unmounted or has no
-    /// symbols yet. Used by `build_project_tree` to surface a
-    /// `Symbols` subbranch under the library node so the user can
-    /// navigate to a specific symbol file directly from the tree.
-    pub symbols: Vec<String>,
-    /// F29 — same as `symbols` but for `.snxfpt` footprints. Used to
-    /// build the `Footprints` subbranch under the library node.
-    pub footprints: Vec<String>,
     /// v0.13 — `true` when this `.snxlib` is currently open as a tab
     /// (Library Browser). Drives the white open-dot indicator in the
     /// project tree, matching schematic / pcb sheet open status.
@@ -209,12 +199,6 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     // advertised symbols the project hadn't actually mounted, which
     // caused real confusion (a project with nothing saved would show
     // "222 symbols loaded" sourced from globally-mounted libraries).
-    // F29 — when a library is mounted and exposes symbols /
-    // footprints, render a `Symbols` and `Footprints` subbranch
-    // underneath the `.snxlib` node so the user can navigate to a
-    // specific primitive directly from the tree. Unmounted /
-    // missing / empty libraries collapse to a plain leaf (matches
-    // the previous behaviour).
     // Libraries branch: every entry renders as a single leaf with the
     // file's full filename (incl. extension). `.snxlib` (Component
     // Libraries), `.snxsym` (Symbol Libraries), and `.snxfpt` (PCB

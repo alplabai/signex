@@ -13,7 +13,7 @@
 //! custom rows + the add-new control.
 //!
 //! Numeric / measurement edits go through a per-row `String` buffer on
-//! `ComponentPreviewState.params_edit_buf`, following the
+//! the editor's `params_edit_buf`, following the
 //! `reference_erasable_numeric_input` pattern.
 
 use std::collections::BTreeSet;

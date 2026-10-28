@@ -15,27 +15,6 @@ mod sheet_frame;
 mod symbol_ctx;
 
 impl Signex {
-    /// Resolved `.snxlib` paths referenced by every loaded project's
-    /// `Project.libraries` list — reserved for callers outside the
-    /// Components Panel that still need a flat slice (the panel itself
-    /// derives the same Vec from `ctx.projects[].libraries[].root`).
-    #[expect(
-        dead_code,
-        reason = "reserved for callers outside the Components Panel that need a flat library-path slice"
-    )]
-    pub(crate) fn collect_project_library_paths(&self) -> Vec<std::path::PathBuf> {
-        let mut out: Vec<std::path::PathBuf> = Vec::new();
-        for p in &self.document_state.projects {
-            for entry in &p.data.libraries {
-                let resolved = p.data.resolve_library_path(entry);
-                if !out.contains(&resolved) {
-                    out.push(resolved);
-                }
-            }
-        }
-        out
-    }
-
     /// Copy the UI-state grid/unit/snap fields into the panel context.
     pub(in crate::app) fn sync_panel_ctx_mirrors(&mut self) {
         self.document_state.panel_ctx.unit = self.ui_state.unit;
@@ -74,6 +53,15 @@ impl Signex {
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
         self.sync_panel_ctx_mirrors();
+        let shown_browser = match self.document_state.tabs.get(self.document_state.active_tab) {
+            Some(tab) => match &tab.kind {
+                crate::app::TabKind::LibraryBrowser(path) => Some(path.clone()),
+                _ => None,
+            },
+            None => None,
+        };
+        self.library.note_shown_browser(shown_browser.as_deref());
+        self.library.sync_view_caches();
         let class_styles = self.refresh_net_class_styles();
         self.sync_label_class_pick();
         self.sync_diagnostics_panel_ctx();
@@ -84,6 +72,7 @@ impl Signex {
         // results check `generation == history.generation` and drop
         // themselves on mismatch.
         let history = self.refresh_history_panel();
+        let dir_probes = self.warm_document_dir_probes();
         // v0.23 — Drain any queued git commits onto the iced task
         // pool so they run off the update thread. The "Saving…" pill
         // in the status bar reads from `inflight_git_commits` until
@@ -100,6 +89,7 @@ impl Signex {
         };
         Task::batch([
             history,
+            dir_probes,
             commits,
             drift,
             annotate_preview,
@@ -135,11 +125,16 @@ impl Signex {
     }
 
     pub(crate) fn sync_active_tab(&mut self) {
+        // A tab switch ends every Project tab's typing run: what is typed
+        // after coming back is its own undo step.
+        for tab in self.document_state.project_tabs.values_mut() {
+            tab.general_history.close_run();
+        }
         // Follow the focused tab into its project: the Projects-panel
         // accent and active_project-scoped handlers (ERC / annotate /
         // save-all) should track the user's tab focus, not the most
         // recently opened project. Tabs with no `project_id` (loose
-        // schematics opened without a `.standard_pro`) leave the pointer
+        // schematics opened without a `.snxprj`) leave the pointer
         // alone so the panel keeps showing whichever project was last
         // active. (#54 phase 2.4)
         if let Some(pid) = self
@@ -149,6 +144,7 @@ impl Signex {
             .and_then(|t| t.project_id)
         {
             self.document_state.active_project = Some(pid);
+            self.drop_pending_profile_update_for_other_project();
         }
 
         self.sync_visible_document_from_active_tab();
@@ -331,14 +327,10 @@ impl Signex {
         }
     }
 
-    /// The active canvas colour set, derived from the saved theme.
-    ///
-    /// One derivation for both readers — `update_canvas_theme` (which
-    /// still pushes them into the PCB canvas) and
-    /// [`Self::canvas_view_prefs`] (which hands them to the schematic
-    /// `Program` each frame). Two copies of this `if` was how the two
-    /// could disagree.
-    /// Canvas colours for a given theme id. `Custom` reads the loaded
+    /// Canvas colours for a given theme id — the one derivation shared by
+    /// `update_canvas_theme` (pushes them into the PCB canvas) and
+    /// [`Self::canvas_view_prefs`] (hands them to the schematic `Program`
+    /// each frame). `Custom` reads the loaded
     /// custom theme and falls back to Signex when none is loaded.
     pub(crate) fn canvas_colors_for(&self, id: ThemeId) -> signex_types::theme::CanvasColors {
         if id == ThemeId::Custom {
@@ -401,6 +393,8 @@ impl Signex {
             zoom_step: self.ui_state.effective_zoom_step(),
             move_keeps_wires: self.ui_state.move_keeps_wires,
             draw_mode: self.interaction_state.draw_mode,
+            current_tool: self.interaction_state.current_tool,
+            window_width: self.ui_state.window_size.0,
             wire_color_overrides: &self.ui_state.wire_color_overrides,
             wire_class_styles: self.ui_state.net_class_styles.styles(),
             selection_filters: &self.interaction_state.selection_filters,
@@ -408,15 +402,7 @@ impl Signex {
     }
 
     pub(crate) fn update_canvas_theme(&mut self) {
-        let colors = if self.ui_state.theme_id == ThemeId::Custom {
-            self.ui_state
-                .custom_theme
-                .as_ref()
-                .map(|custom_theme| custom_theme.canvas)
-                .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
-        } else {
-            signex_types::theme::canvas_colors(self.ui_state.theme_id)
-        };
+        let colors = self.canvas_colors_for(self.ui_state.theme_id);
         for canvas in self.interaction_state.all_pcb_canvases_mut() {
             canvas.set_theme_colors(
                 crate::render_config::to_iced(&colors.background),

@@ -3,162 +3,6 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    /// On TAB during placement: commit the ghost at the current cursor
-    /// world position as a real engine object and select it, so the normal
-    /// selection-aware Properties panel (with full per-kind fields) renders.
-    /// Returns without committing for kinds that have no in-place properties
-    /// (wire / bus / bus entry / no-connect / component fallback).
-    #[expect(
-        dead_code,
-        reason = "kept until the selection-aware Properties panel renders full per-kind fields"
-    )]
-    fn commit_ghost_for_pre_placement(
-        &mut self,
-        kind: crate::panels::PrePlacementKind,
-        label_text: &str,
-    ) {
-        use crate::panels::PrePlacementKind;
-        use signex_types::schematic as sch;
-        // Snap the cursor to grid so the new object lands on a grid dot.
-        let (wx, wy) = {
-            let x = self.ui_state.cursor_x;
-            let y = self.ui_state.cursor_y;
-            if self.ui_state.snap_enabled && self.ui_state.grid_size_mm > 0.0 {
-                let g = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
-                ((x / g).round() * g, (y / g).round() * g)
-            } else {
-                (x, y)
-            }
-        };
-        match kind {
-            PrePlacementKind::NetLabel
-            | PrePlacementKind::GlobalPort
-            | PrePlacementKind::HierPort => {
-                let (label_type, shape) = match kind {
-                    PrePlacementKind::GlobalPort => {
-                        (sch::LabelType::Global, "bidirectional".to_string())
-                    }
-                    PrePlacementKind::HierPort => (sch::LabelType::Hierarchical, String::new()),
-                    _ => (sch::LabelType::Net, String::new()),
-                };
-                let uuid = uuid::Uuid::new_v4();
-                let label = sch::Label {
-                    unknown_columns: Default::default(),
-                    uuid,
-                    text: if label_text.is_empty() {
-                        "NET".to_string()
-                    } else {
-                        label_text.to_string()
-                    },
-                    position: sch::Point::new(wx, wy),
-                    rotation: 0.0,
-                    label_type,
-                    shape,
-                    font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-                    justify: sch::HAlign::Left,
-                    justify_v: sch::VAlign::Bottom,
-                    font_family: None,
-                };
-                self.apply_engine_command(
-                    signex_engine::Command::PlaceLabel { label },
-                    false,
-                    false,
-                );
-                self.interaction_state.active_canvas_mut().selected = vec![sch::SelectedItem {
-                    uuid,
-                    kind: sch::SelectedKind::Label,
-                }];
-                // Keep the ghost armed so Resume picks up where the user
-                // left off — just hidden while paused.
-                self.update_selection_info();
-            }
-            PrePlacementKind::TextNote => {
-                let uuid = uuid::Uuid::new_v4();
-                let tn = sch::TextNote {
-                    uuid,
-                    text: if label_text.is_empty() {
-                        "Text".to_string()
-                    } else {
-                        label_text.to_string()
-                    },
-                    position: sch::Point::new(wx, wy),
-                    rotation: 0.0,
-                    font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-                    justify_h: sch::HAlign::Left,
-                    justify_v: sch::VAlign::default(),
-                    font_family: None,
-                };
-                self.apply_engine_command(
-                    signex_engine::Command::PlaceTextNote { text_note: tn },
-                    false,
-                    false,
-                );
-                self.interaction_state.active_canvas_mut().selected = vec![sch::SelectedItem {
-                    uuid,
-                    kind: sch::SelectedKind::TextNote,
-                }];
-                self.update_selection_info();
-            }
-            PrePlacementKind::PowerPort => {
-                let Some((net_name, lib_id)) = self.interaction_state.pending_power.clone() else {
-                    return;
-                };
-                let uuid = uuid::Uuid::new_v4();
-                let symbol = sch::Symbol {
-                    unknown_columns: Default::default(),
-                    unknown: Default::default(),
-                    uuid,
-                    lib_id,
-                    reference: String::new(),
-                    value: if label_text.is_empty() {
-                        net_name
-                    } else {
-                        label_text.to_string()
-                    },
-                    footprint: String::new(),
-                    datasheet: String::new(),
-                    position: sch::Point::new(wx, wy),
-                    rotation: 0.0,
-                    mirror_x: false,
-                    mirror_y: false,
-                    unit: 1,
-                    is_power: true,
-                    ref_text: None,
-                    val_text: None,
-                    fields_autoplaced: false,
-                    fields_user_placed: false,
-                    dnp: false,
-                    in_bom: true,
-                    on_board: true,
-                    exclude_from_sim: false,
-                    locked: false,
-                    fields: std::collections::HashMap::new(),
-                    custom_properties: Vec::new(),
-                    pin_uuids: std::collections::HashMap::new(),
-                    instances: Vec::new(),
-                    library_id: None,
-                    row_id: None,
-                    library_version: String::new(),
-                };
-                self.apply_engine_command(
-                    signex_engine::Command::PlaceSymbol { symbol },
-                    false,
-                    false,
-                );
-                self.interaction_state.active_canvas_mut().selected = vec![sch::SelectedItem {
-                    uuid,
-                    kind: sch::SelectedKind::Symbol,
-                }];
-                self.update_selection_info();
-            }
-            _ => {
-                // Wire / bus / bus entry / no-connect / component —
-                // properties are edited post-placement via the regular
-                // selection flow. TAB just pauses the ghost here.
-            }
-        }
-    }
-
     pub(super) fn dispatch_tool_message(&mut self, message: ToolMessage) -> Task<Message> {
         match message {
             ToolMessage::PrePlacementTab => {
@@ -417,6 +261,12 @@ impl Signex {
                 // close any transient selection the dock picked up.
                 self.interaction_state.active_canvas_mut().placement_paused = false;
                 self.interaction_state.active_canvas_mut().selected.clear();
+                // The overlay layer draws the selection highlight and now
+                // also the ERC markers; without a rebuild the old highlight
+                // stays painted beside the markers (#1403).
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_overlay_cache();
                 self.update_selection_info();
                 // v0.13 — also resume the footprint editor's placement
                 // pause when the active tab is a footprint editor.
@@ -542,5 +392,30 @@ impl Signex {
                 self.finish_update()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::contracts::Message;
+
+    /// #1403 - resuming placement drops the selection, so the overlay layer
+    /// that paints the highlight must be rebuilt rather than left stale.
+    #[test]
+    fn resume_placement_rebuilds_the_overlay() {
+        let (mut app, _t) = Signex::new();
+        let id = signex_types::schematic::SelectedItem::new(
+            uuid::Uuid::from_u128(7),
+            signex_types::schematic::SelectedKind::Wire,
+        );
+        app.interaction_state.active_canvas_mut().selected = vec![id];
+        let before = app.interaction_state.active_canvas().overlay_cache_clears;
+
+        let _ = app.update(Message::Tool(ToolMessage::ResumePlacement));
+
+        let canvas = app.interaction_state.active_canvas();
+        assert!(canvas.selected.is_empty());
+        assert!(canvas.overlay_cache_clears > before, "stale overlay left");
     }
 }

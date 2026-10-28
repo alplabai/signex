@@ -403,7 +403,7 @@ impl Engine {
                 info.push(("Sheet".into(), sheet_name));
                 info.push(("Sheet File".into(), sheet_file));
                 info.push(("Name".into(), sheet_pin.name.clone()));
-                info.push(("Direction".into(), format!("{:?}", sheet_pin.direction)));
+                info.push(("Direction".into(), sheet_pin.direction.clone()));
                 info.push((
                     "Position".into(),
                     format!("{:.2}, {:.2}", sheet_pin.position.x, sheet_pin.position.y),
@@ -713,5 +713,46 @@ mod tests {
                 SelectedKind::TextNote,
             ]
         );
+    }
+
+    #[test]
+    fn sheet_pin_direction_is_shown_without_debug_quoting() {
+        use signex_types::schematic::{ChildSheet, FillType, Point, SchematicSheet, SheetPin};
+        let pin_uuid = uuid::Uuid::new_v4();
+        let sheet = SchematicSheet {
+            child_sheets: vec![ChildSheet {
+                uuid: uuid::Uuid::new_v4(),
+                name: "Child".into(),
+                filename: "child.snxsch".into(),
+                position: Point::new(0.0, 0.0),
+                size: (10.0, 10.0),
+                stroke_width: 0.0,
+                fill: FillType::None,
+                stroke_color: None,
+                fill_color: None,
+                fields_autoplaced: false,
+                pins: vec![SheetPin {
+                    uuid: pin_uuid,
+                    name: "IN".into(),
+                    direction: "input".into(),
+                    position: Point::new(0.0, 5.0),
+                    rotation: 0.0,
+                    auto_generated: false,
+                    user_moved: false,
+                }],
+                instances: Vec::new(),
+            }],
+            ..Default::default()
+        };
+        let engine = Engine::new(sheet).expect("engine");
+        let details = engine
+            .describe_single_selection(&[SelectedItem::new(pin_uuid, SelectedKind::SheetPin)])
+            .expect("details");
+        let direction = details
+            .info
+            .iter()
+            .find(|(k, _)| k == "Direction")
+            .map(|(_, v)| v.as_str());
+        assert_eq!(direction, Some("input"));
     }
 }

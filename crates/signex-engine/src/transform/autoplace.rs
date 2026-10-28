@@ -1,6 +1,6 @@
 //! Field autoplace algorithm (reference/value text placement).
 
-use super::*;
+use super::wire_index::WireIndex;
 
 // ---------------------------------------------------------------------------
 // Field autoplace (v0.12 cleanroom rewrite — Wave 2.5)
@@ -25,29 +25,6 @@ use super::*;
 //    sides where the field text won't visually crash into other
 //    document elements (Q9 (c) Aggressive-tier improvement).
 // ---------------------------------------------------------------------------
-
-/// Re-run autoplace on every symbol whose `fields_autoplaced` flag is
-/// already set. Used by callers that want to migrate stale layouts in
-/// bulk. User-placed fields are still respected.
-///
-/// `pub(crate)` until a real caller lands; flip to `pub` when signex-app
-/// wires it into the "Re-autoplace all fields" command.
-#[expect(
-    dead_code,
-    reason = "waiting on signex-app to wire the Re-autoplace all fields command"
-)]
-pub(crate) fn autoplace_all_marked_fields(document: &mut signex_types::schematic::SchematicSheet) {
-    let lib_symbols = document.lib_symbols.clone();
-    let snapshot = document.clone();
-    for symbol in &mut document.symbols {
-        if !symbol.fields_autoplaced {
-            continue;
-        }
-        if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
-            autoplace_fields(symbol, lib, &snapshot);
-        }
-    }
-}
 
 const ANCHOR_AVOID_RADIUS_MM: f64 = 1.27;
 const ANCHOR_PENALTY: u32 = 1;
@@ -347,12 +324,13 @@ fn point_on_wire_interior(
 /// imported or legacy geometry — are exactly where the two metrics diverge, so
 /// every dot this module mints is gated on the netlist's own answer rather than
 /// on the float tolerance alone.
-fn junction_is_honoured(point: signex_types::schematic::Point, document: &SchematicSheet) -> bool {
+fn junction_is_honoured(point: signex_types::schematic::Point, index: &WireIndex) -> bool {
     let k = signex_net::pt_key(&point);
-    document
-        .wires
-        .iter()
-        .filter(|w| {
+    index
+        .segment_candidates(point)
+        .into_iter()
+        .filter(|&i| {
+            let w = index.wire(i);
             signex_net::point_on_segment(
                 k,
                 signex_net::pt_key(&w.start),
@@ -385,16 +363,16 @@ fn junction_at(point: signex_types::schematic::Point) -> signex_types::schematic
 /// path leaves drag / rotate / mirror minting junction-less Ts (issue #402).
 pub(crate) fn junctions_for_wire(
     wire: &signex_types::schematic::Wire,
-    document: &SchematicSheet,
-    tolerance: f64,
+    junctions: &[signex_types::schematic::Junction],
+    index: &WireIndex,
 ) -> Vec<signex_types::schematic::Junction> {
     let mut placed: Vec<signex_types::schematic::Junction> = Vec::new();
     for point in [wire.start, wire.end] {
-        if let Some(junction) = needed_junction(point, document, tolerance) {
+        if let Some(junction) = needed_junction(point, junctions, index) {
             placed.push(junction);
         }
     }
-    placed.extend(junctions_under_new_wire(wire, document, tolerance));
+    placed.extend(junctions_under_new_wire(wire, junctions, index));
     placed
 }
 
@@ -410,18 +388,19 @@ pub(crate) fn junctions_for_wire(
 /// can never sit on its own interior, so no self-exclusion is needed.
 pub(crate) fn junctions_under_new_wire(
     wire: &signex_types::schematic::Wire,
-    document: &SchematicSheet,
-    tolerance: f64,
+    junctions: &[signex_types::schematic::Junction],
+    index: &WireIndex,
 ) -> Vec<signex_types::schematic::Junction> {
+    let tolerance = index.tolerance();
     let mut placed: Vec<signex_types::schematic::Junction> = Vec::new();
-    for point in document
-        .wires
-        .iter()
-        .flat_map(|w| [w.start, w.end])
+    for point in index
+        .endpoint_candidates_near_wire(wire)
+        .into_iter()
+        .flat_map(|i| [index.wire(i).start, index.wire(i).end])
         .filter(|p| point_on_wire_interior(*p, wire, tolerance))
-        .filter(|p| wire_meeting_justifies_junction(*p, document, tolerance))
+        .filter(|p| wire_meeting_justifies_junction(*p, index))
     {
-        let already = document.junctions.iter().chain(placed.iter()).any(|j| {
+        let already = junctions.iter().chain(placed.iter()).any(|j| {
             (j.position.x - point.x).abs() < tolerance && (j.position.y - point.y).abs() < tolerance
         });
         if already {
@@ -433,15 +412,13 @@ pub(crate) fn junctions_under_new_wire(
 }
 
 /// Number of the sheet's wires that terminate (start or end) at `point`.
-fn wire_endpoint_count(
-    point: signex_types::schematic::Point,
-    document: &SchematicSheet,
-    tolerance: f64,
-) -> usize {
-    document
-        .wires
-        .iter()
-        .filter(|wire| {
+fn wire_endpoint_count(point: signex_types::schematic::Point, index: &WireIndex) -> usize {
+    let tolerance = index.tolerance();
+    index
+        .endpoint_candidates(point)
+        .into_iter()
+        .filter(|&i| {
+            let wire = index.wire(i);
             let at_start = (wire.start.x - point.x).abs() < tolerance
                 && (wire.start.y - point.y).abs() < tolerance;
             let at_end = (wire.end.x - point.x).abs() < tolerance
@@ -466,28 +443,29 @@ fn wire_endpoint_count(
 /// connected (issue #422).
 pub(crate) fn wire_meeting_justifies_junction(
     point: signex_types::schematic::Point,
-    document: &SchematicSheet,
-    tolerance: f64,
+    index: &WireIndex,
 ) -> bool {
-    let endpoint_count = wire_endpoint_count(point, document, tolerance);
+    let endpoint_count = wire_endpoint_count(point, index);
     if endpoint_count == 0 {
         return false;
     }
 
-    let on_wire_interior = document
-        .wires
-        .iter()
-        .any(|wire| point_on_wire_interior(point, wire, tolerance));
+    let tolerance = index.tolerance();
+    let on_wire_interior = index
+        .segment_candidates(point)
+        .into_iter()
+        .any(|i| point_on_wire_interior(point, index.wire(i), tolerance));
 
-    (on_wire_interior || endpoint_count >= 3) && junction_is_honoured(point, document)
+    (on_wire_interior || endpoint_count >= 3) && junction_is_honoured(point, index)
 }
 
 pub(crate) fn needed_junction(
     point: signex_types::schematic::Point,
-    document: &SchematicSheet,
-    tolerance: f64,
+    junctions: &[signex_types::schematic::Junction],
+    index: &WireIndex,
 ) -> Option<signex_types::schematic::Junction> {
-    let already_present = document.junctions.iter().any(|junction| {
+    let tolerance = index.tolerance();
+    let already_present = junctions.iter().any(|junction| {
         (junction.position.x - point.x).abs() < tolerance
             && (junction.position.y - point.y).abs() < tolerance
     });
@@ -495,9 +473,12 @@ pub(crate) fn needed_junction(
         return None;
     }
 
-    if !wire_meeting_justifies_junction(point, document, tolerance) {
+    if !wire_meeting_justifies_junction(point, index) {
         return None;
     }
 
     Some(junction_at(point))
 }
+
+#[cfg(test)]
+mod oracle_tests;

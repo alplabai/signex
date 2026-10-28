@@ -1,3 +1,4 @@
+// Standalone binary: reads the process-wide, 200-entry diagnostics ring and installs the logger, which would turn every other test's logging into ring traffic.
 //! #1047 — the footprint sketch solve runs off the UI thread.
 //!
 //! A drag tick moves the geometry at once and owes a solve; the answer comes

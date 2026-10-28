@@ -22,12 +22,18 @@ mod project_actions;
 mod project_rename;
 mod project_rename_fs;
 #[cfg(test)]
+mod project_rename_inflight_tests;
+#[cfg(test)]
+mod project_rename_recovery_tests;
+#[cfg(test)]
 mod project_rename_tests;
 mod remove;
 mod remove_guard;
 mod rename;
 mod rename_library;
 mod save_all;
+#[cfg(test)]
+mod save_all_case_variant_tests;
 #[cfg(test)]
 mod save_all_gate_tests;
 #[cfg(test)]
@@ -197,6 +203,7 @@ impl Signex {
                 // items we haven't touched yet. Collects close tasks
                 // into a single batch so orphan-window close commands
                 // from every tab fire concurrently.
+                self.cancel_in_flight_reads();
                 let mut tasks = Vec::new();
                 for idx in (0..self.document_state.tabs.len()).rev() {
                     tasks.push(self.close_tab_parking_dirty(idx));
@@ -243,7 +250,9 @@ impl Signex {
                 self.open_project_rename_dialog(tree_path);
             }
             ProjectTreeAction::OpenProjectOptions(tree_path) => {
-                self.open_project_options_dialog(tree_path);
+                if let Some(&project_idx) = tree_path.first() {
+                    self.open_project_tab(project_idx);
+                }
             }
             ProjectTreeAction::AddExistingToProject(tree_path) => {
                 return self.add_existing_to_project(tree_path);

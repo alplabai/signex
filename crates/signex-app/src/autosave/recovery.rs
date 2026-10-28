@@ -58,6 +58,10 @@ pub fn reconcile(
     document: &Path,
     now: SystemTime,
 ) -> Result<Option<Recoverable>, String> {
+    // A copy a build before #1510 keyed by the raw spelling moves to the
+    // current key. Journalled moves are not replayed here: the live autosave
+    // state owns them once the app runs.
+    sidecar::adopt_legacy(recovery_dir, document)?;
     let sidecar_file = sidecar::sidecar_path(recovery_dir, document);
     let sidecar_modified = match std::fs::metadata(&sidecar_file) {
         Ok(meta) => meta
@@ -160,6 +164,12 @@ pub fn load_document(recovery_dir: &Path, document: &Path) -> Result<RestoredDoc
             signex_library::FootprintFile::from_toml_str(&text)
                 .map(|file| RestoredDocument::Footprint(Box::new(file)))
                 .map_err(|e| unreadable("footprint", &e))
+        }
+        Some("snxpcb" | "standard_pcb") => {
+            let text = String::from_utf8(bytes).map_err(|e| unreadable("PCB", &e))?;
+            signex_types::format::SnxPcb::parse(&text)
+                .map(|pcb| RestoredDocument::Pcb(Box::new(pcb.board)))
+                .map_err(|e| unreadable("PCB", &format!("{e:#}")))
         }
         _ => {
             let text = String::from_utf8(bytes).map_err(|e| unreadable("schematic", &e))?;

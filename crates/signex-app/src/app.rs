@@ -18,13 +18,17 @@ pub mod command_palette;
 pub mod contracts;
 mod dir_listing;
 pub(crate) mod dispatch;
+pub mod document_read;
 mod documents;
 mod handlers;
 mod helpers;
 mod load_gateway;
 mod mutation_gateway;
+mod project_tab;
+pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
 mod pcb_dirty_adapter;
 pub(crate) mod project_sheets;
+pub mod restore_job;
 mod runtime;
 mod selection_request;
 pub(crate) mod sheet_hierarchy;
@@ -43,11 +47,10 @@ pub use contracts::{
     FileMsg, GitCommitFailure, GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg,
     LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, OverlayMsg, ParameterManagerMsg,
     PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg,
-    ProjectOptionsState, ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState,
-    RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg,
-    SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
-    TabContextMenuState, TextEditMsg, TextEditState, TrackItem, UiMsg, VersionControlScope,
-    WindowMsg,
+    ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
+    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
+    SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
+    TextEditState, TrackItem, UiMsg, VersionControlScope, WindowMsg,
 };
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,
@@ -56,6 +59,7 @@ pub use documents::{
 };
 pub(crate) use handlers::selection_workflow::passes_filter;
 pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};
+pub use state::project_case::CaseProbeOutcome;
 pub use state::{
     CaseFold, DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
     PreviewState, ProjectId, Signex, UiState,

@@ -22,6 +22,9 @@ pub struct PanelContext {
     pub lib_symbol_names: Vec<String>,
     /// Placed symbols: (reference, value, footprint, lib_id).
     pub placed_symbols: Vec<(String, String, String, String)>,
+    /// `(engine instance, revision)` the two lists above were built from;
+    /// `refresh_panel_ctx` reuses them while it still matches (#1383).
+    pub symbol_lists_key: Option<(u64, u64)>,
     pub tokens: ThemeTokens,
     /// Active theme id. Feeds the icon registry so dock/panel SVGs tint
     /// to the theme's accent (see `crate::icons`).
@@ -75,6 +78,9 @@ pub struct PanelContext {
     pub components_split: f32,
     /// Persistent project tree — toggle state survives across renders.
     pub project_tree: Vec<TreeNode>,
+    /// How many times `project_tree` has been rebuilt; `refresh_panel_ctx`
+    /// rebuilds it only when `projects` changed (#1383).
+    pub project_tree_builds: u32,
     /// Path of the currently single-clicked tree row, used to drive
     /// the row highlight independently of which document is active.
     /// Set on `TreeMsg::Select`, cleared when the tree resets.
@@ -159,13 +165,13 @@ pub struct PanelContext {
     pub collapsed_sections: CollapsedSections,
     /// Pre-placement configuration (shown when Tab pressed during placement tool).
     pub pre_placement: Option<PrePlacementData>,
-    /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
     /// Flattened ERC diagnostics from the most recent Run-ERC pass.
     pub erc_diagnostics: Vec<ErcDiagnosticEntry>,
     /// Focused ERC diagnostic index used by prev/next navigation arrows.
     pub erc_focus_index: Option<usize>,
     /// An ERC run is in flight (the panel shows "Running…").
     pub erc_running: bool,
+    /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.
     pub diagnostics: Vec<crate::diagnostics::DiagnosticEntry>,

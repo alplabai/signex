@@ -13,6 +13,10 @@ use signex_types::schematic::SelectedItem;
 /// off-grid origin; users expect the endpoint to be on-grid. The commit and
 /// the drag ghost both call this, so the preview shows exactly the
 /// topology the drop will produce.
+///
+/// With `hotspot_radius` set (electrical grid on, #1246) a moved pin tip or
+/// wire end that would land within that radius of a non-moved hotspot is
+/// pulled exactly onto it, after the grid snap.
 pub(crate) fn snapped_move_delta(
     snap: Option<&SchematicRenderSnapshot>,
     selected: &[SelectedItem],
@@ -20,24 +24,65 @@ pub(crate) fn snapped_move_delta(
     dy: f64,
     snap_enabled: bool,
     grid_mm: f64,
+    hotspot_radius: Option<f64>,
 ) -> (f64, f64) {
-    if !snap_enabled {
-        return (dx, dy);
-    }
-    let primary = selected
-        .first()
-        .and_then(|item| snap.and_then(|snap| primary_anchor_world(snap, item)));
-    match primary {
-        Some((px, py)) => {
-            let snapped_x = ((px + dx) / grid_mm).round() * grid_mm;
-            let snapped_y = ((py + dy) / grid_mm).round() * grid_mm;
-            (snapped_x - px, snapped_y - py)
+    let (dx, dy) = if snap_enabled {
+        let primary = selected
+            .first()
+            .and_then(|item| snap.and_then(|snap| primary_anchor_world(snap, item)));
+        match primary {
+            Some((px, py)) => {
+                let snapped_x = ((px + dx) / grid_mm).round() * grid_mm;
+                let snapped_y = ((py + dy) / grid_mm).round() * grid_mm;
+                (snapped_x - px, snapped_y - py)
+            }
+            None => (
+                (dx / grid_mm).round() * grid_mm,
+                (dy / grid_mm).round() * grid_mm,
+            ),
         }
-        None => (
-            (dx / grid_mm).round() * grid_mm,
-            (dy / grid_mm).round() * grid_mm,
-        ),
+    } else {
+        (dx, dy)
+    };
+    match (snap, hotspot_radius) {
+        (Some(sheet), Some(radius)) if !selected.is_empty() => {
+            let points = moved_connection_points(sheet, selected);
+            let ids: Vec<_> = moved_item_ids(sheet, selected).into_iter().collect();
+            signex_types::schematic::snap_move_to_hotspot(sheet, &points, &ids, (dx, dy), radius)
+        }
+        _ => (dx, dy),
     }
+}
+
+/// The points of the selected items that make electrical connections: every
+/// pin tip of a symbol, both ends of a wire, the anchor of anything else.
+fn moved_connection_points(
+    sheet: &SchematicRenderSnapshot,
+    selected: &[SelectedItem],
+) -> Vec<signex_types::schematic::Point> {
+    use signex_types::schematic::{Point, SelectedKind, SymbolTransform, instance_pins};
+    let mut points = Vec::new();
+    for item in selected {
+        match item.kind {
+            SelectedKind::Symbol => {
+                let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) else {
+                    continue;
+                };
+                let Some(lib) = sheet.resolve_lib_symbol(sym) else {
+                    continue;
+                };
+                let xform = SymbolTransform::from_symbol(sym);
+                points.extend(instance_pins(&lib, sym).map(|lp| xform.apply(lp.pin.position)));
+            }
+            SelectedKind::Wire => {
+                if let Some(w) = sheet.wires.iter().find(|w| w.uuid == item.uuid) {
+                    points.extend([w.start, w.end]);
+                }
+            }
+            _ => points.extend(primary_anchor_world(sheet, item).map(|(x, y)| Point::new(x, y))),
+        }
+    }
+    points
 }
 
 /// Resolve a selected item's primary anchor — the world point that should
@@ -323,14 +368,14 @@ mod tests {
     fn the_snapped_delta_puts_the_primary_anchor_on_the_grid() {
         let (sheet, item) = sheet_with_wired_resistor();
         // Symbol origin (50, 50) on a 1.27 grid: 50 / 1.27 is not integral.
-        let (dx, dy) = snapped_move_delta(Some(&sheet), &[item], 0.3, 3.1, true, 1.27);
+        let (dx, dy) = snapped_move_delta(Some(&sheet), &[item], 0.3, 3.1, true, 1.27, None);
         let (x, y) = (50.0 + dx, 50.0 + dy);
         for v in [x, y] {
             let cells = v / 1.27;
             assert!((cells - cells.round()).abs() < 1e-9, "{v} is off-grid");
         }
         assert_eq!(
-            snapped_move_delta(Some(&sheet), &[], 0.3, 3.1, false, 1.27),
+            snapped_move_delta(Some(&sheet), &[], 0.3, 3.1, false, 1.27, None),
             (0.3, 3.1),
             "snap off leaves the delta alone"
         );

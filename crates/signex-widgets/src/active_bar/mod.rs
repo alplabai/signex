@@ -103,14 +103,24 @@ impl<M: 'static + Clone> ActiveBarItem<M> {
 /// item list is the only truth about what got drawn, so a bar that
 /// gains, loses, or reorders a slot moves its dropdowns automatically.
 pub fn slot_offsets<M: 'static + Clone>(items: &[ActiveBarItem<M>]) -> (Vec<f32>, f32) {
-    let mut offsets = Vec::with_capacity(items.len());
+    let widths: Vec<f32> = items.iter().map(ActiveBarItem::width).collect();
+    offsets_for_widths(&widths)
+}
+
+/// [`slot_offsets`] for a bar described only by its slot widths.
+///
+/// Lets a consumer that knows the bar's slot order but has no item
+/// list (a hit-test running outside the view) use the same row maths
+/// as the renderer instead of re-deriving it.
+pub fn offsets_for_widths(widths: &[f32]) -> (Vec<f32>, f32) {
+    let mut offsets = Vec::with_capacity(widths.len());
     let mut x = BAR_PADDING;
-    for (i, item) in items.iter().enumerate() {
+    for (i, width) in widths.iter().enumerate() {
         if i > 0 {
             x += ROW_SPACING;
         }
         offsets.push(x);
-        x += item.width();
+        x += width;
     }
     (offsets, x + BAR_PADDING)
 }
@@ -195,6 +205,11 @@ pub const ROW_SPACING: f32 = 2.0;
 
 const ICON_SIZE: f32 = 20.0;
 const SEP_H: f32 = 18.0;
+/// Distance from the top of the layer to the dropdown panel: the bar's own
+/// height (button + padding both sides) plus a 16 px gap beneath it.
+const PANEL_TOP_OFFSET: f32 = BTN_SIZE + 2.0 * BAR_PADDING + 16.0;
+/// Horizontal inset keeping the dropdown panel off the layer edges.
+const PANEL_SIDE_PAD: f32 = 10.0;
 const BAR_RADIUS: f32 = 4.0;
 
 /// Render the bar + an open dropdown overlay (when one is open).
@@ -246,7 +261,7 @@ where
     let width_hint = width_hint_for(menu);
     let panel = crate::active_bar_dropdown::view(entries, tokens, width_hint);
     let panel_anchor = container(panel)
-        .padding([46, 10])
+        .padding([PANEL_TOP_OFFSET, PANEL_SIDE_PAD])
         .center_x(Length::Fill)
         .align_y(iced::alignment::Vertical::Top);
 

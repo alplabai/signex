@@ -37,14 +37,15 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{Space, button, checkbox, column, container, row, scrollable, text};
-use iced::{Border, Element, Length, Theme};
+use iced::widget::{Space, checkbox, column, container, row, scrollable, text};
+use iced::{Element, Length};
 use signex_library::RowId;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
+use super::modal_chrome::{primary_btn_if, secondary_btn};
 
 /// Modal width — wider than the recovery dialogs (520 px) because the
 /// drift list needs room for the ref-designator column + two version
@@ -149,9 +150,7 @@ pub struct LibraryUpdateEntry {
 
 /// Modal state — owned by [`crate::library::LibraryState::library_updates`].
 /// `None` while closed; populated by the schematic-open scan. Sorted
-/// by `ref_des` (lexicographic with natural-numeric tail handling
-/// would be nicer but isn't worth the dep here — `R12` sorts before
-/// `R2` in pure lex; the user can re-sort visually if it bites).
+/// by `ref_des` in natural order (`R2` before `R12`).
 #[derive(Debug, Clone)]
 pub struct LibraryUpdatesState {
     /// Schematic the scan ran against — drift applies into this
@@ -271,21 +270,16 @@ pub fn view<'a>(
 
     let footer = container(
         row![
-            secondary_btn(
-                "Skip All",
-                LibraryMessage::LibraryUpdatesSkipAll,
-                text_c,
-                border,
-            ),
+            secondary_btn("Skip All", LibraryMessage::LibraryUpdatesSkipAll, tokens,),
             Space::new().width(Length::Fill),
-            secondary_btn(
-                "Cancel",
-                LibraryMessage::LibraryUpdatesCancel,
-                text_c,
-                border,
-            ),
+            secondary_btn("Cancel", LibraryMessage::LibraryUpdatesCancel, tokens,),
             Space::new().width(8),
-            primary_btn(&update_label, LibraryMessage::LibraryUpdatesApply, selected),
+            primary_btn_if(
+                &update_label,
+                LibraryMessage::LibraryUpdatesApply,
+                selected > 0,
+                tokens,
+            ),
         ]
         .align_y(iced::Alignment::Center),
     )
@@ -350,57 +344,6 @@ fn render_entry_row<'a>(
         .align_y(iced::Alignment::Center),
     )
     .padding([4, 4])
-    .into()
-}
-
-fn secondary_btn<'a>(
-    label: &'a str,
-    message: LibraryMessage,
-    text_color: iced::Color,
-    border: iced::Color,
-) -> Element<'a, LibraryMessage> {
-    button(container(text(label.to_string()).size(11).color(text_color)).padding([4, 14]))
-        .on_press(message)
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            ..iced::widget::button::Style::default()
-        })
-        .into()
-}
-
-fn primary_btn<'a>(
-    label: &str,
-    message: LibraryMessage,
-    selected: usize,
-) -> Element<'a, LibraryMessage> {
-    let bg = if selected == 0 {
-        iced::Color::from_rgba(0.0, 0.47, 0.84, 0.4)
-    } else {
-        iced::Color::from_rgb(0.00, 0.47, 0.84)
-    };
-    let fg = iced::Color::WHITE;
-    let mut btn = button(container(text(label.to_string()).size(11).color(fg)).padding([4, 14]));
-    if selected > 0 {
-        btn = btn.on_press(message);
-    }
-    btn.style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(bg)),
-        text_color: fg,
-        border: Border {
-            width: 0.0,
-            radius: 3.0.into(),
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
-    })
     .into()
 }
 

@@ -181,6 +181,9 @@ pub struct ErcNetPin {
     pub occurrence: InstancePath,
     /// That symbol's reference designator, for messages.
     pub reference: String,
+    /// The pin's number (or name when it has none): the `pin` half of
+    /// `reference.pin`.
+    pub number: String,
     /// World-space position of the pin tip.
     pub position: Point,
     pub direction: PinDirection,
@@ -383,7 +386,7 @@ impl ErcContext {
             .symbols
             .iter()
             .filter_map(|sym| {
-                let lib_sym = snapshot.lib_symbols.get(&sym.lib_id)?;
+                let lib_sym = snapshot.resolve_lib_symbol(sym)?;
                 let pins = lib_sym
                     .pins
                     .iter()
@@ -542,6 +545,7 @@ fn summarize_nets(
                 symbol: sym.uuid,
                 occurrence: InstancePath::root(),
                 reference: sym.reference.clone(),
+                number: pin.number.clone(),
                 position: pin.world_pos,
                 direction: pin.electrical_type,
                 is_power_flag: sym.is_power && signex_net::is_power_flag(&sym.lib_id),
@@ -568,6 +572,8 @@ fn summarize_nets(
         PinDirection::OpenDrainHigh,
     ];
 
+    let mut all_roots: Vec<(i64, i64)> = all_roots.into_iter().collect();
+    all_roots.sort_unstable();
     all_roots
         .into_iter()
         .map(|root| {

@@ -2,6 +2,7 @@
 use super::*;
 
 mod bus_members;
+mod index_equivalence;
 mod multiple_names;
 mod pin_contact_and_power;
 mod wire_order;
@@ -625,6 +626,27 @@ fn flood_returns_only_the_clicked_net() {
     let flood = flood_net_elements(&sheet, a).expect("clicked wire exists");
     assert_eq!(flood.wires, vec![a]);
     assert!(flood.junctions.is_empty());
+}
+
+#[test]
+fn net_extent_covers_only_the_anchored_net_and_its_bounds() {
+    let mut sheet = empty_sheet();
+    let a = Uuid::from_u128(1);
+    let b = Uuid::from_u128(2);
+    sheet.wires.push(wire_id(pt(0.0, 0.0), pt(10.0, 0.0), a));
+    sheet
+        .wires
+        .push(wire_id(pt(10.0, 0.0), pt(10.0, 5.0), Uuid::from_u128(3)));
+    sheet.wires.push(wire_id(pt(50.0, 0.0), pt(60.0, 0.0), b));
+    let lab = label("SIG", pt(0.0, 0.0), LabelType::Net);
+    let lab_id = lab.uuid;
+    sheet.labels.push(lab);
+
+    let extent = net_extent_at(&sheet, &pt(0.0, 0.0));
+    assert_eq!(extent.wires.len(), 2);
+    assert!(!extent.wires.contains(&b));
+    assert_eq!(extent.labels, vec![lab_id]);
+    assert_eq!(extent.bounds, Some([0.0, 0.0, 10.0, 5.0]));
 }
 
 #[test]
