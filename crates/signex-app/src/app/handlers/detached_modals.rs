@@ -988,6 +988,33 @@ mod tests {
                     paper,
                     "{modal:?} in {theme_id:?}: the window background is not the surface token"
                 );
+                // Dialogs with a footer of buttons: the footer reaches the
+                // window's right edge, so no fixed card width is left behind.
+                if matches!(
+                    modal,
+                    ModalId::LibraryCloseConfirm
+                        | ModalId::LibraryCreateOptions
+                        | ModalId::LibraryDocumentOptions
+                        | ModalId::LibraryRecovery
+                        | ModalId::LibraryUpdates
+                        | ModalId::LibraryPicker
+                        | ModalId::LibraryPrimitivePicker
+                        | ModalId::AppQuitConfirm
+                        | ModalId::ProjectCloseConfirm
+                        | ModalId::RemoveDialog
+                        | ModalId::RenameDialog
+                        | ModalId::CreateChildSheet
+                ) {
+                    let right = lay_out_texts(app.view(id), size)
+                        .iter()
+                        .map(|t| t.bounds.x + t.bounds.width)
+                        .fold(0.0_f32, f32::max);
+                    assert!(
+                        size.width - right <= 48.0,
+                        "{modal:?} in {theme_id:?}: content ends {} px short of the right edge",
+                        size.width - right
+                    );
+                }
             }
         }
     }

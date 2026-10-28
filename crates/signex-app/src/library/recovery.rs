@@ -109,27 +109,37 @@ pub enum BrokenBindingChoice {
 pub fn view<'a>(
     dialog: &'a RecoveryDialog,
     tokens: &'a ThemeTokens,
+    windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     match dialog {
-        RecoveryDialog::LibraryMissing { path } => library_missing_view(path, tokens),
+        RecoveryDialog::LibraryMissing { path } => library_missing_view(path, tokens, windowed),
         RecoveryDialog::GitMissing {
             path,
             remote,
             error,
-        } => git_missing_view(path, remote.as_deref(), error.as_deref(), tokens),
+        } => git_missing_view(path, remote.as_deref(), error.as_deref(), tokens, windowed),
         RecoveryDialog::BrokenPrimitiveBinding {
             library_path,
             table,
             row_id,
             kind,
             missing_uuid,
-        } => broken_binding_view(library_path, table, *row_id, *kind, *missing_uuid, tokens),
+        } => broken_binding_view(
+            library_path,
+            table,
+            *row_id,
+            *kind,
+            *missing_uuid,
+            tokens,
+            windowed,
+        ),
     }
 }
 
 fn library_missing_view<'a>(
     path: &'a std::path::Path,
     tokens: &'a ThemeTokens,
+    windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -189,7 +199,8 @@ fn library_missing_view<'a>(
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
-        column![header, container(body).padding([14, 16]), footer].width(Length::Fixed(MODAL_W)),
+        column![header, container(body).padding([14, 16]), footer]
+            .width(super::card_len(windowed, MODAL_W)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
@@ -201,6 +212,7 @@ fn git_missing_view<'a>(
     remote: Option<&'a str>,
     error: Option<&'a str>,
     tokens: &'a ThemeTokens,
+    windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -299,7 +311,7 @@ fn git_missing_view<'a>(
 
     container(
         column![header, container(summary_lines).padding([14, 16]), footer]
-            .width(Length::Fixed(MODAL_W)),
+            .width(super::card_len(windowed, MODAL_W)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
@@ -313,6 +325,7 @@ fn broken_binding_view<'a>(
     kind: PrimitiveKind,
     missing_uuid: Uuid,
     tokens: &'a ThemeTokens,
+    windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -388,7 +401,8 @@ fn broken_binding_view<'a>(
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
-        column![header, container(body).padding([14, 16]), footer].width(Length::Fixed(MODAL_W)),
+        column![header, container(body).padding([14, 16]), footer]
+            .width(super::card_len(windowed, MODAL_W)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

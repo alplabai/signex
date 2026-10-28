@@ -228,3 +228,33 @@ fn an_edit_form_whose_window_vanishes_keeps_its_text_and_comes_back_twice_at_mos
     );
     assert!(app.library.library_browsers[&a].edit_modal.is_some());
 }
+
+#[test]
+fn the_per_browser_delete_confirm_fills_its_window_on_the_theme_surface() {
+    use signex_types::theme::ThemeId;
+    for theme_id in [ThemeId::CatppuccinMocha, ThemeId::SolarizedLight] {
+        let (mut app, _main, [a, _b]) = two_browsers();
+        app.ui_state.theme_id = theme_id;
+        app.document_state.panel_ctx.tokens = app.tokens_for(theme_id);
+        let _ = app.sync_detached_modals();
+        let id = window_for(&app, &a);
+        let size = crate::app::handlers::erc::modal_size(ModalId::LibraryDeleteConfirm);
+        let root = crate::layout_probe::root_size(app.view(id), size);
+        assert_eq!(
+            (root.width, root.height),
+            (size.width, size.height),
+            "{theme_id:?}"
+        );
+        let right = lay_out_texts(app.view(id), size)
+            .iter()
+            .map(|t| t.bounds.x + t.bounds.width)
+            .fold(0.0_f32, f32::max);
+        assert!(
+            size.width - right <= 48.0,
+            "{theme_id:?}: {} px short",
+            size.width - right
+        );
+        let paper = crate::styles::ti(app.document_state.panel_ctx.tokens.paper);
+        assert_eq!(app.theme(id).expect("theme").palette().background, paper);
+    }
+}

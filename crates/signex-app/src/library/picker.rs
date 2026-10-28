@@ -31,7 +31,11 @@ const PICKER_H: f32 = 480.0;
 
 /// Draws the list `LibraryState::sync_view_caches` last built for the
 /// picker; `view` itself filters and clones nothing.
-pub fn view<'a>(picker: &'a PickerState, tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
+pub fn view<'a>(
+    picker: &'a PickerState,
+    tokens: &'a ThemeTokens,
+    windowed: bool,
+) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
@@ -189,8 +193,8 @@ pub fn view<'a>(picker: &'a PickerState, tokens: &'a ThemeTokens) -> Element<'a,
 
     container(
         column![header, body_pad, footer]
-            .width(Length::Fixed(PICKER_W))
-            .height(Length::Fixed(PICKER_H)),
+            .width(super::card_len(windowed, PICKER_W))
+            .height(super::card_len(windowed, PICKER_H)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

@@ -25,6 +25,7 @@ const MODAL_W: f32 = 460.0;
 pub fn view<'a>(
     state: &'a DocumentOptionsModalState,
     tokens: &'a ThemeTokens,
+    windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let ts = TypeScale::default();
     let sp = Spacing::default();
@@ -126,7 +127,8 @@ pub fn view<'a>(
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
-        column![header, container(body).padding([sp.s, 0.0]), footer].width(Length::Fixed(MODAL_W)),
+        column![header, container(body).padding([sp.s, 0.0]), footer]
+            .width(super::card_len(windowed, MODAL_W)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

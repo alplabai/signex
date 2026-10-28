@@ -68,3 +68,13 @@ pub use state::{
     EditRowModalState, LibraryBrowserState, LibraryState, OpenLibrary, PickerState, PreviewTab,
     PrimitivePickerState, PrimitivePickerTarget,
 };
+
+/// A dialog card's length: `px` in the main window, the whole window in the
+/// dialog's own window (the window is the frame; docs/DETACHED_MODALS.md).
+pub(crate) fn card_len(windowed: bool, px: f32) -> iced::Length {
+    if windowed {
+        iced::Length::Fill
+    } else {
+        iced::Length::Fixed(px)
+    }
+}

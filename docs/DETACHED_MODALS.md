@@ -66,9 +66,11 @@ strip of another colour can show, and a theme switch updates it. Every dialog
 body is wrapped in a root that fills the window on that surface. The dialog
 bodies in `view/dialogs/*` (and the error notice and netlist prompt) use the full
 window width there instead of their in-window card width (`dialog_width`). The
-library dialogs keep their own card widths and sit centred on the same surface.
+library dialogs do the same (`library::card_len`, a `windowed` argument of each
+view): fixed card widths and heights become `Fill` in the dialog's own window.
 A test checks, for every dialog window in a dark theme and Solarized Light, that
-the body covers the window and that the window background is the surface token.
+the body covers the window, that the footer reaches the right edge for the
+dialogs with a button footer, and that the window background is the surface token.
 
 ## Lock policy
 

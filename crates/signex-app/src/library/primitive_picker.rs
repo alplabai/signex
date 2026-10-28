@@ -157,6 +157,7 @@ pub fn view<'a>(
     state: &'a LibraryState,
     picker: &'a PrimitivePickerState,
     tokens: &'a ThemeTokens,
+    windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -312,8 +313,8 @@ pub fn view<'a>(
 
     container(
         column![header, body_pad, footer]
-            .width(Length::Fixed(PICKER_W))
-            .height(Length::Fixed(PICKER_H)),
+            .width(super::card_len(windowed, PICKER_W))
+            .height(super::card_len(windowed, PICKER_H)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

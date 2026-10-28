@@ -305,42 +305,56 @@ impl Signex {
         use crate::app::state::ModalId;
         let tokens = &self.document_state.panel_ctx.tokens;
         let lib = &self.library;
+        // In a dialog's own window the card fills the window.
+        let windowed = owner.is_some() || self.modal_detached(modal);
         let card: Element<'_, Message> = match modal {
             ModalId::LibraryPicker => {
-                crate::library::picker::view(lib.picker.as_ref()?, tokens).map(Message::Library)
-            }
-            ModalId::LibraryPrimitivePicker => {
-                crate::library::primitive_picker::view(lib, lib.primitive_picker.as_ref()?, tokens)
+                crate::library::picker::view(lib.picker.as_ref()?, tokens, windowed)
                     .map(Message::Library)
             }
-            ModalId::LibraryDocumentOptions => {
-                crate::library::document_options::view(lib.document_options.as_ref()?, tokens)
-                    .map(Message::Library)
-            }
+            ModalId::LibraryPrimitivePicker => crate::library::primitive_picker::view(
+                lib,
+                lib.primitive_picker.as_ref()?,
+                tokens,
+                windowed,
+            )
+            .map(Message::Library),
+            ModalId::LibraryDocumentOptions => crate::library::document_options::view(
+                lib.document_options.as_ref()?,
+                tokens,
+                windowed,
+            )
+            .map(Message::Library),
             ModalId::LibraryCreateOptions => {
-                crate::library::create_options::view(lib.create_options.as_ref()?, tokens)
+                crate::library::create_options::view(lib.create_options.as_ref()?, tokens, windowed)
                     .map(Message::Library)
             }
-            ModalId::LibraryCloseConfirm => {
-                crate::library::close_prompt::view(lib, lib.close_library_confirm.as_ref()?, tokens)
-                    .map(Message::Library)
-            }
+            ModalId::LibraryCloseConfirm => crate::library::close_prompt::view(
+                lib,
+                lib.close_library_confirm.as_ref()?,
+                tokens,
+                windowed,
+            )
+            .map(Message::Library),
             ModalId::LibraryRecovery => {
-                crate::library::recovery::view(lib.recovery.as_ref()?, tokens).map(Message::Library)
-            }
-            ModalId::LibraryUpdates => {
-                crate::library::updates_dialog::view(lib.library_updates.as_ref()?, tokens)
+                crate::library::recovery::view(lib.recovery.as_ref()?, tokens, windowed)
                     .map(Message::Library)
             }
+            ModalId::LibraryUpdates => crate::library::updates_dialog::view(
+                lib.library_updates.as_ref()?,
+                tokens,
+                windowed,
+            )
+            .map(Message::Library),
             ModalId::LibraryEditRow => {
                 let (path, edit) = self.browser_modal(owner, |b| b.edit_modal.as_ref())?;
                 let classes = self.row_classes_for(path);
-                crate::library::edit_row_modal::view(path, edit, tokens, classes)
+                crate::library::edit_row_modal::view(path, edit, tokens, windowed, classes)
                     .map(Message::Library)
             }
             ModalId::LibraryDeleteConfirm => {
                 let (path, confirm) = self.browser_modal(owner, |b| b.delete_confirm.as_ref())?;
-                crate::library::edit_row_modal::view_delete_confirm(path, confirm, tokens)
+                crate::library::edit_row_modal::view_delete_confirm(path, confirm, tokens, windowed)
                     .map(Message::Library)
             }
             ModalId::NetColorCustom => {
