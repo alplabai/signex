@@ -293,6 +293,7 @@ fn colliding_job() -> (ErcRunInputs, PathBuf, PathBuf, PathBuf) {
             sha256: String::new(),
         },
         config: signex_erc::ErcConfig::default(),
+        net_waivers: Default::default(),
         fold: CaseFold::FOLD,
     };
     (inputs, root_path, child_path, loose_path)

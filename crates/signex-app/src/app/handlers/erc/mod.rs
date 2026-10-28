@@ -13,6 +13,9 @@ pub(crate) use annotate_preview::{AnnotatePreviewCache, AnnotatePreviewLoad};
 pub(crate) use erc_job::ErcRunOutcome;
 mod modals;
 mod net_focus;
+mod net_waivers;
+#[cfg(test)]
+mod net_waivers_tests;
 mod rule_profiles;
 #[cfg(test)]
 mod rule_profiles_tests;
