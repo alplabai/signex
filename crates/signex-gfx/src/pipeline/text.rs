@@ -4,6 +4,9 @@
 //! This module was written without reference to GPL-licensed software.
 //! Sources: IPC-2612-1, IEEE 315, IEC 60617, wgpu/WGSL public docs.
 
+use std::sync::Arc;
+
+use super::text_cache::{ShapedBufferCache, ShapedKey};
 use crate::primitive::text::{
     LINE_HEIGHT_EM, TextHAlign, TextItem, TextSizePolicy, TextVAlign, text_px,
 };
@@ -312,7 +315,8 @@ pub struct GlyphonTextPipeline {
     viewport: cryoglyph::Viewport,
     atlas: cryoglyph::TextAtlas,
     text_renderer: cryoglyph::TextRenderer,
-    buffers: Vec<cryoglyph::Buffer>,
+    buffers: Vec<Arc<cryoglyph::Buffer>>,
+    shaped: ShapedBufferCache,
     prepared_texts: Vec<GlyphonPreparedText>,
     text_count: u32,
     viewport_size_px: [u32; 2],
@@ -341,6 +345,7 @@ impl GlyphonTextPipeline {
             atlas,
             text_renderer,
             buffers: Vec::new(),
+            shaped: ShapedBufferCache::new(),
             prepared_texts: Vec::new(),
             text_count: 0,
             viewport_size_px: [0, 0],
@@ -404,13 +409,11 @@ impl GlyphonTextPipeline {
             }
             let metrics = cryoglyph::Metrics::new(font_px, line_height_px);
             let attrs = attrs_for_item(text, family);
-            let buffer = shaped_buffer(
-                font_system,
-                text,
-                metrics,
-                &attrs,
-                [viewport_width, viewport_height],
-            );
+            let wrap_px = [viewport_width, viewport_height];
+            let key = ShapedKey::new(text, family, font_px, line_height_px, wrap_px);
+            let buffer = self.shaped.get_or_shape(font_system, key, |font_system| {
+                shaped_buffer(font_system, text, metrics, &attrs, wrap_px)
+            });
 
             let text_bounds_px = measure_text_bounds_px(&buffer);
             let top_left_px = anchored_top_left_px(text, anchor_px, text_bounds_px);
@@ -439,7 +442,7 @@ impl GlyphonTextPipeline {
                 .iter()
                 .zip(self.prepared_texts.iter())
                 .map(|(buffer, prepared)| cryoglyph::TextArea {
-                    buffer,
+                    buffer: buffer.as_ref(),
                     left: prepared.left,
                     top: prepared.top,
                     scale: prepared.scale,
