@@ -230,6 +230,17 @@ pub(crate) fn app_with_library(f: &Fixture) -> Signex {
 }
 
 pub(crate) fn app_with_libraries(libs: &[&Fixture]) -> Signex {
+    let mut app = app_with_empty_sheet();
+    for f in libs {
+        app.library
+            .open_library(f.snxlib.clone())
+            .expect("mount library");
+    }
+    app
+}
+
+/// An app whose active tab is an empty A4 sheet and with no library mounted.
+pub(crate) fn app_with_empty_sheet() -> Signex {
     let path = PathBuf::from("place-364.snxsch");
     let sheet = SchematicSheet {
         uuid: Uuid::new_v4(),
@@ -251,11 +262,6 @@ pub(crate) fn app_with_libraries(libs: &[&Fixture]) -> Signex {
     });
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(path);
-    for f in libs {
-        app.library
-            .open_library(f.snxlib.clone())
-            .expect("mount library");
-    }
     app
 }
 

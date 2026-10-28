@@ -433,7 +433,10 @@ pub(super) fn validate_legacy_header(table: &str, columns: &[String]) -> Result<
     Ok(())
 }
 
-pub(super) fn component_to_library_row(row: &ComponentRow) -> Result<LibraryRow, LibraryError> {
+/// Convert a component row to the cells a `[tables.<name>]` block stores,
+/// validating it first. The stock-library generator calls it so the bundled
+/// rows cannot drift from what the adapter writes.
+pub fn component_to_library_row(row: &ComponentRow) -> Result<LibraryRow, LibraryError> {
     crate::validate::validate_row_for_write(row)?;
     let cells = row_to_record(row)?;
     let mut lib_row = LibraryRow::default();
