@@ -16,13 +16,14 @@ use signex_erc::project_rules::profile::{
 use signex_types::project::RuleProfileRef;
 
 use super::super::super::state::PendingProfileUpdate;
+use super::super::super::state::rule_profile_ui::SaveProfileDialog;
 use super::super::super::*;
-use crate::rule_profiles::{self, ProfileMigration, ResolvedProfile, SavedProfile};
+use crate::rule_profiles::{self, ProfileMigration, ResolvedProfile, SaveOutcome};
 
 type Loaded = Arc<Result<Option<ResolvedProfile>, String>>;
 
 /// Run blocking `work` off the update thread and map its result to a message.
-fn blocking<T: Send + 'static>(
+pub(crate) fn blocking<T: Send + 'static>(
     work: impl FnOnce() -> T + Send + 'static,
     done: impl FnOnce(Result<T, String>) -> Message + Send + 'static,
 ) -> Task<Message> {
@@ -100,32 +101,111 @@ impl Signex {
 
     // ---- Save as profile -------------------------------------------------
 
-    pub(crate) fn handle_profile_save_requested(&mut self, name: String) -> Task<Message> {
-        let name = name.trim().to_string();
-        let Some(rules) = self
+    /// Open the Save-as dialog with the default name and version. Writes
+    /// nothing.
+    pub(crate) fn handle_profile_save_dialog_opened(&mut self) -> Task<Message> {
+        let Some((project, true)) = self
             .document_state
             .active_document_project()
-            .and_then(|p| p.data.rules.as_ref())
+            .map(|p| (p.id, p.data.rules.is_some()))
         else {
             crate::diagnostics::log_warning(
                 "Save as profile: this project stores no ERC rules yet. Store them first.",
             );
             return Task::none();
         };
-        if name.is_empty() {
-            crate::diagnostics::log_warning("Save as profile: the profile needs a name.");
+        self.ui_state.save_profile_dialog =
+            Some(SaveProfileDialog::new(project, self.default_profile_name()));
+        Task::none()
+    }
+
+    pub(crate) fn handle_profile_save_name_changed(&mut self, name: String) -> Task<Message> {
+        if let Some(dialog) = self
+            .ui_state
+            .save_profile_dialog
+            .as_mut()
+            .filter(|d| !d.busy)
+        {
+            dialog.name = name;
+            dialog.error = None;
+            dialog.confirm_overwrite = false;
+        }
+        Task::none()
+    }
+
+    pub(crate) fn handle_profile_save_version_changed(&mut self, version: String) -> Task<Message> {
+        if let Some(dialog) = self
+            .ui_state
+            .save_profile_dialog
+            .as_mut()
+            .filter(|d| !d.busy)
+        {
+            dialog.version = version;
+            dialog.error = None;
+            dialog.confirm_overwrite = false;
+        }
+        Task::none()
+    }
+
+    /// Esc / Cancel: from the overwrite question back to the inputs, from the
+    /// inputs out of the dialog. Nothing is written either way.
+    pub(crate) fn handle_profile_save_cancelled(&mut self) -> Task<Message> {
+        match self.ui_state.save_profile_dialog.as_mut() {
+            Some(dialog) if dialog.confirm_overwrite => dialog.confirm_overwrite = false,
+            _ => self.ui_state.save_profile_dialog = None,
+        }
+        Task::none()
+    }
+
+    pub(crate) fn handle_profile_save_submitted(&mut self) -> Task<Message> {
+        self.start_profile_save(false)
+    }
+
+    pub(crate) fn handle_profile_save_overwrite_confirmed(&mut self) -> Task<Message> {
+        self.start_profile_save(true)
+    }
+
+    /// Validate the dialog and write on a worker. `overwrite` is honoured only
+    /// after the dialog has asked, so a stray message cannot replace a file.
+    fn start_profile_save(&mut self, overwrite: bool) -> Task<Message> {
+        let Some(dialog) = self.ui_state.save_profile_dialog.as_mut() else {
+            return Task::none();
+        };
+        if dialog.busy || (overwrite && !dialog.confirm_overwrite) {
             return Task::none();
         }
-        let erc = rules.erc.clone();
-        let Some(project) = self.document_state.active_document_project().map(|p| p.id) else {
-            return Task::none();
-        };
+        let (name, version) =
+            match rule_profiles::validate_profile_input(&dialog.name, &dialog.version) {
+                Ok(valid) => valid,
+                Err(why) => {
+                    dialog.error = Some(why);
+                    return Task::none();
+                }
+            };
+        let project = dialog.project;
         let Some(dir) = rule_profiles::profiles_dir() else {
-            crate::diagnostics::log_warning("Save as profile: no config folder on this platform.");
+            dialog.error = Some("This platform has no config folder for rule profiles.".into());
             return Task::none();
         };
+        let Some(erc) = self
+            .document_state
+            .active_document_project()
+            .filter(|p| p.id == project)
+            .and_then(|p| p.data.rules.as_ref())
+            .map(|r| r.erc.clone())
+        else {
+            self.ui_state.save_profile_dialog = None;
+            crate::diagnostics::log_warning(
+                "Save as profile: the project it was opened for no longer stores ERC rules.",
+            );
+            return Task::none();
+        };
+        if let Some(dialog) = self.ui_state.save_profile_dialog.as_mut() {
+            dialog.busy = true;
+            dialog.error = None;
+        }
         blocking(
-            move || rule_profiles::save_as_profile(&dir, &name, erc),
+            move || rule_profiles::save_named_profile(&dir, &name, &version, erc, overwrite),
             move |joined| {
                 Message::Erc(ErcMsg::ProfileSaved {
                     project,
@@ -135,22 +215,43 @@ impl Signex {
         )
     }
 
-    /// Log the outcome and, on success, record the written profile as the
-    /// project's provenance in one undoable edit, so Update from profile and
-    /// the drift note have something to compare against.
+    /// Show the outcome. A taken name opens the overwrite question; a failure
+    /// stays in the dialog; a write closes it and records the written profile
+    /// as the project's provenance in one undoable edit, so Update from
+    /// profile and the drift note have something to compare against.
     pub(crate) fn handle_profile_saved(
         &mut self,
         project: ProjectId,
-        result: &Result<SavedProfile, String>,
+        result: &Result<SaveOutcome, String>,
     ) -> Task<Message> {
+        if let Some(dialog) = self.ui_state.save_profile_dialog.as_mut() {
+            dialog.busy = false;
+        }
         let saved = match result {
-            Ok(saved) => saved,
+            Ok(SaveOutcome::Saved(saved)) => saved,
+            Ok(SaveOutcome::Exists) => {
+                if let Some(dialog) = self.ui_state.save_profile_dialog.as_mut() {
+                    dialog.confirm_overwrite = true;
+                }
+                return Task::none();
+            }
             Err(why) => {
+                if let Some(dialog) = self.ui_state.save_profile_dialog.as_mut() {
+                    dialog.error = Some(why.clone());
+                }
                 crate::diagnostics::log_warning(why);
                 return Task::none();
             }
         };
+        self.ui_state.save_profile_dialog = None;
         crate::diagnostics::log_info(format!("Saved ERC rules as profile {}.", saved.summary));
+        // An open Rule Profiles pane holds a listing from before this write
+        // (an overwrite changed a profile it shows); read it again.
+        let relist = if self.ui_state.profile_manager.loaded {
+            Self::list_profiles_task()
+        } else {
+            Task::none()
+        };
         let Some(mut rules) = self
             .document_state
             .active_document_project()
@@ -161,13 +262,13 @@ impl Signex {
                 "The profile was saved, but the project it came from is no longer the active \
                  one, so the project does not record it.",
             );
-            return Task::none();
+            return relist;
         };
         if rules.profile.as_ref() != Some(&saved.reference) {
             rules.profile = Some(saved.reference.clone());
             self.replace_project_rules(Some(rules), true);
         }
-        Task::none()
+        relist
     }
 
     // ---- Update from profile ----------------------------------------------
@@ -256,6 +357,14 @@ impl Signex {
         {
             self.ui_state.pending_profile_update = None;
         }
+        if self
+            .ui_state
+            .save_profile_dialog
+            .as_ref()
+            .is_some_and(|dialog| Some(dialog.project) != active)
+        {
+            self.ui_state.save_profile_dialog = None;
+        }
     }
 
     /// Drop the pending update because the rules changed under it: its diff
@@ -339,7 +448,21 @@ impl Signex {
     /// was seeded from has changed locally. Cheap no-op for a project that
     /// records no profile or was already told.
     pub(crate) fn check_profile_drift_task(&self) -> Task<Message> {
-        let Some((project, reference)) = self.active_profile_ref() else {
+        match self.document_state.active_document_project() {
+            Some(project) => self.check_profile_drift_task_for(project.id),
+            None => Task::none(),
+        }
+    }
+
+    /// [`Self::check_profile_drift_task`] for a named project, not the one the
+    /// active tab happens to belong to (a project opened from another's tab).
+    pub(crate) fn check_profile_drift_task_for(&self, project: ProjectId) -> Task<Message> {
+        let Some(reference) = self
+            .document_state
+            .project_by_id(project)
+            .and_then(|p| p.data.rules.as_ref())
+            .and_then(|r| r.profile.clone())
+        else {
             return Task::none();
         };
         if self.document_state.profile_drift_noted.contains(&project) {
@@ -399,12 +522,25 @@ impl Signex {
         };
         blocking(
             move || {
+                let severity = crate::fonts::read_erc_severity_overrides();
+                let pin_matrix = crate::fonts::read_pin_matrix_overrides();
+                let folded = crate::fonts::read_erc_rules_in_profile_from(
+                    crate::fonts::load_prefs_json().as_ref(),
+                );
                 rule_profiles::migrate_prefs_to_default_profile(
                     &dir,
-                    &crate::fonts::read_erc_severity_overrides(),
-                    &crate::fonts::read_pin_matrix_overrides(),
+                    &rule_profiles::PrefsRules {
+                        severity: &severity,
+                        pin_matrix: &pin_matrix,
+                        folded,
+                    },
+                    &crate::fonts::write_erc_rules_in_profile_marker,
                 )
-                .map_err(|e| format!("Could not create the default rule profile: {e}"))
+                .map_err(|e| {
+                    format!(
+                        "Could not merge the ERC preferences into the default rule profile: {e}"
+                    )
+                })
             },
             |joined| {
                 Message::Erc(ErcMsg::DefaultProfileMigrated(Arc::new(
@@ -414,7 +550,13 @@ impl Signex {
         )
     }
 
+    /// Log the migration, then read the (possibly just created) `User Default`
+    /// profile into the in-memory machine rules.
+    ///
+    /// A migration that was refused locks the machine's rules for the session:
+    /// the old preferences would fold over an edit made now on a later launch.
     pub(crate) fn handle_default_profile_migrated(
+        &mut self,
         result: &Result<ProfileMigration, String>,
     ) -> Task<Message> {
         match result {
@@ -422,9 +564,17 @@ impl Signex {
                 "Your ERC preferences were saved as the rule profile \"{}\".",
                 rule_profiles::USER_DEFAULT_PROFILE_NAME
             )),
+            Ok(ProfileMigration::Folded) => crate::diagnostics::log_info(format!(
+                "Your newer ERC preferences were merged into the rule profile \"{}\", which is \
+                 now where this machine's ERC rules are kept.",
+                rule_profiles::USER_DEFAULT_PROFILE_NAME
+            )),
             Ok(_) => {}
-            Err(why) => crate::diagnostics::log_warning(why),
+            Err(why) => {
+                crate::diagnostics::log_warning(why);
+                self.ui_state.machine_rules_locked = Some(why.clone());
+            }
         }
-        Task::none()
+        Self::load_user_default_task()
     }
 }

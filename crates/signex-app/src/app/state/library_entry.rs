@@ -73,6 +73,31 @@ pub(crate) fn is_library_listed(project: &ProjectData, lib_path: &Path, fold: Ca
         .any(|e| path_key_with(&project.resolve_library_path(e), fold) == wanted)
 }
 
+/// True when the project entry string `entry` (a `SheetEntry.filename`,
+/// `schematic_root` or `pcb_file`: bare, or `sub/Power.snxsch`) resolves to
+/// `target` under the project's own `fold`. This is the same resolution the
+/// open path and the "(missing)" check use (`project_dir.join(entry)`), so a
+/// row that cannot open is never matched as the working file.
+pub(crate) fn entry_resolves_to(
+    project_dir: &Path,
+    entry: &str,
+    target: &Path,
+    fold: CaseFold,
+) -> bool {
+    path_key_with(&project_dir.join(entry), fold) == path_key_with(target, fold)
+}
+
+/// `entry` with its last path component replaced by `new_name`, keeping the
+/// directory prefix and the separators the entry already used. Shared by the
+/// `.snxprj` entry rewrite and the parent-sheet reference rewrite, so one
+/// Rename spells both the same.
+pub(crate) fn with_new_leaf(entry: &str, new_name: &str) -> String {
+    match entry.rfind(['/', '\\']) {
+        Some(idx) => format!("{}{new_name}", &entry[..=idx]),
+        None => new_name.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,5 +192,64 @@ mod tests {
                 assert_eq!(path, lib);
             }
         }
+    }
+
+    #[test]
+    fn entry_resolves_to_follows_the_projects_own_fold() {
+        // Folds carry the host separator rule, as a probed project's do.
+        let (keep, fold) = (CaseFold::from_probe(false), CaseFold::from_probe(true));
+        let dir = Path::new("/p/proj");
+        let target = Path::new("/p/proj/sub/Power.snxsch");
+        let cases: [(&str, &str, CaseFold, bool); 6] = [
+            ("sub/Power.snxsch", "exact", keep, true),
+            ("SUB/power.snxsch", "case variant folded", fold, true),
+            ("SUB/power.snxsch", "case variant preserved", keep, false),
+            (
+                "Power.snxsch",
+                "root entry vs subdirectory file",
+                keep,
+                false,
+            ),
+            ("/p/proj/sub/Power.snxsch", "absolute entry", keep, true),
+            ("sub/../sub/Power.snxsch", "dot-dot entry", keep, true),
+        ];
+        for (entry, why, fold, expected) in cases {
+            assert_eq!(
+                entry_resolves_to(dir, entry, target, fold),
+                expected,
+                "{why}"
+            );
+        }
+    }
+
+    /// `\` is a separator only where the host says so (the open path's rule).
+    #[test]
+    fn a_backslash_entry_matches_only_where_backslash_is_a_separator() {
+        let target = Path::new("/p/proj/sub/Power.snxsch");
+        let matched = entry_resolves_to(
+            Path::new("/p/proj"),
+            "sub\\Power.snxsch",
+            target,
+            CaseFold::from_probe(false),
+        );
+        assert_eq!(matched, cfg!(windows));
+    }
+
+    #[test]
+    fn a_root_entry_does_not_match_the_same_named_file_in_a_subdirectory() {
+        let dir = Path::new("/p/proj");
+        let root = Path::new("/p/proj/Power.snxsch");
+        assert!(entry_resolves_to(
+            dir,
+            "Power.snxsch",
+            root,
+            CaseFold::from_probe(false)
+        ));
+        assert!(!entry_resolves_to(
+            dir,
+            "sub/Power.snxsch",
+            root,
+            CaseFold::from_probe(false)
+        ));
     }
 }
