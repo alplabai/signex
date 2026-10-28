@@ -91,10 +91,10 @@ pub(super) fn bake_polar(
         params: params_ast.clone(),
         array_index: Some((0, 0)),
     };
-    let count = eval(&count_ast, &ctx)
-        .map_err(SketchError::Expr)?
-        .value
-        .round() as i64;
+    let Some(count) = super::eval_count("polar", "count_expr", source, &count_ast, &ctx, warnings)?
+    else {
+        return Ok(());
+    };
     if count <= 0 {
         warnings.push(format!(
             "polar array source {source}: count={count} — array skipped"
