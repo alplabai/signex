@@ -972,3 +972,6 @@ fn a_padded_mount_keeps_the_gpu_label_on_the_cpu_text() {
         "GPU label bbox {gpu_box:?} is not the CPU's {cpu_box:?}"
     );
 }
+
+#[cfg(test)]
+mod order;

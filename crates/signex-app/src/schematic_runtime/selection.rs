@@ -86,6 +86,7 @@ pub fn draw_selection_overlay(
         parameter_texts: Vec::new(),
         overlays,
         erc_markers: Vec::new(),
+        drawings: Vec::new(),
         wire_color_overrides: HashMap::new(),
         wire_line_styles: HashMap::new(),
     };

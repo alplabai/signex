@@ -5,7 +5,7 @@
 use iced::keyboard::{self, Key, Modifiers, key::Named};
 use iced::{Event, mouse, window};
 use signex_gfx::scene::Scene;
-use signex_types::schematic::{SelectedItem, SelectedKind};
+use signex_types::schematic::{SchDrawing, SelectedItem, SelectedKind};
 
 use super::gpu_drag::SchematicDragShaderProgram;
 use super::gpu_mount::SchematicShaderProgram;
@@ -110,6 +110,7 @@ fn is_blank(scene: &Scene) -> bool {
         && scene.circles.is_empty()
         && scene.arcs.is_empty()
         && scene.polygons.is_empty()
+        && scene.drawings.is_empty()
         && scene.texts.is_empty()
 }
 
@@ -144,6 +145,7 @@ fn multiset(scenes: &[&Scene]) -> Vec<String> {
             all.extend(bucket.iter().map(|x| format!("{name} {x:?}")));
         }
         all.extend(scene.arcs.iter().map(|x| format!("arc {x:?}")));
+        all.extend(scene.drawings.iter().map(|x| format!("drawing {x:?}")));
         all.extend(scene.texts.iter().map(|x| format!("text {x:?}")));
     }
     all.sort();
@@ -695,5 +697,38 @@ fn a_dragging_slot_and_an_idle_one_do_not_collide_on_the_idle_generation() {
             assert_ne!(content(b).generation, Some(idle_generation));
             assert_eq!(moving(b).generation, Some(idle_generation), "and holds");
         });
+    });
+}
+
+/// A moved drawing leaves the static layer's ordered bucket for the moving
+/// layer's, so the drag layer carries the bucket too (#1579).
+#[test]
+fn a_dragged_drawing_moves_from_the_static_bucket_to_the_moving_one() {
+    let sheet = fixture();
+    let mut slot = slot_with(&sheet);
+    // The fixture's rectangle drawing, outlined from world (22, 12) to
+    // (25, 15): its top edge at world (23.5, 12.0) is pixel (208, 116).
+    let SchDrawing::Rect { uuid, .. } = sheet.drawings[0] else {
+        panic!("the fixture's first drawing is a rectangle");
+    };
+    slot.selected = vec![SelectedItem::new(uuid, SelectedKind::Drawing)];
+    rig(&slot, |p| {
+        let mut state = CanvasState::default();
+        let all = content(p).scene.drawings.len();
+        assert!(all > 0, "the fixture draws drawings");
+
+        let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+        send(&p.overlay, &mut state, press, at(208.0, 116.0));
+        drag_to(&p.overlay, &mut state, 240.0);
+        assert!(state.move_dragging, "pressing the drawing starts a drag");
+
+        assert!(
+            !moving(p).scene.drawings.is_empty(),
+            "the moved drawing is on the moving layer"
+        );
+        assert!(
+            content(p).scene.drawings.len() < all,
+            "and no longer on the static one"
+        );
     });
 }

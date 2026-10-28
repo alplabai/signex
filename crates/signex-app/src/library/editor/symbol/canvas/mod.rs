@@ -804,6 +804,7 @@ impl<'a> SymbolCanvas<'a> {
             parameter_texts: Vec::new(),
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
+            drawings: Vec::new(),
             wire_color_overrides: HashMap::new(),
             wire_line_styles: HashMap::new(),
         }
