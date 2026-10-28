@@ -248,11 +248,11 @@ fn frame_of(gpu: &mut Gpu, layer: Layer, sheet: &SchematicSheet) -> Frame {
 struct Look {
     /// Select the sheet's first wire.
     select_wire: bool,
-    /// Also keep the first label in the AutoFocus set without giving the
-    /// focus box a corner there: a `SymbolRefField` that names no symbol is in
-    /// the set (by uuid) but has no bounds. The scene then leaves the label
-    /// unfaded, so only the overlay's dim can darken it.
-    label_in_focus: bool,
+    /// Focus the first label, and keep the wire in the AutoFocus set without
+    /// giving the focus box a corner there: a `SymbolRefField` that names no
+    /// symbol is in the set (by uuid) but has no bounds. The scene then leaves
+    /// the far-away wire unfaded, so only the overlay's dim can darken it.
+    focus_label: bool,
     auto_focus: bool,
     dpi: f32,
 }
@@ -261,7 +261,7 @@ impl Default for Look {
     fn default() -> Self {
         Self {
             select_wire: false,
-            label_in_focus: false,
+            focus_label: false,
             auto_focus: false,
             dpi: 1.0,
         }
@@ -274,10 +274,12 @@ fn frame_with(gpu: &mut Gpu, layer: Layer, sheet: &SchematicSheet, look: &Look) 
         let wire = sheet.wires[0].uuid;
         slot.selected = vec![SelectedItem::new(wire, SelectedKind::Wire)];
     }
-    if look.label_in_focus {
-        let label = sheet.labels[0].uuid;
-        slot.selected
-            .push(SelectedItem::new(label, SelectedKind::SymbolRefField));
+    if look.focus_label {
+        let (label, wire) = (sheet.labels[0].uuid, sheet.wires[0].uuid);
+        slot.selected = vec![
+            SelectedItem::new(label, SelectedKind::Label),
+            SelectedItem::new(wire, SelectedKind::SymbolRefField),
+        ];
     }
     let overrides = Default::default();
     let filters = Default::default();
@@ -591,32 +593,28 @@ fn the_selection_highlight_draws_above_the_gpu_content() {
     );
 }
 
-/// The AutoFocus dim is the overlay's too: it must darken the GPU's glyphs
-/// (the label sits far outside the selected wire's focus box), not only the
-/// paper under them.
+/// The AutoFocus dim is the overlay's too: it must darken the GPU's wire (far
+/// outside the focused label's box), not only the paper under it.
 #[test]
 fn the_auto_focus_dim_draws_above_the_gpu_content() {
     let mut gpu = gpu();
     let sheet = fixture();
-    let selected = Look {
-        select_wire: true,
-        label_in_focus: true,
+    let lit_look = Look {
+        focus_label: true,
         ..Look::default()
     };
-    let dimmed = Look {
+    let dim_look = Look {
         auto_focus: true,
-        ..selected
+        ..lit_look
     };
-    let blank = frame_of(&mut gpu, Layer::Stack, &SchematicSheet::default());
-    let lit = frame_with(&mut gpu, Layer::Stack, &sheet, &selected);
-    let dim = frame_with(&mut gpu, Layer::Stack, &sheet, &dimmed);
-    let glyphs = lit.changed_vs(&blank, regions().horizontal);
-    assert!(!glyphs.is_empty(), "no GPU label to dim");
-    let total = |f: &Frame| glyphs.iter().map(|&(x, y)| luma(f.px(x, y))).sum::<u32>();
-    let (lit_sum, dim_sum) = (total(&lit), total(&dim));
+    let (wx, wy) = world(12.5, 5.0);
+    let lit = luma(frame_with(&mut gpu, Layer::Stack, &sheet, &lit_look).px(wx, wy));
+    let dim = luma(frame_with(&mut gpu, Layer::Stack, &sheet, &dim_look).px(wx, wy));
+    // A dim underneath the opaque wire leaves it as it was; only one on top
+    // lowers it.
     assert!(
-        dim_sum * 100 < lit_sum * 95,
-        "the GPU label is not dimmed: {dim_sum} vs {lit_sum}"
+        dim * 100 < lit * 75,
+        "the GPU wire is not dimmed: {dim} vs {lit}"
     );
 }
 
