@@ -47,6 +47,9 @@ impl LibraryFile {
         if raw.format != FORMAT_TOKEN {
             return Err(LibraryFileError::UnsupportedFormat { got: raw.format });
         }
+        // Second, untyped read: tells whether the text holds keys the typed
+        // structs do not model (#1435).
+        let untyped: toml::Table = toml::from_str(text)?;
 
         let mut tables = BTreeMap::new();
         for (name, body) in raw.tables {
@@ -67,7 +70,12 @@ impl LibraryFile {
             tables.insert(name, table);
         }
 
-        Ok(LibraryFile {
+        // Older builds never checked, so such a file must still open (and be
+        // repairable); a save of it is refused instead (`validate_for_write`).
+        if let Err(e) = check_class_keys_unique(&raw.classes) {
+            tracing::warn!(target: "signex::library", "{e}; saving this library is refused until it is fixed");
+        }
+        let mut file = LibraryFile {
             manifest: SnxlibManifest {
                 format: raw.format,
                 library_id: raw.library_id,
@@ -78,20 +86,82 @@ impl LibraryFile {
                 classes: raw.classes,
             },
             tables,
-        })
+            layout: SourceLayout::default(),
+        };
+        file.layout = SourceLayout::of(text, &untyped, &file)?;
+        Ok(file)
     }
 
     /// Serialize back to a TOML document. Output is deterministic — calling
     /// `parse` on the result yields a `LibraryFile` equal to `self`.
+    ///
+    /// A file parsed from text holding keys this build does not model is
+    /// written as that text with only the changed content edited in, so the
+    /// unknown keys, the key order and the untouched rows stay as they were
+    /// (#1435). Any other file is written by [`Self::write_canonical`].
+    pub fn write(&self) -> Result<String, LibraryFileError> {
+        self.render().map(|(out, _)| out)
+    }
+
+    /// [`Self::write`], then take the written text as the layout later writes
+    /// start from, so what this write removed (a class, a user) cannot come
+    /// back with a later edit.
+    pub fn write_and_rebase(&mut self) -> Result<String, LibraryFileError> {
+        let (out, layout) = self.render()?;
+        self.layout = layout;
+        Ok(out)
+    }
+
+    /// Rename class `old_key` to `entry`, keeping the unknown keys the class
+    /// carries in the kept text.
+    pub fn rename_class(&mut self, old_key: &str, entry: ClassEntry) {
+        self.layout.rename_class(old_key, &entry.key);
+        if let Some(class) = self.manifest.classes.iter_mut().find(|c| c.key == old_key) {
+            *class = entry;
+        }
+    }
+
+    /// Rename table `old` to `new`, keeping the unknown keys the table carries
+    /// in the kept text. Returns false, changing nothing, when there is no
+    /// table `old`.
+    pub fn rename_table(&mut self, old: &str, new: &str) -> bool {
+        let Some(table) = self.tables.remove(old) else {
+            return false;
+        };
+        self.tables.insert(new.to_string(), table);
+        self.layout.rename_table(old, new);
+        true
+    }
+
+    fn render(&self) -> Result<(String, SourceLayout), LibraryFileError> {
+        self.validate_for_write()?;
+        let canonical = self.write_canonical()?;
+        let out = self.layout.render(&canonical)?.unwrap_or(canonical);
+        // Self-check: refuse a document our own parser cannot read back, or
+        // reads back as something other than `self`, so a bad or lossy table
+        // never reaches `atomic_write` / `commit_path` (#687).
+        let reread = LibraryFile::parse(&out).map_err(|source| {
+            LibraryFileError::WrittenDocumentUnreadable {
+                reason: source.to_string(),
+            }
+        })?;
+        if reread.manifest != self.manifest {
+            return Err(LibraryFileError::WrittenDocumentDiffers {
+                table: "(manifest)".to_string(),
+            });
+        }
+        self.check_tables_survive(&reread)?;
+        Ok((out, reread.layout))
+    }
+
+    /// The content alone, in the canonical layout.
     ///
     /// The header is emitted via `toml::to_string_pretty`; each table is
     /// appended as a `[tables.<name>]` section with the TSV wrapped in a
     /// TOML literal multi-line string (`'''…'''`) so newlines and
     /// backslashes survive without escaping noise. Tables are emitted in
     /// `BTreeMap` order — sorted by name.
-    pub fn write(&self) -> Result<String, LibraryFileError> {
-        self.validate_for_write()?;
-
+    pub(super) fn write_canonical(&self) -> Result<String, LibraryFileError> {
         // Header section — toml-rs reorders root scalars before sub-tables
         // automatically so `format` / `library_id` land at the top.
         let mut out = toml::to_string_pretty(&self.manifest)?;
@@ -130,16 +200,6 @@ impl LibraryFile {
             // (row, distributor, part number), only when the table has any.
             write_pricing(&mut out, name, &table.pricing);
         }
-
-        // Self-check: refuse a document our own parser cannot read back, or
-        // reads back as something other than `self`, so a bad or lossy table
-        // never reaches `atomic_write` / `commit_path` (#687).
-        let reread = LibraryFile::parse(&out).map_err(|source| {
-            LibraryFileError::WrittenDocumentUnreadable {
-                reason: source.to_string(),
-            }
-        })?;
-        self.check_tables_survive(&reread)?;
         Ok(out)
     }
 
@@ -172,6 +232,7 @@ impl LibraryFile {
     /// a TOML `'''` literal string. Naming the offending table / row here
     /// beats a surprise parse failure after the file is on disk.
     fn validate_for_write(&self) -> Result<(), LibraryFileError> {
+        check_class_keys_unique(&self.manifest.classes)?;
         for (name, table) in &self.tables {
             check_pricing(name, &table.pricing)?;
             for column in &table.columns {
@@ -565,4 +626,12 @@ fn write_pricing(
 /// A TOML basic string, escaped.
 fn toml_string(text: &str) -> String {
     toml::Value::String(text.to_string()).to_string()
+}
+
+fn check_class_keys_unique(classes: &[ClassEntry]) -> Result<(), LibraryFileError> {
+    let mut seen = std::collections::HashSet::new();
+    match classes.iter().find(|c| !seen.insert(c.key.as_str())) {
+        Some(c) => Err(LibraryFileError::DuplicateClassKey { key: c.key.clone() }),
+        None => Ok(()),
+    }
 }

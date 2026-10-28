@@ -89,6 +89,7 @@ impl Signex {
         self.ui_state.preferences_draft_symbol_grid_style = self.ui_state.symbol_grid_style;
         self.ui_state.preferences_draft_symbol_pin_selection = self.ui_state.symbol_pin_selection;
         self.ui_state.preferences_draft_zoom_step_percent = self.ui_state.zoom_step_percent;
+        self.ui_state.preferences_draft_erc_severity = self.ui_state.erc_severity_override.clone();
         self.ui_state.preferences_draft_ui_scale_percent =
             crate::ui_scale::scale_to_percent(self.ui_state.ui_scale);
         // Fresh working copy of the live profile set for the Keyboard
@@ -292,6 +293,18 @@ impl Signex {
                 crate::fonts::write_symbol_pin_selection_pref(self.ui_state.symbol_pin_selection);
                 crate::fonts::write_zoom_step_percent_pref(self.ui_state.zoom_step_percent);
                 crate::fonts::write_ui_scale_pref(self.ui_state.ui_scale);
+                // Commit the ERC severity draft. Only when it differs, so a
+                // Save that never touched ERC cannot clobber an override the
+                // ERC dialog wrote while Preferences was open.
+                if self.ui_state.preferences_draft_erc_severity
+                    != self.ui_state.erc_severity_override
+                {
+                    self.ui_state.erc_severity_override =
+                        self.ui_state.preferences_draft_erc_severity.clone();
+                    crate::fonts::write_erc_severity_overrides(
+                        &self.ui_state.erc_severity_override,
+                    );
+                }
                 // Component classes — keep entries with non-empty keys
                 // and labels, dedupe by key (last write wins) so the
                 // dropdown never shows blanks or duplicates.
@@ -578,37 +591,42 @@ impl Signex {
                 };
             }
             PrefMsg::ThemeFileLoaded(content) => {
-                if let Ok(custom) =
-                    serde_json::from_str::<signex_types::theme::CustomThemeFile>(&content)
-                {
-                    self.ui_state.custom_theme = Some(custom);
-                    self.ui_state.preferences_draft_theme = ThemeId::Custom;
-                    // Import swaps the live `custom_theme` in place — the
-                    // draft comparator can't see it, so pin the dirty flag
-                    // sticky until Save or a draft reseed clears it. Sticky
-                    // MUST be set before the recompute below so the flag
-                    // lands `true` even when every draft compares equal.
-                    // (Discard & Close cannot restore the previous custom
-                    // theme content; the sticky flag at least guarantees
-                    // the user is asked before the dialog closes. Note the
-                    // imported theme is session-only either way — nothing
-                    // persists `custom_theme` to disk yet, so it is lost on
-                    // restart even after Save; pre-existing gap.)
-                    self.ui_state.preferences_dirty_sticky = true;
-                    self.recompute_preferences_dirty();
+                match serde_json::from_str::<signex_types::theme::CustomThemeFile>(&content) {
+                    Err(e) => {
+                        self.ui_state.preferences_theme_status =
+                            format!("Could not import theme: {e}");
+                    }
+                    Ok(custom) => {
+                        self.ui_state.custom_theme = Some(custom);
+                        self.ui_state.preferences_draft_theme = ThemeId::Custom;
+                        // Import swaps the live `custom_theme` in place — the
+                        // draft comparator can't see it, so pin the dirty flag
+                        // sticky until Save or a draft reseed clears it. Sticky
+                        // MUST be set before the recompute below so the flag
+                        // lands `true` even when every draft compares equal.
+                        // (Discard & Close cannot restore the previous custom
+                        // theme content; the sticky flag at least guarantees
+                        // the user is asked before the dialog closes. Note the
+                        // imported theme is session-only either way — nothing
+                        // persists `custom_theme` to disk yet, so it is lost on
+                        // restart even after Save; pre-existing gap.)
+                        self.ui_state.preferences_dirty_sticky = true;
+                        self.recompute_preferences_dirty();
+                    }
                 }
             }
             PrefMsg::DraftErcSeverity(rule, severity) => {
                 // Verbatim, like the ERC dialog: a rule that grades its own
                 // findings must be flattenable to its default level too.
+                // Draft only: Save commits and persists, Discard drops it.
                 self.ui_state
-                    .erc_severity_override
+                    .preferences_draft_erc_severity
                     .insert(rule, rule.normalize_override(severity));
-                crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
+                self.recompute_preferences_dirty();
             }
             PrefMsg::ResetErcSeverities => {
-                self.ui_state.erc_severity_override.clear();
-                crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
+                self.ui_state.preferences_draft_erc_severity.clear();
+                self.recompute_preferences_dirty();
             }
             PrefMsg::ResetPrefsFile => {
                 // Never move a healthy file aside. The user may have
