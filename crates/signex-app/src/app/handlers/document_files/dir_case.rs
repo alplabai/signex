@@ -16,22 +16,52 @@ use crate::app::state::project_case::{
 use crate::app::state::scope::{CaseFold, path_key_with};
 use crate::app::{FileMsg, Message, Signex};
 
+/// What is known about the identity rule of a path.
+enum IdentityRule {
+    /// A probe decided it.
+    Decided(CaseFold),
+    /// A probe ran and could not decide; treated as "one file".
+    Assumed,
+    /// No probe has answered yet.
+    Unknown,
+}
+
+/// An identity rule and whether a probe decided it.
+#[derive(Clone, Copy)]
+pub(crate) struct FoldAnswer {
+    pub(crate) fold: CaseFold,
+    pub(crate) decided: bool,
+}
+
 impl Signex {
+    /// The one lookup behind every identity answer: the owning project's
+    /// rule once its own probe decided, else the directory's probe.
+    fn identity_rule(&self, path: &Path) -> IdentityRule {
+        if let Some(project) = self.project_owning(path)
+            && project.case_decided
+        {
+            return IdentityRule::Decided(project.case_fold);
+        }
+        let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) else {
+            return IdentityRule::Assumed;
+        };
+        match self.document_state.dir_case.answer(dir) {
+            None => IdentityRule::Unknown,
+            Some(CaseProbeOutcome::Decided(ignores_case)) => {
+                IdentityRule::Decided(CaseFold::from_probe(*ignores_case))
+            }
+            Some(_) => IdentityRule::Assumed,
+        }
+    }
+
     /// The identity rule for `path` when it is known: the owning project's
     /// once its own probe landed, else its directory's probe. `None` while
     /// neither has answered. An undecided probe answers "folds".
     pub(crate) fn identity_answer(&self, path: &Path) -> Option<CaseFold> {
-        if let Some(project) = self.project_owning(path)
-            && project.case_decided
-        {
-            return Some(project.case_fold);
-        }
-        let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) else {
-            return Some(undecided_identity_fold());
-        };
-        match self.document_state.dir_case.answer(dir)? {
-            CaseProbeOutcome::Decided(ignores_case) => Some(CaseFold::from_probe(*ignores_case)),
-            _ => Some(undecided_identity_fold()),
+        match self.identity_rule(path) {
+            IdentityRule::Decided(fold) => Some(fold),
+            IdentityRule::Assumed => Some(undecided_identity_fold()),
+            IdentityRule::Unknown => None,
         }
     }
 
@@ -40,8 +70,24 @@ impl Signex {
     /// edits, one document for two files only costs a tab. Not the netlist key
     /// rule, which is [`Self::fold_for_path`].
     pub(crate) fn identity_fold_for(&self, path: &Path) -> CaseFold {
-        self.identity_answer(path)
-            .unwrap_or_else(undecided_identity_fold)
+        self.identity_decision(path).fold
+    }
+
+    /// [`Self::identity_fold_for`] plus whether a probe DECIDED it or it was
+    /// only ASSUMED. A save that writes one spelling may clear the other
+    /// spellings' dirty markers only when decided: under an assumed fold
+    /// they can be separate files that were never written.
+    pub(crate) fn identity_decision(&self, path: &Path) -> FoldAnswer {
+        match self.identity_rule(path) {
+            IdentityRule::Decided(fold) => FoldAnswer {
+                fold,
+                decided: true,
+            },
+            _ => FoldAnswer {
+                fold: undecided_identity_fold(),
+                decided: false,
+            },
+        }
     }
 
     /// Store the directory probes a Save All just ran, so the plan's writes

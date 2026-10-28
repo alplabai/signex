@@ -247,7 +247,7 @@ impl Signex {
         match choice {
             ExcludeDirtyChoice::Save => {
                 for doc_path in &docs {
-                    if let Err(err) = self.try_save_dirty_path_with(doc_path, fold) {
+                    if let Err(err) = self.try_save_dirty_path_with(doc_path) {
                         self.report_exclude_save_failure(&state, doc_path, &err);
                         // Keep the prompt so the user can retry or cancel.
                         self.ui_state.remove_dialog = Some(state);
@@ -289,6 +289,18 @@ impl Signex {
         failed: &std::path::Path,
         err: &anyhow::Error,
     ) {
+        if err
+            .downcast_ref::<super::close_project::SpellingsKept>()
+            .is_some()
+        {
+            // `failed` was written; the error names the spellings that were not.
+            crate::diagnostics::log_warning(format!("Exclude from Project: {err}"));
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(format!(
+                "\"{}\" was not excluded: {err}",
+                state.display_name
+            )));
+            return;
+        }
         let name = failed
             .file_name()
             .map(|f| f.to_string_lossy().into_owned())

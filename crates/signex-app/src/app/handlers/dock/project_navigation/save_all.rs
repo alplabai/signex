@@ -12,6 +12,7 @@ use crate::app::FileMsg;
 use crate::app::contracts::{
     CaseVariants, PinnedSpelling, SaveAllNext, SaveAllPlan, SaveAllSettle,
 };
+use crate::app::handlers::document_files::FoldAnswer;
 use crate::app::state::project_case::CaseProbeOutcome;
 use crate::app::state::scope::path_key_with;
 use crate::app::state::volume_case::probe_directory_case;
@@ -179,7 +180,7 @@ impl Signex {
         let mut begun = std::collections::HashSet::new();
         let mut case_variants = Vec::new();
         for path in paths {
-            let fold = self.identity_fold_for(path);
+            let FoldAnswer { fold, decided } = self.identity_decision(path);
             if !begun.insert(path_key_with(path, fold)) {
                 continue;
             }
@@ -191,7 +192,20 @@ impl Signex {
                     // clean; a refused one leaves every marker (#1423). Each
                     // other is pinned now: one edited while the write runs
                     // is not on disk and stays dirty.
-                    if held.len() > 1 {
+                    if held.len() > 1 && !decided {
+                        // The spellings may be two files and only `target`
+                        // was written: the others stay dirty, and the
+                        // settle step names them.
+                        if let Some((kept, message)) = self.unsaved_spellings(&held, &target) {
+                            crate::diagnostics::log_warning(message);
+                            for path in kept {
+                                self.document_state.document_saves.record_failure(
+                                    path,
+                                    "folder case rule unknown, save it separately".into(),
+                                );
+                            }
+                        }
+                    } else if held.len() > 1 {
                         let others = held
                             .iter()
                             .filter(|p| **p != target)

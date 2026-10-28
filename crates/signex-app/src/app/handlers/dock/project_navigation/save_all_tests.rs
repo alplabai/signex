@@ -343,6 +343,7 @@ pub(super) fn app_with_two_engine_variants(
         &["Lib.snxsch"],
     );
     app.document_state.projects[0].case_fold = CaseFold::from_probe(true);
+    app.document_state.projects[0].case_decided = true;
     let second_paper = if edit_second { "A3" } else { "A4" };
     for (path, paper) in [(&upper, "A4"), (&lower, second_paper)] {
         let sheet = signex_types::schematic::SchematicSheet {
@@ -467,6 +468,25 @@ impl crate::persist::DocumentSink for CountingSink {
     }
 }
 
+/// Records the writes a Save All issues without touching the disk, so a
+/// test about which spellings are written does not depend on whether the
+/// host's temp directory folds case (two writes to one real file race).
+#[derive(Default)]
+struct RecordingSink(std::sync::Mutex<Vec<PathBuf>>);
+
+impl crate::persist::DocumentSink for RecordingSink {
+    fn write(&self, path: &Path, _bytes: &[u8]) -> std::io::Result<()> {
+        self.0.lock().unwrap().push(path.to_path_buf());
+        Ok(())
+    }
+}
+
+fn record_writes(app: &mut Signex) -> std::sync::Arc<RecordingSink> {
+    let sink = std::sync::Arc::new(RecordingSink::default());
+    app.document_state.document_saves = crate::persist::DocumentSaves::new(sink.clone());
+    sink
+}
+
 pub(super) fn count_writes(app: &mut Signex) -> std::sync::Arc<CountingSink> {
     let sink = std::sync::Arc::new(CountingSink::default());
     app.document_state.document_saves = crate::persist::DocumentSaves::new(sink.clone());
@@ -556,14 +576,16 @@ fn begin_save_all_probes_the_loose_directory_then_saves_both_spellings() {
     }
 }
 
-/// #1505 — a directory the probe cannot decide is one file for Save All,
-/// open and Ctrl+S alike (they all read `identity_fold_for`), so Save All
-/// writes the case-variant pair once on every host and agrees with open.
+/// #1505 / #1447 — an undecided directory is one file for Save All, open and
+/// Ctrl+S alike, so Save All writes the first dirty spelling once. The fold is
+/// only ASSUMED, though: on a case-sensitive volume the other spelling is a
+/// second file that was never written, so it stays dirty, is named, and Quit
+/// stays open.
 #[test]
-fn an_undecided_directory_folds_for_save_all_as_it_does_for_open_and_ctrl_s() {
+fn an_undecided_directory_writes_once_and_keeps_the_other_spelling_dirty() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, upper, lower) = loose_identical_variants(dir.path());
-    let sink = count_writes(&mut app);
+    let sink = record_writes(&mut app);
 
     let task = app.begin_save_all_planned(SaveAllPlan {
         context: "Save All".into(),
@@ -573,11 +595,58 @@ fn an_undecided_directory_folds_for_save_all_as_it_does_for_open_and_ctrl_s() {
         probes: HashMap::new(),
         undecided: vec![(dir.path().to_path_buf(), CaseProbeOutcome::Undecided)],
     });
-    feed(&mut app, outputs(task));
+    let after = feed_then_settle(&mut app, outputs(task));
 
     assert!(
         app.identity_fold_for(&lower).fold_case,
         "open and Ctrl+S fold"
     );
-    assert_eq!(*sink.0.lock().unwrap(), vec![upper], "one file, one write");
+    assert_eq!(*sink.0.lock().unwrap(), vec![upper.clone()], "one write");
+    assert!(!app.document_state.dirty_paths.contains(&upper));
+    assert!(app.document_state.dirty_paths.contains(&lower));
+    assert_eq!(
+        after.units(),
+        0,
+        "Signex must not quit over the unsaved file"
+    );
+    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    assert!(format!("{notice:?}").contains("lib.snxsch"), "{notice:?}");
+}
+
+/// A project whose own volume probe did not decide gives no decided rule:
+/// the same keep-dirty answer as a loose undecided folder.
+#[test]
+fn an_undecided_project_keeps_the_other_spelling_dirty_too() {
+    use crate::app::handlers::menu::export::tests::app_workspace;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut app = app_workspace(dir.path().to_str().expect("utf8"), &["X.snxsch"]);
+    app.document_state.projects[0].case_probed = true;
+    assert!(!app.document_state.projects[0].case_decided);
+    let (upper, lower) = (dir.path().join("Lib.snxsch"), dir.path().join("lib.snxsch"));
+    for path in [&upper, &lower] {
+        let mut engine = signex_engine::Engine::new(Default::default()).expect("engine");
+        engine.set_path(Some(path.clone()));
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.dirty_paths.insert(path.clone());
+    }
+    let sink = record_writes(&mut app);
+
+    let task = app.begin_save_all_planned(SaveAllPlan {
+        context: "Save All".into(),
+        paths: vec![upper.clone(), lower.clone()],
+        rows: Vec::new(),
+        next: SaveAllNext::Quit,
+        probes: HashMap::new(),
+        undecided: Vec::new(),
+    });
+    let after = feed_then_settle(&mut app, outputs(task));
+
+    assert_eq!(*sink.0.lock().unwrap(), vec![upper.clone()]);
+    assert!(app.document_state.dirty_paths.contains(&lower));
+    assert_eq!(
+        after.units(),
+        0,
+        "Signex must not quit over the unsaved file"
+    );
 }

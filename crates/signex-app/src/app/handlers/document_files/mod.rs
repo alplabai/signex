@@ -6,6 +6,7 @@ use super::super::*;
 
 mod altium_import;
 mod dir_case;
+pub(crate) use dir_case::FoldAnswer;
 #[cfg(test)]
 mod dir_case_tests;
 mod git;

@@ -1,6 +1,7 @@
 //! Close-Project + app-quit lifecycle for the project-navigation dock.
 
 use super::*;
+use crate::app::handlers::document_files::FoldAnswer;
 use crate::app::state::ProjectId;
 use crate::app::state::project_case::fold_of;
 use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
@@ -309,8 +310,7 @@ impl Signex {
     /// WHY a file couldn't be saved instead of only naming it.
     #[cfg(test)]
     pub(crate) fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
-        let fold = self.fold_for_path(path);
-        self.try_save_dirty_path_with(path, fold)
+        self.try_save_dirty_path_with(path)
     }
 
     /// The project whose directory holds `path`; the deepest one when
@@ -335,21 +335,26 @@ impl Signex {
     pub(super) fn try_save_dirty_path_with(
         &mut self,
         path: &std::path::Path,
-        fold: CaseFold,
     ) -> anyhow::Result<()> {
         // The maps are keyed by the exact spelling a document was opened
-        // under, while callers (the Exclude prompt) match under `fold`.
-        // On a folding host `Lib.snxsch` and `lib.snxsch` are ONE file, so
-        // two documents held under both spellings cannot both be written:
-        // the second write would silently replace the first's edits and the
-        // markers would then be cleared. Refuse unless every variant is an
-        // engine encoding to identical bytes; keep every marker and say so.
+        // under. Whether two spellings are ONE file is the identity rule
+        // open, Ctrl+S and Save All use. If one file, the second write would
+        // silently replace the first's edits: refuse unless every variant is
+        // an engine encoding to identical bytes; keep every marker and say so.
+        let FoldAnswer { fold, decided } = self.identity_decision(path);
         let held = self.held_spellings(path, fold);
         if held.len() > 1 {
             self.ensure_variants_agree(&held)?;
         }
         let target = self.write_target(&held).clone();
         self.save_held_path(&target)?;
+        if !decided {
+            // The spellings may be two files: the others were not written.
+            return match self.unsaved_spellings(&held, &target) {
+                Some((_, message)) => Err(anyhow::Error::new(SpellingsKept(message))),
+                None => Ok(()),
+            };
+        }
         let key = path_key_with(path, fold);
         for variant in held.iter().filter(|p| **p != target) {
             if let Some(tab) = self
@@ -365,6 +370,35 @@ impl Signex {
             .dirty_paths
             .retain(|p| path_key_with(p, fold) != key);
         Ok(())
+    }
+
+    /// The other spellings of a file still dirty after only `target` was
+    /// written under an ASSUMED fold, with the Messages line that says so
+    /// (advice first, paths last). `None` when none of them is dirty.
+    pub(crate) fn unsaved_spellings(
+        &self,
+        held: &[std::path::PathBuf],
+        target: &std::path::Path,
+    ) -> Option<(Vec<std::path::PathBuf>, String)> {
+        let kept: Vec<_> = held
+            .iter()
+            .filter(|p| p.as_path() != target && self.document_state.dirty_paths.contains(*p))
+            .cloned()
+            .collect();
+        if kept.is_empty() {
+            return None;
+        }
+        let names = kept
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(" and ");
+        let count = kept.len();
+        let noun = if count == 1 { "spelling" } else { "spellings" };
+        let message = format!(
+            "Save each spelling separately, folder case rule unknown, {count} {noun} kept unsaved: {names}"
+        );
+        Some((kept, message))
     }
 
     /// Ok only when every spelling is a schematic engine and all of them
@@ -705,11 +739,23 @@ impl Signex {
     }
 }
 
+/// A save wrote one spelling of a file whose other spellings, still dirty,
+/// may be separate files under an assumed fold.
+#[derive(Debug)]
+pub(crate) struct SpellingsKept(String);
+
+impl std::fmt::Display for SpellingsKept {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for SpellingsKept {}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
-    use crate::app::state::scope::CaseFold;
     use crate::app::{Signex, SymbolDocument};
 
     /// Build a minimal app carrying one dirty, open symbol-library
@@ -756,7 +802,7 @@ mod tests {
         let mut app = app_with_dirty_symbol(&held);
         let variant = dir.path().join("symbollibrary5.SNXSYM");
 
-        let result = app.try_save_dirty_path_with(&variant, CaseFold::FOLD);
+        let result = app.try_save_dirty_path_with(&variant);
 
         assert!(result.is_ok(), "case-variant save failed: {result:?}");
         assert!(held.exists(), "the held spelling must be the one written");
@@ -794,9 +840,7 @@ mod tests {
         let (mut app, upper, lower) = app_with_two_engine_variants(dir.path(), true);
         std::fs::write(&upper, b"on-disk").unwrap();
 
-        let err = app
-            .try_save_dirty_path_with(&upper, CaseFold::FOLD)
-            .unwrap_err();
+        let err = app.try_save_dirty_path_with(&upper).unwrap_err();
 
         let text = format!("{err:#}");
         assert!(
@@ -808,12 +852,36 @@ mod tests {
         assert!(app.document_state.dirty_paths.contains(&lower));
     }
 
+    fn decide_dir_folds(app: &mut Signex, dir: &std::path::Path) {
+        use crate::app::state::project_case::CaseProbeOutcome;
+        app.document_state
+            .dir_case
+            .record(dir, CaseProbeOutcome::Decided(true));
+    }
+
+    #[test]
+    fn identical_variants_in_an_undecided_folder_save_one_and_keep_the_other_dirty() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, upper, lower) = app_with_two_engine_variants(dir.path(), false);
+
+        let err = app.try_save_dirty_path_with(&upper).unwrap_err();
+
+        assert!(format!("{err:#}").starts_with("Save each spelling separately"));
+        assert!(!app.document_state.dirty_paths.contains(&upper));
+        assert!(app.document_state.dirty_paths.contains(&lower));
+        // The retry writes the spelling that is still dirty and succeeds.
+        assert!(app.try_save_dirty_path_with(&lower).is_ok());
+        assert!(app.document_state.dirty_paths.is_empty());
+    }
+
     #[test]
     fn identical_case_variants_save_once_and_clear_every_marker() {
         let dir = tempfile::tempdir().unwrap();
         let (mut app, upper, _lower) = app_with_two_engine_variants(dir.path(), false);
 
-        let result = app.try_save_dirty_path_with(&upper, CaseFold::FOLD);
+        decide_dir_folds(&mut app, dir.path());
+
+        let result = app.try_save_dirty_path_with(&upper);
 
         assert!(result.is_ok(), "identical variants must save: {result:?}");
         assert!(app.document_state.dirty_paths.is_empty());
