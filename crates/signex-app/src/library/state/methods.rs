@@ -62,6 +62,7 @@ impl Default for LibraryState {
             settings,
             panel_search: String::new(),
             close_library_confirm: None,
+            batch_row_failures: HashMap::new(),
             template_registry: Arc::new(TemplateRegistry::new_with_builtins()),
             library_browsers: HashMap::new(),
             shown_browser: None,

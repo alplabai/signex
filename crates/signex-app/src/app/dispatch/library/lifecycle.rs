@@ -124,7 +124,7 @@ impl Signex {
 
     /// Close an open library — diverts to the confirm modal when any
     /// Component Preview editor against it is dirty.
-    pub(super) fn handle_close_library(&mut self, path: std::path::PathBuf) -> Task<Message> {
+    pub(crate) fn handle_close_library(&mut self, path: std::path::PathBuf) -> Task<Message> {
         // If any Component Preview editors against this library
         // are dirty, divert to the confirm modal so the user
         // can Save All / Discard All / Cancel rather than
@@ -202,19 +202,20 @@ impl Signex {
                 self.library.close_library(&confirm.library_path);
             }
             CloseLibraryChoice::SaveAll => {
-                // Persist every dirty editor's row through the
-                // adapter, then close the library. A failed save
-                // keeps the library open with its drafts and raises
-                // the Save Failed card: closing anyway would turn
-                // "Save All" into a silent discard (#110). The user
-                // can retry, or pick Discard All.
-                for address in &confirm.dirty_editors {
-                    if let Err(e) = self.try_save_row(address) {
-                        self.report_save_row_failure(&e);
-                        return Task::none();
-                    }
-                }
-                self.library.close_library(&confirm.library_path);
+                // Persist every dirty editor's row through the adapter
+                // (staged PDFs are written on a worker first), then close
+                // the library. A failed save keeps the library open with
+                // its drafts and raises the Save Failed card: closing
+                // anyway would turn "Save All" into a silent discard
+                // (#110). The user can retry, or pick Discard All.
+                return self.begin_save_all(
+                    "Close Library",
+                    &[],
+                    &confirm.dirty_editors,
+                    crate::app::contracts::SaveAllNext::CloseLibrary {
+                        library_path: confirm.library_path,
+                    },
+                );
             }
         }
         Task::none()

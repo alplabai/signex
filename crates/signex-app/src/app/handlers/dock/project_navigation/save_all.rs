@@ -80,7 +80,7 @@ impl Signex {
     /// by a probe of its own directory, which reads the filesystem, so the
     /// probes run off-thread and the writes start when
     /// [`FileMsg::SaveAllProbed`] arrives; with none to probe they start now.
-    pub(super) fn begin_save_all(
+    pub(crate) fn begin_save_all(
         &mut self,
         context: &str,
         paths: &[std::path::PathBuf],
@@ -192,17 +192,26 @@ impl Signex {
             }
         }
         let mut failed = Vec::new();
+        // A row that pins staged PDFs stores them on a worker first; its
+        // outcome reaches the settle step through `batch_row_failures`.
         for address in rows {
-            let label = self.library.editor_label(address);
-            if let Err(err) = self.try_save_row(address) {
-                crate::diagnostics::log_error(&format!("{context}: could not save {label}"), &err);
-                failed.push((label, format!("{err:#}")));
+            match self.begin_save_row_in_batch(address) {
+                Ok(task) => writes.extend(task),
+                Err(err) => {
+                    let label = self.library.editor_label(address);
+                    crate::diagnostics::log_error(
+                        &format!("{context}: could not save {label}"),
+                        &err,
+                    );
+                    failed.push((label, format!("{err:#}")));
+                }
             }
         }
         let settled = Message::File(FileMsg::SaveAllSettled(Box::new(SaveAllSettle {
             next,
             paths: paths.to_vec(),
             failed,
+            rows: rows.to_vec(),
             case_variants,
         })));
         Task::batch(writes).chain(Task::done(settled))
@@ -215,6 +224,7 @@ impl Signex {
             next,
             paths,
             failed: rows_failed,
+            rows,
             case_variants,
         } = settle;
         self.clear_saved_case_variants(&case_variants);
@@ -239,6 +249,10 @@ impl Signex {
             failed.push((name, reason));
         }
         failed.extend(rows_failed);
+        failed.extend(
+            rows.iter()
+                .filter_map(|address| self.library.batch_row_failures.remove(address)),
+        );
         if failed.is_empty() {
             // Everything saved, so no recovery copy of it is worth
             // keeping: remove them before the close / quit takes over.
@@ -255,12 +269,22 @@ impl Signex {
                 // The UI stayed live during the writes, so anything edited
                 // meanwhile is dirty now; the quit gate prompts for it.
                 SaveAllNext::Quit => Task::batch([sweep, self.handle_app_quit_requested()]),
+                // A row edited while its PDFs were written is dirty again:
+                // the close gate prompts for it instead of dropping it.
+                SaveAllNext::CloseLibrary { library_path } => {
+                    Task::batch([sweep, self.handle_close_library(library_path)])
+                }
             };
         }
         let listing = Self::save_all_failure_listing(&failed);
         let message = match next {
             SaveAllNext::CloseProject { .. } => format!(
                 "Could not save {} item(s) — project not closed:\n  {listing}",
+                failed.len()
+            ),
+            SaveAllNext::CloseLibrary { .. } => format!(
+                "Could not save {} item(s) — library not closed:
+  {listing}",
                 failed.len()
             ),
             SaveAllNext::Quit => format!(
