@@ -25,7 +25,9 @@ use super::super::super::*;
 use super::project_scan::{designator_scope_of, shown_path};
 use crate::app::project_sheets;
 use crate::app::sheet_hierarchy::build_sheet_hierarchy;
-use crate::find_replace::{FindMatch, FindReplaceMsg, ReplaceJob, ReplacePrep};
+use crate::find_replace::{
+    ChildSheetSignature, FindMatch, FindReplaceMsg, ReplaceJob, ReplacePrep,
+};
 
 /// Identity of a hit across a rescan: the item and the placement it was read at.
 type HitKey = (signex_types::schematic::SelectedItem, Option<String>);
@@ -63,6 +65,23 @@ impl Signex {
         }
     }
 
+    /// The open sheets' child-sheet placements, read live (memory only).
+    fn child_sheet_signature(&self) -> ChildSheetSignature {
+        self.document_state
+            .engines
+            .iter()
+            .map(|(path, engine)| {
+                let placements = engine
+                    .document()
+                    .child_sheets
+                    .iter()
+                    .map(|cs| (cs.uuid, cs.name.clone(), cs.filename.clone()))
+                    .collect();
+                (path.clone(), placements)
+            })
+            .collect()
+    }
+
     /// Start a project Replace of `matches`: read what the disk holds, off
     /// the UI thread. Applied by [`Self::apply_project_replace`].
     pub(super) fn start_project_replace(&mut self, matches: Vec<FindMatch>) -> Task<Message> {
@@ -81,6 +100,7 @@ impl Signex {
             return Task::none();
         };
         let epoch = self.document_state.documents_epoch;
+        let child_sheets = self.child_sheet_signature();
         let find = &mut self.ui_state.find_replace;
         // Any later search change (a new generation) cancels this replace.
         find.scan_generation += 1;
@@ -88,6 +108,7 @@ impl Signex {
         find.replace_job = Some(ReplaceJob {
             generation,
             epoch,
+            child_sheets,
             query,
             replacement: find.replacement.clone(),
             matches: matches.clone(),
@@ -153,6 +174,12 @@ impl Signex {
             crate::diagnostics::log_warning(
                 "Replace cancelled: a document changed while the sheets were being read. \
                  Nothing was changed; run Replace All again.",
+            );
+            return self.refresh_find_matches();
+        }
+        if job.child_sheets != self.child_sheet_signature() {
+            crate::diagnostics::log_warning(
+                "Replace cancelled: a sheet symbol was placed, removed or changed while the                  sheets were being read, so the designators' instances may differ.                  Nothing was changed; run Replace All again.",
             );
             return self.refresh_find_matches();
         }

@@ -421,12 +421,7 @@ fn slot_input<'a>(
 /// per-row buffer is empty. Replaces the previous `ParamValue::display`
 /// method whose name collided with type inference.
 fn display_param(v: &ParamValue) -> String {
-    match v {
-        ParamValue::Text(s) => s.clone(),
-        ParamValue::Number(n) => n.to_string(),
-        ParamValue::Bool(b) => b.to_string(),
-        ParamValue::Measurement { value, unit } => format!("{value} {unit}"),
-    }
+    ParamValue::display(v)
 }
 
 /// Inline "+ Add custom parameter" row — text input + four kind buttons
