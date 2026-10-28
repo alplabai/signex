@@ -500,6 +500,10 @@ pub enum ProjectMsg {
         u64,
         Result<Box<crate::app::state::project_fs::ProjectFsFacts>, String>,
     ),
+    /// The off-thread Navigator hierarchy build finished. The number is the
+    /// generation it was started under; a result a newer request overtook is
+    /// dropped. `Err` is a worker that died, with the reason.
+    NavigatorBuilt(u64, Result<Box<crate::panels::NavigatorBuilt>, String>),
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex
     /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.

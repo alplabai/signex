@@ -493,7 +493,7 @@ impl DocumentState {
             );
         }
         SheetRefInputs {
-            loaded: self.child_sheet_refs(),
+            loaded: (*self.child_sheet_refs()).clone(),
             roots: self
                 .projects
                 .iter()

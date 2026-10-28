@@ -7,6 +7,7 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod case_fold;
+mod child_refs_cache;
 mod interaction;
 pub(crate) mod library_entry;
 mod link_policy;
@@ -494,6 +495,8 @@ pub struct PdfExportRequest {
 }
 
 pub struct DocumentState {
+    /// Memo behind [`Self::child_sheet_refs`].
+    pub(crate) child_refs_cache: child_refs_cache::ChildRefsCache,
     pub dock: DockArea,
     /// Change detection + debounce for persisting `dock` (#692). The
     /// write itself runs as a `Task`; see `handlers/dock/layout_persist.rs`.
@@ -1047,19 +1050,8 @@ impl DocumentState {
     /// `sheet path → the `filename` strings it references as child sheets`,
     /// over every loaded engine. Input to the hierarchy walk in
     /// [`active_document_project`](Self::active_document_project).
-    pub(crate) fn child_sheet_refs(&self) -> std::collections::HashMap<PathBuf, Vec<String>> {
-        self.engines
-            .iter()
-            .map(|(path, engine)| {
-                let refs = engine
-                    .document()
-                    .child_sheets
-                    .iter()
-                    .map(|cs| cs.filename.clone())
-                    .collect();
-                (path.clone(), refs)
-            })
-            .collect()
+    pub(crate) fn child_sheet_refs(&self) -> std::sync::Arc<child_refs_cache::ChildSheetRefs> {
+        self.child_refs_cache.get(&self.engines)
     }
 
     /// Every open engine that belongs to the same project as the active

@@ -158,6 +158,7 @@ fn a_child_opened_without_a_placement_shows_what_its_page_prints() {
     // Opened from the project, not by descending: no recorded placement.
     app.open_or_focus_sheet_path(child.clone());
     app.refresh_panel_ctx();
+    app.settle_navigator();
     assert_eq!(app.document_state.tab_placements.get(&child), None);
     assert_eq!(shown(&app).as_deref(), Some("R7"));
     assert_eq!(current_page(&app, &child).0, "R7");
@@ -172,6 +173,7 @@ fn a_designator_edit_on_a_singly_placed_child_writes_the_reference() {
     let (mut app, _top, child) = placed_once_with_an_entry(&dir);
     app.open_or_focus_sheet_path(child.clone());
     app.refresh_panel_ctx();
+    app.settle_navigator();
     let id = child_symbol(&app);
 
     let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
@@ -212,6 +214,7 @@ fn a_recorded_placement_the_walk_no_longer_reaches_is_not_shown() {
         .execute(signex_engine::Command::ReplaceDocument { document })
         .expect("replace");
     app.refresh_panel_ctx();
+    app.settle_navigator();
 
     assert_eq!(
         app.document_state.active_path.as_deref(),
@@ -262,6 +265,7 @@ fn a_designator_edit_on_a_loose_page_that_another_loose_page_places_writes_the_r
     app.open_or_focus_sheet_path(root);
     app.open_or_focus_sheet_path(y.clone());
     app.refresh_panel_ctx();
+    app.settle_navigator();
     let placements = app
         .document_state
         .panel_ctx
@@ -340,6 +344,7 @@ fn a_child_opened_directly_shows_its_smallest_placement() {
     let (mut app, _top, child) = placed_twice_on_disk(&dir);
     app.open_or_focus_sheet_path(child.clone());
     app.refresh_panel_ctx();
+    app.settle_navigator();
     assert_eq!(app.document_state.tab_placements.get(&child), None);
     assert_eq!(shown(&app), None, "A's R1, not B's R101");
     assert_eq!(
@@ -371,6 +376,7 @@ fn a_designator_edit_on_a_sheet_another_project_shares_writes_the_entry() {
     app.open_or_focus_sheet_path(top_b_path);
     app.open_or_focus_sheet_path(child.clone());
     app.refresh_panel_ctx();
+    app.settle_navigator();
     let id = child_symbol(&app);
 
     let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(

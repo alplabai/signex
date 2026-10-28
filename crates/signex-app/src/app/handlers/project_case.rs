@@ -73,8 +73,10 @@ mod tests {
             .any(|w| w.contains("share a UUID"))
     }
 
+    /// Routed without `update`, which would hand the Navigator build to a Task
+    /// this test cannot await; `settle_navigator` runs it in place.
     fn deliver(app: &mut Signex, project_id: ProjectId, outcome: CaseProbeOutcome) {
-        let _ = app.update(Message::Project(ProjectMsg::CaseProbed {
+        let _ = app.dispatch_update(Message::Project(ProjectMsg::CaseProbed {
             project_id,
             outcome,
         }));
@@ -94,6 +96,7 @@ mod tests {
         let mut app = app_with_two_spellings(CaseFold::from_probe(false));
         let id = app.document_state.projects[0].id;
         app.refresh_panel_ctx();
+        app.settle_navigator();
         assert!(
             has_duplicate_uuid(&app),
             "precondition: two spellings are two sheets under a case-sensitive rule"
@@ -101,6 +104,7 @@ mod tests {
         assert_eq!(navigator_fold(&app), Some(CaseFold::from_probe(false)));
 
         deliver(&mut app, id, CaseProbeOutcome::Decided(true));
+        app.settle_navigator();
 
         assert!(
             !has_duplicate_uuid(&app),

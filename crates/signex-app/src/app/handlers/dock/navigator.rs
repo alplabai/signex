@@ -186,12 +186,84 @@ mod tests {
     }
 
     #[test]
+    fn a_fingerprint_change_defers_the_disk_read_to_a_task() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (mut app, _) = three_level_project(&dir, &[]);
+
+        app.refresh_panel_ctx();
+        assert!(
+            app.document_state.panel_ctx.navigator.tree.is_empty(),
+            "refresh_panel_ctx must not read the sheets from disk"
+        );
+        let request = app
+            .document_state
+            .panel_ctx
+            .navigator
+            .wanted
+            .clone()
+            .expect("the refresh records what it wants built");
+
+        assert!(
+            app.start_navigator_build().is_some(),
+            "update starts the build as a Task"
+        );
+        assert!(
+            app.start_navigator_build().is_none(),
+            "the request is claimed once"
+        );
+
+        let open = crate::app::project_sheets::open_sheets_snapshot(&app.document_state);
+        let built = crate::app::runtime::navigator_ctx::build_navigator_hierarchy(&open, &request);
+        app.handle_navigator_built(request.generation, Ok(Box::new(built)));
+        assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Leaf"]);
+    }
+
+    #[test]
+    fn a_build_overtaken_by_a_newer_request_is_dropped() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (mut app, [_, _, leaf]) = three_level_project(&dir, &[]);
+        app.refresh_panel_ctx();
+        let stale = app
+            .document_state
+            .panel_ctx
+            .navigator
+            .wanted
+            .clone()
+            .expect("first request");
+        let open = crate::app::project_sheets::open_sheets_snapshot(&app.document_state);
+        let stale_built =
+            crate::app::runtime::navigator_ctx::build_navigator_hierarchy(&open, &stale);
+
+        // Opening a sheet changes the fingerprint before the first build lands.
+        app.open_or_focus_sheet_path(leaf);
+        app.refresh_panel_ctx();
+        let fresh = app
+            .document_state
+            .panel_ctx
+            .navigator
+            .wanted
+            .clone()
+            .expect("second request");
+        assert_ne!(stale.generation, fresh.generation);
+
+        app.handle_navigator_built(stale.generation, Ok(Box::new(stale_built)));
+        assert!(
+            app.document_state.panel_ctx.navigator.hierarchy.is_none(),
+            "the stale result must not be applied"
+        );
+
+        app.settle_navigator();
+        assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Leaf"]);
+    }
+
+    #[test]
     fn navigator_shows_the_whole_hierarchy_even_with_a_leaf_focused() {
         let dir = tempfile::tempdir().expect("tempdir");
         let (mut app, [_, _, leaf]) = three_level_project(&dir, &[]);
 
         app.open_or_focus_sheet_path(leaf.clone());
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         assert_eq!(active_tab(&app), Some(leaf));
         assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Leaf"]);
@@ -206,6 +278,7 @@ mod tests {
         let (mut app, _) = three_level_project(&dir, &[("Back", "root.snxsch")]);
 
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         assert_eq!(
             labels(&app, &[0, 0, 0, 0]),
@@ -218,6 +291,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let (mut app, [_, mid, _]) = three_level_project(&dir, &[]);
         app.refresh_panel_ctx();
+        app.settle_navigator();
         let select = PanelMsg::Navigator(TreeMsg::Select(key_at(&app, &[0, 0])));
 
         let _ = app.handle_dock_navigator_panel_message(&select);
@@ -272,6 +346,7 @@ mod tests {
         let mut app = app_workspace(&dir.path().to_string_lossy(), &["root.snxsch"]);
         app.open_or_focus_sheet_path(mid.clone());
         app.refresh_panel_ctx();
+        app.settle_navigator();
         assert!(root.exists());
 
         double_click(&mut app, &[0, 0]);
@@ -296,6 +371,7 @@ mod tests {
         );
         let mut app = app_workspace(&dir.to_string_lossy(), &["root.snxsch"]);
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         assert_eq!(labels(&app, &[0, 0]), ["root", "Up (rejected)"]);
         assert_eq!(labels(&app, &[0, 1]), ["root", "Abs (rejected)"]);
@@ -315,6 +391,7 @@ mod tests {
         let mut app = app_workspace(&dir.path().to_string_lossy(), &["root.snxsch"]);
 
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Again (cycle)"]);
     }
@@ -327,6 +404,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let (mut app, _top, child) = placed_twice_on_disk(&dir);
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         double_click(&mut app, &[0, 1]);
 
@@ -342,6 +420,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let (mut app, top, child) = placed_twice_on_disk(&dir);
         app.refresh_panel_ctx();
+        app.settle_navigator();
         let engine = app
             .document_state
             .engines
@@ -352,6 +431,7 @@ mod tests {
         document.child_sheets[1].uuid = replacement;
         *engine = signex_engine::Engine::new(document).expect("engine");
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         double_click(&mut app, &[0, 1]);
 

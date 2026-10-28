@@ -63,12 +63,14 @@ fn placed_twice_listing(dir: &tempfile::TempDir, listed: &[&str]) -> (Signex, Pa
     write(&child, child_sheet);
     let mut app = app_workspace(&dir.path().to_string_lossy(), listed);
     app.open_or_focus_sheet_path(top.clone());
+    app.settle_navigator();
     (app, top, child)
 }
 
 /// Descend through the sheet symbol `placement` of the focused `top` by the
 /// canvas route (double-click / context menu both end in this call).
 pub(crate) fn descend_by_canvas(app: &mut Signex, placement: u128) {
+    app.settle_navigator();
     app.interaction_state.active_canvas_mut().selected = vec![SelectedItem::new(
         Uuid::from_u128(placement),
         SelectedKind::ChildSheet,
@@ -245,6 +247,7 @@ fn double_clicking_a_sheet_symbol_records_that_placement() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _top, child) = placed_twice_on_disk(&dir);
     app.refresh_panel_ctx();
+    app.settle_navigator();
 
     // Sheet symbol B sits at x = 50..60.
     let _ = app.update(crate::app::Message::CanvasEvent(
