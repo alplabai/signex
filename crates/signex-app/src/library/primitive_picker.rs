@@ -32,6 +32,10 @@ use super::messages::{LibraryMessage, PrimitivePickerMsg};
 use super::modal_chrome::close_x;
 use super::state::{LibraryState, PrimitivePickerState};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 const PICKER_W: f32 = 640.0;
 const PICKER_H: f32 = 520.0;
 /// Height every list entry (library header or primitive row) is pinned to,
@@ -117,16 +121,16 @@ fn row_button<'a>(
         row![
             Space::new().width(20),
             text(format!("{name}.{ext}"))
-                .size(11)
+                .size(TS.body)
                 .color(text_c)
                 .width(Length::FillPortion(3)),
             text(format!("(uuid {}…)", short_uuid))
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
         ]
         .spacing(0)
-        .padding([3, 8])
+        .padding([3.0, SP.m])
         .height(Length::Fill)
         .align_y(iced::Alignment::Center),
     )
@@ -171,7 +175,7 @@ pub fn view<'a>(
 
     let header = container(
         row![
-            text(title).size(14).color(text_c),
+            text(title).size(TS.heading).color(text_c),
             Space::new().width(Length::Fill),
             close_x(
                 LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Cancel),
@@ -186,7 +190,7 @@ pub fn view<'a>(
     let search = text_input("Filter…", &picker.filter)
         .on_input(|s| LibraryMessage::PrimitivePicker(PrimitivePickerMsg::SetFilter(s)))
         .padding(6)
-        .size(12);
+        .size(TS.label);
 
     let needle = picker.filter.trim().to_lowercase();
 
@@ -206,8 +210,8 @@ pub fn view<'a>(
     for item in &items[window.clone()] {
         list_col = list_col.push(match item {
             ListItem::Header { text: label } => {
-                container(text(label.clone()).size(11).color(muted))
-                    .padding([6, 8])
+                container(text(label.clone()).size(TS.body).color(muted))
+                    .padding([6.0, SP.m])
                     .height(ROW_H)
                     .into()
             }
@@ -233,7 +237,7 @@ pub fn view<'a>(
                 } else {
                     "No primitives match. Open more libraries or use Browse filesystem…"
                 })
-                .size(11)
+                .size(TS.body)
                 .color(muted),
             )
             .padding([14, 14]),
@@ -256,36 +260,37 @@ pub fn view<'a>(
     let error_row: Element<'_, LibraryMessage> = if let Some(err) = picker.error.as_ref() {
         container(
             text(err.clone())
-                .size(11)
+                .size(TS.body)
                 .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
         )
-        .padding([4, 14])
+        .padding([SP.s, 14.0])
         .into()
     } else {
         Space::new().height(0).into()
     };
 
-    let browse_btn =
-        button(container(text("Browse filesystem…").size(11).color(text_c)).padding([4, 14]))
-            .on_press(LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Browse))
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            });
+    let browse_btn = button(
+        container(text("Browse filesystem…").size(TS.body).color(text_c)).padding([SP.s, 14.0]),
+    )
+    .on_press(LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Browse))
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(iced::Color::from_rgba(
+            1.0, 1.0, 1.0, 0.04,
+        ))),
+        text_color: text_c,
+        border: Border {
+            width: 1.0,
+            radius: 3.0.into(),
+            color: border,
+        },
+        ..iced::widget::button::Style::default()
+    });
 
     let footer = container(
         row![
             browse_btn,
             Space::new().width(Length::Fill),
-            button(container(text("Cancel").size(11).color(text_c)).padding([4, 14]))
+            button(container(text("Cancel").size(TS.body).color(text_c)).padding([SP.s, 14.0]))
                 .on_press(LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Cancel))
                 .style(move |_: &Theme, _| iced::widget::button::Style {
                     background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -306,7 +311,7 @@ pub fn view<'a>(
     .style(crate::styles::modal_footer_strip(tokens));
 
     let body_pad =
-        container(column![container(search).padding([6, 12]), body, error_row].spacing(0))
+        container(column![container(search).padding([6.0, SP.l]), body, error_row].spacing(0))
             .width(Length::Fill)
             .height(Length::Fill);
 
