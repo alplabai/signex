@@ -170,6 +170,8 @@ pub struct PanelContext {
     pub pre_placement: Option<PrePlacementData>,
     /// Flattened ERC diagnostics from the most recent Run-ERC pass.
     pub erc_diagnostics: Vec<ErcDiagnosticEntry>,
+    /// Net waivers stored in the active project (#1581).
+    pub erc_waivers: Vec<super::ErcWaiverEntry>,
     /// Focused ERC diagnostic index used by prev/next navigation arrows.
     pub erc_focus_index: Option<usize>,
     /// An ERC run is in flight (the panel shows "Running…").

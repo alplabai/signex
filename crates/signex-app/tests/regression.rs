@@ -262,6 +262,8 @@ mod library_update_apply;
 mod non_finite_edits;
 #[path = "regression/numeric_drafts.rs"]
 mod numeric_drafts;
+#[path = "regression/reprefix_standard.rs"]
+mod reprefix_standard;
 
 #[path = "regression/canvas_editing_correctness.rs"]
 mod canvas_editing_correctness;
@@ -319,6 +321,11 @@ mod pending_open_rename_delete;
 // (Space / Shift+Space / X / Y), at placement and on a selected entry.
 #[path = "regression/bus_entry.rs"]
 mod bus_entry;
+
+// #1404 — the X / Y keys, context-menu Mirror X / Y and the active bar's
+// Flip Along X / Y all flip a symbol the same way.
+#[path = "regression/mirror_axis_entry_points.rs"]
+mod mirror_axis_entry_points;
 
 // #1039 — rotate / mirror act on any selection, about its centre, as one undo step.
 #[path = "regression/rotate_mirror_selection.rs"]
