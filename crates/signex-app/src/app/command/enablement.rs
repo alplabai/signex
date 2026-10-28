@@ -235,6 +235,7 @@ impl Signex {
                 .map_or((false, false), |e| {
                     (!e.history.is_empty(), !e.redo.is_empty())
                 }),
+            Some(TabKind::Project(project_id)) => self.project_tab_history_available(*project_id),
             _ => {
                 let engine = path.and_then(|p| document.engines.get(p));
                 let has_steps = |steps: &std::collections::HashMap<_, Vec<_>>| {
@@ -404,6 +405,7 @@ mod tests {
             id: project,
             path: path.clone(),
             data: signex_types::project::ProjectData {
+                description: None,
                 name: "p".into(),
                 dir: String::new(),
                 schematic_root: None,

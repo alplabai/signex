@@ -91,6 +91,18 @@ impl Signex {
             return self.begin_project_folder_rename(job);
         }
 
+        // A write of the project file runs only after `update` returns, so
+        // waiting for it here would hang the app, and letting it land after
+        // the move would recreate the old file: refuse instead.
+        if self
+            .document_state
+            .document_saves
+            .is_saving(&state.target_path)
+        {
+            self.refuse_rename_while_project_saving();
+            return Task::none();
+        }
+
         // Only the file moves. Nothing else is written; the project's
         // in-memory record follows.
         if let Err(e) = std::fs::rename(&state.target_path, &new_prj) {
@@ -444,10 +456,23 @@ impl Signex {
             loaded.path = to.to_path_buf();
             loaded.data.name = new_stem.to_string();
         }
+        // A failure or queued save names the file by its old path.
+        self.document_state
+            .document_saves
+            .forget_where(|p| p == from);
+        crate::diagnostics::log_info(format!(
+            "[rename] Project file {} renamed to {}",
+            from.display(),
+            to.display()
+        ));
         for tab in self.document_state.tabs.iter_mut() {
             if tab.path == from {
                 tab.path = to.to_path_buf();
-                tab.title = new_stem.to_string();
+                tab.title = if tab.kind.as_project().is_some() {
+                    crate::app::project_tab::project_tab_title(to)
+                } else {
+                    new_stem.to_string()
+                };
             }
         }
         if let Some(engine) = self.document_state.engines.remove(from) {
@@ -460,6 +485,7 @@ impl Signex {
             self.document_state.dirty_paths.insert(to.to_path_buf());
         }
         self.rekey_page_setup(from, to);
+        self.rekey_undocked_windows(from, to);
     }
 
     /// Move every path-keyed record under the old project folder to the new

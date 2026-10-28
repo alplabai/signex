@@ -364,8 +364,6 @@ pub enum ModalId {
     PrintPreview,
     /// BOM Export preview modal (File → Export → Bill of Materials…).
     BomPreview,
-    /// Project Options metadata modal (Projects-panel root → Project Options...).
-    ProjectOptions,
     /// Enable Version Control confirm modal (Projects-panel root →
     /// Enable Version Control...).
     EnableVersionControl,
@@ -589,6 +587,9 @@ pub struct DocumentState {
     /// Undo/redo of each project's net-class table (#1042). The table is
     /// project data, so it has its own history beside the per-sheet engines.
     pub net_class_history: std::collections::HashMap<ProjectId, signex_engine::NetClassHistory>,
+    /// Project tab state per loaded project (#1202): selected section and
+    /// the General history. Outlives the tab, dropped with the project.
+    pub project_tabs: std::collections::HashMap<ProjectId, crate::app::ProjectTabState>,
     /// Net-class picks made from a sheet's Properties panel, keyed by that
     /// sheet, so Ctrl+Z on it can interleave them with its engine edits (#1220).
     pub net_class_picks: std::collections::HashMap<PathBuf, net_class_picks::NetClassPickSteps>,

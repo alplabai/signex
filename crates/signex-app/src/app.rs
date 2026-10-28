@@ -24,6 +24,8 @@ mod handlers;
 mod helpers;
 mod load_gateway;
 mod mutation_gateway;
+mod project_tab;
+pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
 mod pcb_dirty_adapter;
 pub(crate) mod project_sheets;
 pub mod restore_job;
@@ -45,11 +47,10 @@ pub use contracts::{
     FileMsg, GitCommitFailure, GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg,
     LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, OverlayMsg, ParameterManagerMsg,
     PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg,
-    ProjectOptionsState, ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState,
-    RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg,
-    SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
-    TabContextMenuState, TextEditMsg, TextEditState, TrackItem, UiMsg, VersionControlScope,
-    WindowMsg,
+    ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
+    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
+    SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
+    TextEditState, TrackItem, UiMsg, VersionControlScope, WindowMsg,
 };
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,

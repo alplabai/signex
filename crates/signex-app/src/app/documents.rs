@@ -48,6 +48,10 @@ pub enum TabKind {
     /// [`crate::library::state::LibraryState::library_browsers`]
     /// keyed by the same path that lives on `TabInfo.path`.
     LibraryBrowser(PathBuf),
+    /// The project's `.snxprj` opened as a Project tab (#1202). Tab state
+    /// lives in [`crate::app::DocumentState::project_tabs`] keyed by this
+    /// id; `TabInfo.path` is the `.snxprj` path.
+    Project(super::state::ProjectId),
 }
 
 impl TabKind {
@@ -83,6 +87,14 @@ impl TabKind {
     pub fn as_library_browser(&self) -> Option<&PathBuf> {
         match self {
             TabKind::LibraryBrowser(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    /// `Some(id)` if this tab is a project's Project tab.
+    pub fn as_project(&self) -> Option<super::state::ProjectId> {
+        match self {
+            TabKind::Project(id) => Some(*id),
             _ => None,
         }
     }

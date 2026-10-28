@@ -253,7 +253,9 @@ impl Signex {
                 continue;
             }
             tab.path = new_path.to_path_buf();
-            if let Some(title) = &new_title {
+            if tab.kind.as_project().is_some() {
+                tab.title = crate::app::project_tab::project_tab_title(new_path);
+            } else if let Some(title) = &new_title {
                 tab.title = title.clone();
             }
             match &mut tab.kind {
@@ -362,5 +364,13 @@ impl Signex {
         if let Some(d) = self.ui_state.rename_dialog.as_mut() {
             d.error = Some(msg.to_string());
         }
+    }
+
+    /// Refuse a rename that would race an off-thread `.snxprj` write: shown
+    /// in the dialog and logged to the Messages panel.
+    pub(super) fn refuse_rename_while_project_saving(&mut self) {
+        const REASON: &str = "The project file is still being saved; try again in a moment.";
+        self.set_rename_error(REASON);
+        crate::diagnostics::log_warning(format!("[rename] refused: {REASON}"));
     }
 }

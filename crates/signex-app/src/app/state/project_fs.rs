@@ -98,6 +98,7 @@ pub fn message_touches_disk(message: &crate::app::Message) -> bool {
                 | ProjectMsg::AddExistingFilePicked { .. }
                 | ProjectMsg::AddExistingFilesCopied { .. }
                 | ProjectMsg::AddNewSchematicWritten { .. }
+                | ProjectMsg::FileSaved(_)
         ),
         Message::Library(m) => matches!(
             m,
