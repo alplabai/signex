@@ -3,7 +3,6 @@
 
 use std::path::PathBuf;
 
-use super::*;
 use crate::app::handlers::menu::export::tests::{app_workspace, open_with, sheet_with_net};
 use crate::app::runtime::sheet_tree_tests::{settle, write_sheet};
 use crate::app::{ProjectTreeAction, RemoveChoice, RemoveDialogState};
