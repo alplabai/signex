@@ -178,6 +178,8 @@ pub enum SaveAllNext {
     },
     /// Close the main window; the tail of the app-quit Save All.
     Quit,
+    /// Close a library; the tail of the close-library Save All.
+    CloseLibrary { library_path: std::path::PathBuf },
 }
 
 /// A Save All whose loose documents' volumes have been probed off-thread;
@@ -208,6 +210,12 @@ pub struct SaveAllSettle {
     /// `(label, reason)` of what already failed before a write started
     /// (Component Preview rows).
     pub failed: Vec<(String, String)>,
+    /// The Component Preview rows the Save All started: those whose write
+    /// ran off-thread report a failure into `LibraryState::batch_row_failures`.
+    pub rows: Vec<crate::library::state::EditorAddress>,
+    /// This Save All's id, the key of its rows' entries in
+    /// `LibraryState::batch_row_failures`.
+    pub batch: u64,
     /// Files held under several case-variant spellings: the spelling that
     /// was written, and the others it stands for. The others' dirty markers
     /// go once the written one is clean.

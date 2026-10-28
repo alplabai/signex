@@ -1,4 +1,4 @@
-//! Library left-dock panel — flat library list (post-WS-K refactor).
+//! Library left-dock panel — flat library list.
 //!
 //! The inline category-tree-with-row-grid the v0.9-refactor-2 plan §10
 //! sketched is now superseded by the main-window Library Browser tab

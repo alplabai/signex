@@ -60,11 +60,12 @@ impl Default for LibraryState {
             where_used: WhereUsedIndex::new(),
             picker: None,
             settings,
-            expanded: Vec::new(),
             panel_search: String::new(),
             close_library_confirm: None,
+            batch_row_failures: HashMap::new(),
             template_registry: Arc::new(TemplateRegistry::new_with_builtins()),
             library_browsers: HashMap::new(),
+            shown_browser: None,
             primitive_picker: None,
             document_options: None,
             recovery: None,
@@ -243,7 +244,6 @@ impl LibraryState {
             );
         }
         self.open_libraries.push(entry);
-        self.expanded.push(true);
         self.touch_data();
         self.sweep_dangling_refs();
         Ok(())
@@ -291,9 +291,6 @@ impl LibraryState {
             let entry = self.open_libraries.remove(idx);
             self.touch_data();
             self.set.unmount(entry.library_id);
-            if idx < self.expanded.len() {
-                self.expanded.remove(idx);
-            }
             self.editors.retain(|key, _| key.library_path != root);
             // Names, drift rows and Update must not use an unmounted library.
             self.drift.check_pending = true;
@@ -589,18 +586,20 @@ impl OpenLibrary {
         let names = adapter.list_tables()?;
         let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
         let mut summaries: Vec<ComponentSummary> = Vec::new();
+        let mut pricing: HashMap<Uuid, signex_library::RowPricing> = HashMap::new();
         for name in names {
+            match adapter.table_pricing(&name) {
+                Ok(cached) => pricing.extend(cached),
+                Err(e) => tracing::warn!(
+                    target: "signex::library",
+                    table = %name,
+                    error = %e,
+                    "reload_tables: cached prices could not be read; none are shown"
+                ),
+            }
             match adapter.read_table(&name) {
                 Ok(rows) => {
-                    for row in &rows {
-                        summaries.push(ComponentSummary {
-                            row_id: row.row_id,
-                            internal_pn: row.internal_pn.clone(),
-                            mpn: row.primary_mpn.mpn.clone(),
-                            state: row.state,
-                            description: String::new(),
-                        });
-                    }
+                    summaries.extend(rows.iter().map(summarize_row));
                     tables.insert(name, rows);
                 }
                 Err(e) => {
@@ -615,6 +614,7 @@ impl OpenLibrary {
             }
         }
         self.tables = tables;
+        self.pricing = pricing;
         self.cached_components = summaries;
         self.cached_classes = adapter.library_classes();
         self.observed_stamp = stamp;
@@ -702,5 +702,17 @@ pub(crate) fn resolved_path(path: &Path) -> PathBuf {
                 return path.to_path_buf();
             }
         }
+    }
+}
+
+/// Picker/panel summary for one table row. `description` stays empty:
+/// `ComponentRow` carries no description field to source it from.
+fn summarize_row(row: &ComponentRow) -> ComponentSummary {
+    ComponentSummary {
+        row_id: row.row_id,
+        internal_pn: row.internal_pn.clone(),
+        mpn: row.primary_mpn.mpn.clone(),
+        state: row.state,
+        description: String::new(),
     }
 }

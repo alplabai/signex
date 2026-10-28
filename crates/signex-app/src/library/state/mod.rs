@@ -21,7 +21,6 @@
 //!   stable identity, not the window id.
 //! * `picker` — component picker modal state (used by schematic
 //!   placement; flattens across every open library).
-//!   (library + table + class + InternalPN).
 //! * `template_registry` — bundled + per-library parameter templates,
 //!   resolved at component-class lookup time.
 
@@ -76,14 +75,14 @@ impl EditorAddress {
 ///
 /// Mirrors plan §6 "Lifecycle, tagging, distributors": rows tagged
 /// `Released`/`InReview`/`Draft` count as "active" for filtering, while
-/// `Deprecated` rows are tinted yellow when shown and `Obsolete` rows
-/// are hidden by default. Stage 18 surfaces these as a single dropdown
+/// `Deprecated` and `Obsolete` rows are both hidden by default
+/// (`Deprecated` rows are tinted yellow once `IncludeDeprecated` shows them). Stage 18 surfaces these as a single dropdown
 /// pill in the browser header so users can pivot the visible row set
 /// without touching every row's lifecycle field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum LifecycleFilter {
-    /// Default — show `Released` / `InReview` / `Draft` and tint
-    /// `Deprecated`. Hides `Obsolete`.
+    /// Default — show `Released` / `InReview` / `Draft`. Hides
+    /// `Deprecated` and `Obsolete`.
     #[default]
     ActiveAndPreferred,
     /// Show only `Released` (the "preferred for new designs" subset
@@ -118,10 +117,10 @@ impl LifecycleFilter {
     ];
 
     /// Whether a row in `state` should render under this filter.
-    /// Deprecated rows render in the default filter but render tinted
-    /// (see `lifecycle_dot_color`). `LifecycleState` is
-    /// `#[non_exhaustive]` so the match falls through to the default
-    /// (active-but-not-preferred) bucket for any future variant.
+    /// Deprecated rows are hidden by default and render tinted when
+    /// `IncludeDeprecated` shows them (see `lifecycle_dot_color`).
+    /// `LifecycleState` is `#[non_exhaustive]`, so any future variant
+    /// falls through to hidden.
     pub fn allows(self, state: signex_library::LifecycleState) -> bool {
         use signex_library::LifecycleState as L;
         match (self, state) {
@@ -134,7 +133,6 @@ impl LifecycleFilter {
             ) => true,
             (Self::IncludeDeprecated, L::Deprecated) => true,
             (Self::ActiveAndPreferred, L::Deprecated) => false,
-            (_, L::Obsolete) => false,
             _ => false,
         }
     }
@@ -223,6 +221,9 @@ pub struct LibraryBrowserState {
     /// kept current by `LibraryState::sync_view_caches`; `view` reads it
     /// instead of recomputing every frame.
     pub view_cache: Option<super::browser::BrowserViewCache>,
+    /// Where the grid is scrolled to, as reported by its scrollable. The
+    /// grid builds only the rows in this window (#1355).
+    pub grid_scroll: super::browser::GridScroll,
 }
 
 /// Active sort key + direction for the Library Browser grid.
@@ -251,6 +252,7 @@ impl LibraryBrowserState {
             renaming_table: None,
             rename_error: None,
             view_cache: None,
+            grid_scroll: super::browser::GridScroll::default(),
         }
     }
 
@@ -423,13 +425,14 @@ pub struct LibraryState {
     pub picker: Option<PickerState>,
     /// Distributor APIs settings panel state.
     pub settings: DistributorSettings,
-    /// True while the Library left-dock panel's expanded library node
-    /// at index `i` is open.
-    pub expanded: Vec<bool>,
     /// Library left-dock search box buffer.
     pub panel_search: String,
     /// "Close Library — Unsaved Drafts" modal state — `None` while closed.
     pub close_library_confirm: Option<CloseLibraryConfirmState>,
+    /// `(label, reason)` of each Save-All row whose off-thread datasheet
+    /// store or commit failed, keyed by `(batch id, row)`, until that Save
+    /// All settles and reports it. Another Save All never touches them.
+    pub batch_row_failures: HashMap<(u64, EditorAddress), (String, String)>,
     /// Bundled + per-library parameter templates. Reference-counted
     /// because both the editor and the validator borrow it. The
     /// Component Preview tab + the validator both read through this
@@ -439,6 +442,9 @@ pub struct LibraryState {
     /// per `TabKind::LibraryBrowser(path)` tab in the main window's
     /// tab bar; insert on tab open, drop on tab close.
     pub library_browsers: HashMap<PathBuf, LibraryBrowserState>,
+    /// The library whose browser tab was showing at the last update, so a
+    /// switch to another tab can be told apart from a repeat of the same one.
+    pub shown_browser: Option<PathBuf>,
     /// Primitive picker modal state — `None` while closed. Opened from
     /// the Component Preview tab's Symbol/Footprint pane, the New
     /// Component modal, and the Edit Component Details modal.
@@ -468,9 +474,9 @@ pub struct LibraryState {
     /// Updates modals for other sheets, waiting for the open one to close
     /// (one modal at a time). Promoted by `show_next_queued_updates`.
     pub queued_library_updates: Vec<super::updates_dialog::LibraryUpdatesState>,
-    /// Set of schematic paths the user explicitly skipped updates on
-    /// — drives the persistent "Library Updates" status-bar indicator.
-    /// Cleared on apply / re-scan / close-tab.
+    /// Set of schematic paths the user explicitly skipped updates on.
+    /// Nothing renders this set yet (no status-bar indicator). Cleared
+    /// on apply / re-scan / close-tab.
     pub skipped_updates_for: std::collections::HashSet<PathBuf>,
     /// Session-scoped "Installed" libraries — opened via the
     /// Components Panel's "+ Add Library…" button (Stage 9 of
@@ -600,8 +606,8 @@ impl ComponentsMountSource {
         }
     }
 
-    /// Every section in stable display order — Project on top,
-    /// Installed in the middle, Global last.
+    /// Every section in stable display order — Project, Installed,
+    /// Global, then Stock last.
     pub const ORDER: &'static [ComponentsMountSource] = &[
         ComponentsMountSource::Project,
         ComponentsMountSource::Installed,
@@ -616,7 +622,8 @@ impl ComponentsMountSource {
 #[derive(Debug, Clone, Default)]
 pub struct ComponentsPanelState {
     /// `true` while the named section is collapsed. Sections are
-    /// `"project"`, `"installed"`, `"global"`.
+    /// `"project"`, `"installed"`, `"global"` (stock has its own
+    /// `collapsed_stock`).
     pub collapsed_project: bool,
     pub collapsed_installed: bool,
     pub collapsed_global: bool,

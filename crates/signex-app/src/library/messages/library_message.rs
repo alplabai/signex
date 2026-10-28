@@ -159,9 +159,6 @@ pub enum LibraryMessage {
         library_path: PathBuf,
     },
     // ─────────────────────────────────────────────────────────────────
-    /// Toggle the Library left-dock panel's library tree node at
-    /// `path` (path relative to the open libraries list).
-    ToggleLibraryTreeNode(usize),
     /// Open a Component Preview tab for the row identified by
     /// `(library_path, table, row_id)`.
     OpenComponentRow {
@@ -300,6 +297,18 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         table: String,
         row_id: RowId,
+    },
+    /// The browser grid's scrollable moved. Carries the scroll offset the
+    /// grid windows its rows from.
+    BrowserGridScrolled {
+        library_path: PathBuf,
+        offset_y: f32,
+    },
+    /// The browser grid was laid out at a new height (a resize, including
+    /// one the scrollable does not report because the rows now fit).
+    BrowserGridResized {
+        library_path: PathBuf,
+        viewport_h: f32,
     },
     /// User clicked the Add Component button (inside the empty-state
     /// CTA, the action row, or the "+" tab). Pre-sets the New
