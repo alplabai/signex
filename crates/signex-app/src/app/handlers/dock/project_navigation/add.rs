@@ -418,35 +418,13 @@ impl Signex {
             Some(name) => name.to_string(),
             None => return false,
         };
-        let stem = file_path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_string();
         let ext = file_path
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("")
             .to_ascii_lowercase();
         match ext.as_str() {
-            "snxsch" => {
-                if loaded.data.sheets.iter().any(|s| s.filename == filename) {
-                    return false;
-                }
-                loaded.data.sheets.push(signex_types::project::SheetEntry {
-                    name: stem,
-                    filename,
-                    symbols_count: 0,
-                    wires_count: 0,
-                    labels_count: 0,
-                    unknown: Default::default(),
-                });
-                if loaded.data.schematic_root.is_none() {
-                    loaded.data.schematic_root =
-                        loaded.data.sheets.last().map(|s| s.filename.clone());
-                }
-                true
-            }
+            "snxsch" => register_sheet_entry(loaded, &filename),
             "snxpcb" => {
                 if loaded.data.pcb_file.as_deref() == Some(filename.as_str()) {
                     return false;
@@ -520,4 +498,39 @@ fn unique_name_in(dir: &std::path::Path, base: &str, ext: &str) -> String {
         }
     }
     primary
+}
+
+/// List the schematic `filename` (relative to the project folder) among the
+/// project's sheets: the one place a sheet is registered. Compared under the
+/// project's case rules, so `Sheet1.snxsch` and `sheet1.snxsch` are one sheet
+/// on a case-insensitive volume. The first sheet listed becomes the root when
+/// the project has none. `true` when something was added.
+pub(crate) fn register_sheet_entry(loaded: &mut crate::app::LoadedProject, filename: &str) -> bool {
+    let fold = crate::app::state::project_case::fold_of(Some(&*loaded));
+    let key =
+        |name: &str| crate::app::state::scope::path_key_with(std::path::Path::new(name), fold);
+    let wanted = key(filename);
+    if loaded
+        .data
+        .sheets
+        .iter()
+        .any(|s| key(&s.filename) == wanted)
+    {
+        return false;
+    }
+    let name = std::path::Path::new(filename)
+        .file_stem()
+        .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
+    loaded.data.sheets.push(signex_types::project::SheetEntry {
+        name,
+        filename: filename.to_owned(),
+        symbols_count: 0,
+        wires_count: 0,
+        labels_count: 0,
+        unknown: Default::default(),
+    });
+    if loaded.data.schematic_root.is_none() {
+        loaded.data.schematic_root = Some(filename.to_owned());
+    }
+    true
 }

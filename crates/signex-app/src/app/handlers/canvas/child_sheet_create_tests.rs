@@ -59,7 +59,9 @@ fn parent_with_symbol(dir: &Path) -> (Signex, PathBuf, Uuid) {
 fn the_child_is_written_beside_the_parent_with_one_port_per_entry_and_registered() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, top, id) = parent_with_symbol(dir.path());
-    let plan = app.plan_child_sheet_creation(id).expect("a plan");
+    let plan = app
+        .plan_child_sheet_creation(&top, id, None)
+        .expect("a plan");
     let child = dir.path().join("sheet1.snxsch");
     assert_eq!(plan.path, child);
     assert!(!child.exists(), "planning writes nothing");
@@ -92,15 +94,15 @@ fn the_child_is_written_beside_the_parent_with_one_port_per_entry_and_registered
 #[test]
 fn an_existing_child_file_is_never_overwritten() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let (mut app, _top, id) = parent_with_symbol(dir.path());
+    let (mut app, top, id) = parent_with_symbol(dir.path());
     let child = dir.path().join("sheet1.snxsch");
     std::fs::write(&child, "mine").expect("existing");
     assert!(
-        app.plan_child_sheet_creation(id).is_none(),
+        app.plan_child_sheet_creation(&top, id, None).is_none(),
         "nothing to write"
     );
     let err = add_io::write_new_schematic(&child, SchematicSheet::default()).unwrap_err();
-    assert!(add_io::is_already_exists(&err), "{err}");
+    assert_eq!(err, add_io::ChildSheetWriteError::AlreadyExists);
     assert_eq!(std::fs::read_to_string(&child).expect("read"), "mine");
 }
 
@@ -146,7 +148,7 @@ fn an_unsaved_parent_says_so_and_offers_nothing() {
         card.detail.contains("Save the parent sheet first"),
         "{card:?}"
     );
-    assert!(app.plan_child_sheet_creation(id).is_none());
+    assert!(app.plan_child_sheet_creation(&top, id, None).is_none());
 }
 
 #[test]
@@ -188,4 +190,128 @@ fn the_sheet_entry_tool_places_an_entry_on_the_edge_and_undo_removes_it() {
         .expect("one step");
     assert_eq!(pins(&app).len(), 2);
     let _ = id;
+}
+
+/// A second sheet that carries a copy of the same symbol, made active.
+fn switch_to_other_sheet_with_same_symbol(app: &mut Signex, dir: &Path, id: Uuid) -> PathBuf {
+    let top = app.document_state.tabs[0].path.clone();
+    let symbol = app.document_state.engines[&top].document().child_sheets[0].clone();
+    assert_eq!(symbol.uuid, id);
+    let other = dir.join("sub").join("other.snxsch");
+    std::fs::create_dir_all(other.parent().expect("dir")).expect("mkdir");
+    std::fs::write(&other, "other").expect("other on disk");
+    let sheet = SchematicSheet {
+        child_sheets: vec![symbol],
+        ..SchematicSheet::default()
+    };
+    let engine = signex_engine::Engine::new_with_path(sheet, Some(other.clone())).expect("engine");
+    app.document_state.engines.insert(other.clone(), engine);
+    app.document_state.tabs.push(TabInfo {
+        title: "other".into(),
+        path: other.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.document_state.active_path = Some(other.clone());
+    other
+}
+
+#[test]
+fn the_answer_plans_against_the_sheet_that_was_asked_not_the_active_tab() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, id) = parent_with_symbol(dir.path());
+    app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    let shown = app
+        .ui_state
+        .create_child_sheet_confirm
+        .as_ref()
+        .expect("dialog")
+        .path
+        .clone();
+    switch_to_other_sheet_with_same_symbol(&mut app, dir.path(), id);
+
+    let confirm = app
+        .ui_state
+        .create_child_sheet_confirm
+        .clone()
+        .expect("dialog");
+    assert_eq!(confirm.parent, top);
+    let plan = app
+        .plan_child_sheet_creation(&confirm.parent, id, Some(&confirm.path))
+        .expect("a plan for the original sheet");
+    assert_eq!(plan.path, shown, "written where the dialog said");
+    assert!(!dir.path().join("sub").join("sheet1.snxsch").exists());
+}
+
+#[test]
+fn a_path_other_than_the_one_shown_is_refused_with_a_log_line() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, id) = parent_with_symbol(dir.path());
+    let wrong = dir.path().join("elsewhere.snxsch");
+    assert!(
+        app.plan_child_sheet_creation(&top, id, Some(&wrong))
+            .is_none()
+    );
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("not the file you were asked about"))
+    );
+    assert!(app.document_state.project_writes.is_empty());
+    assert!(!dir.path().join("sheet1.snxsch").exists());
+}
+
+#[test]
+fn a_symbol_that_is_gone_is_logged_not_ignored() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, _id) = parent_with_symbol(dir.path());
+    assert!(
+        app.plan_child_sheet_creation(&top, Uuid::new_v4(), None)
+            .is_none()
+    );
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("is no longer in"))
+    );
+}
+
+#[test]
+fn a_case_variant_of_a_listed_sheet_is_not_listed_twice() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _top, _id) = parent_with_symbol(dir.path());
+    let project = &mut app.document_state.projects[0];
+    project.case_fold = crate::app::state::scope::CaseFold::FOLD;
+    project.data.sheets.clear();
+    project.data.schematic_root = None;
+    assert!(super::super::dock::project_navigation::register_sheet_entry(project, "Sheet1.snxsch"));
+    assert_eq!(
+        project.data.schematic_root.as_deref(),
+        Some("Sheet1.snxsch")
+    );
+    assert!(
+        !super::super::dock::project_navigation::register_sheet_entry(project, "sheet1.snxsch")
+    );
+    assert_eq!(project.data.sheets.len(), 1);
+}
+
+#[test]
+fn a_project_closed_during_the_write_is_logged() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, id) = parent_with_symbol(dir.path());
+    let plan = app.plan_child_sheet_creation(&top, id, None).expect("plan");
+    add_io::write_new_schematic(&plan.path, plan.document).expect("written");
+    app.document_state.projects.clear();
+    let _ = app.handle_child_sheet_created(plan.project_id, &top, id, plan.path, Ok(()));
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("its project was closed first"))
+    );
 }

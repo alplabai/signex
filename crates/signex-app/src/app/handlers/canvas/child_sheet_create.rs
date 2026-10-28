@@ -13,6 +13,7 @@ use super::super::super::*;
 use super::super::dock::project_navigation::add_io;
 use crate::app::contracts::CreateChildSheetConfirmState;
 use crate::app::state::ProjectId;
+use add_io::ChildSheetWriteError;
 
 /// What creating a child sheet writes, decided in `update`, written on a worker.
 pub(crate) struct ChildSheetPlan {
@@ -29,16 +30,22 @@ impl Signex {
         let Some(name) = self.sheet_symbol_name(symbol) else {
             return;
         };
-        if self.saved_parent_sheet().is_none() {
+        let Some(parent) = self.saved_parent_sheet() else {
             self.refuse_child_sheet_without_parent(&name);
             return;
-        }
+        };
         crate::diagnostics::log_info(format!(
             "Sheet '{name}' has no file yet ({}); asking whether to create it",
             path.display()
         ));
-        self.ui_state.create_child_sheet_confirm =
-            Some(CreateChildSheetConfirmState { symbol, name, path });
+        // The answer plans against THIS parent, not whichever tab is active
+        // by then.
+        self.ui_state.create_child_sheet_confirm = Some(CreateChildSheetConfirmState {
+            symbol,
+            name,
+            path,
+            parent,
+        });
     }
 
     fn sheet_symbol_name(&self, symbol: Uuid) -> Option<String> {
@@ -61,9 +68,14 @@ impl Signex {
     /// place to put it.
     fn refuse_child_sheet_without_parent(&mut self, name: &str) {
         let detail = format!(
-            "Sheet '{name}' has no file yet, and its parent sheet is not saved, so there is no \\
+            "Sheet '{name}' has no file yet, and its parent sheet is not saved, so there is no \
              folder to create it in. Save the parent sheet first."
         );
+        self.refuse_child_sheet(detail);
+    }
+
+    /// Say why nothing was created, on screen and in the Messages panel.
+    fn refuse_child_sheet(&mut self, detail: String) {
         crate::diagnostics::log_warning(&detail);
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(detail));
     }
@@ -79,13 +91,31 @@ impl Signex {
             ));
             return Task::none();
         }
-        self.create_child_sheet_from_symbol(confirm.symbol)
+        self.create_child_sheet_in(confirm.parent, confirm.symbol, Some(confirm.path))
     }
 
-    /// Write the child sheet of `symbol_id` and open it. An existing file is
-    /// never touched: the sheet is just opened.
+    /// The context-menu route: write the child of `symbol_id` beside the
+    /// focused sheet and open it. An existing file is never touched.
     pub(crate) fn create_child_sheet_from_symbol(&mut self, symbol_id: Uuid) -> Task<Message> {
-        let Some(plan) = self.plan_child_sheet_creation(symbol_id) else {
+        let Some(parent) = self.saved_parent_sheet() else {
+            let name = self.sheet_symbol_name(symbol_id).unwrap_or_default();
+            self.refuse_child_sheet_without_parent(&name);
+            return Task::none();
+        };
+        self.create_child_sheet_in(parent, symbol_id, None)
+    }
+
+    /// Write the child of `symbol_id` of the sheet `parent`, off the update
+    /// thread. `expected` is the path the user was shown; a different one
+    /// is refused rather than written.
+    fn create_child_sheet_in(
+        &mut self,
+        parent: std::path::PathBuf,
+        symbol_id: Uuid,
+        expected: Option<std::path::PathBuf>,
+    ) -> Task<Message> {
+        let Some(plan) = self.plan_child_sheet_creation(&parent, symbol_id, expected.as_deref())
+        else {
             return Task::none();
         };
         self.begin_project_write(&plan.path);
@@ -96,13 +126,7 @@ impl Signex {
             project_id,
         } = plan;
         Task::perform(
-            {
-                let path = path.clone();
-                async move {
-                    add_io::on_blocking_pool(move || add_io::write_new_schematic(&path, document))
-                        .await
-                }
-            },
+            add_io::write_new_schematic_off_thread(path.clone(), document),
             move |result| {
                 Message::Project(ProjectMsg::ChildSheetCreated {
                     project_id,
@@ -115,32 +139,60 @@ impl Signex {
         )
     }
 
-    /// Decide what creating the child of `symbol_id` writes and where, reading
-    /// the Model only. `None` when there is nothing to write: the symbol is
-    /// gone, the parent is unsaved, the name is unusable, the project is being
-    /// moved, or the file already exists (then it is just opened).
-    pub(crate) fn plan_child_sheet_creation(&mut self, symbol_id: Uuid) -> Option<ChildSheetPlan> {
+    /// Decide what creating the child of `symbol_id` of `parent` writes and
+    /// where, reading the Model only. `None` (always with a log line) when
+    /// there is nothing to write: the symbol is gone, the parent is unsaved,
+    /// the name is unusable, the path is not the one shown, the project is
+    /// being moved, or the file already exists (then it is just opened).
+    pub(crate) fn plan_child_sheet_creation(
+        &mut self,
+        parent: &std::path::Path,
+        symbol_id: Uuid,
+        expected: Option<&std::path::Path>,
+    ) -> Option<ChildSheetPlan> {
         let symbol = self
             .document_state
-            .active_engine()?
-            .document()
-            .child_sheets
-            .iter()
-            .find(|c| c.uuid == symbol_id)?
-            .clone();
-        let Some(parent) = self.saved_parent_sheet() else {
-            self.refuse_child_sheet_without_parent(&symbol.name);
+            .engines
+            .get(parent)
+            .and_then(|e| {
+                e.document()
+                    .child_sheets
+                    .iter()
+                    .find(|c| c.uuid == symbol_id)
+            })
+            .cloned();
+        let Some(symbol) = symbol else {
+            crate::diagnostics::log_warning(format!(
+                "The sheet symbol is no longer in {}; no child sheet was created",
+                parent.display()
+            ));
             return None;
         };
-        let Some(path) = self.resolve_child_sheet_path(&symbol.filename) else {
+        if !parent.is_file() {
+            self.refuse_child_sheet_without_parent(&symbol.name);
+            return None;
+        }
+        let Some(path) = crate::app::project_sheets::resolve_child_reference(
+            parent.parent().unwrap_or_else(|| std::path::Path::new("")),
+            &symbol.filename,
+        ) else {
             crate::diagnostics::log_warning(format!(
                 "Sheet '{}' has no usable file name ('{}'); nothing was created",
                 symbol.name, symbol.filename
             ));
             return None;
         };
+        if expected.is_some_and(|shown| shown != path) {
+            self.refuse_child_sheet(format!(
+                "Sheet '{}' now points at {}, not the file you were asked about; nothing was \
+                 created",
+                symbol.name,
+                path.display()
+            ));
+            return None;
+        }
         if path.exists() {
-            self.descend_through_sheet_symbol(symbol_id, &symbol.filename);
+            self.open_existing_child_sheet(parent, symbol_id, &symbol.filename, path);
             return None;
         }
         if self.refuse_with_notice_while_project_moves(
@@ -150,17 +202,33 @@ impl Signex {
         ) {
             return None;
         }
-        let project_id = self.document_state.document_project(&parent).map(|p| p.id);
+        let project_id = self.document_state.document_project(parent).map(|p| p.id);
         let document = signex_engine::child_document_for_symbol(
             crate::app::handlers::document_files::blank_schematic_sheet_for_new_doc(),
             &symbol,
         );
         Some(ChildSheetPlan {
-            parent,
+            parent: parent.to_path_buf(),
             path,
             document,
             project_id,
         })
+    }
+
+    /// Open `path`, the child of `symbol` of `parent`: through the symbol when
+    /// `parent` is the focused sheet (recording the placement), else plainly.
+    fn open_existing_child_sheet(
+        &mut self,
+        parent: &std::path::Path,
+        symbol: Uuid,
+        filename: &str,
+        path: std::path::PathBuf,
+    ) {
+        if self.active_tab_path().as_deref() == Some(parent) {
+            self.descend_through_sheet_symbol(symbol, filename);
+        } else {
+            self.open_sheet_with_placement(path, None);
+        }
     }
 
     /// The write landed (or failed). Register the file with the project, then
@@ -171,18 +239,18 @@ impl Signex {
         parent: &std::path::Path,
         symbol: Uuid,
         path: std::path::PathBuf,
-        result: Result<(), String>,
+        result: Result<(), ChildSheetWriteError>,
     ) -> Task<Message> {
         self.end_project_write(&path);
         match result {
             Ok(()) => {
                 crate::diagnostics::log_info(format!("Created child sheet {}", path.display()))
             }
-            Err(e) if add_io::is_already_exists(&e) => crate::diagnostics::log_info(format!(
+            Err(ChildSheetWriteError::AlreadyExists) => crate::diagnostics::log_info(format!(
                 "Child sheet {} already exists; opened it instead of overwriting",
                 path.display()
             )),
-            Err(e) => {
+            Err(ChildSheetWriteError::Failed(e)) => {
                 crate::diagnostics::log_error("Create child sheet", &anyhow::anyhow!("{e}"));
                 self.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(e));
                 return Task::none();
@@ -191,29 +259,30 @@ impl Signex {
         if let Some(id) = project_id {
             self.register_child_sheet_in_project(id, &path);
         }
-        let descended = self.active_tab_path().as_deref() == Some(parent);
-        match self.sheet_symbol_filename(symbol) {
-            Some(filename) if descended => self.descend_through_sheet_symbol(symbol, &filename),
-            _ => self.open_sheet_with_placement(path, None),
+        let filename = self
+            .document_state
+            .engines
+            .get(parent)
+            .and_then(|e| e.document().child_sheets.iter().find(|c| c.uuid == symbol))
+            .map(|c| c.filename.clone());
+        match filename {
+            Some(filename) => self.open_existing_child_sheet(parent, symbol, &filename, path),
+            None => self.open_sheet_with_placement(path, None),
         }
         Task::none()
     }
 
-    fn sheet_symbol_filename(&self, symbol: Uuid) -> Option<String> {
-        let engine = self.document_state.active_engine()?;
-        let found = engine
-            .document()
-            .child_sheets
-            .iter()
-            .find(|c| c.uuid == symbol);
-        found.map(|c| c.filename.clone())
-    }
-
-    /// List `path` among the project's sheets, relative to the project folder,
-    /// and mark the `.snxprj` dirty (it persists on Save, like Add New). A
-    /// file outside the project folder is not registered.
+    /// List `path` among the project's sheets (relative to the project folder)
+    /// and mark the `.snxprj` dirty; it persists on Save, like Add New. A file
+    /// outside the project folder, or a project closed during the write, is
+    /// left unlisted and the Messages panel says so.
     fn register_child_sheet_in_project(&mut self, project_id: ProjectId, path: &std::path::Path) {
         let Some(project) = self.document_state.project_by_id_mut(project_id) else {
+            crate::diagnostics::log_warning(format!(
+                "Child sheet {} was created, but its project was closed first, so it is not \
+                 listed in any project",
+                path.display()
+            ));
             return;
         };
         let Some(relative) = project
@@ -228,20 +297,9 @@ impl Signex {
             return;
         };
         let filename = relative.to_string_lossy().replace('\\', "/");
-        if project.data.sheets.iter().any(|s| s.filename == filename) {
+        if !super::super::dock::project_navigation::register_sheet_entry(project, &filename) {
             return;
         }
-        let name = path
-            .file_stem()
-            .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
-        project.data.sheets.push(signex_types::project::SheetEntry {
-            name,
-            filename,
-            symbols_count: 0,
-            wires_count: 0,
-            labels_count: 0,
-            unknown: Default::default(),
-        });
         let project_path = project.path.clone();
         self.document_state.dirty_paths.insert(project_path);
         self.refresh_panel_ctx();

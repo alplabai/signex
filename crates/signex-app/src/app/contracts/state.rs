@@ -153,6 +153,14 @@ pub struct ProjectCloseConfirmState {
     pub sheet_refs: crate::app::state::sheet_refs::SheetRefs,
 }
 
+/// Why a child sheet could not be written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChildSheetWriteError {
+    /// The file was already there; it was left alone.
+    AlreadyExists,
+    Failed(String),
+}
+
 /// "Create the missing sheet?" confirm, opened by descending through a sheet
 /// symbol whose file does not exist. Held by symbol id: the sheet may change
 /// while the dialog is up, and the answer looks the symbol up again.
@@ -163,6 +171,9 @@ pub struct CreateChildSheetConfirmState {
     pub name: String,
     /// Where the file would be written.
     pub path: std::path::PathBuf,
+    /// The sheet that carries the symbol: the answer plans against it, not
+    /// against whichever tab is active by then.
+    pub parent: std::path::PathBuf,
 }
 
 /// State for the "Exit Signex — Unsaved Edits" confirmation modal.

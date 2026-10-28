@@ -122,28 +122,39 @@ pub(crate) fn write_blank_schematic(path: &Path) -> Result<(), String> {
         .map_err(|e| format!("write blank sheet to {}: {e}", path.display()))
 }
 
+pub(crate) use crate::app::contracts::ChildSheetWriteError;
+
 /// Write `sheet` as a new schematic at `path`, refusing to overwrite: the
 /// child sheet created from a sheet symbol. Same temp + fsync + no-clobber
 /// rename as every new document.
 pub(crate) fn write_new_schematic(
     path: &Path,
     sheet: signex_types::schematic::SchematicSheet,
-) -> Result<(), String> {
+) -> Result<(), ChildSheetWriteError> {
     let text = signex_types::format::SnxSchematic::new(sheet)
         .write_string()
-        .map_err(|e| format!("serialise sheet: {e}"))?;
+        .map_err(|e| ChildSheetWriteError::Failed(format!("serialise sheet: {e}")))?;
     create_noclobber(path, |f| std::io::Write::write_all(f, text.as_bytes())).map_err(|e| {
         if e.kind() == std::io::ErrorKind::AlreadyExists {
-            e.to_string()
+            ChildSheetWriteError::AlreadyExists
         } else {
-            format!("write sheet to {}: {e}", path.display())
+            ChildSheetWriteError::Failed(format!("write sheet to {}: {e}", path.display()))
         }
     })
 }
 
-/// Whether a [`write_new_schematic`] error means the file was already there.
-pub(crate) fn is_already_exists(error: &str) -> bool {
-    error.contains("destination already exists")
+/// [`write_new_schematic`] on the blocking pool; a worker that died is a failure.
+pub(crate) async fn write_new_schematic_off_thread(
+    path: PathBuf,
+    sheet: signex_types::schematic::SchematicSheet,
+) -> Result<(), ChildSheetWriteError> {
+    tokio::task::spawn_blocking(move || write_new_schematic(&path, sheet))
+        .await
+        .unwrap_or_else(|e| {
+            Err(ChildSheetWriteError::Failed(format!(
+                "worker thread failed: {e}"
+            )))
+        })
 }
 
 #[cfg(test)]

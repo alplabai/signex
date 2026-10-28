@@ -557,7 +557,7 @@ pub enum ProjectMsg {
         parent: std::path::PathBuf,
         symbol: uuid::Uuid,
         path: std::path::PathBuf,
-        result: Result<(), String>,
+        result: Result<(), crate::app::contracts::ChildSheetWriteError>,
     },
     /// v0.23 — Async project-git commit completed. The dispatcher
     /// removes the `(project_root, rel_path)` entry from
