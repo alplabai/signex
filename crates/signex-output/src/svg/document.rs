@@ -8,7 +8,7 @@
 //! Extracted verbatim from the SVG exporter (`svg/mod.rs`); pure code
 //! motion, zero behaviour change.
 
-use super::drawings::push_sch_drawing_path;
+use super::drawings::push_placed_drawings;
 use super::family::alias_for_family;
 use super::geometry::{path_to_tiny_skia, rect_path};
 use super::labels::{
@@ -23,8 +23,8 @@ use crate::SheetSnapshot;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::{ColourMode, PdfOptions};
 use signex_types::markup::ExpressionEvalContext;
-use signex_types::schematic::LabelType;
 use signex_types::schematic::field_effective_style;
+use signex_types::schematic::{DrawingPlacement, LabelType};
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use tiny_skia::{Color, FillRule, Paint, Pixmap, Stroke};
@@ -77,6 +77,14 @@ impl SvgRenderContext {
                 stroke_width: 1.0,
             },
         ));
+
+        push_placed_drawings(
+            &mut elements,
+            &sheet.schematic,
+            DrawingPlacement::Behind,
+            &xform,
+            palette,
+        );
 
         // Base primitives
         for wire in &sheet.schematic.wires {
@@ -296,10 +304,6 @@ impl SvgRenderContext {
             }
         }
 
-        for drawing in &sheet.schematic.drawings {
-            push_sch_drawing_path(&mut elements, drawing, &xform, palette);
-        }
-
         // Full symbol body graphics from library definitions.
         let mut lib_by_id: HashMap<&str, &signex_types::schematic::LibSymbol> = HashMap::new();
         for ls in sheet.schematic.lib_symbols.values() {
@@ -407,6 +411,14 @@ impl SvgRenderContext {
                 });
             }
         }
+
+        push_placed_drawings(
+            &mut elements,
+            &sheet.schematic,
+            DrawingPlacement::Above,
+            &xform,
+            palette,
+        );
 
         Self {
             width,

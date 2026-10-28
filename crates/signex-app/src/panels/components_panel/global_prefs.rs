@@ -188,36 +188,6 @@ pub fn remove_path_at(prefs: &Path, path: &Path) -> Result<Vec<GlobalLibraryEntr
     Ok(current)
 }
 
-/// Mount every entry in `entries` onto the supplied `LibraryState`,
-/// best-effort. Adapter open failures are logged through `tracing`
-/// and the affected entry is skipped — one bad library shouldn't sink
-/// the whole load.
-///
-/// Called by `bootstrap` once at startup so global libraries are
-/// available across every project the user opens during the session.
-pub fn mount_all(library_state: &mut crate::library::LibraryState, entries: &[GlobalLibraryEntry]) {
-    for entry in entries {
-        if let Err(e) = library_state.open_library(entry.path.clone()) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %entry.path.display(),
-                error = %e,
-                "global library mount failed"
-            );
-        }
-    }
-}
-
-/// One-shot "load and mount" — used by the bootstrap path so callers
-/// don't have to remember the two-step dance.
-pub fn load_and_mount_all(
-    library_state: &mut crate::library::LibraryState,
-) -> Vec<GlobalLibraryEntry> {
-    let entries = load();
-    mount_all(library_state, &entries);
-    entries
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
