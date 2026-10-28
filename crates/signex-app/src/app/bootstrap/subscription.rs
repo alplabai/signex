@@ -42,6 +42,7 @@ struct OpenOverlays {
     // #514 — the rest of the Esc ladder. Each closes exactly one gap that
     // used to fall through to the `Tool::Select` reset behind the modal.
     annotate_reset_confirm_open: bool,
+    reprefix_confirm_open: bool,
     app_quit_confirm_open: bool,
     project_close_confirm_open: bool,
     grid_properties_open: bool,
@@ -270,6 +271,11 @@ impl OpenOverlays {
             OverlayId::AnnotateResetConfirm => self
                 .annotate_reset_confirm_open
                 .then(|| Message::Annotate(AnnotateMsg::CloseResetConfirm)),
+            // Child of the annotate dialog like the reset confirm; Esc cancels,
+            // it must never confirm a rewrite of the whole project.
+            OverlayId::ReprefixConfirm => self
+                .reprefix_confirm_open
+                .then(|| Message::Annotate(AnnotateMsg::ReprefixCancelled)),
             OverlayId::ErcDialog => self.erc_open.then(|| Message::Erc(ErcMsg::CloseDialog)),
 
             // ── Library modals ──────────────────────────────────────
@@ -366,6 +372,7 @@ fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
     match modal {
         ModalId::AnnotateDialog => Some(OverlayId::AnnotateDialog),
         ModalId::AnnotateResetConfirm => Some(OverlayId::AnnotateResetConfirm),
+        ModalId::ReprefixConfirm => Some(OverlayId::ReprefixConfirm),
         ModalId::ErcDialog => Some(OverlayId::ErcDialog),
         ModalId::Preferences => Some(OverlayId::Preferences),
         ModalId::FindReplace => Some(OverlayId::FindReplace),
@@ -467,6 +474,8 @@ impl Signex {
             passive_calculator_open: self.ui_state.passive_calculator_open,
             annotate_reset_confirm_open: self.ui_state.annotate_reset_confirm
                 && !modal_detached(crate::app::state::ModalId::AnnotateResetConfirm),
+            reprefix_confirm_open: self.ui_state.reprefix_confirm.is_some()
+                && !modal_detached(crate::app::state::ModalId::ReprefixConfirm),
             app_quit_confirm_open: self.ui_state.app_quit_confirm.is_some(),
             project_close_confirm_open: self.ui_state.project_close_confirm.is_some(),
             grid_properties_open: self.ui_state.grid_properties.is_some(),
@@ -646,11 +655,10 @@ impl Signex {
         let window_close = iced::window::close_events()
             .map(|id| Message::Window(WindowMsg::SecondaryWindowClosed(id)));
         // OS close requests (native close button, Alt+F4, taskbar close).
-        // In daemon mode iced does NOT auto-close on these, so we route
-        // them explicitly: the main window goes through the unsaved-
-        // changes guard, any other window closes. Without this, an
-        // Alt+F4 on a dirty main window would otherwise be silently
-        // dropped (or, if iced ever auto-closed, lose unsaved edits).
+        // These only reach the app because every window is opened with
+        // `exit_on_close_request: false`; otherwise winit closes the window
+        // itself. The main window goes through the unsaved-changes guard,
+        // any other window closes.
         let window_close_request = iced::window::close_requests()
             .map(|id| Message::Window(WindowMsg::WindowCloseRequested(id)));
         // Window-resize subscription. `iced::event::listen()`'s
@@ -823,6 +831,7 @@ mod tests {
             ModalId::AnnotateDialog,
             ModalId::ErcDialog,
             ModalId::AnnotateResetConfirm,
+            ModalId::ReprefixConfirm,
             ModalId::PrintPreview,
             ModalId::BomPreview,
         ] {
@@ -941,6 +950,10 @@ mod tests {
         assert!(matches!(
             only(|o| o.annotate_reset_confirm_open = true),
             Some(Message::Annotate(AnnotateMsg::CloseResetConfirm))
+        ));
+        assert!(matches!(
+            only(|o| o.reprefix_confirm_open = true),
+            Some(Message::Annotate(AnnotateMsg::ReprefixCancelled))
         ));
         assert!(matches!(
             only(|o| o.app_quit_confirm_open = true),
@@ -1451,6 +1464,7 @@ mod tests {
             library_create_options_open,
             passive_calculator_open,
             annotate_reset_confirm_open,
+            reprefix_confirm_open,
             app_quit_confirm_open,
             project_close_confirm_open,
             grid_properties_open,
@@ -1498,6 +1512,7 @@ mod tests {
             ("annotate_reset_confirm_open", |o| {
                 o.annotate_reset_confirm_open = true
             }),
+            ("reprefix_confirm_open", |o| o.reprefix_confirm_open = true),
             ("app_quit_confirm_open", |o| o.app_quit_confirm_open = true),
             ("project_close_confirm_open", |o| {
                 o.project_close_confirm_open = true

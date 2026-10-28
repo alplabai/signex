@@ -13,6 +13,7 @@
 
 mod general;
 mod open;
+mod parameters;
 mod update;
 mod view;
 
@@ -30,15 +31,18 @@ use crate::app::state::ProjectId;
 pub enum ProjectSection {
     #[default]
     General,
+    /// Project parameters the sheets inherit (#1080).
+    Parameters,
 }
 
 impl ProjectSection {
     /// Every section, in list order.
-    pub const ALL: [ProjectSection; 1] = [ProjectSection::General];
+    pub const ALL: [ProjectSection; 2] = [ProjectSection::General, ProjectSection::Parameters];
 
     pub fn label(self) -> &'static str {
         match self {
             ProjectSection::General => "General",
+            ProjectSection::Parameters => "Parameters",
         }
     }
 }
@@ -51,6 +55,8 @@ pub struct ProjectTabState {
     pub section: ProjectSection,
     /// Undo/redo of the General section's fields (engine-owned).
     pub general_history: signex_engine::ProjectGeneralHistory,
+    /// The name typed for a new custom parameter, not yet added.
+    pub new_parameter_name: String,
 }
 
 /// Messages of a Project tab, namespaced under `ProjectMsg::Tab`. Each
@@ -71,6 +77,24 @@ pub enum ProjectTabMsg {
     DesignatorStandardPicked {
         project_id: ProjectId,
         standard: Option<signex_types::designator::DesignatorStandard>,
+    },
+    /// A parameter's value as typed in the Parameters section (#1080).
+    ParameterEdited {
+        project_id: ProjectId,
+        name: String,
+        value: String,
+    },
+    ParameterRemoved {
+        project_id: ProjectId,
+        name: String,
+    },
+    NewParameterNameEdited {
+        project_id: ProjectId,
+        text: String,
+    },
+    /// Add the typed custom parameter, with an empty value.
+    ParameterAdded {
+        project_id: ProjectId,
     },
     /// Rename… in the General section: the project-tree Rename flow.
     RenameRequested {

@@ -7,6 +7,7 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod case_fold;
+pub(crate) mod dir_case;
 mod interaction;
 pub(crate) mod library_entry;
 mod link_policy;
@@ -16,6 +17,7 @@ mod path_key;
 mod pcb_revision;
 mod pdf_page_setup;
 mod pdf_preview_raster;
+mod placement;
 mod profile_update;
 pub(crate) mod project_case;
 pub(crate) mod project_fs;
@@ -35,6 +37,7 @@ pub use pdf_preview_raster::{
     PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
     forget_page_setup, rekey_page_setup,
 };
+pub use placement::PlacementSession;
 pub use profile_update::PendingProfileUpdate;
 pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{NetColorStep, UiState};
@@ -345,6 +348,8 @@ impl ErrorNotice {
 pub enum ModalId {
     AnnotateDialog,
     AnnotateResetConfirm,
+    /// Re-prefix to standard (#1315): the list of changes, to confirm.
+    ReprefixConfirm,
     ErcDialog,
     /// Altium-style Move-Selection dialog — numeric ΔX / ΔY inputs.
     MoveSelection,
@@ -424,6 +429,10 @@ pub struct LoadedProject {
     pub case_fold: scope::CaseFold,
     /// The volume probe has reported; the first answer wins.
     pub case_probed: bool,
+    /// The probe DECIDED (not undecided, failed or a stat error): only then is
+    /// `case_fold` a fact about the volume rather than the host default, and
+    /// only then does document identity trust it (#1447).
+    pub case_decided: bool,
 }
 
 impl LoadedProject {
@@ -680,6 +689,9 @@ pub struct DocumentState {
     /// spawned; cleared in both the `Ok` and `Err` arms of
     /// `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished`.
     pub pending_opens: crate::app::document_read::InFlightReads,
+    /// What the directory case probes of loose documents reported, and the
+    /// opens and saves waiting on one (#1447).
+    pub dir_case: dir_case::DirCases,
     /// #859 — History restores running on a worker, keyed by the document
     /// path. A second restore click for the same document is ignored until
     /// the first completes; closing the project or all documents cancels it.

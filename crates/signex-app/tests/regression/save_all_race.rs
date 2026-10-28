@@ -46,11 +46,13 @@ fn project_with_two_sheets(dir: &Path) -> Signex {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     for (name, dirty) in [("X", true), ("Y", false)] {
         let path = dir.join(format!("{name}.snxsch"));

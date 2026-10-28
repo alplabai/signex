@@ -132,7 +132,10 @@ fn a_family_with_spaces_and_quotes_survives_the_label_column() {
 // `every_kind_sheet()`; `resaved_by_older_build.snxsch` is that file after
 // `SnxSchematic::parse` + `write_string` of trunk at 2dcb6169, which does not
 // have the field (produced with a scratch worktree, see
-// `regenerate_fixtures`).
+// `regenerate_fixtures`). The wire table header of these fixtures was then
+// hand-migrated for #1364 (the `net` column is gone), so
+// `regenerate_fixtures` needs a post-#1364 base build; an older base writes
+// the old header and the test panics.
 // ---------------------------------------------------------------------------
 
 const WRITTEN: &str = include_str!("../../tests/fixtures/font_family/written_by_510.snxsch");

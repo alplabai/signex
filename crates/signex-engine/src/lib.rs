@@ -7,6 +7,7 @@ mod history;
 mod history_snapshot;
 mod lock;
 mod net_class_table;
+mod placement;
 mod power_port;
 mod project_general;
 mod selection;
@@ -54,6 +55,7 @@ pub use net_class_table::{
     StepId as NetClassStepId, apply_net_class_command,
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
+pub use placement::PlacementPayload;
 pub use power_port::{place_power_port, restyle_power_port};
 pub use project_general::{
     HISTORY_LIMIT as PROJECT_GENERAL_HISTORY_LIMIT, ProjectGeneralCommand, ProjectGeneralHistory,

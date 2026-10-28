@@ -620,6 +620,13 @@ pub enum PanelMsg {
     /// pin, every other rule falls back to "zoom + select" (same as
     /// clicking the row body).
     ErcQuickFix(usize),
+    /// Waive (`waive`) or restore a net-level finding's (rule id, net) pair
+    /// (#1581). Stored in the project's rule set; one undo step.
+    ErcNetWaiverSet {
+        rule_id: String,
+        net: String,
+        waive: bool,
+    },
     ToggleGrid,
     ToggleSnap,
     PropertiesTab(usize),

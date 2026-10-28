@@ -1,7 +1,7 @@
 //! Command-driven editing of the project's General settings (#1202).
 //!
-//! The Project tab's General section edits the `.snxprj` `description` in
-//! place on the project's one in-memory `ProjectData`. The project name is
+//! The Project tab's General and Parameters sections edit the `.snxprj`
+//! `description` and `parameters` (#1080) in place on the project's one in-memory `ProjectData`. The project name is
 //! not edited here: it is the file stem, changed only by the Rename flow.
 //! Like the net-class table, the settings are tiny, so the history keeps
 //! snapshots rather than inverse commands. A snapshot holds only the fields
@@ -11,6 +11,8 @@
 //! Text is edited per keystroke. Consecutive edits coalesce into one undo
 //! step (a "run"); the run closes on undo, redo, or
 //! [`ProjectGeneralHistory::close_run`] (a section switch, a save).
+
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use signex_types::project::ProjectData;
@@ -24,24 +26,50 @@ pub const HISTORY_LIMIT: usize = 100;
 pub enum ProjectGeneralCommand {
     /// The description as typed; an empty text clears it.
     SetDescription(String),
+    /// A project parameter as typed (#1080). An empty value on one of the
+    /// sheet title-block keys clears it; a user-named parameter keeps an
+    /// empty value until [`Self::RemoveParameter`].
+    SetParameter { name: String, value: String },
+    /// Delete a parameter.
+    RemoveParameter(String),
 }
+
+/// The `title_block` keys a project parameter shares with a sheet: empty
+/// means "not set", so the key is dropped rather than stored empty.
+const TITLE_BLOCK_KEYS: [&str; 12] = [
+    "title",
+    "document_number",
+    "rev",
+    "date",
+    "company",
+    "drawn_by",
+    "checked_by",
+    "approved_by",
+    "comment1",
+    "comment2",
+    "comment3",
+    "comment4",
+];
 
 /// The fields the General section owns, as one undo snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct GeneralSnapshot {
     description: Option<String>,
+    parameters: BTreeMap<String, String>,
 }
 
 impl GeneralSnapshot {
     fn of(data: &ProjectData) -> Self {
         Self {
             description: data.description.clone(),
+            parameters: data.parameters.clone(),
         }
     }
 
     /// Put these fields back, leaving every other field as it is now.
     fn restore(self, data: &mut ProjectData) {
         data.description = self.description;
+        data.parameters = self.parameters;
     }
 }
 
@@ -63,6 +91,18 @@ impl ProjectGeneralHistory {
         match command {
             ProjectGeneralCommand::SetDescription(text) => {
                 data.description = (!text.is_empty()).then_some(text);
+            }
+            ProjectGeneralCommand::SetParameter { name, value } => {
+                if name.is_empty()
+                    || (value.is_empty() && TITLE_BLOCK_KEYS.contains(&name.as_str()))
+                {
+                    data.parameters.remove(&name);
+                } else {
+                    data.parameters.insert(name, value);
+                }
+            }
+            ProjectGeneralCommand::RemoveParameter(name) => {
+                data.parameters.remove(&name);
             }
         }
         if GeneralSnapshot::of(data) == before {

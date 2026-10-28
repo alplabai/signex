@@ -67,7 +67,6 @@ fn component_rotation_rejects_non_finite() {
 fn wire_stroke_width_rejects_non_finite() {
     let row = SchWireRow {
         uuid: Uuid::nil(),
-        net: "n".into(),
         start_x: 0,
         start_y: 0,
         end_x: 1,
@@ -152,7 +151,6 @@ fn format_f64_refuses_non_finite_and_keeps_finite_output() {
 fn write_tsv_block_names_block_row_and_field() {
     let finite = SchWireRow {
         uuid: Uuid::nil(),
-        net: "n".into(),
         start_x: 0,
         start_y: 0,
         end_x: 1,

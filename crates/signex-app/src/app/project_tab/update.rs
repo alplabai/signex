@@ -27,9 +27,63 @@ impl Signex {
                 }
                 self.set_project_designator_standard(project_id, standard);
             }
+            ProjectTabMsg::ParameterEdited {
+                project_id,
+                name,
+                value,
+            } => {
+                self.apply_project_general(
+                    project_id,
+                    ProjectGeneralCommand::SetParameter { name, value },
+                );
+            }
+            ProjectTabMsg::ParameterRemoved { project_id, name } => {
+                self.close_general_run(project_id);
+                self.apply_project_general(
+                    project_id,
+                    ProjectGeneralCommand::RemoveParameter(name),
+                );
+            }
+            ProjectTabMsg::NewParameterNameEdited { project_id, text } => {
+                if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                    tab.new_parameter_name = text;
+                }
+            }
+            ProjectTabMsg::ParameterAdded { project_id } => {
+                self.close_general_run(project_id);
+                let tab = self
+                    .document_state
+                    .project_tabs
+                    .entry(project_id)
+                    .or_default();
+                let name = std::mem::take(&mut tab.new_parameter_name)
+                    .trim()
+                    .to_string();
+                let exists = self
+                    .document_state
+                    .project_by_id(project_id)
+                    .is_none_or(|p| p.data.parameters.contains_key(&name));
+                if !name.is_empty() && !exists {
+                    self.apply_project_general(
+                        project_id,
+                        ProjectGeneralCommand::SetParameter {
+                            name,
+                            value: String::new(),
+                        },
+                    );
+                    self.close_general_run(project_id);
+                }
+            }
             ProjectTabMsg::RenameRequested { project_id } => {
                 self.open_project_rename_from_tab(project_id);
             }
+        }
+    }
+
+    /// End the General history's typing run: the next edit is its own step.
+    fn close_general_run(&mut self, project_id: ProjectId) {
+        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+            tab.general_history.close_run();
         }
     }
 

@@ -157,6 +157,14 @@ pub fn view<'a>(
         .padding(6)
         .size(12);
 
+    let description_input = text_input("e.g. 100 nF 50 V X7R 0603", &edit.draft.description)
+        .on_input({
+            let send = send.clone();
+            move |s| send(BrowserEditMsg::SetDescription(s))
+        })
+        .padding(6)
+        .size(12);
+
     // Tags row (Stage 18) — comma-separated free-form tokens.
     // The buffer flushes to `parameters["tags"]` on Save (see
     // `handle_browser_edit_msg`); empty buffer drops the entry.
@@ -266,6 +274,8 @@ pub fn view<'a>(
         labelled("Datasheet", datasheet_field),
         Space::new().height(8),
         mfr_mpn_row,
+        Space::new().height(8),
+        labelled("Description", description_input.into()),
         Space::new().height(8),
         labelled("Tags (comma-separated)", tags_input.into()),
         Space::new().height(12),
