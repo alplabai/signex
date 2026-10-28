@@ -81,6 +81,7 @@ fn a_case_variant_of_a_registered_library_is_not_registered_twice() {
     let variant = d1.path().join("LIBS").join("Lib").join("Lib.snxlib");
     let task = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
         project_id: app.document_state.projects[0].id,
+        project_dir: std::path::PathBuf::new(),
         results: Ok(vec![Ok(variant)]),
     }));
     run_task(&mut app, task);

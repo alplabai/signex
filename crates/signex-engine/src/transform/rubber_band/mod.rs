@@ -158,7 +158,7 @@ pub fn moved_pin_tips(document: &SchematicSheet, items: &[SelectedItem]) -> Vec<
                 let Some(symbol) = document.symbols.iter().find(|s| s.uuid == item.uuid) else {
                     continue;
                 };
-                let Some(lib) = document.lib_symbols.get(&symbol.lib_id) else {
+                let Some(lib) = document.resolve_lib_symbol(symbol) else {
                     continue;
                 };
                 let xform = SymbolTransform::from_symbol(symbol);

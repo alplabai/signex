@@ -4,6 +4,8 @@
 //! recovery directory and never the real file; a normal save (or a close)
 //! removes the sidecar, including one whose write was still running.
 
+#[path = "autosave/pcb.rs"]
+mod pcb;
 #[path = "autosave/primitives.rs"]
 mod primitives;
 

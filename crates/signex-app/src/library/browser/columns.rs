@@ -8,12 +8,14 @@
 
 use super::*;
 
+#[derive(Debug, Clone)]
 pub(super) struct GridColumn {
     pub(super) label: String,
     pub(super) kind: ColumnKind,
     pub(super) width: f32,
 }
 
+#[derive(Debug, Clone)]
 pub(super) enum ColumnKind {
     InternalPn,
     Manufacturer,

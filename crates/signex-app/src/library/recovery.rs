@@ -48,6 +48,7 @@ use signex_widgets::theme_ext;
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
+use super::modal_chrome::{close_x, primary_btn, secondary_btn};
 
 const MODAL_W: f32 = 520.0;
 
@@ -132,7 +133,6 @@ fn library_missing_view<'a>(
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
 
     let header = container(
         row![
@@ -168,20 +168,19 @@ fn library_missing_view<'a>(
             secondary_btn(
                 "Cancel",
                 LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
-                text_c,
-                border,
+                tokens,
             ),
             Space::new().width(8),
             secondary_btn(
                 "Remove from project",
                 LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::RemoveFromProject),
-                text_c,
-                border,
+                tokens,
             ),
             Space::new().width(8),
             primary_btn(
                 "Locate\u{2026}",
                 LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Locate),
+                tokens,
             ),
         ]
         .align_y(iced::Alignment::Center),
@@ -265,8 +264,7 @@ fn git_missing_view<'a>(
         secondary_btn(
             "Restore from remote",
             LibraryMessage::RecoveryGitMissing(GitMissingChoice::RestoreFromRemote),
-            text_c,
-            border,
+            tokens,
         )
     } else {
         disabled_btn("Restore from remote", text_c, border)
@@ -278,15 +276,13 @@ fn git_missing_view<'a>(
             secondary_btn(
                 "Cancel",
                 LibraryMessage::RecoveryGitMissing(GitMissingChoice::Cancel),
-                text_c,
-                border,
+                tokens,
             ),
             Space::new().width(8),
             secondary_btn(
                 "Skip (read-only)",
                 LibraryMessage::RecoveryGitMissing(GitMissingChoice::Skip),
-                text_c,
-                border,
+                tokens,
             ),
             Space::new().width(8),
             restore_button,
@@ -320,7 +316,6 @@ fn broken_binding_view<'a>(
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
 
     let kind_label = match kind {
         PrimitiveKind::Symbol => "Symbol",
@@ -372,20 +367,19 @@ fn broken_binding_view<'a>(
             secondary_btn(
                 "Cancel",
                 LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
-                text_c,
-                border,
+                tokens,
             ),
             Space::new().width(8),
             secondary_btn(
                 "Remove row",
                 LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::RemoveRow),
-                text_c,
-                border,
+                tokens,
             ),
             Space::new().width(8),
             primary_btn(
                 "Re-bind\u{2026}",
                 LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Rebind),
+                tokens,
             ),
         ]
         .align_y(iced::Alignment::Center),
@@ -399,47 +393,6 @@ fn broken_binding_view<'a>(
     .style(crate::styles::modal_card(tokens))
     .clip(true)
     .into()
-}
-
-fn secondary_btn<'a>(
-    label: &'a str,
-    message: LibraryMessage,
-    text_color: iced::Color,
-    border: iced::Color,
-) -> Element<'a, LibraryMessage> {
-    button(container(text(label.to_string()).size(11).color(text_color)).padding([4, 14]))
-        .on_press(message)
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            ..iced::widget::button::Style::default()
-        })
-        .into()
-}
-
-fn primary_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, LibraryMessage> {
-    let bg = iced::Color::from_rgb(0.00, 0.47, 0.84);
-    let fg = iced::Color::WHITE;
-    button(container(text(label.to_string()).size(11).color(fg)).padding([4, 14]))
-        .on_press(message)
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(bg)),
-            text_color: fg,
-            border: Border {
-                width: 0.0,
-                radius: 3.0.into(),
-                ..Border::default()
-            },
-            ..iced::widget::button::Style::default()
-        })
-        .into()
 }
 
 /// Destructive button — used for *Re-init (lose history)*. Painted
@@ -486,34 +439,6 @@ fn disabled_btn<'a>(
                 },
             },
             ..Default::default()
-        })
-        .into()
-}
-
-fn close_x<'a>(message: LibraryMessage, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
-    button(container(text("\u{00D7}".to_string()).size(14).color(text_c)).padding([0, 6]))
-        .on_press(message)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10),
-                )),
-                _ => Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.03,
-                ))),
-            };
-            iced::widget::button::Style {
-                background: bg,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                text_color: text_c,
-                ..iced::widget::button::Style::default()
-            }
         })
         .into()
 }

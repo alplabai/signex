@@ -72,7 +72,7 @@ fn blank_preview() -> crate::app::state::PreviewState {
     PreviewState {
         source: std::path::PathBuf::new(),
         pages: Vec::new(),
-        page_handles: Vec::new(),
+        raster_source: None,
         selected: 0,
         pdf_options: signex_output::PdfOptions::default(),
         page_setup: PageSetupInputs::from_options(&signex_output::PdfOptions::default()),

@@ -97,7 +97,11 @@ const HEIGHT_SLACK: f32 = 2.0;
 ///
 /// Returns `true` (keep, shape it) whenever the text might wrap, because a
 /// wrapped block's height depends on shaping. Never returns `false` for an
-/// item the post-shaping test would keep.
+/// item the post-shaping test would keep, **assuming** no glyph advances more
+/// than `MAX_GLYPH_ADVANCE_EM` ems. That is a property of the fonts, not
+/// something this code enforces; a few codepoints in fallback faces (e.g.
+/// U+FDFD) are wider, so a label made of them at a viewport edge could be
+/// culled while partly visible.
 fn may_intersect_viewport(
     item: &TextItem,
     font_px: f32,
@@ -108,7 +112,9 @@ fn may_intersect_viewport(
     let (mut chars, mut tabs, mut lines) = (0usize, 0usize, 1usize);
     for ch in item.content.chars() {
         match ch {
-            '\n' => lines += 1,
+            // The shaper (cosmic-text) also breaks on a lone '\r'. Counting
+            // both halves of "\r\n" only enlarges the bound, which is safe.
+            '\n' | '\r' => lines += 1,
             '\t' => tabs += 1,
             _ => chars += 1,
         }
@@ -505,7 +511,7 @@ mod tests {
         let font_px = 16.0;
         let line_h = font_px * crate::primitive::text::LINE_HEIGHT_EM;
         let mut culled = 0;
-        for content in ["R1", "NET_A_LONG_LABEL", "a\nbb\nccc", "x\ty"] {
+        for content in ["R1", "NET_A_LONG_LABEL", "a\nbb\nccc", "x\ty", "a\rb\rc\rd"] {
             for h in [TextHAlign::Left, TextHAlign::Center, TextHAlign::Right] {
                 for v in [TextVAlign::Top, TextVAlign::Center, TextVAlign::Bottom] {
                     let item = TextItem {

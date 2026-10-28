@@ -95,6 +95,38 @@ pub enum ErcMsg {
     /// Copy this machine's ERC preferences into the active project's
     /// `.snxprj` rule set (written on the next explicit save, #1085).
     StoreRulesInProject,
+    /// "Save as profile": write the project's stored ERC rules to the user's
+    /// profile library as a new file under `name` (a taken name gets a
+    /// numeric suffix; an existing profile is never replaced).
+    ProfileSaveRequested { name: String },
+    /// The profile file was written (or why it was not). On success the
+    /// project records the written profile as its provenance.
+    ProfileSaved {
+        project: crate::app::state::ProjectId,
+        result: std::sync::Arc<Result<crate::rule_profiles::SavedProfile, String>>,
+    },
+    /// "Update from profile": look up the profile the project was seeded
+    /// from and show what applying it would change.
+    ProfileUpdateRequested,
+    /// The profile an update asked for was read. `Ok(None)`: no profile of
+    /// that name on this machine.
+    ProfileLoadedForUpdate {
+        project: crate::app::state::ProjectId,
+        result: std::sync::Arc<Result<Option<crate::rule_profiles::ResolvedProfile>, String>>,
+    },
+    /// The user confirmed the shown diff: apply it as one undo step.
+    ProfileUpdateConfirmed,
+    /// The user dismissed the shown diff; the project is unchanged.
+    ProfileUpdateCancelled,
+    /// The local profile a project was seeded from was read for the drift
+    /// check. Same payload as `ProfileLoadedForUpdate`.
+    ProfileDriftChecked {
+        project: crate::app::state::ProjectId,
+        result: std::sync::Arc<Result<Option<crate::rule_profiles::ResolvedProfile>, String>>,
+    },
+    /// The first-run move of the preferences' ERC rules into the user's
+    /// default profile finished.
+    DefaultProfileMigrated(std::sync::Arc<Result<crate::rule_profiles::ProfileMigration, String>>),
     /// Undo the last edit of the project's stored rule set.
     RulesUndone,
     /// Redo the last undone edit of the project's stored rule set.
@@ -276,8 +308,6 @@ pub enum ExportMsg {
     },
     /// User picked a path for File → Export → ERC Report — format and write.
     ErcReportPathChosen(Result<std::path::PathBuf, String>),
-    /// The ERC report write completed — carries the path or the IO error.
-    ErcReportWritten(Result<std::path::PathBuf, String>),
     /// #431 — user clicked "Export anyway (incomplete)" on the
     /// netlist-incomplete prompt. Writes the partial `.net` (a clean file, no
     /// header) and logs the omitted pages as a warning, then clears the prompt.
@@ -293,6 +323,9 @@ pub enum ExportMsg {
 /// so the notice, advisory and log lines are applied on the UI thread.
 #[derive(Debug, Clone)]
 pub struct ExportWriteOutcome {
+    /// The file written, released from the rename guard
+    /// (`DocumentState::project_writes`) when the write lands.
+    pub path: std::path::PathBuf,
     /// `Err` holds the complete user-facing failure text.
     pub result: Result<(), String>,
     /// Logged when the write succeeded.
@@ -375,6 +408,28 @@ pub enum FileMsg {
         path: PathBuf,
         title: String,
         result: Result<Box<signex_types::pcb::PcbBoard>, String>,
+    },
+    /// Completion of an off-thread schematic / PCB / primitive read started
+    /// from the project tree or a primitive open (#859). Applied only while
+    /// `request` is still the read tracked for its path; otherwise dropped.
+    DocumentReadFinished {
+        request: crate::app::document_read::ReadRequest,
+        result: Result<
+            Box<crate::app::document_read::LoadedDocument>,
+            crate::app::document_read::OpenFailure,
+        >,
+    },
+    /// Completion of an off-thread History restore (#859): the git restore
+    /// and the re-read of the restored file. Applied only while `request` is
+    /// still the restore tracked for its document.
+    HistoryRestoreFinished {
+        request: crate::app::document_read::ReadRequest,
+        sha: String,
+        edit_stamp: crate::app::restore_job::EditStamp,
+        result: Result<
+            Box<crate::app::restore_job::RestoreJobDocument>,
+            crate::app::restore_job::RestoreFailure,
+        >,
     },
     Save,
     /// Completion of an off-thread document write (Save / Save As). The
@@ -475,6 +530,9 @@ pub enum ProjectMsg {
     /// Messages panel. The outer `Err` is a worker that died.
     AddExistingFilesCopied {
         project_id: crate::app::state::ProjectId,
+        /// The folder the copies went into, released from the rename
+        /// guard (`DocumentState::project_writes`).
+        project_dir: std::path::PathBuf,
         results: Result<Vec<Result<std::path::PathBuf, String>>, String>,
     },
     /// The off-thread blank-schematic write behind `AddNewSchematicPicked`
