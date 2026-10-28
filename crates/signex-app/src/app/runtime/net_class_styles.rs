@@ -26,7 +26,7 @@ use crate::app::state::net_class_styles::{
     ProjectKey, ResolveFailed, ResolvedProject, ResolvedStyles,
 };
 use crate::app::state::project_case::fold_of;
-use crate::app::state::scope::{self, CaseFold};
+use crate::app::state::scope;
 use crate::app::state::{DocumentState, ProjectId};
 
 use super::Signex;
@@ -36,7 +36,6 @@ struct PlannedProject {
     project: ProjectId,
     key: ProjectKey,
     open_paths: Vec<PathBuf>,
-    fold: CaseFold,
     project_dir: PathBuf,
 }
 
@@ -45,7 +44,6 @@ struct PlannedProject {
 struct ProjectJob {
     project: ProjectId,
     key: ProjectKey,
-    fold: CaseFold,
     project_dir: PathBuf,
 }
 
@@ -78,7 +76,6 @@ fn resolve_project(open: &OpenSheets, job: ProjectJob) -> ResolvedProject {
     let ProjectJob {
         project,
         key,
-        fold,
         project_dir,
     } = job;
     let mut resolved = ResolvedProject {
@@ -95,7 +92,7 @@ fn resolve_project(open: &OpenSheets, job: ProjectJob) -> ResolvedProject {
         open,
         &resolved.key.pages,
         &resolved.key.root,
-        fold,
+        resolved.key.fold,
         Some(project_dir),
     );
     resolved.warnings = stitched.warnings;
@@ -153,10 +150,10 @@ fn plan_projects(document: &DocumentState) -> Vec<PlannedProject> {
                     connectivity: entry.stamp,
                     pages: project_sheets::project_pages(Some(project)),
                     root,
+                    fold: fold_of(Some(project)),
                     classes: project.data.net_classes.clone(),
                 },
                 open_paths: entry.paths,
-                fold: fold_of(Some(project)),
                 project_dir: project.dir().to_path_buf(),
             })
         })
@@ -206,7 +203,6 @@ impl Signex {
             jobs.push(ProjectJob {
                 project: project.project,
                 key: project.key,
-                fold: project.fold,
                 project_dir: project.project_dir,
             });
         }

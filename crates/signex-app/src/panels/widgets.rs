@@ -244,29 +244,20 @@ fn property_label_small<'a, M: 'a>(label: impl Into<String>, color: Color) -> El
     .into()
 }
 
-/// Numeric edit row used by the shape pre-placement form. Writes on
-/// submit — partial text mid-type doesn't panic via parse failure.
+/// Numeric edit row used by the shape pre-placement form. The typed text
+/// stays as a draft while the box is edited, so `-` and `1.` survive; each
+/// parsable keystroke is applied, and Enter shows the stored value again.
 pub fn form_edit_row_f64<'a>(
     label: &'a str,
     value: f64,
+    key: crate::panels::NumericFieldKey,
+    draft: Option<&crate::panels::NumericDraft>,
     muted: Color,
-    on_submit: impl Fn(f64) -> PanelMsg + 'a + Clone,
 ) -> Element<'a, PanelMsg> {
-    use iced::widget::{row, text_input};
-    let buf = format!("{value:.3}");
-    let on_submit_cb = on_submit.clone();
+    use iced::widget::row;
     row![
         property_label_small(label, muted),
-        text_input("", &buf)
-            .size(11)
-            .on_input(move |s| {
-                if let Some(v) = crate::numeric_field::parse_field_f64(&s) {
-                    on_submit_cb(v)
-                } else {
-                    PanelMsg::Noop
-                }
-            })
-            .width(Length::FillPortion(3)),
+        crate::panels::numeric_input("", key, value, draft).size(11),
     ]
     .padding([4, PROPERTY_ROW_PAD_X])
     .spacing(6)

@@ -341,3 +341,49 @@ fn unencodable_cell_is_rejected_and_library_stays_saveable() {
     let on_disk = LibraryFile::parse(&std::fs::read_to_string(&file).unwrap()).unwrap();
     assert_eq!(on_disk.tables["resistors"].rows.len(), 2);
 }
+
+/// #416: once memory holds the adapter's own last write, a row edit takes
+/// the row write. A cell the full write refuses is refused there too, and
+/// leaves disk, HEAD, the index and memory as they were.
+#[test]
+fn a_bad_cell_on_the_row_write_changes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, lib_id, adapter) = init(&dir);
+    let root = file.parent().unwrap().to_path_buf();
+    let first = row("R-1", lib_id);
+    adapter
+        .insert_row("resistors", first.clone(), "first")
+        .unwrap();
+    adapter
+        .insert_row("resistors", row("R-2", lib_id), "second")
+        .unwrap();
+    let bytes = std::fs::read(&file).unwrap();
+    let head = head_oid(&root);
+    let pns = |a: &LocalGitAdapter| -> Vec<String> {
+        a.read_table("resistors")
+            .unwrap()
+            .iter()
+            .map(|r| r.internal_pn.to_string())
+            .collect()
+    };
+    let memory = pns(&adapter);
+
+    for bad in ["R\u{7f}3", "R\t3", "R'''3"] {
+        let err = adapter
+            .insert_row("resistors", row(bad, lib_id), "bad")
+            .unwrap_err();
+        assert!(err.to_string().contains("resistors"), "{bad:?}: {err}");
+        let mut edited = adapter.read_row("resistors", first.row_id.into()).unwrap();
+        edited.internal_pn = InternalPn::new(bad);
+        assert!(adapter.update_row("resistors", edited, "bad").is_err());
+        assert_eq!(std::fs::read(&file).unwrap(), bytes, "{bad:?}");
+        assert_eq!(head_oid(&root), head, "{bad:?}");
+        assert_index_is_head(&root, &file);
+        assert_eq!(pns(&adapter), memory, "{bad:?}");
+    }
+
+    adapter
+        .insert_row("resistors", row("R-3", lib_id), "ok")
+        .unwrap();
+    assert_eq!(pns(&LocalGitAdapter::open(&file).unwrap()).len(), 3);
+}

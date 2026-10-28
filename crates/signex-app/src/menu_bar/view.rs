@@ -179,8 +179,8 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             // leaf duplicating Export → PDF's shortcut. Consolidated
             // under Export → PDF so there's one surface that opens the
             // same preview flow. Ctrl+P (the former top-level shortcut)
-            // still fires `MenuMessage::PrintPreview` through the
-            // global key handler; only the menu row moves.
+            // still opens the preview, via the keymap command bridge
+            // (`app/command/bridge.rs`); only the menu row moves.
             import_menu,
             export_menu,
             separator(mc),

@@ -160,3 +160,36 @@ fn a_power_port_without_a_library_entry_is_drawn_from_its_built_in_body() {
     );
     assert!(plain.is_empty());
 }
+
+/// A power port's library entry (#1408) draws through its pin, and the SVG
+/// shows the same elements as the entry-less built-in body.
+#[test]
+fn power_port_library_entry_draws_its_pin_like_the_built_in_body() {
+    for lib_id in ["power:GND", "power:+5V", "power:arrow"] {
+        let sym = Symbol {
+            lib_id: lib_id.to_string(),
+            is_power: true,
+            unit: 1,
+            ..Symbol::default()
+        };
+        let lib = signex_types::schematic::power_port_lib_symbol(lib_id);
+        let mut with_entry: Vec<String> =
+            emit(&lib, &sym).iter().map(|e| format!("{e:?}")).collect();
+        let mut xform_out = Vec::new();
+        push_symbol_lib_graphics(
+            &mut xform_out,
+            &sym,
+            None,
+            &PageTransform {
+                mm_to_unit: 1.0,
+                translate_x: 0.0,
+                translate_y: 0.0,
+            },
+            &SchematicPalette::classic(),
+        );
+        let mut built_in: Vec<String> = xform_out.iter().map(|e| format!("{e:?}")).collect();
+        with_entry.sort();
+        built_in.sort();
+        assert_eq!(with_entry, built_in, "{lib_id}");
+    }
+}

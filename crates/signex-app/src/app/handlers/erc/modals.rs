@@ -9,11 +9,14 @@ impl Signex {
     pub(crate) fn handle_open_erc_dialog(&mut self) -> Task<Message> {
         self.ui_state.erc_dialog_open = true;
         self.interaction_state.context_menu = None;
-        self.handle_detach_modal(super::super::super::state::ModalId::ErcDialog)
+        let drift = self.check_profile_drift_task();
+        let detach = self.handle_detach_modal(super::super::super::state::ModalId::ErcDialog);
+        Task::batch([detach, drift])
     }
 
     pub(crate) fn handle_close_erc_dialog(&mut self) -> Task<Message> {
         self.ui_state.erc_dialog_open = false;
+        self.ui_state.pending_profile_update = None;
         self.close_detached_modal(super::super::super::state::ModalId::ErcDialog)
     }
 
@@ -39,6 +42,18 @@ impl Signex {
         // Persist so the override survives restart. Silent on I/O errors —
         // this is a preference, not critical state.
         crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
+        // Keep an open Preferences ERC pane and its dirty baseline in step
+        // with the committed change.
+        let stored = self.ui_state.erc_severity_override.get(&rule).copied();
+        for map in [
+            &mut self.ui_state.preferences_draft_erc_severity,
+            &mut self.ui_state.preferences_seed_erc_severity,
+        ] {
+            match stored {
+                Some(s) => map.insert(rule, s),
+                None => map.remove(&rule),
+            };
+        }
         Task::none()
     }
 

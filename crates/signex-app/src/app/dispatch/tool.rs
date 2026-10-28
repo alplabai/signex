@@ -140,11 +140,7 @@ impl Signex {
                     row_id: None,
                     library_version: String::new(),
                 };
-                self.apply_engine_command(
-                    signex_engine::Command::PlaceSymbol { symbol },
-                    false,
-                    false,
-                );
+                self.apply_engine_commands(signex_engine::place_power_port(symbol), false, false);
                 self.interaction_state.active_canvas_mut().selected = vec![sch::SelectedItem {
                     uuid,
                     kind: sch::SelectedKind::Symbol,
@@ -417,6 +413,12 @@ impl Signex {
                 // close any transient selection the dock picked up.
                 self.interaction_state.active_canvas_mut().placement_paused = false;
                 self.interaction_state.active_canvas_mut().selected.clear();
+                // The overlay layer draws the selection highlight and now
+                // also the ERC markers; without a rebuild the old highlight
+                // stays painted beside the markers (#1403).
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_overlay_cache();
                 self.update_selection_info();
                 // v0.13 — also resume the footprint editor's placement
                 // pause when the active tab is a footprint editor.
@@ -542,5 +544,30 @@ impl Signex {
                 self.finish_update()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::contracts::Message;
+
+    /// #1403 - resuming placement drops the selection, so the overlay layer
+    /// that paints the highlight must be rebuilt rather than left stale.
+    #[test]
+    fn resume_placement_rebuilds_the_overlay() {
+        let (mut app, _t) = Signex::new();
+        let id = signex_types::schematic::SelectedItem::new(
+            uuid::Uuid::from_u128(7),
+            signex_types::schematic::SelectedKind::Wire,
+        );
+        app.interaction_state.active_canvas_mut().selected = vec![id];
+        let before = app.interaction_state.active_canvas().overlay_cache_clears;
+
+        let _ = app.update(Message::Tool(ToolMessage::ResumePlacement));
+
+        let canvas = app.interaction_state.active_canvas();
+        assert!(canvas.selected.is_empty());
+        assert!(canvas.overlay_cache_clears > before, "stale overlay left");
     }
 }

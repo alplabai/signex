@@ -76,8 +76,6 @@ pub fn parse(
 pub enum ParseError {
     #[error("unexpected end of token stream at line {line}")]
     UnexpectedEof { line: usize },
-    #[error("unresolved USE node: {name}")]
-    UnresolvedUse { name: String },
     #[error("node nesting deeper than {limit} at line {line}")]
     NestingTooDeep { line: usize, limit: usize },
     #[error("malformed number at line {line}: {value:?}")]

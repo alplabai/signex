@@ -8,8 +8,7 @@ use crate::icons;
 use crate::panels::{self, PanelKind};
 use crate::styles;
 
-/// Wrap a themed SVG handle into a 10×10 `Svg` widget — matches the
-/// dimensions of the old LazyLock-based helper. Kept as a free
+/// Wrap a themed SVG handle into a 14×14 `Svg` widget. Kept as a free
 /// function so every call site reads `svg_icon(icons::icon_close(tid))`
 /// without extra boilerplate.
 fn svg_icon(handle: svg::Handle) -> iced::widget::Svg<'static> {

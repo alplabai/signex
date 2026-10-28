@@ -110,7 +110,7 @@ pub fn lower_symbol(lib: &LibSymbol, sym: &Symbol) -> Vec<SymbolPrimitive> {
 
 /// Lower a placed symbol whose library entry may be missing. A library entry
 /// wins; a power port without one gets its built-in body (see
-/// `power_port_graphics`); any other symbol without an entry lowers to
+/// `power_port_lib_symbol`); any other symbol without an entry lowers to
 /// nothing. A library entry that draws nothing also falls back for a power
 /// port.
 pub fn lower_placed_symbol(lib: Option<&LibSymbol>, sym: &Symbol) -> Vec<SymbolPrimitive> {
@@ -123,12 +123,7 @@ pub fn lower_placed_symbol(lib: Option<&LibSymbol>, sym: &Symbol) -> Vec<SymbolP
     if !sym.is_power {
         return Vec::new();
     }
-    let t = SymbolTransform::from_symbol(sym);
-    let mut out = Vec::new();
-    for graphic in super::power_port_graphics(&sym.lib_id) {
-        lower_graphic(&graphic, &t, &mut out);
-    }
-    out
+    lower_symbol(&super::power_port_lib_symbol(&sym.lib_id), sym)
 }
 
 fn lower_graphic(graphic: &Graphic, t: &SymbolTransform, out: &mut Vec<SymbolPrimitive>) {

@@ -39,7 +39,8 @@
 //!   handles that — left-click action + right-click dropdown +
 //!   chevron indicator).
 //! - The toggle state (each editor's state owns it).
-//! - The click-outside backstop layer (each editor's view stacks it).
+//! - The click-outside backstop layer (`active_bar::view_with_overlay` stacks it under
+//!   the panel).
 
 use iced::widget::svg;
 use iced::widget::{Column, Space, button, container, row, text};

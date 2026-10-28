@@ -1,0 +1,524 @@
+//! Rule profiles in the ERC flow (#1085): confirmed updates, the drift note,
+//! the report header and the old-project guarantee.
+
+use std::sync::Arc;
+
+use signex_erc::project_rules::profile::{builtin_profile, profile_ref};
+use signex_erc::{RuleKind, Severity};
+use signex_output::{ErcReportExporter, ErcReportFormat, Exporter};
+use signex_types::project::{RuleProfile, RuleProfileRef};
+
+use crate::app::handlers::menu::export::tests::app_workspace;
+
+fn workspace(tag: &str) -> crate::app::Signex {
+    let dir = std::env::temp_dir().join(format!("signex-prof-{tag}-{}", uuid::Uuid::new_v4()));
+    let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
+    app.ui_state.erc_severity_override.clear();
+    app.ui_state.pin_matrix_overrides.clear();
+    app
+}
+
+fn rules(app: &crate::app::Signex) -> Option<signex_types::project::ProjectRules> {
+    app.document_state.projects[0].data.rules.clone()
+}
+
+fn is_dirty(app: &crate::app::Signex) -> bool {
+    let path = &app.document_state.projects[0].path;
+    app.document_state.dirty_paths.contains(path)
+}
+
+fn found(profile: RuleProfile) -> Arc<Result<Option<(RuleProfile, &'static str)>, String>> {
+    Arc::new(Ok(Some((profile, "user"))))
+}
+
+/// A project whose rules were edited away from a stored profile.
+fn edited_project(tag: &str) -> crate::app::Signex {
+    let mut app = workspace(tag);
+    let _ = app.handle_store_erc_rules_in_project();
+    let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Off);
+    let _ = app.handle_erc_severity_changed(RuleKind::DanglingWire, Severity::Info);
+    app
+}
+
+fn company_profile() -> RuleProfile {
+    let mut p = builtin_profile();
+    p.name = "Company".into();
+    p.erc.severity.insert("unused_pin".into(), "error".into());
+    p
+}
+
+#[test]
+fn update_applies_only_after_confirm_and_is_one_undo_step() {
+    let mut app = edited_project("confirm");
+    let id = app.document_state.projects[0].id;
+    let before = rules(&app);
+    let _ = app.handle_profile_loaded_for_update(id, &found(company_profile()));
+
+    let pending = app
+        .ui_state
+        .pending_profile_update
+        .as_ref()
+        .expect("diff shown");
+    assert!(!pending.changes.is_empty());
+    assert_eq!(rules(&app), before, "the diff alone changes nothing");
+
+    let _ = app.handle_profile_update_confirmed();
+    let after = rules(&app).unwrap();
+    assert_eq!(after.erc.severity["unused_pin"], "error");
+    assert_eq!(after.profile.as_ref().unwrap().name, "Company");
+    assert_eq!(
+        after.profile.as_ref().unwrap().sha256,
+        company_profile().content_sha256()
+    );
+    assert!(app.ui_state.pending_profile_update.is_none());
+    assert!(is_dirty(&app));
+
+    assert!(app.undo_project_rules());
+    assert_eq!(
+        rules(&app),
+        before,
+        "one undo returns to the pre-update rules"
+    );
+}
+
+#[test]
+fn cancelling_the_diff_leaves_the_project_alone() {
+    let mut app = edited_project("cancel");
+    let id = app.document_state.projects[0].id;
+    let before = rules(&app);
+    let _ = app.handle_profile_loaded_for_update(id, &found(company_profile()));
+    let _ = app.handle_profile_update_cancelled();
+    let _ = app.handle_profile_update_confirmed();
+    assert_eq!(rules(&app), before);
+    assert!(app.ui_state.pending_profile_update.is_none());
+}
+
+#[test]
+fn an_update_keeps_rule_ids_from_a_newer_build() {
+    let mut app = edited_project("foreign");
+    app.edit_project_erc_rules(|erc| {
+        erc.severity.insert("future_rule".into(), "warning".into());
+    });
+    let id = app.document_state.projects[0].id;
+    let _ = app.handle_profile_loaded_for_update(id, &found(company_profile()));
+    let _ = app.handle_profile_update_confirmed();
+    assert_eq!(rules(&app).unwrap().erc.severity["future_rule"], "warning");
+}
+
+#[test]
+fn a_profile_missing_from_the_library_shows_no_diff() {
+    let mut app = edited_project("missing");
+    let id = app.document_state.projects[0].id;
+    let before = rules(&app);
+    let _ = app.handle_profile_loaded_for_update(id, &Arc::new(Ok(None)));
+    assert!(app.ui_state.pending_profile_update.is_none());
+    assert_eq!(rules(&app), before);
+}
+
+#[test]
+fn matching_rules_and_hash_show_no_diff() {
+    let mut app = workspace("uptodate");
+    let _ = app.handle_store_erc_rules_in_project();
+    let profile = builtin_profile();
+    let id = app.document_state.projects[0].id;
+    app.document_state.projects[0]
+        .data
+        .rules
+        .as_mut()
+        .unwrap()
+        .profile = Some(profile_ref(&profile, "builtin"));
+    let _ = app.handle_profile_loaded_for_update(id, &found(profile));
+    assert!(app.ui_state.pending_profile_update.is_none());
+}
+
+#[test]
+fn drift_is_noted_once_and_never_overwrites() {
+    let mut app = workspace("drift");
+    let _ = app.handle_store_erc_rules_in_project();
+    let id = app.document_state.projects[0].id;
+    let mut local = company_profile();
+    local.name = format!("Drift-{}", uuid::Uuid::new_v4());
+    let stale = RuleProfileRef {
+        name: local.name.clone(),
+        source: "user".into(),
+        sha256: "stale".into(),
+        ..Default::default()
+    };
+    app.document_state.projects[0]
+        .data
+        .rules
+        .as_mut()
+        .unwrap()
+        .profile = Some(stale);
+    let before = rules(&app);
+    let dirty_before = is_dirty(&app);
+
+    let needle = local.name.clone();
+    let logged = crate::diagnostics::logged_count(&needle);
+    let _ = app.handle_profile_drift_checked(id, &found(local.clone()));
+    let _ = app.handle_profile_drift_checked(id, &found(local));
+    assert_eq!(crate::diagnostics::logged_count(&needle), logged + 1);
+    assert!(app.document_state.profile_drift_noted.contains(&id));
+    assert_eq!(
+        rules(&app),
+        before,
+        "the project's rules are never overwritten"
+    );
+    assert_eq!(is_dirty(&app), dirty_before);
+    assert!(app.ui_state.pending_profile_update.is_none());
+}
+
+#[test]
+fn no_drift_note_when_the_hash_still_matches() {
+    let mut app = workspace("nodrift");
+    let _ = app.handle_store_erc_rules_in_project();
+    let id = app.document_state.projects[0].id;
+    let mut local = company_profile();
+    local.name = format!("Same-{}", uuid::Uuid::new_v4());
+    app.document_state.projects[0]
+        .data
+        .rules
+        .as_mut()
+        .unwrap()
+        .profile = Some(profile_ref(&local, "user"));
+    let logged = crate::diagnostics::logged_count(&local.name);
+    let _ = app.handle_profile_drift_checked(id, &found(local.clone()));
+    assert_eq!(crate::diagnostics::logged_count(&local.name), logged);
+    assert!(app.document_state.profile_drift_noted.is_empty());
+}
+
+#[test]
+fn storing_the_untouched_defaults_records_the_shipped_profile() {
+    let mut app = workspace("seedref");
+    let _ = app.handle_store_erc_rules_in_project();
+    let reference = rules(&app).unwrap().profile.expect("provenance");
+    assert_eq!(reference.name, "Signex Default");
+    assert_eq!(reference.source, "builtin");
+    assert_eq!(reference.sha256, builtin_profile().content_sha256());
+
+    let mut custom = workspace("seedref-custom");
+    custom
+        .ui_state
+        .erc_severity_override
+        .insert(RuleKind::DanglingWire, Severity::Off);
+    let _ = custom.handle_store_erc_rules_in_project();
+    assert!(rules(&custom).unwrap().profile.is_none());
+}
+
+#[test]
+fn the_report_header_carries_the_profile_name_and_rule_set_hash() {
+    let mut app = workspace("report");
+    let _ = app.handle_store_erc_rules_in_project();
+    app.run_erc_blocking();
+    app.ui_state
+        .erc_violations_by_path
+        .insert(std::path::PathBuf::from("a_root.snxsch"), Vec::new());
+    let stored = rules(&app).unwrap();
+
+    let opts = app.erc_report_options(ErcReportFormat::Text);
+    let ctx = signex_output::ExportContext {
+        sheets: Vec::new(),
+        metadata: signex_output::ProjectMetadata::default(),
+        netlist: None,
+        netlist_sheets: Vec::new(),
+        current_sheet: None,
+        netlist_placements: Vec::new(),
+    };
+    let text = String::from_utf8(ErcReportExporter.export(&ctx, &opts).unwrap().bytes).unwrap();
+    let want = format!(
+        "Rule set: Signex Default (sha256 {})",
+        stored.erc.sha256_hex()
+    );
+    assert!(text.lines().nth(1) == Some(want.as_str()), "{text}");
+}
+
+#[test]
+fn an_old_project_stays_without_rules_and_clean_through_every_profile_path() {
+    let mut app = workspace("old");
+    let id = app.document_state.projects[0].id;
+    app.run_erc_blocking();
+    let _ = app.handle_profile_drift_checked(id, &Arc::new(Ok(None)));
+    let _ = app.handle_profile_update_requested();
+    let _ = app.handle_profile_update_confirmed();
+    let _ = app.handle_profile_save_requested("Mine".into());
+    assert!(rules(&app).is_none());
+    assert!(!is_dirty(&app));
+    assert!(app.ui_state.pending_profile_update.is_none());
+    let report_set = app.ui_state.erc_run_rule_set.clone().expect("identity");
+    assert_eq!(report_set.profile_name, None);
+}
+
+/// Run the Save-as-profile task body against a tempdir and feed the result
+/// back through the handler, as the message loop would.
+fn save_through_handler(app: &mut crate::app::Signex, dir: &std::path::Path, name: &str) {
+    let project = app.document_state.projects[0].id;
+    let erc = rules(app).unwrap().erc;
+    let result = crate::rule_profiles::save_as_profile(dir, name, erc);
+    let _ = app.handle_profile_saved(project, &result);
+}
+
+#[test]
+fn saving_a_profile_records_it_then_drift_and_update_work() {
+    let mut app = edited_project("saveref");
+    let lib = tempfile::tempdir().unwrap();
+    app.document_state.dirty_paths.clear();
+    let before = rules(&app).unwrap();
+    assert_eq!(before.profile.as_ref().unwrap().source, "builtin");
+
+    save_through_handler(&mut app, lib.path(), "Mine");
+    let recorded = rules(&app).unwrap().profile.expect("ref recorded");
+    assert_eq!(
+        (recorded.name.as_str(), recorded.source.as_str()),
+        ("Mine", "user")
+    );
+    assert_eq!(recorded.sha256, rules(&app).unwrap().erc.sha256_hex());
+    assert!(is_dirty(&app));
+    assert!(app.active_project_has_profile());
+    assert!(app.undo_project_rules());
+    assert_eq!(rules(&app), Some(before), "one undo removes the record");
+    assert!(app.redo_project_rules());
+
+    // Edit the profile file on disk: drift is noted, Update applies it.
+    let file = lib.path().join("mine.snxrules");
+    let mut edited =
+        signex_types::project::RuleProfile::from_json_bytes(&std::fs::read(&file).unwrap())
+            .unwrap();
+    edited
+        .erc
+        .severity
+        .insert("unused_pin".into(), "error".into());
+    std::fs::write(&file, edited.to_json_bytes()).unwrap();
+    let id = app.document_state.projects[0].id;
+    let resolved = Arc::new(crate::rule_profiles::resolve_profile(
+        Some(lib.path()),
+        &recorded,
+    ));
+    let logged = crate::diagnostics::logged_count("The rule profile \"Mine\" has changed");
+    let _ = app.handle_profile_drift_checked(id, &resolved);
+    assert_eq!(
+        crate::diagnostics::logged_count("The rule profile \"Mine\" has changed"),
+        logged + 1
+    );
+    let _ = app.handle_profile_loaded_for_update(id, &resolved);
+    assert!(app.ui_state.pending_profile_update.is_some());
+    let _ = app.handle_profile_update_confirmed();
+    let after = rules(&app).unwrap();
+    assert_eq!(after.erc.severity["unused_pin"], "error");
+    assert_eq!(after.profile.unwrap().sha256, edited.content_sha256());
+}
+
+#[test]
+fn the_report_header_says_modified_when_the_rules_left_the_profile() {
+    let mut app = workspace("modified");
+    let _ = app.handle_store_erc_rules_in_project();
+    assert_eq!(
+        app.current_rule_set_identity().profile_name.as_deref(),
+        Some("Signex Default")
+    );
+    let _ = app.handle_erc_severity_changed(RuleKind::DanglingWire, Severity::Off);
+    let identity = app.current_rule_set_identity();
+    assert_eq!(
+        identity.profile_name.as_deref(),
+        Some("Signex Default (modified)")
+    );
+    assert_eq!(identity.sha256, rules(&app).unwrap().erc.sha256_hex());
+}
+
+#[test]
+fn confirming_for_another_project_logs_instead_of_dropping_silently() {
+    let mut app = edited_project("stale-confirm");
+    let id = app.document_state.projects[0].id;
+    let mut profile = company_profile();
+    profile.name = format!("Stale-{}", uuid::Uuid::new_v4());
+    let _ = app.handle_profile_loaded_for_update(id, &found(profile.clone()));
+    app.ui_state
+        .pending_profile_update
+        .as_mut()
+        .unwrap()
+        .project = crate::app::state::ProjectId::test_id(u32::MAX);
+    let before = rules(&app);
+    let logged = crate::diagnostics::logged_count(&profile.name);
+    let _ = app.handle_profile_update_confirmed();
+    assert_eq!(crate::diagnostics::logged_count(&profile.name), logged + 1);
+    assert_eq!(rules(&app), before);
+}
+
+fn erc_with_unknown(key: &str, value: serde_json::Value) -> signex_types::project::ErcRules {
+    serde_json::from_value(serde_json::json!({ key: value })).unwrap()
+}
+
+#[test]
+fn a_foreign_key_both_sides_hold_is_listed_and_applied_exactly_as_listed() {
+    let mut app = edited_project("unknown-key");
+    app.edit_project_erc_rules(|erc| {
+        erc.unknown = erc_with_unknown("future_key", serde_json::json!(1)).unknown;
+    });
+    let id = app.document_state.projects[0].id;
+    let mut profile = company_profile();
+    profile.erc.unknown = erc_with_unknown("future_key", serde_json::json!(2)).unknown;
+    let _ = app.handle_profile_loaded_for_update(id, &found(profile));
+    let lines = app.pending_profile_update_lines().expect("diff shown").1;
+    assert!(
+        lines
+            .iter()
+            .any(|l| l == "other setting future_key: 1 -> 2"),
+        "{lines:?}"
+    );
+    let _ = app.handle_profile_update_confirmed();
+    let unknown = rules(&app).unwrap().erc.unknown;
+    assert_eq!(unknown.get("future_key"), Some(&serde_json::json!(2)));
+}
+
+#[test]
+fn a_foreign_key_only_the_project_holds_is_kept_and_not_listed() {
+    let mut app = edited_project("unknown-keep");
+    app.edit_project_erc_rules(|erc| {
+        erc.unknown = erc_with_unknown("future_key", serde_json::json!(1)).unknown;
+    });
+    let id = app.document_state.projects[0].id;
+    let _ = app.handle_profile_loaded_for_update(id, &found(company_profile()));
+    let lines = app.pending_profile_update_lines().expect("diff shown").1;
+    assert!(!lines.iter().any(|l| l.contains("future_key")), "{lines:?}");
+    let _ = app.handle_profile_update_confirmed();
+    assert!(rules(&app).unwrap().erc.unknown.get("future_key").is_some());
+}
+
+#[test]
+fn editing_a_rule_after_the_diff_was_shown_drops_it_so_apply_cannot_revert_the_edit() {
+    let mut app = edited_project("stale-edit");
+    let id = app.document_state.projects[0].id;
+    let mut profile = company_profile();
+    profile
+        .erc
+        .severity
+        .insert("unused_pin".into(), "error".into());
+    let _ = app.handle_profile_loaded_for_update(id, &found(profile));
+    assert!(app.ui_state.pending_profile_update.is_some());
+
+    let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Info);
+    assert!(
+        app.ui_state.pending_profile_update.is_none(),
+        "panel closed"
+    );
+    let edited = rules(&app);
+    let _ = app.handle_profile_update_confirmed();
+    assert_eq!(rules(&app), edited, "Apply after the edit changes nothing");
+    assert_eq!(rules(&app).unwrap().erc.severity["unused_pin"], "info");
+}
+
+#[test]
+fn undo_and_redo_drop_a_shown_diff() {
+    let mut app = edited_project("stale-undo");
+    let id = app.document_state.projects[0].id;
+    let _ = app.handle_profile_loaded_for_update(id, &found(company_profile()));
+    assert!(app.undo_project_rules());
+    assert!(app.ui_state.pending_profile_update.is_none());
+    let _ = app.handle_profile_loaded_for_update(id, &found(company_profile()));
+    assert!(app.redo_project_rules());
+    assert!(app.ui_state.pending_profile_update.is_none());
+}
+
+#[test]
+fn a_project_switch_drops_the_shown_diff() {
+    let mut app = edited_project("stale-switch");
+    let id = app.document_state.projects[0].id;
+    let _ = app.handle_profile_loaded_for_update(id, &found(company_profile()));
+    assert!(app.pending_profile_update_lines().is_some());
+    app.document_state.active_project = Some(crate::app::state::ProjectId::test_id(u32::MAX));
+    assert!(
+        app.pending_profile_update_lines().is_none(),
+        "the panel never shows another project's diff"
+    );
+    app.refresh_panel_ctx();
+    assert!(app.ui_state.pending_profile_update.is_none());
+}
+
+#[test]
+fn a_drift_check_that_failed_is_logged() {
+    let mut app = workspace("drift-err");
+    let _ = app.handle_store_erc_rules_in_project();
+    let id = app.document_state.projects[0].id;
+    let why = format!("newer-schema-{}", uuid::Uuid::new_v4());
+    let logged = crate::diagnostics::logged_count(&why);
+    let _ = app.handle_profile_drift_checked(id, &Arc::new(Err(why.clone())));
+    assert_eq!(crate::diagnostics::logged_count(&why), logged + 1);
+}
+
+#[test]
+fn a_project_without_a_profile_exports_the_plain_csv() {
+    let mut app = workspace("csv-plain");
+    app.run_erc_blocking();
+    app.ui_state
+        .erc_violations_by_path
+        .insert(std::path::PathBuf::from("a_root.snxsch"), Vec::new());
+    let opts = app.erc_report_options(ErcReportFormat::Csv);
+    assert!(
+        opts.rule_set.is_some(),
+        "identity still feeds the text report"
+    );
+    let ctx = signex_output::ExportContext {
+        sheets: Vec::new(),
+        metadata: signex_output::ProjectMetadata::default(),
+        netlist: None,
+        netlist_sheets: Vec::new(),
+        current_sheet: None,
+        netlist_placements: Vec::new(),
+    };
+    let bytes = ErcReportExporter.export(&ctx, &opts).unwrap().bytes;
+    let plain_opts = signex_output::ErcReportOptions {
+        rule_set: None,
+        ..opts
+    };
+    let plain = ErcReportExporter.export(&ctx, &plain_opts).unwrap().bytes;
+    assert_eq!(bytes, plain);
+}
+
+/// #1503 - the report header names the rule set that produced the cached
+/// rows, not the one a newer or failed run started under.
+#[test]
+fn the_report_rule_set_follows_the_rows_not_the_run_start() {
+    let mut app = edited_project("hdr");
+    let (first, inputs) = app.begin_erc_run();
+    assert!(
+        app.ui_state.erc_run_rule_set.is_none(),
+        "starting a run names no set before rows exist"
+    );
+    let outcome = Ok(crate::app::handlers::erc::erc_job::run_erc_job(inputs));
+    assert!(app.apply_erc_run_result(first, &outcome));
+    let produced = app
+        .ui_state
+        .erc_run_rule_set
+        .clone()
+        .expect("set after success");
+
+    let _ = app.handle_erc_severity_changed(RuleKind::DanglingWire, Severity::Error);
+    assert_ne!(app.current_rule_set_identity(), produced, "rules moved on");
+
+    // A run in flight under the new rules must not rename the old rows.
+    let (second, _) = app.begin_erc_run();
+    assert_eq!(app.ui_state.erc_run_rule_set, Some(produced.clone()));
+    // ...nor does a failed run.
+    assert!(!app.apply_erc_run_result(second, &Err("worker died".into())));
+    assert_eq!(app.ui_state.erc_run_rule_set, Some(produced));
+}
+
+/// #1503 - Apply keeps a hand-written `source: "file"` instead of rewriting
+/// it to `user`.
+#[test]
+fn apply_keeps_the_recorded_profile_source() {
+    let mut app = edited_project("src");
+    app.edit_project_erc_rules(|_| {});
+    let id = app.document_state.projects[0].id;
+    let mut rules_now = rules(&app).unwrap();
+    rules_now.profile = Some(RuleProfileRef {
+        name: "Company".into(),
+        source: "file".into(),
+        ..Default::default()
+    });
+    app.replace_project_rules(Some(rules_now), true);
+    let _ = app.handle_profile_loaded_for_update(id, &found(company_profile()));
+    let _ = app.handle_profile_update_confirmed();
+    let recorded = rules(&app).unwrap().profile.unwrap();
+    assert_eq!(recorded.source, "file");
+    assert_eq!(recorded.sha256, company_profile().content_sha256());
+}

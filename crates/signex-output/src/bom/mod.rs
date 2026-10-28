@@ -239,9 +239,11 @@ fn engine_options_from_opts(opts: &BomOptions) -> BomEngineOptions {
         grouping: opts.grouping,
         include_dnp: opts.include_dnp,
         include_not_fitted: opts.include_not_fitted,
-        // Keep v0.8 behavior stable for now: include symbols regardless of these flags.
-        include_excluded_from_bom: true,
-        include_not_on_board: true,
+        // A part marked out of the BOM or off the board has always been
+        // listed only together with the not-fitted parts (it used to be folded
+        // into the fitted state), so the one export toggle keeps governing it.
+        include_excluded_from_bom: opts.include_not_fitted,
+        include_not_on_board: opts.include_not_fitted,
     }
 }
 
@@ -367,8 +369,7 @@ fn placed_components(placed: &[(&Symbol, &str)], opts: &BomOptions) -> Vec<BomCo
 }
 
 fn component_is_exported(component: &BomComponent, opts: &BomOptions) -> bool {
-    component.passes_dnp_filter(opts.include_dnp)
-        && (opts.include_not_fitted || component.is_fitted())
+    engine_options_from_opts(opts).admits(component)
 }
 
 fn build_validation_context(ctx: &BomContext, opts: &BomOptions) -> BomContext {
@@ -908,6 +909,51 @@ mod tests {
                 && i.message.contains("In BOM")
                 && i.message.contains("differ")),
             "{issues:?}"
+        );
+    }
+
+    #[test]
+    fn include_dnp_alone_exports_dnp_parts_but_not_excluded_ones() {
+        let mut dnp = unit_of("R2", "Device:R", 1);
+        dnp.dnp = true;
+        let mut excluded = unit_of("R3", "Device:R", 1);
+        excluded.in_bom = false;
+        let ctx = context_with(vec![unit_of("R1", "Device:R", 1), dnp, excluded]);
+        let qty = |opts: &BomOptions| rollup(&ctx, opts).rows.iter().map(|r| r.qty).sum::<u32>();
+        assert_eq!(qty(&BomOptions::default()), 1);
+        let dnp_only = BomOptions {
+            include_dnp: true,
+            ..BomOptions::default()
+        };
+        assert_eq!(qty(&dnp_only), 2);
+    }
+
+    #[test]
+    fn a_part_outside_the_bom_listed_by_include_not_fitted_is_not_fitted() {
+        let mut test_point = unit_of("TP1", "Device:TestPoint", 1);
+        test_point.in_bom = false;
+        let ctx = context_with(vec![unit_of("R1", "Device:R", 1), test_point]);
+        let opts = BomOptions {
+            include_not_fitted: true,
+            ..BomOptions::default()
+        };
+        let rows = rollup(&ctx, &opts).rows;
+        let row = rows
+            .iter()
+            .find(|r| r.references.iter().any(|x| x == "TP1"))
+            .expect("listed");
+        assert_eq!((row.qty, row.fitted_qty, row.not_fitted_qty), (1, 0, 1));
+        let r1 = rows
+            .iter()
+            .find(|r| r.references.iter().any(|x| x == "R1"))
+            .unwrap();
+        assert_eq!((r1.fitted_qty, r1.not_fitted_qty), (1, 0));
+        // Without the toggle it stays out of the BOM.
+        assert!(
+            !rollup(&ctx, &BomOptions::default())
+                .rows
+                .iter()
+                .any(|r| r.references.iter().any(|x| x == "TP1"))
         );
     }
 

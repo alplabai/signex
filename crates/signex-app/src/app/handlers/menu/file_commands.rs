@@ -53,9 +53,6 @@ impl Signex {
                 |p| Message::File(FileMsg::NewProject(p)),
             )),
             MenuMessage::OpenSampleProject => Some(self.handle_open_sample_project()),
-            MenuMessage::PrintPreview => {
-                Some(self.update(Message::PrintPreview(PrintPreviewMsg::Requested)))
-            }
             MenuMessage::ExportPdf => Some(self.update(Message::Export(ExportMsg::PdfOpenDialog))),
             MenuMessage::ExportNetlist => self.handle_export_netlist_requested(),
             MenuMessage::ExportBom => Some(self.handle_bom_preview_open()),
@@ -67,9 +64,6 @@ impl Signex {
             MenuMessage::LibraryPlaceComponent => {
                 Some(self.update(Message::Library(crate::library::LibraryMessage::OpenPicker)))
             }
-            MenuMessage::LibraryNewComponent => Some(self.update(Message::Library(
-                crate::library::LibraryMessage::NewComponent,
-            ))),
             MenuMessage::AddComponentLibrary => {
                 let path = self.document_state.active_project.and_then(|id| {
                     self.document_state
