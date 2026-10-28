@@ -13,6 +13,12 @@ use crate::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 /// Saves two rows into a library whose database mode carries `auth`, and
 /// returns how many plain-text warnings the adapter logged.
 fn warnings_after_two_saves(auth: &str) -> usize {
+    warnings_of_reopened_library(auth).0
+}
+
+/// Like [`warnings_after_two_saves`], also returning the warnings logged by
+/// a second adapter that reopens the same library and saves a row.
+fn warnings_of_reopened_library(auth: &str) -> (usize, usize) {
     crate::git_identity::test_identity::install();
     let mut rng = Rng(11);
     let w = World {
@@ -48,12 +54,24 @@ fn warnings_after_two_saves(auth: &str) -> usize {
         row.internal_pn = InternalPn::new(pn);
         adapter.insert_row("t", row, "save").unwrap();
     }
-    adapter.plain_token_warnings.load(Ordering::Relaxed)
+    let first = adapter.plain_token_warnings.load(Ordering::Relaxed);
+    drop(adapter);
+    let reopened = LocalGitAdapter::open(&file).unwrap();
+    let id = rng.uuid();
+    let mut row = random_row(&mut rng, &w, id);
+    row.internal_pn = InternalPn::new("PN-3");
+    reopened.insert_row("t", row, "save").unwrap();
+    (first, reopened.plain_token_warnings.load(Ordering::Relaxed))
 }
 
 #[test]
 fn a_raw_token_warns_exactly_once_across_saves() {
     assert_eq!(warnings_after_two_saves("s3cr3t-token"), 1);
+}
+
+#[test]
+fn a_reopened_adapter_does_not_warn_again_for_the_same_library() {
+    assert_eq!(warnings_of_reopened_library("s3cr3t-token"), (1, 0));
 }
 
 #[test]

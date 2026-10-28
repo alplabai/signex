@@ -139,8 +139,11 @@ fn any_other_column_layout_still_errors() {
         assert!(text.contains(&header), "header line not found");
         std::fs::write(&file, text.replace(&header, &format!("{header}{extra}"))).unwrap();
 
-        let refused = LocalGitAdapter::open(&file).is_err_and(|_| true)
-            || LocalGitAdapter::open(&file).is_ok_and(|a| a.iter_rows().is_err());
+        // Either open or the first row read must refuse the layout.
+        let refused = match LocalGitAdapter::open(&file) {
+            Err(_) => true,
+            Ok(adapter) => adapter.iter_rows().is_err(),
+        };
         assert!(refused, "layout with {extra:?} was accepted");
     }
 }

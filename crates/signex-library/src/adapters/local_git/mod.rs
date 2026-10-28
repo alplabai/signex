@@ -127,8 +127,8 @@ pub struct LocalGitAdapter {
     warned_state: Mutex<Option<disk_sync::DiskState>>,
     /// The "cannot lock on this filesystem" warning was logged (#832).
     write_lock_warned: std::sync::atomic::AtomicBool,
-    /// How many times the plain-text database token warning was logged for
-    /// this library; at most once per adapter, so once per session.
+    /// How many plain-text database token warnings this adapter logged: 0
+    /// or 1 (see `plain_token`).
     plain_token_warnings: std::sync::atomic::AtomicUsize,
     /// Encoded row lines from the last row write (#416). Lock order: after
     /// `library_file` and `disk_stamp`.
@@ -456,6 +456,7 @@ mod write_oracle_tests;
 
 #[cfg(test)]
 mod insert_row_tests;
+mod plain_token;
 #[cfg(test)]
 mod plain_token_tests;
 

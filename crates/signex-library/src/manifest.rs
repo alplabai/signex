@@ -37,12 +37,30 @@ pub(crate) const KEYCHAIN_SIGIL: &str = "@signex-keychain:";
 /// A manifest `auth` of the form `${env:NAME}` names an environment
 /// variable that holds the token, so the token itself never reaches the
 /// manifest. Read when the library connects.
+///
+/// Only variables whose name starts with `SIGNEX_` (upper-case letters,
+/// digits and `_`, for example `SIGNEX_DB_TOKEN`) can be named. A `.snxlib`
+/// comes from a shared repository and also sets the server `url`, so letting
+/// it name any variable would let a tampered manifest send `GITHUB_TOKEN` or
+/// a cloud secret to its own server as the bearer token.
 const ENV_REFERENCE_PREFIX: &str = "${env:";
 
-/// The variable name in an `auth` of the form `${env:NAME}`.
+/// Variable names a manifest may reference.
+const ENV_NAME_PREFIX: &str = "SIGNEX_";
+
+/// The variable name in an `auth` of the form `${env:NAME}`, whatever the
+/// name (it may still be refused by [`resolve_auth`]).
 pub(crate) fn env_reference(auth: &str) -> Option<&str> {
-    let name = auth.strip_prefix(ENV_REFERENCE_PREFIX)?.strip_suffix('}')?;
-    (!name.is_empty()).then_some(name)
+    auth.strip_prefix(ENV_REFERENCE_PREFIX)?.strip_suffix('}')
+}
+
+fn env_name_is_allowed(name: &str) -> bool {
+    name.strip_prefix(ENV_NAME_PREFIX).is_some_and(|rest| {
+        !rest.is_empty()
+            && rest
+                .bytes()
+                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
+    })
 }
 
 /// True when `auth` is a hand-written token: not empty, not a keychain
@@ -54,13 +72,19 @@ pub fn auth_is_plain_token(auth: &str) -> bool {
 
 /// Turn a manifest `auth` into the bearer token to send. An `${env:NAME}`
 /// reference is read through `lookup` (the process environment in
-/// production); anything else is the token itself. Empty means no auth.
+/// production) only when its name starts with `SIGNEX_`; any other name is
+/// refused without calling `lookup`. Anything else is the token itself.
+/// Empty means no auth.
 pub(crate) fn resolve_auth(
     auth: &str,
     lookup: impl Fn(&str) -> Option<String>,
 ) -> Result<String, String> {
     match env_reference(auth) {
         None => Ok(auth.to_string()),
+        Some(name) if !env_name_is_allowed(name) => Err(format!(
+            "library auth names environment variable {name:?}; only SIGNEX_ followed by upper-case \
+             letters, digits or _ is allowed, so a shared library file cannot read other secrets"
+        )),
         Some(name) => lookup(name)
             .filter(|token| !token.is_empty())
             .ok_or_else(|| {
@@ -76,8 +100,9 @@ pub enum LibraryMode {
     LocalGit,
     Database {
         url: String,
-        /// Empty (no auth), an `${env:NAME}` reference to an environment
-        /// variable holding the token, a `@signex-keychain:` reference, or
+        /// Empty (no auth), an `${env:SIGNEX_NAME}` reference to an
+        /// environment variable holding the token (the name must start with
+        /// `SIGNEX_`), a `@signex-keychain:` reference, or
         /// a raw token. The database adapter cannot resolve keychain
         /// references yet (#976). A raw token is written back as is so the
         /// manifest stays saveable; the library adapter warns once per
@@ -497,7 +522,7 @@ classes = ["connector"]
         assert!(!auth_is_plain_token(""));
         assert!(!auth_is_plain_token("@signex-keychain:lab"));
         assert!(!auth_is_plain_token("${env:SIGNEX_DB_TOKEN}"));
-        assert!(auth_is_plain_token("${env:}"), "an empty name is just text");
+        assert!(!auth_is_plain_token("${env:}"), "refused, not sent as text");
 
         let lookup = |name: &str| (name == "SIGNEX_DB_TOKEN").then(|| "tok".to_string());
         assert_eq!(
@@ -506,7 +531,30 @@ classes = ["connector"]
         );
         assert_eq!(resolve_auth("raw", lookup).unwrap(), "raw");
         assert_eq!(resolve_auth("", lookup).unwrap(), "");
-        let err = resolve_auth("${env:OTHER}", lookup).unwrap_err();
-        assert!(err.contains("OTHER"), "{err}");
+        let err = resolve_auth("${env:SIGNEX_OTHER}", lookup).unwrap_err();
+        assert!(
+            err.contains("SIGNEX_OTHER") && err.contains("not set"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn only_signex_prefixed_variables_can_be_read_and_the_lookup_is_never_called() {
+        let lookup = |name: &str| -> Option<String> {
+            panic!("the environment was read for {name}");
+        };
+        for auth in [
+            "${env:HOME}",
+            "${env:AWS_SECRET_ACCESS_KEY}",
+            "${env:GITHUB_TOKEN}",
+            "${env:signex_db_token}",
+            "${env:SIGNEX_db}",
+            "${env:SIGNEX_}",
+            "${env:}",
+            "${env: SIGNEX_DB_TOKEN}",
+        ] {
+            let err = resolve_auth(auth, lookup).unwrap_err();
+            assert!(err.contains("SIGNEX_"), "{auth}: {err}");
+        }
     }
 }
