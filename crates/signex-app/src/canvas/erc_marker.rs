@@ -6,6 +6,8 @@ pub struct ErcMarker {
     pub x: f64,
     pub y: f64,
     pub severity: ErcMarkerSeverity,
+    /// `true` for a net-level finding, drawn with the distinct net marker.
+    pub net_level: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -82,13 +82,13 @@ fn bezier_points(points: &[(f64, f64)]) -> Vec<(f64, f64)> {
 /// applies the single y-flip that turns that "up" into a smaller
 /// screen-space y, matching every other consumer of library coordinates.
 fn pin_stub_direction(rotation: f64) -> (f64, f64) {
-    match rotation as i32 {
-        0 => (1.0, 0.0),
-        90 => (0.0, 1.0),
-        180 => (-1.0, 0.0),
-        270 => (0.0, -1.0),
-        _ => (1.0, 0.0),
-    }
+    signex_types::schematic::pin_direction(rotation)
+}
+
+/// Pin rotation normalised to `0..360` whole degrees (rounded, wrapped),
+/// matching `pin_direction`'s bucketing.
+fn pin_rotation_degrees(rotation: f64) -> i32 {
+    rotation.rem_euclid(360.0).round() as i32 % 360
 }
 
 /// Map a library-space point (Y-up) to frame/screen space (Y-down),
@@ -359,7 +359,7 @@ impl canvas::Program<(), Theme> for SymbolPreview {
                 // Pin name (at the tip end)
                 if self.symbol.show_pin_names && !pin.name.is_empty() && pin.name != "~" {
                     let font_sz = (6.0 * scale).clamp(5.0, 10.0) as f32;
-                    let name_pos = match pin.rotation as i32 {
+                    let name_pos = match pin_rotation_degrees(pin.rotation) {
                         0 => Point::new(tip.x + 2.0, tip.y - font_sz / 2.0),
                         180 => Point::new(tip.x - 2.0, tip.y - font_sz / 2.0),
                         _ => Point::new(tip.x + 2.0, tip.y),
@@ -466,6 +466,17 @@ mod tests {
         assert_eq!(pin_stub_direction(90.0), (0.0, 1.0));
         assert_eq!(pin_stub_direction(180.0), (-1.0, 0.0));
         assert_eq!(pin_stub_direction(270.0), (0.0, -1.0));
+    }
+
+    #[test]
+    fn pin_rotation_is_rounded_and_wrapped_not_truncated() {
+        // 89.6 deg is a "up" pin; truncation read it as 89 (no match).
+        assert_eq!(pin_stub_direction(89.6), (0.0, 1.0));
+        assert_eq!(pin_stub_direction(-90.0), (0.0, -1.0));
+        assert_eq!(pin_stub_direction(450.0), (0.0, 1.0));
+        assert_eq!(pin_rotation_degrees(179.6), 180);
+        assert_eq!(pin_rotation_degrees(-180.0), 180);
+        assert_eq!(pin_rotation_degrees(359.7), 0);
     }
 
     #[test]

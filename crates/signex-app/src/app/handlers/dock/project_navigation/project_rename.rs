@@ -9,7 +9,8 @@
 use std::path::{Path, PathBuf};
 
 use super::project_rename_fs::{
-    carry_closed_copies, folder_collides, folder_target, rename_project_on_disk, same_path_on_disk,
+    carry_closed_copies, folder_collides, folder_target, journal_closed_copies,
+    rename_project_on_disk, same_path_on_disk, unjournal_closed_copies,
 };
 use super::*;
 
@@ -88,6 +89,18 @@ impl Signex {
                 recent_key,
             };
             return self.begin_project_folder_rename(job);
+        }
+
+        // A write of the project file runs only after `update` returns, so
+        // waiting for it here would hang the app, and letting it land after
+        // the move would recreate the old file: refuse instead.
+        if self
+            .document_state
+            .document_saves
+            .is_saving(&state.target_path)
+        {
+            self.refuse_rename_while_project_saving();
+            return Task::none();
         }
 
         // Only the file moves. Nothing else is written; the project's
@@ -319,12 +332,21 @@ impl Signex {
         let run = job.clone();
         let recovery = self.document_state.autosave.dir().map(Path::to_path_buf);
         let open = self.open_document_paths();
+        let fold = self.fold_for_path(&job.old_dir);
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    rename_project_on_disk(&run)?;
+                    let journalled = recovery.as_deref().map(|recovery| {
+                        journal_closed_copies(recovery, &run.old_dir, &run.new_dir, &open, fold)
+                    });
+                    if let Err(why) = rename_project_on_disk(&run) {
+                        if let (Some(recovery), Some(journalled)) = (&recovery, &journalled) {
+                            unjournal_closed_copies(recovery, journalled);
+                        }
+                        return Err(why);
+                    }
                     if let Some(recovery) = recovery {
-                        carry_closed_copies(&recovery, &run.old_dir, &run.new_dir, &open);
+                        carry_closed_copies(&recovery, &run.old_dir, &run.new_dir, &open, fold);
                     }
                     Ok(())
                 })
@@ -434,10 +456,23 @@ impl Signex {
             loaded.path = to.to_path_buf();
             loaded.data.name = new_stem.to_string();
         }
+        // A failure or queued save names the file by its old path.
+        self.document_state
+            .document_saves
+            .forget_where(|p| p == from);
+        crate::diagnostics::log_info(format!(
+            "[rename] Project file {} renamed to {}",
+            from.display(),
+            to.display()
+        ));
         for tab in self.document_state.tabs.iter_mut() {
             if tab.path == from {
                 tab.path = to.to_path_buf();
-                tab.title = new_stem.to_string();
+                tab.title = if tab.kind.as_project().is_some() {
+                    crate::app::project_tab::project_tab_title(to)
+                } else {
+                    new_stem.to_string()
+                };
             }
         }
         if let Some(engine) = self.document_state.engines.remove(from) {
@@ -450,6 +485,7 @@ impl Signex {
             self.document_state.dirty_paths.insert(to.to_path_buf());
         }
         self.rekey_page_setup(from, to);
+        self.rekey_undocked_windows(from, to);
     }
 
     /// Move every path-keyed record under the old project folder to the new

@@ -5,7 +5,7 @@
 //! Sources: IPC-2612-1, IEEE 315, IEC 60617, wgpu/WGSL public docs.
 
 /// Polygon primitive for filled or stroked schematic shapes.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct GpuPolygon {
     pub vertices: Vec<[f32; 2]>,
     /// Cut-out contours inside `vertices`; left unfilled (even-odd) and

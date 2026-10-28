@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 
 use super::super::super::*;
 use super::new_project::{new_project_parts, write_new_project_files};
+use super::spelling::OpenGate;
 
 impl Signex {
     /// An async read+parse of a document came back failed: log it and
@@ -240,7 +241,12 @@ impl Signex {
             "standard_pro" | "snxprj" => self.open_project_file(path)?,
             "standard_sch" | "snxsch" => self.open_schematic_file(path)?,
             "standard_pcb" | "snxpcb" => self.open_pcb_file(path)?,
-            "snxsym" | "snxfpt" => self.handle_open_primitive(path),
+            "snxsym" | "snxfpt" => match self.gate_open(path) {
+                OpenGate::Proceed { path, probe } => {
+                    iced::Task::batch([probe, self.handle_open_primitive(path)])
+                }
+                OpenGate::Deferred(probe) => probe,
+            },
             // `.snxlib/` is a directory package — open it as a Library
             // Browser tab in the main canvas area. The handler mounts
             // the library if not already mounted and pushes the tab
@@ -291,6 +297,15 @@ impl Signex {
             self.document_state.active_project = Some(id);
             return Ok((id, iced::Task::none()));
         }
+        // A write of this file is still running (its project may have been
+        // closed since): parsing now would load the old bytes as clean.
+        if self.document_state.document_saves.is_saving(project_path) {
+            anyhow::bail!(
+                "A save to that project file is still running, so it was not opened; \
+                 try again once it finishes: {}",
+                super::save::file_label(project_path)
+            );
+        }
         let data = signex_types::project::parse_project(project_path)
             .with_context(|| format!("parse project {}", project_path.display()))?;
         let id = self.document_state.mint_project_id();
@@ -332,6 +347,7 @@ impl Signex {
                 pending_libraries: std::collections::HashMap::new(),
                 case_fold: crate::app::state::scope::CaseFold::host_default(),
                 case_probed: false,
+                case_decided: false,
             });
         self.document_state.active_project = Some(id);
         Ok((id, mount_task))
@@ -427,7 +443,15 @@ impl Signex {
     }
 
     fn open_schematic_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
-        let path = self.resolve_held_spelling(path);
+        let (path, probe) = match self.gate_open(path) {
+            OpenGate::Proceed { path, probe } => (path, probe),
+            OpenGate::Deferred(probe) => return Ok(probe),
+        };
+        let task = self.open_schematic_resolved(path)?;
+        Ok(iced::Task::batch([probe, task]))
+    }
+
+    fn open_schematic_resolved(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
         if self.activate_or_skip_duplicate_open(&path) {
             return Ok(iced::Task::none());
         }
@@ -451,7 +475,7 @@ impl Signex {
                     // neither waits on the other.
                     Ok((_, mount_task)) => companion_mounts = mount_task,
                     Err(error) => {
-                        crate::diagnostics::log_error("Failed to parse companion project", &error);
+                        crate::diagnostics::log_error("Failed to load companion project", &error);
                     }
                 }
             }
@@ -503,7 +527,15 @@ impl Signex {
     }
 
     fn open_pcb_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
-        let path = self.resolve_held_spelling(path);
+        let (path, probe) = match self.gate_open(path) {
+            OpenGate::Proceed { path, probe } => (path, probe),
+            OpenGate::Deferred(probe) => return Ok(probe),
+        };
+        let task = self.open_pcb_resolved(path)?;
+        Ok(iced::Task::batch([probe, task]))
+    }
+
+    fn open_pcb_resolved(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
         if self.activate_or_skip_duplicate_open(&path) {
             return Ok(iced::Task::none());
         }
@@ -526,7 +558,7 @@ impl Signex {
                     // neither waits on the other.
                     Ok((_, mount_task)) => companion_mounts = mount_task,
                     Err(error) => {
-                        crate::diagnostics::log_error("Failed to parse companion project", &error);
+                        crate::diagnostics::log_error("Failed to load companion project", &error);
                     }
                 }
             }

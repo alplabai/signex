@@ -7,10 +7,10 @@
 //! each carries.
 //!
 //! Resolution order (§4.3):
-//! 1. per-library override (inside `*.snxlib/templates/<class>.toml`),
+//! 1. per-library override (`<class>.toml` templates, supplied by the
+//!    caller),
 //! 2. global override (`<config_dir>/signex/templates/<class>.toml`) — *not
-//!    loaded by this crate; `TemplateRegistry::load_global_dir` is called by
-//!    the app shell during start-up*,
+//!    loaded by this crate; the app shell registers these at start-up*,
 //! 3. the bundled built-in.
 //!
 //! `TemplateRegistry::new_with_builtins` ships with five starter classes:

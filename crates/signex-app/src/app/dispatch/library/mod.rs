@@ -44,6 +44,8 @@ mod document_options;
 mod edit_modal_tests;
 mod editor;
 mod external_edits;
+#[cfg(test)]
+mod grid_window_tests;
 mod lifecycle;
 mod new_component;
 mod pricing;
@@ -143,43 +145,6 @@ impl Signex {
             LibraryMessage::BrowserCancelRenameTable { library_path } => {
                 self.handle_browser_cancel_rename_table(library_path)
             }
-            LibraryMessage::BrowserBeginAddClass { library_path } => {
-                self.handle_browser_begin_add_class(library_path)
-            }
-            LibraryMessage::BrowserSetNewClassKey {
-                library_path,
-                value,
-            } => self.handle_browser_set_new_class_key(library_path, value),
-            LibraryMessage::BrowserSetNewClassLabel {
-                library_path,
-                value,
-            } => self.handle_browser_set_new_class_label(library_path, value),
-            LibraryMessage::BrowserCancelAddClass { library_path } => {
-                self.handle_browser_cancel_add_class(library_path)
-            }
-            LibraryMessage::BrowserConfirmAddClass { library_path } => {
-                self.handle_browser_confirm_add_class(library_path)
-            }
-            LibraryMessage::BrowserDeleteClass { library_path, key } => {
-                self.handle_browser_delete_class(library_path, key)
-            }
-            LibraryMessage::BrowserBeginRenameClass { library_path, key } => {
-                self.handle_browser_begin_rename_class(library_path, key)
-            }
-            LibraryMessage::BrowserSetRenameClassKey {
-                library_path,
-                value,
-            } => self.handle_browser_set_rename_class_key(library_path, value),
-            LibraryMessage::BrowserSetRenameClassLabel {
-                library_path,
-                value,
-            } => self.handle_browser_set_rename_class_label(library_path, value),
-            LibraryMessage::BrowserCancelRenameClass { library_path } => {
-                self.handle_browser_cancel_rename_class(library_path)
-            }
-            LibraryMessage::BrowserConfirmRenameClass { library_path } => {
-                self.handle_browser_confirm_rename_class(library_path)
-            }
             LibraryMessage::BrowserConfirmRenameTable { library_path } => {
                 self.handle_browser_confirm_rename_table(library_path)
             }
@@ -187,7 +152,6 @@ impl Signex {
                 self.handle_browser_confirm_add_table(library_path)
             }
 
-            LibraryMessage::ToggleLibraryTreeNode(idx) => self.handle_toggle_library_tree_node(idx),
             LibraryMessage::OpenComponentRow {
                 library_path,
                 table,
@@ -226,9 +190,15 @@ impl Signex {
             }
             LibraryMessage::LibraryComponentResolved {
                 target_sheet,
+                arm_epoch,
                 library_path,
                 result,
-            } => self.handle_library_component_resolved(target_sheet, library_path, result),
+            } => self.handle_library_component_resolved(
+                target_sheet,
+                arm_epoch,
+                library_path,
+                result,
+            ),
             LibraryMessage::SymbolChoiceResolved {
                 target_sheet,
                 engine_instance,
@@ -315,6 +285,14 @@ impl Signex {
                 table,
                 row_id,
             } => self.handle_browser_select_row(library_path, table, row_id),
+            LibraryMessage::BrowserGridScrolled {
+                library_path,
+                offset_y,
+            } => self.handle_browser_grid_scrolled(library_path, offset_y),
+            LibraryMessage::BrowserGridResized {
+                library_path,
+                viewport_h,
+            } => self.handle_browser_grid_resized(library_path, viewport_h),
             LibraryMessage::BrowserAddComponent {
                 library_path,
                 table,

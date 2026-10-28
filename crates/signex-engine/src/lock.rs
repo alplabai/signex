@@ -6,7 +6,9 @@
 //! batches) with one rule. `execute` refuses a command naming a locked
 //! symbol whole, before anything is touched. A caller that would rather
 //! carry on without the locked symbols (the app) asks `without_locked`
-//! first and runs what is left.
+//! first and runs what is left; that also drops a wire ending on a locked
+//! symbol's pin from a move or turn, since the symbol stays and the wire
+//! would drag off its pin.
 //!
 //! Left open on purpose: `SetSymbolLocked` (the way out), `SetSymbolDnp`,
 //! font family, library-symbol replacement and annotation (which has its
@@ -14,6 +16,8 @@
 
 use std::collections::HashSet;
 
+use signex_net::pt_key;
+use signex_net::uf::Key;
 use signex_types::schematic::{SelectedItem, SelectedKind};
 use uuid::Uuid;
 
@@ -129,6 +133,26 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
 }
 
 impl Engine {
+    /// Where each pin of a locked symbol sits, with the symbol's reference.
+    fn locked_pin_keys(&self) -> Vec<(Key, String)> {
+        let locked: Vec<SelectedItem> = self
+            .document
+            .symbols
+            .iter()
+            .filter(|s| s.locked)
+            .map(|s| SelectedItem::new(s.uuid, SelectedKind::Symbol))
+            .collect();
+        crate::moved_pin_tips(&self.document, &locked)
+            .into_iter()
+            .filter_map(|tip| {
+                let owner = self.document.symbols.iter().find(
+                    |s| matches!(tip.ident(), crate::PinIdent::Terminal(id, _) if *id == s.uuid),
+                )?;
+                Some((tip.old_key(), owner.reference.clone()))
+            })
+            .collect()
+    }
+
     /// Whether `cmd` names a locked symbol, so `execute` would refuse it.
     #[must_use]
     pub fn names_locked_symbol(&self, cmd: &Command) -> bool {
@@ -147,6 +171,14 @@ impl Engine {
     #[must_use]
     pub fn without_locked(&self, mut cmd: Command) -> (Option<Command>, Vec<String>) {
         let mut skipped = Vec::new();
+        // A locked symbol stays put, so a wire ending on one of its pins must
+        // not be moved either, or it would drag off the pin. Deleting such a
+        // wire leaves the symbol alone, so delete skips only symbols.
+        let pinned = if matches!(cmd, Command::DeleteSelection { .. }) {
+            Vec::new()
+        } else {
+            self.locked_pin_keys()
+        };
         let mut keep = |item: &SelectedItem| {
             let locked = symbol_ids(std::slice::from_ref(item))
                 .first()
@@ -155,7 +187,17 @@ impl Engine {
             if let Some(symbol) = locked {
                 skipped.push(symbol.reference.clone());
             }
-            locked.is_none()
+            let on_pin = (item.kind == SelectedKind::Wire)
+                .then(|| self.document.wires.iter().find(|w| w.uuid == item.uuid))
+                .flatten()
+                .and_then(|w| {
+                    let ends = [pt_key(&w.start), pt_key(&w.end)];
+                    pinned.iter().find(|(key, _)| ends.contains(key))
+                });
+            if let Some((_, reference)) = on_pin {
+                skipped.push(reference.clone());
+            }
+            locked.is_none() && on_pin.is_none()
         };
         let emptied = match &mut cmd {
             Command::MoveSelection { items, .. }

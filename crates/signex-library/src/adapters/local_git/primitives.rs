@@ -461,8 +461,7 @@ impl LocalGitAdapter {
 
     /// Read the table named `table` as a snapshot of [`ComponentRow`]s,
     /// scoped to whatever the legacy [`TABLE_HEADER`] columns are.
-    /// Returns an empty vec for unknown tables (matches the old
-    /// `tables/<name>.tsv` "missing file = empty" semantics).
+    /// Returns an empty vec for unknown tables.
     pub(super) fn snapshot_table(&self, name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
         self.refresh_for_read();
         let guard = self
@@ -492,6 +491,7 @@ impl LocalGitAdapter {
         let dir = self.primitive_dir(PrimitiveKind::Symbol);
         if !dir.exists() {
             self.record_symbol_problems(&[]);
+            self.symbol_index.rebuild(&[]);
             return Ok(Vec::new());
         }
         let suffix = format!(".{SYMBOL_EXT}");
@@ -531,6 +531,7 @@ impl LocalGitAdapter {
         }
         out.sort_by(|a, b| a.0.cmp(&b.0));
         self.record_symbol_problems(&problems);
+        self.symbol_index.rebuild(&out);
         Ok(out)
     }
 
@@ -629,6 +630,7 @@ impl LocalGitAdapter {
                 // envelope holding every symbol; an in-place truncate by
                 // `fs::write` would destroy them all on a crash mid-save.
                 signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
+                self.symbol_index.record(&file, &path);
                 path
             }
             None => {
@@ -646,6 +648,7 @@ impl LocalGitAdapter {
                 // envelope holding every symbol; an in-place truncate by
                 // `fs::write` would destroy them all on a crash mid-save.
                 signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
+                self.symbol_index.record(&file, &path);
                 path
             }
         };
@@ -664,10 +667,13 @@ impl LocalGitAdapter {
         self.commit_path(&rel_path, message, &fallback)
     }
 
-    fn locate_symbol_file(
+    pub(super) fn locate_symbol_file(
         &self,
         uuid: Uuid,
     ) -> Result<Option<(PathBuf, SymbolFile)>, LibraryError> {
+        if let Some(hit) = self.indexed_symbol_file(uuid) {
+            return Ok(Some(hit));
+        }
         for (path, file) in self.scan_symbol_files()? {
             if file.symbols.iter().any(|s| s.uuid == uuid) {
                 return Ok(Some((path, file)));

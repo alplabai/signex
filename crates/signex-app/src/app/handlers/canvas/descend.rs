@@ -33,7 +33,7 @@ impl Signex {
     ) {
         // Record under the spelling the tab is held at (#1149), not the
         // spelling the hierarchy resolved.
-        let path = self.resolve_held_spelling(path);
+        let path = self.resolve_held_spelling_now(path);
         if self.open_or_focus_sheet_path(path.clone()) {
             self.document_state.tab_placements.record(&path, placement);
             // The canvas draws the designators of the placement just recorded.

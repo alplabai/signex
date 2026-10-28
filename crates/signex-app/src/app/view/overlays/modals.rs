@@ -33,6 +33,8 @@ impl Signex {
             draft_pcb_gpu_render: ui.preferences_draft_pcb_gpu_render,
             draft_annotate_undo: ui.preferences_draft_annotate_undo,
             draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
+            draft_window_controls_placement: ui.preferences_draft_window_controls_placement,
+            window_controls_restart_note: self.window_controls_needs_restart(),
             draft_autosave_enabled: ui.preferences_draft_autosave_enabled,
             draft_symbol_grid_size_mm: ui.preferences_draft_symbol_grid_size_mm,
             draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
@@ -82,10 +84,18 @@ impl Signex {
         // layer so they cannot pass through to the layers below it in the
         // `Stack`. Testing whether event leakage is what makes this modal
         // inert.
+        let built;
+        let sections = match &ui.shortcut_sections {
+            Some(cached) => cached.as_slice(),
+            None => {
+                built = crate::keyboard_shortcuts_modal::build_sections(&ui.keymap_profiles);
+                built.as_slice()
+            }
+        };
         Some(iced::widget::opaque(crate::keyboard_shortcuts_modal::view(
             &self.document_state.panel_ctx.tokens,
             ui.theme_id,
-            &ui.keymap_profiles,
+            sections,
         )))
     }
 
@@ -194,13 +204,6 @@ impl Signex {
             .then(|| self.view_app_quit_confirm())
     }
 
-    pub(in crate::app::view) fn project_options_overlay(&self) -> Option<Element<'_, Message>> {
-        self.ui_state
-            .project_options
-            .is_some()
-            .then(|| self.view_project_options_dialog())
-    }
-
     pub(in crate::app::view) fn enable_version_control_overlay(
         &self,
     ) -> Option<Element<'_, Message>> {
@@ -240,6 +243,12 @@ impl Signex {
         (self.ui_state.annotate_reset_confirm
             && !self.modal_detached(crate::app::state::ModalId::AnnotateResetConfirm))
         .then(|| self.view_annotate_reset_confirm())
+    }
+
+    pub(in crate::app::view) fn reprefix_confirm_overlay(&self) -> Option<Element<'_, Message>> {
+        (self.ui_state.reprefix_confirm.is_some()
+            && !self.modal_detached(crate::app::state::ModalId::ReprefixConfirm))
+        .then(|| self.view_reprefix_confirm())
     }
 
     pub(in crate::app::view) fn erc_dialog_overlay(&self) -> Option<Element<'_, Message>> {

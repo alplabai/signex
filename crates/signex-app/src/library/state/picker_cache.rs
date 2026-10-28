@@ -117,6 +117,7 @@ impl LibraryState {
                 .rows
                 .sync(&self.open_libraries, version, &picker.filter);
         }
+        self.sync_panel_rows();
         self.sync_browser_caches();
     }
 }

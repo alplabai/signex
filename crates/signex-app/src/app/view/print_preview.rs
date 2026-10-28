@@ -310,7 +310,7 @@ impl Signex {
         let footer_caption = if preview.pages.is_empty() {
             "No files selected for export".to_string()
         } else {
-            format!("{} page(s) — preview at 96 DPI", preview.pages.len())
+            format!("{} page(s)", preview.pages.len())
         };
         let footer = container(
             row![

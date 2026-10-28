@@ -5,8 +5,8 @@ use std::sync::Arc;
 use regex::Regex;
 use signex_erc::engine::EvalFn;
 use signex_erc::{
-    AnalysisScope, Applicability, Diagnostic, ErcContext, LocationSpace, RuleDefinition, RuleId,
-    RuleKind, RuleTarget, Severity,
+    AnalysisScope, Applicability, Diagnostic, ErcContext, LocationSpace, NetFinding,
+    RuleDefinition, RuleId, RuleKind, RuleTarget, Severity,
 };
 use signex_types::schematic::{PinDirection, Point, SelectedItem, SelectedKind};
 
@@ -217,18 +217,24 @@ fn evaluate_rule(
         TargetKind::Net => {
             for net in &ctx.nets {
                 if eval_expr(expr, Subject::Net(net)) {
-                    out.push(Diagnostic {
-                        rule_id: rule_id.clone(),
-                        rule_kind,
-                        severity,
-                        message: message.to_string(),
-                        location: Point::new(0.0, 0.0),
-                        location_space: LocationSpace::Unplaced,
-                        child_sheet: None,
-                        owner_sheet: None,
-                        primary: None,
-                        peer: None,
-                    });
+                    // The finding carries the net; it is anchored at the
+                    // net's representative pin, not at a fake origin.
+                    out.push(
+                        Diagnostic {
+                            rule_id: rule_id.clone(),
+                            rule_kind,
+                            severity,
+                            message: message.to_string(),
+                            location: Point::new(0.0, 0.0),
+                            location_space: LocationSpace::Unplaced,
+                            child_sheet: None,
+                            owner_sheet: None,
+                            primary: None,
+                            peer: None,
+                            net: None,
+                        }
+                        .for_net(NetFinding::from_net(net)),
+                    );
                 }
             }
         }
@@ -247,6 +253,7 @@ fn evaluate_rule(
                             owner_sheet: None,
                             primary: Some(SelectedItem::new(symbol.uuid, SelectedKind::Symbol)),
                             peer: None,
+                            net: None,
                         });
                     }
                 }
@@ -266,6 +273,7 @@ fn evaluate_rule(
                         owner_sheet: None,
                         primary: Some(SelectedItem::new(symbol.uuid, SelectedKind::Symbol)),
                         peer: None,
+                        net: None,
                     });
                 }
             }
@@ -284,6 +292,7 @@ fn evaluate_rule(
                         owner_sheet: None,
                         primary: Some(SelectedItem::new(sheet.uuid, SelectedKind::ChildSheet)),
                         peer: None,
+                        net: None,
                     });
                 }
             }

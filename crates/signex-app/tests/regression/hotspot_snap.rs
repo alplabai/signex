@@ -62,7 +62,17 @@ fn app_with_off_grid_pin_and_wire(hotspots: bool) -> (Signex, std::path::PathBuf
 }
 
 fn app_with_symbol(hotspots: bool, pin_at: Point, symbol: Symbol) -> (Signex, std::path::PathBuf) {
+    app_with_symbol_and_wire(hotspots, pin_at, symbol, None)
+}
+
+fn app_with_symbol_and_wire(
+    hotspots: bool,
+    pin_at: Point,
+    symbol: Symbol,
+    wire: Option<Wire>,
+) -> (Signex, std::path::PathBuf) {
     let mut sheet = SchematicSheet::default();
+    sheet.wires.extend(wire);
     sheet
         .lib_symbols
         .insert("R".to_string(), one_pin_part(pin_at));
@@ -196,4 +206,56 @@ fn click_on_the_grid_point_next_to_a_wire_end_stays_on_the_grid() {
         .clone();
     assert_eq!((wire.start.x, wire.end.x), (5.08, 6.35));
     assert_eq!(wire.end.y, 25.4);
+}
+
+/// Moving a symbol whose pin tip would land 0.3 / 0.1 mm beside an off-grid
+/// wire end: with the toggle on the tip lands exactly on the wire end, with
+/// it off the tip lands on the grid.
+fn move_pin_tip_near_wire_end(hotspots: bool) -> (f64, f64) {
+    let symbol = Symbol {
+        uuid: uuid::Uuid::new_v4(),
+        lib_id: "R".to_string(),
+        position: Point::new(12.7, 6.35),
+        ..Default::default()
+    };
+    let id = symbol.uuid;
+    let wire = Wire {
+        unknown_columns: Default::default(),
+        uuid: uuid::Uuid::new_v4(),
+        start: Point::new(50.0, 50.0),
+        end: Point::new(25.4 + 0.3, 12.7 + 0.1),
+        stroke_width: 0.0,
+    };
+    let (mut app, path) =
+        app_with_symbol_and_wire(hotspots, Point::new(0.0, 0.0), symbol, Some(wire));
+    let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)));
+    app.interaction_state.active_canvas_mut().selected =
+        vec![signex_types::schematic::SelectedItem::new(
+            id,
+            signex_types::schematic::SelectedKind::Symbol,
+        )];
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
+        dx: 12.8,
+        dy: 6.4,
+    }));
+    let moved = &app.document_state.engines[&path].document().symbols[0];
+    (moved.position.x, moved.position.y)
+}
+
+#[test]
+fn moving_a_pin_tip_near_a_wire_end_lands_exactly_on_it() {
+    let (x, y) = move_pin_tip_near_wire_end(true);
+    assert!(
+        (x - 25.7).abs() < 1e-9 && (y - 12.8).abs() < 1e-9,
+        "({x}, {y})"
+    );
+}
+
+#[test]
+fn moving_with_the_toggle_off_lands_on_the_grid() {
+    let (x, y) = move_pin_tip_near_wire_end(false);
+    assert!(
+        (x - 25.4).abs() < 1e-9 && (y - 12.7).abs() < 1e-9,
+        "({x}, {y})"
+    );
 }

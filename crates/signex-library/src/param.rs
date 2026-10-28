@@ -30,7 +30,7 @@ impl ParamValue {
 }
 
 /// Sorted-key parameter map. Determinism on serialisation is load-bearing for
-/// `hash_revision_content` and the diff engine.
+/// the content hash and the diff engine.
 pub type ParamMap = BTreeMap<String, ParamValue>;
 
 #[cfg(test)]

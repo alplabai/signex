@@ -12,7 +12,7 @@ use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::parameter::resolve_quantities;
 use signex_sketch::sketch::SketchData;
-use signex_sketch::unit::{Quantity, Unit, UnitFamily};
+use signex_sketch::unit::{Quantity, UnitFamily};
 
 /// One literal per canonical parameter, in the unit family the sketch's
 /// parameter table declares for it. A parameter the table does not resolve
@@ -54,27 +54,6 @@ pub(crate) fn eval_context(
     }
 }
 
-/// `ctx` with every unitless (count) parameter read as millimetres.
-fn with_unitless_as_mm(ctx: &EvalContext) -> EvalContext {
-    let params = ctx
-        .params
-        .iter()
-        .map(|(name, node)| {
-            let node = match node {
-                ExprNode::Literal(q) if q.unit == Unit::Dimensionless => {
-                    ExprNode::Literal(Quantity::length(q.value))
-                }
-                other => other.clone(),
-            };
-            (name.clone(), node)
-        })
-        .collect();
-    EvalContext {
-        params,
-        array_index: ctx.array_index,
-    }
-}
-
 /// Evaluate `ast` as a length in millimetres. A unitless parameter keeps its
 /// count family so it can drive a ratio, but where a length is expected it is
 /// read as millimetres, the same convention the solver applies to a dimension
@@ -92,7 +71,7 @@ pub(crate) fn eval_length_mm(ast: &ExprNode, ctx: &EvalContext) -> Result<f64, S
     match typed {
         Ok(mm) => Ok(mm),
         Err(first) => {
-            let lenient = with_unitless_as_mm(ctx);
+            let lenient = ctx.with_unitless_as_mm();
             if lenient.params == ctx.params {
                 return Err(first);
             }

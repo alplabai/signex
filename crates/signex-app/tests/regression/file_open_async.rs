@@ -9,7 +9,7 @@
 //!   message must apply exactly like the old inline path did (success
 //!   opens the tab, failure logs and opens nothing).
 
-use signex_app::app::{FileMsg, Message, Signex};
+use signex_app::app::{CaseProbeOutcome, FileMsg, Message, Signex};
 
 use std::fs;
 use std::path::PathBuf;
@@ -52,6 +52,15 @@ fn opening_a_schematic_does_not_synchronously_create_a_tab() {
     );
 }
 
+/// Answer the identity probe of `dir`, so an open does not also start one:
+/// the task counts below are then exactly the read+parse tasks.
+fn answer_dir_probe(app: &mut Signex, dir: &std::path::Path) {
+    let _ = app.update(Message::File(FileMsg::DirCaseProbed {
+        dir: dir.to_path_buf(),
+        answer: CaseProbeOutcome::Decided(false),
+    }));
+}
+
 #[test]
 fn opening_the_same_schematic_twice_before_it_completes_spawns_only_one_task() {
     // #478 review — the read+parse is a `Task::perform` round-trip, so
@@ -74,6 +83,7 @@ fn opening_the_same_schematic_twice_before_it_completes_spawns_only_one_task() {
     fs::write(&sch_path, serialised).expect("write .snxsch");
 
     let (mut app, _t) = Signex::new();
+    answer_dir_probe(&mut app, tmp.path());
     let first = app.update(Message::File(FileMsg::Opened(Some(sch_path.clone()))));
     let second = app.update(Message::File(FileMsg::Opened(Some(sch_path.clone()))));
 
@@ -232,6 +242,7 @@ fn opening_the_same_pcb_twice_before_it_completes_spawns_only_one_task() {
     let pcb_path = PathBuf::from("/tmp/does-not-matter/Dup.snxpcb");
 
     let (mut app, _t) = Signex::new();
+    answer_dir_probe(&mut app, pcb_path.parent().expect("parent"));
     let first = app.update(Message::File(FileMsg::Opened(Some(pcb_path.clone()))));
     let second = app.update(Message::File(FileMsg::Opened(Some(pcb_path.clone()))));
 
