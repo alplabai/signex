@@ -28,6 +28,11 @@ pub const SIDECAR_EXTENSION: &str = "recovery";
 ///
 /// Dot segments are resolved first, with the normaliser the rest of the app
 /// compares paths by, so `W/x/../Foo/a` and `W/Foo/a` name one sidecar.
+///
+/// The resolution is lexical, never a disk lookup: `w/link/../x` and `w/x`
+/// share a key even when `link` is a symlink and they are different files.
+/// Sheet paths are compared the same way elsewhere (`KeyMap::lexical_key`),
+/// and the key must be computable without IO on the UI thread.
 fn path_hash(path: &Path) -> u64 {
     let path = crate::app::project_sheets::normalize_clamped(path);
     bytes_hash(path.to_string_lossy().as_bytes())

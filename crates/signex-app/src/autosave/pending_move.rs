@@ -16,10 +16,27 @@
 //! A copy is never deleted here: it is only renamed onto a free new key.
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
 use super::sidecar::sidecar_path;
+
+/// Most entries one startup pass finishes. The pass is synchronous on the
+/// boot thread, so a huge journal must not hold the first frame; the rest
+/// stay journalled for the next start.
+pub const MAX_ENTRIES_PER_PASS: usize = 256;
+
+/// Serialises every write and removal of a journal entry, so a conditional
+/// clear cannot delete an entry a record wrote between its read and its
+/// remove. Guards file IO only; it holds no application state.
+static JOURNAL_IO: Mutex<()> = Mutex::new(());
+
+fn journal_io() -> std::sync::MutexGuard<'static, ()> {
+    JOURNAL_IO
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
 
 /// Extension of a journal entry file.
 pub const ENTRY_EXTENSION: &str = "move";
@@ -46,6 +63,7 @@ pub fn record(recovery_dir: &Path, old: &Path, new: &Path) -> Result<(), String>
     };
     let bytes = serde_json::to_vec(&entry).map_err(|e| format!("pending move not saved: {e}"))?;
     let file = entry_path(recovery_dir, old);
+    let _io = journal_io();
     signex_types::atomic_io::atomic_write(&file, &bytes).map_err(|e| {
         format!(
             "{e}: could not journal the recovery copy move from {}",
@@ -56,8 +74,13 @@ pub fn record(recovery_dir: &Path, old: &Path, new: &Path) -> Result<(), String>
 
 /// Drop the journal entry of the copy leaving `old`. Already gone is success.
 pub fn clear(recovery_dir: &Path, old: &Path) {
-    let file = entry_path(recovery_dir, old);
-    match std::fs::remove_file(&file) {
+    let _io = journal_io();
+    remove_entry(&entry_path(recovery_dir, old));
+}
+
+/// Remove an entry file; the caller holds the journal lock.
+fn remove_entry(file: &Path) {
+    match std::fs::remove_file(file) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => crate::diagnostics::log_warning(format!(
@@ -72,6 +95,8 @@ pub fn clear(recovery_dir: &Path, old: &Path) {
 /// clear that was queued for an older one.
 pub fn clear_if(recovery_dir: &Path, old: &Path, targets: &[PathBuf]) {
     let file = entry_path(recovery_dir, old);
+    // Read and remove under one lock: a record cannot land in between.
+    let _io = journal_io();
     let entry = match std::fs::read(&file) {
         Ok(bytes) => serde_json::from_slice::<Entry>(&bytes).map_err(|e| e.to_string()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
@@ -83,7 +108,7 @@ pub fn clear_if(recovery_dir: &Path, old: &Path, targets: &[PathBuf]) {
                 sidecar_path(recovery_dir, t) == sidecar_path(recovery_dir, &entry.new)
             }) =>
         {
-            clear(recovery_dir, old);
+            remove_entry(&file);
         }
         Ok(_) => {}
         Err(why) => crate::diagnostics::log_warning(format!(
@@ -149,11 +174,19 @@ pub fn finish_all(recovery_dir: &Path) -> Finished {
             return report;
         }
     };
-    for file in dir
+    let files: Vec<PathBuf> = dir
         .flatten()
         .map(|e| e.path())
         .filter(|p| p.extension().and_then(|e| e.to_str()) == Some(ENTRY_EXTENSION))
-    {
+        .collect();
+    if files.len() > MAX_ENTRIES_PER_PASS {
+        crate::diagnostics::log_warning(format!(
+            "{} pending recovery copy moves are journalled; {} were left for the next start.",
+            files.len(),
+            files.len() - MAX_ENTRIES_PER_PASS
+        ));
+    }
+    for file in files.into_iter().take(MAX_ENTRIES_PER_PASS) {
         let entry = std::fs::read(&file)
             .map_err(|e| e.to_string())
             .and_then(|bytes| serde_json::from_slice::<Entry>(&bytes).map_err(|e| e.to_string()));
@@ -237,5 +270,47 @@ fn run_one(recovery_dir: &Path, file: &Path, entry: &Entry, report: &mut Finishe
                 dst.display()
             ));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A conditional clear queued for an older target must never delete the
+    /// newer entry a record writes at the same moment. Statistical: the race
+    /// window is small, so it repeats; with the lock it can never fail.
+    #[test]
+    fn a_conditional_clear_never_deletes_a_concurrent_newer_entry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let old = tmp.path().join("a.snxsch");
+        let (older, newer) = (tmp.path().join("b.snxsch"), tmp.path().join("c.snxsch"));
+        for _ in 0..300 {
+            record(&rec, &old, &older).unwrap();
+            std::thread::scope(|s| {
+                s.spawn(|| clear_if(&rec, &old, std::slice::from_ref(&older)));
+                s.spawn(|| record(&rec, &old, &newer).unwrap());
+            });
+            assert_eq!(owed(&rec), vec![(old.clone(), newer.clone())]);
+        }
+    }
+
+    #[test]
+    fn a_startup_pass_finishes_at_most_the_cap_and_leaves_the_rest_journalled() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let total = MAX_ENTRIES_PER_PASS + 3;
+        for i in 0..total {
+            let new = tmp.path().join(format!("new/{i}.snxsch"));
+            std::fs::create_dir_all(new.parent().unwrap()).unwrap();
+            std::fs::write(&new, b"saved").unwrap();
+            let old = tmp.path().join(format!("old/{i}.snxsch"));
+            super::super::sidecar::write(&rec, &old, b"x").unwrap();
+            record(&rec, &old, &new).unwrap();
+        }
+        assert_eq!(finish_all(&rec).moved, MAX_ENTRIES_PER_PASS);
+        assert_eq!(owed(&rec).len(), 3);
+        assert_eq!(finish_all(&rec).moved, 3);
     }
 }
