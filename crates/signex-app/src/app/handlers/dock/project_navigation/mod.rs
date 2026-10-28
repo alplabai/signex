@@ -19,6 +19,9 @@ mod exclude_dirty;
 mod exclude_dirty_tests;
 #[cfg(test)]
 mod library_row_tests;
+mod missing_child;
+#[cfg(test)]
+mod nested_row_tests;
 mod open_document;
 mod project_actions;
 mod project_rename;
@@ -120,7 +123,9 @@ impl Signex {
                 );
                 if is_double {
                     self.interaction_state.last_tree_click = None;
-                    if let Some(node) = selected_node {
+                    if let Some(missing) = self.missing_child_sheet_at(path) {
+                        self.offer_create_child_sheet(&missing);
+                    } else if let Some(node) = selected_node {
                         match self.open_project_tree_document(path, node.label.clone()) {
                             Ok(task) => follow = task,
                             Err(error) => crate::diagnostics::log_error(

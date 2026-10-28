@@ -11,6 +11,10 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use super::ProjectId;
+use super::project_hierarchy::{HierarchyRequest, walk_hierarchies};
+use crate::app::sheet_hierarchy::SheetHierarchy;
+
 /// A probe still unanswered after this long is presumed hung (a dead network
 /// mount) and abandoned so the next one can start.
 const PROBE_DEADLINE: Duration = crate::library::external_poll::POLL_TIMEOUT;
@@ -20,12 +24,15 @@ const PROBE_DEADLINE: Duration = crate::library::external_poll::POLL_TIMEOUT;
 pub struct ProjectFsRequest {
     /// Paths whose existence marks a `(missing)` row.
     pub exists: Vec<PathBuf>,
+    /// The sheet hierarchy of each open project (#1618).
+    pub hierarchy: HierarchyRequest,
 }
 
 /// The answer to a [`ProjectFsRequest`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProjectFsFacts {
     exists: HashMap<PathBuf, bool>,
+    hierarchies: HashMap<ProjectId, SheetHierarchy>,
 }
 
 impl ProjectFsFacts {
@@ -39,6 +46,12 @@ impl ProjectFsFacts {
     /// "has one", so nothing offers Enable Version Control before the answer.
     pub fn lacks_git(&self, dir: &Path) -> bool {
         self.is_missing(&git_marker(dir))
+    }
+
+    /// The sheet hierarchy last walked for `project`; `None` until the first
+    /// walk lands, which leaves the tree flat.
+    pub fn hierarchy_of(&self, project: ProjectId) -> Option<&SheetHierarchy> {
+        self.hierarchies.get(&project)
     }
 
     /// Record a fact the app itself just made true (a repository it created),
@@ -68,6 +81,7 @@ pub fn probe(request: &ProjectFsRequest) -> ProjectFsFacts {
     for path in request.exists.iter().collect::<HashSet<_>>() {
         facts.exists.insert(path.clone(), path.exists());
     }
+    facts.hierarchies = walk_hierarchies(&request.hierarchy);
     facts
 }
 
@@ -132,6 +146,12 @@ pub struct ProjectFsCache {
     generation: u64,
     /// The last finished probe's worker died; warn once per streak.
     failing: bool,
+    /// The hierarchy request the facts' hierarchies answer. A probe walks the
+    /// sheets only when the wanted one differs: the poll tick would otherwise
+    /// parse every sheet of every project each time it fired.
+    hierarchy_done: HierarchyRequest,
+    /// The request the running probe walks, taken on success.
+    hierarchy_inflight: Option<HierarchyRequest>,
 }
 
 /// What a finished probe means for the caller.
@@ -156,6 +176,8 @@ impl ProjectFsCache {
     /// rename the app did itself): re-probe on the next update.
     pub fn invalidate(&mut self) {
         self.stale = true;
+        // A save or a created sheet changes what the walk reads.
+        self.hierarchy_done = HierarchyRequest::default();
     }
 
     /// Claim the next probe, if one may start: none while another runs, and
@@ -172,7 +194,14 @@ impl ProjectFsCache {
         self.generation += 1;
         self.in_flight = Some((self.generation, Instant::now()));
         self.stale = false;
-        Some((self.generation, self.wanted.clone()))
+        let mut request = self.wanted.clone();
+        self.hierarchy_inflight = None;
+        if request.hierarchy == self.hierarchy_done {
+            request.hierarchy = HierarchyRequest::default();
+        } else {
+            self.hierarchy_inflight = Some(request.hierarchy.clone());
+        }
+        Some((self.generation, request))
     }
 
     /// A probe ended; `facts` is `Err` when its worker died (the next poll
@@ -189,6 +218,7 @@ impl ProjectFsCache {
             return ProbeFinish::default();
         }
         self.in_flight = None;
+        let walked = self.hierarchy_inflight.take();
         match facts {
             Err(reason) => {
                 let first = !std::mem::replace(&mut self.failing, true);
@@ -197,8 +227,13 @@ impl ProjectFsCache {
                     warning: first.then_some(reason),
                 }
             }
-            Ok(f) => {
+            Ok(mut f) => {
                 self.failing = false;
+                match walked {
+                    Some(done) => self.hierarchy_done = done,
+                    // Not walked this time: the previous answers still stand.
+                    None => f.hierarchies = std::mem::take(&mut self.facts.hierarchies),
+                }
                 let changed = f != self.facts;
                 if changed {
                     self.facts = f;
@@ -231,6 +266,7 @@ mod tests {
         let mut cache = ProjectFsCache::default();
         cache.want(ProjectFsRequest {
             exists: vec![PathBuf::from("a")],
+            ..ProjectFsRequest::default()
         });
         cache
     }
