@@ -505,6 +505,15 @@ impl<'a> SchematicCanvas<'a> {
                     cy - oy,
                     self.prefs.snap_enabled,
                     self.prefs.snap_grid_mm,
+                    self.prefs.snap_hotspots.then(|| {
+                        signex_types::schematic::hotspot_capture_radius(
+                            if self.prefs.snap_enabled {
+                                self.prefs.snap_grid_mm
+                            } else {
+                                0.0
+                            },
+                        )
+                    }),
                 )
             })
     }
