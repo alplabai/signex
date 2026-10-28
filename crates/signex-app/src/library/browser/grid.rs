@@ -390,13 +390,18 @@ pub(super) fn view_grid<'a>(
     // library, so switching tabs builds a fresh one instead of showing the
     // previous library's offset against this library's window.
     let library_for_resize = lib_pb.clone();
-    let scroller = sense_height(
-        keyed(library_key(&lib_pb), scroller),
-        browser.grid_scroll.viewport_h,
-        move |viewport_h| LibraryMessage::BrowserGridResized {
-            library_path: library_for_resize.clone(),
-            viewport_h,
-        },
+    // The sensor sits inside the key: its record of what it published
+    // belongs to this library and must not survive a switch to another.
+    let scroller = keyed(
+        library_key(&lib_pb),
+        sense_height(
+            scroller,
+            browser.grid_scroll.viewport_h,
+            move |viewport_h| LibraryMessage::BrowserGridResized {
+                library_path: library_for_resize.clone(),
+                viewport_h,
+            },
+        ),
     );
     container(scroller)
         .padding([0, 0])

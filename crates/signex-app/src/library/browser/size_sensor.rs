@@ -15,6 +15,13 @@ use iced::{Element, Event, Length, Rectangle, Size, Vector, window};
 /// Height changes smaller than this are layout rounding, not a resize.
 const RESIZE_EPSILON: f32 = 0.5;
 
+/// What the last publish was about (see `state`).
+#[derive(Debug, Clone, Copy)]
+struct Published {
+    height: f32,
+    known: f32,
+}
+
 pub(super) struct SizeSensor<'a, Message, Theme, Renderer> {
     known_height: f32,
     on_height: Box<dyn Fn(f32) -> Message + 'a>,
@@ -41,13 +48,17 @@ where
     Renderer: renderer::Renderer,
 {
     fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<f32>()
+        tree::Tag::of::<Published>()
     }
 
-    /// The last height published, so a redraw before the state catches up
-    /// does not publish it again.
+    /// What the last publish was about: the height published and the height
+    /// the state knew then. A redraw before the state catches up changes
+    /// neither, so it does not publish again.
     fn state(&self) -> tree::State {
-        tree::State::new(f32::NAN)
+        tree::State::new(Published {
+            height: f32::NAN,
+            known: f32::NAN,
+        })
     }
 
     fn children(&self) -> Vec<Tree> {
@@ -109,10 +120,18 @@ where
 
         if matches!(event, Event::Window(window::Event::RedrawRequested(_))) {
             let height = layout.bounds().height;
-            let last_published = *tree.state.downcast_ref::<f32>();
-            let differs = |a: f32| a.is_nan() || (a - height).abs() > RESIZE_EPSILON;
-            if differs(self.known_height) && differs(last_published) {
-                *tree.state.downcast_mut::<f32>() = height;
+            let last = *tree.state.downcast_ref::<Published>();
+            let apart = |a: f32, b: f32| a.is_nan() || b.is_nan() || (a - b).abs() > RESIZE_EPSILON;
+            // The state is out of step with layout. Publish unless that was
+            // already published for this very pair, so a state that ignores
+            // the message cannot be asked again on every redraw.
+            let stale = apart(self.known_height, height);
+            let already = !apart(last.height, height) && !apart(last.known, self.known_height);
+            if stale && !already {
+                *tree.state.downcast_mut::<Published>() = Published {
+                    height,
+                    known: self.known_height,
+                };
                 shell.publish((self.on_height)(height));
             }
         }

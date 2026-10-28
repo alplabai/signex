@@ -192,7 +192,11 @@ fn row(pn: &str) -> ComponentRow {
 }
 
 fn library_of(n: usize) -> (LibraryState, PathBuf, Vec<RowId>) {
-    let root = PathBuf::from("/tmp/grid-window/Window.snxlib");
+    library_at(n, "/tmp/grid-window/Window.snxlib")
+}
+
+fn library_at(n: usize, path: &str) -> (LibraryState, PathBuf, Vec<RowId>) {
+    let root = PathBuf::from(path);
     let rows: Vec<ComponentRow> = (0..n).map(|i| row(&format!("R{i:06}"))).collect();
     let ids = rows.iter().map(|r| RowId::from_uuid(r.row_id)).collect();
     let mut state = LibraryState::default();
@@ -518,4 +522,86 @@ fn a_focused_cell_editor_never_appears_on_another_row_after_a_shift() {
             }
         }
     }
+}
+
+// ── the sensor across library tabs ───────────────────────────────
+
+/// Draw `browser`'s grid on `cache`, redraw once, and return the heights
+/// the grid asked the state to adopt, plus the cache for the next draw.
+fn resize_reports(
+    state: &LibraryState,
+    root: &std::path::Path,
+    browser: &mut LibraryBrowserState,
+    cache: iced_runtime::user_interface::Cache,
+) -> (Vec<f32>, iced_runtime::user_interface::Cache) {
+    use crate::library::messages::LibraryMessage;
+    use iced::advanced::clipboard;
+    use iced::{Size, mouse, window};
+
+    let tokens = theme_tokens(ThemeId::Signex);
+    let mut renderer = crate::layout_probe::headless_renderer();
+    let element = grid_element(state, root, browser.grid_scroll, &tokens, browser);
+    let mut ui =
+        iced_runtime::UserInterface::build(element, Size::new(1200.0, 800.0), cache, &mut renderer);
+    let mut published: Vec<LibraryMessage> = Vec::new();
+    let redraw = iced::Event::Window(window::Event::RedrawRequested(std::time::Instant::now()));
+    let _ = ui.update(
+        &[redraw.clone(), redraw],
+        mouse::Cursor::Unavailable,
+        &mut renderer,
+        &mut clipboard::Null,
+        &mut published,
+    );
+    let heights = published
+        .into_iter()
+        .filter_map(|m| match m {
+            LibraryMessage::BrowserGridResized { viewport_h, .. } => Some(viewport_h),
+            _ => None,
+        })
+        .collect();
+    (heights, ui.into_cache())
+}
+
+#[test]
+fn a_second_library_on_the_same_ui_cache_still_reports_its_height() {
+    let (state_a, root_a, _) = library_at(200, "/tmp/grid-window/A.snxlib");
+    let (state_b, root_b, _) = library_at(200, "/tmp/grid-window/B.snxlib");
+    let mut browser_a = state_a.library_browsers[&root_a].clone();
+    let mut browser_b = state_b.library_browsers[&root_b].clone();
+
+    let (a, cache) = resize_reports(
+        &state_a,
+        &root_a,
+        &mut browser_a,
+        iced_runtime::user_interface::Cache::default(),
+    );
+    assert_eq!(a.len(), 1, "the first draw reports its height once");
+    let laid_out = a[0];
+    assert!(laid_out > 0.0);
+
+    // B has never been measured: it must report, A's record notwithstanding.
+    let (b, cache) = resize_reports(&state_b, &root_b, &mut browser_b, cache);
+    assert_eq!(b, [laid_out]);
+
+    // And a stale, non-zero height in the state is corrected the same way.
+    browser_b.grid_scroll.viewport_h = 300.0;
+    let (stale, _) = resize_reports(&state_b, &root_b, &mut browser_b, cache);
+    assert_eq!(stale, [laid_out]);
+}
+
+#[test]
+fn a_grid_whose_height_the_state_already_knows_publishes_nothing() {
+    let (state, root, _) = library_of(200);
+    let mut browser = state.library_browsers[&root].clone();
+    let (first, cache) = resize_reports(
+        &state,
+        &root,
+        &mut browser,
+        iced_runtime::user_interface::Cache::default(),
+    );
+    browser.grid_scroll.viewport_h = first[0];
+
+    let (again, _) = resize_reports(&state, &root, &mut browser, cache);
+
+    assert!(again.is_empty(), "{again:?}");
 }
