@@ -81,6 +81,9 @@ pub enum WindowMsg {
     MinimizeMainWindow,
     ToggleMaximizeMainWindow,
     CloseMainWindow,
+    /// A row of the macOS system menu bar was chosen; carries the row's
+    /// stable id (`menu_bar::native`). Only the macOS subscription sends it.
+    NativeMenuItemActivated(String),
     /// The Linux startup probe finished: the buttons the desktop lists, or
     /// `None` when it could not be read, or the probe's failure reason.
     ControlsLayoutDetected(Result<Option<crate::chrome::desktop::DesktopButtonLayout>, String>),

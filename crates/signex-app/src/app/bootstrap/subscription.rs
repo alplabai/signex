@@ -716,6 +716,7 @@ impl Signex {
         .map(Message::Autosave);
 
         Subscription::batch([
+            native_menu_activations(),
             kbd,
             mouse_sub,
             window_close,
@@ -727,6 +728,22 @@ impl Signex {
             autosave_tick,
         ])
     }
+}
+
+/// Row activations of the macOS system menu bar; empty elsewhere.
+#[cfg(target_os = "macos")]
+fn native_menu_activations() -> Subscription<Message> {
+    use iced::futures::StreamExt;
+    fn stream() -> impl iced::futures::Stream<Item = Message> {
+        crate::menu_bar::native::activations()
+            .map(|id| Message::Window(WindowMsg::NativeMenuItemActivated(id)))
+    }
+    Subscription::run(stream)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn native_menu_activations() -> Subscription<Message> {
+    Subscription::none()
 }
 
 #[cfg(test)]

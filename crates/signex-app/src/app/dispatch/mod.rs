@@ -137,6 +137,10 @@ impl Signex {
             }
             WindowMsg::MainWindowOpened(id) => {
                 self.ui_state.main_window_id = Some(id);
+                // winit's default menu exists now; ours replaces it on the
+                // sync that ends this update.
+                #[cfg(target_os = "macos")]
+                self.native_menu.arm();
                 // Pull the real initial size from winit — opening the
                 // window at Settings.size doesn't always land at
                 // exactly that size (OS DPI scaling, display clamps).
@@ -401,6 +405,7 @@ impl Signex {
                 None => Task::none(),
             },
             WindowMsg::CloseMainWindow => self.handle_app_quit_requested(),
+            WindowMsg::NativeMenuItemActivated(id) => self.handle_native_menu_activated(&id),
             WindowMsg::ControlsLayoutDetected(layout) => {
                 self.handle_controls_layout_detected(layout)
             }

@@ -79,6 +79,8 @@ impl Signex {
         }
         let before = self.active_tab_path();
         let mut tasks = vec![self.dispatch_update(message)];
+        #[cfg(target_os = "macos")]
+        self.sync_native_menu();
         // Any activation path (select, open, close-neighbour, Ctrl+Tab)
         // ends here: scroll the tab strip to the newly active tab.
         if self.active_tab_path() != before {

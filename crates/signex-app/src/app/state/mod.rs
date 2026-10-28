@@ -48,6 +48,9 @@ pub struct Signex {
     /// `document_state` so the library dispatcher can mutate it
     /// without colliding with schematic / PCB engine borrows.
     pub library: crate::library::LibraryState,
+    /// The macOS system menu bar built from the menu model; inert elsewhere
+    /// (docs/MENU_BAR.md, "Native macOS menu").
+    pub(crate) native_menu: crate::menu_bar::native::NativeMenuState,
 }
 
 /// Chord-recorder overlay state for the Preferences ▸ Keyboard
