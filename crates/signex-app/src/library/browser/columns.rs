@@ -81,7 +81,9 @@ impl ColumnKind {
     pub(super) fn edit_seed(&self, r: &ComponentRow) -> String {
         match self {
             ColumnKind::Parameter(key) => match r.parameters.get(key) {
-                Some(ParamValue::Measurement { value, unit }) => format!("{value} {unit}"),
+                Some(signex_library::ParamValue::Measurement { value, unit }) => {
+                    format!("{value} {unit}")
+                }
                 _ => self.cell_value(r),
             },
             _ => self.cell_value(r),
@@ -344,7 +346,7 @@ mod edit_seed_tests {
     use super::*;
     use signex_library::{
         ComponentClass, DatasheetRef, InternalPn, LifecycleState, ManufacturerPart, ParamMap,
-        PlmReserved, PrimitiveRef,
+        ParamValue, PlmReserved, PrimitiveRef,
     };
 
     fn row_with(value: f64, unit: &str) -> ComponentRow {

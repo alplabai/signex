@@ -254,10 +254,6 @@ fn commit_into_measurement(value: f64, unit: &str, typed: &str) -> ParamValue {
     param_on_disk(&snxlib, row_id)
 }
 
-fn base_of(v: &ParamValue) -> f64 {
-    v.as_quantity().expect("a measurement").base()
-}
-
 /// #1572 phase 1 changes nothing about how a browser cell commits: the
 /// cell is seeded with the stored form (`4700 ohm`), the typed number is
 /// in the stored unit, and the stored unit string is kept.
