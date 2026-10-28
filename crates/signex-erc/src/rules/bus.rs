@@ -270,7 +270,7 @@ pub(crate) fn bus_label_on_wire(ctx: &ErcContext, bus: &BusAnalysis, out: &mut V
         .iter()
         .flat_map(|g| g.names.iter().map(|n| n.label))
         .collect();
-    let wires = super::wire_pairs(ctx);
+    let wires = signex_net::SegmentIndex::new(&super::wire_pairs(ctx));
     for (li, label) in ctx.labels.iter().enumerate() {
         if on_a_bus.contains(&li)
             || parse_bus_name(&label.text).is_err()
