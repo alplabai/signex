@@ -529,6 +529,7 @@ fn f10_save_persists_snxprj_as_valid_json() {
 fn add_existing_landed(app: &mut Signex, paths: &[std::path::PathBuf]) {
     let _ = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
         project_id: app.document_state.projects[0].id,
+        project_dir: std::path::PathBuf::new(),
         results: Ok(paths.iter().cloned().map(Ok).collect()),
     }));
 }

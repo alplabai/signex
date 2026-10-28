@@ -118,6 +118,34 @@ pub(super) fn modal_param_value(value: String, unit: &str) -> Option<ParamValue>
     Some(pv)
 }
 
+/// Every buffered parameter edit that was typed but never committed
+/// (Enter), as the value `CommitParam` would store. `Err(key)` names the
+/// first entry that is refused, so Save can stop instead of dropping it.
+/// `tags` is skipped: its own buffer is flushed separately.
+pub(super) fn uncommitted_param_edits(
+    draft: &signex_library::ParamMap,
+    buf: &std::collections::HashMap<String, (String, String)>,
+) -> Result<Vec<(String, ParamValue)>, String> {
+    use crate::library::state::EditRowModalState;
+    let mut keys: Vec<&String> = buf.keys().filter(|k| k.as_str() != "tags").collect();
+    keys.sort();
+    let mut edits = Vec::new();
+    for key in keys {
+        let (value, unit) = &buf[key];
+        let untouched = draft.get(key).is_some_and(|pv| {
+            EditRowModalState::param_buf_entry(pv) == (value.clone(), unit.clone())
+        });
+        if untouched {
+            continue;
+        }
+        match modal_param_value(value.clone(), unit) {
+            Some(pv) => edits.push((key.clone(), pv)),
+            None => return Err(key.clone()),
+        }
+    }
+    Ok(edits)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

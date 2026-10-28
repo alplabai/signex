@@ -16,7 +16,10 @@ mod layout;
 // paths (overlays/mod.rs) resolve unchanged after the folder split.
 pub use dropdown::{dropdown_x_offset, view_dropdown};
 pub use layout::BAR_WIDTH_PX;
-pub(crate) use layout::{BAR_TOP_MARGIN_PX, BAR_ZONE_HEIGHT_PX, menu_at};
+pub(crate) use layout::{
+    BAR_DROPDOWN_GAP_PX, BAR_HEIGHT_PX, BAR_TOP_MARGIN_PX, BAR_ZONE_HEIGHT_PX, bar_left_in_window,
+    bar_width_for, menu_at,
+};
 
 /// Whether `action` needs at least one selected item to make sense.
 /// Transform / align / distribute family — Altium greys these out when
@@ -696,7 +699,7 @@ fn bar_items(
     // Draw-mode indicator (only visible while wire/bus is the active
     // tool). Drops in as a Custom variant so the standard button
     // styling doesn't apply.
-    if matches!(current_tool, crate::app::Tool::Wire | crate::app::Tool::Bus) {
+    if layout::shows_draw_mode_pill(current_tool) {
         items.push(ActiveBarItem::Separator);
         let mode_label = match draw_mode {
             crate::app::DrawMode::Ortho90 => "90\u{00B0}",
@@ -719,14 +722,13 @@ fn bar_items(
                     ..button::Style::default()
                 })
                 .into();
-        // 42 px fits the widest label ("90°" / "45°" / "Any") at size
-        // 12 plus the 7 px side padding. Declared rather than measured
+        // Declared width (see `DRAW_MODE_PILL_WIDTH_PX`), not measured
         // because `slot_offsets` places every dropdown from these
         // widths — see `ActiveBarItem::Custom`. This pill sits AFTER
         // every dropdown trigger on this bar, so an error here would
         // only shift the bar's centring, not the panels; state it
         // correctly anyway.
-        items.push(ActiveBarItem::custom(pill, 42.0));
+        items.push(ActiveBarItem::custom(pill, layout::DRAW_MODE_PILL_WIDTH_PX));
     }
 
     items
@@ -752,12 +754,48 @@ mod pill_tests {
     }
 }
 
+/// Window-space centre x of every dropdown trigger the view draws for
+/// `tool` in a window `window_width` wide, derived from the drawn items
+/// and the widget's own row maths (not from `layout`'s slot table).
+#[cfg(test)]
+pub(crate) fn drawn_trigger_centres(
+    tool: crate::app::Tool,
+    window_width: f32,
+) -> Vec<(ActiveBarMenu, f32)> {
+    use signex_widgets::active_bar::{ActiveBarItem, slot_offsets};
+    let tokens = signex_types::theme::theme_tokens(ThemeId::Signex);
+    let items = bar_items(
+        tool,
+        crate::app::DrawMode::Ortho90,
+        &std::collections::HashMap::new(),
+        &tokens,
+        ThemeId::Signex,
+        false,
+        false,
+    );
+    let (offsets, total) = slot_offsets(&items);
+    let bar_left = (window_width - total) / 2.0;
+    items
+        .iter()
+        .zip(offsets)
+        .filter_map(|(item, left)| match item {
+            ActiveBarItem::Button(b) => match b.on_right_press {
+                Some(ActiveBarMsg::ToggleMenu(menu)) => {
+                    Some((menu, bar_left + left + item.width() / 2.0))
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod layout_tests {
-    use super::layout::{BarSlot, SCHEMATIC_BAR_SLOTS, menu_at, slot_rects};
+    use super::layout::{BarSlot, SCHEMATIC_BAR_SLOTS, bar_slots, slot_rects};
     use super::*;
     use crate::app::{DrawMode, Tool};
-    use signex_widgets::active_bar::slot_offsets;
+    use signex_widgets::active_bar::{BTN_SIZE, slot_offsets};
 
     fn drawn_items(tool: Tool) -> Vec<signex_widgets::active_bar::ActiveBarItem<ActiveBarMsg>> {
         let tokens = signex_types::theme::theme_tokens(ThemeId::Signex);
@@ -794,26 +832,45 @@ mod layout_tests {
     /// also while the draw-mode pill widens the bar.
     #[test]
     fn hit_rects_equal_drawn_rects() {
-        for tool in [Tool::Select, Tool::Wire] {
+        for tool in [Tool::Select, Tool::Wire, Tool::Bus] {
             let items = drawn_items(tool);
             let (drawn, total) = slot_offsets(&items);
+            assert_eq!(total, bar_width_for(tool), "{tool:?} total width");
             if tool == Tool::Select {
                 assert_eq!(total, BAR_WIDTH_PX);
+            } else {
+                assert_eq!(total, BAR_WIDTH_PX + 1.0 + 2.0 + 2.0 + 42.0);
             }
-            for (i, (slot, (left, width))) in
-                SCHEMATIC_BAR_SLOTS.iter().zip(slot_rects()).enumerate()
-            {
+            let rects = slot_rects(tool);
+            assert_eq!(rects.len(), items.len(), "{tool:?} slot count");
+            for (i, (left, width)) in rects.iter().copied().enumerate() {
                 assert_eq!(left, drawn[i], "slot {i} left edge");
                 assert_eq!(width, items[i].width(), "slot {i} width");
-                let BarSlot::Trigger(menu) = *slot else {
-                    assert_eq!(menu_at(left + width / 2.0), None, "separator {i}");
+                let BarSlot::Trigger(menu) = bar_slots(tool)[i] else {
+                    assert_eq!(menu_at(tool, left + width / 2.0), None, "non-trigger {i}");
                     continue;
                 };
-                assert_eq!(menu_at(left), Some(menu));
-                assert_eq!(menu_at(left + width - 0.01), Some(menu));
-                assert_ne!(menu_at(left + width), Some(menu));
-                assert_ne!(menu_at(left - 0.01), Some(menu));
+                assert_eq!(menu_at(tool, left), Some(menu));
+                assert_eq!(menu_at(tool, left + width - 0.01), Some(menu));
+                assert_ne!(menu_at(tool, left + width), Some(menu));
+                assert_ne!(menu_at(tool, left - 0.01), Some(menu));
                 assert_eq!(dropdown_x_offset(menu), left);
+            }
+        }
+    }
+
+    /// #1509: with the pill shown the dropdown anchor (window-space left
+    /// edge of the trigger) lands on the drawn button, not 23.5 px off.
+    #[test]
+    fn dropdown_anchor_matches_drawn_button_with_pill() {
+        for window_width in [1400.0_f32, 1117.0] {
+            for (menu, centre) in drawn_trigger_centres(Tool::Wire, window_width) {
+                let anchor = dropdown_x_offset(menu) + bar_left_in_window(Tool::Wire, window_width);
+                assert_eq!(
+                    anchor + BTN_SIZE / 2.0,
+                    centre,
+                    "{menu:?} at {window_width}"
+                );
             }
         }
     }

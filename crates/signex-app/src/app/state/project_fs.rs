@@ -110,9 +110,6 @@ pub fn message_touches_disk(message: &crate::app::Message) -> bool {
                 | L::BrowserConfirmAddTable { .. }
                 | L::BrowserDeleteTable { .. }
                 | L::BrowserConfirmRenameTable { .. }
-                | L::BrowserConfirmAddClass { .. }
-                | L::BrowserDeleteClass { .. }
-                | L::BrowserConfirmRenameClass { .. }
                 | L::BrowserDeleteRowConfirm { .. }
                 | L::RecoveryLibraryMissing(_)
                 | L::RecoveryLibraryMissingLocateResult(_)

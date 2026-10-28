@@ -560,7 +560,7 @@ impl FootprintDocument {
         );
         if log_repairs && state.legacy_pad_stack_offered {
             crate::diagnostics::log_warning(format!(
-                "{}: every sketch pad has paste disabled and direct connect (the stack builds                  before #1052 wrote), so none gets a paste stencil opening; the Properties                  panel offers to restore it",
+                "{}: every sketch pad has paste disabled and direct connect (the stack builds before #1052 wrote), so none gets a paste stencil opening; the Properties panel offers to restore it",
                 path.display()
             ));
         }

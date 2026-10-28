@@ -505,9 +505,7 @@ impl Signex {
 
         // Mark the `.snxprj` dirty so the project tree's red dot lights
         // up and the project-close prompt asks the user to persist the
-        // new binding. (The actual `.snxprj` write isn't wired yet — a
-        // follow-up commit will plumb that through Ctrl+S; for now the
-        // in-session view is correct, persistence is best-effort.)
+        // new binding.
         let project_path = loaded.path.clone();
         self.document_state.dirty_paths.insert(project_path);
 

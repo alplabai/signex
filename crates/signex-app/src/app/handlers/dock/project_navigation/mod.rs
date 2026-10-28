@@ -22,6 +22,8 @@ mod project_actions;
 mod project_rename;
 mod project_rename_fs;
 #[cfg(test)]
+mod project_rename_inflight_tests;
+#[cfg(test)]
 mod project_rename_tests;
 mod remove;
 mod remove_guard;

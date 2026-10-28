@@ -400,6 +400,12 @@ pub struct CanvasViewPrefs<'a> {
     /// "Keep wires connected when moving" preference).
     pub move_keeps_wires: bool,
     pub draw_mode: crate::app::DrawMode,
+    /// Active tool; decides whether the Active Bar shows the draw-mode pill,
+    /// which widens the bar the right-click hit-test must centre.
+    pub current_tool: crate::app::Tool,
+    /// Full window width. The Active Bar is centred on the window, not on
+    /// this canvas, so docked side panels do not move it.
+    pub window_width: f32,
     pub wire_color_overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     /// Resolved net-class style per wire and junction, read from app state
     /// so the canvas never reaches into the project. See
@@ -756,6 +762,9 @@ pub enum CanvasEvent {
 }
 
 #[cfg(test)]
+mod active_bar_hit;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -797,6 +806,8 @@ mod tests {
             zoom_step: 1.1,
             move_keeps_wires: true,
             draw_mode: crate::app::DrawMode::Ortho90,
+            current_tool: crate::app::Tool::Select,
+            window_width: 1400.0,
             wire_color_overrides: overrides,
             wire_class_styles: class_styles,
             selection_filters: filters,

@@ -1307,3 +1307,57 @@ fn the_reread_line_still_names_a_project_that_was_opened() {
     assert_eq!(lines.len(), 1, "{lines:?}");
     assert!(lines[0].contains("open projects changed"), "{}", lines[0]);
 }
+
+/// Make deleting `path` fail: an exclusive handle on Windows, a read-only
+/// parent directory elsewhere. The returned guard keeps the block alive.
+#[cfg(windows)]
+fn block_delete(path: &Path) -> std::fs::File {
+    use std::os::windows::fs::OpenOptionsExt;
+    std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(path)
+        .expect("exclusive open")
+}
+
+#[cfg(not(windows))]
+fn block_delete(path: &Path) -> impl Drop {
+    use std::os::unix::fs::PermissionsExt;
+    struct Restore(PathBuf);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o755));
+        }
+    }
+    let dir = path.parent().expect("parent").to_path_buf();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).expect("chmod");
+    Restore(dir)
+}
+
+/// #1368 — a Delete File whose disk remove fails must keep the sheet in the
+/// project and surface the error instead of pruning a file that still exists.
+#[test]
+fn failed_disk_delete_keeps_the_project_entry() {
+    let tmp = TempDir::new().expect("tempdir");
+    let sheet = tmp.path().join("X.snxsch");
+    std::fs::write(&sheet, b"x").expect("write sheet");
+    let _lock = block_delete(&sheet);
+    let (mut app, _task) = Signex::new();
+    add_project(&mut app, &tmp.path().join("P.snxprj"), "X.snxsch");
+
+    app.ui_state.remove_dialog = Some(RemoveDialogState {
+        project_id: None,
+        target_path: sheet.clone(),
+        tree_path: vec![0, 0],
+        display_name: "X.snxsch".to_string(),
+        is_outside_project: false,
+        unsaved_prompt: false,
+    });
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::DeleteFile,
+    )));
+
+    assert!(sheet.exists());
+    assert_eq!(app.document_state.projects[0].data.sheets.len(), 1);
+    assert!(app.document_state.error_notice.is_some());
+}

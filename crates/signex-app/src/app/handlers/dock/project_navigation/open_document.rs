@@ -1,8 +1,4 @@
 //! Open-tree-document + tree-path resolution for the project-navigation dock.
-//!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
 
 use super::*;
 use anyhow::{Context, Result};
@@ -453,7 +449,16 @@ mod tests {
         assert!(find(tree, "Top.snxsch", &mut row), "the sheet has a row");
         let key = key_of(tree, &row).expect("row");
 
-        for _ in 0..2 {
+        for click in 0..2 {
+            if click == 1 {
+                // Settling the first click's tasks takes wall time that
+                // grows under load, so pin the memo to a future instant:
+                // `duration_since` saturates to zero, keeping the second
+                // click inside the double-click window deterministically.
+                let memo = app.interaction_state.last_tree_click.as_mut();
+                memo.expect("first click memoed").1 =
+                    std::time::Instant::now() + std::time::Duration::from_secs(3600);
+            }
             let task = app.update(Message::Dock(crate::dock::DockMessage::Panel(
                 crate::panels::PanelMsg::Tree(TreeMsg::Select(key.clone())),
             )));

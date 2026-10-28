@@ -5,7 +5,9 @@ mod patch;
 mod annotation;
 mod history;
 mod history_snapshot;
+mod lock;
 mod net_class_table;
+mod power_port;
 mod project_general;
 mod selection;
 mod sheet;
@@ -20,6 +22,9 @@ pub(crate) mod test_support;
 
 #[cfg(test)]
 mod annotation_tests;
+
+#[cfg(test)]
+mod lock_tests;
 
 #[cfg(test)]
 mod history_tests;
@@ -49,6 +54,7 @@ pub use net_class_table::{
     StepId as NetClassStepId, apply_net_class_command,
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
+pub use power_port::{place_power_port, restyle_power_port};
 pub use project_general::{
     HISTORY_LIMIT as PROJECT_GENERAL_HISTORY_LIMIT, ProjectGeneralCommand, ProjectGeneralHistory,
 };
@@ -144,11 +150,16 @@ impl MovePreview {
             return self.sheet.clone();
         };
         engine.preset_before = Some(self.before.clone());
-        let done = engine.execute(Command::MoveEach {
+        // The commit skips locked symbols; the ghost must too, or it shows
+        // nothing moving while the free items jump on release.
+        let (command, _) = engine.without_locked(Command::MoveEach {
             moves: moves.to_vec(),
             keep_wires,
         });
-        if done.is_err() {
+        let Some(command) = command else {
+            return self.sheet.clone();
+        };
+        if engine.execute(command).is_err() {
             return self.sheet.clone();
         }
         engine.document().clone()
@@ -345,6 +356,10 @@ impl Engine {
     }
 
     pub fn execute(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
+        // A refusal touches nothing, so it moves no revision.
+        if let Some(refusal) = self.locked_symbol_refusal(&cmd) {
+            return Err(refusal);
+        }
         self.bump_revision();
         let before = self.document.clone();
 

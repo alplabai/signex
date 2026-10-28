@@ -72,6 +72,10 @@ pub(crate) fn chrome_search_bar_geometry(window_w: f32) -> (f32, f32) {
     (x, width)
 }
 
+/// Pointer travel (px) before a tab press counts as a drag, for both the
+/// grab cursor and the drag ghost.
+const TAB_DRAG_THRESHOLD_PX: f32 = 6.0;
+
 impl Signex {
     pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message> {
         // Secondary windows (detached modals, future undocked tabs) render
@@ -307,12 +311,11 @@ impl Signex {
             // switch armed the drag state and flipped the
             // cursor to Grabbing instantaneously, plus flashed
             // the drag ghost.
-            const DRAG_THRESHOLD_PX: f32 = 6.0;
             let dragging = ui.tab_dragging.and_then(|(idx, ox, oy)| {
                 let (mx, my) = interaction.last_mouse_pos;
                 let dx = mx - ox;
                 let dy = my - oy;
-                if dx * dx + dy * dy > DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX {
+                if dx * dx + dy * dy > TAB_DRAG_THRESHOLD_PX * TAB_DRAG_THRESHOLD_PX {
                     Some(idx)
                 } else {
                     None
@@ -373,11 +376,10 @@ impl Signex {
         if let Some((tab_idx, ox, oy)) = ui.tab_dragging
             && let Some(tab) = document.tabs.get(tab_idx)
         {
-            const DRAG_GHOST_THRESHOLD_PX: f32 = 6.0;
             let (mx, my) = interaction.last_mouse_pos;
             let dx = mx - ox;
             let dy = my - oy;
-            if dx * dx + dy * dy > DRAG_GHOST_THRESHOLD_PX * DRAG_GHOST_THRESHOLD_PX {
+            if dx * dx + dy * dy > TAB_DRAG_THRESHOLD_PX * TAB_DRAG_THRESHOLD_PX {
                 overlays.push(self.view_tab_drag_ghost(&tab.title));
             }
         }

@@ -73,6 +73,7 @@ fn add_existing_copies_off_thread_and_registers_on_the_original_project() {
     app.document_state.projects.reverse();
     let _ = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
         project_id: target,
+        project_dir: std::path::PathBuf::new(),
         results: Ok(vec![copied]),
     }));
 
@@ -118,6 +119,7 @@ fn add_existing_failures_reach_the_messages_panel() {
 
     let _ = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
         project_id: target,
+        project_dir: std::path::PathBuf::new(),
         results: Ok(vec![outcome]),
     }));
     assert!(
@@ -276,6 +278,7 @@ pub(super) fn add_existing(app: &mut Signex, picked: std::path::PathBuf) -> std:
     ));
     let task = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
         project_id: id,
+        project_dir: std::path::PathBuf::new(),
         results: Ok(vec![landed.clone()]),
     }));
     run_task(app, task);

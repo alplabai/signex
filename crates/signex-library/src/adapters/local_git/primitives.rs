@@ -334,6 +334,45 @@ impl LocalGitAdapter {
     where
         F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
     {
+        self.save_edit(
+            |lf, _| {
+                if !f(lf)? {
+                    return Ok(None);
+                }
+                // Cached prices follow their rows: a deleted row, or a SKU
+                // edited away, takes its prices with it in this same save.
+                super::helpers::prune_stale_pricing(lf);
+                // Rebased, so what this save removed is gone from the text
+                // later saves start from.
+                let text = lf.write_and_rebase()?;
+                // Lines of rows this edit replaced or removed go now, not
+                // at the next row write.
+                self.row_lines().retain_rows(lf);
+                Ok(Some(text))
+            },
+            asset_rel_paths,
+            message,
+            fallback,
+        )
+    }
+
+    /// The one save protocol of the `.snxlib`: under both write locks,
+    /// reload, edit a clone, write it atomically, then let memory take it
+    /// and commit, with `asset_rel_paths` and every pinned PDF not yet in
+    /// HEAD (#1471). `edit` changes the clone and returns its encoded text,
+    /// or `None` when nothing changed (no write, no commit). Its flag says
+    /// whether memory holds this adapter's own last write (see
+    /// `holds_own_write`).
+    pub(super) fn save_edit<F>(
+        &self,
+        edit: F,
+        asset_rel_paths: &[String],
+        message: &str,
+        fallback: &str,
+    ) -> Result<(), LibraryError>
+    where
+        F: FnOnce(&mut LibraryFile, bool) -> Result<Option<String>, LibraryError>,
+    {
         self.ensure_commit_identity()?;
         // Another Signex process could otherwise reload and write between
         // our reload and our write (see `write_lock`). Taken before the
@@ -350,16 +389,12 @@ impl LocalGitAdapter {
         // atomic write below may return an error.
         let rel = self.snxlib_rel_path()?;
         // #831: edit a clone. An encode or write failure discards it, so
-        // memory and the `.snxlib` on disk stay exactly as they were.
+        // memory and the `.snxlib` on disk stay exactly as they were. Rows
+        // are shared, so the clone is cheap (#416).
         let mut candidate = guard.clone();
-        if !f(&mut candidate)? {
+        let Some(text) = edit(&mut candidate, self.holds_own_write())? else {
             return Ok(());
-        }
-        // Cached prices follow their rows: a deleted row, or a SKU edited
-        // away, takes its prices with it as part of this same save.
-        super::helpers::prune_stale_pricing(&mut candidate);
-        // Encode once; the same bytes are written below.
-        let text = candidate.write()?;
+        };
         // Every row's pins are in `text`, so every pinned PDF that is on
         // disk and not yet in HEAD goes into this commit, whichever row the
         // edit was about (#1471). Read under the write lock.

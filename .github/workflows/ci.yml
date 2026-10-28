@@ -12,6 +12,9 @@ on:
     branches: [main, trunk]
   pull_request:
     branches: [main, trunk]
+    # The default three, plus ready_for_review: marking a draft ready is what
+    # starts its first full build (drafts skip the Rust jobs, see `changes`).
+    types: [opened, synchronize, reopened, ready_for_review]
   merge_group:
   workflow_dispatch:
 
@@ -38,13 +41,18 @@ env:
 
 jobs:
   # Decides whether this run needs the Rust jobs (compile, clippy, test,
-  # postgres). A PR that only touches prose skips them; the lint job and the
-  # `ci · required` aggregator always run. Push, merge-queue and manual runs
-  # always build, so trunk is never merged untested. Rule and controls:
-  # scripts/ci_build_needed.sh.
+  # postgres). A draft PR skips them, and so does a PR that only touches
+  # prose; the lint job and the `ci · required` aggregator always run. Push,
+  # merge-queue and manual runs always build, so trunk is never merged
+  # untested, and a draft cannot be merged at all. The decision and its
+  # controls: scripts/ci_build_needed.sh.
   changes:
     name: changes · build needed?
     runs-on: ubuntu-latest
+    # pull-requests: read for the live draft lookup below.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       build: ${{ steps.decide.outputs.build }}
     steps:
@@ -55,16 +63,30 @@ jobs:
       - name: Decide
         id: decide
         env:
-          EVENT: ${{ github.event_name }}
+          CI_EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "$EVENT" != pull_request ]; then
-            build=true
-          else
-            # --no-renames: a move out of crates/ must list the deleted path
-            # too, or `crates/x.rs -> docs/x.rs` would look like prose.
-            build=$(git diff --no-renames --name-only "$BASE_SHA"...HEAD | bash scripts/ci_build_needed.sh)
+          # The draft flag is read live, not from the event payload: a push
+          # and "Ready for review" seconds apart left only the push's run,
+          # whose payload still said draft, so the ready PR got a green
+          # `ci · required` with no build. A failed lookup leaves CI_DRAFT
+          # empty, which builds.
+          CI_DRAFT=""
+          if [ -n "$PR_NUMBER" ]; then
+            CI_DRAFT=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft) || CI_DRAFT=""
           fi
+          export CI_DRAFT
+          echo "Draft (live): ${CI_DRAFT:-unknown}"
+          # Only a PR has a base to diff against. --no-renames: a move out of
+          # crates/ must list the deleted path too, or `crates/x.rs ->
+          # docs/x.rs` would look like prose.
+          build=$(
+            if [ -n "$BASE_SHA" ]; then
+              git diff --no-renames --name-only "$BASE_SHA"...HEAD
+            fi | bash scripts/ci_build_needed.sh
+          )
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "Rust jobs needed: $build"
 
@@ -188,10 +210,18 @@ jobs:
   # not a matrix on `test`, because only Linux needs the apt packages and the
   # lavapipe env. The GPU smoke tests get WARP (DX12) on Windows and the
   # runner's Metal device on macOS; no extra install.
+  # Skipped in the merge queue. It has never been a required check, so the
+  # queue merged without waiting for it there either: it never kept a break
+  # out of trunk, it only named the group that caused one. The trunk push run
+  # tests the merged tree. A burst of merges cancels all but the last push run
+  # (one concurrency group per ref), and that last run tests the tip, which
+  # holds every merge of the burst. What the skip gives up is which merge
+  # broke it, found with one bisect. What it saves is two runner slots, one
+  # of them macOS (5 org-wide), per queued PR.
   test-os:
     name: test · ${{ matrix.os }}
     needs: changes
-    if: needs.changes.outputs.build == 'true'
+    if: needs.changes.outputs.build == 'true' && github.event_name != 'merge_group'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -222,10 +252,11 @@ jobs:
   # exercises the Postgres migrations against a real server. The test is
   # `#[ignore]`d without the URL, hence `--ignored`. Throwaway CI-only
   # credentials on a job-local service container; no secrets.
+  # Skipped in the merge queue for the same reason as `test-os`.
   library-server-pg:
     name: test · library-server postgres
     needs: changes
-    if: needs.changes.outputs.build == 'true'
+    if: needs.changes.outputs.build == 'true' && github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     services:
       postgres:

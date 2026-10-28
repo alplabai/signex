@@ -1,8 +1,4 @@
 //! Close-Project + app-quit lifecycle for the project-navigation dock.
-//!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
 
 use super::*;
 use crate::app::state::ProjectId;
@@ -223,8 +219,8 @@ impl Signex {
         // engine that was kept alive by `dirty_paths` would leak
         // through project close. Save All / Discard All have already
         // pruned `dirty_paths` for the project, so this loop just
-        // sweeps the engine map for any path under this project's
-        // directory.
+        // sweeps the engine map for paths directly in this project's
+        // directory or reached through its sheet hierarchy.
         if let Some(project) = self.document_state.projects.get(project_idx) {
             let dir = project.dir().to_path_buf();
             let reach = self.document_state.reach_sets(sheet_refs);

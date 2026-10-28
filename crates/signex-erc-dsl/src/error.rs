@@ -30,6 +30,14 @@ pub enum DslError {
         target: String,
     },
 
+    #[error("duplicate rule id '{rule}' at {start}:{end}; rule ids must be unique")]
+    DuplicateRuleId {
+        rule: String,
+        /// Byte span of the second definition's id.
+        start: usize,
+        end: usize,
+    },
+
     #[error("rule '{rule}': unknown predicate '{predicate}'")]
     UnknownPredicate { rule: String, predicate: String },
 

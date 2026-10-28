@@ -22,6 +22,7 @@ fn write_export_task(
 ) -> Task<Message> {
     Task::perform(
         async move {
+            let target = path.clone();
             let result = tokio::task::spawn_blocking(move || {
                 signex_types::atomic_io::atomic_write(&path, &bytes)
                     .map_err(|e| format!("Could not write {what} to {}:\n{e}", path.display()))
@@ -29,6 +30,7 @@ fn write_export_task(
             .await
             .unwrap_or_else(|e| Err(format!("Could not write {what}: {e}")));
             ExportWriteOutcome {
+                path: target,
                 result,
                 success_log,
                 advisory,
@@ -48,11 +50,13 @@ fn export_pdf_task(
     options: signex_output::PdfOptions,
     path: PathBuf,
 ) -> Task<Message> {
+    let target = path.clone();
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || build_and_write_pdf(&ctx, &options, &path))
                 .await
                 .unwrap_or_else(|e| ExportWriteOutcome {
+                    path: target,
                     result: Err(format!("PDF export failed: {e}")),
                     success_log: String::new(),
                     advisory: None,
@@ -70,6 +74,7 @@ fn build_and_write_pdf(
 ) -> ExportWriteOutcome {
     use signex_output::Exporter;
     let failed = |reason: String| ExportWriteOutcome {
+        path: path.to_path_buf(),
         result: Err(reason),
         success_log: String::new(),
         advisory: None,
@@ -88,6 +93,7 @@ fn build_and_write_pdf(
     let result = signex_types::atomic_io::atomic_write(path, &output.bytes)
         .map_err(|e| format!("Could not write PDF to {}:\n{e}", path.display()));
     ExportWriteOutcome {
+        path: path.to_path_buf(),
         result,
         success_log,
         advisory: None,
@@ -133,10 +139,10 @@ impl Signex {
         advisory: Option<ErrorNotice>,
         warnings: Vec<String>,
     ) -> Task<Message> {
-        if let Err(e) = self.refuse_while_project_moves(&path, "export to") {
-            self.document_state.error_notice = Some(ErrorNotice::export(e.to_string()));
+        if self.refuse_with_notice_while_project_moves(&path, "export to", ErrorNotice::export) {
             return Task::none();
         }
+        self.begin_project_write(&path);
         write_export_task(path, bytes, what, success_log, advisory, warnings)
     }
 
@@ -148,14 +154,16 @@ impl Signex {
         options: signex_output::PdfOptions,
         path: PathBuf,
     ) -> Task<Message> {
-        if let Err(e) = self.refuse_while_project_moves(&path, "export to") {
-            self.document_state.error_notice = Some(ErrorNotice::export(e.to_string()));
+        if self.refuse_with_notice_while_project_moves(&path, "export to", ErrorNotice::export) {
             return Task::none();
         }
+        // Held like any export write, so a folder rename waits for it.
+        self.begin_project_write(&path);
         export_pdf_task(ctx, options, path)
     }
 
     pub(crate) fn handle_export_written(&mut self, outcome: ExportWriteOutcome) -> Task<Message> {
+        self.end_project_write(&outcome.path);
         match outcome.result {
             Ok(()) => {
                 log::info!("{}", outcome.success_log);
