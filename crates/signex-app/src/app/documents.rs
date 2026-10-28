@@ -899,6 +899,8 @@ pub enum Tool {
     Sheet,
     /// One click on a sheet symbol's border places an entry (pin) there.
     SheetEntry,
+    /// Two clicks measure the offset between two points (#1256). Read-only.
+    Measure,
 }
 
 impl std::fmt::Display for Tool {
@@ -920,6 +922,7 @@ impl std::fmt::Display for Tool {
             Tool::Polyline => write!(f, "Draw Polygon"),
             Tool::Sheet => write!(f, "Place Sheet"),
             Tool::SheetEntry => write!(f, "Place Sheet Entry"),
+            Tool::Measure => write!(f, "Measure Distance"),
         }
     }
 }

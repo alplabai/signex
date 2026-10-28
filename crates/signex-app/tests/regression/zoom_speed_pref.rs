@@ -159,7 +159,10 @@ fn saving_commits_the_draft_and_clears_the_unsaved_state() {
     assert_eq!(app.ui_state.zoom_step_percent, 10, "fixture: not committed");
 
     // Act
-    let _ = app.update(inner(PrefMsg::Save));
+    {
+        let task = app.update(inner(PrefMsg::Save));
+        crate::drive::drive(&mut app, task);
+    }
 
     // Assert
     assert_eq!(app.ui_state.zoom_step_percent, 33);

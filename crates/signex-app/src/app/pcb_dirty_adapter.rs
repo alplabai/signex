@@ -96,7 +96,11 @@ mod tests {
 
     #[test]
     fn move_selected_canvas_event_maps_to_footprint_move_dirty() {
-        let message = Message::CanvasEvent(CanvasEvent::MoveSelected { dx: 1.0, dy: -2.0 });
+        let message = Message::CanvasEvent(CanvasEvent::MoveSelected {
+            dx: 1.0,
+            dy: -2.0,
+            connections: Default::default(),
+        });
         let events = pcb_renderer_events_for_message(&message);
 
         assert_eq!(events, &[PcbAppEvent::FootprintMoved]);
