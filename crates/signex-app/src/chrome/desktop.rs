@@ -87,11 +87,42 @@ pub fn parse_kwinrc(text: &str) -> Option<DesktopButtonLayout> {
     .non_empty()
 }
 
+/// Which desktop's settings describe the title-bar buttons.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DesktopFamily {
+    Kde,
+    /// Desktops whose window manager honours GNOME's `button-layout`.
+    GnomeLike,
+    Other,
+}
+
+/// Classify `XDG_CURRENT_DESKTOP` (colon-separated, case-insensitive).
+/// `gsettings` alone cannot tell desktops apart: it answers GNOME's schema
+/// default on KDE and others too, so the desktop decides which source counts.
+pub fn desktop_family(xdg_current_desktop: &str) -> DesktopFamily {
+    let has = |wanted: &[&str]| {
+        xdg_current_desktop
+            .split(':')
+            .any(|d| wanted.iter().any(|w| d.trim().eq_ignore_ascii_case(w)))
+    };
+    if has(&["KDE"]) {
+        DesktopFamily::Kde
+    } else if has(&["GNOME", "Unity", "Budgie", "Pantheon"]) {
+        DesktopFamily::GnomeLike
+    } else {
+        DesktopFamily::Other
+    }
+}
+
 /// Ask the running desktop (blocking: spawns `gsettings`, reads a file).
-/// GNOME first, then KDE; `None` when neither answers, which is normal on
-/// other desktops.
+/// `None` on desktops with no known source, which is normal.
 pub fn detect() -> Option<DesktopButtonLayout> {
-    detect_gnome().or_else(detect_kde)
+    let current = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
+    match desktop_family(&current) {
+        DesktopFamily::Kde => detect_kde(),
+        DesktopFamily::GnomeLike => detect_gnome(),
+        DesktopFamily::Other => None,
+    }
 }
 
 fn detect_gnome() -> Option<DesktopButtonLayout> {
@@ -124,6 +155,25 @@ mod tests {
             leading: leading.to_vec(),
             trailing: trailing.to_vec(),
         })
+    }
+
+    #[test]
+    fn desktop_family_reads_the_colon_separated_list_case_insensitively() {
+        use DesktopFamily::{GnomeLike, Kde, Other};
+        for (raw, want) in [
+            ("KDE", Kde),
+            ("kde", Kde),
+            ("GNOME", GnomeLike),
+            ("ubuntu:GNOME", GnomeLike),
+            ("Unity", GnomeLike),
+            ("Budgie:GNOME", GnomeLike),
+            ("Pantheon", GnomeLike),
+            ("XFCE", Other),
+            ("X-Cinnamon", Other),
+            ("", Other),
+        ] {
+            assert_eq!(desktop_family(raw), want, "{raw:?}");
+        }
     }
 
     #[test]
