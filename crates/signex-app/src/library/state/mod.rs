@@ -573,6 +573,9 @@ pub struct LibraryState {
     /// libraries changes. Caches derived from them (the picker list, the
     /// browser grid) rebuild when it moves — see `touch_data`.
     pub data_version: u64,
+    /// Preference-backed defaults for a library opened or created from now
+    /// on; `Save Preferences` updates it, so no reader goes back to disk.
+    pub new_library_defaults: NewLibraryDefaults,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the
@@ -691,6 +694,7 @@ pub struct LibraryCreateOptionsState {
 }
 
 mod methods;
+mod new_library_defaults;
 mod panel_rows;
 #[cfg(test)]
 mod panel_rows_tests;
@@ -710,6 +714,7 @@ mod tests;
 mod under_folder;
 
 pub use methods::*;
+pub use new_library_defaults::NewLibraryDefaults;
 pub use panel_rows::PanelRows;
 pub use picker_cache::{PickerEntry, PickerRows};
 pub use placed_part::{ChangePreview, DatasheetChoice, PickerMode};

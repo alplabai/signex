@@ -479,6 +479,7 @@ fn a_late_mount_after_an_edit_lands_as_one_undo_step() {
     let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
         dx: 2.54,
         dy: 0.0,
+        connections: Default::default(),
     }));
     let wire_x = |app: &Signex| {
         app.document_state.engines[&path]

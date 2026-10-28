@@ -17,6 +17,7 @@ pub mod drawing_order;
 pub mod editing_commands;
 pub mod erc;
 pub mod find_replace;
+pub mod find_similar;
 pub mod library_drift;
 pub mod library_place;
 pub mod library_symbol_choice;

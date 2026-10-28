@@ -68,8 +68,8 @@ pub use messages::{
 };
 pub use state::{
     ComponentPreviewState, ComponentsMountSource, ComponentsPanelState, DeleteConfirmState,
-    EditRowModalState, LibraryBrowserState, LibraryState, OpenLibrary, PickerState, PreviewTab,
-    PrimitivePickerState, PrimitivePickerTarget,
+    EditRowModalState, LibraryBrowserState, LibraryState, NewLibraryDefaults, OpenLibrary,
+    PickerState, PreviewTab, PrimitivePickerState, PrimitivePickerTarget,
 };
 
 /// A dialog card's length: `px` in the main window, the whole window in the

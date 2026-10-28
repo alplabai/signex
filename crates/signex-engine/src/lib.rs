@@ -20,6 +20,7 @@ mod transform;
 
 mod exec;
 mod find;
+mod find_similar;
 
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -58,6 +59,9 @@ pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
 pub use find::{
     DesignatorScope, FindHit, FindKind, designator_commands, replace_all_ci, replace_commands,
     scan_sheet,
+};
+pub use find_similar::{
+    SimilarProperty, SimilarValue, describe, find_similar, kind_label, properties_of,
 };
 use history::HistoryEntry;
 pub use history::UndoGroupId;

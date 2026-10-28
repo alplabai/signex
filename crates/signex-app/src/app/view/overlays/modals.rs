@@ -33,6 +33,7 @@ impl Signex {
             draft_pcb_gpu_render: ui.preferences_draft_pcb_gpu_render,
             draft_annotate_undo: ui.preferences_draft_annotate_undo,
             draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
+            draft_drag_direction_select: ui.preferences_draft_drag_direction_select,
             draft_window_controls_placement: ui.preferences_draft_window_controls_placement,
             window_controls_restart_note: self.window_controls_needs_restart(),
             draft_autosave_enabled: ui.preferences_draft_autosave_enabled,
@@ -72,6 +73,19 @@ impl Signex {
         Some(
             crate::find_replace::view(&ui.find_replace, &self.document_state.panel_ctx.tokens)
                 .map(Message::FindReplaceMsg),
+        )
+    }
+
+    /// Find Similar Objects dialog (#1257). In-window only: it has no
+    /// detached form.
+    pub(in crate::app::view) fn find_similar_overlay(&self) -> Option<Element<'_, Message>> {
+        let state = self.ui_state.find_similar.as_ref()?;
+        Some(
+            crate::find_similar::view(state, &self.document_state.panel_ctx.tokens).map(|msg| {
+                Message::Selection(
+                    crate::app::selection_request::SelectionRequest::FindSimilar(msg),
+                )
+            }),
         )
     }
 

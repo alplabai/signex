@@ -159,7 +159,7 @@ fn flatten(menu: &Menu, parent: Option<&str>, out: &mut Vec<(String, char)>) {
             MenuEntry::Submenu(sub) => flatten(sub, Some(&path), out),
             MenuEntry::Item(item) => {
                 let (kind, action) = match &item.state {
-                    ItemState::Placeholder => ("stub", "-".to_string()),
+                    ItemState::Placeholder | ItemState::Unavailable => ("stub", "-".to_string()),
                     ItemState::Live { action, .. } => ("item", format!("{action:?}")),
                 };
                 let (id, text) = item
@@ -262,7 +262,7 @@ fn model_shortcuts_follow_the_active_keymap() {
     for menu in &menu_bar_model(&ctx).menus {
         check_shortcuts(menu, &ctx, &mut checked);
     }
-    assert_eq!(checked, 26, "the Altium profile labels 26 menu rows");
+    assert_eq!(checked, 31, "the Altium profile labels 31 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
