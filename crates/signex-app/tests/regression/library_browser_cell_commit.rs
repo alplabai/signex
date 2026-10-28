@@ -511,3 +511,45 @@ fn the_modal_keeps_the_text_editor_for_an_unknown_unit() {
         }
     );
 }
+
+/// The unit is picked, not typed: picking farad and saving stores the
+/// farad token with the number the field shows (the k prefix does not
+/// exist for farad, so the picker falls back to none).
+#[test]
+fn the_modal_stores_the_unit_that_was_picked() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (snxlib, row_id) = library_with_measurement(tmp.path(), 4700.0, "ohm");
+    let steps = vec![
+        BrowserEditMsg::SetParamUnit {
+            key: PARAM.into(),
+            unit: "F".into(),
+        },
+        BrowserEditMsg::Save,
+    ];
+    let _ = edit_in_modal(&snxlib, row_id, steps);
+    assert_eq!(
+        param_on_disk(&snxlib, row_id),
+        ParamValue::Measurement {
+            value: 4.7,
+            unit: "F".into()
+        }
+    );
+}
+
+/// A unit string the editor does not know is shown read-only: saving the
+/// row without touching it keeps the string and the content hash.
+#[test]
+fn an_unknown_unit_row_saves_with_its_unit_untouched() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (snxlib, row_id) = library_with_measurement(tmp.path(), 1.5, "furlong");
+    let before = signex_library::hash_row_content(&row_on_disk(&snxlib, row_id)).expect("hash");
+    let _ = edit_in_modal(&snxlib, row_id, vec![BrowserEditMsg::Save]);
+    assert_eq!(
+        param_on_disk(&snxlib, row_id),
+        ParamValue::Measurement {
+            value: 1.5,
+            unit: "furlong".into()
+        }
+    );
+    assert_eq!(row_on_disk(&snxlib, row_id).content_hash, before);
+}

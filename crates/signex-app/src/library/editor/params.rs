@@ -28,6 +28,7 @@ use signex_widgets::theme_ext;
 use super::super::messages::{EditorMsg, LibraryMessage, ParamKindMsg};
 use super::super::prefix_picker::prefix_picker;
 use super::super::state::{ComponentPreviewState, EditorAddress, LibraryState};
+use super::super::unit_picker::{unit_of_token, unit_picker};
 
 /// Width of the status column: the missing badge or a slot problem.
 const STATUS_W: f32 = 170.0;
@@ -298,12 +299,36 @@ fn custom_row<'a>(
 
     let editor_widget = slot_input(state, name, kind, unit.clone(), address);
 
+    // No slot fixes the unit of a custom row, so it is picked, never
+    // typed. A unit string the build does not know stays a read-only label.
     let unit_label: Element<'a, LibraryMessage> = match (unit, kind) {
-        (Some(u), ParamKind::Measurement) => container(text(u).size(11).color(muted))
-            .padding([0, 8])
-            .width(Length::Fixed(60.0))
-            .into(),
-        _ => Space::new().width(Length::Fixed(60.0)).into(),
+        (Some(u), ParamKind::Measurement) => match unit_of_token(&u) {
+            Ok(selected) => {
+                let lib_path = address.library_path.clone();
+                let table = address.table.clone();
+                let row_id = address.row_id;
+                let name_owned = name.to_string();
+                let allow_none = selected.is_none();
+                container(unit_picker(selected, allow_none, 11, move |unit| {
+                    LibraryMessage::EditorEvent {
+                        library_path: lib_path.clone(),
+                        table: table.clone(),
+                        row_id,
+                        msg: EditorMsg::ParamUnitPicked {
+                            name: name_owned.clone(),
+                            unit,
+                        },
+                    }
+                }))
+                .width(Length::Fixed(90.0))
+                .into()
+            }
+            Err(raw) => container(text(raw.to_string()).size(11).color(muted))
+                .padding([0, 8])
+                .width(Length::Fixed(90.0))
+                .into(),
+        },
+        _ => Space::new().width(Length::Fixed(90.0)).into(),
     };
 
     let lib_path = address.library_path.clone();

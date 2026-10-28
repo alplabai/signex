@@ -5,6 +5,7 @@
 //! (`params_edit_buf`) and committed on demand so a half-typed value is
 //! never parsed.
 
+use signex_library::ParamValue;
 use signex_types::quantity::{MantissaError, SiPrefix, Unit};
 
 use crate::library::ComponentPreviewState;
@@ -122,6 +123,32 @@ pub(super) fn pick_prefix(
     commit_measurement(state, name, unit);
 }
 
+/// The user picked a unit for a custom measurement row. The number keeps
+/// its base value; a number still being typed is committed in the new
+/// unit.
+pub(super) fn pick_unit(state: &mut ComponentPreviewState, name: String, unit: String) {
+    let Some(ParamValue::Measurement { value, unit: old }) = state.row.parameters.get(&name) else {
+        return;
+    };
+    let base = signex_types::quantity::quantity_from_stored(*value, old)
+        .map(|q| q.base())
+        .unwrap_or(*value);
+    let token = match Unit::from_alias(unit.trim()) {
+        Some(known) => known.token().to_string(),
+        None => unit.trim().to_string(),
+    };
+    state.row.parameters.insert(
+        name.clone(),
+        ParamValue::Measurement {
+            value: base,
+            unit: token.clone(),
+        },
+    );
+    state.dirty = true;
+    state.params_prefix.remove(&name);
+    commit_measurement(state, name, token);
+}
+
 /// Toggle a boolean parameter.
 pub(super) fn set_bool(state: &mut ComponentPreviewState, name: String, value: bool) {
     state
@@ -208,7 +235,7 @@ mod tests {
     use super::*;
     use signex_library::{
         ComponentClass, ComponentRow, DatasheetRef, InternalPn, LifecycleState, ManufacturerPart,
-        ParamMap, ParamValue, PlmReserved, PrimitiveRef,
+        ParamMap, PlmReserved, PrimitiveRef,
     };
     use signex_types::quantity::SiPrefix;
     use std::path::PathBuf;
@@ -513,6 +540,18 @@ mod tests {
         set_measurement_buf(&mut state, "tolerance".into(), "5".into());
         pick_prefix(&mut state, "tolerance".into(), "%".into(), SiPrefix::Kilo);
         assert_eq!(state.row.parameters["tolerance"], meas(5.0, "%"));
+    }
+
+    #[test]
+    fn picking_a_unit_stores_that_unit_token() {
+        let mut state = state_with("gain", meas(0.0, ""));
+        pick_unit(&mut state, "gain".into(), "F".into());
+        assert_eq!(state.row.parameters["gain"], meas(0.0, "F"));
+        // A number typed before the pick is committed in the new unit.
+        set_measurement_buf(&mut state, "gain".into(), "100".into());
+        pick_prefix(&mut state, "gain".into(), "F".into(), SiPrefix::Nano);
+        pick_unit(&mut state, "gain".into(), "H".into());
+        assert_eq!(state.row.parameters["gain"], meas(1e-7, "H"));
     }
 
     #[test]

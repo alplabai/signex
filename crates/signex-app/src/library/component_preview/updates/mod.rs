@@ -107,6 +107,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         EditorMsg::ParamPrefixPicked { name, unit, prefix } => {
             parameters::pick_prefix(state, name, unit, prefix)
         }
+        EditorMsg::ParamUnitPicked { name, unit } => parameters::pick_unit(state, name, unit),
         EditorMsg::ParamSetBool { name, value } => parameters::set_bool(state, name, value),
         EditorMsg::ParamRemove { name } => parameters::remove(state, name),
         EditorMsg::ParamNewNameChanged(name) => state.new_param_name = name,

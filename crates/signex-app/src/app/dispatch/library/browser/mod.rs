@@ -515,9 +515,11 @@ impl Signex {
                 BrowserEditMsg::SetParamUnit { key, unit } => {
                     let entry = modal
                         .param_buf
-                        .entry(key)
+                        .entry(key.clone())
                         .or_insert_with(|| (String::new(), String::new()));
                     entry.1 = unit;
+                    // A pick is a whole edit: apply it to the draft now.
+                    param_commit::commit_param_buffer(modal, &key);
                 }
                 BrowserEditMsg::ParamPrefixPicked { key, prefix } => {
                     modal.param_prefix.insert(key.clone(), prefix);

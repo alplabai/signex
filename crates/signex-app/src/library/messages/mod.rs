@@ -263,6 +263,12 @@ pub enum EditorMsg {
         unit: String,
         prefix: signex_types::quantity::SiPrefix,
     },
+    /// The user picked a unit for a custom measurement row (a template
+    /// slot fixes its own unit). `unit` is the unit's canonical token.
+    ParamUnitPicked {
+        name: String,
+        unit: String,
+    },
     /// Toggle a `ParamValue::Bool` parameter.
     ParamSetBool {
         name: String,
@@ -603,6 +609,8 @@ pub enum BrowserEditMsg {
         key: String,
         value: String,
     },
+    /// The user picked a unit for a parameter row: its canonical token,
+    /// or an empty string for no unit. Applied to the draft at once.
     SetParamUnit {
         key: String,
         unit: String,

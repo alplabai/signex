@@ -52,6 +52,7 @@ pub mod settings;
 pub mod state;
 #[cfg(test)]
 pub(crate) mod test_adapters;
+mod unit_picker;
 pub mod updates_dialog;
 #[cfg(test)]
 mod view_purity_tests;

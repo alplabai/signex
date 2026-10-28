@@ -18,6 +18,7 @@ use super::messages::{BrowserEditMsg, LibraryMessage};
 use super::modal_chrome::close_x;
 use super::prefix_picker::prefix_picker;
 use super::state::{DeleteConfirmState, EditRowModalState};
+use super::unit_picker::{unit_of_token, unit_picker};
 
 const CONFIRM_W: f32 = 480.0;
 const CONFIRM_H: f32 = 230.0;
@@ -525,22 +526,21 @@ fn view_params_section<'a>(
                 None => val_input.into(),
             };
 
-            let send_u = send.clone();
-            let key_for_u = key_owned.clone();
-            let unit_input = text_input("unit", &cur_unit)
-                .on_input(move |s| {
-                    send_u(BrowserEditMsg::SetParamUnit {
-                        key: key_for_u.clone(),
-                        unit: s,
+            // The unit is picked, never typed. A unit string the build does
+            // not know is shown as it is and kept untouched.
+            let unit_input: Element<'a, LibraryMessage> = match unit_of_token(&cur_unit) {
+                Ok(selected) => {
+                    let send_u = send.clone();
+                    let key_for_u = key_owned.clone();
+                    unit_picker(selected, true, 11, move |unit| {
+                        send_u(BrowserEditMsg::SetParamUnit {
+                            key: key_for_u.clone(),
+                            unit,
+                        })
                     })
-                })
-                .on_submit({
-                    let send_c = send.clone();
-                    let key_c = key_owned.clone();
-                    send_c(BrowserEditMsg::CommitParam { key: key_c })
-                })
-                .padding(4)
-                .size(11);
+                }
+                Err(raw) => text(raw.to_string()).size(11).color(muted).into(),
+            };
 
             let send_del = send.clone();
             let key_for_del = key_owned.clone();
