@@ -118,10 +118,7 @@ impl Signex {
                 }
             }
             PrefMsg::KeymapRestoreFromBackup => {
-                let Some(bak) = crate::keymap::existing_backup_profiles_path() else {
-                    self.refresh_keymap_backup();
-                    self.ui_state.preferences_keymap_status =
-                        "There is no keyboard-shortcuts backup to restore from.".to_string();
+                let Some(bak) = self.displayed_keymap_backup("restore from") else {
                     return Task::none();
                 };
                 // Read it through the normal loader rather than copying
@@ -206,10 +203,7 @@ impl Signex {
                 }
             }
             PrefMsg::KeymapDiscardBackup => {
-                let Some(bak) = crate::keymap::existing_backup_profiles_path() else {
-                    self.refresh_keymap_backup();
-                    self.ui_state.preferences_keymap_status =
-                        "There is no keyboard-shortcuts backup to discard.".to_string();
+                let Some(bak) = self.displayed_keymap_backup("discard") else {
                     return Task::none();
                 };
                 match crate::keymap::discard_profile_backup_at(&bak) {

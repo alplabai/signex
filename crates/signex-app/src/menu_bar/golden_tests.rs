@@ -262,10 +262,7 @@ fn model_shortcuts_follow_the_active_keymap() {
     for menu in &menu_bar_model(&ctx).menus {
         check_shortcuts(menu, &ctx, &mut checked);
     }
-    assert!(
-        checked > 20,
-        "expected the keymap-backed rows, saw {checked}"
-    );
+    assert_eq!(checked, 26, "the Altium profile labels 26 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {

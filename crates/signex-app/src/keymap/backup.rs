@@ -13,17 +13,17 @@ use std::path::{Path, PathBuf};
 /// Three outcomes, all load-bearing:
 ///
 /// * `path` does not exist — `Ok(None)`, there is nothing to preserve.
-/// * otherwise — copy `path` to the first free sibling name from
-///   [`free_aside_path`] (`.bak`, `.bak.2`, …) and return
+/// * otherwise — copy `path` to the first free sibling name (`.bak`,
+///   `.bak.2`, …), claimed with `create_new` so a slot created since a
+///   probe cannot be overwritten, and return
 ///   `Ok(Some(bak_path))`. An existing backup is never overwritten, and
 ///   it no longer suppresses a new one either (#1378): the old
 ///   "any `.bak` means skip" rule lost the current file whenever an
 ///   older backup was lying around.
 ///
-/// Both the source and the candidate names are probed with
-/// `symlink_metadata`, so a stat error other than `NotFound` is an `Err`
-/// rather than "absent" (`Path::exists()` answers `false` for a name it
-/// merely cannot stat).
+/// The source is probed with `symlink_metadata`, so a stat error other
+/// than `NotFound` is an `Err` rather than "absent" (`Path::exists()`
+/// answers `false` for a name it merely cannot stat).
 ///
 /// An `Err` means the copy could not be made, and the caller must then
 /// refuse to save: overwriting after a failed backup is the data loss
@@ -34,10 +34,45 @@ pub fn back_up_profile_file_at(path: &Path) -> Result<Option<PathBuf>, ProfileLo
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(ProfileLoadError::Io(error)),
     }
-    let bak = free_aside_path(path).map_err(ProfileLoadError::Io)?;
-    std::fs::copy(path, &bak).map_err(ProfileLoadError::Io)?;
+    let bak = copy_to_free_slot(path).map_err(ProfileLoadError::Io)?;
     stamp_written_now(&bak);
     Ok(Some(bak))
+}
+
+/// Copy `path` into the first slot nobody holds. `create_new` makes the
+/// claim atomic: a slot that appears between two tries is skipped, never
+/// overwritten.
+fn copy_to_free_slot(path: &Path) -> Result<PathBuf, std::io::Error> {
+    use crate::ignore::IgnoreResult;
+    let mut source = std::fs::File::open(path)?;
+    for slot in 1..=MAX_ASIDE_SLOTS {
+        let candidate = slot_path(path, slot).ok_or_else(|| {
+            std::io::Error::other(format!(
+                "shortcuts file has no file name to back up: {}",
+                path.display()
+            ))
+        })?;
+        let mut target = match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(target) => target,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        };
+        if let Err(error) = std::io::copy(&mut source, &mut target) {
+            // The half-written file is ours alone: this call created it.
+            drop(target);
+            std::fs::remove_file(&candidate).ignore("removing our own partial backup");
+            return Err(error);
+        }
+        return Ok(candidate);
+    }
+    Err(std::io::Error::other(format!(
+        "all {MAX_ASIDE_SLOTS} .bak slots are taken beside {}",
+        path.display()
+    )))
 }
 
 /// Windows `fs::copy` keeps the source's mtime, which would rank a backup

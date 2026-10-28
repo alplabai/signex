@@ -188,6 +188,10 @@ pub struct CompiledKeymap {
 /// Per command, the label of its last `Command` binding that no later
 /// `Unbind` of the same command, context and strokes shadows. A command
 /// with no such binding has no entry.
+///
+/// The hint is context-free: it does not know which context the menu is
+/// shown in, and an `Unbind` shadows a binding only in its own context
+/// (the same rule `shortcut_label_linear` states independently).
 fn label_index(bindings: &[CompiledBinding]) -> BTreeMap<AppCommandId, String> {
     let mut labels = BTreeMap::new();
     // Reverse scan; `unbinds` holds the unbinds that come after the

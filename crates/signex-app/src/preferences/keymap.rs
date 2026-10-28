@@ -233,6 +233,10 @@ fn keymap_table_row<'a>(
     let overridden_by = shadow_note(&row_model.trigger);
     let state = if !row_model.trigger_valid {
         "Invalid".to_string()
+    } else if row_model.unbound {
+        // The user's own unbind outranks the fixed-action note: the row
+        // does nothing, whatever it would have been shadowed by.
+        "Unbound".to_string()
     } else if let Some(note) = overridden_by.clone() {
         note
     } else if has_conflict {
@@ -246,7 +250,8 @@ fn keymap_table_row<'a>(
     } else {
         "Gesture".to_string()
     };
-    let state_warn = !row_model.trigger_valid || has_conflict || overridden_by.is_some();
+    let state_warn =
+        !row_model.trigger_valid || has_conflict || (overridden_by.is_some() && !row_model.unbound);
     let state_unbound = row_model.unbound || row_model.trigger.trim().is_empty();
     let state_style = move |theme: &Theme| text::Style {
         color: Some(if state_warn {

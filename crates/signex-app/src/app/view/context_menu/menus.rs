@@ -24,7 +24,7 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Keyboard-shortcut hints for the canvas menu, resolved from the active
-/// keymap profile (with the historic Altium defaults as fallbacks) before
+/// keymap profile (empty when the profile does not bind the command) before
 /// the pure builder runs.
 pub(super) struct CanvasShortcuts {
     pub find: String,
@@ -134,8 +134,8 @@ impl Signex {
             .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet);
         let drawing_selected = !self.selected_drawing_ids().is_empty();
         let active_submenu = self.interaction_state.context_submenu;
-        // Shortcut hints read from the active keymap profile, falling
-        // back to the historic Altium defaults when a command is unbound.
+        // Shortcut hints read from the active keymap profile; a command
+        // it does not bind has none.
         let sc = CanvasShortcuts {
             find: self.keymap_shortcut_label("find"),
             cut: self.keymap_shortcut_label("cut"),
