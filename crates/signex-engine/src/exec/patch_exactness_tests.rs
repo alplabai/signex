@@ -367,7 +367,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 46] = [
+const ALL_KINDS: [CommandKind; 47] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
