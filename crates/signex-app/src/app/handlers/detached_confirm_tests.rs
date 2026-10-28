@@ -3,9 +3,7 @@
 //! tests in `tests/regression/project.rs` run unchanged beside these.
 
 use crate::app::state::ModalId;
-use crate::app::{
-    AppQuitConfirmState, InputMsg, Message, ProjectCloseChoice, ProjectMsg, Signex, WindowMsg,
-};
+use crate::app::{InputMsg, Message, ProjectCloseChoice, ProjectMsg, Signex, WindowMsg};
 
 fn quit_app() -> (Signex, iced::window::Id) {
     let (mut app, _task) = Signex::new();
