@@ -19,6 +19,7 @@
 //! migration in BOTH sets.
 
 pub mod page;
+mod pn_unique;
 
 use std::str::FromStr;
 
@@ -52,6 +53,18 @@ pub enum RowWrite {
     Stale { current_revision: i64 },
     /// No such row.
     Missing,
+    /// Refused: another row of the library already holds this part number.
+    PnTaken,
+}
+
+/// Outcome of inserting a new row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RowInsert {
+    Created,
+    /// A row with the same `(library_id, table, row_id)` exists.
+    RowExists,
+    /// Another row of the library already holds this part number.
+    PnTaken,
 }
 
 /// Pool variant selected by URL scheme.
@@ -130,11 +143,14 @@ impl AppState {
 
     /// Apply embedded migrations.
     pub async fn migrate(&self) -> sqlx::Result<()> {
-        match &self.pool {
-            DbPool::Sqlite(p) => MIGRATOR.run(p).await?,
-            DbPool::Postgres(p) => POSTGRES_MIGRATOR.run(p).await?,
+        let applied = match &self.pool {
+            DbPool::Sqlite(p) => MIGRATOR.run(p).await,
+            DbPool::Postgres(p) => POSTGRES_MIGRATOR.run(p).await,
+        };
+        match applied {
+            Ok(()) => Ok(()),
+            Err(e) => Err(self.explain_migration_failure(e).await),
         }
-        Ok(())
     }
 
     // ── Component-row CRUD ─────────────────────────────────────────────────
@@ -153,30 +169,33 @@ impl AppState {
     /// can answer `409` — POST must never silently overwrite an
     /// existing row (an upsert would let one client clobber another's
     /// component with no warning). Replacement goes through
-    /// [`update_row`] (PUT).
+    /// [`update_row`] (PUT). A part number another row of the library holds
+    /// is refused by the unique index, so racing writers cannot both win.
     pub async fn insert_row(
         &self,
         library_id: Uuid,
         table_name: &str,
         row: &ComponentRow,
-    ) -> sqlx::Result<bool> {
+    ) -> sqlx::Result<RowInsert> {
         signex_library::validate_row_for_write(row)
             .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
         let payload = row_payload(row)?;
         let now = Utc::now().to_rfc3339();
         let row_id = row.row_id.to_string();
         let internal_pn = row.internal_pn.as_str().to_string();
+        let pn_key = internal_pn.trim().to_string();
         let result = match &self.pool {
             DbPool::Sqlite(pool) => {
                 sqlx::query(
                     "INSERT INTO component_rows \
-                       (library_id, table_name, row_id, internal_pn, payload, created_at, updated_at) \
-                     VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       (library_id, table_name, row_id, internal_pn, pn_key, payload, created_at, updated_at) \
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 )
                 .bind(library_id.to_string())
                 .bind(table_name)
                 .bind(&row_id)
                 .bind(&internal_pn)
+                .bind(&pn_key)
                 .bind(&payload)
                 .bind(&now)
                 .bind(&now)
@@ -187,13 +206,14 @@ impl AppState {
             DbPool::Postgres(pool) => {
                 sqlx::query(
                     "INSERT INTO component_rows \
-                       (library_id, table_name, row_id, internal_pn, payload, created_at, updated_at) \
-                     VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                       (library_id, table_name, row_id, internal_pn, pn_key, payload, created_at, updated_at) \
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
                 )
                 .bind(library_id.to_string())
                 .bind(table_name)
                 .bind(&row_id)
                 .bind(&internal_pn)
+                .bind(&pn_key)
                 .bind(&payload)
                 .bind(&now)
                 .bind(&now)
@@ -203,8 +223,9 @@ impl AppState {
             }
         };
         match result {
-            Ok(_) => Ok(true),
-            Err(e) if is_unique_violation(&e) => Ok(false),
+            Ok(_) => Ok(RowInsert::Created),
+            Err(e) if is_pn_violation(&e) => Ok(RowInsert::PnTaken),
+            Err(e) if is_unique_violation(&e) => Ok(RowInsert::RowExists),
             Err(e) => Err(e),
         }
     }
@@ -225,13 +246,15 @@ impl AppState {
         let now = Utc::now().to_rfc3339();
         let row_id = row.row_id.to_string();
         let internal_pn = row.internal_pn.as_str().to_string();
+        let pn_key = internal_pn.trim().to_string();
         let affected = match &self.pool {
             DbPool::Sqlite(pool) => sqlx::query(
                 "UPDATE component_rows SET \
-                         internal_pn = ?, payload = ?, updated_at = ?, revision = revision + 1 \
+                         internal_pn = ?, pn_key = ?, payload = ?, updated_at = ?, revision = revision + 1 \
                      WHERE library_id = ? AND table_name = ? AND row_id = ? AND revision = ?",
             )
             .bind(&internal_pn)
+            .bind(&pn_key)
             .bind(&payload)
             .bind(&now)
             .bind(library_id.to_string())
@@ -239,14 +262,15 @@ impl AppState {
             .bind(&row_id)
             .bind(base_revision)
             .execute(pool)
-            .await?
-            .rows_affected(),
+            .await
+            .map(|r| r.rows_affected()),
             DbPool::Postgres(pool) => sqlx::query(
                 "UPDATE component_rows SET \
-                         internal_pn = $1, payload = $2, updated_at = $3, revision = revision + 1 \
-                     WHERE library_id = $4 AND table_name = $5 AND row_id = $6 AND revision = $7",
+                         internal_pn = $1, pn_key = $2, payload = $3, updated_at = $4, revision = revision + 1 \
+                     WHERE library_id = $5 AND table_name = $6 AND row_id = $7 AND revision = $8",
             )
             .bind(&internal_pn)
+            .bind(&pn_key)
             .bind(&payload)
             .bind(&now)
             .bind(library_id.to_string())
@@ -254,8 +278,13 @@ impl AppState {
             .bind(&row_id)
             .bind(base_revision)
             .execute(pool)
-            .await?
-            .rows_affected(),
+            .await
+            .map(|r| r.rows_affected()),
+        };
+        let affected = match affected {
+            Ok(n) => n,
+            Err(e) if is_pn_violation(&e) => return Ok(RowWrite::PnTaken),
+            Err(e) => return Err(e),
         };
         if affected > 0 {
             return Ok(RowWrite::Applied {
@@ -891,6 +920,13 @@ fn decode_err(e: serde_json::Error) -> sqlx::Error {
 /// True when a sqlx error is a primary-key / unique-constraint
 /// violation — the signal that a plain `INSERT` hit an existing row.
 /// Backend-agnostic via `DatabaseError::kind()` (SQLite + Postgres).
+/// A unique violation of the part-number index (`idx_component_rows_pn_key`;
+/// SQLite names the `pn_key` column instead), as opposed to the row key.
+fn is_pn_violation(err: &sqlx::Error) -> bool {
+    is_unique_violation(err)
+        && matches!(err, sqlx::Error::Database(db) if db.message().contains("pn_key"))
+}
+
 fn is_unique_violation(err: &sqlx::Error) -> bool {
     matches!(
         err,

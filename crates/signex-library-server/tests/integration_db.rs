@@ -17,7 +17,7 @@ use signex_library::lifecycle::LifecycleState;
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::PrimitiveRef;
-use signex_library_server::db::AppState;
+use signex_library_server::db::{AppState, RowInsert};
 use signex_library_server::{API_TOKEN_ENV, router_with_state};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -462,7 +462,10 @@ async fn store_refuses_non_finite_parameter() {
     let state = fresh_state().await;
     let lib = Uuid::now_v7();
     let good = fixture_row("R1");
-    assert!(state.insert_row(lib, "resistors", &good).await.unwrap());
+    assert_eq!(
+        state.insert_row(lib, "resistors", &good).await.unwrap(),
+        RowInsert::Created
+    );
 
     let mut bad = fixture_row("R_BAD");
     bad.parameters
@@ -742,4 +745,159 @@ async fn post_row_with(app: &axum::Router, library_id: Uuid, row: &ComponentRow)
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
+}
+
+/// POST `row` into `table` of `library_id` and return the status.
+async fn post_row_status(
+    app: &axum::Router,
+    library_id: Uuid,
+    table: &str,
+    row: &ComponentRow,
+) -> StatusCode {
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/tables/{table}/rows?library_id={library_id}"))
+                .header("content-type", "application/json")
+                .header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string())
+                .header("authorization", bearer_header())
+                .body(Body::from(serde_json::to_vec(row).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+        .status()
+}
+
+/// #1613: two writers racing the same new part number (different rows,
+/// different tables) - exactly one is created, the other gets 409, and the
+/// library keeps one row with that PN. A different library may reuse it.
+async fn assert_racing_same_pn_has_one_winner(state: AppState) {
+    let app = router_with_state(state.clone());
+    let library_id = Uuid::now_v7();
+    let (a, b) = (fixture_row("R-1613"), fixture_row(" R-1613 "));
+    let (ra, rb) = tokio::join!(
+        post_row_status(&app, library_id, "resistors", &a),
+        post_row_status(&app, library_id, "capacitors", &b),
+    );
+    let mut statuses = [ra, rb];
+    statuses.sort();
+    assert_eq!(statuses, [StatusCode::CREATED, StatusCode::CONFLICT]);
+
+    let tables = ["resistors", "capacitors"];
+    let mut held = 0;
+    for (table, row) in tables.iter().zip([&a, &b]) {
+        let id = RowId::from_uuid(row.row_id);
+        held += usize::from(
+            state
+                .fetch_row(library_id, table, id)
+                .await
+                .unwrap()
+                .is_some(),
+        );
+    }
+    assert_eq!(held, 1);
+
+    // Other library, blank PNs and a different case are all free.
+    let other = Uuid::now_v7();
+    for (table, pn, lib) in [
+        ("resistors", "R-1613", other),
+        ("resistors", "", library_id),
+        ("capacitors", "", library_id),
+        ("resistors", "r-1613", library_id),
+    ] {
+        let status = post_row_status(&app, lib, table, &fixture_row(pn)).await;
+        assert_eq!(status, StatusCode::CREATED, "{table} {pn:?}");
+    }
+
+    // A PUT that moves a row onto a taken PN is refused too, row unchanged.
+    let mover = fixture_row("R-MOVE");
+    post_row(&app, library_id, &mover).await;
+    let mut moved = mover.clone();
+    moved.internal_pn = InternalPn::new("R-1613");
+    let resp = app
+        .clone()
+        .oneshot(put_request(library_id, &moved, Some("\"1\"")))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CONFLICT);
+    let stored = state
+        .fetch_row(library_id, "resistors", RowId::from_uuid(mover.row_id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.internal_pn, InternalPn::new("R-MOVE"));
+    assert_eq!(stored.server_revision, Some(1));
+}
+
+#[tokio::test]
+async fn racing_posts_of_one_part_number_have_one_winner() {
+    assert_racing_same_pn_has_one_winner(fresh_state().await).await;
+}
+
+#[tokio::test]
+#[ignore = "requires SIGNEX_TEST_PG_URL"]
+async fn postgres_racing_posts_of_one_part_number_have_one_winner() {
+    ensure_test_token();
+    let url = std::env::var("SIGNEX_TEST_PG_URL")
+        .expect("SIGNEX_TEST_PG_URL must be set to run the ignored Postgres tests");
+    let state = AppState::connect(&url).await.expect("pg connect");
+    state.migrate().await.expect("pg migrations apply");
+    // Fresh library ids per run, so a reused database stays valid.
+    assert_racing_same_pn_has_one_winner(state).await;
+}
+
+/// #1613: a database that already holds two rows with one part number is
+/// refused by the migration with the clashing PN named, and no row is lost.
+#[tokio::test]
+async fn migration_refuses_existing_duplicate_part_numbers_without_losing_rows() {
+    let state = fresh_state().await;
+    let pool = state.pool().sqlite().expect("sqlite pool");
+    // Put the schema back to before the index (migration 0009).
+    for sql in [
+        "DROP INDEX idx_component_rows_pn_key",
+        "ALTER TABLE component_rows DROP COLUMN pn_key",
+        "DELETE FROM _sqlx_migrations WHERE version = 9",
+    ] {
+        sqlx::query(sql).execute(pool).await.unwrap();
+    }
+    let library_id = Uuid::now_v7().to_string();
+    for (i, pn) in ["DUP-1", "DUP-1 ", "OK-1"].iter().enumerate() {
+        sqlx::query(
+            "INSERT INTO component_rows              (library_id, table_name, row_id, internal_pn, payload, created_at, updated_at)              VALUES (?, 't', ?, ?, '{}', 'x', 'x')",
+        )
+        .bind(&library_id)
+        .bind(format!("row-{i}"))
+        .bind(pn)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    let err = state.migrate().await.expect_err("duplicates are refused");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("\"DUP-1\" x2") && msg.contains(&library_id),
+        "{msg}"
+    );
+    assert!(!msg.contains("OK-1"), "{msg}");
+    let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM component_rows")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(rows, 3);
+
+    // Once renumbered, the migration applies and backfills the key.
+    sqlx::query("UPDATE component_rows SET internal_pn = 'DUP-2' WHERE row_id = 'row-1'")
+        .execute(pool)
+        .await
+        .unwrap();
+    state.migrate().await.expect("migrates after renumbering");
+    let key: String =
+        sqlx::query_scalar("SELECT pn_key FROM component_rows WHERE row_id = 'row-1'")
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(key, "DUP-2");
 }
