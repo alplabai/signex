@@ -71,7 +71,7 @@ impl Signex {
         let value = digits.parse::<u32>().ok()?;
         Some(format!(
             "{prefix}{:0width$}",
-            value + 1,
+            value.checked_add(1)?,
             width = digits.len()
         ))
     }
@@ -92,7 +92,7 @@ impl Signex {
                     })
                     .max()
                     .unwrap_or(0)
-                    + 1
+                    .saturating_add(1)
             })
             .unwrap_or(1);
 
@@ -460,5 +460,19 @@ impl Signex {
                 false,
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod designator_tests {
+    use super::Signex;
+
+    #[test]
+    fn designator_increment_does_not_overflow() {
+        assert_eq!(Signex::increment_designator("R4294967295"), None);
+        assert_eq!(
+            Signex::increment_designator("R009").as_deref(),
+            Some("R010")
+        );
     }
 }
