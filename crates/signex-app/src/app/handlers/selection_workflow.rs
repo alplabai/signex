@@ -339,6 +339,12 @@ impl Signex {
             "Selection mode: {:?}",
             self.ui_state.selection_mode
         ));
+        if self.ui_state.drag_direction_select {
+            crate::diagnostics::log_info(
+                "Select by drag direction is on: the drag direction decides box selection \
+                 (Preferences > Editing turns it off)",
+            );
+        }
         Task::none()
     }
 }

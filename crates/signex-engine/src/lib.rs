@@ -57,7 +57,7 @@ pub use find::{
     scan_sheet,
 };
 pub use find_similar::{
-    SimilarProperty, SimilarValue, all_items, describe, find_similar, kind_label, properties_of,
+    SimilarProperty, SimilarValue, describe, find_similar, kind_label, properties_of,
 };
 use history::HistoryEntry;
 pub use history::UndoGroupId;

@@ -15,7 +15,11 @@ impl SchematicCanvas<'_> {
         // now rather than at the next cursor move.
         if alt_changed && state.move_dragging {
             self.refresh_drag_ghost(state);
-            return Some(canvas::Action::request_redraw());
+            // A cheap event, so the app rebuilds the view and the status bar
+            // names the new behaviour without waiting for the mouse to move.
+            return Some(canvas::Action::publish(Message::CanvasEvent(
+                CanvasEvent::CursorMoved,
+            )));
         }
         None
     }

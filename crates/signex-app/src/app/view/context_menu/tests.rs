@@ -105,6 +105,39 @@ fn dd_msg_row_carries_message_and_optional_shortcut() {
     }
 }
 
+/// #1257 - the row is live and routes to the Find Similar action, with or
+/// without a selection.
+#[test]
+fn find_similar_row_is_enabled_and_routes_to_its_action() {
+    let tokens = theme_tokens(TID);
+    for has_selection in [false, true] {
+        let rows = canvas_menu_entries(
+            TID,
+            &tokens,
+            has_selection,
+            false,
+            false,
+            None,
+            &shortcuts(),
+        );
+        assert!(!disabled_of(&rows, "Find Similar Objects..."));
+        let item = rows
+            .iter()
+            .find_map(|e| match e {
+                DropdownEntry::Item(it) if it.label == "Find Similar Objects..." => Some(it),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(item.shortcut.as_deref(), Some("Shift+F"));
+        assert!(matches!(
+            item.on_press,
+            Some(Message::ContextMenu(ContextMenuMsg::Action(
+                ContextAction::FindSimilar
+            )))
+        ));
+    }
+}
+
 #[test]
 fn canvas_menu_grows_and_gates_on_selection() {
     let tokens = theme_tokens(TID);

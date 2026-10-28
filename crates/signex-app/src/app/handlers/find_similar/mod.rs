@@ -25,17 +25,25 @@ pub(crate) fn pick_seed(
 
 impl Signex {
     pub(crate) fn handle_find_similar_message(&mut self, msg: FindSimilarMsg) -> Task<Message> {
+        self.close_find_similar_if_sheet_changed();
         match msg {
             FindSimilarMsg::OpenRequested { at } => self.open_find_similar(at),
-            FindSimilarMsg::PropertyToggled(property) => {
+            FindSimilarMsg::PropertySet(property, same) => {
+                // The running search was made for the old criteria.
                 if let Some(state) = self.ui_state.find_similar.as_mut()
-                    && !state.same.remove(&property)
+                    && !state.running
                 {
-                    state.same.insert(property);
+                    if same {
+                        state.same.insert(property);
+                    } else {
+                        state.same.remove(&property);
+                    }
                 }
             }
             FindSimilarMsg::ScopeChosen(scope) => {
-                if let Some(state) = self.ui_state.find_similar.as_mut() {
+                if let Some(state) = self.ui_state.find_similar.as_mut()
+                    && !state.running
+                {
                     state.scope = scope;
                 }
             }
@@ -48,10 +56,26 @@ impl Signex {
         Task::none()
     }
 
-    /// Dismiss the dialog. Its generation goes with it, so a search still
-    /// running finds nothing to apply to.
+    /// Dismiss the dialog. The search token moves on, so a search still
+    /// running finds nothing to apply to, even if the dialog is reopened.
     pub(crate) fn close_find_similar(&mut self) {
         self.ui_state.find_similar = None;
+        self.ui_state.find_similar_generation += 1;
+    }
+
+    /// Close the dialog when the active sheet is not the one it was opened
+    /// on, so a selection never lands on a different sheet. Run on every tab
+    /// switch and on every dialog message.
+    pub(crate) fn close_find_similar_if_sheet_changed(&mut self) {
+        let moved = self
+            .ui_state
+            .find_similar
+            .as_ref()
+            .is_some_and(|s| s.origin != self.document_state.active_path);
+        if moved {
+            self.close_find_similar();
+            crate::diagnostics::log_info("Find Similar closed: the active sheet changed");
+        }
     }
 
     fn open_find_similar(&mut self, at: Option<(f64, f64)>) {
@@ -84,7 +108,11 @@ impl Signex {
             );
             return;
         }
-        self.ui_state.find_similar = Some(FindSimilarState::new(describe(sheet, &seed), values));
+        self.ui_state.find_similar = Some(FindSimilarState::new(
+            describe(sheet, &seed),
+            values,
+            self.document_state.active_path.clone(),
+        ));
     }
 
     /// OK: select the matches on this sheet, or start the project search.
@@ -95,10 +123,13 @@ impl Signex {
         if state.running {
             return Task::none();
         }
-        if state.scope == SimilarScope::Project
-            && let Some(task) = self.start_project_search()
-        {
-            return task;
+        if state.scope == SimilarScope::Project {
+            if let Some(task) = self.start_project_search() {
+                return task;
+            }
+            crate::diagnostics::log_warning(
+                "Find Similar: not in a project, so only this sheet was searched",
+            );
         }
         self.select_similar_on_this_sheet(None);
         Task::none()

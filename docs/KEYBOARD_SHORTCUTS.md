@@ -117,7 +117,11 @@ sequences.
 Two canvas modifiers are hard-wired rather than profile bindings: `Ctrl+Click`
 toggles an item in the selection, and `Alt` held through a drag flips
 "Keep wires connected when moving" for that drag only (#1266). The status bar
-names the behaviour while the drag is live. A selection box dragged left to right selects what it fully contains and
+names the behaviour while the drag is live.
+`Alt+Click` is reserved in `altium.toml` for `highlight_related_net_objects`, which
+is unmapped today; when it is wired, an Alt-press that turns into a drag and an
+Alt+Click will need telling apart. Some Linux window managers take Alt+drag to
+move the window; remap the WM modifier if the drag never reaches Signex. A selection box dragged left to right selects what it fully contains and
 right to left what it touches (#1257); Preferences > Editing > "Select by drag
 direction" turns that off, and the Inside / Touching mode then decides for both.
 

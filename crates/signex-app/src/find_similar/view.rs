@@ -79,7 +79,6 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
     .spacing(SP.s);
     for v in &state.values {
         let same = state.same.contains(&v.property);
-        let toggle = FindSimilarMsg::PropertyToggled(v.property);
         table = table.push(
             row![
                 text(v.property.label())
@@ -91,8 +90,8 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
                     .color(text_secondary)
                     .width(Length::Fill),
                 row![
-                    choice("Same", same, toggle.clone()),
-                    choice("Any", !same, toggle),
+                    choice("Same", same, FindSimilarMsg::PropertySet(v.property, true)),
+                    choice("Any", !same, FindSimilarMsg::PropertySet(v.property, false)),
                 ]
                 .width(110),
             ]
@@ -206,7 +205,7 @@ mod tests {
                 value: "10k".into(),
             },
         ];
-        let state = FindSimilarState::new("Symbol R1".into(), values);
+        let state = FindSimilarState::new("Symbol R1".into(), values, None);
         assert_eq!(state.criteria().len(), 1);
         assert_eq!(state.criteria()[0].property, SimilarProperty::Kind);
         assert_eq!(state.scope, SimilarScope::Sheet);

@@ -26,20 +26,24 @@ pub struct FindSimilarState {
     pub scope: SimilarScope,
     /// A project search is running; OK waits for it.
     pub running: bool,
-    /// Bumped by every search and by Close, so a late result is dropped.
-    pub generation: u64,
+    /// The sheet the dialog was opened on; a search answers for it only.
+    pub origin: Option<std::path::PathBuf>,
 }
 
 impl FindSimilarState {
     /// A fresh dialog for a seed: only `Kind` is Same, as the rest start Any.
-    pub fn new(seed_label: String, values: Vec<SimilarValue>) -> Self {
+    pub fn new(
+        seed_label: String,
+        values: Vec<SimilarValue>,
+        origin: Option<std::path::PathBuf>,
+    ) -> Self {
         Self {
             seed_label,
             values,
             same: BTreeSet::from([SimilarProperty::Kind]),
             scope: SimilarScope::Sheet,
             running: false,
-            generation: 0,
+            origin,
         }
     }
 
@@ -72,7 +76,9 @@ pub enum FindSimilarMsg {
         at: Option<(f64, f64)>,
     },
     /// A property's Same / Any choice was flipped.
-    PropertyToggled(SimilarProperty),
+    /// A property was set to Same (`true`) or Any (`false`). Idempotent:
+    /// clicking the choice already made changes nothing.
+    PropertySet(SimilarProperty, bool),
     ScopeChosen(SimilarScope),
     /// OK: select every match.
     ApplyPressed,

@@ -739,6 +739,22 @@ mod tests {
     }
 
     #[test]
+    fn alt_pressed_mid_drag_publishes_an_event_so_the_status_bar_rebuilds() {
+        let (slot, mut state) = mid_drag(keyboard::Modifiers::default());
+        let at = screen(&slot, 32.0, 10.0);
+        let (message, _) = send(&slot, &mut state, modifiers(keyboard::Modifiers::ALT), at);
+        assert!(matches!(
+            message,
+            Some(Message::CanvasEvent(CanvasEvent::CursorMoved))
+        ));
+        // Outside a drag the modifier change is silent.
+        let slot = slot_with_wire();
+        let mut state = CanvasState::default();
+        let (message, _) = send(&slot, &mut state, modifiers(keyboard::Modifiers::ALT), at);
+        assert!(message.is_none());
+    }
+
+    #[test]
     fn a_keep_connections_float_keeps_wires_even_with_alt_held() {
         let mut slot = slot_with_wire();
         slot.move_pick = Some(MovePick::Object);

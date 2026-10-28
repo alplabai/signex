@@ -375,6 +375,9 @@ pub struct UiState {
     pub grid_properties: Option<crate::app::GridPropertiesState>,
     /// The Find Similar Objects dialog, while open (#1257).
     pub find_similar: Option<crate::find_similar::FindSimilarState>,
+    /// Token of the newest Find Similar project search. Lives outside the
+    /// dialog state so a reopened dialog never reuses an old token.
+    pub find_similar_generation: u64,
     /// v0.18.14.1 — Custom Selection Filter modal draft. `Some`
     /// while the dialog is visible; the eight-bool draft mirror
     /// commits on Apply, discards on Cancel.

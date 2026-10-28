@@ -56,10 +56,10 @@ impl Signex {
         let ds = &self.document_state;
         let root = project_sheets::resolve_netlist_root(ds)?;
         ds.active_document_project()?;
+        self.ui_state.find_similar_generation += 1;
+        let generation = self.ui_state.find_similar_generation;
         let state = self.ui_state.find_similar.as_mut()?;
-        state.generation += 1;
         state.running = true;
-        let generation = state.generation;
         let inputs = SearchInputs {
             criteria: state.criteria(),
             open: project_sheets::open_sheets_snapshot(&self.document_state),
@@ -94,11 +94,9 @@ impl Signex {
         generation: u64,
         result: &Result<ProjectMatches, String>,
     ) {
-        let current = self
-            .ui_state
-            .find_similar
-            .as_ref()
-            .is_some_and(|s| s.generation == generation);
+        self.close_find_similar_if_sheet_changed();
+        let current = generation == self.ui_state.find_similar_generation
+            && self.ui_state.find_similar.is_some();
         if !current {
             return;
         }

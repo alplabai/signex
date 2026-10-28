@@ -42,7 +42,7 @@ fn sheet_of(parts: Vec<Symbol>, wires: Vec<Wire>) -> SchematicSheet {
 
 /// An app showing `sheet` as its only tab, render cache built.
 fn app_showing(sheet: SchematicSheet) -> Signex {
-    let path = PathBuf::from("find-similar.snxsch");
+    let path = PathBuf::from("/w/p/find-similar.snxsch");
     let (mut app, _task) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     app.document_state.engines.insert(
@@ -112,8 +112,9 @@ fn ok_selects_every_match_on_the_sheet_and_closes_the_dialog() {
     assert_eq!(state.scope, SimilarScope::Sheet);
 
     // Kind is Same by default: every symbol matches.
-    let _ = app.update(find_similar_msg(FindSimilarMsg::PropertyToggled(
+    let _ = app.update(find_similar_msg(FindSimilarMsg::PropertySet(
         SimilarProperty::Value,
+        true,
     )));
     let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
 
@@ -133,14 +134,19 @@ fn any_on_every_property_but_kind_selects_the_whole_kind() {
 }
 
 #[test]
-fn toggling_a_property_twice_returns_it_to_any() {
+fn setting_a_property_to_same_then_any_returns_it_to_any() {
     let parts = vec![part("R1", "10k", 0.0)];
     let seed = symbol_item(&parts[0]);
     let mut app = app_showing(sheet_of(parts, vec![]));
     app.interaction_state.active_canvas_mut().selected = vec![seed];
     let _ = app.update(find_similar_msg(FindSimilarMsg::OpenRequested { at: None }));
-    let toggle = || find_similar_msg(FindSimilarMsg::PropertyToggled(SimilarProperty::Footprint));
-    let _ = app.update(toggle());
+    let set = |same| {
+        find_similar_msg(FindSimilarMsg::PropertySet(
+            SimilarProperty::Footprint,
+            same,
+        ))
+    };
+    let _ = app.update(set(true));
     assert!(
         app.ui_state
             .find_similar
@@ -149,7 +155,7 @@ fn toggling_a_property_twice_returns_it_to_any() {
             .same
             .contains(&SimilarProperty::Footprint)
     );
-    let _ = app.update(toggle());
+    let _ = app.update(set(false));
     assert!(
         !app.ui_state
             .find_similar
@@ -302,4 +308,186 @@ fn the_context_menu_row_opens_the_dialog_for_the_object_it_was_opened_over() {
     assert!(app.ui_state.find_similar.is_some(), "dialog opened");
     let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
     assert!(selected_ids(&app).contains(&id));
+}
+
+/// `app_showing` placed in a project that lists its sheet, so a whole-project
+/// search can start.
+fn app_in_a_project(sheet: SchematicSheet) -> Signex {
+    use crate::app::state::LoadedProject;
+    use signex_types::project::{ProjectData, SheetEntry};
+    let mut app = app_showing(sheet);
+    let id = app.document_state.mint_project_id();
+    app.document_state.projects.push(LoadedProject {
+        id,
+        path: PathBuf::from("/w/p/P.snxprj"),
+        data: ProjectData {
+            description: None,
+            name: "P".to_string(),
+            dir: "/w/p".to_string(),
+            schematic_root: Some("find-similar.snxsch".to_string()),
+            pcb_file: None,
+            sheets: vec![SheetEntry {
+                name: "s".to_string(),
+                filename: "find-similar.snxsch".to_string(),
+                symbols_count: 0,
+                wires_count: 0,
+                labels_count: 0,
+                unknown: Default::default(),
+            }],
+            variant_definitions: Vec::new(),
+            active_variant: None,
+            libraries: Vec::new(),
+            enable_git: false,
+            net_classes: Vec::new(),
+            rules: None,
+            annotation: None,
+            parameters: Default::default(),
+            unknown: Default::default(),
+        },
+        pending_libraries: std::collections::HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
+        case_decided: false,
+    });
+    app.document_state.active_project = Some(id);
+    app.document_state.tabs[0].project_id = Some(id);
+    app
+}
+
+fn project_result(
+    count: usize,
+) -> std::sync::Arc<Result<crate::find_similar::ProjectMatches, String>> {
+    std::sync::Arc::new(Ok(crate::find_similar::ProjectMatches {
+        elsewhere: vec![(PathBuf::from("/w/p/other.snxsch"), count)],
+        sheets_searched: 2,
+        ..Default::default()
+    }))
+}
+
+fn open_project_dialog(app: &mut Signex, seed: SelectedItem) {
+    app.interaction_state.active_canvas_mut().selected = vec![seed];
+    let _ = app.update(find_similar_msg(FindSimilarMsg::OpenRequested { at: None }));
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ScopeChosen(
+        SimilarScope::Project,
+    )));
+}
+
+#[test]
+fn a_search_from_a_closed_dialog_cannot_answer_the_reopened_one() {
+    let parts = vec![part("R1", "10k", 0.0), part("R2", "10k", 10.0)];
+    let seed = symbol_item(&parts[0]);
+    let mut app = app_in_a_project(sheet_of(parts, vec![]));
+    let _ = crate::diagnostics::init_logging();
+
+    open_project_dialog(&mut app, seed);
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
+    let first = app.ui_state.find_similar_generation;
+    assert!(app.ui_state.find_similar.as_ref().unwrap().running);
+
+    // Close, reopen, search again: the new search has a new token.
+    let _ = app.update(find_similar_msg(FindSimilarMsg::Closed));
+    open_project_dialog(&mut app, seed);
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
+    let second = app.ui_state.find_similar_generation;
+    assert_ne!(first, second);
+
+    // The old result arrives: ignored, the dialog still waits.
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ProjectSearched {
+        generation: first,
+        result: project_result(7),
+    }));
+    assert!(app.ui_state.find_similar.as_ref().unwrap().running);
+    assert!(selected_ids(&app).len() <= 1, "nothing was applied");
+
+    // The new one lands.
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ProjectSearched {
+        generation: second,
+        result: project_result(3),
+    }));
+    assert!(app.ui_state.find_similar.is_none());
+    assert_eq!(selected_ids(&app).len(), 2);
+}
+
+#[test]
+fn clicking_same_twice_keeps_the_property_same() {
+    let parts = vec![part("R1", "10k", 0.0)];
+    let seed = symbol_item(&parts[0]);
+    let mut app = app_showing(sheet_of(parts, vec![]));
+    app.interaction_state.active_canvas_mut().selected = vec![seed];
+    let _ = app.update(find_similar_msg(FindSimilarMsg::OpenRequested { at: None }));
+    let set = |same| find_similar_msg(FindSimilarMsg::PropertySet(SimilarProperty::Value, same));
+    let is_same = |app: &Signex| {
+        app.ui_state
+            .find_similar
+            .as_ref()
+            .unwrap()
+            .same
+            .contains(&SimilarProperty::Value)
+    };
+    let _ = app.update(set(true));
+    let _ = app.update(set(true));
+    assert!(is_same(&app), "Same clicked twice stays Same");
+    let _ = app.update(set(false));
+    let _ = app.update(set(false));
+    assert!(!is_same(&app), "Any clicked twice stays Any");
+}
+
+#[test]
+fn edits_are_ignored_while_a_project_search_runs() {
+    let parts = vec![part("R1", "10k", 0.0)];
+    let seed = symbol_item(&parts[0]);
+    let mut app = app_in_a_project(sheet_of(parts, vec![]));
+    open_project_dialog(&mut app, seed);
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
+    assert!(app.ui_state.find_similar.as_ref().unwrap().running);
+
+    let _ = app.update(find_similar_msg(FindSimilarMsg::PropertySet(
+        SimilarProperty::Value,
+        true,
+    )));
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ScopeChosen(
+        SimilarScope::Sheet,
+    )));
+    let state = app.ui_state.find_similar.as_ref().unwrap();
+    assert!(!state.same.contains(&SimilarProperty::Value));
+    assert_eq!(state.scope, SimilarScope::Project);
+}
+
+#[test]
+fn switching_tabs_closes_the_dialog_so_a_result_never_lands_elsewhere() {
+    let parts = vec![part("R1", "10k", 0.0), part("R2", "10k", 10.0)];
+    let seed = symbol_item(&parts[0]);
+    let mut app = app_in_a_project(sheet_of(parts, vec![]));
+    open_project_dialog(&mut app, seed);
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
+    let generation = app.ui_state.find_similar_generation;
+
+    app.document_state.active_path = Some(PathBuf::from("another.snxsch"));
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ProjectSearched {
+        generation,
+        result: project_result(1),
+    }));
+
+    assert!(app.ui_state.find_similar.is_none());
+    assert_eq!(
+        selected_ids(&app).len(),
+        1,
+        "only the seed; nothing applied"
+    );
+}
+
+#[test]
+fn a_project_scope_outside_any_project_says_it_searched_the_sheet() {
+    let parts = vec![part("R1", "10k", 0.0)];
+    let seed = symbol_item(&parts[0]);
+    let mut app = app_showing(sheet_of(parts, vec![]));
+    let _ = crate::diagnostics::init_logging();
+    open_project_dialog(&mut app, seed);
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("Find Similar: not in a project"))
+    );
+    assert_eq!(selected_ids(&app).len(), 1, "the sheet was searched");
 }

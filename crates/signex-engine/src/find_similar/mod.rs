@@ -116,134 +116,112 @@ pub fn describe(sheet: &SchematicSheet, item: &SelectedItem) -> String {
     }
 }
 
-/// The comparable properties of `item` on `sheet`, `Kind` first. Empty when
-/// the item is not on the sheet.
-pub fn properties_of(sheet: &SchematicSheet, item: &SelectedItem) -> Vec<SimilarValue> {
-    let id = item.uuid;
-    let mut out = vec![val(SimilarProperty::Kind, kind_label(item.kind))];
-    match item.kind {
-        SelectedKind::Symbol | SelectedKind::SymbolRefField | SelectedKind::SymbolValField => {
-            let Some(s) = sheet.symbols.iter().find(|s| s.uuid == id) else {
-                return Vec::new();
-            };
-            out.push(val(SimilarProperty::Value, s.value.trim()));
-            out.push(val(SimilarProperty::Footprint, s.footprint.trim()));
-            out.push(val(SimilarProperty::LibraryPart, s.lib_id.as_str()));
-            out.push(val(
-                SimilarProperty::DesignatorPrefix,
-                alphabetic_prefix(&s.reference),
-            ));
+/// Every selectable object on the sheet with its comparable properties,
+/// built in one pass over the sheet. File order within each kind.
+fn entries(sheet: &SchematicSheet) -> Vec<(SelectedItem, Vec<SimilarValue>)> {
+    use SelectedKind as K;
+    let mut out = Vec::new();
+    let mut push = |uuid, kind, extra: Vec<SimilarValue>| {
+        let mut props = vec![val(SimilarProperty::Kind, kind_label(kind))];
+        props.extend(extra);
+        out.push((SelectedItem::new(uuid, kind), props));
+    };
+    for s in &sheet.symbols {
+        push(
+            s.uuid,
+            K::Symbol,
+            vec![
+                val(SimilarProperty::Value, s.value.trim()),
+                val(SimilarProperty::Footprint, s.footprint.trim()),
+                val(SimilarProperty::LibraryPart, s.lib_id.as_str()),
+                val(
+                    SimilarProperty::DesignatorPrefix,
+                    alphabetic_prefix(&s.reference),
+                ),
+            ],
+        );
+    }
+    for w in &sheet.wires {
+        push(w.uuid, K::Wire, Vec::new());
+    }
+    for b in &sheet.buses {
+        push(b.uuid, K::Bus, Vec::new());
+    }
+    for e in &sheet.bus_entries {
+        push(e.uuid, K::BusEntry, Vec::new());
+    }
+    for j in &sheet.junctions {
+        push(j.uuid, K::Junction, Vec::new());
+    }
+    for n in &sheet.no_connects {
+        push(n.uuid, K::NoConnect, Vec::new());
+    }
+    for n in &sheet.no_erc_directives {
+        push(n.uuid, K::NoErcDirective, Vec::new());
+    }
+    for l in &sheet.labels {
+        push(
+            l.uuid,
+            K::Label,
+            vec![
+                val(SimilarProperty::NetName, l.text.trim()),
+                val(SimilarProperty::LabelType, format!("{:?}", l.label_type)),
+            ],
+        );
+    }
+    for t in &sheet.text_notes {
+        push(
+            t.uuid,
+            K::TextNote,
+            vec![val(SimilarProperty::Text, t.text.trim())],
+        );
+    }
+    for c in &sheet.child_sheets {
+        push(
+            c.uuid,
+            K::ChildSheet,
+            vec![
+                val(SimilarProperty::Name, c.name.trim()),
+                val(SimilarProperty::FileName, c.filename.as_str()),
+            ],
+        );
+        for p in &c.pins {
+            push(
+                p.uuid,
+                K::SheetPin,
+                vec![val(SimilarProperty::Name, p.name.trim())],
+            );
         }
-        SelectedKind::Label => {
-            let Some(l) = sheet.labels.iter().find(|l| l.uuid == id) else {
-                return Vec::new();
-            };
-            out.push(val(SimilarProperty::NetName, l.text.trim()));
-            out.push(val(
-                SimilarProperty::LabelType,
-                format!("{:?}", l.label_type),
-            ));
-        }
-        SelectedKind::TextNote => {
-            let Some(t) = sheet.text_notes.iter().find(|t| t.uuid == id) else {
-                return Vec::new();
-            };
-            out.push(val(SimilarProperty::Text, t.text.trim()));
-        }
-        SelectedKind::SheetPin => {
-            let Some(p) = sheet
-                .child_sheets
-                .iter()
-                .flat_map(|c| &c.pins)
-                .find(|p| p.uuid == id)
-            else {
-                return Vec::new();
-            };
-            out.push(val(SimilarProperty::Name, p.name.trim()));
-        }
-        SelectedKind::ChildSheet => {
-            let Some(c) = sheet.child_sheets.iter().find(|c| c.uuid == id) else {
-                return Vec::new();
-            };
-            out.push(val(SimilarProperty::Name, c.name.trim()));
-            out.push(val(SimilarProperty::FileName, c.filename.as_str()));
-        }
-        _ => {
-            if !exists(sheet, item) {
-                return Vec::new();
-            }
-        }
+    }
+    for d in &sheet.drawings {
+        push(d.uuid(), K::Drawing, Vec::new());
     }
     out
 }
 
-/// Whether a kind with no comparable property besides `Kind` is on the sheet.
-fn exists(sheet: &SchematicSheet, item: &SelectedItem) -> bool {
-    all_items(sheet).any(|i| &i == item)
-}
-
-/// Every selectable object on the sheet, in file order within each kind.
-pub fn all_items(sheet: &SchematicSheet) -> impl Iterator<Item = SelectedItem> + '_ {
-    use SelectedKind as K;
-    let item = |uuid, kind| SelectedItem::new(uuid, kind);
-    sheet
-        .symbols
-        .iter()
-        .map(move |s| item(s.uuid, K::Symbol))
-        .chain(sheet.wires.iter().map(move |w| item(w.uuid, K::Wire)))
-        .chain(sheet.buses.iter().map(move |b| item(b.uuid, K::Bus)))
-        .chain(
-            sheet
-                .bus_entries
-                .iter()
-                .map(move |e| item(e.uuid, K::BusEntry)),
-        )
-        .chain(
-            sheet
-                .junctions
-                .iter()
-                .map(move |j| item(j.uuid, K::Junction)),
-        )
-        .chain(
-            sheet
-                .no_connects
-                .iter()
-                .map(move |n| item(n.uuid, K::NoConnect)),
-        )
-        .chain(
-            sheet
-                .no_erc_directives
-                .iter()
-                .map(move |n| item(n.uuid, K::NoErcDirective)),
-        )
-        .chain(sheet.labels.iter().map(move |l| item(l.uuid, K::Label)))
-        .chain(
-            sheet
-                .text_notes
-                .iter()
-                .map(move |t| item(t.uuid, K::TextNote)),
-        )
-        .chain(sheet.child_sheets.iter().flat_map(move |c| {
-            std::iter::once(item(c.uuid, K::ChildSheet))
-                .chain(c.pins.iter().map(move |p| item(p.uuid, K::SheetPin)))
-        }))
-        .chain(
-            sheet
-                .drawings
-                .iter()
-                .map(move |d| item(d.uuid(), K::Drawing)),
-        )
+/// The comparable properties of `item` on `sheet`, `Kind` first. Empty when
+/// the item is not on the sheet. A symbol's reference and value fields stand
+/// for the symbol.
+pub fn properties_of(sheet: &SchematicSheet, item: &SelectedItem) -> Vec<SimilarValue> {
+    let kind = match item.kind {
+        SelectedKind::SymbolRefField | SelectedKind::SymbolValField => SelectedKind::Symbol,
+        other => other,
+    };
+    let wanted = SelectedItem::new(item.uuid, kind);
+    entries(sheet)
+        .into_iter()
+        .find_map(|(i, props)| (i == wanted).then_some(props))
+        .unwrap_or_default()
 }
 
 /// Every object on `sheet` whose value for each of `criteria` equals the
 /// criterion's. An object that has no such property does not match. Empty
-/// criteria match everything on the sheet.
+/// criteria match everything on the sheet. One pass over the sheet.
 pub fn find_similar(sheet: &SchematicSheet, criteria: &[SimilarValue]) -> Vec<SelectedItem> {
-    all_items(sheet)
-        .filter(|candidate| {
-            let have = properties_of(sheet, candidate);
-            criteria.iter().all(|c| have.contains(c))
-        })
+    entries(sheet)
+        .into_iter()
+        .filter(|(_, have)| criteria.iter().all(|c| have.contains(c)))
+        .map(|(item, _)| item)
         .collect()
 }
 
