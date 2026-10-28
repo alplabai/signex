@@ -727,7 +727,13 @@ fn publish_float_drag(slot: &CanvasSlot, prefs: CanvasViewPrefs<'_>, x: f32) {
     let overlay = SchematicCanvas::new(slot, prefs).gpu_overlay();
     let mut state = CanvasState::default();
     let lifted = slot.selected.clone();
-    state.start_floating_move((12.5, 5.0), slot.move_epoch, lifted.clone(), lifted);
+    state.start_floating_move(
+        (12.5, 5.0),
+        slot.move_epoch,
+        lifted.clone(),
+        lifted,
+        Default::default(),
+    );
     let cursor = iced::mouse::Cursor::Available(iced::Point::new(x, 60.0));
     let moved = iced::Event::Mouse(iced::mouse::Event::CursorMoved {
         position: iced::Point::new(x, 60.0),

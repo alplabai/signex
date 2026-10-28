@@ -188,6 +188,14 @@ impl Signex {
         if let Some(project) = self.document_state.projects.get(project_idx) {
             let dir = project.dir().to_path_buf();
             self.document_state.pending_opens.cancel_under(&dir);
+            if self
+                .ui_state
+                .pending_create_sheet
+                .as_ref()
+                .is_some_and(|(parent, _)| parent.starts_with(&dir))
+            {
+                self.ui_state.pending_create_sheet = None;
+            }
             self.document_state
                 .pending_restores
                 .cancel_under_retaining(&dir);

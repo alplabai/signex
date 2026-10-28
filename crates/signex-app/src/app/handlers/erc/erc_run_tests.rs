@@ -393,9 +393,9 @@ mod net_level {
 
     #[test]
     fn fit_rect_frames_the_box_with_margin_and_a_minimum_size() {
-        let r = super::super::net_focus::fit_rect([0.0, 0.0, 100.0, 50.0]);
+        let r = crate::app::handlers::canvas::fit_view::fit_rect([0.0, 0.0, 100.0, 50.0]);
         assert_eq!((r.x, r.y, r.width, r.height), (-2.0, -2.0, 104.0, 54.0));
-        let dot = super::super::net_focus::fit_rect([5.0, 5.0, 5.0, 5.0]);
+        let dot = crate::app::handlers::canvas::fit_view::fit_rect([5.0, 5.0, 5.0, 5.0]);
         assert_eq!((dot.width, dot.height), (16.0, 16.0));
         assert_eq!((dot.x, dot.y), (-3.0, -3.0));
     }

@@ -2,9 +2,9 @@
 //! and `v0.9-refactor-2-plan.md` §3 (Altium DBLib model).
 //!
 //! Adds the `[[tables]]` config section per `v0.9-refactor-2-plan.md` §6
-//! step 1.5: a class with no override gets its own table (`<class>s.tsv`).
-//! Explicit overrides let multiple classes share a table or rename the
-//! filename.
+//! step 1.5: a class with no override gets its own table (`<class>s`).
+//! Explicit overrides let multiple classes share a table or rename it. A table
+//! is a `[tables.<name>]` block inside the `.snxlib` file.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -214,16 +214,16 @@ pub struct UserEntry {
 /// Optional `[[tables]]` override block — Altium DBLib parity.
 ///
 /// Per `v0.9-refactor-2-plan.md` §3:
-/// - The default is class → `<class>s.tsv` (mechanical pluralisation).
+/// - The default is class → `<class>s` (mechanical pluralisation).
 /// - An explicit override lets multiple classes share one table
-///   (e.g. resistors + capacitors both rolled into `Discrete_Passives.tsv`),
-///   or rename the file for non-English / domain-specific layouts.
+///   (e.g. resistors + capacitors both rolled into `Discrete_Passives`),
+///   or rename it for non-English / domain-specific layouts.
 ///
-/// `name` is the filename stem (no extension); the file lives at
-/// `tables/<name>.tsv`.
+/// `name` is the table name; the rows live in the `.snxlib` file's
+/// `[tables.<name>]` block.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TableConfig {
-    /// Filename stem (no extension). Becomes `tables/<name>.tsv`.
+    /// Table name. Becomes the `[tables.<name>]` block in the `.snxlib`.
     pub name: String,
     /// Class names that route into this table.
     #[serde(default)]
@@ -244,7 +244,7 @@ impl Manifest {
         &self.tables
     }
 
-    /// Resolve a class name to its table filename stem.
+    /// Resolve a class name to its table name.
     ///
     /// 1. If any `[[tables]]` override lists `class` in its `classes` array,
     ///    return that override's `name`.

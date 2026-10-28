@@ -18,10 +18,10 @@
 //!    with a map of parsed tables. [`LibraryFile::parse`] and
 //!    [`LibraryFile::write`] are the round-trip entrypoints.
 //!
-//! Reserved-core-column validation, typed accessors for fields like
-//! `row_id` / `version` / `released`, and the cascade engine are later
-//! stages of `v0.9-snxlib-as-file-plan.md` — Stage 1 only establishes
-//! the storage shape and the round-trip contract.
+//! This module is the storage shape and the round-trip contract only.
+//! Reserved-core-column validation and typed accessors for fields like
+//! `row_id` / `version` / `released` live with the adapters, and the
+//! cascade engine in [`crate::cascade`].
 
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;

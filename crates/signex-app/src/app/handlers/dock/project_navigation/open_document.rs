@@ -215,7 +215,9 @@ impl Signex {
 /// filename matching against `entry.path.file_name()` still works.
 /// Returns the original `&str` when no suffix is present (zero-copy).
 fn canonical_tree_label(label: &str) -> &str {
-    label.trim_end_matches("  (missing)")
+    label
+        .trim_end_matches("  (missing)")
+        .trim_end_matches("  (unreadable)")
 }
 
 #[cfg(test)]

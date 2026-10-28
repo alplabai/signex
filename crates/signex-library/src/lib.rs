@@ -21,6 +21,8 @@ pub mod distributor;
 #[cfg(feature = "distributors-community")]
 pub mod distributors;
 #[cfg(feature = "local-git")]
+mod git_history;
+#[cfg(feature = "local-git")]
 pub mod git_identity;
 pub mod hash;
 pub mod identity;
@@ -307,8 +309,7 @@ pub fn project_file_history(
     project_dir: &std::path::Path,
     rel_path: &std::path::Path,
 ) -> Result<Vec<adapter::HistoryEntry>, adapter::LibraryError> {
-    use adapter::{HistoryEntry, LibraryError};
-    use std::path::Path;
+    use adapter::LibraryError;
 
     const MAX_ENTRIES: usize = 50;
 
@@ -341,85 +342,7 @@ pub fn project_file_history(
 
     let repo = git2::Repository::open(project_dir)
         .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
-
-    let mut walk = repo
-        .revwalk()
-        .map_err(|e| LibraryError::Backend(format!("git revwalk: {e}")))?;
-    walk.set_sorting(git2::Sort::TIME | git2::Sort::TOPOLOGICAL)
-        .map_err(|e| LibraryError::Backend(format!("git revwalk sort: {e}")))?;
-
-    // Unborn HEAD (fresh repo, no commits yet) is "no history",
-    // not an error. libgit2 reports this as either UnbornBranch
-    // (when HEAD points at an unborn ref) or NotFound (when HEAD
-    // itself can't be peeled). Both surfaces fold to an empty Vec
-    // so the History panel can render a "No commits yet" card.
-    match walk.push_head() {
-        Ok(()) => {}
-        Err(e)
-            if matches!(
-                e.code(),
-                git2::ErrorCode::UnbornBranch | git2::ErrorCode::NotFound
-            ) || e.class() == git2::ErrorClass::Reference =>
-        {
-            // Unborn HEAD: libgit2 reports either UnbornBranch (POSIX
-            // path), NotFound (some macOS variants), or a generic
-            // Reference-class error on Windows where HEAD points at
-            // `refs/heads/master` which doesn't exist yet. All three
-            // surfaces fold to an empty Vec so the History panel can
-            // render a "No commits yet" card.
-            return Ok(Vec::new());
-        }
-        Err(e) => return Err(LibraryError::Backend(format!("git push head: {e}"))),
-    }
-
-    let mut entries: Vec<HistoryEntry> = Vec::new();
-    for oid_res in walk {
-        if entries.len() >= MAX_ENTRIES {
-            break;
-        }
-        let oid = oid_res.map_err(|e| LibraryError::Backend(format!("git revwalk oid: {e}")))?;
-        let commit = repo
-            .find_commit(oid)
-            .map_err(|e| LibraryError::Backend(format!("git find commit: {e}")))?;
-
-        if !commit_touches_path(&repo, &commit, &rel_str)? {
-            continue;
-        }
-
-        entries.push(HistoryEntry::from_commit(&commit));
-    }
-
-    fn commit_touches_path(
-        repo: &git2::Repository,
-        commit: &git2::Commit<'_>,
-        rel_path: &str,
-    ) -> Result<bool, LibraryError> {
-        let new_tree = commit
-            .tree()
-            .map_err(|e| LibraryError::Backend(format!("git commit tree: {e}")))?;
-
-        if commit.parent_count() == 0 {
-            return Ok(new_tree.get_path(Path::new(rel_path)).is_ok());
-        }
-
-        let mut diff_opts = git2::DiffOptions::new();
-        diff_opts.pathspec(rel_path);
-
-        for parent in commit.parents() {
-            let old_tree = parent
-                .tree()
-                .map_err(|e| LibraryError::Backend(format!("git parent tree: {e}")))?;
-            let diff = repo
-                .diff_tree_to_tree(Some(&old_tree), Some(&new_tree), Some(&mut diff_opts))
-                .map_err(|e| LibraryError::Backend(format!("git diff: {e}")))?;
-            if diff.deltas().len() > 0 {
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
-    Ok(entries)
+    git_history::path_history(&repo, &rel_str, MAX_ENTRIES)
 }
 
 #[cfg(test)]

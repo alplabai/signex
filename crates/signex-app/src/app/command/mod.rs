@@ -99,6 +99,9 @@ impl Signex {
 mod arrange_tests;
 
 #[cfg(test)]
+mod shortcut_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::keymap::AppCommandId;
@@ -159,17 +162,17 @@ mod tests {
         assert_eq!(task.units(), 0);
     }
 
-    /// `measure_distance` is a real catalog entry
+    /// `break_wire` is a real catalog entry
     /// (`keymap/catalog`) with no arm in `core_to_message`
     /// yet — it must resolve to a no-op too, not panic.
     #[test]
     fn catalog_id_with_no_bridge_arm_is_a_no_op_and_does_not_panic() {
         let (mut app, _task) = Signex::new();
 
-        let command = AppCommandId::new("measure_distance").unwrap();
+        let command = AppCommandId::new("break_wire").unwrap();
         assert!(
             crate::keymap::metadata_for(&command).is_some(),
-            "test fixture drifted: measure_distance is no longer a catalog id"
+            "test fixture drifted: break_wire is no longer a catalog id"
         );
 
         let task = app.dispatch_command(&command, CommandArgs::none(), None);

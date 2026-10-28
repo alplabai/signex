@@ -185,11 +185,21 @@ impl Signex {
                     self.update_selection_info();
                 }
             }
-            selection_request::SelectionRequest::BoxSelect { x1, y1, x2, y2 } => {
+            selection_request::SelectionRequest::BoxSelect {
+                x1,
+                y1,
+                x2,
+                y2,
+                direction,
+            } => {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let rect = signex_types::schematic::Aabb::new(x1, y1, x2, y2);
                     let filters = self.interaction_state.selection_filters.clone();
-                    let mode = self.ui_state.selection_mode;
+                    let mode = crate::schematic_runtime::hit_test::SelectionMode::for_box_drag(
+                        direction,
+                        self.ui_state.drag_direction_select,
+                        self.ui_state.selection_mode,
+                    );
                     self.interaction_state.active_canvas_mut().selected =
                         crate::schematic_runtime::hit_test::hit_test_rect_mode(
                             snapshot,
@@ -224,6 +234,12 @@ impl Signex {
                         self.update_selection_info();
                     }
                 }
+            }
+            selection_request::SelectionRequest::FindSimilar(msg) => {
+                return self.handle_find_similar_message(msg);
+            }
+            selection_request::SelectionRequest::DragKeepingConnections => {
+                self.arm_drag_keeping_connections();
             }
             selection_request::SelectionRequest::CycleMode => return self.cycle_selection_mode(),
             selection_request::SelectionRequest::LassoCommit => {
@@ -323,6 +339,12 @@ impl Signex {
             "Selection mode: {:?}",
             self.ui_state.selection_mode
         ));
+        if self.ui_state.drag_direction_select {
+            crate::diagnostics::log_info(
+                "Select by drag direction is on: the drag direction decides box selection \
+                 (Preferences > Editing turns it off)",
+            );
+        }
         Task::none()
     }
 }

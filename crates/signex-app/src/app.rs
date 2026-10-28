@@ -22,6 +22,8 @@ pub mod document_read;
 mod documents;
 mod handlers;
 mod helpers;
+#[cfg(test)]
+pub(crate) mod hierarchy_fixture;
 mod load_gateway;
 mod mutation_gateway;
 mod project_tab;

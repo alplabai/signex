@@ -129,6 +129,7 @@ impl Signex {
         // Reading twice would be harmless today but invites the two to be
         // seeded from different parses of a file edited mid-launch.
         let symbol_grid_size_mm = crate::fonts::read_symbol_grid_size_mm_pref_from(prefs);
+        let component_classes = crate::fonts::read_component_classes_pref_from(prefs);
         let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref_from(prefs);
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref_from(prefs);
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref_from(prefs);
@@ -136,6 +137,7 @@ impl Signex {
             crate::fonts::read_ui_scale_pref_from(prefs, &crate::fonts::prefs_file_path());
         let annotate_undo = crate::fonts::read_annotate_undo_pref_from(prefs);
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
+        let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
         let window_controls_placement =
             crate::fonts::read_window_controls_placement_pref_from(prefs);
         let autosave_enabled = crate::fonts::read_autosave_enabled_pref_from(prefs);
@@ -234,10 +236,8 @@ impl Signex {
                 visible_grid_mm: 1.27,
                 snap_hotspots: true,
                 ui_font_name: crate::fonts::read_ui_font_pref_from(prefs),
-                component_classes: crate::fonts::read_component_classes_pref_from(prefs),
-                preferences_draft_component_classes: crate::fonts::read_component_classes_pref_from(
-                    prefs,
-                ),
+                component_classes: component_classes.clone(),
+                preferences_draft_component_classes: component_classes.clone(),
                 keymap_profiles,
                 active_keymap,
                 keymap_pending_sequence: Vec::new(),
@@ -284,6 +284,8 @@ impl Signex {
                 preferences_draft_annotate_undo: annotate_undo,
                 move_keeps_wires,
                 preferences_draft_move_keeps_wires: move_keeps_wires,
+                drag_direction_select,
+                preferences_draft_drag_direction_select: drag_direction_select,
                 window_controls_placement,
                 preferences_draft_window_controls_placement: window_controls_placement,
                 window_controls_placement_at_boot: window_controls_placement,
@@ -327,9 +329,12 @@ impl Signex {
                 remove_dialog: None,
                 project_close_confirm: None,
                 create_child_sheet_confirm: None,
+                pending_create_sheet: None,
                 app_quit_confirm: None,
                 enable_version_control: None,
                 grid_properties: None,
+                find_similar: None,
+                find_similar_generation: 0,
                 selection_filter_custom: None,
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),
@@ -582,7 +587,15 @@ impl Signex {
                 hover_started_at: None,
                 hover_screen_pos: None,
             },
-            library: crate::library::LibraryState::default(),
+            library: crate::library::LibraryState {
+                // The values parsed above, not a second read of `prefs.json`.
+                new_library_defaults: crate::library::NewLibraryDefaults {
+                    grid_size_mm: symbol_grid_size_mm,
+                    pin_selection: symbol_pin_selection,
+                    component_classes,
+                },
+                ..Default::default()
+            },
             native_menu: Default::default(),
         };
         // The PCB canvas starts from the loaded grid state, not its own

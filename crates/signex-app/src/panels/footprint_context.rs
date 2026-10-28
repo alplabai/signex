@@ -25,6 +25,10 @@ pub struct FootprintEditorPanelContext {
     /// Number of free DoF the most recent solve reported, plus
     /// elapsed_ms. `None` if no solve has run yet.
     pub last_solve: Option<FootprintSolveSummary>,
+    /// The constraints the last rejected edit conflicted with. The sketch
+    /// is back at its last good solve; these rows say why the edit did not
+    /// stick. Empty after any edit or solve that succeeds.
+    pub rejected_conflicts: Vec<RejectedConflictSummary>,
     /// Read-only summary of the selected pad — populated when in
     /// Pads mode and a pad is selected.
     pub selected_pad: Option<FootprintPadSummary>,
@@ -479,6 +483,14 @@ pub struct FootprintSolveSummary {
     /// descending by `residual_magnitude` so the worst offender
     /// leads. Empty when `over_constraint_count == 0`.
     pub over_constraints: Vec<OverConstraintSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RejectedConflictSummary {
+    pub constraint_id: signex_sketch::id::ConstraintId,
+    pub kind_label: &'static str,
+    /// The entity a click selects; `None` when the revert removed it.
+    pub focus_entity_id: Option<signex_sketch::id::SketchEntityId>,
 }
 
 #[derive(Debug, Clone)]

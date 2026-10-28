@@ -15,7 +15,7 @@ use uuid::Uuid;
 /// which `WhereUsedIndex` and the resolver both need.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct PrimitiveRef {
-    /// Stable UUID from the source library's `library.toml::id`.
+    /// Stable UUID from the source library's `.snxlib` manifest's `library_id`.
     pub library_id: Uuid,
     /// Primitive UUID within that library.
     pub uuid: Uuid,

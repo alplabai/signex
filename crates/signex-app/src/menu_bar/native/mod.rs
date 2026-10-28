@@ -170,7 +170,7 @@ impl Builder {
 
     fn model_item(&mut self, item: &MenuItem, path: &str) -> NativeNode {
         let (action, enabled) = match &item.state {
-            ItemState::Placeholder => (None, false),
+            ItemState::Placeholder | ItemState::Unavailable => (None, false),
             ItemState::Live { action, is_enabled } => {
                 (Some(action.clone()), *is_enabled && !self.locked)
             }

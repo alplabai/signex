@@ -117,21 +117,24 @@ impl Signex {
             )),
         );
         // Shared / Global libraries are owned by other projects too:
-        // never offer to delete them from disk (#139).
-        let remove_options: Element<'_, Message> = if st.is_outside_project {
-            column![exclude_card].spacing(SP.m).into()
-        } else {
-            column![
-                option_card(
-                    "Delete file",
-                    "File will be removed from project and permanently deleted.",
-                    Message::Remove(RemoveMsg::Confirm(crate::app::RemoveChoice::DeleteFile)),
-                ),
-                exclude_card,
-            ]
-            .spacing(SP.m)
-            .into()
-        };
+        // never offer to delete them from disk (#139). A sheet other sheets
+        // place is not deleted either, and a sheet that is not a project page
+        // has nothing to exclude (#1618).
+        let blockers = self.remove_blockers(st);
+        // A `.snxlib` is a directory package: it is never a placed sheet.
+        let is_dir = st.target_path.extension().and_then(|e| e.to_str()) == Some("snxlib");
+        let mut remove_options = column![].spacing(SP.m);
+        if !st.is_outside_project && !blockers.blocks_delete(is_dir) {
+            remove_options = remove_options.push(option_card(
+                "Delete file",
+                "File will be removed from project and permanently deleted.",
+                Message::Remove(RemoveMsg::Confirm(crate::app::RemoveChoice::DeleteFile)),
+            ));
+        }
+        if !blockers.unlisted {
+            remove_options = remove_options.push(exclude_card);
+        }
+        let remove_options: Element<'_, Message> = remove_options.into();
 
         let mut prompt = column![
             text(format!(
@@ -142,6 +145,53 @@ impl Signex {
             .color(text_muted),
         ]
         .spacing(SP.s);
+        if !blockers.other_parents.is_empty() {
+            prompt = prompt.push(
+                text(format!(
+                    "It is also placed by {}, so it cannot be deleted from here.",
+                    blockers.parent_names()
+                ))
+                .size(TS.caption)
+                .color(text_muted),
+            );
+        }
+        if let Some(why) = blockers.unknown.as_deref().filter(|_| !is_dir) {
+            prompt = prompt.push(
+                text(format!(
+                    "It cannot be deleted from here: whether another sheet places it is not \
+                     known yet ({why}). You can exclude it from the project."
+                ))
+                .size(TS.caption)
+                .color(text_muted),
+            );
+        }
+        if !blockers.blocks_delete(is_dir)
+            && !st.is_outside_project
+            && let Some(parent) = &blockers.own_parent
+        {
+            prompt = prompt.push(
+                text(format!("{} will show it as missing.", parent.display()))
+                    .size(TS.caption)
+                    .color(text_muted),
+            );
+        }
+        if blockers.placed && !blockers.unlisted {
+            prompt = prompt.push(
+                text(
+                    "Excluding it does not take it out of the design: a sheet symbol still \
+                     places it.",
+                )
+                .size(TS.caption)
+                .color(text_muted),
+            );
+        }
+        if blockers.unlisted {
+            prompt = prompt.push(
+                text("It is not a page of this project, so there is nothing to exclude.")
+                    .size(TS.caption)
+                    .color(text_muted),
+            );
+        }
         // Library names can repeat across folders; the full path says which
         // one is affected. Sheets and PCBs get no extra line.
         if st.display_name.ends_with(".snxlib") {
