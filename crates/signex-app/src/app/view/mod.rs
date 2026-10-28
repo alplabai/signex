@@ -184,7 +184,7 @@ impl Signex {
             // a secondary window onto a monitor with a different DPI.
             scale_factor: crate::ui_scale::render_scale(ui.main_window_scale, ui.ui_scale),
             active_keymap: Some(std::sync::Arc::clone(&ui.active_keymap)),
-            recent_projects: ui.recent_projects.entries().to_vec(),
+            recent_projects: ui.recent_projects.entries(),
         };
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row =

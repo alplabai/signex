@@ -65,12 +65,16 @@ impl Signex {
     }
 
     pub fn new() -> (Self, Task<Message>) {
+        // One parse of `prefs.json` feeds every startup reader below; a
+        // missing or malformed file reads as `None`, i.e. every default.
+        let prefs_json = crate::fonts::load_prefs_json();
+        let prefs = prefs_json.as_ref();
         // Default panel layout — restored from disk if a previous
         // session persisted one, otherwise seeded with the Altium-ish
         // defaults: Projects + Components + Signal on the left,
         // Properties + Messages on the right, ERC on the bottom
         // (user's request — bottom is reserved for future log tails).
-        let mut dock = match crate::fonts::read_dock_layout() {
+        let mut dock = match crate::fonts::read_dock_layout_from(prefs) {
             Some(saved) => saved,
             None => {
                 // Which panels open, in tab order. *Where* each one
@@ -99,7 +103,7 @@ impl Signex {
             crate::dock::DockLayoutSnapshot::capture(&dock),
         );
 
-        let initial_component_filter = crate::fonts::read_component_filter();
+        let initial_component_filter = crate::fonts::read_component_filter_from(prefs);
         let search_prefs = crate::persist::SearchPrefsSync::new(std::sync::Arc::new(
             crate::fonts::PrefsSearchStore::user_prefs(),
         ));
@@ -111,25 +115,26 @@ impl Signex {
         // widget's effective flag (so the very first PCB frame honours the
         // saved toggle before the user opens Preferences) plus the
         // `ui_state.pcb_gpu_render` saved mirror and its Preferences draft.
-        let pcb_gpu_render = crate::fonts::read_pcb_gpu_render_pref();
+        let pcb_gpu_render = crate::fonts::read_pcb_gpu_render_pref_from(prefs);
         pcb_canvas.gpu_render = pcb_gpu_render;
         // #629 — same shape for the three Symbol Editor settings: one read
         // each, feeding both the committed field and its Preferences draft.
         // Reading twice would be harmless today but invites the two to be
         // seeded from different parses of a file edited mid-launch.
-        let symbol_grid_size_mm = crate::fonts::read_symbol_grid_size_mm_pref();
-        let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref();
-        let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref();
-        let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref();
-        let ui_scale = crate::fonts::read_ui_scale_pref();
-        let annotate_undo = crate::fonts::read_annotate_undo_pref();
-        let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref();
-        let autosave_enabled = crate::fonts::read_autosave_enabled_pref();
+        let symbol_grid_size_mm = crate::fonts::read_symbol_grid_size_mm_pref_from(prefs);
+        let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref_from(prefs);
+        let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref_from(prefs);
+        let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref_from(prefs);
+        let ui_scale =
+            crate::fonts::read_ui_scale_pref_from(prefs, &crate::fonts::prefs_file_path());
+        let annotate_undo = crate::fonts::read_annotate_undo_pref_from(prefs);
+        let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
+        let autosave_enabled = crate::fonts::read_autosave_enabled_pref_from(prefs);
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
-        let erc_severity_boot = crate::fonts::read_erc_severity_overrides();
-        let grid_size_mm =
-            crate::fonts::read_grid_size_mm_pref().unwrap_or(crate::canvas::grid::GRID_SIZES_MM[1]);
+        let erc_severity_boot = crate::fonts::read_erc_severity_overrides_from(prefs);
+        let grid_size_mm = crate::fonts::read_grid_size_mm_pref_from(prefs)
+            .unwrap_or(crate::canvas::grid::GRID_SIZES_MM[1]);
         let standard_lib_dir = helpers::find_standard_symbols_dir();
         let mut standard_libraries = standard_lib_dir
             .as_deref()
@@ -217,10 +222,10 @@ impl Signex {
                 // Persisted user-toggleable state (UX §1.5). Reads
                 // fall back to defaults when the prefs file is absent
                 // or the key missing — same as a fresh install.
-                theme_id: crate::fonts::read_theme_pref(),
-                unit: crate::fonts::read_unit_pref(),
-                grid_visible: crate::fonts::read_grid_visible_pref(),
-                snap_enabled: crate::fonts::read_snap_enabled_pref(),
+                theme_id: crate::fonts::read_theme_pref_from(prefs),
+                unit: crate::fonts::read_unit_pref_from(prefs),
+                grid_visible: crate::fonts::read_grid_visible_pref_from(prefs),
+                snap_enabled: crate::fonts::read_snap_enabled_pref_from(prefs),
                 cursor_x: 0.0,
                 cursor_y: 0.0,
                 cursor_document: None,
@@ -228,9 +233,11 @@ impl Signex {
                 grid_size_mm,
                 visible_grid_mm: 1.27,
                 snap_hotspots: true,
-                ui_font_name: crate::fonts::read_ui_font_pref(),
-                component_classes: crate::fonts::read_component_classes_pref(),
-                preferences_draft_component_classes: crate::fonts::read_component_classes_pref(),
+                ui_font_name: crate::fonts::read_ui_font_pref_from(prefs),
+                component_classes: crate::fonts::read_component_classes_pref_from(prefs),
+                preferences_draft_component_classes: crate::fonts::read_component_classes_pref_from(
+                    prefs,
+                ),
                 keymap_profiles,
                 active_keymap,
                 keymap_pending_sequence: Vec::new(),
@@ -249,9 +256,9 @@ impl Signex {
                 keyboard_shortcuts_open: false,
                 about_open: false,
                 recent_projects: crate::recent_projects::RecentProjects::from_paths(
-                    crate::fonts::read_recent_projects(),
+                    crate::fonts::read_recent_projects_from(prefs),
                 ),
-                first_run_tour_open: !crate::fonts::read_first_run_tour_dismissed(),
+                first_run_tour_open: !crate::fonts::read_first_run_tour_dismissed_from(prefs),
                 find_replace: crate::find_replace::FindReplaceState::default(),
                 preferences_nav: crate::preferences::PrefNav::Appearance,
                 // #631 — seeded from the saved theme, not hardcoded. This
@@ -260,10 +267,10 @@ impl Signex {
                 // fixed it there); the canvas now renders from it, so a
                 // user whose saved theme is not Signex would have opened
                 // to the wrong canvas colours.
-                preferences_draft_theme: crate::fonts::read_theme_pref(),
+                preferences_draft_theme: crate::fonts::read_theme_pref_from(prefs),
                 preferences_draft_font: String::new(),
-                grid_style: crate::fonts::read_grid_style_pref(),
-                preferences_draft_grid_style: crate::fonts::read_grid_style_pref(),
+                grid_style: crate::fonts::read_grid_style_pref_from(prefs),
+                preferences_draft_grid_style: crate::fonts::read_grid_style_pref_from(prefs),
                 pcb_gpu_render,
                 preferences_draft_pcb_gpu_render: pcb_gpu_render,
                 ui_scale,
@@ -336,7 +343,7 @@ impl Signex {
                 parameter_manager_open: false,
                 reorder_picker: None,
                 move_pick: None,
-                pin_matrix_overrides: crate::fonts::read_pin_matrix_overrides(),
+                pin_matrix_overrides: crate::fonts::read_pin_matrix_overrides_from(prefs),
                 annotate_locked: std::collections::HashSet::new(),
                 annotate_preview: Default::default(),
                 selection_mode: crate::schematic_runtime::hit_test::SelectionMode::default(),
@@ -407,8 +414,8 @@ impl Signex {
                     // the app value is assembled, below.
                     symbol_grid_style: crate::render_config::GridStyle::Dots,
                     snap_hotspots: true,
-                    ui_font_name: crate::fonts::read_ui_font_pref(),
-                    component_classes: crate::fonts::read_component_classes_pref(),
+                    ui_font_name: crate::fonts::read_ui_font_pref_from(prefs),
+                    component_classes: crate::fonts::read_component_classes_pref_from(prefs),
                     canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
                     canvas_font_size: 11.0,
                     canvas_font_bold: false,
@@ -461,9 +468,11 @@ impl Signex {
                         .iter()
                         .copied()
                         .collect(),
-                    custom_filter_presets: crate::fonts::read_custom_filter_presets(),
+                    custom_filter_presets: crate::fonts::read_custom_filter_presets_from(prefs),
                     active_custom_filter_tab: 0,
-                    footprint_filter_presets: crate::fonts::read_footprint_filter_presets(),
+                    footprint_filter_presets: crate::fonts::read_footprint_filter_presets_from(
+                        prefs,
+                    ),
                     page_format_mode: crate::panels::PageFormatMode::default(),
                     sheet_frame: Default::default(),
                     page_origin: crate::panels::PageOrigin::default(),
@@ -536,9 +545,9 @@ impl Signex {
                     .iter()
                     .copied()
                     .collect(),
-                custom_filter_presets: crate::fonts::read_custom_filter_presets(),
+                custom_filter_presets: crate::fonts::read_custom_filter_presets_from(prefs),
                 active_custom_filter_tab: 0,
-                footprint_filter_presets: crate::fonts::read_footprint_filter_presets(),
+                footprint_filter_presets: crate::fonts::read_footprint_filter_presets_from(prefs),
                 selection_slots: std::array::from_fn(|_| Vec::new()),
                 last_tool: std::collections::HashMap::new(),
                 pending_power: None,
