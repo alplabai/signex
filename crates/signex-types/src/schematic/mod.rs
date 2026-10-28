@@ -465,7 +465,7 @@ pub struct SheetInstance {
 /// - `body_style == 0` → common to all body styles (normal + De Morgan)
 /// - `body_style == 1` → normal body style (default)
 /// - `body_style == 2` → De Morgan body style
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LibGraphic {
     #[serde(default)]
     pub unit: u32,
@@ -475,7 +475,7 @@ pub struct LibGraphic {
 }
 
 /// A pin inside a library symbol, tagged with unit and body-style.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LibPin {
     #[serde(default)]
     pub unit: u32,
@@ -488,7 +488,7 @@ fn default_body_style() -> u32 {
     1
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LibSymbol {
     pub id: String,
     #[serde(default)]
@@ -529,7 +529,7 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Graphic {
     Polyline {
@@ -612,7 +612,7 @@ pub enum Graphic {
 // Pin
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Pin {
     pub direction: PinDirection,
     pub shape_style: PinShapeStyle,
