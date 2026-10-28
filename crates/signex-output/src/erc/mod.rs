@@ -66,6 +66,23 @@ impl ErcReportFormat {
     }
 }
 
+/// The rule set a report was produced under (#1085), so a result can be
+/// reproduced: the profile the project was seeded from (if it records one)
+/// and the hash of the rules actually applied.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ErcReportRuleSet {
+    pub profile_name: Option<String>,
+    pub sha256: String,
+}
+
+impl ErcReportRuleSet {
+    /// `<profile> (sha256 <hash>)`, or `no profile` when none is recorded.
+    pub(crate) fn summary(&self) -> String {
+        let name = self.profile_name.as_deref().unwrap_or("no profile");
+        format!("{name} (sha256 {})", self.sha256)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ErcReportOptions {
     pub format: ErcReportFormat,
@@ -77,6 +94,8 @@ pub struct ErcReportOptions {
     /// The cached ERC results in Messages-panel order. `None` means ERC has
     /// never been run — the exporter refuses rather than emit an empty file.
     pub violations: Option<Vec<ErcReportRow>>,
+    /// Written into the report header when present.
+    pub rule_set: Option<ErcReportRuleSet>,
 }
 
 #[derive(Debug, Clone)]
@@ -109,8 +128,10 @@ impl Exporter for ErcReportExporter {
         let rows = select_rows(opts).ok_or(ErcReportError::NeverRun)?;
         let labels = sheet_labels(&rows);
         let bytes = match opts.format {
-            ErcReportFormat::Text => text::emit(&rows, &labels, opts.group_by_sheet),
-            ErcReportFormat::Csv => csv::emit(&rows, &labels)?,
+            ErcReportFormat::Text => {
+                text::emit(&rows, &labels, opts.group_by_sheet, opts.rule_set.as_ref())
+            }
+            ErcReportFormat::Csv => csv::emit(&rows, &labels, opts.rule_set.as_ref())?,
         };
         Ok(ErcReportOutput {
             bytes,

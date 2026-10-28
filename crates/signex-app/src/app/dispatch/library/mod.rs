@@ -40,6 +40,8 @@ mod component_preview;
 mod components_panel;
 mod datasheet_save;
 mod document_options;
+#[cfg(test)]
+mod edit_modal_tests;
 mod editor;
 mod external_edits;
 mod lifecycle;
@@ -50,6 +52,7 @@ mod pricing_tests;
 mod primitive_picker;
 mod read_only;
 mod recovery;
+mod refresh;
 mod registration;
 mod settings;
 #[cfg(test)]
@@ -94,6 +97,7 @@ impl Signex {
             LibraryMessage::CloseLibrary(path) => self.handle_close_library(path),
             LibraryMessage::OpenPicker => {
                 self.library.picker = Some(PickerState::default());
+                self.library.sync_view_caches();
                 Task::none()
             }
             LibraryMessage::ClosePicker => {
@@ -286,6 +290,14 @@ impl Signex {
             LibraryMessage::MountFinished { path, prepared } => {
                 self.handle_mount_finished(path, prepared)
             }
+            LibraryMessage::RefreshFinished {
+                path,
+                generation,
+                snapshot,
+            } => {
+                self.handle_refresh_finished(path, generation, snapshot);
+                Task::none()
+            }
             LibraryMessage::BrowserSelectTable {
                 library_path,
                 table,
@@ -394,6 +406,7 @@ impl Signex {
             LibraryMessage::LibraryUpdatesSkipAll => self.handle_library_updates_skip_all(),
             LibraryMessage::LibraryUpdatesCancel => {
                 self.library.library_updates = None;
+                self.show_next_queued_updates();
                 Task::none()
             }
 

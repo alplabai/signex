@@ -1,13 +1,17 @@
-//! Built-in body of a power port that carries no library graphics.
+//! Built-in body of a power port that carries no library entry.
 //!
-//! The Active Bar places a power port as a bare `Symbol` (`is_power`, a
-//! `power:<style>` `lib_id`) without adding a library entry to the sheet, so
-//! there is nothing for `lower_symbol` to lower. [`power_port_graphics`] gives
-//! such a symbol its body in library space (Y-up, connection point at the
-//! origin) so the canvas, hit-test, placement ghost and SVG export all draw
-//! and measure the same shape.
+//! The Active Bar registers [`power_port_lib_symbol`] on the sheet when it
+//! places a port, but older files and pasted ports have none.
+//! [`SchematicSheet::resolve_lib_symbol`] gives every reader (netlist, ERC,
+//! canvas, SVG/PDF) that same built-in entry for such a port, so it connects
+//! and draws the same whether or not the sheet carries the entry.
 
-use super::{FillType, Graphic, Point};
+use std::borrow::Cow;
+
+use super::{
+    FillType, Graphic, LibGraphic, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point,
+    SchematicSheet, Symbol,
+};
 
 /// Length of the stem from the connection point to the symbol head, mm.
 const STEM_MM: f64 = 1.27;
@@ -106,63 +110,58 @@ fn line(a: (f64, f64), b: (f64, f64)) -> Graphic {
     }
 }
 
-/// Library-space graphics of the power port style named by `lib_id`.
+/// Library-space graphics of the power port style named by `lib_id`: the stem
+/// from the connection point plus the head.
 #[must_use]
 pub fn power_port_graphics(lib_id: &str) -> Vec<Graphic> {
+    let style = PowerPortStyle::of(lib_id);
+    let dir = if style.hangs_down() { -1.0 } else { 1.0 };
+    let mut out = vec![line((0.0, 0.0), (0.0, dir * STEM_MM))];
+    out.extend(power_port_head(style));
+    out
+}
+
+/// The head of a style, without the stem (the stem is the library pin).
+fn power_port_head(style: PowerPortStyle) -> Vec<Graphic> {
     let top = STEM_MM;
-    match PowerPortStyle::of(lib_id) {
+    match style {
         PowerPortStyle::PowerGround => {
-            let mut out = vec![line((0.0, 0.0), (0.0, -top))];
+            let mut out = Vec::new();
             for (i, half) in [0.9525, 0.6, 0.25].into_iter().enumerate() {
                 let y = -top - 0.5 * i as f64;
                 out.push(line((-half, y), (half, y)));
             }
             out
         }
-        PowerPortStyle::Bar => vec![
-            line((0.0, 0.0), (0.0, top)),
-            line((-HEAD_HALF_MM, top), (HEAD_HALF_MM, top)),
-        ],
-        PowerPortStyle::Arrow => vec![
-            line((0.0, 0.0), (0.0, top)),
-            Graphic::Polyline {
-                points: vec![
-                    Point::new(-HEAD_HALF_MM, top),
-                    Point::new(HEAD_HALF_MM, top),
-                    Point::new(0.0, top + 1.0),
-                    Point::new(-HEAD_HALF_MM, top),
-                ],
-                width: 0.0,
-                fill: FillType::Outline,
-            },
-        ],
-        PowerPortStyle::Circle => vec![
-            line((0.0, 0.0), (0.0, top)),
-            Graphic::Circle {
-                center: Point::new(0.0, top + HEAD_HALF_MM),
-                radius: HEAD_HALF_MM,
-                width: 0.0,
-                fill: FillType::None,
-            },
-        ],
-        PowerPortStyle::SignalGround => vec![
-            line((0.0, 0.0), (0.0, -top)),
-            Graphic::Polyline {
-                points: vec![
-                    Point::new(-0.9525, -top),
-                    Point::new(0.9525, -top),
-                    Point::new(0.0, -top - 1.0),
-                    Point::new(-0.9525, -top),
-                ],
-                width: 0.0,
-                fill: FillType::None,
-            },
-        ],
+        PowerPortStyle::Bar => vec![line((-HEAD_HALF_MM, top), (HEAD_HALF_MM, top))],
+        PowerPortStyle::Arrow => vec![Graphic::Polyline {
+            points: vec![
+                Point::new(-HEAD_HALF_MM, top),
+                Point::new(HEAD_HALF_MM, top),
+                Point::new(0.0, top + 1.0),
+                Point::new(-HEAD_HALF_MM, top),
+            ],
+            width: 0.0,
+            fill: FillType::Outline,
+        }],
+        PowerPortStyle::Circle => vec![Graphic::Circle {
+            center: Point::new(0.0, top + HEAD_HALF_MM),
+            radius: HEAD_HALF_MM,
+            width: 0.0,
+            fill: FillType::None,
+        }],
+        PowerPortStyle::SignalGround => vec![Graphic::Polyline {
+            points: vec![
+                Point::new(-0.9525, -top),
+                Point::new(0.9525, -top),
+                Point::new(0.0, -top - 1.0),
+                Point::new(-0.9525, -top),
+            ],
+            width: 0.0,
+            fill: FillType::None,
+        }],
         PowerPortStyle::Earth => {
-            let mut out = vec![
-                line((0.0, 0.0), (0.0, -top)),
-                line((-0.9525, -top), (0.9525, -top)),
-            ];
+            let mut out = vec![line((-0.9525, -top), (0.9525, -top))];
             for x in [-0.9525, 0.0, 0.9525] {
                 out.push(line((x, -top), (x - 0.5, -top - 0.6)));
             }
@@ -170,22 +169,83 @@ pub fn power_port_graphics(lib_id: &str) -> Vec<Graphic> {
         }
         PowerPortStyle::Wave => {
             let y = top + 0.4;
-            vec![
-                line((0.0, 0.0), (0.0, top)),
-                Graphic::Polyline {
-                    points: (0..=8)
-                        .map(|i| {
-                            let t = i as f64 / 8.0;
-                            Point::new(
-                                (t - 0.5) * 2.0 * HEAD_HALF_MM,
-                                y + 0.3 * (t * std::f64::consts::TAU).sin(),
-                            )
-                        })
-                        .collect(),
-                    width: 0.0,
-                    fill: FillType::None,
-                },
-            ]
+            vec![Graphic::Polyline {
+                points: (0..=8)
+                    .map(|i| {
+                        let t = i as f64 / 8.0;
+                        Point::new(
+                            (t - 0.5) * 2.0 * HEAD_HALF_MM,
+                            y + 0.3 * (t * std::f64::consts::TAU).sin(),
+                        )
+                    })
+                    .collect(),
+                width: 0.0,
+                fill: FillType::None,
+            }]
+        }
+    }
+}
+
+/// The library entry a power port of `lib_id`'s style is placed with: the
+/// head as body graphics and one visible pin at the connection point whose
+/// stub is the stem, so a pin-reading consumer (netlist, ERC, SVG) sees the
+/// same body the canvas draws. The entry is keyed by `lib_id`.
+#[must_use]
+pub fn power_port_lib_symbol(lib_id: &str) -> LibSymbol {
+    let style = PowerPortStyle::of(lib_id);
+    LibSymbol {
+        id: lib_id.to_owned(),
+        reference: "#PWR".to_owned(),
+        value: String::new(),
+        footprint: String::new(),
+        datasheet: String::new(),
+        description: format!("{} power port", style.label()),
+        keywords: "power".to_owned(),
+        fp_filters: String::new(),
+        in_bom: false,
+        on_board: false,
+        in_pos_files: false,
+        duplicate_pin_numbers_are_jumpers: false,
+        graphics: power_port_head(style)
+            .into_iter()
+            .map(|graphic| LibGraphic {
+                unit: 0,
+                body_style: 1,
+                graphic,
+            })
+            .collect(),
+        pins: vec![LibPin {
+            unit: 0,
+            body_style: 1,
+            pin: Pin {
+                direction: PinDirection::PowerInput,
+                shape_style: PinShapeStyle::Plain,
+                position: Point::new(0.0, 0.0),
+                // Library space is Y-up: 90 degrees points the stub up.
+                rotation: if style.hangs_down() { 270.0 } else { 90.0 },
+                length: STEM_MM,
+                name: String::new(),
+                number: "1".to_owned(),
+                visible: true,
+                name_visible: false,
+                number_visible: false,
+            },
+        }],
+        show_pin_numbers: false,
+        show_pin_names: false,
+        pin_name_offset: 0.0,
+    }
+}
+
+impl SchematicSheet {
+    /// The library entry `sym` is read from: the sheet's own entry, else the
+    /// built-in [`power_port_lib_symbol`] for an `is_power` symbol, else none.
+    #[must_use]
+    pub fn resolve_lib_symbol(&self, sym: &Symbol) -> Option<Cow<'_, LibSymbol>> {
+        match self.lib_symbols.get(&sym.lib_id) {
+            Some(lib) => Some(Cow::Borrowed(lib)),
+            None if sym.is_power => Some(Cow::Owned(power_port_lib_symbol(&sym.lib_id))),
+            None => None,
         }
     }
 }
@@ -251,6 +311,41 @@ mod tests {
         for style in PowerPortStyle::ALL {
             let lib_id = format!("power:{}", style.lib_tag());
             assert!(!power_port_graphics(&lib_id).is_empty(), "{lib_id}");
+        }
+    }
+
+    #[test]
+    fn the_lib_entry_lowers_to_the_built_in_body() {
+        use crate::schematic::{SymbolPrimitive, lower_placed_symbol, lower_symbol};
+        for style in PowerPortStyle::ALL {
+            let lib_id = format!("power:{}", style.lib_tag());
+            let lib = power_port_lib_symbol(&lib_id);
+            let sym = crate::schematic::Symbol {
+                lib_id: lib_id.clone(),
+                is_power: true,
+                unit: 1,
+                ..Default::default()
+            };
+            let lowered = lower_symbol(&lib, &sym);
+            let pins: Vec<_> = lowered
+                .iter()
+                .filter_map(|p| match p {
+                    SymbolPrimitive::Pin { tip, body } => Some((*tip, *body)),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(pins.len(), 1, "{lib_id}");
+            assert_eq!((pins[0].0.x, pins[0].0.y), (0.0, 0.0), "{lib_id}");
+            let stem = STEM_MM;
+            assert!((pins[0].1.x).abs() < 1e-9, "{lib_id}");
+            assert!((pins[0].1.y.abs() - stem).abs() < 1e-9, "{lib_id}");
+            // Same extent as the entry-less fallback.
+            let fallback = lower_placed_symbol(None, &sym);
+            assert_eq!(
+                format!("{:?}", crate::schematic::primitives_bounds(&lowered)),
+                format!("{:?}", crate::schematic::primitives_bounds(&fallback)),
+                "{lib_id}"
+            );
         }
     }
 }

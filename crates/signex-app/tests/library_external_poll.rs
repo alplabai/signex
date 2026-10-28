@@ -65,12 +65,56 @@ use signex_app::app::{Message, Signex};
 use signex_app::library::external_poll::PollOutcome;
 use signex_app::library::messages::LibraryMessage;
 
+/// Deliver a poll outcome, then land the off-thread refreshes it started
+/// (a test cannot run the `Task`; `land_pending_refresh` is its completion).
 fn polled(app: &mut Signex, outcome: PollOutcome) {
+    let changed = match &outcome {
+        PollOutcome::Changed(changed) => changed.clone(),
+        _ => Vec::new(),
+    };
+    let generations =
+        |app: &Signex, path: &std::path::Path| app.library.refresh_generations.get(path).copied();
+    let before: Vec<_> = changed
+        .iter()
+        .map(|(path, _)| generations(app, path))
+        .collect();
     drop(
         app.update(Message::Library(LibraryMessage::ExternalEditsPolled(
             outcome,
         ))),
     );
+    for ((path, _), generation) in changed.iter().zip(before) {
+        if generations(app, path) != generation {
+            app.land_pending_refresh(path);
+        }
+    }
+}
+
+/// A poll that lands while a refresh of the library is already on its way
+/// starts nothing and reports nothing: the app's own write would otherwise
+/// look like an outside edit, and a slow disk would never get to land.
+#[test]
+fn a_poll_during_an_in_flight_refresh_starts_nothing_and_logs_nothing() {
+    let (_t, snxlib, mut app) = mounted("extpoll-inflight");
+    append_component(&snxlib, SYMBOLS).expect("append_component");
+    let changed = libraries_changed(&app.library.watched_libraries());
+    assert_eq!(changed.len(), 1);
+    app.library
+        .begin_refresh(
+            &snxlib,
+            signex_app::library::refresh::RefreshFollowUp::Nothing,
+        )
+        .expect("a refresh is on its way");
+    let generation = app.library.refresh_generations.get(&snxlib).copied();
+
+    polled(&mut app, PollOutcome::Changed(changed));
+
+    assert_eq!(
+        app.library.refresh_generations.get(&snxlib).copied(),
+        generation,
+        "no second refresh was started"
+    );
+    assert_eq!(logged(&["extpoll-inflight changed on disk"]), 0);
 }
 
 /// #827: a tick while a timed-out pass's `stat` thread is still running
@@ -198,5 +242,38 @@ fn the_apps_own_class_write_is_silent_but_a_later_external_edit_is_not() {
         logged(&["extpoll-own changed on disk; reloaded"]),
         1,
         "an edit after the own write is external"
+    );
+}
+
+/// A refresh read that finishes before a library rename but whose report
+/// reaches `update` after it: the report names the old path. It must clear
+/// the in-flight mark of the renamed library, or the poll skips that
+/// library for the rest of the session.
+#[test]
+fn a_read_reported_after_a_rename_does_not_pin_the_poll_off() {
+    use signex_app::library::refresh::RefreshFollowUp;
+    use signex_app::library::state::LibrarySnapshot;
+
+    let (tmp, snxlib, mut app) = mounted("extpoll-renamed");
+    let start = app
+        .library
+        .begin_refresh(&snxlib, RefreshFollowUp::Nothing)
+        .expect("a refresh is on its way");
+    let snapshot = LibrarySnapshot::read(start.adapter.as_ref(), &snxlib);
+    let generation = start.generation;
+    drop(start); // the read is done; relocating needs the adapter unshared
+    let renamed = tmp.path().join("renamed.snxlib");
+    std::fs::rename(&snxlib, &renamed).expect("rename the file");
+    app.library
+        .relocate_library(&snxlib, &renamed)
+        .expect("relocate");
+    assert!(app.library.refresh_in_flight(&renamed));
+
+    let finish = app.library.finish_refresh(&snxlib, generation, snapshot);
+
+    assert_eq!(finish.root, renamed);
+    assert!(
+        !app.library.refresh_in_flight(&renamed),
+        "the poll must be allowed to look at the renamed library again"
     );
 }

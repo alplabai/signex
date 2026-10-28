@@ -68,6 +68,7 @@ fn library(pricing: Option<(&str, CachedPricing)>) -> LibraryFile {
             .insert(cached.sku.clone(), cached);
     }
     LibraryFile {
+        layout: Default::default(),
         manifest: manifest(),
         tables: BTreeMap::from([("resistors".to_string(), table)]),
     }

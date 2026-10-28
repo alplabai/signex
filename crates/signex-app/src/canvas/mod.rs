@@ -1,9 +1,13 @@
 //! Schematic/PCB canvas — wgpu rendering with Altium-style pan/zoom/grid.
 //!
-//! Uses `iced::widget::canvas::Program` with a 3-layer cache:
-//! - background: grid, sheet border (cleared on theme/grid/zoom change)
-//! - content: schematic elements (cleared on document edit)
-//! - overlay: selection, cursor, wire-in-progress (cleared every frame)
+//! Uses `iced::widget::canvas::Program`. Layers, back to front:
+//! - background (`bg_cache`): cached, cleared on theme/grid/viewport change;
+//! - content (`content_cache`): cached, cleared when the document or camera
+//!   changes (pan frames replay a camera-independent scene);
+//! - autofocus dim: drawn over the content when autofocus is active;
+//! - selection overlay (`overlay_cache`): cached, cleared on input events;
+//! - HUD / previews (cursor, wire and placement previews): uncached, redrawn
+//!   every frame.
 
 mod camera;
 mod drag_layers;
@@ -25,7 +29,6 @@ use iced::{Color, Rectangle, Renderer, Theme};
 
 pub use camera::Camera;
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
-pub use grid::GridState;
 pub use move_pick::MovePick;
 pub use shape_preview::ShapePreviewKind;
 
@@ -38,7 +41,6 @@ use crate::toolbar::ToolMessage;
 
 #[derive(Debug, Default)]
 pub struct CanvasState {
-    pub _grid: GridState,
     /// Is the user currently panning (right-click or middle-click drag)?
     panning: bool,
     /// Whether actual pan movement occurred (to distinguish click from drag).
@@ -227,7 +229,6 @@ impl CanvasSlot {
             ghost_text: None,
             ghost_bus_entry: None,
             placement_paused: false,
-            // Altium default is 1.27 mm (50 mil); also matches Standard's default schematic grid step.
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
             sheet_frame: Vec::new(),
@@ -705,84 +706,6 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
     }
 }
 
-// ─── Active Bar hit detection for right-click ────────────────
-
-/// Map a relative x position within the Active Bar to a dropdown menu.
-/// Returns None for buttons without dropdowns (Select, Add Component).
-fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
-    use crate::active_bar::ActiveBarMenu;
-    // Each btn=29px (28 cell + 1 spacing), sep=2px, pad=4px.
-    // [Filter][Move] | [Select][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
-    let x = x - 4.0;
-    let b = 29; // button width (cell + spacing)
-    let s = 2; // separator
-    let xi = x as i32;
-    if xi < 0 {
-        return None;
-    }
-    // btn 0: Filter
-    if xi < b {
-        return Some(ActiveBarMenu::Filter);
-    }
-    // btn 1: Move
-    if xi < 2 * b {
-        return Some(ActiveBarMenu::Select);
-    }
-    // sep
-    let off = 2 * b + s;
-    // btn 2: Select
-    if xi >= off && xi < off + b {
-        return Some(ActiveBarMenu::SelectMode);
-    }
-    // btn 3: Align
-    if xi >= off + b && xi < off + 2 * b {
-        return Some(ActiveBarMenu::Align);
-    }
-    // sep
-    let off = off + 2 * b + s;
-    // btn 4: Wire
-    if xi >= off && xi < off + b {
-        return Some(ActiveBarMenu::Wiring);
-    }
-    // btn 5: Power
-    if xi >= off + b && xi < off + 2 * b {
-        return Some(ActiveBarMenu::Power);
-    }
-    // sep
-    let off = off + 2 * b + s;
-    // btn 6: Harness
-    if xi >= off && xi < off + b {
-        return Some(ActiveBarMenu::Harness);
-    }
-    // btn 7: Sheet Symbol
-    if xi >= off + b && xi < off + 2 * b {
-        return Some(ActiveBarMenu::SheetSymbol);
-    }
-    // btn 8: Port
-    if xi >= off + 2 * b && xi < off + 3 * b {
-        return Some(ActiveBarMenu::Port);
-    }
-    // btn 9: Directives
-    if xi >= off + 3 * b && xi < off + 4 * b {
-        return Some(ActiveBarMenu::Directives);
-    }
-    // sep
-    let off = off + 4 * b + s;
-    // btn 10: Text
-    if xi >= off && xi < off + b {
-        return Some(ActiveBarMenu::TextTools);
-    }
-    // btn 11: Shapes
-    if xi >= off + b && xi < off + 2 * b {
-        return Some(ActiveBarMenu::Shapes);
-    }
-    // btn 12: Net Color
-    if xi >= off + 2 * b && xi < off + 3 * b {
-        return Some(ActiveBarMenu::NetColor);
-    }
-    None
-}
-
 // ─── Canvas events sent to the app ────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -918,7 +841,6 @@ mod tests {
             x: 10.0,
             y: 10.0,
             severity: ErcMarkerSeverity::Error,
-            primary_uuid: None,
         });
         let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
         assert!(view.selected.is_empty());

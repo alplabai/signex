@@ -234,15 +234,15 @@ impl SchematicCanvas<'_> {
             return Some(canvas::Action::capture());
         }
         if let Some(pos) = cursor.position_in(bounds) {
-            // Active Bar zone: top ~46px, centered (bar 36px + 4 top margin + slack)
-            if pos.y < 46.0 {
+            // Active Bar zone: top margin + bar height + slack, centered.
+            if pos.y < crate::active_bar::BAR_ZONE_HEIGHT_PX {
                 // Calculate which Active Bar button was right-clicked
                 let bar_width: f32 = crate::active_bar::BAR_WIDTH_PX;
                 let bar_x = (bounds.width - bar_width) / 2.0;
                 let rel_x = pos.x - bar_x;
                 if rel_x >= 0.0
                     && rel_x < bar_width
-                    && let Some(menu) = active_bar_hit(rel_x)
+                    && let Some(menu) = crate::active_bar::menu_at(rel_x)
                 {
                     return Some(canvas::Action::publish(Message::ActiveBar(
                         crate::active_bar::ActiveBarMsg::ToggleMenu(menu),

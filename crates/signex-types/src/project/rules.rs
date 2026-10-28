@@ -69,7 +69,7 @@ impl ProjectRules {
 
 /// Provenance of a stored rule set. Every field is optional on load and
 /// omitted on save when empty, so a partial entry round-trips as written.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RuleProfileRef {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub name: String,
@@ -104,6 +104,16 @@ impl ErcRules {
     /// No severities, no pin-matrix cells and no foreign keys.
     pub fn is_empty(&self) -> bool {
         self.severity.is_empty() && self.pin_matrix.is_empty() && self.unknown.is_empty()
+    }
+
+    /// Lower-case hex SHA-256 of the rule set's canonical JSON. The maps are
+    /// ordered, so equal rule sets hash equal on every machine; the profile
+    /// provenance and the ERC report header both record this value.
+    pub fn sha256_hex(&self) -> String {
+        use sha2::{Digest, Sha256};
+        // A map of strings and JSON values always serialises.
+        let canonical = serde_json::to_vec(self).unwrap_or_default();
+        format!("{:x}", Sha256::digest(canonical))
     }
 }
 

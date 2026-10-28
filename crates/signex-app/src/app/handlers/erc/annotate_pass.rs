@@ -229,6 +229,15 @@ impl Signex {
             let Some(document) = project_set.sheets.get(path).cloned() else {
                 continue;
             };
+            if self.unopened_write_blocked("Annotate", path) {
+                // A re-prefix is all or nothing: leaving one sheet out would
+                // split a prefix across the project.
+                if reprefix.is_some() {
+                    failed = true;
+                    break;
+                }
+                continue;
+            }
             if reprefix.is_some() {
                 // Re-prefix never writes behind the user's back: the sheet
                 // is loaded into a parked engine, dirty and unsaved, inside

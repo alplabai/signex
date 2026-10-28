@@ -580,9 +580,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             }
         }
         Some(signex_types::schematic::SelectedKind::Label) => {
-            // Net Name stored in Standard escapes `/` as `{slash}`. Show the
-            // visible form in the panel; the edit handler re-escapes on save.
-            let label_text = crate::schematic_runtime::text::expand_char_escapes(&get("Text"));
+            let label_text = get("Text");
             let position = get("Position");
             let rotation_str = get("Rotation");
             let text_size_str = get("Text Size");

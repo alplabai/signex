@@ -278,7 +278,9 @@ impl Signex {
                 crate::fonts::write_move_keeps_wires_pref(self.ui_state.move_keeps_wires);
                 crate::fonts::write_autosave_enabled_pref(self.ui_state.autosave_enabled);
                 crate::fonts::write_pcb_gpu_render_pref(self.ui_state.pcb_gpu_render);
-                crate::fonts::write_theme_pref(self.ui_state.theme_id);
+                let theme = self.ui_state.theme_id;
+                crate::fonts::OrderedPrefWrite::new("theme")
+                    .run(|| crate::fonts::write_theme_pref(theme));
                 // #629 — moved here from the three `PrefMsg::DraftSymbol*`
                 // arms, which wrote on every picker move. Re-asserting the
                 // render input from the committed value keeps the saved
@@ -576,24 +578,28 @@ impl Signex {
                 };
             }
             PrefMsg::ThemeFileLoaded(content) => {
-                if let Ok(custom) =
-                    serde_json::from_str::<signex_types::theme::CustomThemeFile>(&content)
-                {
-                    self.ui_state.custom_theme = Some(custom);
-                    self.ui_state.preferences_draft_theme = ThemeId::Custom;
-                    // Import swaps the live `custom_theme` in place — the
-                    // draft comparator can't see it, so pin the dirty flag
-                    // sticky until Save or a draft reseed clears it. Sticky
-                    // MUST be set before the recompute below so the flag
-                    // lands `true` even when every draft compares equal.
-                    // (Discard & Close cannot restore the previous custom
-                    // theme content; the sticky flag at least guarantees
-                    // the user is asked before the dialog closes. Note the
-                    // imported theme is session-only either way — nothing
-                    // persists `custom_theme` to disk yet, so it is lost on
-                    // restart even after Save; pre-existing gap.)
-                    self.ui_state.preferences_dirty_sticky = true;
-                    self.recompute_preferences_dirty();
+                match serde_json::from_str::<signex_types::theme::CustomThemeFile>(&content) {
+                    Err(e) => {
+                        self.ui_state.preferences_theme_status =
+                            format!("Could not import theme: {e}");
+                    }
+                    Ok(custom) => {
+                        self.ui_state.custom_theme = Some(custom);
+                        self.ui_state.preferences_draft_theme = ThemeId::Custom;
+                        // Import swaps the live `custom_theme` in place — the
+                        // draft comparator can't see it, so pin the dirty flag
+                        // sticky until Save or a draft reseed clears it. Sticky
+                        // MUST be set before the recompute below so the flag
+                        // lands `true` even when every draft compares equal.
+                        // (Discard & Close cannot restore the previous custom
+                        // theme content; the sticky flag at least guarantees
+                        // the user is asked before the dialog closes. Note the
+                        // imported theme is session-only either way — nothing
+                        // persists `custom_theme` to disk yet, so it is lost on
+                        // restart even after Save; pre-existing gap.)
+                        self.ui_state.preferences_dirty_sticky = true;
+                        self.recompute_preferences_dirty();
+                    }
                 }
             }
             PrefMsg::DraftErcSeverity(rule, severity) => {
