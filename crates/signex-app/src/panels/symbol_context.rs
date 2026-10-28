@@ -4,7 +4,7 @@ use super::*;
 
 /// Context handed to the right-dock Properties panel and the SCH-Library
 /// left-dock panel when the active tab is a `.snxsym` standalone editor.
-/// Mirrors the live `SymbolEditorState` but contains only the fields the
+/// Mirrors the live `SymbolDocument` but contains only the fields the
 /// panels render — keeps `panel_ctx` cloneable and decouples panel code
 /// from the canvas state struct.
 #[derive(Debug, Clone)]

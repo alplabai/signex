@@ -60,6 +60,7 @@ fn fixture(dirty: bool) -> Fixture {
             enable_git: false,
             rules: Default::default(),
             net_classes: Default::default(),
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),

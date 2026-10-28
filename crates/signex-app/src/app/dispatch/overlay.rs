@@ -60,8 +60,7 @@ impl Signex {
             }
             OverlayMsg::DismissFirstRunTour => {
                 self.ui_state.first_run_tour_open = false;
-                crate::fonts::write_first_run_tour_dismissed(true);
-                Task::none()
+                dismiss_first_run_tour_task()
             }
             OverlayMsg::ModalDragStart { modal, x, y } => self.handle_modal_drag_start(modal, x, y),
             OverlayMsg::ModalDragEnd => self.handle_modal_drag_end(),
@@ -92,6 +91,10 @@ impl Signex {
                 self.handle_project_fs_probed(generation, facts)
             }
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
+            ProjectMsg::DesignatorStandardPicked(standard) => {
+                self.handle_designator_standard_picked(standard);
+                Task::none()
+            }
             ProjectMsg::CloseOptions => {
                 self.ui_state.project_options = None;
                 Task::none()
@@ -101,11 +104,9 @@ impl Signex {
             }
             ProjectMsg::AddExistingFilesCopied {
                 project_id,
+                project_dir,
                 results,
-            } => {
-                self.handle_add_existing_files_copied(project_id, results);
-                Task::none()
-            }
+            } => self.handle_add_existing_files_copied(project_id, &project_dir, results),
             ProjectMsg::AddNewSchematicWritten {
                 project_id,
                 path,
@@ -122,6 +123,9 @@ impl Signex {
                 rel_path,
                 result,
             } => self.handle_project_git_commit_done(project_root, rel_path, result),
+            ProjectMsg::ProjectFolderRenamed { job, result } => {
+                self.handle_project_folder_renamed(&job, result)
+            }
         }
     }
 
@@ -428,6 +432,29 @@ impl Signex {
             ErcMsg::RunFinished { generation, result } => {
                 self.handle_erc_run_finished(generation, &result)
             }
+            ErcMsg::StoreRulesInProject => self.handle_store_erc_rules_in_project(),
+            ErcMsg::ProfileSaveRequested { name } => self.handle_profile_save_requested(name),
+            ErcMsg::ProfileSaved { project, result } => self.handle_profile_saved(project, &result),
+            ErcMsg::ProfileUpdateRequested => self.handle_profile_update_requested(),
+            ErcMsg::ProfileLoadedForUpdate { project, result } => {
+                self.handle_profile_loaded_for_update(project, &result)
+            }
+            ErcMsg::ProfileUpdateConfirmed => self.handle_profile_update_confirmed(),
+            ErcMsg::ProfileUpdateCancelled => self.handle_profile_update_cancelled(),
+            ErcMsg::ProfileDriftChecked { project, result } => {
+                self.handle_profile_drift_checked(project, &result)
+            }
+            ErcMsg::DefaultProfileMigrated(result) => {
+                Self::handle_default_profile_migrated(&result)
+            }
+            ErcMsg::RulesUndone => {
+                self.undo_project_rules();
+                Task::none()
+            }
+            ErcMsg::RulesRedone => {
+                self.redo_project_rules();
+                Task::none()
+            }
             ErcMsg::PinMatrixCellCycled { row, col } => {
                 self.handle_pin_matrix_cell_cycled(row, col)
             }
@@ -439,21 +466,20 @@ impl Signex {
     /// cell is written with it: the dialog then never shows two different
     /// verdicts for the same pair. A value equal to the baseline drops the
     /// override instead of storing it.
-    fn handle_pin_matrix_cell_cycled(&mut self, row: u8, col: u8) -> Task<Message> {
-        use signex_erc::Severity;
+    pub(crate) fn handle_pin_matrix_cell_cycled(&mut self, row: u8, col: u8) -> Task<Message> {
         use signex_erc::pin_matrix::baseline_cell;
+        if self.edit_project_erc_rules(|rules| {
+            signex_erc::project_rules::cycle_pin_cell(rules, row, col)
+        }) {
+            return Task::none();
+        }
         let current = self
             .ui_state
             .pin_matrix_overrides
             .get(&(row, col))
             .copied()
             .unwrap_or_else(|| baseline_cell(row, col));
-        let next = match current {
-            Severity::Error => Severity::Warning,
-            Severity::Warning => Severity::Info,
-            Severity::Info => Severity::Off,
-            Severity::Off => Severity::Error,
-        };
+        let next = current.cycled();
         for key in [(row, col), (col, row)] {
             if next == baseline_cell(key.0, key.1) {
                 self.ui_state.pin_matrix_overrides.remove(&key);
@@ -461,8 +487,10 @@ impl Signex {
                 self.ui_state.pin_matrix_overrides.insert(key, next);
             }
         }
-        crate::fonts::write_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides);
-        Task::none()
+        let overrides = self.ui_state.pin_matrix_overrides.clone();
+        crate::fonts::background_pref_write("pin_matrix", move || {
+            crate::fonts::write_pin_matrix_overrides(&overrides)
+        })
     }
 
     /// Preferences modal family handler (namespaced, ADR-0001 D3).
@@ -539,6 +567,11 @@ impl Signex {
             }
             RenameMsg::Submit => self.handle_rename_submit(),
             RenameMsg::Close => {
+                // A folder move in flight reports its result into this
+                // dialog; closing it would hide that outcome.
+                if !self.document_state.project_folder_renames.is_empty() {
+                    return Task::none();
+                }
                 self.ui_state.rename_dialog = None;
                 Task::none()
             }
@@ -580,4 +613,12 @@ impl Signex {
             self.interaction_state.submenu_unhovered_since = Some(std::time::Instant::now());
         }
     }
+}
+
+/// Persist the first-run tour dismissal on a blocking worker, never in
+/// `update` (#1469).
+pub(super) fn dismiss_first_run_tour_task() -> Task<Message> {
+    crate::fonts::background_pref_write("first_run_tour_dismissed", || {
+        crate::fonts::write_first_run_tour_dismissed(true)
+    })
 }

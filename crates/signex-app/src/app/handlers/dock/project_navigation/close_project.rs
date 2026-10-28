@@ -1,8 +1,4 @@
 //! Close-Project + app-quit lifecycle for the project-navigation dock.
-//!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
 
 use super::*;
 use crate::app::state::ProjectId;
@@ -186,6 +182,16 @@ impl Signex {
         };
         let target_id = project_id;
 
+        // Reads and restores still running for this project's files must not
+        // open or rewrite anything once it is gone (#859).
+        if let Some(project) = self.document_state.projects.get(project_idx) {
+            let dir = project.dir().to_path_buf();
+            self.document_state.pending_opens.cancel_under(&dir);
+            self.document_state
+                .pending_restores
+                .cancel_under_retaining(&dir);
+        }
+
         // A kept document's tab outlives the project it was opened under.
         for tab in &mut self.document_state.tabs {
             if tab.project_id == Some(target_id) && kept.contains(&tab.path) {
@@ -213,8 +219,8 @@ impl Signex {
         // engine that was kept alive by `dirty_paths` would leak
         // through project close. Save All / Discard All have already
         // pruned `dirty_paths` for the project, so this loop just
-        // sweeps the engine map for any path under this project's
-        // directory.
+        // sweeps the engine map for paths directly in this project's
+        // directory or reached through its sheet hierarchy.
         if let Some(project) = self.document_state.projects.get(project_idx) {
             let dir = project.dir().to_path_buf();
             let reach = self.document_state.reach_sets(sheet_refs);
@@ -235,12 +241,6 @@ impl Signex {
             }
         }
 
-        // Drop the project from the workspace, then pick a new active
-        // project — the one that now sits in the same slot (was
-        // immediately after the closed one), else the previous slot,
-        // else None when the workspace is empty.
-        // A pricing walk keeps running: closing a project does not unmount its
-        // libraries, and another open project may use the same one.
         // Forget that this project was noted, so reopening it says it again.
         if let Some(closed) = self
             .document_state
@@ -250,11 +250,24 @@ impl Signex {
         {
             let closed_path = closed.path.clone();
             self.document_state
+                .paused_git_projects
+                .remove(std::path::Path::new(&closed.data.dir));
+            self.document_state
                 .instance_note_scopes
                 .remove(&closed_path);
         }
+
+        // A pricing walk keeps running: closing a project does not unmount its
+        // libraries, and another open project may use the same one.
+        // Drop the project from the workspace, then pick a new active
+        // project — the one that now sits in the same slot (was
+        // immediately after the closed one), else the previous slot,
+        // else None when the workspace is empty.
         self.document_state.projects.retain(|p| p.id != target_id);
         self.document_state.net_class_history.remove(&target_id);
+        self.forget_net_class_picks_of(target_id);
+        self.document_state.rules_history.remove(&target_id);
+        self.document_state.profile_drift_noted.remove(&target_id);
         self.document_state.active_project = self
             .document_state
             .projects
@@ -294,25 +307,28 @@ impl Signex {
     /// here. Returns the failure reason so the caller can tell the user
     /// WHY a file couldn't be saved instead of only naming it.
     #[cfg(test)]
-    pub(super) fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
+    pub(crate) fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
         let fold = self.fold_for_path(path);
         self.try_save_dirty_path_with(path, fold)
     }
 
-    /// The volume rule of the project whose directory holds `path`; the
-    /// deepest one when directories nest (the inner volume is the one the
-    /// file lives on). A loose document has no probe, so it keys by the
-    /// host default. An empty dir would claim every path, so it is skipped.
+    /// The project whose directory holds `path`; the deepest one when
+    /// directories nest (the inner volume is the one the file lives on). An
+    /// empty dir would claim every path, so it is skipped.
+    pub(super) fn project_owning(&self, path: &std::path::Path) -> Option<&LoadedProject> {
+        self.document_state
+            .projects
+            .iter()
+            .filter(|p| {
+                !p.dir().as_os_str().is_empty() && path_is_under(path, p.dir(), p.case_fold)
+            })
+            .max_by_key(|p| p.dir().components().count())
+    }
+
+    /// The volume rule of the project that owns `path`. A loose document has
+    /// no probe, so it keys by the host default.
     pub(crate) fn fold_for_path(&self, path: &std::path::Path) -> CaseFold {
-        fold_of(
-            self.document_state
-                .projects
-                .iter()
-                .filter(|p| {
-                    !p.dir().as_os_str().is_empty() && path_is_under(path, p.dir(), p.case_fold)
-                })
-                .max_by_key(|p| p.dir().components().count()),
-        )
+        fold_of(self.project_owning(path))
     }
 
     pub(super) fn try_save_dirty_path_with(
@@ -410,6 +426,7 @@ impl Signex {
         use anyhow::Context as _;
         // Reported as this file's failure; the rest of the batch still saves.
         self.refuse_while_path_op(path, "saved")?;
+        self.refuse_save_while_restoring(path)?;
         // A write still running for this sheet could land after the one
         // below and put older content on disk; let it finish first.
         self.document_state.document_saves.barrier().wait();
@@ -662,14 +679,14 @@ impl Signex {
     /// Quitting between a file move and its completion would leave the
     /// project naming the old file with no prompt, so a quit is held (and
     /// says why) while a rename or delete runs.
-    fn hold_quit_while_path_op(&self) -> bool {
+    fn hold_quit_while_path_op(&mut self) -> bool {
         if self.document_state.pending_path_ops.is_empty() {
             return false;
         }
-        crate::diagnostics::log_warning(
-            "A rename or delete is still running, so the app was not closed. \
-             Try again once it finishes.",
-        );
+        let detail = "A rename or delete is still running, so the app was not closed. \
+                      Try again once it finishes.";
+        crate::diagnostics::log_warning(detail);
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::quit_held(detail));
         true
     }
 
@@ -716,7 +733,7 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::app::state::scope::CaseFold;
-    use crate::app::{Signex, SymbolEditorState};
+    use crate::app::{Signex, SymbolDocument};
 
     /// Build a minimal app carrying one dirty, open symbol-library
     /// editor keyed at `path` — mirrors the state right after
@@ -728,7 +745,7 @@ mod tests {
         let file = signex_library::SymbolFile::from_symbol(symbol);
         app.document_state.symbol_editors.insert(
             path.to_path_buf(),
-            SymbolEditorState::new(path.to_path_buf(), file),
+            SymbolDocument::new(path.to_path_buf(), file),
         );
         app.document_state.dirty_paths.insert(path.to_path_buf());
         app
@@ -862,6 +879,7 @@ mod tests {
                 enable_git: false,
                 net_classes: Vec::new(),
                 rules: None,
+                annotation: None,
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),
@@ -871,7 +889,7 @@ mod tests {
         let path = dir.join("lib.snxlib").join("footprints").join("g.snxfpt");
         let file =
             signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
-        let mut editor = crate::app::FootprintEditorState::new(path.clone(), file);
+        let mut editor = crate::app::FootprintDocument::new(path.clone(), file);
         editor.dirty = true;
         app.document_state
             .footprint_editors

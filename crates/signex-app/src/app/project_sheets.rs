@@ -110,7 +110,7 @@ pub(crate) fn assemble_project_sheets_for(
     (pages, set)
 }
 
-fn project_pages(project: Option<&crate::app::state::LoadedProject>) -> Vec<PathBuf> {
+pub(crate) fn project_pages(project: Option<&crate::app::state::LoadedProject>) -> Vec<PathBuf> {
     project
         .map(|p| {
             let dir = p.dir();
@@ -179,19 +179,10 @@ pub(crate) fn resolve_netlist_root_for(document_state: &DocumentState, source: &
         .unwrap_or_else(|| source.to_path_buf())
 }
 
-/// The warning to surface when [`resolve_netlist_root`] had to fall back to the
-/// active sheet *inside a project* because the project declares no root sheet
+/// The warning to surface when [`resolve_netlist_root_for`] had to fall back to
+/// `source` *inside a project* because the project declares no root sheet
 /// (#338). `None` for a declared root and for a loose document, where rooting
-/// at the active sheet is the whole scope rather than a degradation.
-///
-/// Kept apart from the resolver so the resolver stays pure (`view` reaches it
-/// through [`assemble_active_project_sheets`]); update-side callers log this.
-pub(crate) fn netlist_root_fallback_warning(document_state: &DocumentState) -> Option<String> {
-    let active = document_state.active_path.as_deref()?;
-    netlist_root_fallback_warning_for(document_state, active)
-}
-
-/// [`netlist_root_fallback_warning`] for an explicit `source` document.
+/// at the document is the whole scope rather than a degradation.
 pub(crate) fn netlist_root_fallback_warning_for(
     document_state: &DocumentState,
     source: &Path,
@@ -282,6 +273,21 @@ pub(crate) fn open_sheets_snapshot(document_state: &DocumentState) -> OpenSheets
         .engines
         .iter()
         .map(|(path, engine)| (path.clone(), engine.document().clone()))
+        .collect()
+}
+
+/// Snapshot the documents of the open engines at `paths`. Cloning is the cost
+/// of leaving the UI thread, so a caller names only the sheets its job reads.
+pub(crate) fn open_sheets_snapshot_of(
+    document_state: &DocumentState,
+    paths: &[PathBuf],
+) -> OpenSheets {
+    paths
+        .iter()
+        .filter_map(|path| {
+            let engine = document_state.engines.get(path)?;
+            Some((path.clone(), engine.document().clone()))
+        })
         .collect()
 }
 

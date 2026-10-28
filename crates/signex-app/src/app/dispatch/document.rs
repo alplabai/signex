@@ -9,6 +9,7 @@ impl Signex {
     /// via `Message::Edit`.
     pub(crate) fn dispatch_edit_message(&mut self, msg: EditMsg) -> Task<Message> {
         match msg {
+            EditMsg::UpdateDrawingField(uuid, edit) => self.handle_update_drawing_field(uuid, edit),
             EditMsg::DeleteSelected => {
                 // v0.20 — if the active tab is a footprint editor,
                 // route the Delete key to FootprintDeleteSelected so
@@ -136,6 +137,10 @@ impl Signex {
                 let task = self.handle_primitive_saved(*done);
                 iced::Task::batch([task, self.finish_update()])
             }
+            FileMsg::SaveAllProbed(plan) => {
+                let task = self.begin_save_all_planned(*plan);
+                iced::Task::batch([task, self.finish_update()])
+            }
             FileMsg::SaveAllSettled(settle) => {
                 let task = self.handle_save_all_settled(*settle);
                 iced::Task::batch([task, self.finish_update()])
@@ -150,6 +155,19 @@ impl Signex {
                 };
                 iced::Task::batch([task, self.finish_update()])
             }
+            FileMsg::DocumentReadFinished { request, result } => {
+                let task = self.handle_document_read_finished(request, result);
+                Task::batch([task, self.finish_update()])
+            }
+            FileMsg::HistoryRestoreFinished {
+                request,
+                sha,
+                edit_stamp,
+                result,
+            } => {
+                let task = self.handle_history_restore_finished(request, &sha, edit_stamp, result);
+                Task::batch([task, self.finish_update()])
+            }
             FileMsg::SchematicOpenFinished {
                 path,
                 title,
@@ -158,14 +176,16 @@ impl Signex {
                 // #478 review — clear the in-flight guard before acting
                 // on the result so a duplicate open fired while this one
                 // was in flight is free to spawn again from here on.
-                self.document_state.pending_opens.remove(&path);
+                self.document_state.pending_opens.remove_untracked(&path);
                 if self.is_open_result_superseded(&path, &result) {
                     self.attach_parked_tab_for_superseded_open(&path, title);
                     self.activate_tab_for_path(&path);
                     return self.finish_update();
                 }
                 match result {
+                    Ok(_) if self.has_tab_for(&path) => Self::log_duplicate_open(&path),
                     Ok(sheet) => {
+                        // `update` starts the recovery check of every tab opened.
                         self.open_schematic_tab(path, title, *sheet);
                     }
                     Err(message) => self.report_open_failure(message),
@@ -188,12 +208,13 @@ impl Signex {
                 result,
             } => {
                 // #478 review — same in-flight guard clear as above.
-                self.document_state.pending_opens.remove(&path);
+                self.document_state.pending_opens.remove_untracked(&path);
                 if self.is_open_result_superseded(&path, &result) {
                     self.activate_tab_for_path(&path);
                     return self.finish_update();
                 }
                 match result {
+                    Ok(_) if self.has_tab_for(&path) => Self::log_duplicate_open(&path),
                     Ok(board) => self.open_pcb_tab(path, title, *board),
                     Err(message) => self.report_open_failure(message),
                 }
@@ -246,10 +267,6 @@ impl Signex {
             }
             ExportMsg::FileWritten(outcome) => {
                 let task = self.handle_export_written(*outcome);
-                iced::Task::batch([task, self.finish_update()])
-            }
-            ExportMsg::ErcReportWritten(result) => {
-                let task = self.handle_erc_report_written(result);
                 iced::Task::batch([task, self.finish_update()])
             }
         }
@@ -341,18 +358,10 @@ impl Signex {
                     let start_width = p.column_widths.get(&idx).copied().unwrap_or_else(|| {
                         // Fall back to the per-BomColumn default
                         // table the view function uses.
-                        use signex_output::BomColumn;
-                        match p.options.columns.get(idx) {
-                            Some(BomColumn::Name) => 140.0,
-                            Some(BomColumn::Description) => 220.0,
-                            Some(BomColumn::Designator) | Some(BomColumn::Reference) => 220.0,
-                            Some(BomColumn::Value) => 110.0,
-                            Some(BomColumn::Footprint) => 140.0,
-                            Some(BomColumn::LibRef) => 160.0,
-                            Some(BomColumn::Qty) => 50.0,
-                            Some(BomColumn::Custom(_)) => 120.0,
-                            None => 120.0,
-                        }
+                        p.options
+                            .columns
+                            .get(idx)
+                            .map_or(120.0, crate::app::view::dialogs::bom_default_column_width)
                     });
                     p.column_resize = Some(crate::app::state::ColumnResizeState {
                         idx,
@@ -394,8 +403,16 @@ impl Signex {
                 let task = self.handle_print_preview_requested();
                 iced::Task::batch([task, self.finish_update()])
             }
-            PrintPreviewMsg::Rasterized { generation, pages } => {
-                self.handle_print_preview_rasterized(generation, pages);
+            PrintPreviewMsg::Rasterized {
+                generation,
+                outline,
+                pages,
+            } => {
+                let task = self.handle_print_preview_rasterized(generation, &outline, pages);
+                Task::batch([task, self.finish_update()])
+            }
+            PrintPreviewMsg::PagesRasterized { generation, pages } => {
+                self.handle_print_preview_pages_rasterized(generation, pages);
                 self.finish_update()
             }
             PrintPreviewMsg::RasterFailed { generation, reason } => {
@@ -403,8 +420,8 @@ impl Signex {
                 self.finish_update()
             }
             PrintPreviewMsg::SelectPage(idx) => {
-                self.handle_print_preview_select_page(idx);
-                self.finish_update()
+                let task = self.handle_print_preview_select_page(idx);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetColourMode(mode) => {
                 let task = self.handle_print_preview_set_colour_mode(mode);

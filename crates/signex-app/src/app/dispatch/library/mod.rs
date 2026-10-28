@@ -34,10 +34,14 @@ use crate::library::state::{
 };
 use signex_library::{PrimitiveKind, PrimitiveRef, RowId};
 
+mod alternate_symbols;
 mod browser;
 mod component_preview;
 mod components_panel;
+mod datasheet_save;
 mod document_options;
+#[cfg(test)]
+mod edit_modal_tests;
 mod editor;
 mod external_edits;
 mod lifecycle;
@@ -48,6 +52,7 @@ mod pricing_tests;
 mod primitive_picker;
 mod read_only;
 mod recovery;
+mod refresh;
 mod registration;
 mod rename_guard;
 mod settings;
@@ -97,6 +102,7 @@ impl Signex {
             LibraryMessage::CloseLibrary(path) => self.handle_close_library(path),
             LibraryMessage::OpenPicker => {
                 self.library.picker = Some(PickerState::default());
+                self.library.sync_view_caches();
                 Task::none()
             }
             LibraryMessage::ClosePicker => {
@@ -228,6 +234,23 @@ impl Signex {
                 library_path,
                 result,
             } => self.handle_library_component_resolved(target_sheet, library_path, result),
+            LibraryMessage::SymbolChoiceResolved {
+                target_sheet,
+                engine_instance,
+                symbol_id,
+                request,
+                label,
+                result,
+            } => self.handle_symbol_choice_resolved(
+                crate::app::handlers::library_symbol_choice::SwitchContext {
+                    target_sheet,
+                    engine_instance,
+                    symbol_id,
+                    request,
+                    label,
+                },
+                result,
+            ),
             LibraryMessage::CreateLibraryAt(project_root) => {
                 self.handle_create_library_for_project(project_root)
             }
@@ -271,6 +294,14 @@ impl Signex {
             LibraryMessage::OpenLibraryBrowser(path) => self.handle_open_library_browser(path),
             LibraryMessage::MountFinished { path, prepared } => {
                 self.handle_mount_finished(path, prepared)
+            }
+            LibraryMessage::RefreshFinished {
+                path,
+                generation,
+                snapshot,
+            } => {
+                self.handle_refresh_finished(path, generation, snapshot);
+                Task::none()
             }
             LibraryMessage::BrowserSelectTable {
                 library_path,
@@ -380,6 +411,7 @@ impl Signex {
             LibraryMessage::LibraryUpdatesSkipAll => self.handle_library_updates_skip_all(),
             LibraryMessage::LibraryUpdatesCancel => {
                 self.library.library_updates = None;
+                self.show_next_queued_updates();
                 Task::none()
             }
 

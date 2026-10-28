@@ -3,6 +3,7 @@
 //! connected when moving" is on, the attached wires rubber-banded exactly as
 //! the engine will commit them (#963).
 
+use super::drag_layers::{DragFrame, moved_item_ids, split_ghost};
 use crate::schematic_runtime::SchematicRenderSnapshot;
 use signex_types::schematic::SelectedItem;
 
@@ -118,12 +119,15 @@ pub(super) const MAX_RUBBER_BAND_GHOST_ITEMS: usize = 60;
 
 /// With snap off the ghost moves in steps of this many screen pixels, so the
 /// pass does not rerun for every pixel of cursor travel.
-const GHOST_STEP_PX: f64 = 4.0;
+const GHOST_STEP_PX: f64 = 2.0;
 
 /// The delta the ghost is computed at. With snap on the delta already puts
 /// the selection on the grid and stays exact, so the ghost is the sheet the
 /// commit makes; with snap off it is rounded to [`GHOST_STEP_PX`] at the
-/// current zoom (`scale` in px per mm).
+/// current zoom (`scale` in px per mm). The trade-off: with snap off the
+/// ghost can sit up to half a step (±1/3 mm at 100 % zoom) from the exact
+/// delta the commit uses, so it may show a route, or miss a fallback, that
+/// the commit does not.
 pub(super) fn ghost_delta(dx: f64, dy: f64, snap_enabled: bool, scale: f32) -> (f64, f64) {
     if snap_enabled || scale <= 0.0 || scale.is_nan() {
         return (dx, dy);
@@ -146,6 +150,9 @@ struct GhostKey {
 struct DragGhost {
     key: GhostKey,
     snapshot: Rc<SchematicRenderSnapshot>,
+    /// What the ghost changes against the source sheet, found when the ghost
+    /// is computed so a frame only draws that (#1335).
+    frame: DragFrame,
 }
 
 /// The rubber-banded drag ghost and the pre-move nets it is built against,
@@ -167,8 +174,20 @@ fn key_of(revision: u64, selection: &[SelectedItem], dx: f64, dy: f64) -> GhostK
 }
 
 impl GhostState {
+    fn ready_ghost(
+        &self,
+        revision: u64,
+        selection: &[SelectedItem],
+        dx: f64,
+        dy: f64,
+    ) -> Option<&DragGhost> {
+        let key = key_of(revision, selection, dx, dy);
+        self.ghost.as_ref().filter(|ghost| ghost.key == key)
+    }
+
     /// The ghost already computed for exactly this document revision,
     /// selection and delta (see [`ghost_delta`]).
+    #[cfg(test)]
     pub(super) fn ready(
         &self,
         revision: u64,
@@ -176,11 +195,21 @@ impl GhostState {
         dx: f64,
         dy: f64,
     ) -> Option<Rc<SchematicRenderSnapshot>> {
-        let key = key_of(revision, selection, dx, dy);
-        self.ghost
-            .as_ref()
-            .filter(|ghost| ghost.key == key)
+        self.ready_ghost(revision, selection, dx, dy)
             .map(|ghost| ghost.snapshot.clone())
+    }
+
+    /// What the ready ghost changes: the moving items to draw and the ids the
+    /// static layer leaves out.
+    pub(super) fn ready_frame(
+        &self,
+        revision: u64,
+        selection: &[SelectedItem],
+        dx: f64,
+        dy: f64,
+    ) -> Option<DragFrame> {
+        self.ready_ghost(revision, selection, dx, dy)
+            .map(|ghost| ghost.frame.clone())
     }
 
     /// Compute the rubber-banded ghost for `selection` moved by `(dx, dy)`:
@@ -194,8 +223,8 @@ impl GhostState {
         dx: f64,
         dy: f64,
     ) -> Rc<SchematicRenderSnapshot> {
-        if let Some(ready) = self.ready(revision, selection, dx, dy) {
-            return ready;
+        if let Some(ready) = self.ready_ghost(revision, selection, dx, dy) {
+            return ready.snapshot.clone();
         }
         let session = match &self.session {
             Some((rev, session)) if *rev == revision => session.clone(),
@@ -208,9 +237,11 @@ impl GhostState {
         let key = key_of(revision, selection, dx, dy);
         let moves: Vec<_> = selection.iter().map(|item| (*item, dx, dy)).collect();
         let snapshot = Rc::new(session.moved(&moves, true));
+        let frame = split_ghost(snap, &snapshot, &moved_item_ids(snap, selection));
         self.ghost = Some(DragGhost {
             key,
             snapshot: snapshot.clone(),
+            frame,
         });
         snapshot
     }
@@ -358,7 +389,7 @@ mod tests {
         assert!(!Rc::ptr_eq(&first, &moved));
     }
 
-    /// Snap off: cursor travel under one step (4 px, so 4/3 mm at 100 % zoom)
+    /// Snap off: cursor travel under one step (2 px, so 2/3 mm at 100 % zoom)
     /// keeps the ghost delta and the pass does not rerun. Snap on: the delta
     /// that puts the anchor on the grid is kept exact, never rounded off it.
     #[test]

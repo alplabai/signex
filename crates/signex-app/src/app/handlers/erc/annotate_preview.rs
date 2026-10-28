@@ -72,26 +72,18 @@ fn is_target(sym: &Symbol) -> bool {
     !sym.is_power && !sym.reference.starts_with('#')
 }
 
-/// The alphabetic head of a reference — `"R"` for both `"R12"` and `"R?"`.
-fn prefix_of(reference: &str) -> String {
-    reference
-        .chars()
-        .take_while(|c| c.is_ascii_alphabetic())
-        .collect()
-}
-
 /// Highest number already claimed per prefix across `sheets` — the same seed
 /// `handle_annotate`'s pass A builds, from the same sheet set.
 fn seed_counters(sheets: &[(String, SchematicSheet)]) -> std::collections::HashMap<String, u32> {
     let mut next: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
     for (_, sheet) in sheets {
         for sym in sheet.symbols.iter().filter(|s| is_target(s)) {
-            let prefix = prefix_of(&sym.reference);
+            let (prefix, number) = signex_types::designator::split_reference(&sym.reference);
             if prefix.is_empty() {
                 continue;
             }
-            if let Ok(n) = sym.reference[prefix.len()..].parse::<u32>() {
-                let e = next.entry(prefix).or_insert(0);
+            if let Some(n) = number {
+                let e = next.entry(prefix.to_owned()).or_insert(0);
                 *e = (*e).max(n);
             }
         }
@@ -192,7 +184,7 @@ fn compute_entries(
             if sym.reference.is_empty() || !is_target(sym) {
                 continue;
             }
-            let prefix = prefix_of(&sym.reference);
+            let prefix = signex_types::designator::alphabetic_prefix(&sym.reference).to_owned();
             let part = parts.part(sheet_ordinal, i);
             let pinned = locked.contains(&sym.uuid)
                 || part.is_some_and(|p| parts.locked_designator(p).is_some());

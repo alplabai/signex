@@ -80,18 +80,37 @@ impl SvgRenderContext {
 
         // Base primitives
         for wire in &sheet.schematic.wires {
-            let stroke_mm = if wire.stroke_width > 0.0 {
-                wire.stroke_width
-            } else {
-                0.15
-            };
+            let class = opts.net_class_styles.get(&wire.uuid);
+            let stroke_mm = wire_style::wire_width_mm(wire, class);
+            let start = (
+                xform.x(wire.start.x) as f64,
+                xform.px_y(wire.start.y) as f64,
+            );
+            let end = (xform.x(wire.end.x) as f64, xform.px_y(wire.end.y) as f64);
+            let marks = wire_style::line_marks(
+                start,
+                end,
+                class.map(|style| style.line).unwrap_or_default(),
+                stroke_mm * xform.mm_to_unit,
+            );
+            let commands = marks
+                .into_iter()
+                .flat_map(|(a, b)| {
+                    [
+                        SvgPathCommand::MoveTo(pt(a.0 as f32, a.1 as f32)),
+                        SvgPathCommand::LineTo(pt(b.0 as f32, b.1 as f32)),
+                    ]
+                })
+                .collect();
             elements.push(SvgElement::Path {
-                commands: vec![
-                    SvgPathCommand::MoveTo(pt(xform.x(wire.start.x), xform.px_y(wire.start.y))),
-                    SvgPathCommand::LineTo(pt(xform.x(wire.end.x), xform.px_y(wire.end.y))),
-                ],
+                commands,
                 style: SvgStyle {
-                    stroke_rgb: Some(palette.wire),
+                    stroke_rgb: Some(wire_style::wire_rgb(
+                        wire,
+                        &sheet.schematic.net_colors,
+                        &opts.net_class_styles,
+                        palette.wire,
+                    )),
                     fill_rgb: None,
                     stroke_width: (stroke_mm * xform.mm_to_unit) as f32,
                 },
@@ -138,14 +157,20 @@ impl SvgRenderContext {
             let half = side / 2.0;
             let cx = xform.x(j.position.x);
             let cy = xform.px_y(j.position.y);
+            let junction_rgb = wire_style::junction_rgb(
+                j,
+                &sheet.schematic.net_colors,
+                &opts.net_class_styles,
+                palette.junction,
+            );
             elements.push(rect_path(
                 cx - half,
                 cy - half,
                 side,
                 side,
                 SvgStyle {
-                    stroke_rgb: Some(palette.junction),
-                    fill_rgb: Some(palette.junction),
+                    stroke_rgb: Some(junction_rgb),
+                    fill_rgb: Some(junction_rgb),
                     stroke_width: 0.8,
                 },
             ));
@@ -294,17 +319,19 @@ impl SvgRenderContext {
                     ))
             });
 
-            if let Some(lib) = sheet
+            let lib = sheet
                 .schematic
                 .lib_symbols
                 .values()
                 .find(|ls| ls.id == sym.lib_id)
-            {
-                push_symbol_lib_graphics(&mut elements, sym, lib, &xform, palette);
+                .map(std::borrow::Cow::Borrowed)
+                .or_else(|| sheet.schematic.resolve_lib_symbol(sym));
+            if let Some(lib) = lib {
+                push_symbol_lib_graphics(&mut elements, sym, Some(&lib), &xform, palette);
                 push_symbol_pins(
                     &mut elements,
                     sym,
-                    lib,
+                    &lib,
                     &xform,
                     &symbol_eval_ctx,
                     symbol_pin_nets,
@@ -379,6 +406,7 @@ impl SvgRenderContext {
             height,
             elements,
             svg_document,
+            paper: palette.paper,
         }
     }
 
@@ -401,7 +429,7 @@ impl SvgRenderContext {
                     if let Some(path) = path_to_tiny_skia(commands) {
                         if let Some((r, g, b)) = style.fill_rgb {
                             let mut paint = Paint::default();
-                            let (mr, mg, mb) = map_colour_mode((r, g, b), colour_mode);
+                            let (mr, mg, mb) = map_colour_mode((r, g, b), colour_mode, self.paper);
                             paint.set_color(rgb_to_color(mr, mg, mb));
                             pixmap.fill_path(
                                 &path,
@@ -414,7 +442,7 @@ impl SvgRenderContext {
 
                         if let Some((r, g, b)) = style.stroke_rgb {
                             let mut paint = Paint::default();
-                            let (mr, mg, mb) = map_colour_mode((r, g, b), colour_mode);
+                            let (mr, mg, mb) = map_ink_mode((r, g, b), colour_mode, self.paper);
                             paint.set_color(rgb_to_color(mr, mg, mb));
                             let stroke = Stroke {
                                 width: style.stroke_width.max(0.5),
@@ -435,7 +463,7 @@ impl SvgRenderContext {
                     text,
                     font_alias,
                 } => {
-                    let mapped_fill = map_colour_mode(*fill_rgb, colour_mode);
+                    let mapped_fill = map_ink_mode(*fill_rgb, colour_mode, self.paper);
                     let style = TextStyle {
                         x: *x,
                         y: *y,

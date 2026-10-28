@@ -6,6 +6,7 @@ mod command_palette;
 mod document;
 mod escape;
 pub(crate) mod input;
+mod keyboard;
 mod keymap;
 pub(crate) mod library;
 mod overlay;
@@ -28,6 +29,9 @@ impl Signex {
                 Task::batch([self.finish_update(), task])
             }
             Message::Dock(msg) => self.handle_dock_message(msg),
+            Message::Input(msg) => self.dispatch_input_message(msg),
+            Message::Library(msg) => self.dispatch_library_message(msg),
+            Message::CommandPalette(msg) => self.dispatch_command_palette_message(msg),
             Message::Selection(request) => self.handle_selection_request(request),
             // Idle cursor move (the subscription forwards every one): only
             // the cached position changes, so skip the drag handlers and
@@ -50,14 +54,19 @@ impl Signex {
             Message::CanvasEvent(event) => {
                 if self.ui_state.first_run_tour_open {
                     self.ui_state.first_run_tour_open = false;
-                    crate::fonts::write_first_run_tour_dismissed(true);
+                    let save = overlay::dismiss_first_run_tour_task();
+                    return Task::batch([save, self.handle_canvas_interaction_event(event)]);
                 }
                 self.handle_canvas_interaction_event(event)
             }
             Message::CanvasEventInWindow { window_id, event } => {
                 if self.ui_state.first_run_tour_open {
                     self.ui_state.first_run_tour_open = false;
-                    crate::fonts::write_first_run_tour_dismissed(true);
+                    let save = overlay::dismiss_first_run_tour_task();
+                    return Task::batch([
+                        save,
+                        self.handle_canvas_event_in_window(window_id, event),
+                    ]);
                 }
                 self.handle_canvas_event_in_window(window_id, event)
             }
@@ -91,179 +100,6 @@ impl Signex {
             Message::MoveSelection(msg) => self.dispatch_move_selection_message(msg),
             Message::NetColor(msg) => self.dispatch_net_color_message(msg),
             Message::ParameterManager(msg) => self.dispatch_parameter_manager_message(msg),
-            Message::LassoCommit => {
-                // Altium-style single terminator — Enter commits
-                // whichever multi-click buffer is currently armed:
-                //   - Lasso: selects inside the polygon.
-                //   - Polyline (Tool::Polyline): writes a SchDrawing.
-                //   - Arc (Tool::Arc): arms need 3 clicks regardless.
-                if self.interaction_state.current_tool == Tool::Polyline
-                    && self.interaction_state.polyline_points.len() >= 2
-                {
-                    let pp_w = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.shape_width_mm)
-                        .unwrap_or(0.0);
-                    let pp_fill = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.shape_fill)
-                        .unwrap_or(signex_types::schematic::FillType::None);
-                    let pts = std::mem::take(&mut self.interaction_state.polyline_points);
-                    let drawing = signex_types::schematic::SchDrawing::Polyline {
-                        uuid: uuid::Uuid::new_v4(),
-                        points: pts,
-                        width: pp_w,
-                        fill: pp_fill,
-                        stroke_color: None,
-                    };
-                    self.apply_engine_command(
-                        signex_engine::Command::PlaceSchDrawing { drawing },
-                        false,
-                        false,
-                    );
-                    self.interaction_state
-                        .active_canvas_mut()
-                        .polyline_points
-                        .clear();
-                    self.interaction_state
-                        .active_canvas_mut()
-                        .clear_overlay_cache();
-                    return Task::none();
-                }
-                if let Some(pts) = self.ui_state.lasso_polygon.take()
-                    && pts.len() >= 3
-                    && let Some(snapshot) = self.active_render_snapshot()
-                {
-                    let poly: Vec<(f64, f64)> = pts.iter().map(|p| (p.x, p.y)).collect();
-                    let filters = self.interaction_state.selection_filters.clone();
-                    self.interaction_state.active_canvas_mut().selected =
-                        crate::schematic_runtime::hit_test::hit_test_polygon(snapshot, &poly)
-                            .into_iter()
-                            .filter(|h| {
-                                super::handlers::selection_workflow::passes_filter(
-                                    h, snapshot, &filters,
-                                )
-                            })
-                            .collect();
-                    self.update_selection_info();
-                }
-                self.sync_lasso_polygon_to_canvas();
-                if self.open_selected_child_sheet() {
-                    return Task::none();
-                }
-                Task::none()
-            }
-            Message::CycleSelectionMode => {
-                use crate::schematic_runtime::hit_test::SelectionMode;
-                self.ui_state.selection_mode = match self.ui_state.selection_mode {
-                    SelectionMode::Inside => SelectionMode::Touching,
-                    SelectionMode::Touching => SelectionMode::Inside,
-                    SelectionMode::Single => SelectionMode::Inside,
-                };
-                crate::diagnostics::log_info(format!(
-                    "Selection mode: {:?}",
-                    self.ui_state.selection_mode
-                ));
-                Task::none()
-            }
-            Message::UpdateDrawingField(uuid, edit) => self.handle_update_drawing_field(uuid, edit),
-            Message::Library(msg) => self.dispatch_library_message(msg),
-            Message::CommandPalette(msg) => self.dispatch_command_palette_message(msg),
-            Message::HistoryLoaded {
-                generation,
-                path,
-                result,
-            } => {
-                // Drop stale results from a previous tab — the
-                // generation token compares cheaply and is the
-                // authoritative staleness check (the path field
-                // is informational only).
-                if generation != self.document_state.history.generation {
-                    return Task::none();
-                }
-                self.document_state.history.loading = false;
-                match result {
-                    Ok(crate::panels::history::HistoryLoad::Entries(entries)) => {
-                        self.document_state.history.mode =
-                            crate::panels::history::HistoryRenderMode::Ready;
-                        self.document_state.history.entries = entries;
-                    }
-                    Ok(crate::panels::history::HistoryLoad::NoRepo) => {
-                        self.document_state.history.mode =
-                            crate::panels::history::HistoryRenderMode::NoRepo;
-                        self.document_state.history.entries = Vec::new();
-                    }
-                    // A failed revwalk used to be `unwrap_or_default()`d
-                    // into an empty `Ready`, which the panel renders as
-                    // the "No history yet." card — a corrupt object or an
-                    // unreadable `.git/` presented as "this file has no
-                    // commits" (#599).
-                    Err(error) => {
-                        // `error` before `path`: the Messages panel
-                        // compacts a record to 160 characters
-                        // (`diagnostics::compact_message`), and the
-                        // diagnosis is worth more there than the path,
-                        // which the panel itself is already showing.
-                        tracing::error!(
-                            target: "signex::history",
-                            error = %error,
-                            path = %path.display(),
-                            "git history could not be read; Restore is unavailable"
-                        );
-                        self.document_state.history.mode =
-                            crate::panels::history::HistoryRenderMode::Error(error);
-                        self.document_state.history.entries = Vec::new();
-                        // This arm does not run `finish_update`, so
-                        // republish here or the failure sits in the ring
-                        // buffer until some unrelated later message
-                        // happens to flush it.
-                        self.sync_diagnostics_panel_ctx();
-                    }
-                }
-                self.document_state.panel_ctx.history = self.document_state.history.clone();
-                Task::none()
-            }
-            // Esc means different things in different OS windows, so its
-            // whole resolution lives in `dispatch/escape.rs` (#554).
-            Message::EscapePressed { window } => self.handle_escape_pressed(window),
-            // Every other key the widgets didn't want. Which consumer
-            // owns it is decided in `dispatch/input.rs` against live
-            // state (#557 phase 1) — the subscription no longer decides
-            // anything.
-            Message::KeyInput { window, event } => self.handle_key_input(window, event),
-            Message::FootprintModeShortcut(target) => {
-                // v0.14.2 — gate on "active tab is a footprint
-                // editor". When yes, route through the existing
-                // FootprintSetMode dispatch (which also runs the
-                // sketch dispatcher's SetMode handler so the
-                // SetMode side-effects fire). Otherwise no-op so the
-                // bare digits don't hijack other tabs.
-                let path = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
-                    .and_then(|t| t.kind.as_footprint_editor())
-                    .cloned();
-                if let Some(path) = path {
-                    self.update(Message::Library(
-                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                            path,
-                            msg: crate::library::messages::PrimitiveEdit::Footprint(
-                                crate::library::messages::FootprintEditorMsg::SetMode(target),
-                            ),
-                        },
-                    ))
-                } else {
-                    Task::none()
-                }
-            }
-            Message::Noop => Task::none(),
         }
     }
 
@@ -498,6 +334,7 @@ impl Signex {
                     per_window.paper_width_mm,
                     per_window.paper_height_mm,
                 );
+                per_window.designators = self.designators_for_path(&path);
                 per_window.fit_to_content();
                 self.interaction_state.canvases.insert(id, per_window);
                 // A PCB tab gets its own PCB canvas too, so panning one
@@ -592,9 +429,9 @@ impl Signex {
                 } else {
                     self.ui_state.net_colors.remove(&net);
                 }
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_content_cache();
+                for canvas in self.interaction_state.all_schematic_canvases_mut() {
+                    canvas.clear_content_cache();
+                }
                 Task::none()
             }
             NetColorMsg::CustomShow(show) => {

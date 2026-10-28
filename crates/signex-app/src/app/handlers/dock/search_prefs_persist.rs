@@ -54,12 +54,17 @@ impl Signex {
     }
 
     /// Quit path: flush every debounced preference write (dock layout, then
-    /// search boxes, then in-flight document saves), wait for the ones in flight, then run `next`.
+    /// search boxes, then in-flight document saves, then in-flight autosave
+    /// writes), wait for the ones in flight, then run `next`.
     pub(crate) fn flush_quit_writes_then(&mut self, next: Task<Message>) -> Task<Message> {
-        // A pricing walk must not write into a library after quit.
-        self.library.cancel_pricing_refresh();
+        // A pricing walk must not write into a library after quit, and an
+        // in-flight save + commit is waited for.
+        let next = self.wait_for_pricing_then(next);
         let search = self.flush_search_prefs_then(next);
-        let documents = self.wait_for_document_saves_then(search);
+        // After the document saves: a save supersedes its recovery copy, and
+        // the removal that follows must finish before the process exits.
+        let autosave = self.wait_for_autosave_then(search);
+        let documents = self.wait_for_document_saves_then(autosave);
         self.flush_dock_layout_then(documents)
     }
 

@@ -21,6 +21,7 @@ mod labels;
 mod markers;
 mod symbols;
 mod text;
+mod wire_style;
 
 #[derive(Debug, Clone, Copy)]
 pub enum SvgTextAlign {
@@ -82,6 +83,8 @@ pub struct SvgRenderContext {
     pub height: f32,
     pub elements: Vec<SvgElement>,
     pub svg_document: String,
+    /// The theme's paper colour, which Black & White maps against.
+    pub paper: (f32, f32, f32),
 }
 
 pub struct SvgEvaluatorInputs<'a> {
@@ -122,28 +125,60 @@ fn rgb_to_color(r: f32, g: f32, b: f32) -> Color {
         .unwrap_or(Color::BLACK)
 }
 
-fn map_colour_mode(rgb: (f32, f32, f32), mode: ColourMode) -> (f32, f32, f32) {
-    let (r, g, b) = rgb;
+/// Rec.601 luma — the one luminance the preview and the PDF both use.
+pub(crate) fn luma((r, g, b): (f32, f32, f32)) -> f32 {
+    0.299 * r + 0.587 * g + 0.114 * b
+}
+
+/// How far a colour's luma may sit from the paper's and still print as
+/// paper in Black & White.
+pub(crate) const BW_PAPER_TOLERANCE: f32 = 0.25;
+
+/// Black & White is black ink on white paper whatever the theme (#1342).
+/// A colour close to the theme's paper tone prints as paper (white) and
+/// anything else is ink (black). Measuring against the paper rather than a
+/// fixed mid-grey cut keeps a dark theme's page white and its light marks
+/// solid.
+pub(crate) fn map_black_and_white(rgb: (f32, f32, f32), paper: (f32, f32, f32)) -> (f32, f32, f32) {
+    if (luma(rgb) - luma(paper)).abs() < BW_PAPER_TOLERANCE {
+        (1.0, 1.0, 1.0)
+    } else {
+        (0.0, 0.0, 0.0)
+    }
+}
+
+fn map_colour_mode(
+    rgb: (f32, f32, f32),
+    mode: ColourMode,
+    paper: (f32, f32, f32),
+) -> (f32, f32, f32) {
     match mode {
-        ColourMode::Colour => (r, g, b),
+        ColourMode::Colour => rgb,
         ColourMode::Grayscale => {
-            let y = 0.299 * r + 0.587 * g + 0.114 * b;
+            let y = luma(rgb);
             (y, y, y)
         }
-        ColourMode::BlackAndWhite => {
-            let y = 0.299 * r + 0.587 * g + 0.114 * b;
-            if y >= 0.5 {
-                (1.0, 1.0, 1.0)
-            } else {
-                (0.0, 0.0, 0.0)
-            }
-        }
+        ColourMode::BlackAndWhite => map_black_and_white(rgb, paper),
+    }
+}
+
+/// Strokes and text: Black & White draws them black whatever the colour,
+/// exactly as the PDF does (`ColourMap::map_stroke_bw`), so a light ink on a
+/// light paper stays visible in the preview (#1403). Fills keep the shared
+/// paper-relative mapping; the other modes map as for any colour.
+fn map_ink_mode(rgb: (f32, f32, f32), mode: ColourMode, paper: (f32, f32, f32)) -> (f32, f32, f32) {
+    match mode {
+        ColourMode::BlackAndWhite => (0.0, 0.0, 0.0),
+        _ => map_colour_mode(rgb, mode, paper),
     }
 }
 
 fn pt(x: f32, y: f32) -> SvgPoint {
     SvgPoint { x, y }
 }
+
+#[cfg(test)]
+mod net_class_tests;
 
 #[cfg(test)]
 mod tests {
@@ -167,6 +202,79 @@ mod tests {
             sheet_number: 1,
             sheet_count: 1,
             placement: Default::default(),
+        }
+    }
+
+    fn ink_ctx(paper: (f32, f32, f32), ink: (f32, f32, f32)) -> SvgRenderContext {
+        let line = vec![
+            SvgPathCommand::MoveTo(pt(2.0, 10.0)),
+            SvgPathCommand::LineTo(pt(38.0, 10.0)),
+        ];
+        let elements = vec![
+            SvgElement::Path {
+                commands: line,
+                style: SvgStyle {
+                    stroke_rgb: Some(ink),
+                    fill_rgb: None,
+                    stroke_width: 6.0,
+                },
+            },
+            SvgElement::Text {
+                x: 2.0,
+                y: 30.0,
+                font_alias: "F1",
+                size_pt: 16.0,
+                align: SvgTextAlign::Left,
+                v_align: SvgTextVAlign::Center,
+                rotation_deg: 0.0,
+                fill_rgb: ink,
+                text: "HHHH".to_string(),
+            },
+        ];
+        SvgRenderContext {
+            width: 40.0,
+            height: 40.0,
+            elements,
+            svg_document: String::new(),
+            paper,
+        }
+    }
+
+    /// #1403 - on a light paper a light stroke or text (luma ~0.8, within
+    /// the paper tolerance) must still print black in Black & White, as the
+    /// PDF does, not vanish as paper.
+    #[test]
+    fn black_and_white_preview_draws_light_ink_black_on_light_paper() {
+        let paper = (
+            0xEE as f32 / 255.0,
+            0xE8 as f32 / 255.0,
+            0xD5 as f32 / 255.0,
+        );
+        let ink = (0.8, 0.8, 0.8);
+        assert!((luma(ink) - luma(paper)).abs() < BW_PAPER_TOLERANCE);
+        let px = ink_ctx(paper, ink)
+            .rasterize_rgba_with_colour_mode(40, 40, ColourMode::BlackAndWhite)
+            .expect("rasterized");
+        let at = |x: usize, y: usize| &px[(y * 40 + x) * 4..(y * 40 + x) * 4 + 3];
+        assert_eq!(at(20, 10), [0, 0, 0], "stroke must be black");
+        let text_has_black = (0..12).any(|row| (0..40).any(|x| at(x, 24 + row) == [0, 0, 0]));
+        assert!(text_has_black, "text must be black");
+    }
+
+    /// #1403 - a symbol's body tint prints as paper (white) in Black & White
+    /// on every built-in theme; a theme whose tint drifted outside the paper
+    /// tolerance would print its symbol bodies solid black.
+    #[test]
+    fn every_builtin_theme_body_fill_prints_as_paper_in_black_and_white() {
+        use crate::pdf::SchematicPalette;
+        use signex_types::theme::{ThemeId, canvas_colors};
+        for id in ThemeId::BUILTINS {
+            let palette = SchematicPalette::from(&canvas_colors(*id));
+            assert_eq!(
+                map_black_and_white(palette.symbol_fill, palette.paper),
+                (1.0, 1.0, 1.0),
+                "{id:?} body_fill would print black"
+            );
         }
     }
 

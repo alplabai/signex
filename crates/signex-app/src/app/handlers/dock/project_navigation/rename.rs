@@ -34,8 +34,7 @@ impl Signex {
 
     /// Open the rename modal seeded with the project name (the `.snxprj`
     /// file stem). On submit, [`handle_rename_submit`] sees
-    /// `is_project_rename = true` and renames the trio
-    /// `<old>.snxprj` / `<old>.snxsch` / `<old>.snxpcb` together.
+    /// `is_project_rename = true` and renames the project (see `project_rename`).
     pub(crate) fn open_project_rename_dialog(&mut self, tree_path: Vec<usize>) {
         let Some(&project_idx) = tree_path.first() else {
             return;
@@ -114,19 +113,45 @@ impl Signex {
             self.ui_state.rename_dialog = None;
             return iced::Task::none();
         }
+        if let Err(error) = self.refuse_while_project_moves(&state.target_path, "rename") {
+            self.set_rename_error(&error.to_string());
+            return iced::Task::none();
+        }
         if let Err(refusal) = self.refuse_rename_overlap(&state.target_path, &new_path) {
             self.set_rename_error(&refusal);
             return iced::Task::none();
         }
         // An open still reading this file would land on the old path after
         // the move, and a save of that tab would recreate it (#1096).
-        if let Some(opening) = self.pending_open_under(&state.target_path) {
+        if let Some(opening) = self
+            .pending_open_under(&state.target_path)
+            .or_else(|| self.recovery_check_under(&state.target_path))
+        {
             crate::diagnostics::log_warning(format!(
                 "Rename of {} refused: {} is still opening.",
                 state.target_path.display(),
                 opening.display()
             ));
             self.set_rename_error("This file is still opening; rename it once it has opened.");
+            return iced::Task::none();
+        }
+        // A restore still running would rewrite the old path after the move,
+        // recreating the file the user just renamed.
+        if let Some(restoring) = self
+            .document_state
+            .pending_restores
+            .find_under(&state.target_path)
+        {
+            let label = restoring.file_name().map_or_else(
+                || restoring.display().to_string(),
+                |name| name.to_string_lossy().into_owned(),
+            );
+            crate::diagnostics::log_warning(format!(
+                "Rename refused: a History restore of {label} is still running."
+            ));
+            self.set_rename_error(
+                "A History restore of this file is still running; rename it once the restore has finished.",
+            );
             return iced::Task::none();
         }
         // A project library moves its entry, mount and open documents
@@ -187,12 +212,8 @@ impl Signex {
             self.document_state.fold_for_project(id)
         });
         let from = state.target_path.clone();
-        let parents_to_read = match &kind {
-            crate::app::path_ops::FileRenameKind::Document(plan) => {
-                self.unopened_rewrite_parents(plan)
-            }
-            crate::app::path_ops::FileRenameKind::Project => Vec::new(),
-        };
+        let crate::app::path_ops::FileRenameKind::Document(plan) = &kind;
+        let parents_to_read = self.unopened_rewrite_parents(plan);
         // The unopened parents the worker reads are registered too, so
         // opening one meanwhile is refused instead of being replaced by the
         // rewritten copy (or replacing it).
@@ -230,65 +251,26 @@ impl Signex {
         )
     }
 
+    /// A file at or under `target` whose recovery check has not reported:
+    /// renaming it now would lose the copy the check finds (#1323).
+    fn recovery_check_under(&self, target: &std::path::Path) -> Option<std::path::PathBuf> {
+        use crate::app::state::scope::path_is_under;
+        let ds = &self.document_state;
+        let owner = ds
+            .projects
+            .iter()
+            .find(|p| path_is_under(target, p.dir(), p.case_fold));
+        let fold = crate::app::state::project_case::fold_of(owner);
+        ds.recovery_check_due
+            .iter()
+            .chain(ds.autosave.checking_paths())
+            .find(|p| path_is_under(p, target, fold))
+            .cloned()
+    }
+
     pub(super) fn set_rename_error(&mut self, msg: &str) {
         if let Some(d) = self.ui_state.rename_dialog.as_mut() {
             d.error = Some(msg.to_string());
         }
-    }
-
-    /// Project-root rename: `state.target_path` is the project's
-    /// `.snxprj`; the buffer is the new *stem*. We rename ONLY the
-    /// `.snxprj` file and update the project's in-memory `name`.
-    /// Companion schematic / pcb files keep their existing filenames:
-    /// they're independent entities, possibly shared across workflows
-    /// or referenced from version control with their original names.
-    /// The `.snxprj`'s `schematic_root` / `pcb_file` are filename
-    /// strings that continue to point at the unchanged sheet files.
-    fn handle_project_rename_submit(
-        &mut self,
-        state: &crate::app::RenameDialogState,
-    ) -> iced::Task<Message> {
-        let new_stem = state.buffer.trim();
-        if new_stem.is_empty() {
-            self.set_rename_error("Name cannot be empty.");
-            return iced::Task::none();
-        }
-        if new_stem.contains(['/', '\\', '.']) {
-            self.set_rename_error("Name cannot contain '/', '\\', or '.'.");
-            return iced::Task::none();
-        }
-        let dir = match state.target_path.parent() {
-            Some(d) => d.to_path_buf(),
-            None => {
-                self.set_rename_error("Project file has no parent directory.");
-                return iced::Task::none();
-            }
-        };
-        let old_stem = match state.target_path.file_stem().and_then(|s| s.to_str()) {
-            Some(s) => s.to_string(),
-            None => {
-                self.set_rename_error("Project file has no stem.");
-                return iced::Task::none();
-            }
-        };
-        if new_stem == old_stem {
-            self.ui_state.rename_dialog = None;
-            return iced::Task::none();
-        }
-        let new_prj = dir.join(format!("{new_stem}.snxprj"));
-        if let Err(refusal) = self.refuse_rename_overlap(&state.target_path, &new_prj) {
-            self.set_rename_error(&refusal);
-            return iced::Task::none();
-        }
-        // Rename only the .snxprj. Schematic / PCB files keep their
-        // original filenames; the project's `schematic_root` /
-        // `pcb_file` references continue to point at them.
-        let new_name = new_stem.to_string();
-        self.start_file_rename(
-            state,
-            new_prj,
-            new_name,
-            crate::app::path_ops::FileRenameKind::Project,
-        )
     }
 }

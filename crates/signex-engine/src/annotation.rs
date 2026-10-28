@@ -4,6 +4,7 @@ use crate::patch::{DocumentPatch, PatchPair, SemanticPatch};
 
 use std::collections::{HashMap, HashSet};
 
+use signex_types::designator::{alphabetic_prefix, split_reference};
 use signex_types::schematic::{AnnotateOrder, ProjectParts, Symbol, annotation_order};
 use uuid::Uuid;
 
@@ -59,6 +60,9 @@ impl Engine {
         assigned: &mut HashMap<usize, String>,
     ) -> Result<bool, EngineError> {
         self.bump_revision();
+        // A designator names the nets nothing else names, so renumbering can
+        // rename a net.
+        self.bump_connectivity_revision();
         let before = self.document.clone();
         let AnnotateScope {
             parts,
@@ -123,12 +127,12 @@ impl Engine {
             if !is_designator_target(symbol) {
                 continue;
             }
-            let prefix = alphabetic_prefix(&symbol.reference);
+            let (prefix, number) = split_reference(&symbol.reference);
             if prefix.is_empty() {
                 continue;
             }
-            if let Ok(n) = symbol.reference[prefix.len()..].parse::<u32>() {
-                let entry = next_by_prefix.entry(prefix).or_insert(0);
+            if let Some(n) = number {
+                let entry = next_by_prefix.entry(prefix.to_owned()).or_insert(0);
                 if n > *entry {
                     *entry = n;
                 }
@@ -156,7 +160,7 @@ impl Engine {
                 changed = true;
                 continue;
             }
-            let prefix = alphabetic_prefix(&symbol.reference);
+            let prefix = alphabetic_prefix(&symbol.reference).to_owned();
             if prefix.is_empty() {
                 continue;
             }
@@ -194,13 +198,6 @@ impl Engine {
         self.record_grouped_history(before, patch_pair, undo_group);
         Ok(true)
     }
-}
-
-fn alphabetic_prefix(reference: &str) -> String {
-    reference
-        .chars()
-        .take_while(|c| c.is_ascii_alphabetic())
-        .collect()
 }
 
 #[cfg(test)]

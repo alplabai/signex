@@ -216,7 +216,7 @@ impl Signex {
         .map(Message::ActiveBar);
         Some(
             column![
-                iced::widget::Space::new().height(y_offset + 4.0),
+                iced::widget::Space::new().height(y_offset + crate::active_bar::BAR_TOP_MARGIN_PX),
                 container(bar)
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
@@ -255,7 +255,7 @@ impl Signex {
         let bar = signex_widgets::active_bar::view(bar_items, tokens).map(Message::Library);
         out.push(
             column![
-                iced::widget::Space::new().height(y_offset + 4.0),
+                iced::widget::Space::new().height(y_offset + crate::active_bar::BAR_TOP_MARGIN_PX),
                 container(bar)
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
@@ -747,13 +747,14 @@ mod tests {
         PreviewState {
             source: std::path::PathBuf::new(),
             pages: Vec::new(),
-            page_handles: Vec::new(),
+            raster_source: None,
             selected: 0,
             pdf_options: signex_output::PdfOptions::default(),
             page_setup: crate::app::state::PageSetupInputs::from_options(
                 &signex_output::PdfOptions::default(),
             ),
             specific_page_input: "1".to_string(),
+            range_note: None,
             zoom: 1.0,
             active_tab: crate::app::state::PdfPreviewTab::Preview,
             pan: (0.0, 0.0),

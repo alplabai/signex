@@ -13,7 +13,7 @@ use crate::app::view::dialogs::{
 };
 use crate::app::{Message, OverlayMsg};
 use crate::keymap::{KeymapEditorModel, KeymapEditorRow, ShortcutProfileSet};
-use crate::styles::{self, MODAL_CORNER_RADIUS};
+use crate::styles;
 
 const MODAL_W: f32 = 520.0;
 const MODAL_H: f32 = 600.0;
@@ -200,12 +200,6 @@ fn thin_divider<'a, M: 'a>(color: iced::Color) -> Element<'a, M> {
         })
         .into()
 }
-
-// `MODAL_CORNER_RADIUS` is currently consumed implicitly through
-// `styles::modal_card`. The const re-export keeps the reference
-// available for any future direct use (custom footer, etc.) without
-// forcing a re-import.
-const _MODAL_CORNER_RADIUS_REEXPORT: f32 = MODAL_CORNER_RADIUS;
 
 #[cfg(test)]
 mod tests {

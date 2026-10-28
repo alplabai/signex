@@ -48,11 +48,14 @@ fn seeded_library(dir: &Path) -> (PathBuf, Uuid, RowId) {
     .expect("init");
     let now = chrono::Utc::now();
     let row = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         server_revision: None,
         internal_pn: InternalPn::new("R10K"),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(library_id, Uuid::now_v7()),
         footprint_ref: None,
@@ -101,11 +104,14 @@ fn snapshot(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
 fn sample_row(row_id: RowId, library_id: Uuid) -> ComponentRow {
     let now = chrono::Utc::now();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: row_id.as_uuid(),
         server_revision: None,
         internal_pn: InternalPn::new("R10K"),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Released,
         symbol_ref: PrimitiveRef::new(library_id, Uuid::now_v7()),
         footprint_ref: None,
@@ -213,6 +219,7 @@ fn every_write_entry_point_is_refused_and_disk_is_untouched() {
                     fetched_at: chrono::Utc::now(),
                 },
             }],
+            &std::sync::atomic::AtomicBool::new(false),
             "m",
         ),
     );

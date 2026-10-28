@@ -194,6 +194,20 @@ pub enum OverlayMsg {
 /// their own top-level `Message::CanvasEvent(…)` variants.
 #[derive(Debug, Clone)]
 pub enum UiMsg {
+    /// Nothing to do. Produced by widgets / tasks that must emit a
+    /// `Message` but carry no event.
+    Noop,
+    /// Async result of a per-file Git history load issued by the
+    /// right-dock History panel. `generation` is the value of
+    /// `DocumentState.history.generation` when the load was kicked off;
+    /// the handler discards stale results whose generation no longer
+    /// matches (the user has switched tabs since). `path` is the file
+    /// the load targeted, for diagnostic logging only.
+    HistoryLoaded {
+        generation: u32,
+        path: std::path::PathBuf,
+        result: Result<crate::panels::history::HistoryLoad, String>,
+    },
     /// Switch the active colour theme and persist the preference.
     ThemeChanged(ThemeId),
     /// Cycle the display unit (mm / mil / inch).
@@ -247,6 +261,16 @@ pub enum UiMsg {
     /// whose document names a family redraws with it, and open documents
     /// are checked for families this machine lacks.
     InstalledFontsScanned,
+    /// The background resolution of the canvas's net-class styles finished
+    /// (#1042). Applied only if no newer refresh has started since.
+    NetClassStylesResolved(
+        std::sync::Arc<
+            Result<
+                crate::app::state::net_class_styles::ResolvedStyles,
+                crate::app::state::net_class_styles::ResolveFailed,
+            >,
+        >,
+    ),
 }
 
 /// Move Selection dialog message family (ADR-0001 D3). Namespaced under
@@ -329,11 +353,21 @@ pub enum BomPreviewMsg {
 pub enum PrintPreviewMsg {
     /// User triggered print preview via Ctrl+P or menu. Open preview dialog.
     Requested,
-    /// A background rasterisation finished. `generation` identifies the
+    /// A background rasterisation finished: the layout of every page plus
+    /// the pixels of the first one(s) shown. `generation` identifies the
     /// request; a result older than the newest request is discarded.
     Rasterized {
         generation: u64,
-        pages: std::sync::Arc<Vec<signex_output::PreviewPage>>,
+        outline: std::sync::Arc<Vec<signex_output::PreviewPageInfo>>,
+        /// `(position in outline, page)`.
+        pages: std::sync::Arc<Vec<(usize, signex_output::PreviewPage)>>,
+    },
+    /// Pages the user navigated to finished rasterising, for the layout of
+    /// `generation`. Dropped when a newer request has begun.
+    PagesRasterized {
+        generation: u64,
+        /// `(position in outline, page)`.
+        pages: std::sync::Arc<Vec<(usize, signex_output::PreviewPage)>>,
     },
     /// The background rasterisation for `generation` died (the render
     /// panicked). Reported as a failure, not as an empty page range (#1092).
@@ -453,4 +487,43 @@ pub enum GridPropertiesMsg {
     SetCoarseDisplay(crate::library::editor::footprint::state::GridDisplay),
     /// v0.18.19 — Grid Properties modal: Multiplier (5x / 10x / 2x / 1x).
     SetMultiplier(u32),
+}
+
+/// Keyboard-input message family (ADR-0001 D3). Routed to
+/// `dispatch_input_message`.
+#[derive(Debug, Clone)]
+pub enum InputMsg {
+    /// Esc-key tool cancel routed through the dispatcher. In a footprint
+    /// editor it fires `FootprintToolEscape`; otherwise it falls back to
+    /// the schematic `Tool::Select` reset.
+    EscapePressed {
+        /// Which OS window the key was pressed in (#547).
+        ///
+        /// `keyboard::listen()` drops this, so every Esc used to look
+        /// identical no matter which window produced it, and an Esc
+        /// typed into a detached modal's own window reset the MAIN
+        /// window's canvas tool. The subscription now goes through
+        /// `event::listen_with`, which hands the window id to its filter.
+        ///
+        /// `None` means the Esc was synthesised rather than typed — the
+        /// `cancel_current_tool` command id arriving from the palette or
+        /// a keymap binding (`app/command/bridge.rs`). It resolves
+        /// exactly as a main-window Esc does.
+        window: Option<iced::window::Id>,
+    },
+    /// A keyboard event no widget wanted, with the window it landed in
+    /// (#557 phase 1).
+    ///
+    /// The keyboard subscription is a pure transport: it filters
+    /// `Status::Ignored` keyboard events and forwards them unexamined.
+    /// Which app-level consumer owns the event is decided in
+    /// `app/dispatch/input.rs` against live state.
+    KeyInput {
+        window: iced::window::Id,
+        event: iced::keyboard::Event,
+    },
+    /// Footprint editor mode switch (`1` / `2` / `3`). The dispatcher
+    /// sets the mode only when the active tab is a footprint editor, so
+    /// the keys don't steal text input on other tabs.
+    FootprintModeShortcut(crate::library::editor::footprint::state::EditorMode),
 }

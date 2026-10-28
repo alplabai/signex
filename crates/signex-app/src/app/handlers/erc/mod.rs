@@ -12,3 +12,11 @@ mod erc_run_tests;
 pub(crate) use annotate_preview::{AnnotatePreviewCache, AnnotatePreviewLoad};
 pub(crate) use erc_job::ErcRunOutcome;
 mod modals;
+mod rule_profiles;
+#[cfg(test)]
+mod rule_profiles_tests;
+mod rules_edit;
+#[cfg(test)]
+mod rules_edit_tests;
+#[cfg(test)]
+mod rules_undo_routing_tests;

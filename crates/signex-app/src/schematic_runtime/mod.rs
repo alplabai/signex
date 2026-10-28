@@ -12,6 +12,7 @@ use signex_renderer::schematic::{
     TextInput, ViewRenderer, WireInput,
 };
 use signex_renderer::theme::ResolvedTheme;
+use signex_types::net_class::NetLineStyle;
 use signex_types::schematic::{
     Aabb, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
     SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle, field_effective_style,
@@ -30,9 +31,14 @@ mod symbol;
 pub(crate) use symbol::symbols_without_geometry;
 pub mod text;
 mod text_width;
+mod wire_style;
 
 pub use scene_cache::ContentSceneCache;
+pub(crate) use scene_cache::SceneInputs;
 pub use snapshot::build_renderer_snapshot;
+pub use wire_style::{
+    WireClassStyles, WireStyling, drawn_wire_width_mm, junction_color, wire_color,
+};
 
 pub type SchematicRenderSnapshot = SchematicSheet;
 
@@ -248,6 +254,7 @@ fn copy_invalidated(
         dst.paper_size.clone_from(&src.paper_size);
         dst.title_block.clone_from(&src.title_block);
         dst.root_sheet_page.clone_from(&src.root_sheet_page);
+        dst.frame = src.frame;
     }
 }
 
@@ -258,8 +265,6 @@ pub fn draw_power_port_preview(
     color: Color,
     colors: &CanvasColors,
 ) {
-    let half_w = screen_px_to_world_mm(7.0, transform.scale) as f32;
-    let half_h = screen_px_to_world_mm(4.0, transform.scale) as f32;
     let cx = symbol.position.x as f32;
     let cy = symbol.position.y as f32;
 
@@ -282,26 +287,42 @@ pub fn draw_power_port_preview(
         });
     }
 
+    // The body is the placed port's own lowering, so the ghost shows the
+    // shape the click will commit.
+    let (primitives, bbox) = symbol::symbol_geometry_of(None, symbol);
+    let mut wires = Vec::new();
+    let mut arcs = Vec::new();
+    let mut polygons = Vec::new();
+    let style = symbol::SymbolStyle {
+        id: 0,
+        stroke: color,
+        fill: Color {
+            a: color.a * 0.24,
+            ..color
+        },
+        pin: color,
+        // The ghost keeps its own colour even for an unknown part.
+        missing: color,
+        scale: transform.scale,
+        family: None,
+    };
+    let mut sink = symbol::SymbolSink {
+        wires: &mut wires,
+        arcs: &mut arcs,
+        polygons: &mut polygons,
+        texts: &mut parameter_texts,
+    };
+    if primitives.is_empty() {
+        symbol::push_fallback_box(&bbox, &symbol.lib_id, &style, &mut sink);
+    } else {
+        symbol::push_primitives(&primitives, &style, &mut sink);
+    }
+
     let snapshot = RendererSnapshot {
-        wires: Vec::new(),
+        wires,
         junctions: Vec::new(),
-        arcs: Vec::new(),
-        polygons: vec![PolygonInput {
-            vertices: vec![
-                [cx - half_w, cy + half_h],
-                [cx - half_w, cy - half_h],
-                [cx + half_w, cy],
-            ],
-            fill_color: to_rgba(Color {
-                a: color.a * 0.24,
-                ..color
-            }),
-            stroke_color: Some(to_rgba(color)),
-            stroke_width_mm: stroke_world_mm(
-                signex_types::schematic::SCHEMATIC_RENDER_POWER_PORT_STROKE_PX,
-                transform.scale,
-            ),
-        }],
+        arcs,
+        polygons,
         labels: Vec::new(),
         pin_texts: Vec::new(),
         reference_value_texts: Vec::new(),
@@ -309,13 +330,14 @@ pub fn draw_power_port_preview(
         overlays: OverlayInputs::default(),
         erc_markers: Vec::new(),
         wire_color_overrides: HashMap::new(),
+        wire_line_styles: HashMap::new(),
     };
 
     draw_renderer_snapshot(
         frame,
         &snapshot,
         &ResolvedTheme::from_canvas_colors(*colors),
-        DirtyFlags::POLYGONS | DirtyFlags::TEXT,
+        DirtyFlags::LINES | DirtyFlags::POLYGONS | DirtyFlags::TEXT,
         transform,
     );
 }
@@ -329,6 +351,21 @@ pub fn frame_local_bounds(bounds: Rectangle) -> Rectangle {
     Rectangle::with_size(bounds.size())
 }
 
+/// Designators drawn in place of `reference`, by symbol uuid (#1151).
+pub type Designators = HashMap<uuid::Uuid, String>;
+
+/// What the drawn scene shows instead of the document's own values. Each
+/// map is keyed by item uuid; an item not in a map draws as stored.
+#[derive(Default, Clone, Copy)]
+pub struct SceneOverrides<'a> {
+    /// How wires and junctions are styled: the Active Bar pen colour, then
+    /// the net-class style, by wire / junction uuid.
+    pub wire_styling: Option<WireStyling<'a>>,
+    /// Designators of the placement the tab was opened through (#1151), by
+    /// symbol uuid; only those that differ from the symbol's `reference`.
+    pub designators: Option<&'a HashMap<uuid::Uuid, String>>,
+}
+
 pub fn render_schematic(
     frame: &mut canvas::Frame,
     snapshot: &SchematicRenderSnapshot,
@@ -336,7 +373,7 @@ pub fn render_schematic(
     colors: &CanvasColors,
     bounds: Rectangle,
     focus_set: Option<&HashSet<uuid::Uuid>>,
-    wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+    overrides: SceneOverrides<'_>,
 ) {
     render_schematic_with_renderer(
         frame,
@@ -345,7 +382,7 @@ pub fn render_schematic(
         colors,
         frame_local_bounds(bounds),
         focus_set,
-        wire_color_overrides,
+        overrides,
     );
 }
 
@@ -356,16 +393,11 @@ fn render_schematic_with_renderer(
     colors: &CanvasColors,
     bounds: Rectangle,
     focus_set: Option<&HashSet<uuid::Uuid>>,
-    wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+    overrides: SceneOverrides<'_>,
 ) {
-    if let Some(scene) = build_schematic_scene(
-        snapshot,
-        transform,
-        colors,
-        bounds,
-        focus_set,
-        wire_color_overrides,
-    ) {
+    if let Some(scene) =
+        build_schematic_scene(snapshot, transform, colors, bounds, focus_set, overrides)
+    {
         draw_built_scene(frame, &scene, transform);
     }
 }
@@ -378,16 +410,10 @@ pub(crate) fn build_schematic_scene(
     colors: &CanvasColors,
     bounds: Rectangle,
     focus_set: Option<&HashSet<uuid::Uuid>>,
-    wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+    overrides: SceneOverrides<'_>,
 ) -> Option<Scene> {
-    let renderer_snapshot = build_renderer_snapshot(
-        snapshot,
-        transform,
-        colors,
-        bounds,
-        focus_set,
-        wire_color_overrides,
-    );
+    let renderer_snapshot =
+        build_renderer_snapshot(snapshot, transform, colors, bounds, focus_set, overrides);
     if renderer_snapshot.wires.is_empty()
         && renderer_snapshot.junctions.is_empty()
         && renderer_snapshot.arcs.is_empty()
@@ -414,6 +440,12 @@ pub(crate) fn build_schematic_scene(
     Some(scene)
 }
 
+/// Readability limits on schematic text, in logical pixels. The one source for
+/// the CPU replay below and for `scene_shader::SchematicSurface`, so the two
+/// paths clamp glyphs identically.
+pub(crate) const SCHEMATIC_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
+    signex_gfx::primitive::text::TextSizePolicy::new(6.0, 64.0);
+
 /// Replay a built scene through the live `transform`.
 pub(crate) fn draw_built_scene(
     frame: &mut canvas::Frame,
@@ -427,8 +459,8 @@ pub(crate) fn draw_built_scene(
         crate::renderer_scene_canvas::SceneDrawOptions {
             scale_px_per_mm: transform.scale,
             min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
-            text_min_px: 6.0,
-            text_max_px: 64.0,
+            text_min_px: SCHEMATIC_TEXT_SIZE.min_px,
+            text_max_px: SCHEMATIC_TEXT_SIZE.max_px,
         },
     );
 }
@@ -504,8 +536,13 @@ struct ItemBound {
     anchor: Point,
 }
 
-fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
-    collect_item_bounds_with(snapshot, true)
+/// `designators` size each designator's box from the text the canvas draws
+/// (#1200), not the stored `reference`.
+fn collect_item_bounds(
+    snapshot: &SchematicRenderSnapshot,
+    designators: &Designators,
+) -> Vec<ItemBound> {
+    collect_item_bounds_with(snapshot, true, designators)
 }
 
 /// `symbol_bodies = false` leaves out the symbol body entries, which are the
@@ -513,6 +550,7 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
 fn collect_item_bounds_with(
     snapshot: &SchematicRenderSnapshot,
     symbol_bodies: bool,
+    designators: &Designators,
 ) -> Vec<ItemBound> {
     let mut out = Vec::new();
     let document_family = snapshot.font_family.as_deref();
@@ -529,7 +567,12 @@ fn collect_item_bounds_with(
         if let Some(ref_text) = symbol.ref_text.as_ref().filter(|p| !p.hidden) {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
-                bbox: text_prop_aabb(&symbol.reference, ref_text, symbol, document_family),
+                bbox: text_prop_aabb(
+                    designators.get(&symbol.uuid).unwrap_or(&symbol.reference),
+                    ref_text,
+                    symbol,
+                    document_family,
+                ),
                 anchor: ref_text.position,
             });
         }
@@ -689,21 +732,46 @@ fn collect_item_bounds_with(
     out
 }
 
-fn item_aabb(snapshot: &SchematicRenderSnapshot, item: &SelectedItem) -> Option<Aabb> {
-    // A symbol body is the only bound that costs a library lowering; look the
-    // selected symbol up directly, and skip every body for any other item, so
-    // the per-frame selection overlay does not lower the whole sheet per item.
-    if item.kind == SelectedKind::Symbol {
-        return snapshot
-            .symbols
-            .iter()
-            .find(|symbol| symbol.uuid == item.uuid)
-            .map(|symbol| symbol::symbol_bounds(snapshot, symbol));
-    }
-    collect_item_bounds_with(snapshot, false)
-        .into_iter()
-        .find(|entry| entry.item == *item)
-        .map(|entry| entry.bbox)
+/// The bounding box of each `selected` item, aligned with `selected`; `None`
+/// for an item the sheet no longer holds.
+///
+/// A symbol body is the only bound that costs a library lowering, so a
+/// selected symbol is looked up directly and no body is lowered for any other
+/// item. The other kinds share one pass over the sheet and each symbol index
+/// is built once, so the cost is the sheet size plus the selection size
+/// rather than their product.
+fn selected_aabbs(
+    snapshot: &SchematicRenderSnapshot,
+    selected: &[SelectedItem],
+    designators: &Designators,
+) -> Vec<Option<Aabb>> {
+    let symbols = std::cell::OnceCell::new();
+    let others = std::cell::OnceCell::new();
+    selected
+        .iter()
+        .map(|item| {
+            if item.kind == SelectedKind::Symbol {
+                let index: &HashMap<uuid::Uuid, &Symbol> = symbols.get_or_init(|| {
+                    let mut index = HashMap::with_capacity(snapshot.symbols.len());
+                    for symbol in &snapshot.symbols {
+                        index.entry(symbol.uuid).or_insert(symbol);
+                    }
+                    index
+                });
+                return index
+                    .get(&item.uuid)
+                    .map(|symbol| symbol::symbol_bounds(snapshot, symbol));
+            }
+            let index: &HashMap<SelectedItem, Aabb> = others.get_or_init(|| {
+                let mut index = HashMap::new();
+                for entry in collect_item_bounds_with(snapshot, false, designators) {
+                    index.entry(entry.item).or_insert(entry.bbox);
+                }
+                index
+            });
+            index.get(item).copied()
+        })
+        .collect()
 }
 
 fn label_color(label: &Label, colors: &CanvasColors) -> Color {
@@ -938,4 +1006,8 @@ mod font_geometry_tests;
 #[cfg(test)]
 mod scene_cache_tests;
 #[cfg(test)]
+mod selection_bounds_tests;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod wire_style_render_tests;

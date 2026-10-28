@@ -32,6 +32,21 @@ pub enum LibraryError {
     /// a server counter or, for a local library, a content hash.
     #[error("changed by someone else since you read it; reload to see their version")]
     RowChanged { current_revision: u64 },
+    /// Like [`Self::RowChanged`], for a symbol, footprint or sim model.
+    /// `subject` names it (`symbol <uuid>`) so the caller can keep the
+    /// local edit and offer save-as as well as reload.
+    #[error(
+        "{subject} was changed by someone else since you read it; save your edit as a new copy, \
+         or reload to see their version"
+    )]
+    PrimitiveChanged {
+        subject: String,
+        current_revision: u64,
+    },
+    /// The version-control guard refused to start a repository in a folder
+    /// that holds more than the project (#1205). The text says why.
+    #[error("{0}")]
+    VersionControlRefused(String),
     #[error("unauthorized: {0}")]
     Unauthorized(String),
     #[error("backend: {0}")]
@@ -127,6 +142,29 @@ pub struct HistoryEntry {
     /// Removed lines/keys for this commit (lazy — 0 in the scaffold).
     #[serde(default)]
     pub deletions: u32,
+}
+
+/// A primitive together with the revision this copy was read at — the
+/// primitive tier's counterpart of `ComponentRow::server_revision`. The
+/// caller that holds the copy keeps the revision with it and hands it back
+/// as the base of its save, so the base is always "what this copy was read
+/// at", never "what someone last read". `None` for a backend that does not
+/// version primitives (a local library) and for a primitive being created.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Versioned<T> {
+    pub value: T,
+    pub revision: Option<u64>,
+}
+
+/// Refuse a base revision on a backend that hands none out: silently
+/// dropping it would turn a conditional save into an unconditional one.
+fn refuse_unversioned_base(base: Option<u64>) -> Result<(), LibraryError> {
+    match base {
+        None => Ok(()),
+        Some(_) => Err(LibraryError::Backend(
+            "this library does not version primitives; save without a base revision".into(),
+        )),
+    }
 }
 
 /// Storage backend abstraction. All flavours (LocalGit, Database, Plm)
@@ -378,25 +416,25 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
-    /// Move one row's binding to `kind` onto `new_version` and patch-bump
+    /// Move every pin of one row that binds `save`'s primitive (default or
+    /// alternate symbol, footprint, sim) onto `save.version` and patch-bump
     /// the row's own version, re-reading the row at write time so the
     /// write keeps any other field changed since a caller's snapshot.
     /// Returns whether the row changed: a row already pinned at
-    /// `new_version` is left alone. The default reads and then updates;
+    /// `save.version` is left alone. The default reads and then updates;
     /// an adapter with a write lock overrides it to do both under the lock.
     fn bind_row_primitive_version(
         &self,
         table: &str,
         row_id: RowId,
-        kind: crate::cascade::CascadeKind,
-        new_version: &str,
+        save: &crate::cascade::PrimitiveSave,
         message: &str,
     ) -> Result<bool, LibraryError> {
         let mut row = self.read_row(table, row_id)?;
-        if crate::cascade::pinned_version(&row, kind) == new_version {
+        if !crate::cascade::needs_bump(&row, save) {
             return Ok(false);
         }
-        crate::cascade::apply_cascade_bump(&mut row, new_version, kind);
+        crate::cascade::apply_cascade_bump(&mut row, save);
         self.update_row(table, row, message)?;
         Ok(true)
     }
@@ -436,6 +474,29 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
+    /// [`update_row`](Self::update_row), committing the working-tree files
+    /// `asset_rel_paths` (relative to the library root, already written)
+    /// in the same commit as the row that references them. An adapter that
+    /// keeps no working tree cannot hold those files, so with any asset it
+    /// refuses instead of saving a row whose pinned file nobody else can
+    /// resolve.
+    fn update_row_with_assets(
+        &self,
+        table: &str,
+        row: ComponentRow,
+        msg: &str,
+        asset_rel_paths: &[String],
+    ) -> Result<Option<u64>, LibraryError> {
+        if !asset_rel_paths.is_empty() {
+            return Err(LibraryError::Backend(
+                "this library cannot store pinned datasheet PDFs: it keeps no files beside its \
+                 library file. Use a URL datasheet instead"
+                    .into(),
+            ));
+        }
+        self.update_row(table, row, msg)
+    }
+
     /// Delete a row. `base_revision` is the `server_revision` of the copy
     /// the caller is deleting (server counter or local content hash); the
     /// delete is refused when the stored row has moved past it.
@@ -462,13 +523,16 @@ pub trait LibraryAdapter: Send + Sync {
         Ok(std::collections::BTreeMap::new())
     }
 
-    /// Write fetched prices back as ONE save and ONE commit. Each update is
+    /// Write fetched prices back as ONE save and ONE commit. `cancel` is
+    /// re-checked under the write lock, after the reload and before the
+    /// write: set, nothing is saved or committed. Each update is
     /// re-checked against the row as it is at write time: a row deleted, or
     /// whose SKU for that distributor changed, since the fetch started is
     /// reported in [`crate::StoreOutcome::dropped`] and not written.
     fn store_pricing(
         &self,
         _updates: Vec<crate::pricing::PricingUpdate>,
+        _cancel: &std::sync::atomic::AtomicBool,
         _msg: &str,
     ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
         Err(LibraryError::Backend(
@@ -517,6 +581,72 @@ pub trait LibraryAdapter: Send + Sync {
         Err(LibraryError::Backend(
             "save_sim not implemented for this adapter".into(),
         ))
+    }
+
+    // ── Versioned primitive reads / saves ───────────────────────────────
+    //
+    // A shared library server versions every primitive. `get_*_versioned`
+    // returns the revision the copy was read at; `save_*_versioned` sends it
+    // back as the base, and the save is refused with
+    // `LibraryError::RowChanged` when the stored primitive has moved on.
+    // On a versioned backend a `None` base creates the primitive
+    // (`Conflict` if it exists). The saved revision comes back so the next
+    // save of the same copy can use it. The defaults carry `None` both ways
+    // and call the plain `save_*`, so a `None`-base save is only create-only
+    // when the plain `save_*` is. A shared backend must therefore make its
+    // plain `save_*` create-only (as `DatabaseAdapter` does); a local
+    // single-writer backend such as `LocalGitAdapter` overwrites, which is
+    // fine there because nobody else writes the copy.
+
+    fn get_symbol_versioned(&self, uuid: Uuid) -> Result<Versioned<Symbol>, LibraryError> {
+        self.get_symbol(uuid).map(|value| Versioned {
+            value,
+            revision: None,
+        })
+    }
+
+    fn get_footprint_versioned(&self, uuid: Uuid) -> Result<Versioned<Footprint>, LibraryError> {
+        self.get_footprint(uuid).map(|value| Versioned {
+            value,
+            revision: None,
+        })
+    }
+
+    fn get_sim_versioned(&self, uuid: Uuid) -> Result<Versioned<SimModel>, LibraryError> {
+        self.get_sim(uuid).map(|value| Versioned {
+            value,
+            revision: None,
+        })
+    }
+
+    fn save_symbol_versioned(
+        &self,
+        sym: Symbol,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        refuse_unversioned_base(base)?;
+        self.save_symbol(sym, message).map(|()| None)
+    }
+
+    fn save_footprint_versioned(
+        &self,
+        fp: Footprint,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        refuse_unversioned_base(base)?;
+        self.save_footprint(fp, message).map(|()| None)
+    }
+
+    fn save_sim_versioned(
+        &self,
+        sm: SimModel,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        refuse_unversioned_base(base)?;
+        self.save_sim(sm, message).map(|()| None)
     }
 
     fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {

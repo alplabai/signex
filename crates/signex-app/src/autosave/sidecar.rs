@@ -24,8 +24,13 @@ pub const SIDECAR_EXTENSION: &str = "recovery";
 /// (unlike `DefaultHasher`), which is what a name that must be found again
 /// on the next launch needs.
 fn path_hash(path: &Path) -> u64 {
+    bytes_hash(path.to_string_lossy().as_bytes())
+}
+
+/// FNV-1a over `bytes`; also the stamp of a draft without a revision counter.
+pub fn bytes_hash(bytes: &[u8]) -> u64 {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for byte in path.to_string_lossy().as_bytes() {
+    for byte in bytes {
         hash ^= u64::from(*byte);
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
@@ -48,7 +53,7 @@ pub fn sidecar_path(recovery_dir: &Path, document: &Path) -> PathBuf {
 pub fn write(recovery_dir: &Path, document: &Path, bytes: &[u8]) -> Result<(), String> {
     let sidecar = sidecar_path(recovery_dir, document);
     signex_types::atomic_io::atomic_write(&sidecar, bytes)
-        .map_err(|e| format!("could not write recovery copy {}: {e}", sidecar.display()))
+        .map_err(|e| format!("{e}: could not write recovery copy {}", sidecar.display()))
 }
 
 /// Remove the sidecar of `document`. A sidecar that is already gone is
@@ -59,8 +64,27 @@ pub fn remove(recovery_dir: &Path, document: &Path) -> Result<(), String> {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(format!(
-            "could not remove recovery copy {}: {e}",
+            "{e}: could not remove recovery copy {}",
             sidecar.display()
+        )),
+    }
+}
+
+/// Move the sidecar of `from` to where `to` looks for it, after the
+/// document was renamed or its folder moved. A sidecar that is not there is
+/// success: the document had no recovery copy.
+pub fn rename(recovery_dir: &Path, from: &Path, to: &Path) -> Result<(), String> {
+    let (src, dst) = (
+        sidecar_path(recovery_dir, from),
+        sidecar_path(recovery_dir, to),
+    );
+    match std::fs::rename(&src, &dst) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!(
+            "could not move recovery copy {} to {}: {e}",
+            src.display(),
+            dst.display()
         )),
     }
 }
@@ -91,5 +115,20 @@ mod tests {
         remove(&rec, &doc).unwrap();
         remove(&rec, &doc).unwrap();
         assert!(!sidecar_path(&rec, &doc).exists());
+    }
+
+    #[test]
+    fn rename_carries_the_copy_to_the_new_document_and_tolerates_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("recovery");
+        let (old, new) = (
+            tmp.path().join("a/main.snxsch"),
+            tmp.path().join("b/main.snxsch"),
+        );
+        rename(&rec, &old, &new).unwrap();
+        write(&rec, &old, b"draft").unwrap();
+        rename(&rec, &old, &new).unwrap();
+        assert!(!sidecar_path(&rec, &old).exists());
+        assert_eq!(std::fs::read(sidecar_path(&rec, &new)).unwrap(), b"draft");
     }
 }

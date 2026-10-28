@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use iced::Task;
-use signex_output::{Exporter, NetlistExporter, NetlistOptions, PdfExporter};
+use signex_output::{Exporter, NetlistExporter, NetlistOptions};
 
 use super::super::super::super::*;
 
@@ -32,7 +32,7 @@ impl Signex {
     ) -> Task<Message> {
         let crate::app::state::PdfExportRequest {
             source,
-            options,
+            mut options,
             files,
             descended_placement,
         } = *request;
@@ -58,11 +58,17 @@ impl Signex {
                     return Task::none();
                 }
             };
+        // Class styles are not something the user picked in the modal: they
+        // follow the netlist this export just derived, so a sheet that is
+        // not open in a tab is styled like one that is.
+        options.net_class_styles =
+            super::class_styles::export_class_styles(&self.document_state, &source, &ctx);
         // Human-consumed deliverable: a partial PDF beats a refusal — the
         // user may well be printing or reviewing mid-refactor with a child
         // file genuinely absent from disk. So this degrades rather than
         // blocks, but it degrades *loudly*, once, from this user action.
         super::log_stitch_issues(&source, &ctx, &issues);
+        super::sheet_numbers::log_numbering_issues(issues.sheet_numbering.as_ref());
 
         self.retire_dead_placement(&issues, &source, &options.page_range);
         // Filter sheets to the user's file picks from the Settings tab.
@@ -98,34 +104,8 @@ impl Signex {
             }
         }
 
-        match PdfExporter
-            .export(&ctx, &options)
-            .inspect(|output| super::log_uncovered_chars(&output.uncovered_chars))
-        {
-            Ok(output) => {
-                let success_log = format!(
-                    "Wrote {} ({} page(s), {} bytes)",
-                    save_path.display(),
-                    output.page_count,
-                    output.bytes.len(),
-                );
-                return super::write::write_export_task(
-                    save_path,
-                    output.bytes,
-                    "PDF",
-                    success_log,
-                    None,
-                    Vec::new(),
-                );
-            }
-            Err(e) => {
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
-                    format!("PDF export failed: {e}"),
-                ));
-            }
-        }
-
-        Task::none()
+        // Building the PDF and writing it both run off the UI thread.
+        self.export_pdf(ctx, options, save_path)
     }
 
     pub(crate) fn handle_export_netlist_requested(&mut self) -> Option<Task<Message>> {
@@ -155,7 +135,7 @@ impl Signex {
                         result: Ok(path),
                     })
                 } else {
-                    Message::Noop
+                    Message::noop()
                 }
             },
         ))
@@ -230,7 +210,7 @@ impl Signex {
                     save_path.display(),
                     output.bytes.len(),
                 );
-                return super::write::write_export_task(
+                return self.write_export(
                     save_path,
                     output.bytes,
                     "netlist",
@@ -287,7 +267,7 @@ impl Signex {
                         .iter()
                         .map(|message| format!("Export: INCOMPLETE — {message}")),
                 );
-                return super::write::write_export_task(
+                return self.write_export(
                     save_path,
                     output.bytes,
                     "netlist",

@@ -6,7 +6,7 @@ use iced::{Border, Element, Length, Theme};
 use signex_types::coord::Unit;
 use signex_widgets::theme_ext;
 
-use crate::app::SymbolEditorState;
+use crate::app::SymbolDocument;
 use crate::library::editor::symbol::canvas::{self as sym_canvas, SymbolCanvas};
 use crate::library::editor::symbol::state as sym_state;
 use crate::library::messages::{
@@ -26,7 +26,7 @@ use crate::panels::PanelContext;
 /// sees the same Properties surface whether editing a schematic or
 /// a symbol library — single source of truth, no duplicated panes.
 pub fn view_symbol<'a>(
-    editor: &'a SymbolEditorState,
+    editor: &'a SymbolDocument,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
     path: &'a std::path::Path,
@@ -66,7 +66,7 @@ pub fn view_symbol<'a>(
 /// status bar so a user editing a symbol library has the same
 /// metadata at the same place on screen.
 fn view_symbol_status<'a>(
-    editor: &'a SymbolEditorState,
+    editor: &'a SymbolDocument,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
     path: &'a std::path::Path,
@@ -164,7 +164,7 @@ fn format_coord(x_mm: f64, y_mm: f64, unit: Unit) -> String {
 }
 
 fn view_symbol_toolbar<'a>(
-    editor: &'a SymbolEditorState,
+    editor: &'a SymbolDocument,
     panel_ctx: &'a PanelContext,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
@@ -237,7 +237,7 @@ fn symbol_tool_button_style(
 }
 
 fn view_symbol_canvas<'a>(
-    editor: &'a SymbolEditorState,
+    editor: &'a SymbolDocument,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
 ) -> Element<'a, LibraryMessage> {

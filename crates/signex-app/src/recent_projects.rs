@@ -74,6 +74,34 @@ impl RecentProjects {
         self.entries.len() != before
     }
 
+    /// How the list spells `path` today. Read it before the file moves:
+    /// afterwards the path no longer exists to canonicalise, and
+    /// [`Self::replace`] must be given the spelling the list stored.
+    pub fn spelling_of(path: &Path) -> PathBuf {
+        canonical(path)
+    }
+
+    /// Point the entry `old` (as spelled in the list) at `new`, keeping its
+    /// place, after a project was renamed or moved. A list that did not
+    /// hold `old` is left alone. If `new` is already listed, the entry at
+    /// `old` is dropped instead of leaving a duplicate. Returns whether the
+    /// list changed.
+    pub fn replace(&mut self, old: &Path, new: &Path) -> bool {
+        let Some(at) = self.entries.iter().position(|entry| entry == old) else {
+            return false;
+        };
+        let new = canonical(new);
+        if self.entries[at] == new {
+            return false;
+        }
+        if self.entries.contains(&new) {
+            self.entries.remove(at);
+        } else {
+            self.entries[at] = new;
+        }
+        true
+    }
+
     /// Forget every entry.
     pub fn clear(&mut self) {
         self.entries.clear();
@@ -157,6 +185,34 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn replace_keeps_the_place_of_a_renamed_project() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let a = project_in(dir.path(), "a.snxprj");
+        let b = project_in(dir.path(), "b.snxprj");
+        let mut recent = RecentProjects::default();
+        recent.record(&a);
+        recent.record(&b);
+        let key = RecentProjects::spelling_of(&a);
+        let renamed = dir.path().join("c.snxprj");
+        std::fs::rename(&a, &renamed).expect("rename");
+        assert!(recent.replace(&key, &renamed));
+        assert_eq!(recent.entries(), [canonical(&b), canonical(&renamed)]);
+        assert!(!recent.replace(&key, &renamed), "the old entry is gone");
+    }
+
+    #[test]
+    fn replace_onto_an_already_listed_path_leaves_no_duplicate() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let a = project_in(dir.path(), "a.snxprj");
+        let b = project_in(dir.path(), "b.snxprj");
+        let mut recent = RecentProjects::default();
+        recent.record(&a);
+        recent.record(&b);
+        assert!(recent.replace(&canonical(&a), &b));
+        assert_eq!(recent.entries(), [canonical(&b)]);
     }
 
     #[test]

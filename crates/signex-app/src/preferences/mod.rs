@@ -62,7 +62,7 @@ pub enum PrefNav {
     /// `prefs.json::component_classes`; defaults seed from
     /// `fonts::default_component_classes` on a fresh install.
     ComponentClasses,
-    // Future: Editor, Shortcuts, ...
+    // Future: Editor, ...
 }
 
 impl PrefNav {
@@ -140,6 +140,9 @@ pub enum PrefMsg {
     /// Update the wheel-zoom speed (percent per notch, 5..=50) shared by
     /// every canvas. Persisted on Save.
     DraftZoomStepPercent(u8),
+    /// Update the interface scale (percent, 80..=200 in 10 % steps).
+    /// Applied to every window on Save.
+    DraftUiScalePercent(u16),
     /// Update the symbol-editor pin-selection mode (persisted on change).
     DraftSymbolPinSelection(PinSelectionMode),
     /// Open a file picker to import a custom theme JSON.
@@ -291,6 +294,7 @@ pub struct PrefsView<'a> {
     pub draft_symbol_grid_style: GridStyle,
     pub draft_symbol_pin_selection: PinSelectionMode,
     pub draft_zoom_step_percent: u8,
+    pub draft_ui_scale_percent: u16,
     pub custom_name: Option<&'a str>,
     /// Appearance ▸ theme import/export status line. Empty renders nothing.
     pub theme_status: &'a str,

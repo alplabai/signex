@@ -145,7 +145,7 @@ impl Signex {
                     project_path: project_path.clone(),
                     lib_path,
                 }),
-                None => Message::Noop,
+                None => Message::noop(),
             },
         )
     }
@@ -241,27 +241,28 @@ impl Signex {
     }
 
     pub(super) fn handle_picker_message(&mut self, msg: PickerMsg) -> Task<Message> {
+        if let PickerMsg::PanelSearchChanged(s) = msg {
+            self.library.panel_search = s;
+            return Task::none();
+        }
         let Some(picker) = self.library.picker.as_mut() else {
             return Task::none();
         };
         match msg {
+            PickerMsg::PanelSearchChanged(_) => {}
             PickerMsg::FilterChanged(s) => {
                 picker.filter = s;
+                self.library.sync_view_caches();
             }
-            PickerMsg::SelectComponent(summary) => {
+            PickerMsg::SelectComponent(row_id) => {
                 // `ComponentSummary` carries `row_id` directly in the
                 // DBLib model; match against that.
-                let path = self
-                    .library
-                    .open_libraries
-                    .iter()
-                    .find(|lib| {
-                        lib.cached_components
-                            .iter()
-                            .any(|c| c.row_id == summary.row_id)
-                    })
-                    .map(|lib| lib.root.clone());
-                picker.selected = path.map(|p| (p, summary));
+                picker.selected = self.library.open_libraries.iter().find_map(|lib| {
+                    lib.cached_components
+                        .iter()
+                        .find(|c| c.row_id == row_id)
+                        .map(|summary| (lib.root.clone(), summary.clone()))
+                });
             }
             PickerMsg::PlaceSelected => {
                 let Some((path, summary)) = picker.selected.clone() else {
@@ -348,6 +349,14 @@ impl Signex {
                 return Task::none();
             }
         };
+        if self.refuse_with_notice_while_project_moves(
+            &path,
+            "create",
+            crate::app::state::ErrorNotice::create,
+        ) {
+            return Task::none();
+        }
+        self.begin_project_write(&path);
         Task::perform(
             {
                 let path = path.clone();
@@ -374,6 +383,7 @@ impl Signex {
         path: std::path::PathBuf,
         result: Result<(), String>,
     ) -> Task<Message> {
+        self.end_project_write(&path);
         if let Err(e) = result {
             crate::diagnostics::log_warning(format!("New library file: {e}"));
             return Task::none();
@@ -393,7 +403,7 @@ impl Signex {
         project_id: crate::app::state::ProjectId,
         path: &std::path::Path,
     ) {
-        use signex_types::project::{LibraryEntry, LibraryEntryKind};
+        use signex_types::project::LibraryEntry;
         let target_idx = self
             .document_state
             .projects
@@ -412,20 +422,11 @@ impl Signex {
             return;
         };
         let project_dir = std::path::PathBuf::from(&loaded.data.dir);
-        let (entry_path, entry_kind) = if !project_dir.as_os_str().is_empty()
-            && let Ok(rel) = path.strip_prefix(&project_dir)
-        {
-            (rel.to_path_buf(), LibraryEntryKind::ProjectLocal)
-        } else {
-            (path.to_path_buf(), LibraryEntryKind::Shared)
-        };
+        use crate::app::state::library_entry::{is_library_listed, library_entry_location};
+        let fold = loaded.case_fold;
+        let (entry_path, entry_kind) = library_entry_location(&project_dir, path, fold);
         // Skip if the same path is already on the list.
-        if loaded
-            .data
-            .libraries
-            .iter()
-            .any(|e| loaded.data.resolve_library_path(e) == path)
-        {
+        if is_library_listed(&loaded.data, path, fold) {
             return;
         }
         loaded.data.libraries.push(LibraryEntry {

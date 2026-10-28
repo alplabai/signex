@@ -16,12 +16,12 @@ fn fixture_manifest() -> SnxlibManifest {
     }
 }
 
-fn make_row(columns: &[&str], values: &[&str]) -> LibraryRow {
+fn make_row(columns: &[&str], values: &[&str]) -> Arc<LibraryRow> {
     let mut row = LibraryRow::default();
     for (col, val) in columns.iter().zip(values) {
         row.cells.insert((*col).to_string(), (*val).to_string());
     }
-    row
+    Arc::new(row)
 }
 
 fn fixture_table_resistors() -> LibraryTable {
@@ -57,6 +57,7 @@ fn fixture_table_resistors() -> LibraryTable {
 #[test]
 fn round_trip_no_tables() {
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables: BTreeMap::new(),
     };
@@ -72,6 +73,7 @@ fn round_trip_single_table() {
     let mut tables = BTreeMap::new();
     tables.insert("resistors".to_string(), fixture_table_resistors());
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -110,6 +112,7 @@ fn round_trip_multiple_tables_user_defined_columns() {
     );
 
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -124,6 +127,7 @@ fn write_is_byte_idempotent_under_round_trip() {
     let mut tables = BTreeMap::new();
     tables.insert("resistors".to_string(), fixture_table_resistors());
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -238,6 +242,7 @@ fn write_rejects_output_that_parses_but_loses_a_row() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -261,6 +266,7 @@ fn write_rejects_cell_with_tab() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -284,6 +290,7 @@ fn write_rejects_cell_with_newline() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -307,6 +314,7 @@ fn write_rejects_cell_with_triple_single_quote() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -330,6 +338,7 @@ fn write_rejects_column_name_with_tab() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -352,6 +361,7 @@ fn single_cell_file(column: &str, cell: &str) -> LibraryFile {
         },
     );
     LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     }
@@ -489,6 +499,7 @@ fn empty_cells_round_trip() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -523,6 +534,7 @@ fn write_emits_canonical_row_order_by_row_id() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -570,6 +582,7 @@ fn write_preserves_insertion_order_when_no_row_id() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -621,6 +634,7 @@ fn column_types_round_trip() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -637,6 +651,7 @@ fn untyped_tables_skip_column_types_block() {
     let mut tables = BTreeMap::new();
     tables.insert("resistors".to_string(), fixture_table_resistors());
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -753,6 +768,7 @@ fn column_order_preserved() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -796,6 +812,7 @@ fn round_trip_awkward_table_and_column_names() {
             },
         );
         let lib = LibraryFile {
+            layout: Default::default(),
             manifest: fixture_manifest(),
             tables,
         };
@@ -813,9 +830,41 @@ fn round_trip_table_name_with_control_characters() {
     let mut tables = BTreeMap::new();
     tables.insert("tab\tand\nnewline".to_string(), fixture_table_resistors());
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
     let s = lib.write().unwrap();
     assert_eq!(lib, LibraryFile::parse(&s).unwrap());
+}
+
+fn table_with_rows(header: &str, rows: &[&str]) -> String {
+    let body = rows.join("\n");
+    format!(
+        "format = \"snxlib/1\"\nlibrary_id = \"0192a8c0-0000-7000-8000-000000000000\"\n\n\
+         [library]\nname = \"X\"\n\n[tables.t]\ntsv = '''\n{header}\n{body}\n'''\n"
+    )
+}
+
+/// The generic codec stays strict: a row one cell short of a header ending
+/// in `alternate_symbols` is a loud mismatch unless a repair accepts it.
+#[test]
+fn short_row_is_a_mismatch_without_a_repair() {
+    let s = table_with_rows("row_id\tmpn\talternate_symbols", &["1\ta"]);
+    assert!(matches!(
+        LibraryFile::parse(&s).unwrap_err(),
+        LibraryFileError::CellCountMismatch { .. }
+    ));
+}
+
+#[test]
+fn a_repair_is_consulted_only_for_a_mismatched_row() {
+    let s = table_with_rows("row_id\tmpn", &["1\ta", "2"]);
+    let lib = LibraryFile::parse_with(&s, &|_, cells| {
+        (cells.len() == 1).then(|| vec![cells[0].to_string(), "fixed".to_string()])
+    })
+    .unwrap();
+    let rows = &lib.tables["t"].rows;
+    assert_eq!(rows[0].cells["mpn"], "a");
+    assert_eq!(rows[1].cells["mpn"], "fixed");
 }

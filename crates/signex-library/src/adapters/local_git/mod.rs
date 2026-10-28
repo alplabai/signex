@@ -34,7 +34,7 @@ pub use symbol_problems::SymbolFileProblem;
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 use uuid::Uuid;
 
@@ -45,7 +45,9 @@ use crate::identity::{InternalPn, RowId};
 use crate::library_file::{LibraryFile, LibraryRow, LibraryTable, SnxlibManifest};
 use crate::manifest::{LibraryMeta, Manifest};
 use crate::primitive::{Footprint, PrimitiveKind, SimFile, SimModel, Symbol, SymbolFile};
-use crate::tables::{TABLE_HEADER, record_to_row, row_to_record};
+use crate::tables::{
+    ALTERNATE_SYMBOLS_COLUMN, TABLE_HEADER, alternate_symbols_cell, record_to_row, row_to_record,
+};
 
 const SYMBOLS_DIR: &str = "symbols";
 const FOOTPRINTS_DIR: &str = "footprints";
@@ -121,6 +123,9 @@ pub struct LocalGitAdapter {
     warned_state: Mutex<Option<disk_sync::DiskState>>,
     /// The "cannot lock on this filesystem" warning was logged (#832).
     write_lock_warned: std::sync::atomic::AtomicBool,
+    /// Encoded row lines from the last row write (#416). Lock order: after
+    /// `library_file` and `disk_stamp`.
+    row_lines: Mutex<crate::library_file::RowLines>,
 }
 
 impl LocalGitAdapter {
@@ -153,6 +158,7 @@ impl LocalGitAdapter {
         fs::create_dir_all(&root_dir)?;
 
         let library_file = LibraryFile {
+            layout: Default::default(),
             manifest: snx_manifest,
             tables: std::collections::BTreeMap::new(),
         };
@@ -222,6 +228,7 @@ impl LocalGitAdapter {
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
             write_lock_warned: Default::default(),
+            row_lines: Mutex::default(),
         })
     }
 
@@ -240,7 +247,8 @@ impl LocalGitAdapter {
         // Stamp first: a write racing the read then costs one extra reload.
         let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
         let text = fs::read_to_string(&file_path)?;
-        let library_file = LibraryFile::parse(&text)?;
+        let library_file =
+            LibraryFile::parse_with(&text, &crate::tables::repair_short_component_row)?;
         let root_dir = parent_dir(&file_path)?;
         // Validate the repo opens — but treat a missing `.git/` as a
         // clean "no version control" state rather than a hard error.
@@ -265,6 +273,7 @@ impl LocalGitAdapter {
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
             write_lock_warned: Default::default(),
+            row_lines: Mutex::default(),
         })
     }
 
@@ -356,7 +365,8 @@ impl LocalGitAdapter {
         // Stamp first: a write racing the read then costs one extra reload.
         let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
         let text = fs::read_to_string(&file_path)?;
-        let library_file = LibraryFile::parse(&text)?;
+        let library_file =
+            LibraryFile::parse_with(&text, &crate::tables::repair_short_component_row)?;
         let manifest_synth = synthesize_manifest(&library_file.manifest);
         Ok(Self {
             file_path,
@@ -369,6 +379,7 @@ impl LocalGitAdapter {
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
             write_lock_warned: Default::default(),
+            row_lines: Mutex::default(),
         })
     }
 
@@ -418,10 +429,16 @@ pub use write_lock::{
 };
 mod helpers;
 pub(crate) mod lfs;
+mod pinned_assets;
 mod primitives;
+mod row_edit;
 mod write_lock;
 
 use helpers::*;
+use row_edit::RowChange;
+
+#[cfg(test)]
+mod write_oracle_tests;
 
 #[cfg(test)]
 mod tests {

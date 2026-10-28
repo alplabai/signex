@@ -71,7 +71,8 @@ impl Signex {
         if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab) {
             // Refused before any branch below could ask for a Save As dialog
             // for a path that is only missing because it is being renamed.
-            self.refuse_while_path_op(&tab.path.clone(), "saved")?;
+            self.refuse_while_path_op(&tab.path, "saved")?;
+            self.refuse_save_while_restoring(&tab.path)?;
         }
         // Standalone `.snxsym` / `.snxfpt` document tabs route Ctrl+S
         // through `save_primitive_tab_at` so JSON persistence happens
@@ -225,7 +226,10 @@ impl Signex {
     /// created: the entry is re-stashed for retry, the `.snxprj` is still
     /// written, but the project stays dirty and the error names the
     /// libraries it lacks, so Save All callers never treat it as saved.
-    fn persist_project_by_id(&mut self, project_id: crate::app::state::ProjectId) -> Result<()> {
+    pub(crate) fn persist_project_by_id(
+        &mut self,
+        project_id: crate::app::state::ProjectId,
+    ) -> Result<()> {
         let project_path = match self
             .document_state
             .projects
@@ -236,6 +240,9 @@ impl Signex {
             None => anyhow::bail!("project {project_id} is no longer loaded"),
         };
         self.refuse_while_path_op(&project_path, "saved")?;
+        // The write would race the folder move: it can land in the old
+        // folder before the re-key and never reach the new one.
+        self.refuse_while_project_moves(&project_path, "save")?;
 
         // Drain the pending-library map first so the snxprj save below
         // captures the freshly-materialised LibraryEntry rows.
@@ -263,6 +270,7 @@ impl Signex {
                     &mut loaded.data,
                     library_id,
                     &spec,
+                    loaded.case_fold,
                 )
             } else {
                 continue;
@@ -356,6 +364,10 @@ impl Signex {
         from_path: &std::path::Path,
         path: PathBuf,
     ) -> Result<iced::Task<Message>> {
+        self.refuse_save_while_restoring(from_path)?;
+        // The target may be a document whose restore is still running (even
+        // one cancelled): the restore would overwrite what this writes.
+        self.refuse_save_while_restoring(&path)?;
         match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(tab) if matches!(tab.kind, TabKind::Schematic) && tab.path == from_path => {}
             _ => anyhow::bail!(
@@ -427,6 +439,10 @@ impl Signex {
             super::primitive_extension(from_path),
         );
         let to_path = resolved.as_path();
+        // Re-keying onto a file whose restore is still running (even a
+        // cancelled one) would let the restore overwrite this save; say so
+        // before the generic "already open" refusal can.
+        self.refuse_save_while_restoring(to_path)?;
         if to_path != picked_path {
             if to_path.exists() {
                 crate::diagnostics::log_warning(format!(
@@ -590,14 +606,18 @@ impl Signex {
 
         let loaded = &mut self.document_state.projects[project_idx];
         let project_dir = std::path::PathBuf::from(&loaded.data.dir);
+        let fold = loaded.case_fold;
 
         // Already in the project? Match by library_id when we have one
         // (handles renames); otherwise compare resolved paths.
+        use crate::app::state::library_entry::library_entry_location;
+        use crate::app::state::scope::path_key_with;
+        let wanted = path_key_with(lib_dir, fold);
         let already_attached = loaded.data.libraries.iter().any(|entry| {
             if let (Some(eid), Some(lid)) = (entry.library_id, library_id) {
                 eid == lid
             } else {
-                loaded.data.resolve_library_path(entry) == lib_dir
+                path_key_with(&loaded.data.resolve_library_path(entry), fold) == wanted
             }
         });
         if already_attached {
@@ -608,17 +628,7 @@ impl Signex {
         // Project-local when the library lives inside the project dir,
         // Shared otherwise. Project-local stores the path relative to
         // the project so a project move doesn't break the binding.
-        let (kind, stored_path) = if let Ok(rel) = lib_dir.strip_prefix(&project_dir) {
-            (
-                signex_types::project::LibraryEntryKind::ProjectLocal,
-                rel.to_path_buf(),
-            )
-        } else {
-            (
-                signex_types::project::LibraryEntryKind::Shared,
-                lib_dir.to_path_buf(),
-            )
-        };
+        let (stored_path, kind) = library_entry_location(&project_dir, lib_dir, fold);
 
         loaded
             .data
@@ -632,9 +642,7 @@ impl Signex {
 
         // Mark the `.snxprj` dirty so the project tree's red dot lights
         // up and the project-close prompt asks the user to persist the
-        // new binding. (The actual `.snxprj` write isn't wired yet — a
-        // follow-up commit will plumb that through Ctrl+S; for now the
-        // in-session view is correct, persistence is best-effort.)
+        // new binding.
         let project_path = loaded.path.clone();
         self.document_state.dirty_paths.insert(project_path);
 

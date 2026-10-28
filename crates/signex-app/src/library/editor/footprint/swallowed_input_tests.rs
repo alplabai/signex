@@ -31,7 +31,7 @@ mod tests {
     /// Editor holding one horizontal Line from (0, 0) to (10, 0) plus
     /// its two endpoints. Returns the endpoint ids and the Line id.
     fn line_editor() -> (
-        crate::app::FootprintEditorState,
+        crate::app::FootprintDocument,
         SketchEntityId,
         SketchEntityId,
         SketchEntityId,
@@ -53,7 +53,7 @@ mod tests {
             ],
             ..SketchData::default()
         });
-        let editor = crate::app::FootprintEditorState::new(
+        let editor = crate::app::FootprintDocument::new(
             PathBuf::from("swallowed-input.snxfpt"),
             FootprintFile::from_footprint(fp),
         );
@@ -64,7 +64,7 @@ mod tests {
     /// Fillet tool needs, and two Lines for the Angle constraint.
     /// Returns the editor plus the east-going and north-going Line ids.
     fn corner_editor() -> (
-        crate::app::FootprintEditorState,
+        crate::app::FootprintDocument,
         SketchEntityId,
         SketchEntityId,
     ) {
@@ -103,7 +103,7 @@ mod tests {
             ],
             ..SketchData::default()
         });
-        let mut editor = crate::app::FootprintEditorState::new(
+        let mut editor = crate::app::FootprintDocument::new(
             PathBuf::from("swallowed-fillet.snxfpt"),
             FootprintFile::from_footprint(fp),
         );
@@ -111,7 +111,7 @@ mod tests {
         (editor, line_east, line_north)
     }
 
-    fn constraint_count(editor: &crate::app::FootprintEditorState) -> usize {
+    fn constraint_count(editor: &crate::app::FootprintDocument) -> usize {
         editor
             .primitive()
             .sketch
@@ -119,7 +119,7 @@ mod tests {
             .map_or(0, |s| s.constraints.len())
     }
 
-    fn line_count(editor: &crate::app::FootprintEditorState) -> usize {
+    fn line_count(editor: &crate::app::FootprintDocument) -> usize {
         editor.primitive().sketch.as_ref().map_or(0, |s| {
             s.entities
                 .iter()
@@ -128,7 +128,7 @@ mod tests {
         })
     }
 
-    fn arc_count(editor: &crate::app::FootprintEditorState) -> usize {
+    fn arc_count(editor: &crate::app::FootprintDocument) -> usize {
         editor.primitive().sketch.as_ref().map_or(0, |s| {
             s.entities
                 .iter()

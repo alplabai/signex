@@ -36,10 +36,37 @@ pub(super) fn stage_and_commit(
     signature: &git2::Signature<'_>,
     message: &str,
 ) -> Result<Option<git2::Oid>, git2::Error> {
+    stage_and_commit_with(repo, removed_rel_path, rel_path, &[], signature, message)
+}
+
+/// [`stage_and_commit`] that also puts `extra_rel_paths` (working-tree
+/// files, e.g. the pinned datasheet a row references) into the same commit.
+pub(super) fn stage_and_commit_with(
+    repo: &git2::Repository,
+    removed_rel_path: Option<&Path>,
+    rel_path: &Path,
+    extra_rel_paths: &[&Path],
+    signature: &git2::Signature<'_>,
+    message: &str,
+) -> Result<Option<git2::Oid>, git2::Error> {
     let workdir = repo
         .workdir()
         .ok_or_else(|| git2::Error::from_str("repository has no working tree"))?;
-    let blob = super::lfs::blob_for_path(repo, workdir, rel_path)?;
+    // Hash the file once (#416): for a plain path the index entry
+    // `add_path` builds already carries the blob to commit, and its stat is
+    // what the index needs afterwards. That blob is the file as `git add`
+    // stores it: the disk bytes after the clean filters (`core.autocrlf`,
+    // `text`/`eol` attributes), as before. Built in memory only; the tree
+    // is still made from HEAD's, never the index.
+    let main_entry = staged_entry(repo, rel_path);
+    let staged_blob = match &main_entry {
+        Ok(entry) if !super::lfs::is_lfs_path(repo, rel_path)? => Some(entry.id),
+        _ => None,
+    };
+    let blob = match staged_blob {
+        Some(id) => id,
+        None => super::lfs::blob_for_path(repo, workdir, rel_path)?,
+    };
     // An unborn HEAD (fresh repo) is the only legitimate "no parent" case.
     let parent = match repo.head() {
         Ok(head) => Some(head.peel_to_commit()?),
@@ -59,7 +86,15 @@ pub(super) fn stage_and_commit(
         (_, base) => base,
     };
     let components: Vec<&std::ffi::OsStr> = rel_path.iter().collect();
-    let tree_id = tree_with_blob(repo, base.as_ref(), &components, blob)?;
+    let mut tree_id = tree_with_blob(repo, base.as_ref(), &components, blob)?;
+    let mut staged: Vec<(&Path, git2::Oid)> = vec![(rel_path, blob)];
+    for extra in extra_rel_paths {
+        let extra_blob = super::lfs::blob_for_path(repo, workdir, extra)?;
+        let extra_components: Vec<&std::ffi::OsStr> = extra.iter().collect();
+        let with_row = repo.find_tree(tree_id)?;
+        tree_id = tree_with_blob(repo, Some(&with_row), &extra_components, extra_blob)?;
+        staged.push((extra, extra_blob));
+    }
     if head_tree.as_ref().is_some_and(|b| b.id() == tree_id) {
         return Ok(None);
     }
@@ -68,7 +103,14 @@ pub(super) fn stage_and_commit(
     let oid = repo.commit(Some("HEAD"), signature, signature, message, &tree, &parents)?;
     // Best effort: a failure here leaves the index stale for this one path
     // (shown as a change by `git status`), never a wrong commit.
-    if let Err(e) = retry_on_git_lock(repo.path(), || {
+    // The index is re-read on every attempt, so an entry another process
+    // staged while we waited for its `index.lock` is kept (#900).
+    let mut main_entry = main_entry.ok();
+    if let Some(entry) = main_entry.as_mut() {
+        // An LFS path's entry records the pointer that was committed.
+        entry.id = blob;
+    }
+    let updated = retry_on_git_lock(repo.path(), || {
         let mut index = repo.index()?;
         index.read(true)?;
         if let Some(removed) = removed_rel_path
@@ -76,17 +118,26 @@ pub(super) fn stage_and_commit(
         {
             index.remove_path(removed)?;
         }
-        index.add_path(rel_path)?;
-        // `add_path` stores the raw bytes; an LFS path's entry records the
-        // pointer that was committed.
-        if let Some(mut entry) = index.get_path(rel_path, 0)
-            && entry.id != blob
-        {
-            entry.id = blob;
-            index.add(&entry)?;
+        for (path, blob) in &staged {
+            if *path == rel_path
+                && let Some(entry) = &main_entry
+            {
+                index.add(entry)?;
+                continue;
+            }
+            index.add_path(path)?;
+            // `add_path` stores the raw bytes; an LFS path's entry records
+            // the pointer that was committed.
+            if let Some(mut entry) = index.get_path(path, 0)
+                && entry.id != *blob
+            {
+                entry.id = *blob;
+                index.add(&entry)?;
+            }
         }
         index.write()
-    }) {
+    });
+    if let Err(e) = updated {
         tracing::warn!(
             target: "signex::library",
             path = %rel_path.display(),
@@ -95,6 +146,18 @@ pub(super) fn stage_and_commit(
         );
     }
     Ok(Some(oid))
+}
+
+/// The index entry `add_path` makes for `rel_path` from the working tree
+/// (its blob, the clean-filtered disk bytes, hashed and stored; its stat
+/// taken), without writing the index.
+fn staged_entry(repo: &git2::Repository, rel_path: &Path) -> Result<git2::IndexEntry, git2::Error> {
+    let mut index = repo.index()?;
+    index.add_path(rel_path)?;
+    let entry = index.get_path(rel_path, 0);
+    // `repo.index()` is shared: drop the in-memory addition again.
+    index.read(true)?;
+    entry.ok_or_else(|| git2::Error::from_str("staged entry missing"))
 }
 
 /// `base` without the entry at `path`, written as new trees up to the
@@ -293,30 +356,35 @@ pub(super) fn legacy_columns() -> Vec<String> {
 /// where someone reordered or renamed columns would silently
 /// miscolumn data otherwise.
 pub(super) fn validate_legacy_header(table: &str, columns: &[String]) -> Result<(), LibraryError> {
-    if columns.len() != TABLE_HEADER.len() {
-        return Err(LibraryError::Backend(format!(
-            "table {table:?} schema mismatch: {} columns, expected {}",
-            columns.len(),
-            TABLE_HEADER.len()
-        )));
-    }
-    for (got, want) in columns.iter().zip(TABLE_HEADER.iter()) {
-        if got.as_str() != *want {
-            return Err(LibraryError::Backend(format!(
-                "table {table:?} schema mismatch: column {got:?}, expected {want:?}"
-            )));
-        }
-    }
+    let names: Vec<&str> = columns.iter().map(String::as_str).collect();
+    crate::tables::check_columns(&names)
+        .map_err(|e| LibraryError::Backend(format!("table {table:?} schema mismatch: {e}")))?;
     Ok(())
 }
 
 pub(super) fn component_to_library_row(row: &ComponentRow) -> Result<LibraryRow, LibraryError> {
+    crate::validate::validate_row_for_write(row)?;
     let cells = row_to_record(row)?;
     let mut lib_row = LibraryRow::default();
     for (col, val) in TABLE_HEADER.iter().zip(cells) {
         lib_row.cells.insert((*col).to_string(), val);
     }
+    if let Some(cell) = alternate_symbols_cell(row)? {
+        lib_row
+            .cells
+            .insert(ALTERNATE_SYMBOLS_COLUMN.to_string(), cell);
+    }
     Ok(lib_row)
+}
+
+/// Declare the optional alternate-symbols column on a table that is about
+/// to store a row carrying it; a cell outside the declared columns is
+/// dropped on save.
+pub(super) fn declare_alternate_symbols_column(columns: &mut Vec<String>, row: &LibraryRow) {
+    let has_cell = row.cells.contains_key(ALTERNATE_SYMBOLS_COLUMN);
+    if has_cell && !columns.iter().any(|c| c == ALTERNATE_SYMBOLS_COLUMN) {
+        columns.push(ALTERNATE_SYMBOLS_COLUMN.to_string());
+    }
 }
 
 /// Base revision of a stored row: the first 8 bytes of a SHA-256 over its
@@ -350,6 +418,9 @@ pub(super) fn library_row_to_component(row: &LibraryRow) -> Result<ComponentRow,
     let mut record = csv::StringRecord::new();
     for col in TABLE_HEADER.iter() {
         let val = row.cells.get(*col).map(String::as_str).unwrap_or("");
+        record.push_field(val);
+    }
+    if let Some(val) = row.cells.get(ALTERNATE_SYMBOLS_COLUMN) {
         record.push_field(val);
     }
     record_to_row(&record)
@@ -389,6 +460,10 @@ pub(super) fn apply_pricing_update(
     // old record instead of keeping both, or the stale one would shadow it.
     per_sku.retain(|k, _| !crate::pricing::same_part_number(k, &update.pricing.sku));
     per_sku.insert(update.pricing.sku.clone(), update.pricing.clone());
+    // A SKU-less listing keeps only its newest priced part.
+    if let Some(cached) = entry.pricing.get_mut(&update.row_id.to_string()) {
+        crate::pricing::prune_row_pricing(&row, cached);
+    }
     Ok(())
 }
 
@@ -571,6 +646,7 @@ mod tests {
 
     fn library_file_with_classes(keys: &[&str]) -> LibraryFile {
         let mut lf = LibraryFile {
+            layout: Default::default(),
             manifest: crate::library_file::SnxlibManifest {
                 format: crate::library_file::FORMAT_TOKEN.into(),
                 library_id: Uuid::now_v7(),

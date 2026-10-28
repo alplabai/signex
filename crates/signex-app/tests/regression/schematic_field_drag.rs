@@ -68,8 +68,9 @@ fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
+        lib_symbols: Default::default(),
         net_colors: HashMap::new(),
+        frame: Default::default(),
         font_family: None,
     }
 }
@@ -117,15 +118,22 @@ fn dragging_the_reference_field_moves_drawn_text_and_hit_box() {
     };
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
     let bounds = Rectangle::new(ScreenPoint::ORIGIN, Size::new(800.0, 600.0));
-    let snap = build_renderer_snapshot(moved, &transform, &colors, bounds, None, None);
+    let snap =
+        build_renderer_snapshot(moved, &transform, &colors, bounds, None, Default::default());
     let text = snap
         .reference_value_texts
         .iter()
         .find(|t| t.content == "R1")
         .expect("reference text is drawn");
     assert_eq!(text.position, [80.0, 35.0]);
-    assert_eq!(hit_test::hit_test(moved, 80.0, 35.0), Some(field));
-    assert_ne!(hit_test::hit_test(moved, 70.0, 30.0), Some(field));
+    assert_eq!(
+        hit_test::hit_test(moved, &Default::default(), 80.0, 35.0),
+        Some(field)
+    );
+    assert_ne!(
+        hit_test::hit_test(moved, &Default::default(), 70.0, 30.0),
+        Some(field)
+    );
 }
 
 #[test]
@@ -181,7 +189,16 @@ fn moved_tall_symbol_is_hit_on_its_library_body() {
 
     let moved = app.document_state.engines[&path].document();
     // The body now spans x 55..65, y 30..70.
-    assert_eq!(hit_test::hit_test(moved, 60.0, 35.0), Some(body));
-    assert_eq!(hit_test::hit_test(moved, 60.0, 75.0), None);
-    assert_eq!(hit_test::hit_test(moved, 50.0, 50.0), None);
+    assert_eq!(
+        hit_test::hit_test(moved, &Default::default(), 60.0, 35.0),
+        Some(body)
+    );
+    assert_eq!(
+        hit_test::hit_test(moved, &Default::default(), 60.0, 75.0),
+        None
+    );
+    assert_eq!(
+        hit_test::hit_test(moved, &Default::default(), 50.0, 50.0),
+        None
+    );
 }

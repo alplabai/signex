@@ -405,6 +405,11 @@ impl Engine {
                 target,
                 font_family,
             } => self.set_text_font_family(before, target, font_family),
+            Command::SetSymbolDesignatorIn {
+                symbol,
+                placement,
+                reference,
+            } => self.set_symbol_designator_in(before, symbol, placement, reference),
             _ => unreachable!(),
         }
     }

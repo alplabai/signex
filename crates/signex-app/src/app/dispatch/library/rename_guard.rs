@@ -13,18 +13,41 @@ impl Signex {
     /// Why `msg` cannot run now, or `None` when it can. The cause leads: the
     /// Messages panel clips a record near 160 characters.
     pub(super) fn library_write_refusal(&self, msg: &LibraryMessage) -> Option<String> {
-        if !self
-            .document_state
-            .pending_path_ops
-            .library_rename_running()
+        let ops = &self.document_state.pending_path_ops;
+        if !ops.library_rename_running() || !writes_through_adapter(msg) {
+            return None;
+        }
+        // A write that names its library is refused only for the library
+        // being moved; one that names none cannot be told apart, so it waits.
+        if let Some(library) = library_named_by(msg)
+            && ops.blocking_write(library).is_none()
         {
             return None;
         }
-        writes_through_adapter(msg).then(|| {
+        Some(
             "A library rename or delete is still running, so this library change was not applied. \
              Try again once it finishes."
-                .to_string()
-        })
+                .to_string(),
+        )
+    }
+}
+
+/// The library a message addresses, when it carries its path.
+fn library_named_by(msg: &LibraryMessage) -> Option<&std::path::Path> {
+    use LibraryMessage as L;
+    match msg {
+        L::BrowserConfirmAddTable { library_path }
+        | L::BrowserDeleteTable { library_path, .. }
+        | L::BrowserConfirmRenameTable { library_path }
+        | L::BrowserConfirmAddClass { library_path }
+        | L::BrowserDeleteClass { library_path, .. }
+        | L::BrowserConfirmRenameClass { library_path }
+        | L::BrowserAddComponent { library_path, .. }
+        | L::BrowserDeleteRowConfirm { library_path, .. }
+        | L::BrowserCellCommit { library_path, .. }
+        | L::BrowserEdit { library_path, .. }
+        | L::ComponentsPanelPromoteToGlobal(library_path) => Some(library_path),
+        _ => None,
     }
 }
 
@@ -86,6 +109,23 @@ mod tests {
             })
             .is_none()
         );
+    }
+
+    #[test]
+    fn a_write_to_an_unrelated_library_is_not_refused() {
+        let app = app_with_library_rename();
+        let commit = |library: &str| LibraryMessage::BrowserCellCommit {
+            library_path: library.into(),
+            table: "t".into(),
+            row_id: signex_library::RowId::default(),
+            column: String::new(),
+        };
+        assert!(
+            app.library_write_refusal(&commit("/w/other.snxlib"))
+                .is_none()
+        );
+        assert!(app.library_write_refusal(&commit("/w/a.snxlib")).is_some());
+        assert!(app.library_write_refusal(&commit("/w/b.snxlib")).is_some());
     }
 
     #[test]

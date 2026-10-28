@@ -10,10 +10,17 @@ mod git;
 mod git_tests;
 mod history;
 mod instance_note;
+mod new_project;
 mod open;
+mod open_read;
+#[cfg(test)]
+mod open_read_tests;
 mod recent;
 #[cfg(test)]
-mod restore_commit_tests;
+mod restore_cancel_tests;
+#[cfg(test)]
+pub(crate) mod restore_commit_tests;
+mod restore_fingerprint;
 #[cfg(test)]
 mod restore_pending_commit_tests;
 mod save;
@@ -94,7 +101,7 @@ fn spawn_primitive_save_dialog(suggested: PathBuf) -> iced::Task<Message> {
         },
         move |picked| match picked {
             Some(to_path) => primitive_save_as_message(from.clone(), to_path),
-            None => Message::Noop,
+            None => Message::noop(),
         },
     )
 }
@@ -130,6 +137,7 @@ fn blank_schematic_sheet() -> signex_types::schematic::SchematicSheet {
         title_block: Default::default(),
         lib_symbols: Default::default(),
         net_colors: Default::default(),
+        frame: Default::default(),
         font_family: None,
     }
 }

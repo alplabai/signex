@@ -17,7 +17,7 @@ use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
 use signex_library::identity::{ComponentClass, InternalPn};
 use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
 use signex_library::lifecycle::LifecycleState;
-use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
+use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig, WorkflowMode};
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{
@@ -78,6 +78,37 @@ fn build(name: &str, symbol_ref: Option<(Uuid, Uuid)>) -> Fixture {
 }
 
 fn build_with(name: &str, symbol_ref: Option<(Uuid, Uuid)>, symbol: Symbol) -> Fixture {
+    build_with_class(name, symbol_ref, symbol, "IC")
+}
+
+/// A library whose single row has component class `class` and a `D?` symbol.
+pub(crate) fn fixture_of_class(class: &str) -> Fixture {
+    let mut symbol = two_unit_symbol();
+    symbol.designator = "D?".into();
+    build_with_class("lib", None, symbol, class)
+}
+
+fn build_with_class(
+    name: &str,
+    symbol_ref: Option<(Uuid, Uuid)>,
+    symbol: Symbol,
+    class: &str,
+) -> Fixture {
+    build_in_mode(name, symbol_ref, symbol, class, WorkflowMode::Personal)
+}
+
+/// A library named `name` whose manifest runs the Team workflow.
+pub(crate) fn team_fixture(name: &str) -> Fixture {
+    build_in_mode(name, None, two_unit_symbol(), "IC", WorkflowMode::Team)
+}
+
+fn build_in_mode(
+    name: &str,
+    symbol_ref: Option<(Uuid, Uuid)>,
+    symbol: Symbol,
+    class: &str,
+    mode: WorkflowMode,
+) -> Fixture {
     signex_library::git_identity::test_identity::install();
     let tmp = tempfile::tempdir().expect("tempdir");
     let dir = tmp.path().join(name);
@@ -90,7 +121,10 @@ fn build_with(name: &str, symbol_ref: Option<(Uuid, Uuid)>, symbol: Symbol) -> F
             description: None,
         },
         mode: LibraryMode::default(),
-        workflow: WorkflowConfig::default(),
+        workflow: WorkflowConfig {
+            mode,
+            ..WorkflowConfig::default()
+        },
         users: UsersConfig::default(),
         classes: Vec::new(),
     };
@@ -118,10 +152,13 @@ fn build_with(name: &str, symbol_ref: Option<(Uuid, Uuid)>, symbol: Symbol) -> F
     let now = chrono::Utc::now();
     let row_id = Uuid::now_v7();
     let row = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id,
         internal_pn: InternalPn::new("SNX-TWO"),
-        class: ComponentClass::new("IC"),
+        class: ComponentClass::new(class),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: match symbol_ref {
             Some((lib, sym)) => PrimitiveRef::new(lib, sym),

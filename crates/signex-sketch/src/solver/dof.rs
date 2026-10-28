@@ -12,13 +12,12 @@
 //! 2. The numerical rank `r = rank(J, tol)` tells us how many of the
 //!    `n` state variables are pinned by the constraint set. Effective
 //!    free DoF = `n − r`.
-//! 3. For per-entity colouring, examine the columns of J belonging
-//!    to that entity. If those columns are full-column-rank in J,
-//!    the entity is fully constrained (black); otherwise it has
-//!    free DoF (blue).
-//! 4. For per-constraint over-detection: a constraint whose row is
-//!    in the rank-deficient null-space of J^T AND whose residual is
-//!    larger than `tol` after solve is over-constrained (red).
+//! 3. For per-entity colouring, apply a coarse global rule: if the
+//!    rank equals `n`, every non-fixed Point is fully constrained
+//!    (black); otherwise every non-fixed Point has free DoF (blue).
+//! 4. For per-constraint over-detection: a constraint whose residual
+//!    is still larger than `RANK_TOL` after solve is over-constrained
+//!    (red). This needs only the residual magnitude, not the Jacobian.
 //!
 //! Reference: *Numerical Recipes* (Press et al., 3rd ed.) §2.10
 //! ("QR Decomposition") for the rank computation. Algorithm derived
@@ -52,10 +51,10 @@ pub enum DofColor {
 /// `1e-9` rank threshold provides a comfortable margin above that).
 pub const RANK_TOL: f64 = 1e-9;
 
-/// Per-entity DoF colour. Returns one entry per Point entity that
-/// participates in the solve — both free Points (in `index.points`)
-/// AND Fixed Points (in `index.fixed`). Non-Point entities (lines,
-/// arcs, circles) are not included; they inherit their endpoints'
+/// Per-entity DoF colour. Returns one entry per Point entity: free Points
+/// (in `index.points`), Fixed Points (in `index.fixed`), and free Points no
+/// residual reads (in `index.frozen`, always `Under`). Non-Point entities
+/// (lines, arcs, circles) are not included; they inherit their endpoints'
 /// colours at render time.
 ///
 /// **Conservative coarse rule (acceptable for v0.13):** if the total
@@ -97,7 +96,7 @@ pub fn entity_colours(
     // conflicting parametric sketch: 2 flagged with the real map, 0
     // with an empty one, so the overlay painted an over-constrained
     // sketch Full/Under.
-    let over_ids: Vec<ConstraintId> = over_constraint_ids(sketch, solve_result, jacobian, params);
+    let over_ids: Vec<ConstraintId> = over_constraint_ids(sketch, solve_result, params);
     let mut over_points = std::collections::HashSet::new();
     if !over_ids.is_empty() {
         let over_set: std::collections::HashSet<ConstraintId> = over_ids.into_iter().collect();
@@ -162,10 +161,6 @@ pub fn entity_colours(
 /// satisfy that constraint — it's redundant or conflicting and should
 /// be flagged red.
 ///
-/// The Jacobian is accepted as a parameter for future per-row null-
-/// space analysis (full rank-deficiency detection); the conservative
-/// rule used here only needs the residual magnitude.
-///
 /// HI-14: `params` MUST be the resolved parameter map from the same
 /// solve that produced `solve_result`. An empty map causes every
 /// `DistancePtPt` / `Angle` / etc. constraint with a parametric target
@@ -174,7 +169,6 @@ pub fn entity_colours(
 pub fn over_constraint_ids(
     sketch: &SketchData,
     solve_result: &SolveResult,
-    _jacobian: &[Vec<f64>],
     params: &crate::solver::residual::ResolvedParams,
 ) -> Vec<ConstraintId> {
     use crate::solver::residual::residual;

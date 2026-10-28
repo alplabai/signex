@@ -11,7 +11,8 @@
 //!
 //! - `<size>` is a legacy name (`A0`-`A5`, `B5`, `Letter`, `Legal`,
 //!   `Tabloid`), an ANSI size (`ANSI A`-`ANSI E`) or `Custom <w>x<h>` in
-//!   millimetres.
+//!   millimetres. The short names `A`-`E`, `USLetter` and `USLegal` read as
+//!   `ANSI A`-`ANSI E`, `Letter` and `Legal`; their text is not rewritten.
 //! - A named size is landscape unless the token ends in ` portrait`.
 //!   Every token written before this model existed is therefore unchanged.
 //! - A token this model does not know is kept verbatim as
@@ -57,10 +58,89 @@ pub enum SheetSize {
     Unrecognized(String),
 }
 
-/// Largest custom edge accepted from a file, matching the PDF page limit.
-const MAX_CUSTOM_EDGE_MM: f64 = 5080.0;
+/// Largest page edge a PDF viewer accepts (14 400 pt). A custom edge never
+/// exceeds it, so the PDF page-setup modal can always take the sheet's size.
+pub const MAX_PAGE_EDGE_MM: f64 = 5080.0;
+/// Smallest custom page edge. Below this the default PDF margins would
+/// consume the whole page.
+pub const MIN_CUSTOM_EDGE_MM: f64 = 10.0;
+
+impl fmt::Display for SheetOrientation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            SheetOrientation::Landscape => "Landscape",
+            SheetOrientation::Portrait => "Portrait",
+        })
+    }
+}
 
 impl SheetSize {
+    /// A custom page with each edge clamped to
+    /// [`MIN_CUSTOM_EDGE_MM`]..=[`MAX_PAGE_EDGE_MM`] and rounded to 0.1 mm,
+    /// so the model never holds a size the PDF page-setup modal would
+    /// refuse and the stored token stays short. A non-finite edge reads as
+    /// the minimum.
+    pub fn custom(width_mm: f64, height_mm: f64) -> SheetSize {
+        let edge = |mm: f64| {
+            if !mm.is_finite() {
+                return MIN_CUSTOM_EDGE_MM;
+            }
+            ((mm * 10.0).round() / 10.0).clamp(MIN_CUSTOM_EDGE_MM, MAX_PAGE_EDGE_MM)
+        };
+        SheetSize::Custom {
+            width_mm: edge(width_mm),
+            height_mm: edge(height_mm),
+        }
+    }
+
+    /// The token after the user turns `token`'s sheet to `target`. A named
+    /// size gains or loses the ` portrait` suffix; a custom page swaps its
+    /// edges; an unrecognised token is returned as written.
+    pub fn reoriented_token(token: &str, target: SheetOrientation) -> String {
+        let (size, current) = SheetSize::parse(token);
+        match size {
+            SheetSize::Unrecognized(text) => text,
+            SheetSize::Custom {
+                width_mm,
+                height_mm,
+            } => {
+                if current == target {
+                    token.to_string()
+                } else {
+                    SheetSize::Custom {
+                        width_mm: height_mm,
+                        height_mm: width_mm,
+                    }
+                    .token(target)
+                }
+            }
+            named => named.token(target),
+        }
+    }
+
+    /// The token after the user picks `picked` (a bare picker token) on a
+    /// sheet currently stored as `current`: a named size keeps the sheet's
+    /// orientation, anything else is taken as written.
+    pub fn picked_token(current: &str, picked: &str) -> String {
+        let (_, orientation) = SheetSize::parse(current);
+        match SheetSize::parse(picked) {
+            (size, SheetOrientation::Landscape) if size.short_long_mm().is_some() => {
+                size.token(orientation)
+            }
+            _ => picked.to_string(),
+        }
+    }
+
+    /// The token after the user types a new custom `width_mm` and/or
+    /// `height_mm` on a sheet currently stored as `current`. The other edge
+    /// starts from the sheet's drawn size; both are clamped by
+    /// [`SheetSize::custom`].
+    pub fn resized_token(current: &str, width_mm: Option<f64>, height_mm: Option<f64>) -> String {
+        let (size, orientation) = SheetSize::parse(current);
+        let (w, h) = size.dimensions_mm(orientation);
+        SheetSize::custom(width_mm.unwrap_or(w), height_mm.unwrap_or(h)).token(orientation)
+    }
+
     /// Every named size the picker offers, in display order.
     pub const PICKABLE: [SheetSize; 15] = [
         SheetSize::IsoA0,
@@ -107,6 +187,14 @@ impl SheetSize {
             "Letter" => Some(SheetSize::Letter),
             "Legal" => Some(SheetSize::Legal),
             "Tabloid" => Some(SheetSize::Tabloid),
+            // Short names the PDF page table read before this model (#1199).
+            "A" => Some(SheetSize::AnsiA),
+            "B" => Some(SheetSize::AnsiB),
+            "C" => Some(SheetSize::AnsiC),
+            "D" => Some(SheetSize::AnsiD),
+            "E" => Some(SheetSize::AnsiE),
+            "USLetter" => Some(SheetSize::Letter),
+            "USLegal" => Some(SheetSize::Legal),
             _ => None,
         };
         if let Some(size) = named {
@@ -233,7 +321,8 @@ fn parse_custom(name: &str) -> Option<SheetSize> {
     let (w, h) = dims.split_once('x')?;
     let width_mm: f64 = w.parse().ok()?;
     let height_mm: f64 = h.parse().ok()?;
-    let valid = |edge: f64| edge.is_finite() && edge > 0.0 && edge <= MAX_CUSTOM_EDGE_MM;
+    let valid =
+        |edge: f64| edge.is_finite() && (MIN_CUSTOM_EDGE_MM..=MAX_PAGE_EDGE_MM).contains(&edge);
     (valid(width_mm) && valid(height_mm)).then_some(SheetSize::Custom {
         width_mm,
         height_mm,
@@ -322,6 +411,8 @@ mod tests {
             "Custom 0x5",
             "Custom axb",
             "Custom 9999x10",
+            "Custom 9.9x100",
+            "Custom 100x5080.1",
         ] {
             let (size, orientation) = SheetSize::parse(token);
             assert!(!size.is_recognized(), "{token:?}");
@@ -336,6 +427,66 @@ mod tests {
     }
 
     #[test]
+    fn custom_edges_clamp_to_what_the_pdf_modal_accepts() {
+        assert_eq!(
+            SheetSize::custom(1.0, 99999.0),
+            SheetSize::Custom {
+                width_mm: MIN_CUSTOM_EDGE_MM,
+                height_mm: MAX_PAGE_EDGE_MM
+            }
+        );
+        assert_eq!(
+            SheetSize::custom(f64::NAN, 50.04).token(SheetOrientation::Landscape),
+            "Custom 10x50"
+        );
+        let token = SheetSize::custom(210.123, 100.0).token(SheetOrientation::Landscape);
+        assert_eq!(token, "Custom 210.1x100");
+        assert!(SheetSize::parse(&token).0.is_recognized());
+    }
+
+    #[test]
+    fn reorienting_named_custom_and_unknown_tokens() {
+        use SheetOrientation::{Landscape, Portrait};
+        assert_eq!(SheetSize::reoriented_token("A4", Portrait), "A4 portrait");
+        assert_eq!(SheetSize::reoriented_token("A4 portrait", Landscape), "A4");
+        assert_eq!(
+            SheetSize::reoriented_token("Custom 300x200", Portrait),
+            "Custom 200x300"
+        );
+        assert_eq!(
+            SheetSize::reoriented_token("Custom 300x200", Landscape),
+            "Custom 300x200"
+        );
+        assert_eq!(
+            SheetSize::reoriented_token("Foolscap", Portrait),
+            "Foolscap"
+        );
+    }
+
+    #[test]
+    fn picking_a_size_keeps_the_orientation() {
+        assert_eq!(SheetSize::picked_token("A4 portrait", "A3"), "A3 portrait");
+        assert_eq!(SheetSize::picked_token("A4", "A3"), "A3");
+        assert_eq!(
+            SheetSize::picked_token("Custom 200x300", "A3"),
+            "A3 portrait"
+        );
+        assert_eq!(SheetSize::picked_token("A4", "A3 portrait"), "A3 portrait");
+    }
+
+    #[test]
+    fn resizing_one_edge_keeps_the_other() {
+        assert_eq!(
+            SheetSize::resized_token("A4", Some(400.0), None),
+            "Custom 400x210"
+        );
+        assert_eq!(
+            SheetSize::resized_token("Custom 400x210", None, Some(2.0)),
+            "Custom 400x10"
+        );
+    }
+
+    #[test]
     fn every_pickable_size_has_dimensions_and_a_stable_token() {
         for size in SheetSize::PICKABLE {
             let token = size.token(SheetOrientation::Landscape);
@@ -343,5 +494,34 @@ mod tests {
             let (w, h) = size.dimensions_mm(SheetOrientation::Landscape);
             assert!(w > h, "{token}");
         }
+    }
+
+    /// #1199 — the short names the PDF page table read before #1188 are the
+    /// sizes they always meant, in either orientation, not A4.
+    #[test]
+    fn short_ansi_and_us_names_read_as_their_sizes() {
+        let aliases = [
+            ("A", SheetSize::AnsiA),
+            ("B", SheetSize::AnsiB),
+            ("C", SheetSize::AnsiC),
+            ("D", SheetSize::AnsiD),
+            ("E", SheetSize::AnsiE),
+            ("USLetter", SheetSize::Letter),
+            ("USLegal", SheetSize::Legal),
+        ];
+        for (token, size) in aliases {
+            assert_eq!(
+                SheetSize::parse(token),
+                (size.clone(), SheetOrientation::Landscape),
+                "{token}"
+            );
+            assert_eq!(
+                SheetSize::parse(&format!("{token} portrait")),
+                (size, SheetOrientation::Portrait),
+                "{token} portrait"
+            );
+        }
+        let (size, orientation) = SheetSize::parse("USLetter");
+        assert_eq!(size.dimensions_mm(orientation), (279.4, 215.9));
     }
 }

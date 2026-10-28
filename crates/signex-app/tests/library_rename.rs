@@ -280,7 +280,7 @@ fn library_writes_after_a_rename_land_in_the_renamed_file() {
 
 #[test]
 fn an_open_footprint_editor_saves_and_commits_through_the_renamed_library() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_library::FootprintFile;
 
     let mut f = fixture();
@@ -293,7 +293,7 @@ fn an_open_footprint_editor_saves_and_commits_through_the_renamed_library() {
         .expect("a footprint file");
     let file =
         FootprintFile::from_toml_str(&fs::read_to_string(&fpt).expect("read")).expect("parse");
-    let mut editor = FootprintEditorState::new(fpt.clone(), file);
+    let mut editor = FootprintDocument::new(fpt.clone(), file);
     // Trunk's saves write nothing for an unchanged footprint (#902), so make
     // a real edit for the save to commit.
     editor.file.footprints[0].name.push_str(" edited");
@@ -775,6 +775,7 @@ fn the_project_patch_does_not_flush_other_unsaved_edits() {
 /// project stays dirty and the Messages panel says it needs saving.
 #[test]
 fn a_never_saved_project_is_not_created_by_the_rename() {
+    let _ = diagnostics::init_logging();
     let mut f = unsaved_fixture();
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
 
@@ -866,6 +867,7 @@ fn duplicate_entries_for_the_library_are_all_repointed() {
 /// Discard and Save will do.
 #[test]
 fn a_shared_disk_entry_gets_an_explicit_warning_and_a_dirty_project() {
+    let _ = diagnostics::init_logging();
     let mut f = fixture();
     let mut on_disk = parse_project(&f.prj).unwrap();
     on_disk.libraries[0].kind = LibraryEntryKind::Shared;
@@ -1163,6 +1165,10 @@ fn quit_is_held_while_a_rename_runs() {
         .app
         .update(Message::Window(signex_app::app::WindowMsg::CloseMainWindow));
     assert!(run_task_messages(quit).is_empty(), "no close was started");
+    assert!(
+        f.app.document_state.error_notice.is_some(),
+        "the user sees why the quit did nothing, not only the Messages panel"
+    );
     assert!(diagnostics::recent_entries().iter().any(|e| {
         e.message
             .starts_with("A rename or delete is still running, so the app was not closed")
@@ -1224,4 +1230,33 @@ fn opening_a_sheet_with_a_busy_companion_project_says_why() {
             .any(|e| e.message.contains("Failed to parse companion project")),
     );
     settle_task(&mut f.app, task);
+}
+
+/// A `LibraryRenamed` completion handled twice must not start a rollback: it
+/// would move the `.snxlib` back while memory already names the new path.
+#[test]
+fn a_duplicate_library_completion_is_ignored() {
+    let _ = diagnostics::init_logging();
+    let mut f = fixture();
+    let renamed = f.alpha.with_file_name("alpha2.snxlib");
+    let task = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+    let messages = run_task_messages(task);
+    let mut twice = messages.clone();
+    twice.extend(messages);
+
+    let mut pending = Vec::new();
+    for message in twice {
+        pending.push(f.app.update(message));
+    }
+    for task in pending {
+        settle_task(&mut f.app, task);
+    }
+
+    assert!(renamed.exists(), "the library stays at its new name");
+    assert!(!f.alpha.exists(), "no rollback moved it back");
+    assert_eq!(
+        entry_paths(&f.app)[0],
+        PathBuf::from("alpha/alpha2.snxlib"),
+        "memory and disk agree"
+    );
 }

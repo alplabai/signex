@@ -13,6 +13,21 @@ use super::{MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL
 
 const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
 
+/// Gap kept between a modal and the window edge, in logical px.
+pub(in crate::app::view) const MODAL_WINDOW_MARGIN: f32 = 24.0;
+
+/// A modal's size: its `desired` size, capped so it fits the window with
+/// [`MODAL_WINDOW_MARGIN`] to spare (#1227). iced lays out in logical px, so
+/// a high OS scale or a user interface scale leaves fewer of them; a modal
+/// hard-sized past that clips its footer buttons.
+pub(in crate::app::view) fn fit_modal_size(
+    window_size: (f32, f32),
+    desired: (f32, f32),
+) -> (f32, f32) {
+    let cap = |window: f32, want: f32| want.min((window - 2.0 * MODAL_WINDOW_MARGIN).max(1.0));
+    (cap(window_size.0, desired.0), cap(window_size.1, desired.1))
+}
+
 pub(in crate::app::view) fn wrap_modal<'a>(
     inner: Element<'a, Message>,
     offset: (f32, f32),
@@ -192,8 +207,19 @@ pub(super) fn secondary_button(
     text_color: Color,
     border: Color,
 ) -> Element<'_, Message> {
+    secondary_button_maybe(label, Some(message), text_color, border)
+}
+
+/// [`secondary_button`] that is really disabled (no press, no hover feedback
+/// from iced) when `message` is `None`.
+pub(super) fn secondary_button_maybe(
+    label: &str,
+    message: Option<Message>,
+    text_color: Color,
+    border: Color,
+) -> Element<'_, Message> {
     button(container(text(label.to_string()).size(11).color(text_color)).padding([5, 14]))
-        .on_press(message)
+        .on_press_maybe(message)
         .style(move |_: &Theme, _| button::Style {
             background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
             border: Border {

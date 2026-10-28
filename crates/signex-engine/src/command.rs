@@ -81,7 +81,10 @@ pub enum CommandKind {
     RenameChildSheetFile,
     ModifyChildSheet,
     SetPaperSize,
+    SetSheetFrame,
+    SetTitleBlockField,
     SetTextFontFamily,
+    SetSymbolDesignatorIn,
     SetDocumentFontFamily,
 }
 
@@ -122,10 +125,11 @@ pub enum Command {
     /// Rotate or mirror any schematic selection 90 degrees / across an axis
     /// through `centre`, as one undo step. Every item's position moves about
     /// the centre; symbols, labels and text notes also update their own
-    /// orientation. A selection holding a sheet symbol, sheet pin or symbol
-    /// field is refused whole (`EngineError::SelectionTransformUnsupported`)
-    /// before anything is touched. Callers pick the centre (see
-    /// `Engine::selection_centre`) and snap it to their grid.
+    /// orientation. A selection holding a sheet symbol or sheet pin is
+    /// refused whole (`EngineError::SelectionTransformUnsupported`) before
+    /// anything is touched; a symbol's ref/value fields travel with their
+    /// symbol. Callers pick the centre (see `Engine::selection_centre`) and
+    /// choose a pivot that keeps on-grid points on the grid.
     TransformSelection {
         items: Vec<SelectedItem>,
         centre: signex_types::schematic::Point,
@@ -328,6 +332,28 @@ pub enum Command {
     SetPaperSize {
         paper_size: String,
     },
+    /// Set the sheet's frame settings: border, title block and zone counts
+    /// (Page Options). Zone counts are clamped to `MAX_ZONES`.
+    SetSheetFrame {
+        settings: signex_types::schematic::SheetFrameSettings,
+    },
+    /// Set one title-block field of the sheet (`title`, `rev`, `date`,
+    /// `company`, `drawn_by`, …; the Properties panel's Title Block section
+    /// is the producer). Stored in `SchematicSheet.title_block`; an empty
+    /// value removes the key. Undoable like any other edit (#1080).
+    SetTitleBlockField {
+        key: String,
+        value: String,
+    },
+    /// Set one symbol's designator at one placement of its sheet: the
+    /// instance entry for `placement` (#1151). A blank `reference` removes the
+    /// entry, so the placement falls back to the symbol's `reference`. The
+    /// root chain is not a placement and leaves the document unchanged.
+    SetSymbolDesignatorIn {
+        symbol: Uuid,
+        placement: signex_types::schematic::InstancePath,
+        reference: String,
+    },
     /// Set (`Some`) or clear (`None`, inherit the sheet default) the font
     /// family of one text item. The name is stored as given; whether the
     /// family is installed is decided at render time and never rewrites it.
@@ -407,7 +433,10 @@ impl Command {
             Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
             Command::ModifyChildSheet { .. } => CommandKind::ModifyChildSheet,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
+            Command::SetSheetFrame { .. } => CommandKind::SetSheetFrame,
+            Command::SetTitleBlockField { .. } => CommandKind::SetTitleBlockField,
             Command::SetTextFontFamily { .. } => CommandKind::SetTextFontFamily,
+            Command::SetSymbolDesignatorIn { .. } => CommandKind::SetSymbolDesignatorIn,
             Command::SetDocumentFontFamily { .. } => CommandKind::SetDocumentFontFamily,
         }
     }

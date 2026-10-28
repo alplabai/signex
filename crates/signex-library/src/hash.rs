@@ -19,7 +19,8 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::adapter::LibraryError;
-use crate::component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
+use crate::alternate_symbol::AlternateSymbol;
+use crate::component::{ComponentRow, DatasheetDoc, DatasheetRef, PinPadOverride, PlmReserved};
 use crate::identity::{ComponentClass, InternalPn};
 use crate::lifecycle::LifecycleState;
 use crate::manufacturer::{DistributorListing, ManufacturerPart};
@@ -39,12 +40,21 @@ struct CanonView<'a> {
     class: &'a ComponentClass,
     state: &'a LifecycleState,
     datasheet: &'a DatasheetRef,
+    // Skipped while empty so rows from before #1231 keep their hash.
+    #[serde(skip_serializing_if = "str::is_empty")]
+    datasheet_label: &'a str,
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    more_datasheets: &'a [DatasheetDoc],
     symbol_ref: &'a PrimitiveRef,
     footprint_ref: Option<&'a PrimitiveRef>,
     sim_ref: Option<&'a PrimitiveRef>,
     pin_map_overrides: &'a [PinPadOverride],
     primary_mpn: &'a ManufacturerPart,
     alternates: &'a [ManufacturerPart],
+    // Omitted when empty so rows without alternate symbols keep their
+    // pre-existing hash.
+    #[serde(skip_serializing_if = "<[AlternateSymbol]>::is_empty")]
+    alternate_symbols: &'a [AlternateSymbol],
     supply: &'a [DistributorListing],
     parameters: &'a ParamMap,
     plm: &'a PlmReserved,
@@ -58,12 +68,15 @@ impl<'a> CanonView<'a> {
             class: &row.class,
             state: &row.state,
             datasheet: &row.datasheet,
+            datasheet_label: &row.datasheet_label,
+            more_datasheets: &row.more_datasheets,
             symbol_ref: &row.symbol_ref,
             footprint_ref: row.footprint_ref.as_ref(),
             sim_ref: row.sim_ref.as_ref(),
             pin_map_overrides: &row.pin_map_overrides,
             primary_mpn: &row.primary_mpn,
             alternates: &row.alternates,
+            alternate_symbols: &row.alternate_symbols,
             supply: &row.supply,
             parameters: &row.parameters,
             plm: &row.plm,
@@ -108,24 +121,9 @@ pub fn hash_row_content(row: &ComponentRow) -> Result<[u8; 32], LibraryError> {
     Ok(out)
 }
 
-/// Refuse a row carrying a NaN / infinite parameter, naming the row and the
-/// parameter key. Every write path (TSV table, `.snxlib`, the database and
-/// the library server) calls this before serialising: `serde_json` writes a
-/// non-finite float as `null`, which cannot be read back, so storing one
-/// would leave the table or library unloadable (#1056).
-pub fn ensure_row_params_finite(row: &ComponentRow) -> Result<(), LibraryError> {
-    check_param_map_finite(&row.parameters).map_err(|e| match e {
-        LibraryError::Backend(msg) => LibraryError::Backend(format!(
-            "row {} ({}): {msg}; nothing was written",
-            row.internal_pn, row.row_id
-        )),
-        other => other,
-    })
-}
-
 /// Reject any `ParamValue::Number` / `ParamValue::Measurement` whose float
 /// payload is not finite (`NaN`, `Infinity`, `-Infinity`).
-fn check_param_map_finite(params: &ParamMap) -> Result<(), LibraryError> {
+pub(crate) fn check_param_map_finite(params: &ParamMap) -> Result<(), LibraryError> {
     for (key, value) in params {
         match value {
             ParamValue::Number(n) if !n.is_finite() => {
@@ -158,8 +156,11 @@ mod tests {
             internal_pn: InternalPn::new("R10K"),
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::url(""),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Released,
             symbol_ref: PrimitiveRef::new(lib, Uuid::nil()),
+            alternate_symbols: Vec::new(),
             footprint_ref: None,
             sim_ref: None,
             pin_map_overrides: Vec::new(),
@@ -180,6 +181,30 @@ mod tests {
         }
     }
 
+    /// Pins the canonical encoding: a row without alternate symbols must
+    /// keep the hash stored before that field existed.
+    #[test]
+    fn hash_of_row_without_alternate_symbols_is_stable() {
+        let h = hash_row_content(&fixture_row()).unwrap();
+        let hex: String = h.iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(
+            hex,
+            "d8cc43c86aa2c893a5371ba6aa1969184a3a71306d14c8907debdc374f62a174"
+        );
+    }
+
+    #[test]
+    fn hash_changes_when_alternate_symbol_added() {
+        let a = fixture_row();
+        let mut b = fixture_row();
+        b.alternate_symbols.push(AlternateSymbol::new(
+            PrimitiveRef::new(Uuid::nil(), Uuid::now_v7()),
+            "0.0.1",
+            "IEC",
+        ));
+        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
+    }
+
     #[test]
     fn hash_is_deterministic() {
         let row = fixture_row();
@@ -187,6 +212,35 @@ mod tests {
             hash_row_content(&row).unwrap(),
             hash_row_content(&row).unwrap()
         );
+    }
+
+    /// Pinned: the document fields added in #1231 are left out of the
+    /// canonical view while empty, so a row without them keeps the hash
+    /// it had before.
+    #[test]
+    fn hash_of_a_row_without_extra_documents_is_unchanged() {
+        assert_eq!(
+            hex(&hash_row_content(&fixture_row()).unwrap()),
+            "d8cc43c86aa2c893a5371ba6aa1969184a3a71306d14c8907debdc374f62a174"
+        );
+    }
+
+    #[test]
+    fn hash_changes_when_documents_change() {
+        let a = fixture_row();
+        let mut b = fixture_row();
+        b.datasheet_label = "TI".into();
+        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
+        let mut c = fixture_row();
+        c.more_datasheets.push(crate::component::DatasheetDoc::new(
+            "Errata",
+            DatasheetRef::url("e.pdf"),
+        ));
+        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&c).unwrap());
+    }
+
+    fn hex(bytes: &[u8; 32]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
     }
 
     #[test]

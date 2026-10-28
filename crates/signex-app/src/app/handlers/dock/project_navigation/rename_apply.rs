@@ -51,13 +51,12 @@ impl Signex {
         }
         match &request.kind {
             FileRenameKind::Document(plan) => self.apply_document_rename(&request, plan, parents),
-            FileRenameKind::Project => self.apply_project_rename(&request),
         }
         if self.dialog_targets(&request.from) {
             self.ui_state.rename_dialog = None;
         }
         self.refresh_panel_ctx();
-        iced::Task::none()
+        self.autosave_flush_moves()
     }
 
     /// Does the open rename dialog still name `path`? It may have been closed
@@ -74,10 +73,6 @@ impl Signex {
     /// always gets it, reason first.
     fn report_file_rename_failure(&mut self, request: &FileRenameRequest, error: &RenameIoError) {
         let (shown, reason) = match (error, &request.kind) {
-            (RenameIoError::TargetExists, FileRenameKind::Project) => (
-                "A project with that name already exists.".to_string(),
-                "A project with that name already exists".to_string(),
-            ),
             (RenameIoError::TargetExists, FileRenameKind::Document(_)) => (
                 "A file with that name already exists.".to_string(),
                 "A file with that name already exists".to_string(),
@@ -173,38 +168,6 @@ impl Signex {
         }
     }
 
-    /// Update the in-memory project record + any tab / engine that
-    /// referenced the .snxprj path itself.
-    fn apply_project_rename(&mut self, request: &FileRenameRequest) {
-        let (from, to) = (request.from.clone(), request.to.clone());
-        if let Some(idx) = self.owner_index(request)
-            && let Some(loaded) = self.document_state.projects.get_mut(idx)
-        {
-            loaded.path = to.clone();
-            loaded.data.name = request.new_name.clone();
-        } else if request.owner.is_some() {
-            self.warn_project_closed_during_rename(request);
-        }
-        for tab in self.document_state.tabs.iter_mut() {
-            if tab.path == from {
-                tab.path = to.clone();
-                if let Some(stem) = to.file_stem().and_then(|s| s.to_str()) {
-                    tab.title = stem.to_string();
-                }
-            }
-        }
-        if let Some(engine) = self.document_state.engines.remove(&from) {
-            self.document_state.engines.insert(to.clone(), engine);
-        }
-        if self.document_state.active_path.as_ref() == Some(&from) {
-            self.document_state.active_path = Some(to.clone());
-        }
-        if self.document_state.dirty_paths.remove(&from) {
-            self.document_state.dirty_paths.insert(to.clone());
-        }
-        self.rekey_page_setup(&from, &to);
-    }
-
     /// Move every path-keyed record of an open document from `old_path`
     /// to `new_path` after its file was renamed on disk: tab, engine map
     /// and the engine's own save target, active path, dirty marker, the
@@ -279,6 +242,7 @@ impl Signex {
                 .net_color_revision
                 .insert(new_path.to_path_buf(), count);
         }
+        self.document_state.autosave.rekey(old_path, new_path);
         self.rekey_page_setup(old_path, new_path);
         // Renaming does not rewrite the parents' sheet symbols, so the
         // placement no longer reaches this file.

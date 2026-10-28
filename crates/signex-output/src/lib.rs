@@ -27,17 +27,18 @@ pub use bom::{
 };
 pub use erc::{
     ErcReportError, ErcReportExporter, ErcReportFormat, ErcReportOptions, ErcReportOutput,
-    ErcReportRow, ErcReportSeverity,
+    ErcReportRow, ErcReportRuleSet, ErcReportSeverity,
 };
 pub use netlist::{NetlistExporter, NetlistFormat, NetlistOptions, NetlistOutput};
 pub use pdf::{
     ColourMode, MAX_PAGE_EDGE_MM, MAX_SCALE_PERCENT, MIN_CUSTOM_EDGE_MM, MIN_PRINTABLE_MM,
     MarginEdge, MarginUpdate, Margins, Orientation, PageRange, PageSetupError, PageSize,
     PageSizeKind, PdfExporter, PdfOptions, PdfOutput, PdfScale, PdfScaleMode, SchematicPalette,
-    parse_custom_edge_mm, parse_mm, parse_percent,
+    check_page_range, parse_custom_edge_mm, parse_mm, parse_percent,
 };
 pub use preview::{
-    MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewRasterizer, preview_raster_size,
+    MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewPageInfo, PreviewRasterizer,
+    preview_raster_size,
 };
 pub use substitution::{SubstitutionContext, resolve};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};

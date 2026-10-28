@@ -36,8 +36,9 @@ fn empty_sheet() -> SchematicSheet {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
+        lib_symbols: Default::default(),
         net_colors: HashMap::new(),
+        frame: Default::default(),
         font_family: None,
     }
 }
@@ -255,16 +256,11 @@ fn sync_never_overwrites_an_existing_pins_direction() {
 }
 
 #[test]
-fn sync_marks_the_sheet_dirty_and_rederives_the_netlist() {
+fn sync_marks_the_sheet_dirty() {
     let mut f = fixture(Some(child_with_labels()));
-    assert!(f.app.ui_state.project_netlist.is_none(), "precondition");
 
     sync(&mut f.app);
 
-    assert!(
-        f.app.ui_state.project_netlist.is_some(),
-        "the netlist is re-derived after the sync"
-    );
     assert!(!f.app.document_state.dirty_paths.is_empty());
 }
 

@@ -55,10 +55,12 @@ mod buses;
 mod designators;
 mod names;
 mod root_order;
+mod sheet_numbers;
 
 pub use names::{MultiNamedNet, NetNameSource};
 
 pub use designators::instance_entry_designators;
+pub use sheet_numbers::{NumberingIssue, SheetNumbering, SheetPage, sheet_numbering};
 
 /// Opaque, host-neutral identifier for one sheet within a [`ProjectGraph`] —
 /// a resolved path made relative to a fixed base and normalized by the

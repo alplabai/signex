@@ -6,8 +6,14 @@ use std::path::PathBuf;
 use thiserror::Error;
 use uuid::Uuid;
 
+mod annotation;
+mod rule_profile;
 mod rules;
 mod unknown;
+pub use annotation::AnnotationSettings;
+pub use rule_profile::{
+    RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
+};
 pub use rules::{ErcRules, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef};
 pub use unknown::UnknownJson;
 
@@ -167,13 +173,37 @@ pub struct ProjectData {
     /// file re-saves without a `rules` key. See [`ProjectRules`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rules: Option<ProjectRules>,
+    /// Annotation settings (#1232): the designator standard. `None` for a
+    /// project that has not chosen one; skipped on save, so an untouched file
+    /// re-saves without an `annotation` key. Top level, not under `rules`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub annotation: Option<AnnotationSettings>,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
     pub unknown: UnknownJson,
 }
 
+/// The `.snxprj` key of the project's rule set.
+const RULES_KEY: &str = "rules";
+
+/// Interpret a `rules` section, or keep it for re-save when this build
+/// cannot: a newer `schema`, or a value whose shape it does not know. The
+/// project opens either way; the section is just not applied (#1180).
+fn take_rules(data: &mut ProjectData, raw: Value) {
+    match serde_json::from_value::<ProjectRules>(raw.clone()) {
+        Ok(rules) if rules.is_supported_schema() => data.rules = Some(rules),
+        _ => data.unknown.insert(RULES_KEY.into(), raw),
+    }
+}
+
 impl ProjectData {
+    /// The file has a `rules` section this build could not interpret: kept
+    /// verbatim for re-save, not applied (#1180).
+    pub fn has_unreadable_rules(&self) -> bool {
+        self.rules.is_none() && self.unknown.get(RULES_KEY).is_some()
+    }
+
     /// Resolve a [`LibraryEntry`]'s `path` to an absolute path. Project-
     /// local entries are joined against `dir`; shared/global entries
     /// are returned as-is. Used by both the auto-mount loop and the
@@ -290,6 +320,48 @@ mod tests {
     }
 
     #[test]
+    fn parse_project_errors_on_conflict_marker_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Merge.snxprj");
+        std::fs::write(
+            &path,
+            "<<<<<<< HEAD
+{ \"name\": \"A\" }
+=======
+{}
+>>>>>>> x
+",
+        )
+        .unwrap();
+        assert!(matches!(
+            parse_project(&path),
+            Err(ProjectError::Corrupt { .. })
+        ));
+    }
+
+    #[test]
+    fn parse_project_reads_bom_prefixed_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Bom.snxprj");
+        std::fs::write(
+            &path,
+            "\u{feff}{ \"name\": \"Bom\", \"dir\": \"\", \"schematic_root\": \"X.snxsch\", \"pcb_file\": null }",
+        )
+        .unwrap();
+        let data = parse_project(&path).unwrap();
+        assert_eq!(data.schematic_root.as_deref(), Some("X.snxsch"));
+    }
+
+    #[test]
+    fn parse_project_errors_on_non_utf8() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Bin.snxprj");
+        std::fs::write(&path, [0xffu8, 0xfe, b'{']).unwrap();
+        let err = parse_project(&path).unwrap_err();
+        assert!(matches!(err, ProjectError::Corrupt { .. }), "got {err:?}");
+    }
+
+    #[test]
     fn library_entry_round_trips_through_serde() {
         let entry = LibraryEntry {
             path: PathBuf::from("MyLib.snxlib"),
@@ -331,6 +403,7 @@ mod tests {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         };
         let local = LibraryEntry {
@@ -359,6 +432,7 @@ mod tests {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         };
         let shared = LibraryEntry {
@@ -465,9 +539,23 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         path: path.display().to_string(),
         source,
     })?;
-    let trimmed = std::str::from_utf8(&bytes)
-        .map(|s| s.trim_start())
-        .unwrap_or("");
+    // Non-UTF-8 content is not a valid project file: refuse it rather than
+    // probing the directory, which would yield an empty project that the
+    // next save writes over the file.
+    let text = std::str::from_utf8(&bytes).map_err(|err| ProjectError::Corrupt {
+        path: path.display().to_string(),
+        reason: err.to_string(),
+    })?;
+    // Editors on Windows prepend a UTF-8 BOM; it is not part of the JSON.
+    let trimmed = text.trim_start_matches('\u{feff}').trim_start();
+    if !trimmed.is_empty() && !trimmed.starts_with('{') {
+        // Merge-conflict markers, NUL padding, stray text: refuse rather
+        // than probe, or the next save overwrites recoverable content.
+        return Err(ProjectError::Corrupt {
+            path: path.display().to_string(),
+            reason: "not a JSON project file".into(),
+        });
+    }
     if trimmed.starts_with('{') {
         // The file is meant to be JSON. If it parses, use it. If it does
         // NOT, return an error instead of falling through to the
@@ -478,10 +566,20 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
             path: path.display().to_string(),
             reason: err.to_string(),
         };
-        let mut value = serde_json::from_slice::<Value>(&bytes).map_err(corrupt)?;
+        let mut value = serde_json::from_str::<Value>(trimmed).map_err(corrupt)?;
         let token = value.as_object_mut().and_then(|map| map.remove(FORMAT_KEY));
         check_format_token(path, token.as_ref())?;
+        let rules = value.as_object_mut().and_then(|map| map.remove(RULES_KEY));
+        let annotation = value
+            .as_object_mut()
+            .and_then(|map| map.remove(annotation::ANNOTATION_KEY));
         let mut data = serde_json::from_value::<ProjectData>(value).map_err(corrupt)?;
+        if let Some(raw) = rules {
+            take_rules(&mut data, raw);
+        }
+        if let Some(raw) = annotation {
+            annotation::take_annotation(&mut data, raw);
+        }
         data.dir = dir.to_string_lossy().to_string();
         // Project name in the file is informational; the on-disk
         // filename is authoritative so renaming the .snxprj outside
@@ -530,6 +628,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         enable_git: false,
         net_classes: Vec::new(),
         rules: None,
+        annotation: None,
         unknown: UnknownJson::default(),
     })
 }
@@ -553,6 +652,22 @@ pub fn write_project(path: &Path, data: &ProjectData) -> Result<(), ProjectError
     stamped.insert(FORMAT_KEY.into(), Value::String(SNXPRJ_FORMAT_V1.into()));
     if let Value::Object(fields) = serde_json::to_value(data).map_err(io_err)? {
         stamped.extend(fields);
+    }
+    // A rule set stored in this session replaces a section kept from a
+    // newer build; serde would otherwise let the kept copy win.
+    if let Some(rules) = &data.rules {
+        stamped.insert(
+            RULES_KEY.into(),
+            serde_json::to_value(rules).map_err(io_err)?,
+        );
+    }
+    // Same for the annotation settings: an explicit choice replaces an
+    // unreadable section kept from a newer build.
+    if let Some(annotation) = &data.annotation {
+        stamped.insert(
+            annotation::ANNOTATION_KEY.into(),
+            serde_json::to_value(annotation).map_err(io_err)?,
+        );
     }
     let json = serde_json::to_vec_pretty(&Value::Object(stamped)).map_err(io_err)?;
     crate::atomic_io::atomic_write(path, &json).map_err(|source| ProjectError::Io {

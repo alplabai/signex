@@ -158,7 +158,7 @@ fn space_and_shift_space_keys_orient_the_armed_entry() {
         .keymap_profiles
         .set_active_profile("altium")
         .expect("altium profile");
-    app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active();
+    app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
     let space = |app: &mut Signex, shift: bool| {
         let stroke = KeyStroke {
             modifiers: Modifiers {

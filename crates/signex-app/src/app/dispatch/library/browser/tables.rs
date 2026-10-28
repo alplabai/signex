@@ -6,6 +6,7 @@
 //! pure code motion, zero behaviour change.
 
 use super::*;
+use crate::library::refresh::RefreshFollowUp;
 
 impl Signex {
     /// Flip the browser into add-table mode.
@@ -68,26 +69,25 @@ impl Signex {
         if let Err(error) =
             adapter.delete_empty_table(&table, &format!("delete empty table {table}"))
         {
+            tracing::error!(
+                target: "signex::library",
+                path = %library_path.display(),
+                error = %error,
+                "delete table failed; library left unchanged"
+            );
             if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
                 s.delete_error = Some(error.to_string());
             }
             return Task::none();
         }
-        if let Err(e) = self.library.refresh_components(&library_path) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %library_path.display(),
-                error = %e,
-                "refresh after delete table failed"
-            );
-        }
+        let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
         if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
             s.delete_error = None;
             if s.active_table.as_deref() == Some(table.as_str()) {
                 s.active_table = None;
             }
         }
-        Task::none()
+        refresh
     }
 
     /// Dismiss the inline delete-table error message.
@@ -179,19 +179,18 @@ impl Signex {
             &new_trimmed,
             &format!("rename table {old_name} → {new_trimmed}"),
         ) {
+            tracing::error!(
+                target: "signex::library",
+                path = %library_path.display(),
+                error = %error,
+                "rename table failed; library left unchanged"
+            );
             if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
                 s.rename_error = Some(error.to_string());
             }
             return Task::none();
         }
-        if let Err(e) = self.library.refresh_components(&library_path) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %library_path.display(),
-                error = %e,
-                "refresh after rename table failed"
-            );
-        }
+        let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
         if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
             s.renaming_table = None;
             s.rename_error = None;
@@ -199,7 +198,7 @@ impl Signex {
                 s.active_table = Some(new_trimmed);
             }
         }
-        Task::none()
+        refresh
     }
 
     /// Confirm `+ Add Table` — calls `create_empty_table` on the
@@ -238,6 +237,12 @@ impl Signex {
         if let Err(error) =
             adapter.create_empty_table(&trimmed, &format!("create empty table {trimmed}"))
         {
+            tracing::error!(
+                target: "signex::library",
+                path = %library_path.display(),
+                error = %error,
+                "create table failed; library left unchanged"
+            );
             if let Some(s) = self.library.library_browsers.get_mut(&library_path)
                 && let Some(d) = s.adding_table.as_mut()
             {
@@ -245,18 +250,11 @@ impl Signex {
             }
             return Task::none();
         }
-        if let Err(e) = self.library.refresh_components(&library_path) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %library_path.display(),
-                error = %e,
-                "refresh after add table failed"
-            );
-        }
+        let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
         if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
             s.adding_table = None;
             s.active_table = Some(trimmed);
         }
-        Task::none()
+        refresh
     }
 }

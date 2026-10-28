@@ -692,8 +692,9 @@ mod tests {
             drawings: Vec::new(),
             no_erc_directives: Vec::new(),
             title_block: HashMap::new(),
-            lib_symbols: HashMap::new(),
+            lib_symbols: Default::default(),
             net_colors: HashMap::new(),
+            frame: Default::default(),
             unknown: Default::default(),
             font_family: None,
         }
@@ -924,6 +925,7 @@ mod tests {
                 enable_git: false,
                 net_classes: Vec::new(),
                 rules: None,
+                annotation: None,
                 unknown: Default::default(),
             },
             pending_libraries: HashMap::new(),

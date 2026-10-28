@@ -131,6 +131,7 @@ impl Signex {
             target: state.target_path.clone(),
             display_name: state.display_name.clone(),
             fold,
+            dialog: state.clone(),
         };
         iced::Task::perform(run_blocking(move || job.run()), move |joined| {
             let io = joined.unwrap_or_else(DeleteIo::Failed);
@@ -139,8 +140,10 @@ impl Signex {
     }
 
     /// The delete worker finished. A file that is gone (or was never there)
-    /// takes every document held for it with it; a refusal or failure leaves
-    /// memory as it was and says why.
+    /// takes every document held for it with it, and its project entry goes
+    /// too; a failure keeps the entry, since pruning it would hide a file that
+    /// is still on disk, and says why. A refusal (shared library, outside the
+    /// project) removes the entry only.
     pub(crate) fn handle_path_deleted(&mut self, done: DeleteDone) -> iced::Task<Message> {
         let DeleteDone { request, io } = done;
         self.document_state.pending_path_ops.finish(request.id);
@@ -153,8 +156,10 @@ impl Signex {
             DeleteIo::Orphan | DeleteIo::Deleted => {
                 tasks = self.close_tabs_of_removed(target, true, request.fold);
                 self.drop_deleted_documents(target, request.fold);
+                self.prune_removed_entry(&request.dialog);
             }
             DeleteIo::Refused => {
+                self.prune_removed_entry(&request.dialog);
                 self.document_state.error_notice =
                     Some(crate::app::state::ErrorNotice::delete(format!(
                         "\"{}\" is a shared library or lives outside this project's folder, so \
@@ -171,10 +176,15 @@ impl Signex {
                     format!("Could not delete \"{}\": {e}", request.display_name),
                 ));
             }
-            DeleteIo::CheckFailed(e) => crate::diagnostics::log_error(
-                "Could not check whether the project file exists",
-                &anyhow::anyhow!("{}: {e}", target.display()),
-            ),
+            DeleteIo::CheckFailed(e) => {
+                crate::diagnostics::log_error(
+                    "Could not check whether the project file exists",
+                    &anyhow::anyhow!("{}: {e}", target.display()),
+                );
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                    format!("Could not delete \"{}\": {e}", request.display_name),
+                ));
+            }
         }
         self.refresh_panel_ctx();
         iced::Task::batch(tasks)
@@ -292,6 +302,25 @@ impl Signex {
             return iced::Task::none();
         }
 
+        // A restore still running for a file being deleted would write it
+        // back (or leave a stray file) when its worker finishes.
+        if choice == RemoveChoice::DeleteFile
+            && let Some(dialog) = self.ui_state.remove_dialog.as_ref()
+            && let Some(restoring) = self
+                .document_state
+                .pending_restores
+                .find_under(&dialog.target_path)
+        {
+            let detail = format!(
+                "A History restore of {} is still running, so {} was not deleted. Delete it again once the restore has finished.",
+                restoring.display(),
+                dialog.display_name
+            );
+            crate::diagnostics::log_warning(&detail);
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(detail));
+            return iced::Task::none();
+        }
+
         let Some(state) = self.ui_state.remove_dialog.take() else {
             return iced::Task::none();
         };
@@ -304,11 +333,7 @@ impl Signex {
         &self,
         target: &std::path::Path,
     ) -> Option<std::path::PathBuf> {
-        self.document_state
-            .pending_opens
-            .iter()
-            .find(|p| p.starts_with(target))
-            .cloned()
+        self.document_state.pending_opens.find_under(target)
     }
 
     /// Carry out a confirmed Remove: close the file's tabs, delete it from
@@ -333,6 +358,17 @@ impl Signex {
             return iced::Task::none();
         }
 
+        // A project folder being renamed would move the file from under the
+        // delete worker.
+        if is_delete
+            && let Err(refusal) = self.refuse_while_project_moves(&state.target_path, "delete")
+        {
+            crate::diagnostics::log_warning(refusal.to_string());
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
+            return iced::Task::none();
+        }
+
         // Close any tab backed by this file before we touch disk or
         // drop it from the project's in-memory list — otherwise the
         // tab would keep referring to a file that no longer exists.
@@ -340,13 +376,26 @@ impl Signex {
         let mut tasks = self.close_tabs_of_removed(&state.target_path, is_delete, fold);
 
         if is_delete {
-            // Orphan target: the worker reports it and the completion
-            // drops what is held for it. The user's intent ("get this row
-            // out of the project") is satisfied by the in-memory entry
-            // pruning below either way.
+            // The worker reports back; the completion drops what is held for
+            // the file and prunes the project entry, or keeps the entry when
+            // the delete failed (the tabs stay closed; unsaved edits were
+            // gated by the unsaved prompt, so nothing is lost).
             tasks.push(self.begin_delete(&state, fold));
+            return iced::Task::batch(tasks);
         }
+        self.prune_removed_entry(&state);
+        self.refresh_panel_ctx();
+        iced::Task::batch(tasks)
+    }
 
+    /// Drop the removed file from its owning project's in-memory lists (page
+    /// list, root, PCB, libraries, pending registrations) and dirty the
+    /// project. Re-resolves the dialog's project first: it may have moved or
+    /// closed while a delete worker ran.
+    fn prune_removed_entry(&mut self, dialog: &crate::app::RemoveDialogState) {
+        let Some(state) = self.repointed_dialog(dialog) else {
+            return;
+        };
         // Drop the sheet from the *owning* project's in-memory data so
         // the tree rebuild reflects the removal. Resolves project via
         // the dialog's `tree_path[0]` so removing a sheet of project B
@@ -425,9 +474,6 @@ impl Signex {
             // children, which lives in the .snxprj.
             self.document_state.dirty_paths.insert(p);
         }
-
-        self.refresh_panel_ctx();
-        iced::Task::batch(tasks)
     }
 }
 
@@ -436,7 +482,7 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use crate::app::state::scope::CaseFold;
-    use crate::app::{FootprintEditorState, Signex, TabInfo, TabKind};
+    use crate::app::{FootprintDocument, Signex, TabInfo, TabKind};
 
     fn sheet() -> signex_types::schematic::SchematicSheet {
         signex_types::schematic::SchematicSheet {
@@ -515,7 +561,7 @@ mod tests {
             signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
         app.document_state.footprint_editors.insert(
             path.to_path_buf(),
-            FootprintEditorState::new(path.to_path_buf(), file),
+            FootprintDocument::new(path.to_path_buf(), file),
         );
         app.document_state.tabs.push(TabInfo {
             title: "fp".into(),

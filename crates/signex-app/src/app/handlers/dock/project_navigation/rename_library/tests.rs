@@ -113,7 +113,7 @@ fn a_project_closed_meanwhile_is_not_dirtied_by_the_rollback() {
 }
 
 #[test]
-fn a_successful_reverse_patch_leaves_the_project_clean() {
+fn a_rollback_of_an_unsaved_project_moves_the_file_back() {
     let tmp = tempfile::TempDir::new().unwrap();
     let project_path = tmp.path().join("missing.snxprj");
     let old_path = tmp.path().join("alpha.snxlib");

@@ -14,18 +14,29 @@ fn first_reference(row: &signex_output::BomRow) -> &str {
     row.references.first().map(String::as_str).unwrap_or("")
 }
 
-/// Rendered text of one cell — also the sort key for the text columns.
+/// Rendered text of one cell — also the sort key for the text columns. The
+/// same text every export writer emits.
 fn column_value(c: &signex_output::BomColumn, r: &signex_output::BomRow) -> String {
+    signex_output::bom::cell_text(r, c)
+}
+
+/// Default on-screen width of a column, in px, until the user resizes it.
+pub(in crate::app) fn default_column_width(c: &signex_output::BomColumn) -> f32 {
     use signex_output::BomColumn;
     match c {
-        BomColumn::Name => r.name.clone(),
-        BomColumn::Description => r.description.clone(),
-        BomColumn::Designator | BomColumn::Reference => r.references.join(", "),
-        BomColumn::Value => r.value.clone(),
-        BomColumn::Footprint => r.footprint.clone(),
-        BomColumn::LibRef => r.lib_ref.clone(),
-        BomColumn::Qty => r.qty.to_string(),
-        BomColumn::Custom(key) => r.custom.get(key).cloned().unwrap_or_default(),
+        BomColumn::Name => 140.0,
+        BomColumn::Description => 220.0,
+        BomColumn::Designator | BomColumn::Reference => 220.0,
+        BomColumn::Value => 110.0,
+        BomColumn::Footprint => 140.0,
+        BomColumn::LibRef => 160.0,
+        BomColumn::Qty => 50.0,
+        BomColumn::Custom(_) => 120.0,
+        BomColumn::UnitPrice | BomColumn::BuyQty | BomColumn::ExtendedPrice | BomColumn::Stock => {
+            80.0
+        }
+        BomColumn::Currency => 70.0,
+        BomColumn::Distributor | BomColumn::PriceAge => 100.0,
     }
 }
 
@@ -51,9 +62,23 @@ pub(in crate::app) fn sorted_row_order(
         return row_order;
     };
     match sort_col {
-        BomColumn::Qty => row_order.sort_by(|&a, &b| {
-            let cmp = rows[a].qty.cmp(&rows[b].qty);
-            if asc { cmp } else { cmp.reverse() }
+        // Numbers sort as numbers; a row without one (an unpriced row in a
+        // price column) sorts after every row that has one, either way.
+        BomColumn::Qty
+        | BomColumn::UnitPrice
+        | BomColumn::BuyQty
+        | BomColumn::ExtendedPrice
+        | BomColumn::Stock => row_order.sort_by(|&a, &b| {
+            let number = |i: usize| signex_output::bom::cell_number(&rows[i], sort_col);
+            match (number(a), number(b)) {
+                (Some(x), Some(y)) => {
+                    let cmp = x.total_cmp(&y);
+                    if asc { cmp } else { cmp.reverse() }
+                }
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => std::cmp::Ordering::Equal,
+            }
         }),
         BomColumn::Designator | BomColumn::Reference => row_order.sort_by(|&a, &b| {
             let cmp = signex_types::designator::compare_references(
@@ -95,18 +120,6 @@ impl Signex {
         // resolution: user override (set by the column-resize
         // handle drag) takes precedence; otherwise fall back to
         // the per-`BomColumn` default below.
-        let default_column_width = |c: &BomColumn| -> f32 {
-            match c {
-                BomColumn::Name => 140.0,
-                BomColumn::Description => 220.0,
-                BomColumn::Designator | BomColumn::Reference => 220.0,
-                BomColumn::Value => 110.0,
-                BomColumn::Footprint => 140.0,
-                BomColumn::LibRef => 160.0,
-                BomColumn::Qty => 50.0,
-                BomColumn::Custom(_) => 120.0,
-            }
-        };
         let column_width = |idx: usize, c: &BomColumn| -> f32 {
             preview
                 .column_widths

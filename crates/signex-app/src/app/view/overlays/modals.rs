@@ -38,10 +38,11 @@ impl Signex {
             draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
             draft_symbol_pin_selection: ui.preferences_draft_symbol_pin_selection,
             draft_zoom_step_percent: ui.preferences_draft_zoom_step_percent,
+            draft_ui_scale_percent: ui.preferences_draft_ui_scale_percent,
             custom_name: ui.custom_theme.as_ref().map(|c| c.name.as_str()),
             theme_status: &ui.preferences_theme_status,
             dirty: ui.preferences_dirty,
-            erc_overrides: &ui.erc_severity_override,
+            erc_overrides: &ui.preferences_draft_erc_severity,
             distributor_settings: &self.library.settings,
             panel_tokens: &document.panel_ctx.tokens,
             draft_component_classes: &ui.preferences_draft_component_classes,
@@ -121,6 +122,14 @@ impl Signex {
         Some(crate::first_run_tour::view(
             &self.document_state.panel_ctx.tokens,
         ))
+    }
+
+    /// The recovery-copy prompt (#1164); shows the first queued offer.
+    pub(in crate::app::view) fn autosave_recovery_overlay(&self) -> Option<Element<'_, Message>> {
+        self.document_state
+            .autosave
+            .current_offer()
+            .map(|offer| self.view_autosave_recovery(offer))
     }
 
     // ── Simple, non-detachable confirm / property dialogs ────────────
@@ -246,8 +255,8 @@ impl Signex {
     pub(in crate::app::view) fn library_picker_overlay(&self) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         let picker = self.library.picker.as_ref()?;
-        let card = crate::library::picker::view(&self.library, picker, &document.panel_ctx.tokens)
-            .map(Message::Library);
+        let card =
+            crate::library::picker::view(picker, &document.panel_ctx.tokens).map(Message::Library);
         let backdrop = container(card)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -262,16 +271,13 @@ impl Signex {
         Some(backdrop.into())
     }
 
-    /// F25 (2026-05-03) — Edit Component Details modal removed. Row click
-    /// selects → Properties panel surfaces detail. Render branch retained
-    /// behind `EDIT_MODAL_ENABLED` for one release; prune the supporting
-    /// state + dispatchers in a follow-up cleanup pass.
+    /// Edit Component Details modal, opened from the browser action row's
+    /// "Edit Details" button. First browser with an open modal wins.
     pub(in crate::app::view) fn edit_row_modal_overlay(&self) -> Vec<Element<'_, Message>> {
         let document = &self.document_state;
-        const EDIT_MODAL_ENABLED: bool = false;
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         for (lib_path, browser_state) in &self.library.library_browsers {
-            if EDIT_MODAL_ENABLED && let Some(edit) = browser_state.edit_modal.as_ref() {
+            if let Some(edit) = browser_state.edit_modal.as_ref() {
                 // Class registry is per-library — read from the
                 // editing library's manifest. Falls back to the
                 // user's prefs default when the library has no

@@ -415,11 +415,7 @@ pub enum PanelMsg {
     FpEditorRestorePadStackDefaults,
     /// #1073 — dismiss the open-time pad-stack offer for this editor tab.
     FpEditorDismissPadStackOffer,
-    /// v0.22 Phase E3+E4 polish — Hover state for the Properties
-    /// panel's "Conflicts (worst first)" list. `true` on row
-    /// `on_enter`, `false` on `on_exit`. The handler flips
-    /// `editor.state.hovered_over_constraint` between
-    /// v0.22 Phase E3+E4 → v0.23 — Per-row hover on a Properties
+    /// Per-row hover on a Properties
     /// panel "Conflicts" list row. `Some(constraint_id)` highlights
     /// the specific constraint at full red and dims everything else
     /// (including other over-constraints) so the user can isolate a
@@ -588,7 +584,7 @@ pub enum PanelMsg {
     /// v0.14.2 — open a sibling `.snxfpt` from the Footprint Library
     /// panel. The handler routes through the existing
     /// `handle_open_primitive` flow so the file gets a fresh tab + a
-    /// `FootprintEditorState` (or activates an existing tab).
+    /// `FootprintDocument` (or activates an existing tab).
     FpLibraryOpenSibling(std::path::PathBuf),
     /// v0.18.8 — Footprint Library panel single-click on an internal
     /// footprint row. Sets `panel_selected_idx` (independent of
@@ -653,6 +649,9 @@ pub enum PanelMsg {
     /// Replace the sheet's embedded library symbol with the library's
     /// current one (Properties ▸ "Update from library", #912).
     UpdateSymbolFromLibrary(uuid::Uuid),
+    /// Switch a placed symbol to another drawing of its library row: the
+    /// symbol's uuid and the `lib_id` of the drawing (#1230).
+    SwitchSymbolChoice(uuid::Uuid, String),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.
@@ -710,6 +709,11 @@ pub enum PanelMsg {
     TogglePrePlacementItalic,
     TogglePrePlacementUnderline,
     SetPrePlacementShapeWidth(f64),
+    /// A keystroke in a numeric box: the raw text is kept as a draft and,
+    /// when it already parses, applied to the model.
+    NumericFieldTyped(super::NumericFieldKey, String),
+    /// Enter in a numeric box: drop the draft so the box shows the stored value.
+    NumericFieldSubmitted(super::NumericFieldKey),
     SetPrePlacementShapeFill(signex_types::schematic::FillType),
     /// Properties panel — edit a pin's designator (number) on the
     /// active Symbol editor tab. Routed through `handle_dock_sch_library_message`
@@ -753,8 +757,7 @@ pub enum PanelMsg {
         pin_idx: usize,
         value: f64,
     },
-    /// SCH Library panel — click on a row in the Pins sub-list.
-    /// Selects the pin on the canvas (Properties panel switches
+    /// Select a pin on the canvas (Properties panel switches
     /// to pin-mode automatically via the next refresh_panel_ctx).
     SymEditorSelectPin(usize),
     /// Properties panel — edit a pin's free-text Description.
@@ -961,10 +964,8 @@ pub enum PanelMsg {
     OpenCanvasFontPopup,
     /// Close canvas font popup.
     CloseCanvasFontPopup,
-    /// Set page margin vertical zones.
-    SetMarginVertical(u32),
-    /// Set page margin horizontal zones.
-    SetMarginHorizontal(u32),
+    /// Change one of the active sheet's frame settings (Page Options).
+    EditSheetFrame(SheetFrameEdit),
     /// Toggle a single selection filter — shared with the Active Bar.
     ToggleSelectionFilter(crate::active_bar::SelectionFilter),
     /// Toggle all selection filters on/off — shared with the Active Bar.
@@ -983,16 +984,52 @@ pub enum PanelMsg {
     SelectCustomFilterTab(usize),
     /// Page Options: choose formatting mode.
     SetPageFormatMode(PageFormatMode),
-    /// Page Options: choose paper size.
+    /// Page Options: choose paper size (a bare picker token). A named size
+    /// keeps the sheet's current orientation.
     SetPaperSize(String),
+    /// Page Options: turn the sheet to portrait or landscape.
+    SetSheetOrientation(signex_types::schematic::SheetOrientation),
     /// Page Options: choose origin corner.
     SetPageOrigin(PageOrigin),
-    /// Page Options: set custom paper width (mm).
-    SetCustomPaperWidth(f32),
-    /// Page Options: set custom paper height (mm).
-    SetCustomPaperHeight(f32),
+    /// Page Options: a keystroke in a custom width/height field (kept as a draft).
+    CustomPaperEdgeTyping(super::PaperEdge, String),
+    /// Page Options: Enter in a custom width/height field writes its draft
+    /// (mm, clamped by the model) as one edit.
+    CommitCustomPaperEdge(super::PaperEdge),
     /// Page Options: choose sheet background colour.
     SetSheetColor(SheetColor),
+    /// Title Block: a keystroke in a field (kept as a draft).
+    TitleBlockTyping(super::TitleBlockField, String),
+    /// Title Block: Enter in a field writes its draft to the sheet.
+    CommitTitleBlockField(super::TitleBlockField),
     /// No-op placeholder for unimplemented UI controls.
     Noop,
+}
+
+/// One change to the active sheet's frame settings (#1134).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SheetFrameEdit {
+    ShowBorder(bool),
+    ShowTitleBlock(bool),
+    /// Zones lettered A, B, C… down the sides.
+    VerticalZones(u8),
+    /// Zones numbered 1, 2, 3… along the top and bottom.
+    HorizontalZones(u8),
+}
+
+impl SheetFrameEdit {
+    /// `settings` with this change applied.
+    pub fn apply(
+        self,
+        settings: signex_types::schematic::SheetFrameSettings,
+    ) -> signex_types::schematic::SheetFrameSettings {
+        let mut settings = settings;
+        match self {
+            Self::ShowBorder(on) => settings.show_border = on,
+            Self::ShowTitleBlock(on) => settings.show_title_block = on,
+            Self::VerticalZones(n) => settings.vertical_zones = n,
+            Self::HorizontalZones(n) => settings.horizontal_zones = n,
+        }
+        settings
+    }
 }

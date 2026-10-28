@@ -60,6 +60,19 @@ pub enum ArcScreenSpan {
     },
 }
 
+/// [`arc_screen_span`] with the handedness probed from the caller's own
+/// world→screen map, the way `draw_arc_bucket` does it.
+///
+/// For anything drawing an arc outside the scene replay — the in-progress
+/// placement preview — so that a preview and the arc it is about to commit
+/// cannot disagree about which way the curve bulges.
+pub fn arc_screen_span_for<F>(start_angle: f32, end_angle: f32, world_to_screen: F) -> ArcScreenSpan
+where
+    F: Fn([f32; 2]) -> Point,
+{
+    arc_screen_span(start_angle, end_angle, world_is_y_up(world_to_screen))
+}
+
 /// Map an arc's world angles onto the screen angles lyon will sweep between.
 ///
 /// Arc angles are world-space radians measured from +X, and the sweep is
@@ -81,19 +94,6 @@ pub enum ArcScreenSpan {
 /// convention)" — true of the Symbol Editor, whose map flips Y, and false of
 /// the schematic, whose map does not. Both share this replay, so the fix for
 /// one silently mirrored the other (#645).
-/// [`arc_screen_span`] with the handedness probed from the caller's own
-/// world→screen map, the way `draw_arc_bucket` does it.
-///
-/// For anything drawing an arc outside the scene replay — the in-progress
-/// placement preview — so that a preview and the arc it is about to commit
-/// cannot disagree about which way the curve bulges.
-pub fn arc_screen_span_for<F>(start_angle: f32, end_angle: f32, world_to_screen: F) -> ArcScreenSpan
-where
-    F: Fn([f32; 2]) -> Point,
-{
-    arc_screen_span(start_angle, end_angle, world_is_y_up(world_to_screen))
-}
-
 pub fn arc_screen_span(start_angle: f32, end_angle: f32, world_is_y_up: bool) -> ArcScreenSpan {
     if signex_gfx::primitive::arc::arc_is_full_turn_rad(start_angle, end_angle) {
         return ArcScreenSpan::FullTurn;
@@ -118,13 +118,18 @@ pub fn arc_screen_span(start_angle: f32, end_angle: f32, world_is_y_up: bool) ->
     }
 }
 
+/// Smallest a circle may render, in logical pixels. Shared with
+/// [`crate::scene_shader::SchematicSurface`] so the CPU replay and the GPU path
+/// floor radii identically.
+pub const MIN_RADIUS_PX: f32 = 0.5;
+
 impl SceneDrawOptions {
     fn stroke_px(self, width_mm: f32) -> f32 {
         (width_mm * self.scale_px_per_mm).max(self.min_stroke_px)
     }
 
     fn radius_px(self, radius_mm: f32) -> f32 {
-        (radius_mm * self.scale_px_per_mm).max(0.5)
+        (radius_mm * self.scale_px_per_mm).max(MIN_RADIUS_PX)
     }
 
     fn text_px(self, size_mm: f32) -> f32 {
@@ -140,7 +145,14 @@ fn color_from_rgba(rgba: [f32; 4]) -> Color {
     Color::from_rgba(rgba[0], rgba[1], rgba[2], rgba[3])
 }
 
-fn draw_dashed_line(frame: &mut canvas::Frame, p0: Point, p1: Point, width: f32, color: Color) {
+pub(crate) fn draw_dashed_line(
+    frame: &mut canvas::Frame,
+    p0: Point,
+    p1: Point,
+    width: f32,
+    color: Color,
+    (dash, gap): (f32, f32),
+) {
     let dx = p1.x - p0.x;
     let dy = p1.y - p0.y;
     let length = (dx * dx + dy * dy).sqrt();
@@ -148,8 +160,6 @@ fn draw_dashed_line(frame: &mut canvas::Frame, p0: Point, p1: Point, width: f32,
         return;
     }
 
-    let dash = 8.0;
-    let gap = 5.0;
     let ux = dx / length;
     let uy = dy / length;
     let mut dist = 0.0;
@@ -183,8 +193,8 @@ fn draw_line_bucket<F>(
         let width = options.stroke_px(line.width);
         let color = color_from_rgba(line.color);
 
-        if (line.style & 1) == 1 {
-            draw_dashed_line(frame, p0, p1, width, color);
+        if let Some(pattern) = line.pattern_px() {
+            draw_dashed_line(frame, p0, p1, width, color, pattern);
         } else {
             let path = canvas::Path::line(p0, p1);
             frame.stroke(
@@ -354,9 +364,57 @@ fn canvas_font(text: &TextItem) -> iced::Font {
     font
 }
 
+/// Translate-then-rotate placement for a rotated label: the text is drawn at
+/// the local origin so its h/v alignment pivots around the anchor. `None` for
+/// axis-aligned items, which are placed directly.
+fn rotated_text_transform(
+    text: &TextItem,
+    position: Point,
+) -> Option<(iced::Vector, iced::Radians)> {
+    (!text.is_axis_aligned()).then(|| {
+        (
+            iced::Vector::new(position.x, position.y),
+            iced::Radians(text.rotation),
+        )
+    })
+}
+
 fn draw_text_bucket<F>(
     frame: &mut canvas::Frame,
     texts: &[TextItem],
+    world_to_screen: F,
+    options: SceneDrawOptions,
+) where
+    F: Fn([f32; 2]) -> Point + Copy,
+{
+    draw_text_items(frame, texts.iter(), world_to_screen, options);
+}
+
+/// The texts of `scene` the GPU glyph atlas cannot draw: every item that is
+/// not [`TextItem::is_axis_aligned`], the same predicate the GPU text pipeline
+/// stages by. Together with the axis-aligned rest they are exactly
+/// `scene.texts`.
+pub fn rotated_texts(scene: &Scene) -> impl Iterator<Item = &TextItem> {
+    scene.texts.iter().filter(|text| !text.is_axis_aligned())
+}
+
+/// CPU fallback for a scene whose axis-aligned text draws on the GPU: paints
+/// only the rotated items, through the same path as the full replay so they
+/// match it pixel for pixel.
+pub fn draw_rotated_texts<F>(
+    frame: &mut canvas::Frame,
+    scene: &Scene,
+    world_to_screen: F,
+    options: SceneDrawOptions,
+) where
+    F: Fn([f32; 2]) -> Point + Copy,
+{
+    draw_text_items(frame, rotated_texts(scene), world_to_screen, options);
+}
+
+fn draw_text_items<'a, F>(
+    frame: &mut canvas::Frame,
+    texts: impl Iterator<Item = &'a TextItem>,
     world_to_screen: F,
     options: SceneDrawOptions,
 ) where
@@ -382,18 +440,18 @@ fn draw_text_bucket<F>(
             ..canvas::Text::default()
         };
 
-        if text.is_axis_aligned() {
-            let mut placed = draw_text;
-            placed.position = position;
-            frame.fill_text(placed);
-            continue;
+        match rotated_text_transform(text, position) {
+            None => {
+                let mut placed = draw_text;
+                placed.position = position;
+                frame.fill_text(placed);
+            }
+            Some((translation, angle)) => frame.with_save(|inner| {
+                inner.translate(translation);
+                inner.rotate(angle);
+                inner.fill_text(draw_text);
+            }),
         }
-
-        frame.with_save(|inner| {
-            inner.translate(iced::Vector::new(position.x, position.y));
-            inner.rotate(iced::Radians(text.rotation));
-            inner.fill_text(draw_text);
-        });
     }
 }
 
@@ -682,7 +740,12 @@ mod canvas_font_tests {
             signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
         let bounds = iced::Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
         let snapshot = crate::schematic_runtime::build_renderer_snapshot(
-            &sheet, &transform, &colors, bounds, None, None,
+            &sheet,
+            &transform,
+            &colors,
+            bounds,
+            None,
+            Default::default(),
         );
         let mut scene = Scene::default();
         SchematicRenderer::build_scene(
@@ -717,5 +780,89 @@ mod canvas_font_tests {
             "a missing family falls back to the bundled default"
         );
         assert_eq!(face("DEFAULT").as_deref(), Some("Iosevka"));
+    }
+}
+
+#[cfg(test)]
+mod rotated_text_tests {
+    use super::*;
+    use signex_gfx::primitive::text::{TextHAlign, TextVAlign};
+    use std::f32::consts::FRAC_PI_2;
+
+    fn item(rotation: f32) -> TextItem {
+        TextItem {
+            content: "PIN1".to_string(),
+            position: [0.0, 0.0],
+            size_mm: 1.0,
+            color: [1.0, 1.0, 1.0, 1.0],
+            bold: false,
+            italic: false,
+            rotation,
+            h_align: TextHAlign::Right,
+            v_align: TextVAlign::Bottom,
+            family: None,
+        }
+    }
+
+    fn text(content: &str, rotation: f32) -> TextItem {
+        TextItem {
+            content: content.to_string(),
+            size_mm: 1.27,
+            color: [1.0; 4],
+            rotation,
+            ..Default::default()
+        }
+    }
+
+    /// The GPU stages `is_axis_aligned` items and this fallback draws the rest,
+    /// so a text is never lost and never drawn twice (#199 S1).
+    #[test]
+    fn gpu_staged_plus_fallback_is_exactly_the_scene_texts() {
+        let scene = Scene {
+            texts: vec![
+                text("horizontal", 0.0),
+                text("vertical", std::f32::consts::FRAC_PI_2),
+                text("negative-zero", -0.0),
+                text("arbitrary", 0.61),
+                text("vertical-down", -std::f32::consts::FRAC_PI_2),
+                text("flipped", std::f32::consts::PI),
+            ],
+            ..Scene::default()
+        };
+
+        let staged: Vec<&str> = scene
+            .texts
+            .iter()
+            .filter(|t| t.is_axis_aligned())
+            .map(|t| t.content.as_str())
+            .collect();
+        let fallback: Vec<&str> = rotated_texts(&scene).map(|t| t.content.as_str()).collect();
+
+        assert_eq!(staged, ["horizontal", "negative-zero"]);
+        assert_eq!(
+            fallback,
+            ["vertical", "arbitrary", "vertical-down", "flipped"]
+        );
+        assert!(staged.iter().all(|c| !fallback.contains(c)), "disjoint");
+        let mut all: Vec<&str> = staged.iter().chain(&fallback).copied().collect();
+        let mut expected: Vec<&str> = scene.texts.iter().map(|t| t.content.as_str()).collect();
+        all.sort_unstable();
+        expected.sort_unstable();
+        assert_eq!(all, expected, "nothing missed, nothing duplicated");
+    }
+
+    #[test]
+    fn quarter_turn_labels_pivot_on_the_anchor_with_their_own_sign() {
+        let anchor = Point::new(100.0, 50.0);
+        for angle in [FRAC_PI_2, -FRAC_PI_2, 3.0 * FRAC_PI_2] {
+            let (shift, rot) = rotated_text_transform(&item(angle), anchor).expect("rotated");
+            assert_eq!((shift.x, shift.y), (100.0, 50.0));
+            assert_eq!(rot.0, angle);
+        }
+    }
+
+    #[test]
+    fn axis_aligned_labels_are_placed_directly() {
+        assert!(rotated_text_transform(&item(0.0), Point::ORIGIN).is_none());
     }
 }

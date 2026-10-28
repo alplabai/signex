@@ -5,6 +5,14 @@ use signex_types::schematic::{
 
 use super::Engine;
 
+/// Row keys of [`SelectionDetails::info`] that callers look up by name.
+pub mod info_keys {
+    /// A symbol's designator (`Symbol::reference`).
+    pub const REFERENCE: &str = "Reference";
+    /// The text of a text item; on a designator field, the designator.
+    pub const TEXT: &str = "Text";
+}
+
 // ---------------------------------------------------------------------------
 // Selection data types
 // ---------------------------------------------------------------------------
@@ -216,7 +224,7 @@ impl Engine {
                     "Symbol"
                 };
                 info.push(("Type".into(), type_label.into()));
-                info.push(("Reference".into(), symbol.reference.clone()));
+                info.push((info_keys::REFERENCE.into(), symbol.reference.clone()));
                 info.push(("Value".into(), symbol.value.clone()));
                 if let Some(lib_sym) = self.document.lib_symbols.get(&symbol.lib_id)
                     && !lib_sym.description.is_empty()
@@ -395,7 +403,7 @@ impl Engine {
                 info.push(("Sheet".into(), sheet_name));
                 info.push(("Sheet File".into(), sheet_file));
                 info.push(("Name".into(), sheet_pin.name.clone()));
-                info.push(("Direction".into(), format!("{:?}", sheet_pin.direction)));
+                info.push(("Direction".into(), sheet_pin.direction.clone()));
                 info.push((
                     "Position".into(),
                     format!("{:.2}, {:.2}", sheet_pin.position.x, sheet_pin.position.y),
@@ -510,8 +518,8 @@ impl Engine {
                 let symbol = self.document.symbols.iter().find(|s| s.uuid == item.uuid)?;
                 let ref_text = symbol.ref_text.as_ref()?;
                 info.push(("Type".into(), "Reference Field".into()));
-                info.push(("Text".into(), symbol.reference.clone()));
-                info.push(("Reference".into(), symbol.reference.clone()));
+                info.push((info_keys::TEXT.into(), symbol.reference.clone()));
+                info.push((info_keys::REFERENCE.into(), symbol.reference.clone()));
                 info.push((
                     "Position".into(),
                     format!("{:.2}, {:.2} mm", ref_text.position.x, ref_text.position.y),
@@ -705,5 +713,46 @@ mod tests {
                 SelectedKind::TextNote,
             ]
         );
+    }
+
+    #[test]
+    fn sheet_pin_direction_is_shown_without_debug_quoting() {
+        use signex_types::schematic::{ChildSheet, FillType, Point, SchematicSheet, SheetPin};
+        let pin_uuid = uuid::Uuid::new_v4();
+        let sheet = SchematicSheet {
+            child_sheets: vec![ChildSheet {
+                uuid: uuid::Uuid::new_v4(),
+                name: "Child".into(),
+                filename: "child.snxsch".into(),
+                position: Point::new(0.0, 0.0),
+                size: (10.0, 10.0),
+                stroke_width: 0.0,
+                fill: FillType::None,
+                stroke_color: None,
+                fill_color: None,
+                fields_autoplaced: false,
+                pins: vec![SheetPin {
+                    uuid: pin_uuid,
+                    name: "IN".into(),
+                    direction: "input".into(),
+                    position: Point::new(0.0, 5.0),
+                    rotation: 0.0,
+                    auto_generated: false,
+                    user_moved: false,
+                }],
+                instances: Vec::new(),
+            }],
+            ..Default::default()
+        };
+        let engine = Engine::new(sheet).expect("engine");
+        let details = engine
+            .describe_single_selection(&[SelectedItem::new(pin_uuid, SelectedKind::SheetPin)])
+            .expect("details");
+        let direction = details
+            .info
+            .iter()
+            .find(|(k, _)| k == "Direction")
+            .map(|(_, v)| v.as_str());
+        assert_eq!(direction, Some("input"));
     }
 }

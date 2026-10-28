@@ -6,6 +6,7 @@
 
 use crate::theme::ResolvedTheme;
 use signex_gfx::scene::{DirtyFlags, Scene};
+use signex_types::net_class::NetLineStyle;
 use std::collections::HashMap;
 
 use signex_gfx::primitive::arc::Arc;
@@ -131,12 +132,14 @@ pub struct SchematicSnapshot {
     pub overlays: OverlayInputs,
     pub erc_markers: Vec<ErcMarkerInput>,
     pub wire_color_overrides: HashMap<u64, [f32; 4]>,
+    /// Stroke pattern per wire id. A wire absent from the map draws solid.
+    pub wire_line_styles: HashMap<u64, NetLineStyle>,
 }
 
 mod emit;
 use emit::*;
 
-/// Phase-0 schematic renderer placeholder.
+/// Schematic renderer: builds a GPU `Scene` from a [`SchematicSnapshot`].
 pub struct SchematicRenderer;
 
 impl ViewRenderer for SchematicRenderer {
@@ -187,6 +190,7 @@ mod tests {
     use signex_gfx::primitive::text::{TextHAlign, TextVAlign};
     use signex_gfx::scene::{DirtyFlags, Scene};
     use signex_gfx::style::ColorSlot;
+    use signex_types::net_class::NetLineStyle;
     use signex_types::schematic::{HAlign, VAlign};
     use signex_types::violation::Severity;
     use std::collections::HashMap;
@@ -278,12 +282,54 @@ mod tests {
         SchematicRenderer::build_scene(snapshot, &theme, dirty, scene);
     }
 
+    fn empty_snapshot() -> SchematicSnapshot {
+        SchematicSnapshot {
+            wires: Vec::new(),
+            junctions: Vec::new(),
+            arcs: Vec::new(),
+            polygons: Vec::new(),
+            labels: Vec::new(),
+            pin_texts: Vec::new(),
+            reference_value_texts: Vec::new(),
+            parameter_texts: Vec::new(),
+            overlays: OverlayInputs::default(),
+            erc_markers: Vec::new(),
+            wire_color_overrides: HashMap::new(),
+            wire_line_styles: HashMap::new(),
+        }
+    }
+
     fn make_erc_marker(center: [f32; 2], radius_mm: f32, severity: Severity) -> ErcMarkerInput {
         ErcMarkerInput {
             center,
             radius_mm,
             severity,
         }
+    }
+
+    #[test]
+    fn wire_line_style_sets_the_scene_pattern_bits() {
+        let mut styles = HashMap::new();
+        styles.insert(1, NetLineStyle::Dashed);
+        styles.insert(2, NetLineStyle::Dotted);
+        let snapshot = SchematicSnapshot {
+            wires: vec![
+                make_wire(1, None),
+                make_wire(2, None),
+                make_wire(3, None),
+                make_wire(4, None),
+            ],
+            wire_line_styles: styles,
+            ..empty_snapshot()
+        };
+
+        let mut scene = Scene::default();
+        SchematicRenderer::build_scene(&snapshot, &default_theme(), DirtyFlags::LINES, &mut scene);
+
+        assert!(scene.lines[0].is_dashed());
+        assert!(scene.lines[1].is_dotted());
+        assert_eq!(scene.lines[2].style, 0);
+        assert_eq!(scene.lines[3].style, 0);
     }
 
     #[test]
@@ -307,6 +353,7 @@ mod tests {
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
             wire_color_overrides: overrides,
+            wire_line_styles: HashMap::new(),
         };
 
         let theme = default_theme().with_slot(ColorSlot::Wire, [0.2, 0.2, 0.9, 1.0]);
@@ -350,6 +397,7 @@ mod tests {
             },
             erc_markers: vec![make_erc_marker([2.8, 2.8], 0.25, Severity::Warning)],
             wire_color_overrides: HashMap::new(),
+            wire_line_styles: HashMap::new(),
         };
 
         let mut scene = Scene::default();
@@ -441,6 +489,7 @@ mod tests {
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
             wire_color_overrides: HashMap::new(),
+            wire_line_styles: HashMap::new(),
         };
 
         let mut scene = Scene::default();
@@ -468,6 +517,7 @@ mod tests {
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
             wire_color_overrides: HashMap::new(),
+            wire_line_styles: HashMap::new(),
         };
 
         let mut scene = Scene::default();
@@ -504,6 +554,7 @@ mod tests {
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
             wire_color_overrides: HashMap::new(),
+            wire_line_styles: HashMap::new(),
         };
 
         let mut scene = Scene::default();
@@ -540,6 +591,7 @@ mod tests {
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
             wire_color_overrides: HashMap::new(),
+            wire_line_styles: HashMap::new(),
         };
 
         let mut scene = Scene::default();
@@ -579,6 +631,7 @@ mod tests {
             },
             erc_markers: Vec::new(),
             wire_color_overrides: HashMap::new(),
+            wire_line_styles: HashMap::new(),
         };
 
         let mut scene = Scene::default();
@@ -620,6 +673,7 @@ mod tests {
                 make_erc_marker([3.0, 1.0], 0.25, Severity::Info),
             ],
             wire_color_overrides: HashMap::new(),
+            wire_line_styles: HashMap::new(),
         };
 
         let mut scene = Scene::default();
@@ -661,6 +715,7 @@ mod tests {
             overlays: OverlayInputs::default(),
             erc_markers: markers,
             wire_color_overrides: HashMap::new(),
+            wire_line_styles: HashMap::new(),
         };
 
         let mut scene = Scene::default();
@@ -703,6 +758,7 @@ mod tests {
             overlays: OverlayInputs::default(),
             erc_markers: vec![make_erc_marker([1.0, 1.0], 0.25, Severity::Error)],
             wire_color_overrides: HashMap::new(),
+            wire_line_styles: HashMap::new(),
         };
 
         let mut scene = Scene::default();

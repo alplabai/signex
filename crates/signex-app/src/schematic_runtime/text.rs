@@ -1,13 +1,5 @@
 use super::*;
 
-pub fn expand_char_escapes(text: &str) -> String {
-    text.to_string()
-}
-
-pub fn escape_for_standard(text: &str) -> String {
-    text.to_string()
-}
-
 pub fn draw_text_note_preview(
     frame: &mut canvas::Frame,
     note: &TextNote,
@@ -41,6 +33,7 @@ pub fn draw_text_note_preview(
         overlays: OverlayInputs::default(),
         erc_markers: Vec::new(),
         wire_color_overrides: HashMap::new(),
+        wire_line_styles: HashMap::new(),
     };
 
     draw_renderer_snapshot(

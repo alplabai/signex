@@ -12,7 +12,7 @@ pub(super) fn build_page_content(
     fonts: &mut FontUsage,
 ) -> Result<Vec<u8>, PdfError> {
     let mut surface = PdfSurface::new(fonts);
-    let colour_map = ColourMap::new(opts.colour_mode);
+    let colour_map = ColourMap::new(opts.colour_mode, opts.palette.paper);
 
     let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
 
@@ -74,7 +74,7 @@ pub(super) fn build_page_content(
                     surface.set_stroke_color(sr, sg, sb);
                 }
                 if let Some((r, g, b)) = style.fill_rgb {
-                    let (fr, fg, fb) = colour_map.map_stroke_bw(r, g, b);
+                    let (fr, fg, fb) = colour_map.map_fill_bw(r, g, b);
                     surface.set_fill_color(fr, fg, fb);
                 }
                 surface.set_stroke_width(style.stroke_width.max(0.1));
@@ -177,39 +177,6 @@ pub(super) fn build_page_content(
     }
 
     Ok(surface.finish())
-}
-
-/// Resolve a `PageRange` against the project's sheet count into a concrete
-/// list of zero-based sheet indices to export.
-pub(super) fn resolve_page_range(
-    range: &PageRange,
-    sheet_count: usize,
-    current: usize,
-) -> Result<Vec<usize>, PdfError> {
-    match range {
-        PageRange::All => Ok((0..sheet_count).collect()),
-        PageRange::Current => Ok(vec![current]),
-        PageRange::Specific(pages) => {
-            let mut out = Vec::with_capacity(pages.len());
-            for &p in pages {
-                if p == 0 || p > sheet_count {
-                    return Err(PdfError::OutOfRange(p, sheet_count));
-                }
-                out.push(p - 1);
-            }
-            Ok(out)
-        }
-        PageRange::Range(start, end) => {
-            if *start == 0 || *end == 0 || *start > sheet_count || *end > sheet_count {
-                return Err(PdfError::OutOfRange((*start).max(*end).max(1), sheet_count));
-            }
-            if start <= end {
-                Ok((start - 1..*end).collect())
-            } else {
-                Ok((end - 1..*start).collect())
-            }
-        }
-    }
 }
 
 #[derive(Clone)]

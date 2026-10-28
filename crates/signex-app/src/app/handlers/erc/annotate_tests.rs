@@ -282,3 +282,278 @@ fn undocked_slot_stale_after_annotate_heals_on_the_next_narrow_edit() {
         "the undocked slot must show the new designator"
     );
 }
+
+/// #1164: both bulk passes write unopened sheets straight to disk. A recovery
+/// copy an earlier run left may hold unsaved edits to a sheet nobody has
+/// opened yet, so it must survive the rewrite and be offered at open; only a
+/// copy this run wrote is removed.
+fn child_with_recovery_copy(
+    root: Vec<Symbol>,
+    child: Vec<Symbol>,
+) -> (Signex, PathBuf, PathBuf, PathBuf) {
+    let (mut app, dir) = project(root, child);
+    let recovery = dir.join("recovery");
+    app.document_state.autosave.set_dir(Some(recovery.clone()));
+    let child_path = dir.join("z_child.snxsch");
+    crate::autosave::sidecar::write(&recovery, &child_path, b"edits from an earlier run")
+        .expect("sidecar");
+    (app, dir, recovery, child_path)
+}
+
+/// Open `path` as a tab and run the open-time recovery check end to end.
+fn open_and_check_recovery(app: &mut Signex, path: &std::path::Path) {
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "z_child".into(),
+        path: path.to_path_buf(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: crate::app::TabKind::Schematic,
+    });
+    // An open schematic has an engine; the offer follows it.
+    let engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default())
+        .expect("engine");
+    app.document_state
+        .engines
+        .insert(path.to_path_buf(), engine);
+    let task = app.autosave_check_recovery(path);
+    for message in crate::persist::run_task::outputs(task) {
+        let _ = app.update(message);
+    }
+}
+
+fn assert_earlier_copy_survives_and_is_offered(
+    mut app: Signex,
+    dir: PathBuf,
+    recovery: PathBuf,
+    child_path: PathBuf,
+) {
+    let kept = crate::autosave::sidecar::sidecar_path(&recovery, &child_path).exists();
+    open_and_check_recovery(&mut app, &child_path);
+    let offered = app
+        .document_state
+        .autosave
+        .current_offer()
+        .map(|offer| offer.path.clone());
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(kept, "an earlier run's copy must not be deleted unseen");
+    assert_eq!(offered, Some(child_path), "the copy is offered at open");
+}
+
+#[test]
+fn reset_duplicates_keeps_an_earlier_runs_recovery_copy_and_offers_it() {
+    let (mut app, dir, recovery, child_path) = child_with_recovery_copy(
+        vec![unit("U1", 1, 0.0)],
+        vec![unit("U1", 1, 0.0), unit("U1", 1, 10.0)],
+    );
+    let task = app.handle_reset_duplicate_designators();
+    for message in crate::persist::run_task::outputs(task) {
+        let _ = app.update(message);
+    }
+    assert_earlier_copy_survives_and_is_offered(app, dir, recovery, child_path);
+}
+
+#[test]
+fn annotate_keeps_an_earlier_runs_recovery_copy_and_offers_it() {
+    let (mut app, dir, recovery, child_path) =
+        child_with_recovery_copy(vec![unit("U?", 1, 0.0)], vec![unit("U?", 1, 0.0)]);
+    let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+    for message in crate::persist::run_task::outputs(task) {
+        let _ = app.update(message);
+    }
+    assert_earlier_copy_survives_and_is_offered(app, dir, recovery, child_path);
+}
+
+#[test]
+fn annotate_drops_a_recovery_copy_this_run_wrote() {
+    let (mut app, dir, recovery, child_path) =
+        child_with_recovery_copy(vec![unit("U?", 1, 0.0)], vec![unit("U?", 1, 0.0)]);
+    // This run's autosave tick wrote the copy: the write began and landed.
+    let stamp = crate::autosave::DocStamp {
+        revision: 1,
+        net_color_revision: 0,
+    };
+    app.document_state.autosave.begin(&child_path);
+    app.document_state.autosave.finish(&child_path, stamp, true);
+    let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+    for message in crate::persist::run_task::outputs(task) {
+        let _ = app.update(message);
+    }
+    let gone = !crate::autosave::sidecar::sidecar_path(&recovery, &child_path).exists();
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(
+        gone,
+        "a copy this run wrote is stale once Annotate rewrote the sheet"
+    );
+}
+
+// ---- #859: an in-flight read or restore owns the sheet's file.
+
+fn child_path(dir: &std::path::Path) -> PathBuf {
+    dir.join("z_child.snxsch")
+}
+
+/// Whether a Messages line containing `needle` was logged after `since`.
+fn logged_since(since: Option<u64>, needle: &str) -> bool {
+    crate::diagnostics::recent_entries()
+        .iter()
+        .any(|e| Some(e.id) > since && e.message.contains(needle))
+}
+
+#[test]
+fn a_read_landing_on_a_dirty_parked_engine_keeps_its_edits() {
+    use crate::app::document_read::{LoadedDocument, ReadRequest};
+    let (mut app, dir) = project(vec![unit("U1", 1, 0.0)], vec![unit("U5", 1, 0.0)]);
+    let child = child_path(&dir);
+    let generation = app
+        .document_state
+        .pending_opens
+        .begin(child.clone())
+        .expect("claim");
+    // A sheet-reference rewrite parked an edited engine, tab-less, while the
+    // tree read of the same file was in flight.
+    let stale = SnxSchematic::parse(&std::fs::read_to_string(&child).unwrap())
+        .unwrap()
+        .sheet;
+    let mut edited = stale.clone();
+    edited.symbols[0].reference = "U9".into();
+    let engine = signex_engine::Engine::new_with_path(edited, Some(child.clone())).unwrap();
+    app.document_state.engines.insert(child.clone(), engine);
+    app.document_state.dirty_paths.insert(child.clone());
+
+    let _ = app.handle_document_read_finished(
+        ReadRequest {
+            path: child.clone(),
+            generation,
+        },
+        Ok(Box::new(LoadedDocument::Schematic {
+            title: "z_child".into(),
+            sheet: Box::new(stale),
+        })),
+    );
+
+    let refs: Vec<String> = app.document_state.engines[&child]
+        .document()
+        .symbols
+        .iter()
+        .map(|s| s.reference.clone())
+        .collect();
+    let tab_attached = app.document_state.tabs.iter().any(|t| t.path == child);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(refs, ["U9"], "the parked edit survived the read");
+    assert!(
+        tab_attached,
+        "the requested tab is attached to the parked engine"
+    );
+}
+
+fn assert_unopened_sheet_untouched_while(
+    claim: impl Fn(&mut Signex, PathBuf),
+    run: impl Fn(&mut Signex),
+    pass: &str,
+    reason: &str,
+    expected: &str,
+) {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, dir) = project(vec![unit("U1", 1, 0.0)], vec![unit(expected, 1, 0.0)]);
+    claim(&mut app, child_path(&dir));
+    let since = crate::diagnostics::newest_entry_id();
+    run(&mut app);
+    let refs = child_refs(&dir);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(refs, [expected], "the sheet file was not rewritten");
+    assert!(
+        logged_since(
+            since,
+            &format!("{pass}: z_child.snxsch was left unchanged, {reason}")
+        ),
+        "the skip is reported"
+    );
+}
+
+fn claim_restore(app: &mut Signex, path: PathBuf) {
+    app.document_state.pending_restores.begin(path.clone());
+    app.document_state.pending_restores.cancel_retaining(&path);
+}
+
+fn claim_read(app: &mut Signex, path: PathBuf) {
+    app.document_state.pending_opens.begin(path);
+}
+
+const RESTORE: &str = "a History restore of it is still running";
+const READ: &str = "a read of it is still in flight";
+
+fn annotate(app: &mut Signex) {
+    let _ = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+}
+
+fn reset(app: &mut Signex) {
+    let _ = app.handle_reset_duplicate_designators();
+}
+
+#[test]
+fn annotate_leaves_an_unopened_sheet_alone_while_its_restore_runs() {
+    assert_unopened_sheet_untouched_while(claim_restore, annotate, "Annotate", RESTORE, "U5");
+}
+
+#[test]
+fn annotate_leaves_an_unopened_sheet_alone_while_its_read_is_in_flight() {
+    assert_unopened_sheet_untouched_while(claim_read, annotate, "Annotate", READ, "U5");
+}
+
+#[test]
+fn reset_duplicates_leaves_an_unopened_sheet_alone_while_its_restore_runs() {
+    assert_unopened_sheet_untouched_while(
+        claim_restore,
+        reset,
+        "Reset Duplicate Designators",
+        RESTORE,
+        "U1",
+    );
+}
+
+#[test]
+fn reset_duplicates_leaves_an_unopened_sheet_alone_while_its_read_is_in_flight() {
+    assert_unopened_sheet_untouched_while(
+        claim_read,
+        reset,
+        "Reset Duplicate Designators",
+        READ,
+        "U1",
+    );
+}
+
+fn claim_rename(app: &mut Signex, path: PathBuf) {
+    app.document_state.pending_path_ops.begin(
+        crate::app::path_ops::PathOpKind::Rename,
+        vec![path, PathBuf::from("/elsewhere/renamed.snxsch")],
+        crate::app::state::scope::CaseFold::PRESERVE,
+    );
+}
+
+/// A rename holding one sheet refuses the whole project-wide pass up front:
+/// no sheet is renumbered, the held one included, and a notice says why.
+fn assert_pass_refused_while_a_rename_holds_a_sheet(run: impl Fn(&mut Signex), pass: &str) {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, dir) = project(vec![unit("U7", 1, 0.0)], vec![unit("U5", 1, 0.0)]);
+    claim_rename(&mut app, child_path(&dir));
+    let since = crate::diagnostics::newest_entry_id();
+    run(&mut app);
+    let (root, child) = (root_refs(&app, &dir), child_refs(&dir));
+    let notice = notice_detail(&app);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(root, ["U7"], "the open sheet was not renumbered");
+    assert_eq!(child, ["U5"], "the held sheet was not rewritten");
+    assert!(notice.contains(&format!("{pass} was not run")), "{notice}");
+    assert!(logged_since(since, &format!("{pass} was not run")));
+}
+
+#[test]
+fn annotate_is_refused_whole_while_a_rename_holds_a_sheet() {
+    assert_pass_refused_while_a_rename_holds_a_sheet(annotate, "Annotate");
+}
+
+#[test]
+fn reset_duplicates_is_refused_whole_while_a_rename_holds_a_sheet() {
+    assert_pass_refused_while_a_rename_holds_a_sheet(reset, "Reset Duplicate Designators");
+}

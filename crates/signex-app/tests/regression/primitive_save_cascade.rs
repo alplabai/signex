@@ -7,7 +7,7 @@
 //! the same write, and then moves the rows onto that version.
 
 use signex_app::app::{
-    FileMsg, FootprintEditorState, Message, Signex, SymbolEditorState, TabInfo, TabKind,
+    FileMsg, FootprintDocument, Message, Signex, SymbolDocument, TabInfo, TabKind,
 };
 use signex_library::adapter::LibraryAdapter;
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
@@ -54,10 +54,13 @@ struct Fixture {
 fn row(pn: &str, library_id: Uuid, symbol: Uuid) -> ComponentRow {
     let now = chrono::Utc::now();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(library_id, symbol),
         footprint_ref: None,
@@ -150,12 +153,12 @@ fn fixture_with(setup: Setup) -> Fixture {
     adapter.insert_row("R", fp_row, "seed").unwrap();
     app.document_state.footprint_editors.insert(
         footprint_path.clone(),
-        FootprintEditorState::new(footprint_path.clone(), fp_file),
+        FootprintDocument::new(footprint_path.clone(), fp_file),
     );
 
     app.document_state.symbol_editors.insert(
         symbol_path.clone(),
-        SymbolEditorState::new(symbol_path.clone(), file),
+        SymbolDocument::new(symbol_path.clone(), file),
     );
     app.document_state.tabs.push(TabInfo {
         title: "pair".into(),

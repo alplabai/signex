@@ -5,11 +5,19 @@ use super::super::*;
 impl Signex {
     pub(super) fn dispatch_ui_message(&mut self, message: UiMsg) -> Task<Message> {
         match message {
+            UiMsg::Noop => Task::none(),
+            UiMsg::HistoryLoaded {
+                generation,
+                path,
+                result,
+            } => self.apply_history_loaded(generation, path, result),
             UiMsg::ThemeChanged(id) => {
                 self.ui_state.theme_id = id;
                 self.update_canvas_theme();
-                crate::fonts::write_theme_pref(id);
-                self.finish_update()
+                let save = crate::fonts::background_pref_write("theme", move || {
+                    crate::fonts::write_theme_pref(id)
+                });
+                Task::batch([save, self.finish_update()])
             }
             UiMsg::UnitCycled | UiMsg::StatusBar(StatusBarRequest::CycleUnit) => {
                 self.handle_unit_cycle_request();
@@ -17,10 +25,17 @@ impl Signex {
             }
             UiMsg::GridToggle | UiMsg::StatusBar(StatusBarRequest::ToggleGrid) => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
-                self.interaction_state.active_canvas_mut().clear_bg_cache();
-                self.interaction_state.pcb_canvas.clear_bg_cache();
-                crate::fonts::write_grid_visible_pref(self.ui_state.grid_visible);
-                self.finish_update()
+                for canvas in self.interaction_state.all_schematic_canvases_mut() {
+                    canvas.clear_bg_cache();
+                }
+                for canvas in self.interaction_state.all_pcb_canvases_mut() {
+                    canvas.clear_bg_cache();
+                }
+                let visible = self.ui_state.grid_visible;
+                let save = crate::fonts::background_pref_write("grid_visible", move || {
+                    crate::fonts::write_grid_visible_pref(visible)
+                });
+                Task::batch([save, self.finish_update()])
             }
             UiMsg::DragStart(target) => {
                 self.handle_layout_drag_started(target);
@@ -114,7 +129,10 @@ impl Signex {
             }
             UiMsg::StatusBar(StatusBarRequest::ToggleSnap) => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
-                crate::fonts::write_snap_enabled_pref(self.ui_state.snap_enabled);
+                let enabled = self.ui_state.snap_enabled;
+                let save = crate::fonts::background_pref_write("snap_enabled", move || {
+                    crate::fonts::write_snap_enabled_pref(enabled)
+                });
                 // v0.18.25.1 — mirror the global toggle into every open
                 // footprint editor so the .snxfpt snap chain (guides /
                 // grid / point-hit / angle) short-circuits in lockstep
@@ -124,7 +142,7 @@ impl Signex {
                     editor.state.global_snap_disabled = disabled;
                     editor.canvas_cache.clear();
                 }
-                self.finish_update()
+                Task::batch([save, self.finish_update()])
             }
             UiMsg::StatusBar(StatusBarRequest::TogglePanelList) => {
                 self.dispatch_overlay_message(OverlayMsg::TogglePanelList)
@@ -145,6 +163,10 @@ impl Signex {
             UiMsg::InstalledFontsScanned => {
                 self.handle_installed_fonts_scanned();
                 self.finish_update()
+            }
+            UiMsg::NetClassStylesResolved(result) => {
+                self.apply_net_class_styles(&result);
+                Task::none()
             }
         }
     }

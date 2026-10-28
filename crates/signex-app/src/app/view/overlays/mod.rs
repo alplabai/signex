@@ -84,7 +84,10 @@ impl Signex {
         };
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(4);
-        rows.push(field("Designator", symbol.reference.clone()));
+        rows.push(field(
+            "Designator",
+            self.shown_designator(symbol).to_string(),
+        ));
         if !symbol.value.is_empty() {
             rows.push(field("Value", symbol.value.clone()));
         }
@@ -334,15 +337,16 @@ impl Signex {
         )
         .map(Message::ActiveBar);
         let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
-        // Bar: MENU_BAR_HEIGHT + tabs + 4 top-margin + bar-height ≈ bottom of bar.
-        // Bar-height = 28 button + 6 vertical padding + 2 border = 36, plus 4
-        // top margin = 40. Add a small gap so the dropdown visually touches.
+        // Bar bottom: MENU_BAR_HEIGHT + tabs + top margin + bar height,
+        // plus a small gap so the dropdown visually touches.
         let ab_y: f32 = crate::menu_bar::MENU_BAR_HEIGHT
             + if document.tabs.is_empty() { 0.0 } else { 28.0 }
-            + 40.0;
-        let bar_w: f32 = crate::active_bar::BAR_WIDTH_PX;
+            + crate::active_bar::BAR_TOP_MARGIN_PX
+            + crate::active_bar::BAR_HEIGHT_PX
+            + crate::active_bar::BAR_DROPDOWN_GAP_PX;
         let (ww, _) = ui.window_size;
-        let adjusted_x = x_off + (ww - bar_w) / 2.0;
+        let adjusted_x =
+            x_off + crate::active_bar::bar_left_in_window(interaction.current_tool, ww);
         vec![
             Self::dismiss_layer(Message::ActiveBar(
                 crate::active_bar::ActiveBarMsg::CloseMenus,

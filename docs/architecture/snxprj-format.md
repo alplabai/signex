@@ -39,11 +39,13 @@ These are why leaving it as JSON is defensible now, not why it was chosen:
   well) buys nothing here.
 - **Atomic write is format-agnostic.** `write_project` goes through
   `atomic_io::atomic_write`, same as the other formats.
-- **Legacy sniffing is trivial.** `parse_project` treats a file whose first
-  non-blank byte is `{` as JSON and anything else as an old empty marker. A
-  JSON body that fails to parse is an error (`ProjectError::Corrupt`), never a
-  fall-through to the directory probe, so a bad file cannot be silently
-  replaced by an empty project on the next save.
+- **Legacy sniffing is trivial.** `parse_project` strips any number of leading
+  UTF-8 BOMs (U+FEFF, via `trim_start_matches`) after a successful decode; a
+  file that is not valid UTF-8 is `ProjectError::Corrupt`. Only an empty or
+  whitespace-only file takes the directory probe. Any other non-blank text
+  that does not start with `{`, and any JSON body that fails to parse, is
+  `ProjectError::Corrupt`, so a bad file cannot be silently replaced by an
+  empty project on the next save.
 
 ## Net classes (`net_classes`)
 
@@ -67,6 +69,10 @@ byte-identical to before.
 - `nets` are exact, case-sensitive net names. `patterns` are globs over the
   net name: `*` is any run of characters (including none), `?` is exactly one;
   everything else is literal and the whole name must match.
+- A net name is the project netlist's name for the net, not a label's own
+  text: a local label `LOCAL` on a child sheet names the net `/LOCAL`. The Net
+  Class picker on a selected net label stores that name. A class cannot be
+  named `(none)`; the picker uses that entry for "no class".
 - A net that matches several classes takes the **first matching class in
   table order**. There is no specificity ranking; reorder the table to change
   the winner.
@@ -81,11 +87,30 @@ byte-identical to before.
   rule is one more defaulted, `skip_serializing_if`-guarded field on
   `NetClass`; no second model and no format-version bump.
 - **Editing.** The table is edited through `signex_engine::NetClassCommand`
-  (`add`, `remove`, `rename`, `set_style`, `set_members`, `move`), which is
+  (`add`, `remove`, `rename`, `set_style`, `set_members`, `assign_net`,
+  `move`), which is
   `serde`-serialisable, validated (unique non-empty names, positive finite
   width) and applied through `NetClassHistory` as one undo step each. The
   Properties panel only sends these commands; the `.snxprj` is written on an
   explicit project save.
+- **Assigning from the schematic.** A selected net label's Properties has a
+  Net Class picker. It sends `assign_net`, which makes the label's net a
+  member of exactly one class by exact name (it leaves every other class's
+  `nets` list and joins the chosen one), or of none. Patterns are not edited,
+  so a class earlier in the table whose pattern still matches keeps winning;
+  the Net Classes section says so when that happens.
+- **Drawing.** The canvas (CPU and GPU scene paths), SVG, PDF and the print
+  preview all draw a member net's wires with the class style, and hit-testing
+  uses the drawn width. The per-element style comes from joining the table
+  with each sheet's netlist after every update (`signex_net::element_class_styles`);
+  the canvas never reads the project. Precedence, per property:
+  - **colour**: the per-net colour override (the Active Bar net-colour tool) wins
+    over the class colour, which wins over the theme's wire colour;
+  - **width**: the class width, else the wire's own `stroke_width`;
+  - **line style**: the class line style, else solid.
+
+  A class colour also tints the junctions of its nets. Exports honour the
+  persisted per-net colours (`[extras.sheet.net_colors]`) in the same order.
 
 ## Project-scoped rules (#1085)
 
@@ -115,8 +140,53 @@ that sees the key keeps it in its unknown-key bag. The section has its own
   its built-in default and is reported in the Messages panel. When it is
   absent, ERC uses the machine preferences as before. `signex_erc::project_rules`
   owns the id vocabulary.
-- `profile` is provenance only. `drc` and `annotation` are reserved: they are
-  carried verbatim in the section's unknown-key bag until their features land.
+- The section is written only by an explicit action: "Store ERC rules in this
+  project" in the ERC dialog snapshots the machine preferences into it (every
+  rule id, plus the pin matrix cells that differ from the factory matrix), and
+  later edits in the dialog change the project's set instead of the
+  preferences. Both are undoable steps that mark the `.snxprj` dirty; the file
+  is written by the normal save. Edits keep keys this build does not know.
+- `profile` records which portable profile the rules came from (name,
+  `source` of `builtin` / `user` / `file`, the profile's `version` and the
+  `sha256` of its rules; see [`snxrules-format.md`](snxrules-format.md)). It is
+  written by "Store ERC rules in this project" when the snapshot equals the
+  shipped profile, by "Save as profile", and by "Update from profile". It is
+  provenance only: ERC never reads a profile file, only the project's own
+  `erc`. `drc` is reserved: it is carried verbatim in the section's
+  unknown-key bag until its feature lands.
+- A section this build cannot interpret never stops the project from opening
+  (#1180). A `schema` above 1, or a value whose shape changed (a severity that
+  is an object, say), makes the whole section opaque: it is kept verbatim in
+  the project's unknown-key bag, written back untouched, and not applied; ERC
+  uses the machine preferences and says so once per open. A later build may
+  therefore change a value's shape only together with a `schema` bump.
+- `schema`, `erc` and every `profile` field are optional and omitted when
+  absent or empty. An explicitly empty value (`"erc": {}`, `"name": ""`) has
+  the same meaning as an absent one and is dropped on re-save.
+
+## Annotation settings (#1232)
+
+`ProjectData.annotation` is an optional top-level `annotation` object, added
+without bumping the `snxprj/1` token. It is deliberately not a child of
+`rules`: a present `rules` section means "this project stores its ERC rules".
+
+```json
+"annotation": { "designator_standard": "din40719_2" }
+```
+
+- `designator_standard` is one of `ieee315`, `din40719_2`, `iec81346_2`; absent
+  means the library symbol's own designator letters decide. The section is
+  omitted entirely when nothing is set, so an untouched project re-saves
+  byte-identical.
+- Placement derives the reference prefix from the part's component class under
+  the standard of the project that owns the target sheet
+  (`signex_types::designator::resolve_prefix`). `#` references (power ports,
+  flags) and the `generic` class are never remapped.
+- Parsing is tolerant like `rules`: an unknown standard string (or any value
+  this build cannot read) never stops the project opening. The section is kept
+  verbatim in the unknown-key bag, written back untouched, not applied, and
+  reported in the Messages panel when a part is placed. Choosing a standard in
+  Project Options replaces it.
 
 ## Known gaps (open questions)
 
@@ -130,8 +200,12 @@ that sees the key keeps it in its unknown-key bag. The section has its own
   change the meaning of existing keys, which the bag cannot preserve, so
   opening read-write would risk silent degradation. This matches the
   `.snxsch` / `.snxpcb` behaviour on a mismatched `format` token.
-  `.snxlib`, `.snxsym` and `.snxfpt` still carry a token but no unknown-key
-  preservation.
+  A `.snxlib` keeps unknown keys by writing back the text it was read from
+  with only the edited content changed (#1435). Class `key`s must be unique:
+  a file with duplicates still opens (a warning goes to the Messages panel),
+  but a save of it is refused with `DuplicateClassKey` until the file is
+  edited so each key appears once. `.snxsym` and `.snxfpt` still
+  carry a token but no unknown-key preservation.
 - **`.snxfpt` pad table (#960).** Each footprint's `pads_tsv` block starts
   with 13 base columns (`number` .. `paste_margin`), always in that order.
   The remaining `Pad` fields (net, testpoint, locked, per-side mask/paste

@@ -44,6 +44,15 @@ pub enum NetClassCommand {
         nets: Vec<String>,
         patterns: Vec<String>,
     },
+    /// Make `net` a member of exactly one class: drop it from every class's
+    /// exact member list, then add it to `class` (or to none, for `None`).
+    /// Glob patterns are left alone, so an earlier class whose pattern still
+    /// matches `net` keeps winning; the caller can tell with
+    /// `signex_types::net_class::first_matching_class`.
+    AssignNet {
+        net: String,
+        class: Option<String>,
+    },
     /// Move a class to `to_index` (clamped to the table). The first matching
     /// class wins, so this is the precedence control.
     Move {
@@ -58,6 +67,8 @@ pub enum NetClassError {
     EmptyName,
     #[error("a net class named \"{0}\" already exists")]
     DuplicateName(String),
+    #[error("\"{0}\" is reserved for \"no class\" in the net label picker; pick another name")]
+    ReservedName(String),
     #[error("no net class named \"{0}\"")]
     Unknown(String),
     #[error("wire width must be a positive, finite number of millimetres")]
@@ -104,6 +115,25 @@ pub fn apply_net_class_command(
             classes[at].nets = clean(nets);
             classes[at].patterns = clean(patterns);
         }
+        NetClassCommand::AssignNet { net, class } => {
+            let net = net.trim().to_string();
+            if net.is_empty() {
+                return Ok(());
+            }
+            let target = match &class {
+                Some(name) => Some(index_of(classes, name)?),
+                None => None,
+            };
+            let already_member = target.is_some_and(|at| classes[at].nets.contains(&net));
+            for (at, member) in classes.iter_mut().enumerate() {
+                if !(already_member && Some(at) == target) {
+                    member.nets.retain(|n| *n != net);
+                }
+            }
+            if let (Some(at), false) = (target, already_member) {
+                classes[at].nets.push(net);
+            }
+        }
         NetClassCommand::Move { name, to_index } => {
             let at = index_of(classes, &name)?;
             let class = classes.remove(at);
@@ -123,6 +153,9 @@ fn index_of(classes: &[NetClass], name: &str) -> Result<usize, NetClassError> {
 fn check_new_name(classes: &[NetClass], name: &str) -> Result<(), NetClassError> {
     if name.is_empty() {
         return Err(NetClassError::EmptyName);
+    }
+    if name == signex_types::net_class::NO_CLASS_ENTRY {
+        return Err(NetClassError::ReservedName(name.to_string()));
     }
     if classes.iter().any(|c| c.name == name) {
         return Err(NetClassError::DuplicateName(name.to_string()));
@@ -148,11 +181,23 @@ fn clean(entries: Vec<String>) -> Vec<String> {
     out
 }
 
+/// Identity of one history step. It travels with the step between the undo
+/// and redo stacks and is never reused, so a caller can tell "the step I
+/// recorded" from a different step that happens to sit at the same depth.
+pub type StepId = u64;
+
+#[derive(Debug, Clone)]
+struct Step {
+    id: StepId,
+    classes: Vec<NetClass>,
+}
+
 /// Undo/redo for one project's net-class table.
 #[derive(Debug, Clone, Default)]
 pub struct NetClassHistory {
-    undo: Vec<Vec<NetClass>>,
-    redo: Vec<Vec<NetClass>>,
+    undo: Vec<Step>,
+    redo: Vec<Step>,
+    next_id: StepId,
 }
 
 impl NetClassHistory {
@@ -169,7 +214,12 @@ impl NetClassHistory {
             return Ok(());
         }
         let before = std::mem::replace(classes, next);
-        self.undo.push(before);
+        let id = self.next_id;
+        self.next_id += 1;
+        self.undo.push(Step {
+            id,
+            classes: before,
+        });
         if self.undo.len() > HISTORY_LIMIT {
             self.undo.remove(0);
         }
@@ -180,8 +230,10 @@ impl NetClassHistory {
     /// Step back. `false` when there is nothing to undo.
     pub fn undo(&mut self, classes: &mut Vec<NetClass>) -> bool {
         match self.undo.pop() {
-            Some(previous) => {
-                self.redo.push(std::mem::replace(classes, previous));
+            Some(step) => {
+                let id = step.id;
+                let classes = std::mem::replace(classes, step.classes);
+                self.redo.push(Step { id, classes });
                 true
             }
             None => false,
@@ -191,12 +243,24 @@ impl NetClassHistory {
     /// Step forward. `false` when there is nothing to redo.
     pub fn redo(&mut self, classes: &mut Vec<NetClass>) -> bool {
         match self.redo.pop() {
-            Some(next) => {
-                self.undo.push(std::mem::replace(classes, next));
+            Some(step) => {
+                let id = step.id;
+                let classes = std::mem::replace(classes, step.classes);
+                self.undo.push(Step { id, classes });
                 true
             }
             None => false,
         }
+    }
+
+    /// The step an undo would revert.
+    pub fn top_undo_id(&self) -> Option<StepId> {
+        self.undo.last().map(|step| step.id)
+    }
+
+    /// The step a redo would re-apply.
+    pub fn top_redo_id(&self) -> Option<StepId> {
+        self.redo.last().map(|step| step.id)
     }
 
     pub fn can_undo(&self) -> bool {

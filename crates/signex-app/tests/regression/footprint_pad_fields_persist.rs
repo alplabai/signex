@@ -2,7 +2,7 @@
 //! save and reopen, and the sketch copy of the pad must not be
 //! overwritten with defaults by the first edit after reopen.
 
-use signex_app::app::{FootprintEditorState, Message, Signex, TabInfo, TabKind};
+use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
 use signex_app::panels::PanelMsg;
 use signex_library::{Footprint, FootprintFile, Pad};
@@ -15,7 +15,7 @@ use std::path::PathBuf;
 
 fn open_editor(stem: &str, file: FootprintFile) -> (Signex, PathBuf) {
     let path = PathBuf::from(format!("{stem}.snxfpt"));
-    let editor = FootprintEditorState::new(path.clone(), file);
+    let editor = FootprintDocument::new(path.clone(), file);
     let (mut app, _initial_task) = Signex::new();
     app.document_state
         .footprint_editors
@@ -224,14 +224,12 @@ fn pad_stack_edits_survive_a_sketch_solve() {
 /// the file grow extended columns.
 #[test]
 fn editor_default_pad_saves_only_the_base_columns() {
-    use signex_app::library::editor::footprint::state::{
-        EditorPad, FootprintEditorState as CanvasState,
-    };
+    use signex_app::library::editor::footprint::state::{EditorPad, FootprintEditorState};
     let pad = EditorPad::new_default("1".into(), (0.0, 0.0));
     let mut fp = Footprint::empty("plain");
-    CanvasState::sync_pads_to_primitive(
+    FootprintEditorState::sync_pads_to_primitive(
         &{
-            let mut s = CanvasState::empty();
+            let mut s = FootprintEditorState::empty();
             s.pads = vec![pad];
             s
         },

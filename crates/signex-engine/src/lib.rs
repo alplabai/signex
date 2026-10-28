@@ -4,7 +4,10 @@ mod patch;
 
 mod annotation;
 mod history;
+mod history_snapshot;
+mod lock;
 mod net_class_table;
+mod power_port;
 mod selection;
 mod sheet;
 mod sheet_identity;
@@ -19,6 +22,11 @@ pub(crate) mod test_support;
 #[cfg(test)]
 mod annotation_tests;
 
+#[cfg(test)]
+mod lock_tests;
+
+#[cfg(test)]
+mod history_tests;
 #[cfg(test)]
 mod rubber_band_power_tests;
 #[cfg(test)]
@@ -37,14 +45,18 @@ pub use command::{
     SheetPort, SymbolTextField, TextTarget,
 };
 pub use error::EngineError;
+pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
 use history::HistoryEntry;
 pub use history::UndoGroupId;
 pub use net_class_table::{
     HISTORY_LIMIT as NET_CLASS_HISTORY_LIMIT, NetClassCommand, NetClassError, NetClassHistory,
-    apply_net_class_command,
+    StepId as NetClassStepId, apply_net_class_command,
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
-pub use selection::{ClipboardSelection, SelectionAnchor, SelectionDetails, partition_cuttable};
+pub use power_port::{place_power_port, restyle_power_port};
+pub use selection::{
+    ClipboardSelection, SelectionAnchor, SelectionDetails, info_keys, partition_cuttable,
+};
 pub use sheet::{
     blank_port_label_count, exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports,
 };
@@ -64,7 +76,7 @@ const JUNCTION_TOLERANCE_MM: f64 = 0.01;
 pub struct Engine {
     document: SchematicSheet,
     path: Option<PathBuf>,
-    history: Vec<HistoryEntry>,
+    history: std::collections::VecDeque<HistoryEntry>,
     redo_stack: Vec<HistoryEntry>,
     /// Entries evicted from the front of `history` by the cap, so
     /// `undo_position` keeps counting up past `MAX_HISTORY_ENTRIES`.
@@ -85,6 +97,11 @@ pub struct Engine {
     /// in step with the document just before that edit, so it may copy only
     /// the collections the edit's patch reports.
     base_revision: u64,
+    /// Re-drawn only by an edit that can change which wires, junctions and
+    /// pins make up a net or what a net is called (see
+    /// [`DocumentPatch::ELECTRICAL`]); a cache of anything derived from
+    /// connectivity may keep its answer while this holds.
+    connectivity_revision: u64,
     /// Fixed for this engine's lifetime and unique across engines: tells a
     /// reopened sheet from the one an off-thread job started on.
     instance: u64,
@@ -129,11 +146,16 @@ impl MovePreview {
             return self.sheet.clone();
         };
         engine.preset_before = Some(self.before.clone());
-        let done = engine.execute(Command::MoveEach {
+        // The commit skips locked symbols; the ghost must too, or it shows
+        // nothing moving while the free items jump on release.
+        let (command, _) = engine.without_locked(Command::MoveEach {
             moves: moves.to_vec(),
             keep_wires,
         });
-        if done.is_err() {
+        let Some(command) = command else {
+            return self.sheet.clone();
+        };
+        if engine.execute(command).is_err() {
             return self.sheet.clone();
         }
         engine.document().clone()
@@ -152,12 +174,13 @@ impl Engine {
         Ok(Self {
             document,
             path,
-            history: Vec::new(),
+            history: std::collections::VecDeque::new(),
             redo_stack: Vec::new(),
             history_evicted: 0,
             history_suppressed: false,
             revision: crate::next_revision(),
             base_revision: 0,
+            connectivity_revision: crate::next_revision(),
             instance: crate::next_revision(),
             warnings: Vec::new(),
             unkept_pins: Vec::new(),
@@ -180,12 +203,13 @@ impl Engine {
         Ok(Self {
             document: snx.sheet,
             path: Some(path.to_path_buf()),
-            history: Vec::new(),
+            history: std::collections::VecDeque::new(),
             redo_stack: Vec::new(),
             history_evicted: 0,
             history_suppressed: false,
             revision: crate::next_revision(),
             base_revision: 0,
+            connectivity_revision: crate::next_revision(),
             instance: crate::next_revision(),
             warnings: Vec::new(),
             unkept_pins: Vec::new(),
@@ -236,6 +260,36 @@ impl Engine {
     /// point ran; `0` before any edit.
     pub fn base_revision(&self) -> u64 {
         self.base_revision
+    }
+
+    /// Changes whenever the document's connectivity may have changed: the
+    /// same entry points as [`Self::revision`], minus the edits whose patch
+    /// touches nothing a net is derived from (a text note, a drawing, the
+    /// paper). Unique across engine instances.
+    pub fn connectivity_revision(&self) -> u64 {
+        self.connectivity_revision
+    }
+
+    pub(crate) fn bump_connectivity_revision(&mut self) {
+        self.connectivity_revision = crate::next_revision();
+    }
+
+    /// Move [`Self::connectivity_revision`] after a command, unless its patch
+    /// proves it left connectivity alone. An error counts as a change: the
+    /// command may have run part-way before it failed.
+    pub(crate) fn note_command_result(&mut self, result: &Result<CommandResult, EngineError>) {
+        let touches = match result {
+            Ok(done) => {
+                done.changed
+                    && done
+                        .patch_pair
+                        .is_none_or(|pair| pair.document.intersects(DocumentPatch::ELECTRICAL))
+            }
+            Err(_) => true,
+        };
+        if touches {
+            self.bump_connectivity_revision();
+        }
     }
 
     pub(crate) fn bump_revision(&mut self) {
@@ -298,10 +352,14 @@ impl Engine {
     }
 
     pub fn execute(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
+        // A refusal touches nothing, so it moves no revision.
+        if let Some(refusal) = self.locked_symbol_refusal(&cmd) {
+            return Err(refusal);
+        }
         self.bump_revision();
         let before = self.document.clone();
 
-        match cmd {
+        let result = match cmd {
             Command::ReplaceDocument { .. }
             | Command::UpdateText { .. }
             | Command::UpdateLabelProps { .. }
@@ -313,7 +371,8 @@ impl Engine {
             | Command::UpdateSymbolFootprint { .. }
             | Command::SetSymbolField { .. }
             | Command::UpdateSymbolFields { .. }
-            | Command::SetTextFontFamily { .. } => self.exec_edits(before, cmd),
+            | Command::SetTextFontFamily { .. }
+            | Command::SetSymbolDesignatorIn { .. } => self.exec_edits(before, cmd),
             Command::DeleteSelection { .. }
             | Command::MoveSelection { .. }
             | Command::MoveEach { .. }
@@ -342,8 +401,12 @@ impl Engine {
             | Command::RenameChildSheetFile { .. }
             | Command::ModifyChildSheet { .. }
             | Command::SetPaperSize { .. }
+            | Command::SetSheetFrame { .. }
+            | Command::SetTitleBlockField { .. }
             | Command::SetDocumentFontFamily { .. } => self.exec_structure(before, cmd),
-        }
+        };
+        self.note_command_result(&result);
+        result
     }
 
     pub fn document(&self) -> &SchematicSheet {
@@ -360,6 +423,7 @@ impl Engine {
 
     pub fn set_document(&mut self, document: SchematicSheet) {
         self.bump_revision();
+        self.bump_connectivity_revision();
         self.document = document;
     }
 }
@@ -409,6 +473,52 @@ mod tests {
         moved(&engine, "annotate");
         engine.set_document(test_sheet());
         moved(&engine, "set_document");
+    }
+
+    #[test]
+    fn only_electrical_edits_move_the_connectivity_revision() {
+        use signex_types::schematic::Wire;
+        let mut sheet = test_sheet();
+        let wire = Wire {
+            uuid: uuid::Uuid::from_u128(7),
+            start: Point::new(0.0, 0.0),
+            end: Point::new(10.0, 0.0),
+            ..Default::default()
+        };
+        sheet.wires.push(wire.clone());
+        let mut engine = Engine::new(sheet).unwrap();
+        let start = engine.connectivity_revision();
+
+        engine
+            .execute(Command::SetPaperSize {
+                paper_size: "A3".into(),
+            })
+            .unwrap();
+        assert_ne!(engine.revision(), 0);
+        assert_eq!(
+            engine.connectivity_revision(),
+            start,
+            "paper size is not electrical"
+        );
+        engine.undo().unwrap();
+        assert_eq!(engine.connectivity_revision(), start, "nor is its undo");
+
+        engine
+            .execute(Command::DeleteSelection {
+                items: vec![SelectedItem::new(wire.uuid, SelectedKind::Wire)],
+            })
+            .unwrap();
+        let after_delete = engine.connectivity_revision();
+        assert_ne!(after_delete, start, "deleting a wire changes connectivity");
+        engine.undo().unwrap();
+        assert_ne!(
+            engine.connectivity_revision(),
+            after_delete,
+            "undoing it changes connectivity back"
+        );
+        let before_set = engine.connectivity_revision();
+        engine.set_document(test_sheet());
+        assert_ne!(engine.connectivity_revision(), before_set);
     }
 
     #[test]
@@ -882,6 +992,73 @@ mod tests {
         // Undo restores the previous format.
         engine.undo().expect("undo");
         assert_eq!(engine.document().paper_size, "A4");
+    }
+
+    #[test]
+    fn set_sheet_frame_clamps_no_ops_and_undoes() {
+        use signex_types::schematic::{MAX_ZONES, SheetFrameSettings};
+        let mut engine = Engine::new(test_sheet()).expect("engine");
+        let wanted = SheetFrameSettings {
+            show_border: false,
+            horizontal_zones: u8::MAX,
+            ..SheetFrameSettings::default()
+        };
+
+        let result = engine
+            .execute(Command::SetSheetFrame { settings: wanted })
+            .expect("set frame");
+        assert!(result.changed);
+        assert_eq!(
+            result.patch_pair.expect("patch").document,
+            DocumentPatch::PAPER
+        );
+        assert!(!engine.document().frame.show_border);
+        assert_eq!(engine.document().frame.horizontal_zones, MAX_ZONES);
+
+        // The same settings again, clamped or not, change nothing.
+        let result = engine
+            .execute(Command::SetSheetFrame { settings: wanted })
+            .expect("no-op set");
+        assert!(!result.changed);
+
+        engine.undo().expect("undo");
+        assert_eq!(engine.document().frame, SheetFrameSettings::default());
+    }
+
+    #[test]
+    fn set_title_block_field_persists_no_ops_clears_and_undoes() {
+        let mut engine = Engine::new(test_sheet()).expect("engine");
+        let set = |engine: &mut Engine, value: &str| {
+            engine
+                .execute(Command::SetTitleBlockField {
+                    key: "drawn_by".to_string(),
+                    value: value.to_string(),
+                })
+                .expect("set title block field")
+        };
+        let field = |engine: &Engine| engine.document().title_block.get("drawn_by").cloned();
+
+        let result = set(&mut engine, "A. Engineer");
+        assert!(result.changed);
+        assert_eq!(
+            result.patch_pair.expect("patch").document,
+            DocumentPatch::PAPER
+        );
+        assert_eq!(field(&engine).as_deref(), Some("A. Engineer"));
+
+        // Same value again is a no-op, and so is clearing an absent key.
+        assert!(!set(&mut engine, "A. Engineer").changed);
+
+        // An empty value removes the key, so the file stays clean.
+        assert!(set(&mut engine, "").changed);
+        assert_eq!(field(&engine), None);
+        assert!(!set(&mut engine, "").changed);
+
+        // Undo walks back through both edits.
+        engine.undo().expect("undo");
+        assert_eq!(field(&engine).as_deref(), Some("A. Engineer"));
+        engine.undo().expect("undo");
+        assert_eq!(field(&engine), None);
     }
 
     fn wire(a: Point, b: Point) -> signex_types::schematic::Wire {

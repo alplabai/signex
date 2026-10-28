@@ -514,3 +514,67 @@ fn write_gitattributes_refuses_a_symlink_and_leaves_its_target_alone() {
             .is_symlink()
     );
 }
+
+/// #1205 — a project folder holding several projects (a shared folder) with
+/// no `.git` is never turned into a repository by a save.
+#[test]
+fn open_or_init_refuses_a_shared_folder_without_a_repo() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("A.snxprj"), b"").unwrap();
+    std::fs::write(dir.path().join("B.snxprj"), b"").unwrap();
+
+    let result = LocalGitProjectAdapter::open_or_init(dir.path().to_path_buf());
+
+    assert!(result.is_err(), "must not git init a shared folder");
+    assert!(!dir.path().join(".git").exists());
+}
+
+#[test]
+fn commit_rename_records_the_move_and_leaves_a_clean_status() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    write_file(&root, "Old.snxprj", "{\"name\":\"Old\"}");
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    adapter
+        .commit_path(Path::new("Old.snxprj"), "init")
+        .unwrap();
+
+    fs::rename(root.join("Old.snxprj"), root.join("New.snxprj")).unwrap();
+    let oid = adapter
+        .commit_rename(
+            Path::new("Old.snxprj"),
+            Path::new("New.snxprj"),
+            "Rename project Old to New",
+        )
+        .unwrap();
+    assert!(oid.is_some(), "a rename is a change worth a commit");
+
+    let repo = git2::Repository::open(&root).unwrap();
+    let mut opts = git2::StatusOptions::new();
+    opts.include_untracked(true);
+    let statuses = repo.statuses(Some(&mut opts)).unwrap();
+    assert!(
+        statuses.is_empty(),
+        "no unstaged deletion or untracked file may remain, got {:?}",
+        statuses
+            .iter()
+            .map(|s| s.path().map(str::to_string))
+            .collect::<Vec<_>>()
+    );
+    let tree = repo.head().unwrap().peel_to_tree().unwrap();
+    assert!(tree.get_name("New.snxprj").is_some());
+    assert!(tree.get_name("Old.snxprj").is_none());
+}
+
+#[test]
+fn commit_rename_rejects_a_parent_escape_in_the_removed_path() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    write_file(&root, "New.snxprj", "{}");
+    let adapter = LocalGitProjectAdapter::open_or_init(root).unwrap();
+    assert!(
+        adapter
+            .commit_rename(Path::new("../Old.snxprj"), Path::new("New.snxprj"), "x")
+            .is_err()
+    );
+}

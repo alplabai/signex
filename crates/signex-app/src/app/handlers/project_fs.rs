@@ -79,6 +79,7 @@ mod tests {
                 enable_git: false,
                 net_classes: Vec::new(),
                 rules: None,
+                annotation: None,
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),
@@ -152,6 +153,7 @@ mod tests {
             net_color_revision: 0,
             save_as_from: None,
             result: Ok(crate::persist::SaveOutcome::Written),
+            recovery_hold: None,
         };
         let _ = app.update(Message::File(crate::app::FileMsg::DocumentSaved(done)));
         assert!(

@@ -18,8 +18,9 @@
 
 use signex_sketch::attr::{ElectricalType, PadFeature, TestpointFlags};
 
-use super::serde_tsv::{fmt_f64_fp, non_finite_pad, parse_opt_f64_cell_fp};
+use super::serde_tsv::{non_finite_pad, parse_opt_f64_cell_fp};
 use super::{FootprintFileError, Pad};
+use crate::primitive::tsv_cell::fmt_f64;
 
 pub(super) struct ExtendedColumn {
     pub name: &'static str,
@@ -61,7 +62,7 @@ macro_rules! opt_f64_col {
             name: stringify!($f),
             encode: |p| match p.$f {
                 None => Ok(String::new()),
-                Some(v) => fmt_f64_fp(v).ok_or_else(|| non_finite_pad(&p.number, stringify!($f))),
+                Some(v) => fmt_f64(v).ok_or_else(|| non_finite_pad(&p.number, stringify!($f))),
             },
             decode: |p, s| {
                 p.$f = parse_opt_f64_cell_fp(stringify!($f), s)?;

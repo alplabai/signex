@@ -88,6 +88,27 @@ fn skipped_summary(skipped: &std::collections::BTreeSet<std::path::PathBuf>) -> 
 }
 
 impl Signex {
+    /// Whether a bulk pass must leave the tab-less sheet at `path` alone
+    /// because a History restore of it is still running (even a cancelled
+    /// one) or a read of it is in flight: the write would race the worker,
+    /// and a read landing later would install the pre-pass content over it.
+    /// The reason leads the Messages line.
+    fn unopened_write_blocked(&self, pass: &str, path: &std::path::Path) -> bool {
+        let reason = if self.document_state.pending_restores.contains(path) {
+            "a History restore of it is still running"
+        } else if self.document_state.pending_opens.contains(path) {
+            "a read of it is still in flight"
+        } else {
+            return false;
+        };
+        let name = path.file_name().map_or_else(
+            || path.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        crate::diagnostics::log_warning(format!("{pass}: {name} was left unchanged, {reason}"));
+        true
+    }
+
     /// Tell the user which sheets a bulk pass skipped: Messages panel plus a
     /// dialog, because a quiet log line would read as "everything was done".
     fn report_read_only_skipped(
@@ -118,6 +139,51 @@ impl Signex {
         self.document_state.dirty_paths.insert(path.to_path_buf());
     }
 
+    /// Refuse a project-wide rewrite up front, with a notice, when any of its
+    /// sheets lies in a project whose folder is being renamed: the unopened
+    /// sheets would be written into the old folder. True when refused.
+    fn refuse_annotate_while_project_moves(
+        &mut self,
+        project_set: &crate::app::project_sheets::ProjectSheetSet,
+        what: &str,
+    ) -> bool {
+        let Some(path) = project_set
+            .sheets
+            .keys()
+            .find(|p| self.path_is_in_moving_project(p))
+        else {
+            return false;
+        };
+        let detail = format!(
+            "{what} was not run: {} is in a project whose folder is being renamed. Try again once the rename has finished.",
+            path.display()
+        );
+        crate::diagnostics::log_warning(detail.clone());
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
+        true
+    }
+
+    /// Refuse a project-wide rewrite up front when a rename or delete holds
+    /// any of its sheets: writing the rest would leave the designators on
+    /// disk inconsistent (#859). True when refused.
+    fn refuse_annotate_while_path_op(
+        &mut self,
+        project_set: &crate::app::project_sheets::ProjectSheetSet,
+        what: &str,
+    ) -> bool {
+        let Some(refusal) = project_set
+            .sheets
+            .keys()
+            .find_map(|p| self.refuse_while_path_op(p, "rewritten").err())
+        else {
+            return false;
+        };
+        let detail = format!("{what} was not run: {refusal}");
+        crate::diagnostics::log_warning(detail.clone());
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
+        true
+    }
+
     pub(crate) fn handle_annotate(&mut self, mode: signex_engine::AnnotateMode) -> Task<Message> {
         // Share one per-prefix counter across every open sheet so designators
         // don't collide across sheets of the same project.
@@ -133,6 +199,11 @@ impl Signex {
         // used) — #406.
         let (_pages, project_set) =
             crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
+        if self.refuse_annotate_while_project_moves(&project_set, "Annotate")
+            || self.refuse_annotate_while_path_op(&project_set, "Annotate")
+        {
+            return Task::none();
+        }
 
         // Pass A: seed the shared counter from every sheet's already-
         // annotated symbols. This happens inside annotate_with_seed's
@@ -148,15 +219,12 @@ impl Signex {
             }
         }
         for refstr in &all_existing {
-            let prefix: String = refstr
-                .chars()
-                .take_while(|c| c.is_ascii_alphabetic())
-                .collect();
+            let (prefix, number) = signex_types::designator::split_reference(refstr);
             if prefix.is_empty() {
                 continue;
             }
-            if let Ok(n) = refstr[prefix.len()..].parse::<u32>() {
-                let e = next_by_prefix.entry(prefix).or_insert(0);
+            if let Some(n) = number {
+                let e = next_by_prefix.entry(prefix.to_owned()).or_insert(0);
                 if n > *e {
                     *e = n;
                 }
@@ -285,10 +353,7 @@ impl Signex {
             let Some(document) = project_set.sheets.get(path).cloned() else {
                 continue;
             };
-            // Writing it now would recreate a file that is being renamed or
-            // delete it from under a running delete (#859).
-            if let Err(refusal) = self.refuse_while_path_op(path, "annotated") {
-                crate::diagnostics::log_warning(refusal.to_string());
+            if self.unopened_write_blocked("Annotate", path) {
                 continue;
             }
             if annotate_and_save_unopened(
@@ -304,6 +369,14 @@ impl Signex {
             }
         }
         let changed_sheets = touched_sheets.live.len() + touched_sheets.disk_only.len();
+        // The files written above bypassed the document save path, so the
+        // autosave hook is called for them here (#1164).
+        let recovery_cleanup: Vec<Task<Message>> = touched_sheets
+            .disk_only
+            .clone()
+            .iter()
+            .map(|path| self.autosave_after_disk_write(path))
+            .collect();
         if let Some(group) = undo_group {
             self.set_undo_group_sheets(group, touched_sheets);
         }
@@ -337,7 +410,7 @@ impl Signex {
             "Annotated symbols on {changed_sheets} sheet(s) ({mode:?})",
         ));
         self.report_read_only_skipped("Annotate", &read_only);
-        Task::none()
+        Task::batch(recovery_cleanup)
     }
 
     pub(crate) fn handle_open_annotate_dialog(&mut self) -> Task<Message> {
@@ -375,6 +448,11 @@ impl Signex {
         // survived into the netlist and onto the board (#406).
         let (_pages, project_set) =
             crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
+        if self.refuse_annotate_while_project_moves(&project_set, "Reset Duplicate Designators")
+            || self.refuse_annotate_while_path_op(&project_set, "Reset Duplicate Designators")
+        {
+            return Task::none();
+        }
 
         // Split by "is it open as an engine": open sheets are reset
         // through their engine so the edit is undoable, the rest are
@@ -399,6 +477,9 @@ impl Signex {
             }
             project_paths.insert(path.clone());
             if !self.document_state.engines.contains_key(&path) {
+                if self.unopened_write_blocked("Reset Duplicate Designators", &path) {
+                    continue;
+                }
                 unopened.push((path, sheet));
             }
         }
@@ -430,11 +511,7 @@ impl Signex {
                     continue;
                 }
                 if dupes.contains(sym.reference.trim()) {
-                    let prefix: String = sym
-                        .reference
-                        .chars()
-                        .take_while(|c| c.is_ascii_alphabetic())
-                        .collect();
+                    let prefix = signex_types::designator::alphabetic_prefix(&sym.reference);
                     if !prefix.is_empty() {
                         sym.reference = format!("{prefix}?");
                         changed = true;
@@ -511,12 +588,9 @@ impl Signex {
         // Unopened sheets — mutate the already-parsed copy and write
         // back. NOTE: direct save, not undoable from within Signex;
         // the user would need to re-open the sheet and Ctrl+Z manually.
+        let mut recovery_cleanup: Vec<Task<Message>> = Vec::new();
         for (path, mut sheet) in unopened {
             if !reset_in(&mut sheet, &duplicates) {
-                continue;
-            }
-            if let Err(refusal) = self.refuse_while_path_op(&path, "reset") {
-                crate::diagnostics::log_warning(refusal.to_string());
                 continue;
             }
             let mut engine = match signex_engine::Engine::new(sheet) {
@@ -534,6 +608,9 @@ impl Signex {
                 Ok(_) => {
                     resets += 1;
                     self.document_state.dirty_paths.remove(&path);
+                    // Rewritten outside the document save path: call the
+                    // autosave hook so a recovery copy of the old content goes.
+                    recovery_cleanup.push(self.autosave_after_disk_write(&path));
                 }
                 Err(err) => {
                     crate::diagnostics::log_info(format!(
@@ -564,7 +641,7 @@ impl Signex {
             resets,
         ));
         self.report_read_only_skipped("Reset Duplicate Designators", &read_only);
-        Task::none()
+        Task::batch(recovery_cleanup)
     }
 
     pub(crate) fn handle_annotate_order_changed(

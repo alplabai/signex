@@ -18,14 +18,77 @@ fn bounds() -> Rectangle {
     Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0))
 }
 
-fn at(cache: &mut ContentSceneCache, sheet: &SchematicRenderSnapshot, x: f32, scale: f32) {
+fn at(
+    cache: &mut ContentSceneCache,
+    sheet: &SchematicRenderSnapshot,
+    x: f32,
+    scale: f32,
+) -> Option<std::sync::Arc<Scene>> {
     let colors = canvas_colors(ThemeId::Signex);
     let transform = ScreenTransform {
         offset_x: x,
         offset_y: 0.0,
         scale,
     };
-    cache.scene_for(sheet, &transform, &colors, bounds(), None, None);
+    cache
+        .scene_for(
+            sheet,
+            &transform,
+            &colors,
+            bounds(),
+            None,
+            Default::default(),
+        )
+        .cloned()
+}
+
+/// The GPU upload cache keys on the generation: it must hold across a pan the
+/// scene survives and change when the scene is rebuilt (#199 S0).
+#[test]
+fn generation_is_stable_on_pan_and_bumps_on_rebuild() {
+    let sheet = sheet_with_wire();
+    let mut cache = ContentSceneCache::default();
+    assert_eq!(cache.generation(), None);
+    at(&mut cache, &sheet, 0.0, 4.0);
+    let built = cache.generation().expect("built");
+    at(&mut cache, &sheet, 100.0, 4.0);
+    assert_eq!(cache.generation(), Some(built), "pan inside the margin");
+    at(&mut cache, &sheet, 0.0, 8.0);
+    let zoomed = cache.generation().expect("rebuilt");
+    assert!(zoomed > built, "a zoom step rebuilds and bumps");
+    cache.invalidate();
+    assert_eq!(cache.generation(), None);
+    at(&mut cache, &sheet, 0.0, 8.0);
+    assert!(cache.generation().expect("rebuilt") > zoomed);
+}
+
+/// Two windows' caches feed one `SchematicSurface` pipeline slot, so their
+/// generations must never coincide.
+#[test]
+fn separate_cache_slots_never_share_a_generation() {
+    let sheet = sheet_with_wire();
+    let mut seen = std::collections::HashSet::new();
+    let mut a = ContentSceneCache::default();
+    let mut b = ContentSceneCache::default();
+    for round in 0..4 {
+        let scale = 4.0 + round as f32;
+        at(&mut a, &sheet, 0.0, scale);
+        assert!(seen.insert(a.generation().expect("built")));
+        at(&mut b, &sheet, 0.0, scale);
+        assert!(seen.insert(b.generation().expect("built")));
+    }
+}
+
+/// A hit hands back the very `Arc` it built, not a copy of the geometry.
+#[test]
+fn cache_hit_returns_the_same_arc() {
+    let sheet = sheet_with_wire();
+    let mut cache = ContentSceneCache::default();
+    let first = at(&mut cache, &sheet, 0.0, 4.0).expect("scene");
+    let hit = at(&mut cache, &sheet, 50.0, 4.0).expect("scene");
+    assert!(std::sync::Arc::ptr_eq(&first, &hit));
+    let rebuilt = at(&mut cache, &sheet, 0.0, 8.0).expect("scene");
+    assert!(!std::sync::Arc::ptr_eq(&first, &rebuilt));
 }
 
 /// Pan frames move only the camera offset; the snapshot -> scene build must
@@ -76,7 +139,14 @@ fn invalidate_forces_a_rebuild_and_a_theme_change_does_too() {
         scale: 4.0,
     };
     let other = canvas_colors(ThemeId::Nord);
-    cache.scene_for(&sheet, &transform, &other, bounds(), None, None);
+    cache.scene_for(
+        &sheet,
+        &transform,
+        &other,
+        bounds(),
+        None,
+        Default::default(),
+    );
     assert_eq!(cache.builds(), 3);
 }
 
@@ -91,7 +161,14 @@ fn a_panned_scene_still_contains_the_wire() {
             offset_y: 0.0,
             scale: 4.0,
         };
-        let scene = cache.scene_for(&sheet, &transform, &colors, bounds(), None, None);
+        let scene = cache.scene_for(
+            &sheet,
+            &transform,
+            &colors,
+            bounds(),
+            None,
+            Default::default(),
+        );
         assert!(scene.is_some_and(|s| !s.lines.is_empty()));
     }
     assert_eq!(cache.builds(), 1);
@@ -121,7 +198,14 @@ fn replay_after_pan(sheet: &SchematicRenderSnapshot, dx: f32, dy: f32) -> (bool,
             offset_y: y,
             scale: 4.0,
         };
-        let scene = cache.scene_for(sheet, &transform, &colors, bounds(), None, None);
+        let scene = cache.scene_for(
+            sheet,
+            &transform,
+            &colors,
+            bounds(),
+            None,
+            Default::default(),
+        );
         has_line = scene.is_some_and(|s| !s.lines.is_empty());
     }
     (has_line, cache.builds())
@@ -171,7 +255,14 @@ fn drag_path_bounds_at_a_non_zero_origin_keep_a_left_edge_wire() {
         scale: 4.0,
     };
     let widget = Rectangle::new(iced::Point::new(250.0, 90.0), iced::Size::new(800.0, 600.0));
-    let raw = build_schematic_scene(&sheet, &transform, &colors, widget, None, None);
+    let raw = build_schematic_scene(
+        &sheet,
+        &transform,
+        &colors,
+        widget,
+        None,
+        Default::default(),
+    );
     assert!(raw.is_none(), "raw window-space bounds cull the wire");
     let local = build_schematic_scene(
         &sheet,
@@ -179,7 +270,7 @@ fn drag_path_bounds_at_a_non_zero_origin_keep_a_left_edge_wire() {
         &colors,
         frame_local_bounds(widget),
         None,
-        None,
+        Default::default(),
     );
     assert!(local.is_some_and(|s| !s.lines.is_empty()));
 }
@@ -194,13 +285,23 @@ fn setting_the_render_cache_drops_the_cached_scene() {
         offset_y: 0.0,
         scale: 4.0,
     };
-    let _ =
-        slot.content_scene_for_test()
-            .scene_for(&sheet, &transform, &colors, bounds(), None, None);
+    let _ = slot.content_scene_for_test().scene_for(
+        &sheet,
+        &transform,
+        &colors,
+        bounds(),
+        None,
+        Default::default(),
+    );
     assert_eq!(slot.content_scene_for_test().builds(), 1);
     slot.set_render_cache(None);
-    let _ =
-        slot.content_scene_for_test()
-            .scene_for(&sheet, &transform, &colors, bounds(), None, None);
+    let _ = slot.content_scene_for_test().scene_for(
+        &sheet,
+        &transform,
+        &colors,
+        bounds(),
+        None,
+        Default::default(),
+    );
     assert_eq!(slot.content_scene_for_test().builds(), 2);
 }

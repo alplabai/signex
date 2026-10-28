@@ -13,16 +13,21 @@ use thiserror::Error;
 
 use crate::{ExportContext, Exporter};
 
+mod cells;
 pub(crate) mod csv;
 mod html;
+#[cfg(test)]
+mod pricing_tests;
 mod units;
 mod xlsx;
 
+pub use cells::{cell_number, cell_text, money, total_lines, unit_money};
 pub use csv::emit as csv_emit;
 pub use html::emit as html_emit;
 pub use signex_bom::{
-    BomGrouping, BomIssueSeverity, BomMetadata, BomRow, BomRule, BomRuleOptions, BomTable,
-    BomValidationIssue, BomValidationReport,
+    BomGrouping, BomIssueSeverity, BomMetadata, BomPrice, BomRow, BomRule, BomRuleOptions,
+    BomTable, BomValidationIssue, BomValidationReport, PriceBook, PriceQuote, library_row_key,
+    mpn_key, price_totals,
 };
 pub use xlsx::emit as xlsx_emit;
 
@@ -42,6 +47,9 @@ pub struct BomOptions {
     pub include_not_fitted: bool,
     pub active_variant: Option<String>,
     pub rule_options: BomRuleOptions,
+    /// Cached library prices the rows are priced from (#1023). Empty: no
+    /// row is priced and the price columns stay blank.
+    pub price_book: signex_bom::PriceBook,
 }
 
 impl Default for BomOptions {
@@ -61,6 +69,7 @@ impl Default for BomOptions {
             include_not_fitted: false,
             active_variant: None,
             rule_options: BomRuleOptions::default(),
+            price_book: signex_bom::PriceBook::default(),
         }
     }
 }
@@ -84,9 +93,34 @@ pub enum BomColumn {
     Footprint,
     Description,
     Custom(String),
+    /// Cached unit price at the quantity bought (#1023).
+    UnitPrice,
+    /// The quantity priced: the fitted quantity, raised to the
+    /// distributor's minimum order.
+    BuyQty,
+    /// Unit price × the quantity bought, rounded to cents.
+    ExtendedPrice,
+    Currency,
+    /// Distributor stock when the price was cached.
+    Stock,
+    /// The distributor the price comes from.
+    Distributor,
+    /// How old the cached price is.
+    PriceAge,
 }
 
 impl BomColumn {
+    /// The price columns, in the order the BOM offers them.
+    pub const PRICES: [BomColumn; 7] = [
+        BomColumn::UnitPrice,
+        BomColumn::BuyQty,
+        BomColumn::ExtendedPrice,
+        BomColumn::Currency,
+        BomColumn::Stock,
+        BomColumn::Distributor,
+        BomColumn::PriceAge,
+    ];
+
     pub fn header(&self) -> &str {
         match self {
             Self::Name => "Name",
@@ -98,6 +132,13 @@ impl BomColumn {
             Self::Footprint => "Footprint",
             Self::Description => "Description",
             Self::Custom(name) => name,
+            Self::UnitPrice => "Unit Price",
+            Self::BuyQty => "Buy Qty",
+            Self::ExtendedPrice => "Ext. Price",
+            Self::Currency => "Currency",
+            Self::Stock => "Stock",
+            Self::Distributor => "Distributor",
+            Self::PriceAge => "Price Age",
         }
     }
 }
@@ -158,7 +199,9 @@ pub fn rollup(ctx: &ExportContext, opts: &BomOptions) -> BomTable {
     let bom_ctx = build_bom_context(ctx, opts);
     let engine_opts = engine_options_from_opts(opts);
 
-    build_table(&bom_ctx, &engine_opts)
+    let mut table = build_table(&bom_ctx, &engine_opts);
+    signex_bom::apply_prices(&mut table, &opts.price_book);
+    table
 }
 
 /// Roll up and validate in one pass — the same table + report
@@ -169,7 +212,8 @@ pub fn rollup_with_validation(
     opts: &BomOptions,
 ) -> (BomTable, BomValidationReport) {
     let bom_ctx = build_bom_context(ctx, opts);
-    let table = build_table(&bom_ctx, &engine_options_from_opts(opts));
+    let mut table = build_table(&bom_ctx, &engine_options_from_opts(opts));
+    signex_bom::apply_prices(&mut table, &opts.price_book);
     let report = validate_table(
         &build_validation_context(&bom_ctx, opts),
         &table,
@@ -195,9 +239,11 @@ fn engine_options_from_opts(opts: &BomOptions) -> BomEngineOptions {
         grouping: opts.grouping,
         include_dnp: opts.include_dnp,
         include_not_fitted: opts.include_not_fitted,
-        // Keep v0.8 behavior stable for now: include symbols regardless of these flags.
-        include_excluded_from_bom: true,
-        include_not_on_board: true,
+        // A part marked out of the BOM or off the board has always been
+        // listed only together with the not-fitted parts (it used to be folded
+        // into the fitted state), so the one export toggle keeps governing it.
+        include_excluded_from_bom: opts.include_not_fitted,
+        include_not_on_board: opts.include_not_fitted,
     }
 }
 
@@ -314,14 +360,16 @@ fn placed_components(placed: &[(&Symbol, &str)], opts: &BomOptions) -> Vec<BomCo
             base_fitted,
             custom,
             unit_conflicts: merged.conflicts,
+            library_row: sym.library_id.zip(sym.row_id).map(|(library, row)| {
+                signex_bom::library_row_key(&library.to_string(), &row.to_string())
+            }),
         });
     }
     components
 }
 
 fn component_is_exported(component: &BomComponent, opts: &BomOptions) -> bool {
-    component.passes_dnp_filter(opts.include_dnp)
-        && (opts.include_not_fitted || component.is_fitted())
+    engine_options_from_opts(opts).admits(component)
 }
 
 fn build_validation_context(ctx: &BomContext, opts: &BomOptions) -> BomContext {
@@ -661,7 +709,7 @@ mod tests {
         }
     }
 
-    fn unit_of(reference: &str, lib_id: &str, unit: u32) -> Symbol {
+    pub(super) fn unit_of(reference: &str, lib_id: &str, unit: u32) -> Symbol {
         Symbol {
             lib_id: lib_id.to_string(),
             reference: reference.to_string(),
@@ -670,7 +718,7 @@ mod tests {
         }
     }
 
-    fn context_with(symbols: Vec<Symbol>) -> ExportContext {
+    pub(super) fn context_with(symbols: Vec<Symbol>) -> ExportContext {
         let mut ctx = base_dnp_variant_context(false);
         ctx.sheets[0].schematic.symbols = symbols;
         ctx
@@ -861,6 +909,51 @@ mod tests {
                 && i.message.contains("In BOM")
                 && i.message.contains("differ")),
             "{issues:?}"
+        );
+    }
+
+    #[test]
+    fn include_dnp_alone_exports_dnp_parts_but_not_excluded_ones() {
+        let mut dnp = unit_of("R2", "Device:R", 1);
+        dnp.dnp = true;
+        let mut excluded = unit_of("R3", "Device:R", 1);
+        excluded.in_bom = false;
+        let ctx = context_with(vec![unit_of("R1", "Device:R", 1), dnp, excluded]);
+        let qty = |opts: &BomOptions| rollup(&ctx, opts).rows.iter().map(|r| r.qty).sum::<u32>();
+        assert_eq!(qty(&BomOptions::default()), 1);
+        let dnp_only = BomOptions {
+            include_dnp: true,
+            ..BomOptions::default()
+        };
+        assert_eq!(qty(&dnp_only), 2);
+    }
+
+    #[test]
+    fn a_part_outside_the_bom_listed_by_include_not_fitted_is_not_fitted() {
+        let mut test_point = unit_of("TP1", "Device:TestPoint", 1);
+        test_point.in_bom = false;
+        let ctx = context_with(vec![unit_of("R1", "Device:R", 1), test_point]);
+        let opts = BomOptions {
+            include_not_fitted: true,
+            ..BomOptions::default()
+        };
+        let rows = rollup(&ctx, &opts).rows;
+        let row = rows
+            .iter()
+            .find(|r| r.references.iter().any(|x| x == "TP1"))
+            .expect("listed");
+        assert_eq!((row.qty, row.fitted_qty, row.not_fitted_qty), (1, 0, 1));
+        let r1 = rows
+            .iter()
+            .find(|r| r.references.iter().any(|x| x == "R1"))
+            .unwrap();
+        assert_eq!((r1.fitted_qty, r1.not_fitted_qty), (1, 0));
+        // Without the toggle it stays out of the BOM.
+        assert!(
+            !rollup(&ctx, &BomOptions::default())
+                .rows
+                .iter()
+                .any(|r| r.references.iter().any(|x| x == "TP1"))
         );
     }
 
@@ -1127,6 +1220,7 @@ mod tests {
                 lib_ref: "Device:R".to_string(),
                 description: "Resistor".to_string(),
                 custom: BTreeMap::new(),
+                ..Default::default()
             }],
             metadata: BomMetadata {
                 title: "Test".to_string(),
@@ -1162,6 +1256,7 @@ mod tests {
                 lib_ref: "Device:R".to_string(),
                 description: "Resistor".to_string(),
                 custom: BTreeMap::new(),
+                ..Default::default()
             }],
             metadata: BomMetadata {
                 title: "Test".to_string(),
@@ -1196,6 +1291,7 @@ mod tests {
                 lib_ref: "Device:R".to_string(),
                 description: "Resistor".to_string(),
                 custom: BTreeMap::new(),
+                ..Default::default()
             }],
             metadata: BomMetadata {
                 title: "Test".to_string(),

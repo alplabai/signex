@@ -1,19 +1,6 @@
-//! Filesystem moves and deletes that run off the UI thread (#859).
-//!
-//! A rename or delete used to run inside one `update`, so nothing could touch
-//! the file between the disk change and the in-memory re-key that followed it.
-//! The disk work now runs on a worker (`path_op_jobs`) and the re-key happens
-//! in the completion message, which opens a window the synchronous code never
-//! had: the user can save, reopen or restore the same file while the move is
-//! in flight, and a write landing then recreates the old path or is lost.
-//!
-//! [`PendingPathOps`] closes it. `update` registers the path before it
-//! returns the `Task`; every entry that writes to, opens, or starts another
-//! move of a path asks [`Signex::refuse_while_path_op`] first and refuses with
-//! a reason-first message. The completion drops the registration.
-//! Edits to an open document are not refused: the completion re-keys engines,
-//! tabs and dirty markers by moving them, so edits made meanwhile travel with
-//! the document.
+//! Filesystem moves and deletes that run off the UI thread (#859): the
+//! pending-operation registry that refuses writes meanwhile. See
+//! `docs/architecture/path-ops.md`.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -100,6 +87,11 @@ impl PendingPathOps {
             fold,
         });
         id
+    }
+
+    /// Whether the operation `id` is still registered.
+    pub fn is_registered(&self, id: PathOpId) -> bool {
+        self.ops.iter().any(|op| op.id == id)
     }
 
     /// Drop a registration when its operation is completely finished.
@@ -253,8 +245,6 @@ pub struct ReferencePlan {
 pub enum FileRenameKind {
     /// A sheet, PCB or primitive: parent references are re-pointed.
     Document(ReferencePlan),
-    /// The `.snxprj` itself; `name` is the new project name.
-    Project,
 }
 
 /// Everything a file rename's completion needs, captured when it started.
@@ -263,7 +253,7 @@ pub struct FileRenameRequest {
     pub id: PathOpId,
     pub from: PathBuf,
     pub to: PathBuf,
-    /// The new file name (a project rename: the new stem).
+    /// The new file name.
     pub new_name: String,
     /// The project that owns the file, by id: its index can shift meanwhile.
     pub owner: Option<ProjectId>,
@@ -343,6 +333,9 @@ pub struct DeleteRequest {
     pub target: PathBuf,
     pub display_name: String,
     pub fold: CaseFold,
+    /// The Remove dialog the delete came from: the completion prunes the
+    /// project entry from it once the file is gone.
+    pub dialog: crate::app::RemoveDialogState,
 }
 
 /// What the delete worker found or did.
