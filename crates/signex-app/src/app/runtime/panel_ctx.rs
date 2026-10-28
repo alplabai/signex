@@ -465,7 +465,6 @@ impl Signex {
 
         let canvas_font_popup_open = self.document_state.panel_ctx.canvas_font_popup_open;
         let properties_tab = self.document_state.panel_ctx.properties_tab;
-        let selected_component = self.document_state.panel_ctx.selected_component.clone();
         let selection_count = self.document_state.panel_ctx.selection_count;
         let selected_uuid = self.document_state.panel_ctx.selected_uuid;
         let selected_kind = self.document_state.panel_ctx.selected_kind;
@@ -534,7 +533,6 @@ impl Signex {
             .clone()
             .filter(|draft| draft.is_live(self.numeric_field_state(draft.key)));
         let title_block_sheet = self.document_state.active_path.clone();
-        let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
         let page_format_mode = self.document_state.panel_ctx.page_format_mode;
@@ -605,7 +603,6 @@ impl Signex {
             canvas_font_popup_open,
             properties_tab,
             net_classes,
-            selected_component,
             project_tree: kept_project_tree,
             project_tree_builds,
             project_tree_selected: self.document_state.panel_ctx.project_tree_selected.clone(),
@@ -634,7 +631,6 @@ impl Signex {
             paper_edge_drafts,
             numeric_draft,
             title_block_sheet,
-            component_filter,
             collapsed_sections,
             pre_placement,
             erc_diagnostics,
@@ -751,25 +747,6 @@ mod tests {
         app.document_state.projects[0].data.pcb_file = Some("b.snxpcb".into());
         app.refresh_panel_ctx();
         assert_eq!(app.document_state.panel_ctx.project_tree_builds, builds + 1);
-    }
-
-    /// #1383: a real engine edit moves the key, so the panel lists show the
-    /// placed symbol instead of the reused (stale) ones.
-    #[test]
-    fn symbol_lists_follow_a_real_edit() {
-        let (mut app, _task) = Signex::new();
-        app.open_schematic_tab(
-            PathBuf::from("snx-1383-edit.snxsch"),
-            "snx-1383-edit".to_string(),
-            signex_types::schematic::SchematicSheet::default(),
-        );
-        app.refresh_panel_ctx();
-        assert!(app.document_state.panel_ctx.placed_symbols.is_empty());
-
-        app.document_state.panel_ctx.selected_component = Some("Device:R".to_string());
-        assert!(app.place_selected_component(10.0, 10.0));
-        app.refresh_panel_ctx();
-        assert_eq!(app.document_state.panel_ctx.placed_symbols.len(), 1);
     }
 
     /// #1098: the probe request must name `<dir>/.git` for the project dir

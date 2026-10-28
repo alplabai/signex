@@ -15,6 +15,10 @@ use crate::app::{Message, OverlayMsg};
 use crate::keymap::{KeymapEditorModel, KeymapEditorRow, ShortcutProfileSet};
 use crate::styles;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 const MODAL_W: f32 = 520.0;
 const MODAL_H: f32 = 600.0;
 const KEY_COL_W: f32 = 140.0;
@@ -96,10 +100,10 @@ pub fn view<'a>(
     // because it's what users scan for; Shortcut on the right.
     let column_header = container(
         row![
-            text("Action").size(10).color(text_secondary),
+            text("Action").size(TS.caption).color(text_secondary),
             Space::new().width(Length::Fill),
             text("Shortcut")
-                .size(10)
+                .size(TS.caption)
                 .color(text_secondary)
                 .width(Length::Fixed(KEY_COL_W)),
         ]
@@ -139,10 +143,10 @@ pub fn view<'a>(
         let mut section_col = Column::new().spacing(0);
         for (idx, (label, trigger)) in section_shortcuts.iter().enumerate() {
             let row_el: Element<'a, Message> = row![
-                text(label.clone()).size(11).color(text_primary),
+                text(label.clone()).size(TS.body).color(text_primary),
                 Space::new().width(Length::Fill),
                 text(trigger.clone())
-                    .size(11)
+                    .size(TS.body)
                     .color(text_primary)
                     .width(Length::Fixed(KEY_COL_W)),
             ]
@@ -159,7 +163,7 @@ pub fn view<'a>(
     }
 
     let body_container = container(scrollable(body).height(Length::Fill))
-        .padding([10, 16])
+        .padding([10.0, SP.xl])
         .width(Length::Fill)
         .height(Length::Fill);
 

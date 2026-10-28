@@ -1,7 +1,12 @@
 //! Library panels -- SCH Library, Footprint Library and row detail.
 
 use super::*;
+use crate::styles::{Spacing, TypeScale};
 use iced::widget::column;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// Detail for the row currently selected in the active Library
 /// Browser tab. Surfaces in the right-edge Properties panel so
@@ -60,8 +65,8 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(
-        container(text("SCH Library").size(11).color(primary))
-            .padding([6, 8])
+        container(text("SCH Library").size(TS.body).color(primary))
+            .padding([6.0, SP.m])
             .width(Length::Fill),
     );
     col = col.push(thin_sep(border_c));
@@ -73,10 +78,10 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     "Open a `.snxsym` to see its symbols here. Right-click a library node \
                      in the project tree and pick `Add New ▸ Symbol` to create one.",
                 )
-                .size(10)
+                .size(TS.caption)
                 .color(muted),
             )
-            .padding([6, 8])
+            .padding([6.0, SP.m])
             .width(Length::Fill),
         );
         return scrollable(col).width(Length::Fill).into();
@@ -114,7 +119,7 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         ),
         None => format!("{}  ({} symbols)", symbol_file, sym.symbols_in_file.len()),
     };
-    col = col.push(container(text(breadcrumb).size(10).color(muted)).padding([4, 8]));
+    col = col.push(container(text(breadcrumb).size(TS.caption).color(muted)).padding([SP.s, SP.m]));
     col = col.push(thin_sep(border_c));
 
     // ── Column header — Altium SCH Library parity. Two columns:
@@ -123,17 +128,17 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         container(
             row![
                 text("Design Item ID")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::FillPortion(3)),
                 text("Description")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::FillPortion(4)),
             ]
             .spacing(6),
         )
-        .padding([4, 8])
+        .padding([SP.s, SP.m])
         .width(Length::Fill),
     );
     col = col.push(thin_sep(border_c));
@@ -151,18 +156,18 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         let row_btn = iced::widget::button(
             row![
                 text(entry.name.clone())
-                    .size(11)
+                    .size(TS.body)
                     .color(label_color)
                     .width(Length::FillPortion(3)),
                 text(entry.description.clone())
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::FillPortion(4)),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),
         )
-        .padding([4, 8])
+        .padding([SP.s, SP.m])
         .width(Length::Fill)
         .on_press(row_msg)
         .style(
@@ -253,19 +258,19 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     // Place — fires on the active symbol (would dispatch to schematic
     // place flow when wired). Stub for now: greyed-out.
-    let place_btn = iced::widget::button(text("Place").size(11).color(muted))
-        .padding([4, 10])
+    let place_btn = iced::widget::button(text("Place").size(TS.body).color(muted))
+        .padding([SP.s, 10.0])
         .style(action_btn_style(true, false));
 
-    let add_btn = iced::widget::button(text("Add").size(11).color(primary))
-        .padding([4, 10])
+    let add_btn = iced::widget::button(text("Add").size(TS.body).color(primary))
+        .padding([SP.s, 10.0])
         .on_press(PanelMsg::SchLibraryAddSymbol)
         .style(action_btn_style(false, true));
 
     let can_delete = sym.symbols_in_file.len() > 1;
     let delete_color = if can_delete { primary } else { muted };
-    let mut delete_btn = iced::widget::button(text("Delete").size(11).color(delete_color))
-        .padding([4, 10])
+    let mut delete_btn = iced::widget::button(text("Delete").size(TS.body).color(delete_color))
+        .padding([SP.s, 10.0])
         .style(action_btn_style(false, can_delete));
     if can_delete {
         delete_btn = delete_btn.on_press(PanelMsg::SchLibraryDeleteSymbol(sym.active_idx));
@@ -274,8 +279,8 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // Edit — opens the active symbol in the standalone editor (for
     // when the SCH Library panel is the only visible surface).
     // Stub for now since the symbol is already open in its tab.
-    let edit_btn = iced::widget::button(text("Edit").size(11).color(muted))
-        .padding([4, 10])
+    let edit_btn = iced::widget::button(text("Edit").size(TS.body).color(muted))
+        .padding([SP.s, 10.0])
         .style(action_btn_style(false, false));
 
     col = col.push(
@@ -292,7 +297,7 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             ]
             .align_y(iced::Alignment::Center),
         )
-        .padding([6, 8]),
+        .padding([6.0, SP.m]),
     );
 
     scrollable(col).width(Length::Fill).into()
@@ -315,8 +320,8 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
 
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(
-        container(text("Footprint Library").size(11).color(primary))
-            .padding([6, 8])
+        container(text("Footprint Library").size(TS.body).color(primary))
+            .padding([6.0, SP.m])
             .width(Length::Fill),
     );
     col = col.push(thin_sep(border_c));
@@ -329,10 +334,10 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
                      `.snxlib` (or a project) in the project tree and pick \
                      `Add New ▸ Footprint Library` to create one.",
                 )
-                .size(10)
+                .size(TS.caption)
                 .color(muted),
             )
-            .padding([6, 8])
+            .padding([6.0, SP.m])
             .width(Length::Fill),
         );
         return scrollable(col).width(Length::Fill).into();
@@ -355,20 +360,23 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
             "s"
         },
     );
-    col = col.push(container(text(breadcrumb).size(10).color(muted)).padding([4, 8]));
+    col = col.push(container(text(breadcrumb).size(TS.caption).color(muted)).padding([SP.s, SP.m]));
     col = col.push(thin_sep(border_c));
 
     // Two-column header: Name + Pads (right-aligned count).
     col = col.push(
         container(
             row![
-                text("Name").size(10).color(muted).width(Length::Fill),
-                text("Pads").size(10).color(muted),
+                text("Name")
+                    .size(TS.caption)
+                    .color(muted)
+                    .width(Length::Fill),
+                text("Pads").size(TS.caption).color(muted),
             ]
-            .spacing(8)
+            .spacing(SP.m)
             .align_y(iced::Alignment::Center),
         )
-        .padding([4, 8])
+        .padding([SP.s, SP.m])
         .width(Length::Fill),
     );
     col = col.push(thin_sep(border_c));
@@ -398,17 +406,17 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
         let row_btn = iced::widget::button(
             row![
                 text(footprint_row.name.clone())
-                    .size(10)
+                    .size(TS.caption)
                     .color(label_color)
                     .width(Length::Fill),
                 text(footprint_row.pad_count.to_string())
-                    .size(10)
+                    .size(TS.caption)
                     .color(label_color),
             ]
-            .spacing(8)
+            .spacing(SP.m)
             .align_y(iced::Alignment::Center),
         )
-        .padding([3, 8])
+        .padding([3.0, SP.m])
         .on_press(PanelMsg::FpLibrarySelectInternal(idx))
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: Some(bg),
@@ -453,11 +461,11 @@ fn view_footprint_library_button_row<'a>(
         let label_color = if enabled { primary } else { muted };
         let mut btn = iced::widget::button(
             text(label)
-                .size(11)
+                .size(TS.body)
                 .color(label_color)
                 .align_x(iced::alignment::Horizontal::Center),
         )
-        .padding([4, 12])
+        .padding([SP.s, SP.l])
         .width(Length::Fixed(64.0))
         .style(move |_: &Theme, status| {
             let bg = match status {
@@ -496,10 +504,10 @@ fn view_footprint_library_button_row<'a>(
 
     container(
         row![place, add, delete, edit]
-            .spacing(4)
+            .spacing(SP.s)
             .align_y(iced::Alignment::Center),
     )
-    .padding([6, 8])
+    .padding([6.0, SP.m])
     .width(Length::Fill)
     .into()
 }
@@ -529,8 +537,8 @@ pub fn view_library_row_properties<'a>(
         d.internal_pn.clone()
     };
 
-    let pick_symbol_btn = button(text("Pick Symbol…").size(11).color(primary))
-        .padding([4, 10])
+    let pick_symbol_btn = button(text("Pick Symbol…").size(TS.body).color(primary))
+        .padding([SP.s, 10.0])
         .on_press_maybe((!d.read_only).then_some(PanelMsg::LibraryRowPickSymbol))
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -545,8 +553,8 @@ pub fn view_library_row_properties<'a>(
             ..iced::widget::button::Style::default()
         });
 
-    let pick_footprint_btn = button(text("Pick Footprint…").size(11).color(primary))
-        .padding([4, 10])
+    let pick_footprint_btn = button(text("Pick Footprint…").size(TS.body).color(primary))
+        .padding([SP.s, 10.0])
         .on_press_maybe((!d.read_only).then_some(PanelMsg::LibraryRowPickFootprint))
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -562,29 +570,29 @@ pub fn view_library_row_properties<'a>(
         });
 
     let body = column![
-        text("Library Row").size(11).color(muted),
+        text("Library Row").size(TS.body).color(muted),
         Space::new().height(4),
-        text(pn_text).size(13).color(primary),
+        text(pn_text).size(TS.title).color(primary),
         Space::new().height(2),
         text(format!(
             "table: {}  ·  class: {}  ·  {}  ·  row {}",
             d.table, d.class, d.lifecycle_label, row_id_short,
         ))
-        .size(10)
+        .size(TS.caption)
         .color(muted),
         Space::new().height(12),
-        text("Symbol").size(11).color(muted),
+        text("Symbol").size(TS.body).color(muted),
         Space::new().height(4),
         text(d.symbol_summary.clone())
-            .size(11)
+            .size(TS.body)
             .color(if d.symbol_unbound { warning } else { primary }),
         Space::new().height(6),
         pick_symbol_btn,
         Space::new().height(14),
-        text("Footprint").size(11).color(muted),
+        text("Footprint").size(TS.body).color(muted),
         Space::new().height(4),
         text(d.footprint_summary.clone())
-            .size(11)
+            .size(TS.body)
             .color(if d.footprint_unbound {
                 warning
             } else {

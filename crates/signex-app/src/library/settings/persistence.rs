@@ -4,11 +4,10 @@
 //! `<config_dir>/signex/distributors.toml`.
 //!
 //! Why a dedicated file vs. piggy-backing on `prefs.json`:
-//! - `prefs.json` is JSON; the rest of the v0.9 library config is TOML
+//! - `prefs.json` is JSON; the rest of the library config is TOML
 //!   (matching `Manifest`).
-//! - The file gets cross-tool-readable lifecycle defaults in v0.9.1
-//!   (AVL, template defaults, etc.); keeping it TOML now lets the
-//!   schema grow without a migration.
+//! - Keeping this file TOML lets the schema grow (AVL, template defaults,
+//!   etc.) without a migration.
 //!
 //! Error handling:
 //! - On load, a missing/corrupt config must not block the app — we
@@ -26,7 +25,7 @@ use signex_library::DistributorSource;
 const FILE_NAME: &str = "distributors.toml";
 
 /// On-disk shape. `serde(default)` lets older / partial files load
-/// cleanly when v0.9.1 lands new sub-tables.
+/// cleanly when new sub-tables are added.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct DistributorsConfig {
     #[serde(default)]

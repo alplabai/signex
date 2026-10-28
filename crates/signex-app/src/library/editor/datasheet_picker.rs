@@ -18,6 +18,10 @@ use signex_widgets::theme_ext;
 use super::super::messages::{DatasheetMsg, EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Mode picker entries — drives both the visible pick_list and the
 /// inline message routing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,7 +64,7 @@ pub fn view<'a>(
     let docs = state.row.documents();
     let count = docs.len();
 
-    let mut list = column![].spacing(8).width(Length::Fill);
+    let mut list = column![].spacing(SP.m).width(Length::Fill);
     for (index, doc) in docs.into_iter().enumerate() {
         let error = state.datasheet_errors.get(&index).map(String::as_str);
         list = list.push(view_document(
@@ -86,7 +90,7 @@ pub fn view<'a>(
                  library without a local folder (a server library) cannot store PDFs: \
                  use a URL there."
             )
-            .size(10)
+            .size(TS.caption)
             .color(muted)
             .width(Length::Fill),
             Space::new().width(8),
@@ -113,8 +117,8 @@ fn small_button<'a>(
     tokens: &'a ThemeTokens,
 ) -> iced::widget::Button<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
-    button(text(label).size(10).color(text_c))
-        .padding([2, 8])
+    button(text(label).size(TS.caption).color(text_c))
+        .padding([SP.xs, SP.m])
         .style(crate::styles::outline_button(tokens))
 }
 
@@ -136,16 +140,16 @@ fn view_document<'a>(
         event(&mode_address, DatasheetMsg::SetMode(index, m))
     })
     .text_size(11)
-    .padding([4, 8]);
+    .padding([SP.s, SP.m]);
 
     let label_address = address.clone();
     let label_input = text_input("Datasheet", &doc.label)
         .on_input(move |s| event(&label_address, DatasheetMsg::SetLabel(index, s)))
-        .padding([4, 8])
-        .size(11)
+        .padding([SP.s, SP.m])
+        .size(TS.body)
         .width(Length::Fixed(160.0));
 
-    let mut actions = row![].spacing(4).align_y(iced::Alignment::Center);
+    let mut actions = row![].spacing(SP.s).align_y(iced::Alignment::Center);
     if index > 0 {
         actions = actions.push(
             small_button("Make primary", tokens)
@@ -174,7 +178,7 @@ fn view_document<'a>(
 
     let header = row![
         text(if index == 0 { "Primary" } else { "Document" })
-            .size(10)
+            .size(TS.caption)
             .color(muted),
         Space::new().width(8),
         label_input,
@@ -190,7 +194,9 @@ fn view_document<'a>(
 
     let error_row: Element<'a, LibraryMessage> = match error {
         Some(reason) => column![
-            text(reason).size(11).color(theme_ext::error_color(tokens)),
+            text(reason)
+                .size(TS.body)
+                .color(theme_ext::error_color(tokens)),
             Space::new().height(4),
         ]
         .into(),
@@ -208,7 +214,7 @@ fn view_document<'a>(
         ]
         .spacing(0),
     )
-    .padding(8)
+    .padding(SP.m)
     .style(crate::styles::modal_card(tokens))
     .width(Length::Fill)
     .into()
@@ -229,8 +235,8 @@ fn view_url_input<'a>(
     };
     text_input("https://example.com/datasheet.pdf", &url_value)
         .on_input(move |s| event(&address, DatasheetMsg::SetUrl(index, s)))
-        .padding([4, 8])
-        .size(12)
+        .padding([SP.s, SP.m])
+        .size(TS.label)
         .into()
 }
 
@@ -243,21 +249,23 @@ fn view_pinned_input<'a>(
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
 
-    let upload_btn =
-        button(container(text("Upload PDF…").size(11).color(iced::Color::WHITE)).padding([4, 14]))
-            .on_press(event(&address, DatasheetMsg::UploadDialog(index)))
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgb(
-                    0.00, 0.47, 0.84,
-                ))),
-                text_color: iced::Color::WHITE,
-                border: Border {
-                    width: 0.0,
-                    radius: 3.0.into(),
-                    ..Border::default()
-                },
-                ..iced::widget::button::Style::default()
-            });
+    let upload_btn = button(
+        container(text("Upload PDF…").size(TS.body).color(iced::Color::WHITE))
+            .padding([SP.s, 14.0]),
+    )
+    .on_press(event(&address, DatasheetMsg::UploadDialog(index)))
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(iced::Color::from_rgb(
+            0.00, 0.47, 0.84,
+        ))),
+        text_color: iced::Color::WHITE,
+        border: Border {
+            width: 0.0,
+            radius: 3.0.into(),
+            ..Border::default()
+        },
+        ..iced::widget::button::Style::default()
+    });
 
     let summary: Element<'a, LibraryMessage> = match source {
         DatasheetRef::HashPinned { hash, filename } if !hash.is_empty() => {
@@ -267,15 +275,15 @@ fn view_pinned_input<'a>(
                 hash.clone()
             };
             row![
-                text(filename.clone()).size(11).color(text_c),
+                text(filename.clone()).size(TS.body).color(text_c),
                 Space::new().width(Length::Fill),
-                text(short_hash).size(10).color(muted),
+                text(short_hash).size(TS.caption).color(muted),
             ]
             .align_y(iced::Alignment::Center)
             .into()
         }
         _ => text("No PDF attached yet — click \"Upload PDF…\".")
-            .size(11)
+            .size(TS.body)
             .color(muted)
             .into(),
     };
