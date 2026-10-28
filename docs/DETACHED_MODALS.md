@@ -58,6 +58,18 @@ window.
   empty window is left. The error notice and the netlist prompt scroll a long
   message instead of growing the window.
 
+## Dialog surface in a window
+
+A dialog window's theme (`styles::dialog_window_theme`) takes the active
+theme's dialog surface colour (`tokens.paper`) as the window background, so no
+strip of another colour can show, and a theme switch updates it. Every dialog
+body is wrapped in a root that fills the window on that surface. The dialog
+bodies in `view/dialogs/*` (and the error notice and netlist prompt) use the full
+window width there instead of their in-window card width (`dialog_width`). The
+library dialogs keep their own card widths and sit centred on the same surface.
+A test checks, for every dialog window in a dark theme and Solarized Light, that
+the body covers the window and that the window background is the surface token.
+
 ## Lock policy
 
 Confirm and warning dialogs lock the main window; tool windows do not.

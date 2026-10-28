@@ -164,7 +164,7 @@ impl Signex {
                 ])
                 .padding([14, 14]),
             ]
-            .width(560),
+            .width(self.dialog_width(super::super::super::state::ModalId::RemoveDialog, 560.0)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -364,7 +364,10 @@ impl Signex {
                 )
                 .padding([14, 14]),
             ]
-            .width(520),
+            .width(self.dialog_width(
+                super::super::super::state::ModalId::ProjectCloseConfirm,
+                520.0,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -517,7 +520,7 @@ impl Signex {
                 )
                 .padding([14, 14]),
             ]
-            .width(520),
+            .width(self.dialog_width(super::super::super::state::ModalId::AppQuitConfirm, 520.0)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

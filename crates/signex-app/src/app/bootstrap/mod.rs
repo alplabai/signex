@@ -75,7 +75,8 @@ impl Signex {
             self.ui_state.windows.get(&id),
             Some(super::state::WindowKind::DetachedModal(_))
         ) {
-            return Some(crate::styles::dialog_window_theme(&theme));
+            let paper = crate::styles::ti(self.document_state.panel_ctx.tokens.paper);
+            return Some(crate::styles::dialog_window_theme(&theme, paper));
         }
         Some(theme)
     }

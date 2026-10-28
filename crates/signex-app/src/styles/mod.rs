@@ -239,9 +239,13 @@ pub const MODAL_CORNER_RADIUS: f32 = 8.0;
 /// [`modal_card`]. The mark rides in the theme name; nothing else changes.
 const DIALOG_WINDOW_MARK: &str = "\u{200B}dialog-window";
 
-/// `base` as the theme of a dialog window.
-pub fn dialog_window_theme(base: &Theme) -> Theme {
-    Theme::custom(format!("{base}{DIALOG_WINDOW_MARK}"), base.palette())
+/// `base` as the theme of a dialog window. The window's own background is the
+/// dialog surface (`paper`) of the active theme, so no strip of another colour
+/// can show around the content.
+pub fn dialog_window_theme(base: &Theme, paper: Color) -> Theme {
+    let mut palette = base.palette();
+    palette.background = paper;
+    Theme::custom(format!("{base}{DIALOG_WINDOW_MARK}"), palette)
 }
 
 /// Whether `theme` is a dialog window's theme.

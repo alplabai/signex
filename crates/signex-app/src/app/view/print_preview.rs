@@ -56,7 +56,13 @@ impl Signex {
         .padding(20);
 
         let card = container(body)
-            .max_width(480)
+            .max_width(
+                if self.modal_detached(crate::app::state::ModalId::ErrorNotice) {
+                    f32::INFINITY
+                } else {
+                    480.0
+                },
+            )
             .style(move |theme: &iced::Theme| {
                 if crate::styles::is_dialog_window(theme) {
                     // Flat in its own window: no second frame.
@@ -198,7 +204,13 @@ impl Signex {
         .padding(20);
 
         let card = container(body)
-            .max_width(520)
+            .max_width(
+                if self.modal_detached(crate::app::state::ModalId::NetlistIncompletePrompt) {
+                    f32::INFINITY
+                } else {
+                    520.0
+                },
+            )
             .style(move |theme: &iced::Theme| {
                 if crate::styles::is_dialog_window(theme) {
                     // Flat in its own window: no second frame.

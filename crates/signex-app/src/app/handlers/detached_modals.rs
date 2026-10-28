@@ -958,4 +958,37 @@ mod tests {
             &app.theme(main).expect("theme")
         ));
     }
+
+    /// Every dialog window is covered edge to edge by its body, and the
+    /// window's own background is the active theme's dialog surface, in a dark
+    /// theme and in Solarized Light and after switching between them.
+    #[test]
+    fn every_dialog_window_is_filled_by_its_body_on_the_theme_surface() {
+        use signex_types::theme::ThemeId;
+        for theme_id in [ThemeId::CatppuccinMocha, ThemeId::SolarizedLight] {
+            for modal in testable() {
+                let (mut app, _main) = test_app();
+                app.ui_state.theme_id = theme_id;
+                app.document_state.panel_ctx.tokens = app.tokens_for(theme_id);
+                open(&mut app, modal);
+                let _ = app.sync_detached_modals();
+                let id = window_of(&app, modal).expect("window");
+                let size = app.modal_window_size(modal);
+                let root = crate::layout_probe::root_size(app.view(id), size);
+                assert_eq!(
+                    (root.width, root.height),
+                    (size.width, size.height),
+                    "{modal:?} in {theme_id:?}: the body does not cover the window"
+                );
+                let paper = crate::styles::ti(app.document_state.panel_ctx.tokens.paper);
+                let theme = app.theme(id).expect("theme");
+                assert!(crate::styles::is_dialog_window(&theme));
+                assert_eq!(
+                    theme.palette().background,
+                    paper,
+                    "{modal:?} in {theme_id:?}: the window background is not the surface token"
+                );
+            }
+        }
+    }
 }

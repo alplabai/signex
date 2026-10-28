@@ -131,7 +131,7 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(420),
+            .width(self.dialog_width(super::super::super::state::ModalId::RenameDialog, 420.0)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -283,7 +283,10 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(520),
+            .width(self.dialog_width(
+                super::super::super::state::ModalId::EnableVersionControl,
+                520.0,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -509,7 +512,7 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(480),
+            .width(self.dialog_width(super::super::super::state::ModalId::GridProperties, 480.0)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -642,7 +645,10 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(440),
+            .width(self.dialog_width(
+                super::super::super::state::ModalId::SelectionFilterCustom,
+                440.0,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

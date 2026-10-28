@@ -88,7 +88,14 @@ impl Signex {
         if let Some(kind) = self.ui_state.windows.get(&window_id) {
             return match kind {
                 super::state::WindowKind::DetachedModal(modal) => {
-                    self.view_detached_modal(window_id, *modal)
+                    // The body fills the whole window on the dialog surface.
+                    iced::widget::container(self.view_detached_modal(window_id, *modal))
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .style(crate::styles::modal_card(
+                            &self.document_state.panel_ctx.tokens,
+                        ))
+                        .into()
                 }
                 // Undocked tab = full duplicate of the main app view.
                 // Shared Signex state means edits sync automatically; the

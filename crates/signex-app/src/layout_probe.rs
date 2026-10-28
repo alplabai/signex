@@ -44,6 +44,23 @@ pub(crate) fn lay_out_texts<M>(
     collect.0
 }
 
+/// The size the root of `element` lays out to in a window of `window`.
+pub(crate) fn root_size<M>(
+    mut element: Element<'_, M, Theme, iced::Renderer>,
+    window: Size,
+) -> Size {
+    let renderer = headless_renderer();
+    let mut tree = Tree::new(element.as_widget());
+    element
+        .as_widget_mut()
+        .layout(
+            &mut tree,
+            &renderer,
+            &layout::Limits::new(Size::ZERO, window),
+        )
+        .size()
+}
+
 /// The text widget whose content is exactly `label`.
 pub(crate) fn find<'t>(texts: &'t [LaidOutText], label: &str) -> &'t LaidOutText {
     texts
