@@ -383,11 +383,12 @@ fn erc_severity_override_equal_to_the_default_is_stored_verbatim() {
 
     // Act: Preferences chip
     app.ui_state.erc_severity_override.clear();
+    app.ui_state.preferences_draft_erc_severity.clear();
     let _ = app.update(inner(PrefMsg::DraftErcSeverity(rule, default)));
 
     // Assert
     assert_eq!(
-        app.ui_state.erc_severity_override.get(&rule),
+        app.ui_state.preferences_draft_erc_severity.get(&rule),
         Some(&default),
         "the Preferences chip must keep an override equal to the default"
     );
@@ -464,5 +465,97 @@ fn pin_matrix_cell_cycle_keeps_the_mirror_cell_in_step() {
     assert_eq!(
         app.ui_state.pin_matrix_overrides.get(&(4, 1)),
         Some(&Severity::Warning)
+    );
+}
+
+/// #1504 — an ERC severity chip is a Preferences draft: it neither touches
+/// the prefs file nor the severity the ERC engine runs with until Save, and
+/// Discard & Close drops it.
+#[test]
+fn erc_severity_draft_then_discard_changes_neither_disk_nor_effective() {
+    use signex_erc::{RuleKind, Severity};
+
+    // Arrange
+    let _serial = serial();
+    let _guard = PrefsPathGuard::capture();
+    let rule = RuleKind::UnusedPin;
+    let (mut app, _t) = Signex::new();
+    app.ui_state.erc_severity_override.clear();
+    signex_app::fonts::write_erc_severity_overrides(&app.ui_state.erc_severity_override);
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+
+    // Act
+    let _ = app.update(inner(PrefMsg::DraftErcSeverity(rule, Severity::Off)));
+
+    // Assert: nothing committed or written yet, but the dialog knows
+    assert!(app.ui_state.erc_severity_override.is_empty());
+    assert!(signex_app::fonts::read_erc_severity_overrides().is_empty());
+    assert!(app.ui_state.preferences_dirty);
+
+    // Act
+    let _ = app.update(inner(PrefMsg::DiscardAndClose));
+
+    // Assert
+    assert!(app.ui_state.erc_severity_override.is_empty());
+    assert!(app.ui_state.preferences_draft_erc_severity.is_empty());
+    assert!(signex_app::fonts::read_erc_severity_overrides().is_empty());
+}
+
+/// #1504 — Save commits the draft to the live map and persists it.
+#[test]
+fn erc_severity_draft_then_save_persists() {
+    use signex_erc::{RuleKind, Severity};
+
+    // Arrange
+    let _serial = serial();
+    let _guard = PrefsPathGuard::capture();
+    let rule = RuleKind::UnusedPin;
+    let (mut app, _t) = Signex::new();
+    app.ui_state.erc_severity_override.clear();
+    signex_app::fonts::write_erc_severity_overrides(&app.ui_state.erc_severity_override);
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+
+    // Act
+    let _ = app.update(inner(PrefMsg::DraftErcSeverity(rule, Severity::Off)));
+    let _ = app.update(inner(PrefMsg::Save));
+
+    // Assert
+    let expected = rule.normalize_override(Severity::Off);
+    assert_eq!(
+        app.ui_state.erc_severity_override.get(&rule),
+        Some(&expected)
+    );
+    assert_eq!(
+        signex_app::fonts::read_erc_severity_overrides().get(&rule),
+        Some(&expected)
+    );
+}
+
+/// #1504 — Reset is a draft too: Reset then Discard leaves the committed
+/// overrides and the file untouched.
+#[test]
+fn erc_severity_reset_then_discard_is_unchanged() {
+    use signex_erc::{RuleKind, Severity};
+
+    // Arrange
+    let _serial = serial();
+    let _guard = PrefsPathGuard::capture();
+    let rule = RuleKind::UnusedPin;
+    let (mut app, _t) = Signex::new();
+    let seeded = rule.normalize_override(Severity::Off);
+    app.ui_state.erc_severity_override.clear();
+    app.ui_state.erc_severity_override.insert(rule, seeded);
+    signex_app::fonts::write_erc_severity_overrides(&app.ui_state.erc_severity_override);
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+
+    // Act
+    let _ = app.update(inner(PrefMsg::ResetErcSeverities));
+    let _ = app.update(inner(PrefMsg::DiscardAndClose));
+
+    // Assert
+    assert_eq!(app.ui_state.erc_severity_override.get(&rule), Some(&seeded));
+    assert_eq!(
+        signex_app::fonts::read_erc_severity_overrides().get(&rule),
+        Some(&seeded)
     );
 }

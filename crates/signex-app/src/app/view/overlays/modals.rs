@@ -42,7 +42,7 @@ impl Signex {
             custom_name: ui.custom_theme.as_ref().map(|c| c.name.as_str()),
             theme_status: &ui.preferences_theme_status,
             dirty: ui.preferences_dirty,
-            erc_overrides: &ui.erc_severity_override,
+            erc_overrides: &ui.preferences_draft_erc_severity,
             distributor_settings: &self.library.settings,
             panel_tokens: &document.panel_ctx.tokens,
             draft_component_classes: &ui.preferences_draft_component_classes,

@@ -37,6 +37,11 @@ pub struct UiState {
     /// semantics — mutated as the user edits, copied back into
     /// `component_classes` + persisted on Save.
     pub preferences_draft_component_classes: Vec<crate::fonts::ComponentClassEntry>,
+    /// Draft of `erc_severity_override` for Preferences ▸ Electrical Rules:
+    /// edited by the chips, committed + persisted on Save, re-seeded from
+    /// the committed map on Discard.
+    pub preferences_draft_erc_severity:
+        std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     /// Loaded keyboard-shortcut profiles (bundled Altium / Classic
     /// built-ins plus any user profile in the OS config dir). Drives
     /// shortcut dispatch and the Help ▸ Keyboard Shortcuts reference.
@@ -480,6 +485,7 @@ impl UiState {
             || self.preferences_draft_ui_scale_percent
                 != crate::ui_scale::scale_to_percent(self.ui_scale)
             || self.preferences_draft_component_classes != self.component_classes
+            || self.preferences_draft_erc_severity != self.erc_severity_override
             || self
                 .preferences_keymap_editor
                 .differs_from(&self.keymap_profiles)
