@@ -5,12 +5,11 @@
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 //!
-//! The folder carries the `browser` namespace: class handlers live in
-//! `classes`, grid/row handlers in `grid`, and table handlers in
+//! The folder carries the `browser` namespace: grid/row handlers live in
+//! `grid`, and table handlers in
 //! `tables`; this `mod.rs` keeps the browser-tab handlers.
 
 mod cell_commit;
-mod classes;
 mod grid;
 mod modal_reload;
 mod param_commit;
