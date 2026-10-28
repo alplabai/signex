@@ -70,37 +70,26 @@ pub fn adopt_legacy(recovery_dir: &Path, document: &Path) -> Result<(), String> 
         // Only the newest of the two is offered. The other is never deleted:
         // it stays on disk under a name no scan offers, and is logged.
         if newer(&legacy, &current) {
-            // Never overwrite an earlier set-aside copy: take the first free
-            // name (`.older`, `.older.1`, ...). With none free the move is
-            // refused, so the document stays protected by what is on disk.
-            let base = {
-                let mut base = current.clone().into_os_string();
-                base.push(".");
-                base.push(SUPERSEDED_EXTENSION);
-                base
-            };
-            let aside = (0..100u32)
-                .map(|n| {
-                    let mut name = base.clone();
-                    if n > 0 {
-                        name.push(format!(".{n}"));
-                    }
-                    PathBuf::from(name)
-                })
-                .find(|p| std::fs::symlink_metadata(p).is_err())
-                .ok_or_else(|| {
-                    format!(
-                        "no free name to set aside the recovery copy {}",
-                        current.display()
-                    )
-                })?;
-            std::fs::rename(&current, &aside).map_err(|e| {
-                format!(
+            // Never overwrite an earlier set-aside copy: claim the first free
+            // name (`.older`, `.older.1`, ...) by creating it with `create_new`,
+            // which fails if it exists, so two processes cannot pick one name.
+            // With none free the move is refused, so the document stays
+            // protected by what is on disk.
+            let aside = claim_aside_name(&current)?;
+            if let Err(e) = std::fs::rename(&current, &aside) {
+                // Do not leave the empty claim behind.
+                if let Err(cleanup) = std::fs::remove_file(&aside) {
+                    crate::diagnostics::log_warning(format!(
+                        "{cleanup}: could not remove the unused claim {}",
+                        aside.display()
+                    ));
+                }
+                return Err(format!(
                     "{e}: could not set aside recovery copy {} as {}",
                     current.display(),
                     aside.display()
-                )
-            })?;
+                ));
+            }
             crate::diagnostics::log_warning(format!(
                 "The recovery copy {} of {} was older than {}; it was kept as {}.",
                 current.display(),
@@ -110,7 +99,8 @@ pub fn adopt_legacy(recovery_dir: &Path, document: &Path) -> Result<(), String> 
             ));
         } else {
             crate::diagnostics::log_warning(format!(
-                "The recovery copy {} (an older key of {}) was left on disk: a copy already \n                 sits under the current key.",
+                "The recovery copy {} (an older key of {}) was left on disk: a copy already \
+                 sits under the current key.",
                 legacy.display(),
                 document.display()
             ));
@@ -124,6 +114,39 @@ pub fn adopt_legacy(recovery_dir: &Path, document: &Path) -> Result<(), String> 
             current.display()
         )
     })
+}
+
+/// Atomically claim the first free set-aside name for `current` by creating an
+/// empty file there. The caller renames the copy over its own claim.
+fn claim_aside_name(current: &Path) -> Result<PathBuf, String> {
+    let mut base = current.to_path_buf().into_os_string();
+    base.push(".");
+    base.push(SUPERSEDED_EXTENSION);
+    for n in 0..100u32 {
+        let mut name = base.clone();
+        if n > 0 {
+            name.push(format!(".{n}"));
+        }
+        let candidate = PathBuf::from(name);
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(_) => return Ok(candidate),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => {
+                return Err(format!(
+                    "{e}: could not claim a name to set aside the recovery copy {}",
+                    current.display()
+                ));
+            }
+        }
+    }
+    Err(format!(
+        "no free name to set aside the recovery copy {}",
+        current.display()
+    ))
 }
 
 /// FNV-1a over `bytes`; also the stamp of a draft without a revision counter.
@@ -276,6 +299,72 @@ mod tests {
         assert_eq!(std::fs::read(&older).unwrap(), b"earliest");
         assert_eq!(std::fs::read(format!("{older}.1")).unwrap(), b"old");
         assert!(!legacy.exists());
+    }
+
+    #[test]
+    fn with_every_aside_name_taken_adopt_fails_and_touches_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let doc = tmp.path().join("w/../main.snxsch");
+        let current = sidecar_path(&rec, &doc);
+        let legacy = key_path(&rec, &doc, legacy_path_hash(&doc));
+        std::fs::create_dir_all(&rec).unwrap();
+        let mut files = vec![(current.clone(), b"old".to_vec())];
+        let base = format!("{}.{SUPERSEDED_EXTENSION}", current.display());
+        for n in 0..100u32 {
+            let name = if n == 0 {
+                base.clone()
+            } else {
+                format!("{base}.{n}")
+            };
+            files.push((PathBuf::from(name), format!("aside{n}").into_bytes()));
+        }
+        for (p, b) in &files {
+            std::fs::write(p, b).unwrap();
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::fs::write(&legacy, b"new").unwrap();
+        files.push((legacy.clone(), b"new".to_vec()));
+        assert!(adopt_legacy(&rec, &doc).is_err());
+        for (p, b) in &files {
+            assert_eq!(&std::fs::read(p).unwrap(), b, "{}", p.display());
+        }
+        assert!(!Path::new(&format!("{base}.100")).exists());
+    }
+
+    #[test]
+    fn a_failed_set_aside_rename_is_an_error_and_cleans_its_claim() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let doc = tmp.path().join("w/../main.snxsch");
+        let current = sidecar_path(&rec, &doc);
+        let legacy = key_path(&rec, &doc, legacy_path_hash(&doc));
+        // Make the rename (and only the rename) fail. Unix refuses a directory
+        // renamed over a file; Windows replaces it, so there the copy is held
+        // open without delete sharing, which blocks renaming it.
+        #[cfg(unix)]
+        {
+            std::fs::create_dir_all(&current).unwrap();
+            std::fs::write(current.join("inner"), b"x").unwrap();
+        }
+        #[cfg(windows)]
+        let _held = {
+            use std::os::windows::fs::OpenOptionsExt;
+            std::fs::create_dir_all(&rec).unwrap();
+            std::fs::write(&current, b"old").unwrap();
+            std::fs::OpenOptions::new()
+                .read(true)
+                .share_mode(0x1 | 0x2) // FILE_SHARE_READ | FILE_SHARE_WRITE
+                .open(&current)
+                .unwrap()
+        };
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::fs::write(&legacy, b"new").unwrap();
+        assert!(adopt_legacy(&rec, &doc).is_err());
+        assert!(current.exists());
+        assert_eq!(std::fs::read(&legacy).unwrap(), b"new");
+        let aside = format!("{}.{SUPERSEDED_EXTENSION}", current.display());
+        assert!(!Path::new(&aside).exists());
     }
 
     #[test]
