@@ -208,6 +208,16 @@ pub enum SymbolEditorMsg {
     /// when only one part exists or the active part is part 1.
     RemovePart,
 
+    // ── De Morgan body ─────────────────────────────────────
+    /// Toolbar — the Normal / Alternate body buttons picked a body to show
+    /// and author. Switches the canvas filter and the body new items are
+    /// stamped with; clears the selection.
+    BodyStyleSelected(signex_types::schematic::BodyStyle),
+
+    /// Toolbar — the selected pins and shapes were assigned a body: `0`
+    /// common to both bodies, or the active body's tag to pin them to it.
+    SelectionBodyAssigned(u8),
+
     /// Undo the last symbol mutation. Pops from `undo_snapshots`
     /// and restores the previous `Symbol` state.
     Undo,

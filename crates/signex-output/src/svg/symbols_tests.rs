@@ -131,6 +131,35 @@ fn other_units_are_left_out_like_on_the_canvas() {
     assert_eq!(emit(&lib, &sym).len(), 1);
 }
 
+/// An alternate-body symbol draws the alternate graphics and not the normal
+/// ones (#1233), exactly as the shared lowering does.
+#[test]
+fn the_alternate_body_draws_the_alternate_graphics() {
+    let mut lib = lib_text();
+    lib.graphics[0].body_style = 1;
+    lib.graphics.push(LibGraphic {
+        unit: 0,
+        body_style: 2,
+        graphic: text_graphic("&", 0.0),
+    });
+    let texts = |sym: &Symbol| -> Vec<String> {
+        emit(&lib, sym)
+            .into_iter()
+            .filter_map(|e| match e {
+                SvgElement::Text { text, .. } => Some(text),
+                _ => None,
+            })
+            .collect()
+    };
+    let normal = Symbol::default();
+    let alt = Symbol {
+        body_style: signex_types::schematic::BodyStyle::Alternate,
+        ..Symbol::default()
+    };
+    assert_eq!(texts(&normal), vec!["+".to_string()]);
+    assert_eq!(texts(&alt), vec!["&".to_string()]);
+}
+
 #[test]
 fn a_power_port_without_a_library_entry_is_drawn_from_its_built_in_body() {
     let sym = Symbol {

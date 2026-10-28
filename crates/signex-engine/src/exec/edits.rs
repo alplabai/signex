@@ -222,6 +222,10 @@ impl Engine {
             Command::SetSymbolDnp { symbol_id, dnp } => {
                 self.set_symbol_flag(before, symbol_id, |s| &mut s.dnp, dnp)
             }
+            Command::SetSymbolBodyStyle {
+                symbol_id,
+                body_style,
+            } => self.set_symbol_body_style(before, symbol_id, body_style),
             Command::UpdateSymbolTextSize {
                 symbol_id,
                 field,

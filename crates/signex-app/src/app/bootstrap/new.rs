@@ -398,6 +398,7 @@ impl Signex {
                 ownership: Default::default(),
                 erc_fallback_noted: Default::default(),
                 profile_drift_noted: Default::default(),
+                read_only_refusal_noted: Default::default(),
                 rules_history: Default::default(),
                 missing_fonts: Default::default(),
                 tabs: vec![],

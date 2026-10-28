@@ -55,6 +55,7 @@ pub enum CommandKind {
     SetSymbolRotation,
     SetSymbolLocked,
     SetSymbolDnp,
+    SetSymbolBodyStyle,
     UpdateSymbolTextSize,
     UpdateSymbolLibId,
     UpdateSymbolFootprint,
@@ -170,6 +171,13 @@ pub enum Command {
     SetSymbolDnp {
         symbol_id: Uuid,
         dnp: bool,
+    },
+    /// Show the normal or the alternate (De Morgan) body of a symbol's library
+    /// symbol. Refused with `EngineError::SymbolBodyPinsConnected` when a wired
+    /// pin would be lost, moved or land on a new connection.
+    SetSymbolBodyStyle {
+        symbol_id: Uuid,
+        body_style: signex_types::schematic::BodyStyle,
     },
     /// Set the font size of a symbol's value/reference text property.
     /// `field` is "value" or "reference".
@@ -457,6 +465,7 @@ impl Command {
             Command::SetSymbolRotation { .. } => CommandKind::SetSymbolRotation,
             Command::SetSymbolLocked { .. } => CommandKind::SetSymbolLocked,
             Command::SetSymbolDnp { .. } => CommandKind::SetSymbolDnp,
+            Command::SetSymbolBodyStyle { .. } => CommandKind::SetSymbolBodyStyle,
             Command::UpdateSymbolTextSize { .. } => CommandKind::UpdateSymbolTextSize,
             Command::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,
             Command::UpdateSymbolFootprint { .. } => CommandKind::UpdateSymbolFootprint,
