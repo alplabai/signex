@@ -412,6 +412,19 @@ impl Signex {
                 } else {
                     self.install_schematic_at(&path, *sheet);
                 }
+                // A restored sheet from a newer Signex is read-only and can
+                // never be saved: leaving it dirty would make quit ask to
+                // save an unsaveable file (#1402). It matches disk, so
+                // commit the restored bytes as they are, as the PCB does.
+                let read_only = self
+                    .document_state
+                    .engines
+                    .get(&path)
+                    .is_some_and(|engine| engine.document().is_read_only());
+                if read_only {
+                    self.set_reloaded_dirty(&path, idx, false);
+                    self.commit_restore(&path, restored_bytes);
+                }
             }
             Ok(RestoreJobDocument::Pcb(board)) => {
                 crate::app::load_gateway::report_unusable_zone_holes(&path, &board);

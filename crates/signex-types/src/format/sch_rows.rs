@@ -14,7 +14,10 @@ use super::tsv::{format_f64, parse_f64, parse_i64, parse_uuid};
 use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use super::unknown_columns::impl_unknown_columns_accessors;
 use super::*;
-use crate::schematic::{HAlign, Junction, Label, LabelType, Point, Symbol, VAlign, Wire};
+use crate::schematic::{
+    BODY_ALTERNATE, BODY_NORMAL, BodyStyle, HAlign, Junction, Label, LabelType, Point, Symbol,
+    VAlign, Wire,
+};
 use uuid::Uuid;
 
 /// Bulk row for one [`Symbol`] in the `[sheets.components]` block.
@@ -300,6 +303,37 @@ pub(in crate::format) fn symbol_to_row(s: &Symbol) -> Result<SchComponentRow, No
     })
 }
 
+/// The body a stored `body_style` tag asks for. Absent and `1` are the normal
+/// body; `2` is the alternate. Anything else is a body this build does not
+/// know, so the symbol loads normal and the unreadable value is logged.
+/// An unreadable value is kept in `unknown` (so a re-save writes it back)
+/// until the user picks a body, which clears it.
+fn body_style_from_tag(
+    tag: Option<toml::Value>,
+    reference: &str,
+    symbol: uuid::Uuid,
+    unknown: &mut super::unknown::UnknownFields,
+) -> BodyStyle {
+    // Not an integer (or out of range) is as unreadable as an unknown number.
+    let known = match &tag {
+        None => Some(BodyStyle::Normal),
+        Some(toml::Value::Integer(n)) => match u32::try_from(*n) {
+            Ok(BODY_NORMAL) => Some(BodyStyle::Normal),
+            Ok(BODY_ALTERNATE) => Some(BodyStyle::Alternate),
+            _ => None,
+        },
+        Some(_) => None,
+    };
+    if let (None, Some(other)) = (known, tag) {
+        tracing::warn!(
+            target: "signex::format",
+            "symbol {reference} ({symbol}): body_style = {other} is not 1 (normal) or 2 (alternate); showing the normal body and keeping the value in the file"
+        );
+        unknown.insert_value("body_style", other);
+    }
+    known.unwrap_or(BodyStyle::Normal)
+}
+
 pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtras) -> Symbol {
     let mut fields: std::collections::HashMap<String, String> = extras.fields.into_iter().collect();
     // LO-6: precedence is `extras.fields["MPN"] > row.mpn`. The TSV row
@@ -312,6 +346,8 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
     if !row.mpn.is_empty() && !fields.contains_key("MPN") {
         fields.insert("MPN".to_string(), row.mpn.clone());
     }
+    let mut unknown = extras.unknown;
+    let body_style = body_style_from_tag(extras.body_style, &row.ref_des, row.uuid, &mut unknown);
     Symbol {
         uuid: row.uuid,
         lib_id: row.library,
@@ -327,6 +363,7 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         mirror_x: extras.mirror_x,
         mirror_y: extras.mirror_y,
         unit: extras.unit,
+        body_style,
         is_power: extras.is_power,
         ref_text: extras.ref_text.map(|mut prop| {
             prop.font_family = extras.ref_font_family.or(prop.font_family);
@@ -350,7 +387,7 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         row_id: extras.row_id,
         library_version: extras.library_version,
         instances: extras.instances,
-        unknown: extras.unknown,
+        unknown,
         unknown_columns: row.unknown_columns,
     }
 }

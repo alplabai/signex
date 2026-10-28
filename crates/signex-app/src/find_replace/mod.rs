@@ -9,4 +9,4 @@ pub use state::{
     ChildSheetSignature, FindMatch, FindReplaceMsg, FindReplaceState, FindScope, ProjectScan,
     ReplaceJob, ReplacePrep,
 };
-pub use view::view;
+pub use view::{view, window_view};

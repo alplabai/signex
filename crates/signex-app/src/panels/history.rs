@@ -12,7 +12,7 @@
 //! token, so a tab switch in flight discards any pending result).
 
 use chrono::Utc;
-use iced::widget::{Column, button, column, container, scrollable, text};
+use iced::widget::{Column, button, column, container, text};
 use iced::{Border, Color, Element, Length, Theme};
 use signex_widgets::theme_ext;
 
@@ -172,7 +172,7 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     };
 
     let body = container(inner).padding(SP.m).width(Length::Fill);
-    scrollable(body)
+    super::panel_scrollable(body)
         .width(Length::Fill)
         .height(Length::Fill)
         .into()

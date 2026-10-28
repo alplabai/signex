@@ -120,7 +120,7 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(560),
+            .width(self.dialog_width(crate::app::state::ModalId::ReprefixConfirm, 560.0)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

@@ -15,6 +15,8 @@ pub mod components_panel;
 mod element_properties;
 mod footprint_editor_properties;
 pub mod history;
+mod scroll;
+pub(crate) use scroll::panel_scrollable;
 mod properties_parameters;
 mod symbol_editor_properties;
 
@@ -35,6 +37,9 @@ mod status;
 mod symbol_context;
 mod widgets;
 
+pub(crate) use element_properties::{
+    BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
+};
 use element_properties::{
     view_child_sheet_properties, view_drawing_properties, view_selected_element_properties,
 };
@@ -265,5 +270,5 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::History => return history::view_history(ctx),
     };
 
-    scrollable(content).width(Length::Fill).into()
+    panel_scrollable(content).into()
 }

@@ -6,6 +6,7 @@
 //! editor live in sibling submodules split out of the former
 //! single-file module.
 
+mod body_row;
 mod child_sheet;
 mod drawing;
 mod drawing_preview;
@@ -13,6 +14,9 @@ mod font_row;
 mod library_rows;
 mod selected;
 
+pub(crate) use body_row::{
+    BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
+};
 pub(super) use child_sheet::view_child_sheet_properties;
 pub(super) use drawing::view_drawing_properties;
 pub(super) use font_row::font_family_row;
