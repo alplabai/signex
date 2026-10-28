@@ -1,4 +1,4 @@
-use signex_types::quantity::{Unit, format_eng};
+use signex_types::quantity::{Quantity, Unit, ValueStyle, format_quantity_sig};
 
 use super::domain::{ComponentKind, PreferredComponent, SiPrefix, Tolerance};
 
@@ -242,6 +242,9 @@ pub fn parallel_value(left: f64, right: f64) -> f64 {
     smaller / (1.0 + smaller / larger)
 }
 
+/// Significant digits a calculator result shows.
+const RESULT_SIG_DIGITS: usize = 4;
+
 pub fn format_value(value: f64, kind: ComponentKind) -> String {
     if value == f64::INFINITY {
         return format!("∞ {}", SiPrefix::None.unit(kind));
@@ -251,7 +254,10 @@ pub fn format_value(value: f64, kind: ComponentKind) -> String {
         ComponentKind::Capacitor => Unit::Farad,
         ComponentKind::Inductor => Unit::Henry,
     };
-    format_eng(value, &unit)
+    match Quantity::new(value, unit) {
+        Some(q) => format_quantity_sig(&q, ValueStyle::Engineering, false, RESULT_SIG_DIGITS),
+        None => value.to_string(),
+    }
 }
 
 pub fn format_number(value: f64) -> String {
@@ -298,4 +304,21 @@ enum Bound {
     Nominal,
     Minimum,
     Maximum,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A calculator result shows four significant digits, not the 15 the
+    /// core would print for 10 k || 4.7 k.
+    #[test]
+    fn results_keep_four_significant_digits() {
+        let parallel = 10_000.0 * 4_700.0 / 14_700.0;
+        assert_eq!(format_value(parallel, ComponentKind::Resistor), "3.197 kΩ");
+        assert_eq!(format_value(4700.0, ComponentKind::Resistor), "4.7 kΩ");
+        assert_eq!(format_value(100e-9, ComponentKind::Capacitor), "100 nF");
+        assert_eq!(format_value(10e-6, ComponentKind::Inductor), "10 µH");
+        assert_eq!(format_value(f64::INFINITY, ComponentKind::Resistor), "∞ Ω");
+    }
 }

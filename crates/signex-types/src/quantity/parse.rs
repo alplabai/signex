@@ -95,8 +95,12 @@ impl Quantity {
 
 /// Split a stored `Measurement.unit` string into the `(prefix, unit)` it
 /// spells. The unit is matched whole first (`Hz`, `ppm/C`), then as a prefix
-/// followed by a unit. Spaces inside are ignored (`k Ω`). `None` if it is not exactly
-/// an optional prefix and a known unit, or if the unit takes no prefix.
+/// followed by a unit. Spaces inside are ignored (`k Ω`). `None` if it is not
+/// exactly an optional prefix and a known unit, if the unit takes no prefix,
+/// or if the prefix is not one the unit uses: `kF` and `mHz` are `None`
+/// (kept as written by [`quantity_from_stored`]). Two tolerated legacy
+/// spellings: `mF` reads as millifarad, and an all-lowercase `mhz` reads as
+/// MHz because milli-hertz is not a component unit.
 pub fn split_unit_string(text: &str) -> Option<(SiPrefix, Unit)> {
     let compact: String = text.chars().filter(|c| !c.is_whitespace()).collect();
     if let Some(unit) = Unit::from_alias(&compact) {
@@ -105,7 +109,19 @@ pub fn split_unit_string(text: &str) -> Option<(SiPrefix, Unit)> {
     let mut chars = compact.chars();
     let prefix = SiPrefix::from_char(chars.next()?)?;
     let unit = Unit::from_alias(chars.as_str())?;
-    unit.takes_prefix().then_some((prefix, unit))
+    if !unit.takes_prefix() {
+        return None;
+    }
+    if unit.allowed_prefixes().contains(&prefix) {
+        return Some((prefix, unit));
+    }
+    match (&unit, prefix) {
+        (Unit::Farad, SiPrefix::Milli) => Some((prefix, unit)),
+        (Unit::Hertz, SiPrefix::Milli) if compact == compact.to_lowercase() => {
+            Some((SiPrefix::Mega, unit))
+        }
+        _ => None,
+    }
 }
 
 /// `mantissa` of a stored `Measurement { value, unit }` as a base-unit

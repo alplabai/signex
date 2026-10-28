@@ -27,7 +27,7 @@ mod value;
 #[cfg(test)]
 mod tests;
 
-pub use format::{ValueStyle, format_eng, format_quantity};
+pub use format::{ValueStyle, format_eng, format_quantity, format_quantity_sig};
 pub use parse::{
     MantissaError, parse_mantissa, quantity_from_parts, quantity_from_stored, split_unit_string,
     unit_string_matches,

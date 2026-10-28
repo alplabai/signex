@@ -36,13 +36,14 @@ pub(super) struct Layout {
 
 /// Significant digits and decimal exponent of `abs` (> 0): `4700` gives
 /// `("47", 3)`, meaning 4.7e3.
-fn digits_and_exponent(abs: f64) -> (String, i32) {
+fn digits_and_exponent(abs: f64, max_sig: usize) -> (String, i32) {
     let mut s = format!("{abs:e}");
-    if s.split('e')
+    let shortest = s
+        .split('e')
         .next()
-        .is_some_and(|m| m.len() > MAX_SIG_DIGITS + 1)
-    {
-        s = format!("{abs:.*e}", MAX_SIG_DIGITS - 1);
+        .map_or(0, |m| m.chars().filter(char::is_ascii_digit).count());
+    if shortest > max_sig {
+        s = format!("{abs:.*e}", max_sig - 1);
     }
     let (mant, exp) = s.split_once('e').unwrap_or((&s, "0"));
     let digits: String = mant.chars().filter(char::is_ascii_digit).collect();
@@ -65,7 +66,7 @@ fn place_point(digits: &str, shift: i32) -> String {
     }
 }
 
-pub(super) fn layout(base: f64, unit: &Unit) -> Layout {
+pub(super) fn layout(base: f64, unit: &Unit, max_sig: usize) -> Layout {
     if base == 0.0 {
         return Layout {
             negative: false,
@@ -74,7 +75,7 @@ pub(super) fn layout(base: f64, unit: &Unit) -> Layout {
             scientific: false,
         };
     }
-    let (digits, exp) = digits_and_exponent(base.abs());
+    let (digits, exp) = digits_and_exponent(base.abs(), max_sig.clamp(1, MAX_SIG_DIGITS));
     let allowed = unit.allowed_prefixes();
     let prefix = allowed
         .iter()
@@ -112,7 +113,19 @@ pub fn format_eng(base: f64, unit: &Unit) -> String {
 /// Render `q` in `style`. `plus_minus` prefixes `±` (`+/-` in ASCII) for
 /// template slots with `display_plus_minus` (tolerances).
 pub fn format_quantity(q: &Quantity, style: ValueStyle, plus_minus: bool) -> String {
-    let l = layout(q.base(), q.unit());
+    format_quantity_sig(q, style, plus_minus, MAX_SIG_DIGITS)
+}
+
+/// [`format_quantity`] rounded to at most `sig` significant digits
+/// (clamped to 1..=15), for displays that want a short value such as a
+/// calculator result: 3197.27891156463 Ω with `sig = 4` is `3.197 kΩ`.
+pub fn format_quantity_sig(
+    q: &Quantity,
+    style: ValueStyle,
+    plus_minus: bool,
+    sig: usize,
+) -> String {
+    let l = layout(q.base(), q.unit(), sig);
     if style == ValueStyle::Rkm
         && let Some(code) = rkm(&l, q.unit())
     {

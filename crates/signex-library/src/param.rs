@@ -35,8 +35,11 @@ impl ParamValue {
     /// A measurement as a base-unit [`Quantity`]. Reads the canonical
     /// `{4700, "ohm"}` and the legacy prefixed `{4.7, "kΩ"}` as the same
     /// 4700 Ω; an unknown unit string is kept as written. `None` for other
-    /// variants and for a non-finite value. Sort, filter, diff and
-    /// grouping go through this, never the raw `value`.
+    /// variants and for a non-finite value. New sort, filter, diff and
+    /// grouping code should read the value through this, never the raw
+    /// `value`. Not yet adopted: the search index (`search_index.rs`) still
+    /// indexes the raw `value`; that and the sort/filter paths move over in
+    /// the base-unit sort and range-filter phases.
     pub fn as_quantity(&self) -> Option<Quantity> {
         match self {
             ParamValue::Measurement { value, unit } => quantity_from_stored(*value, unit),

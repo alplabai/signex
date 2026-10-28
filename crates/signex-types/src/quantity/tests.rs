@@ -161,9 +161,12 @@ fn split_unit_string_real_units() {
         ("V/us", One, Unit::VoltPerMicrosecond),
         ("V/µs", One, Unit::VoltPerMicrosecond),
         ("AWG", One, Unit::Awg),
-        ("fF", Femto, Unit::Farad),
         ("k ohm", Kilo, Unit::Ohm),
-        ("kF", Kilo, Unit::Farad),
+        ("mF", Milli, Unit::Farad),
+        ("mhz", Mega, Unit::Hertz),
+        ("mhz ", Mega, Unit::Hertz),
+        ("MHz", Mega, Unit::Hertz),
+        ("kHz", Kilo, Unit::Hertz),
     ];
     for (s, p, u) in cases {
         assert_eq!(split_unit_string(s), Some((p, u)), "{s:?}");
@@ -189,6 +192,37 @@ fn legacy_prefixed_unit_reads_as_base() {
         (5.0, &Unit::Other("furlong".into()))
     );
     assert_eq!(quantity_from_stored(f64::NAN, "ohm"), None);
+}
+
+/// A prefix outside the unit's set is kept as written, not reinterpreted.
+#[test]
+fn stored_prefix_outside_the_units_set_stays_as_written() {
+    for s in ["kF", "mHz"] {
+        let q = quantity_from_stored(2.0, s).unwrap();
+        assert_eq!(q.base(), 2.0, "{s}");
+        assert_eq!(q.unit(), &Unit::Other(s.to_string()), "{s}");
+    }
+    let mhz = quantity_from_stored(2.0, "mhz").unwrap();
+    assert_eq!((mhz.base(), mhz.unit()), (2.0e6, &Unit::Hertz));
+    let mf = quantity_from_stored(4.7, "mF").unwrap();
+    assert_eq!((mf.base(), mf.unit()), (4.7e-3, &Unit::Farad));
+}
+
+#[test]
+fn significant_digit_cap_rounds_the_display() {
+    let sig = |base: f64, n: usize| {
+        format_quantity_sig(&q(base, Unit::Ohm), ValueStyle::Engineering, false, n)
+    };
+    let parallel = 10_000.0 * 4_700.0 / 14_700.0;
+    assert_eq!(sig(parallel, 4), "3.197 kΩ");
+    assert!(
+        q(parallel, Unit::Ohm).to_string().len() > 12,
+        "uncapped keeps digits"
+    );
+    assert_eq!(sig(4700.0, 4), "4.7 kΩ");
+    assert_eq!(sig(999_960.0, 4), "1 MΩ");
+    assert_eq!(sig(123_456.0, 2), "120 kΩ");
+    assert_eq!(sig(0.1 + 0.2, 1), "300 mΩ");
 }
 
 #[test]

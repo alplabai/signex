@@ -48,13 +48,15 @@ impl Quantity {
     /// range the mantissa carries an exponent (`1.2e-16`) with
     /// [`SiPrefix::One`].
     pub fn eng_parts(&self) -> (String, SiPrefix) {
-        let l = layout(self.base, &self.unit);
+        let l = layout(self.base, &self.unit, 15);
         let sign = if l.negative { "-" } else { "" };
         (format!("{sign}{}", l.text), l.prefix)
     }
 
-    /// The unit string in canonical stored form (prefix is not stored:
-    /// `Measurement.unit` is the unit token and the value is the base).
+    /// Render in `style`; `plus_minus` prefixes `±` (`+/-` in ASCII) for
+    /// template slots that set `display_plus_minus`. Up to 15 significant
+    /// digits; see [`format_quantity_sig`](super::format_quantity_sig) to
+    /// cap them.
     pub fn format(&self, style: ValueStyle, plus_minus: bool) -> String {
         format_quantity(self, style, plus_minus)
     }

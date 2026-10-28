@@ -39,6 +39,11 @@ const UNPARSEABLE: &str = "4k7";
 /// best-effort commit that no-ops, which keeps the fixture cheap while
 /// still writing real bytes through the real writer.
 fn library_with_a_measurement_row(dir: &std::path::Path) -> (PathBuf, RowId) {
+    library_with_measurement(dir, 3.3, "V")
+}
+
+/// Same fixture with the stored measurement chosen by the caller.
+fn library_with_measurement(dir: &std::path::Path, value: f64, unit: &str) -> (PathBuf, RowId) {
     let snxlib = dir.join("cells.snxlib");
     let manifest = SnxlibManifest {
         format: FORMAT_TOKEN.into(),
@@ -67,8 +72,8 @@ fn library_with_a_measurement_row(dir: &std::path::Path) -> (PathBuf, RowId) {
     parameters.insert(
         PARAM.into(),
         ParamValue::Measurement {
-            value: 3.3,
-            unit: "V".into(),
+            value,
+            unit: unit.into(),
         },
     );
 
@@ -219,5 +224,73 @@ fn a_refused_cell_commit_reaches_the_messages_panel() {
         }),
         "the refusal must be in the Messages panel snapshot; got {:?}",
         panel.iter().map(|e| &e.message).collect::<Vec<_>>()
+    );
+}
+
+/// Commit `typed` into the cell holding `{value, unit}` and return what
+/// the library holds afterwards.
+fn commit_into_measurement(value: f64, unit: &str, typed: &str) -> ParamValue {
+    let tmp = tempfile::Builder::new()
+        .prefix("signex-1572-cell-prefix-")
+        .tempdir()
+        .expect("tempdir");
+    let (snxlib, row_id) = library_with_measurement(tmp.path(), value, unit);
+    let (mut app, _boot) = Signex::new();
+    app.library
+        .open_library(snxlib.clone())
+        .expect("mount library");
+    let mut browser = LibraryBrowserState::new(snxlib.clone());
+    browser.active_table = Some(TABLE.to_string());
+    browser
+        .cell_edit
+        .insert((row_id, format!("parameters.{PARAM}")), typed.to_string());
+    app.library.library_browsers.insert(snxlib.clone(), browser);
+    let _ = app.update(Message::Library(LibraryMessage::BrowserCellCommit {
+        library_path: snxlib.clone(),
+        table: TABLE.to_string(),
+        row_id,
+        column: format!("parameters.{PARAM}"),
+    }));
+    param_on_disk(&snxlib, row_id)
+}
+
+fn base_of(v: &ParamValue) -> f64 {
+    v.as_quantity().expect("a measurement").base()
+}
+
+/// #1572 — the cell shows `4.7 kΩ` for `{4700, "ohm"}`; a number typed
+/// into it is read in the prefix the user saw, not in the stored unit's
+/// base. Typing 5.6 must give 5.6 kΩ, not 5.6 Ω.
+#[test]
+fn a_number_typed_into_a_canonical_cell_keeps_the_displayed_prefix() {
+    let stored = commit_into_measurement(4700.0, "ohm", "5.6");
+    assert_eq!(base_of(&stored), 5600.0, "stored {stored:?}");
+    assert_eq!(
+        stored,
+        ParamValue::Measurement {
+            value: 5600.0,
+            unit: "ohm".into()
+        }
+    );
+}
+
+/// The legacy `{0.1, "uF"}` cell shows `100 nF`; typing 220 means 220 nF.
+#[test]
+fn a_number_typed_into_a_legacy_cell_keeps_the_displayed_prefix() {
+    let stored = commit_into_measurement(0.1, "uF", "220");
+    assert_eq!(base_of(&stored), 220e-9, "stored {stored:?}");
+}
+
+/// Retyping the number the cell already shows is a no-op, so an untouched
+/// legacy row keeps its stored form (and its content hash).
+#[test]
+fn retyping_the_displayed_number_leaves_a_legacy_row_as_stored() {
+    let stored = commit_into_measurement(4.7, "kΩ", "4.7");
+    assert_eq!(
+        stored,
+        ParamValue::Measurement {
+            value: 4.7,
+            unit: "kΩ".into()
+        }
     );
 }
