@@ -26,6 +26,9 @@ mod load_gateway;
 mod mutation_gateway;
 mod project_tab;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
+pub mod palette_index;
+#[cfg(test)]
+mod palette_index_tests;
 mod pcb_dirty_adapter;
 pub(crate) mod project_sheets;
 mod read_only_refusal;

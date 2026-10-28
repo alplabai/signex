@@ -119,6 +119,14 @@ pub enum CommandPaletteMsg {
     /// Execute the currently selected entry. Wired to Enter and to
     /// `text_input::on_submit`.
     ExecuteSelected,
+    /// The project search index finished building off-thread. `generation`
+    /// is the request it answers; an older one is dropped.
+    IndexBuilt {
+        generation: u64,
+        result: std::sync::Arc<
+            Result<std::sync::Arc<crate::app::palette_index::ProjectSearchIndex>, String>,
+        >,
+    },
 }
 
 /// In-canvas text-edit message family (ADR-0001 D3). Namespaced under

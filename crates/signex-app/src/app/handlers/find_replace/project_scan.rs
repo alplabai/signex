@@ -34,12 +34,7 @@ pub(super) fn designator_scope_of(
     hierarchy: Option<&SheetHierarchy>,
     path: &std::path::Path,
 ) -> DesignatorScope {
-    let Some(hierarchy) = hierarchy else {
-        return DesignatorScope::default();
-    };
-    let placements = hierarchy.placements_of(path);
-    let single = hierarchy.is_complete() && placements.len() <= 1;
-    DesignatorScope { placements, single }
+    hierarchy.map_or_else(DesignatorScope::default, |h| h.designator_scope(path))
 }
 
 fn run_scan(inputs: ScanInputs) -> ProjectScan {
