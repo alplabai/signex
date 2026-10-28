@@ -87,9 +87,11 @@ impl Signex {
                 Task::none()
             }
             PlacedPartMsg::ChangePartPicked => self.resolve_change_part(),
-            PlacedPartMsg::ChangePartResolved { target, result } => {
-                self.show_change_preview(target, result)
-            }
+            PlacedPartMsg::ChangePartResolved {
+                target,
+                row_id,
+                result,
+            } => self.show_change_preview(target, row_id, result),
             PlacedPartMsg::ChangePreviewBackedOut => self.back_out_of_change_preview(),
             PlacedPartMsg::ChangeConfirmed => self.confirm_change_component(),
         }

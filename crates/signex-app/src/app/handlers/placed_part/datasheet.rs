@@ -32,7 +32,7 @@ impl Signex {
             }
         };
         match <[DatasheetTarget; 1]>::try_from(targets) {
-            Ok([only]) => open_task(only.location, self.library.datasheet_opener),
+            Ok([only]) => open_task(only.location, reference, self.library.datasheet_opener),
             Err(targets) => {
                 self.library.picker = Some(PickerState {
                     mode: PickerMode::Datasheets(DatasheetChoice { reference, targets }),
@@ -52,8 +52,9 @@ impl Signex {
         else {
             return Task::none();
         };
+        let reference = choice.reference.clone();
         match choice.targets.into_iter().nth(index) {
-            Some(target) => open_task(target.location, self.library.datasheet_opener),
+            Some(target) => open_task(target.location, reference, self.library.datasheet_opener),
             None => Task::none(),
         }
     }

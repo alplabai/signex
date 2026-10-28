@@ -1,4 +1,9 @@
 //! Showing a datasheet in the platform's own viewer.
+//!
+//! What is launched is decided here, not by the caller: a link must be
+//! `http(s)`, and a file must be a PDF pinned inside the library's datasheet
+//! folder. Every refusal is an advice line that names the part and never
+//! the path, so a hostile path cannot flood or spoof the Messages panel.
 
 use std::path::Path;
 
@@ -8,39 +13,81 @@ use super::{DatasheetLocation, OpenDatasheet};
 use crate::app::contracts::Message;
 use crate::library::{LibraryMessage, PlacedPartMsg};
 
-/// Open `location`. Blocks on the launcher: call it from a worker. The
-/// error is the advice line for Messages, the location last.
-pub fn open(location: &DatasheetLocation) -> Result<(), String> {
+/// Open `location` for the part `part`. Blocks on the launcher: call it
+/// from a worker. The error is the advice line for Messages.
+pub fn open(location: &DatasheetLocation, part: &str) -> Result<(), String> {
     match location {
-        DatasheetLocation::Url(url) => open_url(url),
-        DatasheetLocation::File(path) => open_file(path),
+        DatasheetLocation::Url(url) => open_url(url, part),
+        DatasheetLocation::Pinned { path, assets_dir } => open_pinned(path, assets_dir, part),
     }
 }
 
-fn open_url(url: &str) -> Result<(), String> {
+fn open_url(url: &str, part: &str) -> Result<(), String> {
     let lower = url.to_ascii_lowercase();
     if !(lower.starts_with("https://") || lower.starts_with("http://")) {
         return Err(format!(
-            "Fix the datasheet link: it must start with https:// or http://, not: {url}"
+            "Fix the datasheet link of {part}: it must start with https:// or http://."
         ));
     }
     webbrowser::open(url).map_err(|e| {
-        format!("Set a default browser to read datasheets: it did not launch ({e}): {url}")
+        format!("Set a default browser to open the datasheet of {part}: it did not launch ({e}).")
     })
 }
 
-fn open_file(path: &Path) -> Result<(), String> {
-    if !path.is_file() {
-        return Err(format!(
-            "Restore the datasheet file or link it again: it is missing: {}",
-            path.display()
-        ));
+/// A UNC share, a verbatim or a device path: `is_file` on one of those can
+/// reach out to a network host, so it is refused on the string alone.
+fn is_remote_or_device_path(path: &Path) -> bool {
+    let text = path.to_string_lossy();
+    ["\\\\", "//", "\\??\\"]
+        .iter()
+        .any(|prefix| text.starts_with(prefix))
+}
+
+/// Why a pinned file may not be opened, as the end of an advice line.
+///
+/// It must be a `.pdf` that really sits inside the library's datasheet
+/// folder (symlinks resolved), is a regular file and carries the PDF header
+/// `store_datasheet` demands. Nothing touches the filesystem before the path
+/// text passes the remote-path test.
+fn check_pinned(path: &Path, assets_dir: &Path) -> Result<(), &'static str> {
+    use std::io::Read as _;
+    if is_remote_or_device_path(path) || is_remote_or_device_path(assets_dir) {
+        return Err("its path is not allowed");
     }
+    let is_pdf_name = path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("pdf"));
+    if !is_pdf_name {
+        return Err("it is not a .pdf file");
+    }
+    let real = path.canonicalize().map_err(|_| "its file is missing")?;
+    let root = assets_dir
+        .canonicalize()
+        .map_err(|_| "the library's datasheet folder is missing")?;
+    if !real.starts_with(&root) {
+        return Err("it is not inside the library's datasheet folder");
+    }
+    if !real.is_file() {
+        return Err("it is not a regular file");
+    }
+    let mut head = Vec::new();
+    std::fs::File::open(&real)
+        .and_then(|file| file.take(PDF_HEAD_BYTES).read_to_end(&mut head))
+        .map_err(|_| "its file cannot be read")?;
+    if !signex_library::is_pdf(&head) {
+        return Err("it is not a PDF");
+    }
+    Ok(())
+}
+
+/// How much of the file is read to look for the PDF header.
+const PDF_HEAD_BYTES: u64 = 1024;
+
+fn open_pinned(path: &Path, assets_dir: &Path, part: &str) -> Result<(), String> {
+    check_pinned(path, assets_dir)
+        .map_err(|why| format!("Re-pin the datasheet of {part} in its library row: {why}."))?;
     launch(path).map_err(|e| {
-        format!(
-            "Install a PDF viewer to read datasheets: it did not launch ({e}): {}",
-            path.display()
-        )
+        format!("Install a PDF viewer to open the datasheet of {part}: it did not launch ({e}).")
     })
 }
 
@@ -74,11 +121,16 @@ fn run_launcher(command: &mut std::process::Command) -> std::io::Result<()> {
     }
 }
 
-/// Open `location` off the update thread with `opener`. A failure comes
-/// back as [`PlacedPartMsg::DatasheetOpenFailed`]; success says nothing.
-pub fn open_task(location: DatasheetLocation, opener: OpenDatasheet) -> Task<Message> {
+/// Open `location` for `part` off the update thread with `opener`. A
+/// failure comes back as [`PlacedPartMsg::DatasheetOpenFailed`]; success says
+/// nothing.
+pub fn open_task(
+    location: DatasheetLocation,
+    part: String,
+    opener: OpenDatasheet,
+) -> Task<Message> {
     Task::future(async move {
-        tokio::task::spawn_blocking(move || opener(&location))
+        tokio::task::spawn_blocking(move || opener(&location, &part))
             .await
             .unwrap_or_else(|e| Err(format!("The datasheet launcher did not finish: {e}")))
             .err()
@@ -96,17 +148,121 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
+    /// A library folder with its datasheet folder, and a file `name` in it.
+    struct Lib {
+        _tmp: tempfile::TempDir,
+        assets: PathBuf,
+    }
+
+    fn lib() -> Lib {
+        let tmp = tempfile::tempdir().unwrap();
+        let assets = tmp.path().join("assets/datasheets");
+        std::fs::create_dir_all(&assets).unwrap();
+        Lib { _tmp: tmp, assets }
+    }
+
+    fn pinned(path: &Path, assets: &Path) -> DatasheetLocation {
+        DatasheetLocation::Pinned {
+            path: path.to_path_buf(),
+            assets_dir: assets.to_path_buf(),
+        }
+    }
+
+    fn refusal(location: &DatasheetLocation) -> String {
+        open(location, "R1").unwrap_err()
+    }
+
+    fn assert_advice_without_path(advice: &str) {
+        assert!(advice.starts_with("Re-pin the datasheet of R1"), "{advice}");
+        assert!(advice.len() <= 157, "{advice}");
+        assert!(
+            !advice.contains('/') || !advice.contains("assets"),
+            "{advice}"
+        );
+    }
+
     #[test]
-    fn a_missing_file_says_to_restore_it_before_any_launch() {
-        let path = PathBuf::from("/definitely/not/here/ds.pdf");
-        let advice = open(&DatasheetLocation::File(path.clone())).unwrap_err();
-        assert!(advice.starts_with("Restore the datasheet file"), "{advice}");
-        assert!(advice.ends_with(&path.display().to_string()), "{advice}");
+    fn a_missing_pinned_file_is_refused() {
+        let l = lib();
+        let advice = refusal(&pinned(&l.assets.join("gone.pdf"), &l.assets));
+        assert_advice_without_path(&advice);
+        assert!(advice.contains("missing"), "{advice}");
+    }
+
+    #[test]
+    fn a_pinned_file_that_is_not_a_pdf_is_refused() {
+        let l = lib();
+        let path = l.assets.join("fake.pdf");
+        std::fs::write(&path, b"#!/bin/sh\necho owned\n").unwrap();
+        let advice = refusal(&pinned(&path, &l.assets));
+        assert_advice_without_path(&advice);
+        assert!(advice.contains("not a PDF"), "{advice}");
+    }
+
+    #[test]
+    fn a_pinned_file_without_a_pdf_extension_is_refused() {
+        let l = lib();
+        let path = l.assets.join("run.command");
+        std::fs::write(&path, b"%PDF-1.7 pretend").unwrap();
+        let advice = refusal(&pinned(&path, &l.assets));
+        assert_advice_without_path(&advice);
+        assert!(advice.contains(".pdf"), "{advice}");
+    }
+
+    #[test]
+    fn a_pinned_file_outside_the_datasheet_folder_is_refused() {
+        let l = lib();
+        let outside = l.assets.parent().unwrap().join("elsewhere.pdf");
+        std::fs::write(&outside, b"%PDF-1.7 x").unwrap();
+        let advice = refusal(&pinned(&outside, &l.assets));
+        assert_advice_without_path(&advice);
+        assert!(advice.contains("datasheet folder"), "{advice}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_out_of_the_datasheet_folder_is_refused() {
+        let l = lib();
+        let target = l.assets.parent().unwrap().join("secret.pdf");
+        std::fs::write(&target, b"%PDF-1.7 secret").unwrap();
+        let link = l.assets.join("link.pdf");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let advice = refusal(&pinned(&link, &l.assets));
+        assert_advice_without_path(&advice);
+        assert!(advice.contains("datasheet folder"), "{advice}");
+    }
+
+    #[test]
+    fn unc_and_verbatim_paths_are_refused_before_any_filesystem_call() {
+        for bad in [
+            r"\\attacker\share\a.pdf",
+            r"\\?\C:\x\a.pdf",
+            r"\\.\pipe\a.pdf",
+            "//attacker/share/a.pdf",
+        ] {
+            let advice = refusal(&pinned(Path::new(bad), Path::new("/lib/assets/datasheets")));
+            assert_advice_without_path(&advice);
+            assert!(advice.contains("not allowed"), "{bad}: {advice}");
+        }
     }
 
     #[test]
     fn a_non_web_link_is_never_handed_to_the_browser() {
-        let advice = open(&DatasheetLocation::Url("file:///etc/passwd".into())).unwrap_err();
-        assert!(advice.starts_with("Fix the datasheet link"), "{advice}");
+        for bad in ["file:///etc/passwd", "javascript:alert(1)"] {
+            let advice = open(&DatasheetLocation::Url(bad.into()), "R1").unwrap_err();
+            assert!(
+                advice.starts_with("Fix the datasheet link of R1"),
+                "{advice}"
+            );
+            assert!(!advice.contains(bad), "the link is not echoed: {advice}");
+        }
+    }
+
+    #[test]
+    fn a_good_pinned_pdf_passes_the_checks() {
+        let l = lib();
+        let path = l.assets.join("ok.pdf");
+        std::fs::write(&path, b"%PDF-1.7 fine").unwrap();
+        assert!(check_pinned(&path, &l.assets).is_ok());
     }
 }

@@ -69,6 +69,18 @@ pub fn preview_lines(preview: &ComponentChangePreview) -> Vec<PreviewLine> {
             text: "Every connected pin keeps its wire.".into(),
         });
     }
+    if !preview.replaced.is_empty() {
+        lines.push(PreviewLine {
+            kind: LineKind::Info,
+            text: format!("Replaced by the new part: {}", list(&preview.replaced)),
+        });
+    }
+    if !preview.kept.is_empty() {
+        lines.push(PreviewLine {
+            kind: LineKind::Info,
+            text: format!("Kept: {}", list(&preview.kept)),
+        });
+    }
     for pair in &preview.mapping.pairs {
         let how = match pair.by {
             PinMatchedBy::Number => "",
@@ -305,6 +317,8 @@ mod tests {
             moved_connected: vec!["2".into()],
             gained: vec!["7".into()],
             missing_unit: Some(2),
+            replaced: vec!["Footprint".into(), "MPN".into()],
+            kept: vec!["Designator".into(), "Tolerance".into()],
         };
         let lines = preview_lines(&preview);
         let warnings: Vec<&str> = lines
@@ -320,5 +334,15 @@ mod tests {
         assert!(lines[..4].iter().all(|l| l.kind == LineKind::Warning));
         assert!(lines.iter().any(|l| l.text == "Pin 3 has no match"));
         assert_eq!(confirm_label(&preview), "Change anyway");
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.text == "Replaced by the new part: Footprint, MPN")
+        );
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.text == "Kept: Designator, Tolerance")
+        );
     }
 }

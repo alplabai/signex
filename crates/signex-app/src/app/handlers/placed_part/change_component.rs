@@ -4,7 +4,9 @@
 //! the confirm, which is one engine command and so one undo step.
 
 use iced::Task;
-use signex_engine::{Command, ComponentReplacement, change_component_preview};
+use signex_engine::{
+    Command, ComponentChangePreview, ComponentReplacement, change_component_preview,
+};
 use uuid::Uuid;
 
 use super::{PlacedPart, part_name};
@@ -23,6 +25,14 @@ impl Signex {
         if part.symbol.locked {
             crate::diagnostics::log_warning(format!(
                 "Unlock {name} in Properties to change its component: it is locked."
+            ));
+            return Task::none();
+        }
+        let elsewhere = self.units_on_other_sheets(&part);
+        if !elsewhere.is_empty() {
+            crate::diagnostics::log_warning(format!(
+                "Change Component works on one sheet; units of {name} are on other sheets: {}",
+                elsewhere.join(", ")
             ));
             return Task::none();
         }
@@ -64,7 +74,8 @@ impl Signex {
             .iter()
             .map(|l| (l.library_id, l.root.clone()))
             .collect();
-        let row_id = signex_library::RowId::from_uuid(summary.row_id);
+        let picked_row = summary.row_id;
+        let row_id = signex_library::RowId::from_uuid(picked_row);
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
@@ -77,6 +88,7 @@ impl Signex {
                 Message::Library(LibraryMessage::PlacedPart(
                     PlacedPartMsg::ChangePartResolved {
                         target: target.clone(),
+                        row_id: picked_row,
                         result: result.map(Box::new),
                     },
                 ))
@@ -89,13 +101,20 @@ impl Signex {
     pub(super) fn show_change_preview(
         &mut self,
         target: PlacedPartTarget,
+        row_id: Uuid,
         result: Result<Box<ResolvedPlacement>, String>,
     ) -> Task<Message> {
         let still_asked = matches!(
             self.library.picker.as_ref().map(|p| &p.mode),
             Some(PickerMode::ChangeComponent(t)) if *t == target
         );
-        if !still_asked {
+        let still_picked = self
+            .library
+            .picker
+            .as_ref()
+            .and_then(|p| p.selected.as_ref())
+            .is_some_and(|(_, summary)| summary.row_id == row_id);
+        if !still_asked || !still_picked {
             return Task::none();
         }
         let name = self.target_reference(&target);
@@ -119,15 +138,14 @@ impl Signex {
             self.drop_change(&name, "the sheet or part changed");
             return Task::none();
         };
-        let preview = change_component_preview(doc, target.symbol_id, &resolved.lib_symbol);
-        if let Some(picker) = self.library.picker.as_mut() {
-            picker.mode = PickerMode::ChangePreview(Box::new(ChangePreview {
-                target,
-                reference: name,
-                resolved,
-                preview,
-            }));
+        let preview = change_component_preview(doc, target.symbol_id, &replacement_of(&resolved));
+        if let Some(unit) = preview.missing_unit {
+            crate::diagnostics::log_warning(format!(
+                "Pick a part that has unit {unit}: the new part has no drawing for it, so {name} was not changed."
+            ));
+            return Task::none();
         }
+        self.show_preview(target, name, resolved, preview);
         Task::none()
     }
 
@@ -140,12 +158,14 @@ impl Signex {
         Task::none()
     }
 
-    /// Apply the reviewed change as one engine command (one undo step).
+    /// Apply the reviewed change as one engine command (one undo step), if
+    /// the sheet still gives the preview the user saw; otherwise show the
+    /// fresh preview instead of committing something unreviewed.
     pub(super) fn confirm_change_component(&mut self) -> Task<Message> {
         let Some(PickerState {
             mode: PickerMode::ChangePreview(change),
             ..
-        }) = self.library.picker.take()
+        }) = self.library.picker.as_ref().cloned()
         else {
             return Task::none();
         };
@@ -153,32 +173,97 @@ impl Signex {
             target,
             reference,
             resolved,
-            ..
+            preview: shown,
         } = *change;
-        if self.target_document(&target).is_none() {
+        let replacement = replacement_of(&resolved);
+        let Some(doc) = self.target_document(&target) else {
             self.drop_change(&reference, "the sheet or part changed meanwhile");
             return Task::none();
+        };
+        let fresh = change_component_preview(doc, target.symbol_id, &replacement);
+        if fresh != shown {
+            crate::diagnostics::log_warning(format!(
+                "Review the changed pins and confirm again: the sheet changed since the preview of {reference}."
+            ));
+            self.show_preview(target, reference, resolved, fresh);
+            return Task::none();
         }
+        if let Some(unit) = fresh.missing_unit {
+            self.library.picker = None;
+            crate::diagnostics::log_warning(format!(
+                "Pick a part that has unit {unit}: the new part has no drawing for it, so {reference} was not changed."
+            ));
+            return Task::none();
+        }
+        self.library.picker = None;
         let part = resolved.internal_pn.clone();
         // A refusal (a locked part) is logged by the gateway.
         let changed = self.apply_engine_command(
             Command::ChangeComponent {
                 symbol_id: target.symbol_id,
-                replacement: ComponentReplacement {
-                    lib_symbol: resolved.lib_symbol,
-                    library_id: Some(resolved.library_id),
-                    row_id: Some(resolved.row_id),
-                    library_version: resolved.library_version,
-                    value: resolved.value,
-                },
+                replacement,
             },
             true,
             true,
         );
         if changed {
             crate::diagnostics::log_info(format!("{reference} now uses {part}."));
+            if let Some(line) = lost_connections_line(&reference, &fresh) {
+                crate::diagnostics::log_warning(line);
+            }
         }
         Task::none()
+    }
+
+    fn show_preview(
+        &mut self,
+        target: PlacedPartTarget,
+        reference: String,
+        resolved: ResolvedPlacement,
+        preview: ComponentChangePreview,
+    ) {
+        if let Some(picker) = self.library.picker.as_mut() {
+            picker.mode = PickerMode::ChangePreview(Box::new(ChangePreview {
+                target,
+                reference,
+                resolved,
+                preview,
+            }));
+        }
+    }
+
+    /// Where the other units of the part (same designator, same drawing)
+    /// sit on the project's other open sheets: one name per sheet.
+    fn units_on_other_sheets(&self, part: &PlacedPart) -> Vec<String> {
+        let reference = part.symbol.reference.trim();
+        if reference.is_empty() {
+            return Vec::new();
+        }
+        let docs = &self.document_state;
+        let owner = docs
+            .document_project(&part.target.sheet)
+            .map(|p| p.path.clone());
+        let mut sheets: Vec<String> = docs
+            .engines
+            .iter()
+            .filter(|(path, _)| **path != part.target.sheet)
+            .filter(|(path, _)| {
+                owner.is_some() && docs.document_project(path).map(|p| p.path.clone()) == owner
+            })
+            .filter(|(_, engine)| {
+                engine
+                    .document()
+                    .symbols
+                    .iter()
+                    .any(|s| s.reference.trim() == reference && s.lib_id == part.symbol.lib_id)
+            })
+            .map(|(path, _)| {
+                path.file_name()
+                    .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+            })
+            .collect();
+        sheets.sort();
+        sheets
     }
 
     /// The sheet of `target`, if it is still the active one on the engine
@@ -216,4 +301,38 @@ impl Signex {
             "Start Change Component again: {why}, so {name} was not changed."
         ));
     }
+}
+
+/// The replacement the engine applies for a read part.
+fn replacement_of(resolved: &ResolvedPlacement) -> ComponentReplacement {
+    ComponentReplacement {
+        lib_symbol: resolved.lib_symbol.clone(),
+        library_id: Some(resolved.library_id),
+        row_id: Some(resolved.row_id),
+        library_version: resolved.library_version.clone(),
+        value: resolved.value.clone(),
+        footprint: resolved.footprint.clone(),
+        datasheet: resolved.datasheet.clone(),
+        fields: resolved.fields.clone(),
+    }
+}
+
+/// One Messages line for a change that went ahead with lost, moved or
+/// gained connections, within the panel's cut; `None` when it was clean.
+fn lost_connections_line(reference: &str, preview: &ComponentChangePreview) -> Option<String> {
+    if preview.is_clean() {
+        return None;
+    }
+    let mut parts = Vec::new();
+    for (what, pins) in [
+        ("dangling", &preview.unmatched_connected),
+        ("moved", &preview.moved_connected),
+        ("gained", &preview.gained),
+    ] {
+        if !pins.is_empty() {
+            parts.push(format!("{what} {}", pins.join(",")));
+        }
+    }
+    let line = format!("Check the wires of {reference}: {}.", parts.join("; "));
+    Some(crate::text_trunc::prefix_within_bytes(&line, 157).to_string())
 }

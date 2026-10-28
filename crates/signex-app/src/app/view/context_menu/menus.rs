@@ -384,12 +384,21 @@ pub(super) fn canvas_menu_entries(
 
     if placed_part_selected {
         use crate::library::PlacedPartAction as A;
+        // Labels come from the catalog where the action has a command id, so
+        // the menu and the command palette cannot drift. Change Component
+        // has no command id yet.
         for (label, action) in [
-            ("Open Datasheet", A::OpenDatasheet),
-            ("Edit Symbol", A::EditSymbol),
-            ("Change Component\u{2026}", A::ChangeComponent),
+            (
+                cmd_label("open_datasheet", "Open Datasheet"),
+                A::OpenDatasheet,
+            ),
+            (
+                cmd_label("edit_selected_symbol_in_symbol_editor", "Edit Symbol"),
+                A::EditSymbol,
+            ),
+            ("Change Component\u{2026}".to_string(), A::ChangeComponent),
         ] {
-            v.push(dd_kb(None, label, "", ContextAction::PlacedPart(action)));
+            v.push(dd_kb(None, &label, "", ContextAction::PlacedPart(action)));
         }
     }
     if has_selection {

@@ -8,15 +8,20 @@ use crate::library_place_symbol::{
 use crate::library_symbol_drift::{check_drift, select_first};
 use crate::settle_support::{settle, settle_task};
 use signex_app::app::contracts::{ContextAction, ContextMenuMsg};
-use signex_app::app::{EditMsg, FileMsg, Message, Signex, TabKind};
+use signex_app::app::{EditMsg, FileMsg, LoadedProject, Message, Signex, TabKind};
+use signex_app::dock::DockMessage;
 use signex_app::library::placed_part::DatasheetLocation;
 use signex_app::library::state::PickerMode;
 use signex_app::library::{LibraryMessage, PlacedPartAction, PlacedPartMsg};
+use signex_app::panels::PanelMsg;
 use signex_library::primitive::{Symbol, SymbolPin};
 use signex_library::{DatasheetDoc, DatasheetRef};
+use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::schematic::{Point, SymbolTransform, Wire};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use uuid::Uuid;
 
 const SHEET: &str = "place-364.snxsch";
 
@@ -80,12 +85,12 @@ fn set_documents(app: &mut Signex, docs: Vec<DatasheetDoc>) {
 
 static OPENED: Mutex<Vec<DatasheetLocation>> = Mutex::new(Vec::new());
 
-fn record_open(location: &DatasheetLocation) -> Result<(), String> {
+fn record_open(location: &DatasheetLocation, _part: &str) -> Result<(), String> {
     OPENED.lock().unwrap().push(location.clone());
     Ok(())
 }
 
-fn refuse_open(_: &DatasheetLocation) -> Result<(), String> {
+fn refuse_open(_: &DatasheetLocation, _part: &str) -> Result<(), String> {
     Err("Refuse-opener advice for zq-open-fail".into())
 }
 
@@ -96,7 +101,7 @@ fn opened_urls() -> Vec<String> {
         .iter()
         .filter_map(|l| match l {
             DatasheetLocation::Url(u) => Some(u.clone()),
-            DatasheetLocation::File(_) => None,
+            DatasheetLocation::Pinned { .. } => None,
         })
         .collect()
 }
@@ -392,20 +397,29 @@ fn change_setup(reference: &str, replacement: Symbol, wired: &[&str]) -> (Signex
     (app, new)
 }
 
-/// Pick `new`'s row in the open Change Component picker and continue.
-fn pick_part(app: &mut Signex, new: &Fixture) {
-    let picker = app.library.picker.as_mut().expect("the picker is open");
-    picker.selected = app
+/// Select `f`'s row in the open Change Component picker.
+fn select_row(app: &mut Signex, f: &Fixture) {
+    let selected = app
         .library
         .open_libraries
         .iter()
-        .find(|l| l.library_id == new.library_id)
+        .find(|l| l.library_id == f.library_id)
         .and_then(|l| {
             l.cached_components
                 .first()
                 .map(|c| (l.root.clone(), c.clone()))
         });
-    assert!(picker.selected.is_some(), "the replacement row is listed");
+    assert!(selected.is_some(), "the row is listed");
+    app.library
+        .picker
+        .as_mut()
+        .expect("the picker is open")
+        .selected = selected;
+}
+
+/// Pick `new`'s row in the open Change Component picker and continue.
+fn pick_part(app: &mut Signex, new: &Fixture) {
+    select_row(app, new);
     send(app, PlacedPartMsg::ChangePartPicked);
 }
 
@@ -498,10 +512,37 @@ fn confirming_swaps_the_part_keeps_the_designator_and_is_one_undo_step() {
     let (mut app, new) = change_setup("ZC5", renumbered(), &["1", "3"]);
     let before = symbol_lib_id(&app);
     let old_row = doc(&app).symbols[0].row_id;
+    let pin_uuid = Uuid::from_u128(0x77);
+    set_symbol(&mut app, |s| {
+        s.pin_uuids.insert("3".into(), pin_uuid);
+    });
     request(&mut app, PlacedPartAction::ChangeComponent);
     pick_part(&mut app, &new);
 
     send(&mut app, PlacedPartMsg::ChangeConfirmed);
+
+    // The wires still meet the mapped pins (1 -> 1, 3 -> 9), the value is the
+    // new part's and the pin uuid followed pin 3 to its new number.
+    let tips: Vec<Point> = {
+        let sheet = doc(&app);
+        let sym = &sheet.symbols[0];
+        let x = SymbolTransform::from_symbol(sym);
+        sheet.lib_symbols[&sym.lib_id]
+            .pins
+            .iter()
+            .filter(|p| p.unit == 0 || p.unit == sym.unit)
+            .map(|p| x.apply(p.pin.position))
+            .collect()
+    };
+    assert_eq!(tips.len(), 2);
+    for tip in tips {
+        assert!(
+            doc(&app).wires.iter().any(|w| w.start == tip),
+            "a wire no longer meets a pin at {tip:?}"
+        );
+    }
+    assert_eq!(doc(&app).symbols[0].value, "TWO-1");
+    assert_eq!(doc(&app).symbols[0].pin_uuids.get("9"), Some(&pin_uuid));
 
     let sym = &doc(&app).symbols[0];
     assert_ne!(sym.lib_id, before);
@@ -539,17 +580,7 @@ fn a_part_read_that_finishes_after_the_picker_closed_changes_nothing() {
     let (mut app, new) = change_setup("ZC7", renumbered(), &[]);
     let before = symbol_lib_id(&app);
     request(&mut app, PlacedPartAction::ChangeComponent);
-    let picker = app.library.picker.as_mut().unwrap();
-    picker.selected = app
-        .library
-        .open_libraries
-        .iter()
-        .find(|l| l.library_id == new.library_id)
-        .and_then(|l| {
-            l.cached_components
-                .first()
-                .map(|c| (l.root.clone(), c.clone()))
-        });
+    select_row(&mut app, &new);
     let task = app.update(Message::Library(LibraryMessage::PlacedPart(
         PlacedPartMsg::ChangePartPicked,
     )));
@@ -585,4 +616,273 @@ fn confirming_after_the_part_was_deleted_is_refused_and_logged() {
     assert!(logged(&["ZC8", "was not changed"]));
     assert!(doc(&app).symbols.is_empty());
     assert!(app.library.picker.is_none());
+}
+
+fn set_symbol(app: &mut Signex, edit: impl FnOnce(&mut signex_types::schematic::Symbol)) {
+    let mut d = doc(app).clone();
+    edit(&mut d.symbols[0]);
+    app.document_state
+        .active_engine_mut()
+        .unwrap()
+        .set_document(d);
+}
+
+/// A second unit (unit 2) of the placed part, same designator and drawing.
+fn add_second_unit(app: &mut Signex) {
+    let mut d = doc(app).clone();
+    let mut unit2 = d.symbols[0].clone();
+    unit2.uuid = Uuid::new_v4();
+    unit2.unit = 2;
+    unit2.position = Point::new(80.0, 40.0);
+    d.symbols.push(unit2);
+    app.document_state
+        .active_engine_mut()
+        .unwrap()
+        .set_document(d);
+}
+
+/// A replacement that draws unit 1 only (no shared pins).
+fn unit_one_only() -> Symbol {
+    let mut s = Symbol::empty("ONE-UNIT");
+    s.designator = "U?".into();
+    for (number, y) in [("1", 0.0), ("2", 5.08)] {
+        let mut p = SymbolPin::new(number, format!("P{number}"));
+        p.position = [0.0, y];
+        p.part_number = 1;
+        s.pins.push(p);
+    }
+    s
+}
+
+#[test]
+fn every_unit_of_the_part_on_the_sheet_is_swapped_in_one_undo_step() {
+    let (mut app, new) = change_setup("ZM1", renumbered(), &[]);
+    add_second_unit(&mut app);
+    let before = symbol_lib_id(&app);
+    request(&mut app, PlacedPartAction::ChangeComponent);
+    pick_part(&mut app, &new);
+
+    send(&mut app, PlacedPartMsg::ChangeConfirmed);
+
+    let after: Vec<(String, Option<Uuid>)> = doc(&app)
+        .symbols
+        .iter()
+        .map(|s| (s.lib_id.clone(), s.row_id))
+        .collect();
+    assert_eq!(after.len(), 2);
+    assert_eq!(after[0], after[1], "both units moved to the new part");
+    assert_ne!(after[0].0, before);
+
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert!(doc(&app).symbols.iter().all(|s| s.lib_id == before));
+}
+
+#[test]
+fn units_on_another_sheet_of_the_project_refuse_the_change() {
+    let (mut app, _new) = change_setup("ZM2", renumbered(), &[]);
+    let other_sheet = join_project_with_a_second_sheet(&mut app);
+    // The other sheet holds another unit of ZM2 on the same drawing.
+    let mut unit = doc(&app).symbols[0].clone();
+    unit.uuid = Uuid::new_v4();
+    unit.unit = 2;
+    let mut sheet = doc(&app).clone();
+    sheet.symbols = vec![unit];
+    app.document_state.engines.insert(
+        other_sheet,
+        signex_engine::Engine::new(sheet).expect("engine"),
+    );
+
+    request(&mut app, PlacedPartAction::ChangeComponent);
+
+    assert!(logged(&[
+        "Change Component works on one sheet",
+        "ZM2",
+        "sheet-two.snxsch"
+    ]));
+    assert!(app.library.picker.is_none());
+}
+
+#[test]
+fn a_new_part_that_lacks_a_placed_unit_is_refused_before_the_preview() {
+    let (mut app, new) = change_setup("ZM3", unit_one_only(), &[]);
+    add_second_unit(&mut app);
+    let before = symbol_lib_id(&app);
+    request(&mut app, PlacedPartAction::ChangeComponent);
+
+    pick_part(&mut app, &new);
+
+    assert!(logged(&["Pick a part that has unit 2", "ZM3"]));
+    assert!(matches!(
+        app.library.picker.as_ref().unwrap().mode,
+        PickerMode::ChangeComponent(_)
+    ));
+    assert_eq!(symbol_lib_id(&app), before);
+}
+
+#[test]
+fn a_sheet_that_changed_after_the_preview_shows_the_fresh_preview_instead_of_committing() {
+    // The new part has no pin 3. Unwired, that costs nothing: a clean preview.
+    let (mut app, new) = change_setup("ZS1", lacking_pin_3(), &["1"]);
+    let before = symbol_lib_id(&app);
+    request(&mut app, PlacedPartAction::ChangeComponent);
+    pick_part(&mut app, &new);
+    assert!(preview_of(&app).preview.unmatched_connected.is_empty());
+
+    // A wire lands on pin 3 while the preview is open.
+    wire_pins(&mut app, &["3"]);
+    send(&mut app, PlacedPartMsg::ChangeConfirmed);
+
+    assert_eq!(symbol_lib_id(&app), before, "nothing was committed");
+    assert_eq!(
+        preview_of(&app).preview.unmatched_connected,
+        ["3".to_string()],
+        "the preview was shown again with the new wire in it"
+    );
+    assert!(logged(&["Review the changed pins", "ZS1"]));
+
+    // Confirming what is now on screen goes ahead.
+    send(&mut app, PlacedPartMsg::ChangeConfirmed);
+    assert_ne!(symbol_lib_id(&app), before);
+}
+
+#[test]
+fn a_part_read_for_a_row_that_is_no_longer_picked_is_dropped() {
+    let (mut app, new) = change_setup("ZR1", renumbered(), &[]);
+    request(&mut app, PlacedPartAction::ChangeComponent);
+    select_row(&mut app, &new);
+    let task = app.update(Message::Library(LibraryMessage::PlacedPart(
+        PlacedPartMsg::ChangePartPicked,
+    )));
+    // The user picks another row while the read of the first is in flight.
+    let old_library = app.library.open_libraries[0].library_id;
+    let other = app
+        .library
+        .open_libraries
+        .iter()
+        .find(|l| l.library_id == old_library)
+        .and_then(|l| {
+            l.cached_components
+                .first()
+                .map(|c| (l.root.clone(), c.clone()))
+        });
+    app.library.picker.as_mut().unwrap().selected = other;
+
+    settle_task(&mut app, task);
+
+    assert!(matches!(
+        app.library.picker.as_ref().unwrap().mode,
+        PickerMode::ChangeComponent(_)
+    ));
+}
+
+#[test]
+fn the_part_data_of_the_new_row_replaces_the_old_and_user_parameters_stay() {
+    let (mut app, new) = change_setup("ZP1", renumbered(), &[]);
+    set_symbol(&mut app, |s| {
+        s.footprint = "OLD-FOOTPRINT".into();
+        s.fields.insert("MPN".into(), "OLD-MPN".into());
+        s.fields.insert("Tolerance".into(), "1%".into());
+    });
+    request(&mut app, PlacedPartAction::ChangeComponent);
+    pick_part(&mut app, &new);
+    let shown = preview_of(&app).preview;
+    assert!(shown.replaced.iter().any(|r| r == "Footprint"));
+    assert!(shown.kept.iter().any(|k| k == "Tolerance"));
+
+    send(&mut app, PlacedPartMsg::ChangeConfirmed);
+
+    let sym = &doc(&app).symbols[0];
+    assert_ne!(
+        sym.footprint, "OLD-FOOTPRINT",
+        "the old part's footprint is gone"
+    );
+    assert_eq!(sym.fields.get("MPN").map(String::as_str), Some("TWO-1"));
+    assert_eq!(
+        sym.fields.get("Manufacturer").map(String::as_str),
+        Some("Acme")
+    );
+    assert_eq!(sym.fields.get("Tolerance").map(String::as_str), Some("1%"));
+    assert_eq!(sym.reference, "ZP1");
+}
+
+#[test]
+fn a_change_that_loses_connections_says_which_pins_in_messages() {
+    let (mut app, new) = change_setup("ZW1", lacking_pin_3(), &["1", "3"]);
+    request(&mut app, PlacedPartAction::ChangeComponent);
+    pick_part(&mut app, &new);
+
+    send(&mut app, PlacedPartMsg::ChangeConfirmed);
+
+    assert!(logged(&["Check the wires of ZW1", "dangling 3"]));
+}
+
+// ---- the Properties panel buttons reach the same flows ----
+
+fn panel_action(app: &mut Signex, action: PlacedPartAction) {
+    settle(
+        app,
+        Message::Dock(DockMessage::Panel(PanelMsg::PlacedPartAction(action))),
+    );
+}
+
+#[test]
+fn the_properties_buttons_reach_all_three_flows() {
+    let f = fixture();
+    let path = symbol_file(&f);
+    let mut app = placed_part(&f, "ZB1");
+
+    panel_action(&mut app, PlacedPartAction::OpenDatasheet);
+    assert!(logged(&["Add a datasheet to the library row of ZB1"]));
+
+    panel_action(&mut app, PlacedPartAction::EditSymbol);
+    assert_eq!(symbol_editor_paths(&app), vec![path]);
+
+    // The symbol editor tab is active now; go back to the sheet.
+    app.document_state.active_tab = 0;
+    let (mut app2, _new) = change_setup("ZB2", renumbered(), &[]);
+    panel_action(&mut app2, PlacedPartAction::ChangeComponent);
+    assert!(matches!(
+        app2.library.picker.as_ref().unwrap().mode,
+        PickerMode::ChangeComponent(_)
+    ));
+}
+
+/// A project owning the active sheet and `sheet-two.snxsch`; returns the
+/// second sheet's path.
+fn join_project_with_a_second_sheet(app: &mut Signex) -> PathBuf {
+    let sheet_entry = |filename: &str| SheetEntry {
+        name: filename.to_string(),
+        filename: filename.to_string(),
+        symbols_count: 0,
+        wires_count: 0,
+        labels_count: 0,
+        unknown: Default::default(),
+    };
+    let id = app.document_state.mint_project_id();
+    app.document_state.projects.push(LoadedProject {
+        id,
+        path: PathBuf::from("proj.snxprj"),
+        data: ProjectData {
+            description: None,
+            name: "proj".into(),
+            dir: String::new(),
+            schematic_root: Some(SHEET.into()),
+            pcb_file: None,
+            sheets: vec![sheet_entry(SHEET), sheet_entry("sheet-two.snxsch")],
+            variant_definitions: Vec::new(),
+            active_variant: None,
+            libraries: Vec::new(),
+            enable_git: false,
+            net_classes: Vec::new(),
+            rules: None,
+            annotation: None,
+            parameters: Default::default(),
+            unknown: Default::default(),
+        },
+        pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
+        case_decided: false,
+    });
+    PathBuf::from("sheet-two.snxsch")
 }

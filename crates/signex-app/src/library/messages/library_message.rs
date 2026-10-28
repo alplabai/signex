@@ -531,6 +531,13 @@ pub struct ResolvedPlacement {
     /// The row's raw `designator_prefix` parameter, not yet validated: it
     /// beats the standard's table entry for `class` (#1315).
     pub prefix_override: Option<String>,
+    /// The part's own footprint (`"<library uuid>:<footprint uuid>"`, empty
+    /// when the row binds none), primary datasheet link and identity fields
+    /// (Manufacturer, MPN and the row's parameters). A placement does not
+    /// stamp them; Change Component replaces the old part's with them.
+    pub footprint: String,
+    pub datasheet: String,
+    pub fields: Vec<(String, String)>,
 }
 
 /// The drawing a placed symbol is switched to, read off-thread: the

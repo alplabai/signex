@@ -3,13 +3,16 @@
 
 use std::path::{Path, PathBuf};
 
-use signex_library::{ComponentRow, DatasheetRef, datasheet_asset_path};
+use signex_library::{ComponentRow, DATASHEET_ASSET_DIR, DatasheetRef, datasheet_asset_path};
 
 /// Where a document lives.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DatasheetLocation {
+    /// An `http` or `https` link.
     Url(String),
-    File(PathBuf),
+    /// A PDF pinned into a library: opened only if it is still a real PDF
+    /// inside `assets_dir`, the library's datasheet folder.
+    Pinned { path: PathBuf, assets_dir: PathBuf },
 }
 
 /// One document to offer, with the label the library gives it.
@@ -53,7 +56,10 @@ pub fn datasheet_targets(
                 let location = match &doc.source {
                     DatasheetRef::Url { url } => web_link(url).map(DatasheetLocation::Url),
                     DatasheetRef::HashPinned { hash, .. } => {
-                        datasheet_asset_path(library_file, hash).map(DatasheetLocation::File)
+                        datasheet_asset_path(library_file, hash).and_then(|path| {
+                            let assets_dir = library_file.parent()?.join(DATASHEET_ASSET_DIR);
+                            Some(DatasheetLocation::Pinned { path, assets_dir })
+                        })
                     }
                 };
                 match location {
@@ -65,14 +71,19 @@ pub fn datasheet_targets(
         }
         PartSource::NoRow | PartSource::RowUnavailable => {}
     }
-    if let Some(target) = own_field_target(own_field, &targets) {
-        targets.push(target);
+    let mut bad_field = false;
+    match own_field_target(own_field, &targets) {
+        OwnField::Absent => {}
+        OwnField::Usable(target) => targets.push(target),
+        OwnField::Unusable => bad_field = true,
     }
     if !targets.is_empty() {
         return Ok(targets);
     }
     Err(if bad_link {
         format!("Fix the datasheet link of {reference}: it must start with https:// or http://.")
+    } else if bad_field {
+        format!("Fix the Datasheet field of {reference}: it must start with https:// or http://.")
     } else if row_listed_none {
         format!("Add a datasheet to the library row of {reference} to open it: the row lists none.")
     } else if matches!(source, PartSource::RowUnavailable) {
@@ -86,23 +97,29 @@ pub fn datasheet_targets(
 
 const DEFAULT_LABEL: &str = "Datasheet";
 
-/// The symbol's own Datasheet field as a document, unless it is empty, the
-/// `~` placeholder, already one of `listed`, or neither a web link nor an
-/// absolute path.
-fn own_field_target(field: &str, listed: &[DatasheetTarget]) -> Option<DatasheetTarget> {
+enum OwnField {
+    Absent,
+    Usable(DatasheetTarget),
+    /// Set, but not a web link; never opened.
+    Unusable,
+}
+
+/// The symbol's own Datasheet field as a document. The field comes from the
+/// sheet file, which is untrusted, so only an `http` or `https` link is
+/// taken from it: a path would hand the file to the system launcher.
+fn own_field_target(field: &str, listed: &[DatasheetTarget]) -> OwnField {
     let field = field.trim();
     if field.is_empty() || field == "~" {
-        return None;
+        return OwnField::Absent;
     }
-    let location = match web_link(field) {
-        Some(link) => DatasheetLocation::Url(link),
-        None if Path::new(field).is_absolute() => DatasheetLocation::File(PathBuf::from(field)),
-        None => return None,
+    let Some(link) = web_link(field) else {
+        return OwnField::Unusable;
     };
+    let location = DatasheetLocation::Url(link);
     if listed.iter().any(|t| t.location == location) {
-        return None;
+        return OwnField::Absent;
     }
-    Some(DatasheetTarget {
+    OwnField::Usable(DatasheetTarget {
         label: DEFAULT_LABEL.to_string(),
         location,
     })
@@ -178,9 +195,10 @@ mod tests {
         assert_eq!(targets[1].label, "Errata");
         assert_eq!(
             targets[1].location,
-            DatasheetLocation::File(
-                PathBuf::from("/libs/main").join(format!("assets/datasheets/{hash}.pdf"))
-            )
+            DatasheetLocation::Pinned {
+                path: PathBuf::from("/libs/main").join(format!("assets/datasheets/{hash}.pdf")),
+                assets_dir: PathBuf::from("/libs/main/assets/datasheets"),
+            }
         );
     }
 
@@ -242,22 +260,36 @@ mod tests {
     }
 
     #[test]
-    fn only_web_links_and_absolute_files_are_opened() {
-        let r = row(vec![DatasheetDoc::new(
-            "",
-            DatasheetRef::url("javascript:alert(1)"),
-        )]);
-        let advice = plan(&r, "").unwrap_err();
-        assert!(advice.contains("https://"), "{advice}");
-        assert!(datasheet_targets("R1", PartSource::NoRow, "relative/d.pdf").is_err());
+    fn a_row_link_that_is_not_http_is_refused() {
+        for bad in ["javascript:alert(1)", "file:///etc/passwd", "ftp://x/y.pdf"] {
+            let r = row(vec![DatasheetDoc::new("", DatasheetRef::url(bad))]);
+            let advice = plan(&r, "").unwrap_err();
+            assert!(
+                advice.starts_with("Fix the datasheet link of R1"),
+                "{bad}: {advice}"
+            );
+        }
     }
 
     #[test]
-    fn an_absolute_field_path_is_a_file_target() {
-        let t = datasheet_targets("R1", PartSource::NoRow, "/docs/r1.pdf").unwrap();
-        assert_eq!(
-            t[0].location,
-            DatasheetLocation::File(PathBuf::from("/docs/r1.pdf"))
-        );
+    fn the_free_form_field_takes_web_links_only() {
+        // `.snxsch` content is untrusted: a path, a script, a UNC share and
+        // a file: or javascript: link are all refused, none is ever offered.
+        for bad in [
+            "/Applications/Evil.command",
+            "C:\\Users\\x\\evil.exe",
+            "\\\\attacker\\share\\a.pdf",
+            "/docs/r1.pdf",
+            "relative/d.pdf",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+        ] {
+            let advice = datasheet_targets("R1", PartSource::NoRow, bad).unwrap_err();
+            assert!(
+                advice.starts_with("Fix the Datasheet field of R1"),
+                "{bad}: {advice}"
+            );
+            assert!(advice.len() <= 157, "{advice}");
+        }
     }
 }

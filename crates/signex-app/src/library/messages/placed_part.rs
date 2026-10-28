@@ -39,6 +39,9 @@ pub enum PlacedPartMsg {
     /// The off-thread read of the picked part finished.
     ChangePartResolved {
         target: PlacedPartTarget,
+        /// The row that was read; a result for a row that is no longer the
+        /// picked one is dropped.
+        row_id: Uuid,
         result: Result<Box<ResolvedPlacement>, String>,
     },
     /// The preview was left to pick another part.
