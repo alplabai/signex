@@ -104,6 +104,7 @@ fn fixture() -> Signex {
         path: dir.join("P.snxprj"),
         data: ProjectData {
             name: "P".to_string(),
+            description: None,
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: None,
             pcb_file: None,
@@ -127,6 +128,7 @@ fn fixture() -> Signex {
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
     let mut engine = signex_engine::Engine::new(vcc_sheet()).expect("engine");

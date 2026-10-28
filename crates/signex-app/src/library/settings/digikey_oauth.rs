@@ -23,10 +23,10 @@
 //!   committed to source.
 //!
 //! Cancellation:
-//! - The caller holds a `CancelHandle` that, when dropped or via
-//!   `cancel()`, asks the listener to stop blocking on the next
-//!   `recv_timeout`. The handler observes cancellation and returns
-//!   [`Outcome::Cancelled`].
+//! - The caller holds a `CancelHandle`; calling `cancel()` (or setting
+//!   the shared flag) makes the polling `accept` loop stop within a
+//!   few hundred ms and return [`Outcome::Cancelled`]. Dropping the
+//!   handle does not cancel.
 
 use std::net::TcpListener;
 use std::sync::Arc;
@@ -51,7 +51,7 @@ pub enum Outcome {
     /// the OS keyring under `signex-distributor-digikey/refresh`. The
     /// returned string is a user-facing identifier (best-effort: the
     /// canonical email isn't returned by the token endpoint, so we
-    /// fall back to "Connected" here and let the panel tweak the
+    /// fall back to "DigiKey" here and let the panel tweak the
     /// label later when an account-info call lands).
     Connected { account_label: String },
     /// User-visible reason. Surfaced as "Failed: <reason>".
@@ -214,50 +214,44 @@ pub fn run_blocking(
                     // not the redirect, so the flow keeps waiting.
                     std::io::Write::write_all(
                         &mut stream,
-                        b"HTTP/1.1 404 Not Found
-Content-Length: 0
-Connection: close
-
-",
+                        b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
                     )
                     .ignore("courtesy 404; the stray peer may already be gone");
                     continue;
                 }
-                let response_body = "<html><body><p>Signex: DigiKey connected. You can close this window.</p></body></html>";
-                // Courtesy page only. `req_line` was already read above and
-                // `parse_callback` below works entirely from it, so the OAuth
-                // exchange completes whether or not this reaches the browser
-                // — a browser that closed early costs the user the "you can
-                // close this window" page and nothing else.
-                std::io::Write::write_all(
-                    &mut stream,
-                    format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                        response_body.len(),
-                        response_body
-                    )
-                    .as_bytes(),
-                )
-                .ignore("confirmation page only; the callback is already captured in `req_line`");
+                let outcome = match callback_params(req_line) {
+                    Ok((code, returned_state)) => {
+                        match auth.exchange_code(&code, verifier, &returned_state, &csrf_token) {
+                            Ok(_access_token) => Outcome::Connected {
+                                // No identity claim is returned by the token
+                                // endpoint in DigiKey's spec; the panel
+                                // labels the connection generically until a
+                                // follow-up `/me` call lands.
+                                account_label: "DigiKey".to_string(),
+                            },
+                            Err(e) => failure_from(e),
+                        }
+                    }
+                    Err(outcome) => outcome,
+                };
+                // Courtesy page only, written after the exchange so the
+                // browser never claims "connected" for a failed handshake.
+                // `req_line` was consumed above, so the outcome does not
+                // depend on this reaching the browser.
+                let response_body = match outcome {
+                    Outcome::Connected { .. } => {
+                        "<html><body><p>Signex: DigiKey connected. You can close this window.</p></body></html>"
+                    }
+                    _ => {
+                        "<html><body><p>Signex: DigiKey was not connected. Return to Signex for details.</p></body></html>"
+                    }
+                };
+                std::io::Write::write_all(&mut stream, ok_response(response_body).as_bytes())
+                    .ignore("confirmation page only; the outcome is already decided");
                 stream.shutdown(std::net::Shutdown::Both).ignore(
                     "connection is finished with; a failed shutdown means the peer closed first",
                 );
-
-                let (code, returned_state) = match callback_params(req_line) {
-                    Ok(t) => t,
-                    Err(outcome) => return outcome,
-                };
-
-                return match auth.exchange_code(&code, verifier, &returned_state, &csrf_token) {
-                    Ok(_access_token) => Outcome::Connected {
-                        // No identity claim is returned by the token
-                        // endpoint in DigiKey's spec; the panel
-                        // labels the connection generically until a
-                        // follow-up `/me` call lands.
-                        account_label: "DigiKey".to_string(),
-                    },
-                    Err(e) => failure_from(e),
-                };
+                return outcome;
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(150));
@@ -296,12 +290,9 @@ fn failure_from(e: DigiKeyAuthError) -> Outcome {
 }
 
 /// Read the first line of the HTTP request — only the line we need
-/// to extract `?code=&state=` from. We intentionally avoid pulling in
-/// the full `tiny_http` server here because it's overkill for one
-/// request and adds a fork of the request lifecycle that doesn't
-/// blend with the polling/cancel pattern. (We still link to it via
-/// `Cargo.toml` for symmetry with the WS specs in case the flow
-/// grows; the polled-listener version above is what runs.)
+/// to extract `?code=&state=` from. A plain polled `TcpListener` is
+/// used instead of an HTTP server crate: one request, and it blends
+/// with the polling/cancel pattern.
 ///
 /// The read error is returned rather than folded into an empty string:
 /// an empty line parses as "the redirect carried no code/state", which
@@ -343,6 +334,21 @@ fn callback_params(req_line: Result<String, std::io::Error>) -> Result<(String, 
             });
         }
     };
+    if let Some(error) = callback_error(&line) {
+        tracing::error!(
+            target: "signex::distributor",
+            distributor = "digikey",
+            error = %error,
+            "DigiKey redirected back with an authorization error, so the account was not connected"
+        );
+        return Err(Outcome::Failed {
+            reason: if error == "access_denied" {
+                "authorization was denied in the browser".into()
+            } else {
+                format!("DigiKey returned an authorization error: {error}")
+            },
+        });
+    }
     match parse_callback(&line) {
         Some(pair) => Ok(pair),
         None => {
@@ -379,6 +385,17 @@ fn callback_query_keys(req_line: &str) -> String {
     keys.join(",")
 }
 
+/// The `error` query parameter of the callback request line, if any
+/// (RFC 6749 §4.1.2.1, e.g. `access_denied` when the user declines).
+fn callback_error(req_line: &str) -> Option<String> {
+    let query = req_line.split_whitespace().nth(1)?.split_once('?')?.1;
+    query
+        .split('&')
+        .filter_map(|pair| pair.split_once('='))
+        .find(|(k, _)| *k == "error")
+        .map(|(_, v)| url_decode(v))
+}
+
 /// Extract `code` and `state` query params from the first request
 /// line `GET /callback?code=...&state=... HTTP/1.1`.
 fn parse_callback(req_line: &str) -> Option<(String, String)> {
@@ -391,7 +408,9 @@ fn parse_callback(req_line: &str) -> Option<(String, String)> {
     let mut code = None;
     let mut state = None;
     for pair in q.split('&') {
-        let (k, v) = pair.split_once('=')?;
+        let Some((k, v)) = pair.split_once('=') else {
+            continue;
+        };
         let v_owned = url_decode(v);
         match k {
             "code" => code = Some(v_owned),
@@ -447,9 +466,26 @@ pub fn read_env_credentials() -> (String, String) {
     (id, secret)
 }
 
+/// Courtesy HTML page shown in the browser after the redirect.
+fn ok_response(body: &str) -> String {
+    format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ok_response_has_one_header_terminator() {
+        let r = ok_response("<p>x</p>");
+        assert_eq!(r.matches("\r\n\r\n").count(), 1);
+        assert!(r.starts_with("HTTP/1.1 200 OK\r\nContent-Type: text/html"));
+        assert!(r.ends_with("\r\n\r\n<p>x</p>"));
+    }
 
     #[test]
     fn parse_callback_extracts_code_and_state() {
@@ -478,6 +514,26 @@ mod tests {
         assert!(!is_callback_request(&timed_out));
         let reset = Err(std::io::Error::from(std::io::ErrorKind::ConnectionReset));
         assert!(is_callback_request(&reset));
+    }
+
+    #[test]
+    fn parse_callback_skips_valueless_params() {
+        let line = "GET /callback?flag&code=abc&state=xyz HTTP/1.1";
+        assert_eq!(parse_callback(line), Some(("abc".into(), "xyz".into())));
+    }
+
+    #[test]
+    fn denied_redirect_is_reported_as_denial_not_missing_pair() {
+        let line = "GET /callback?error=access_denied&state=xyz HTTP/1.1";
+        assert_eq!(callback_error(line).as_deref(), Some("access_denied"));
+        let Err(Outcome::Failed { reason }) = callback_params(Ok(line.to_string())) else {
+            panic!("expected failure");
+        };
+        assert!(reason.contains("denied"), "{reason}");
+        assert_eq!(
+            callback_error("GET /callback?code=a&state=b HTTP/1.1"),
+            None
+        );
     }
 
     #[test]

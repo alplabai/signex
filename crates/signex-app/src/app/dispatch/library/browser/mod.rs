@@ -5,12 +5,11 @@
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 //!
-//! The folder carries the `browser` namespace: class handlers live in
-//! `classes`, grid/row handlers in `grid`, and table handlers in
+//! The folder carries the `browser` namespace: grid/row handlers live in
+//! `grid`, and table handlers in
 //! `tables`; this `mod.rs` keeps the browser-tab handlers.
 
 mod cell_commit;
-mod classes;
 mod grid;
 mod modal_reload;
 mod param_commit;
@@ -46,6 +45,15 @@ impl Signex {
             already_mounted = self.library.library_at(&path).is_some(),
             "open_library_browser: enter"
         );
+        // A mount of a library in a project whose folder is moving would
+        // read a path about to vanish.
+        if self.refuse_with_notice_while_project_moves(
+            &path,
+            "open",
+            crate::app::state::ErrorNotice::open,
+        ) {
+            return Task::none();
+        }
         match self
             .library
             .request_mount(&path, MountIntent::OpenBrowserTab)
@@ -268,6 +276,8 @@ impl Signex {
                     row_id = %row_id,
                     "browser: minted draft row inline"
                 );
+                // The new row may sort outside the built window.
+                return self.reveal_selected_browser_row(&library_path);
             }
             Err(e) => {
                 tracing::warn!(
@@ -483,6 +493,17 @@ impl Signex {
                 BrowserEditMsg::SetMpn(s) => {
                     modal.draft.primary_mpn.mpn = s;
                     modal.error = None;
+                }
+                BrowserEditMsg::SetDescription(s) => {
+                    let s = single_line(&s);
+                    // `'''` ends the table's TOML literal string, so save
+                    // would refuse it; refuse the keystroke instead.
+                    if s.contains("'''") {
+                        modal.error = Some("A description cannot contain '''.".to_string());
+                    } else {
+                        modal.draft.description = s;
+                        modal.error = None;
+                    }
                 }
                 BrowserEditMsg::SetParamValue { key, value } => {
                     let entry = modal
@@ -735,4 +756,14 @@ impl Signex {
         self.refresh_panel_ctx();
         Task::none()
     }
+}
+
+/// `s` with each run of control characters replaced by one space: a tab or
+/// newline cannot live in a table cell, so pasted multi-line text stays
+/// readable instead of running together.
+fn single_line(s: &str) -> String {
+    s.split(char::is_control)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
 }

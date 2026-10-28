@@ -12,7 +12,17 @@ impl Signex {
     /// document (#317), so a file association opens its file through the
     /// same flow as File > Open — including its error notice.
     pub fn boot(startup_paths: Vec<std::path::PathBuf>) -> (Self, Task<Message>) {
-        let (mut app, boot_task) = Self::new();
+        let (app, boot_task) = Self::new();
+        Self::boot_from(app, boot_task, startup_paths)
+    }
+
+    /// Everything [`Signex::boot`] does after `new`, split out so a test can
+    /// give the app a recovery folder of its own.
+    pub(super) fn boot_from(
+        mut app: Self,
+        boot_task: Task<Message>,
+        startup_paths: Vec<std::path::PathBuf>,
+    ) -> (Self, Task<Message>) {
         let opens = Self::startup_open_messages(startup_paths)
             .into_iter()
             .map(Task::done);
@@ -20,6 +30,13 @@ impl Signex {
         // this clears what a crashed write stranded beside them. Here, not
         // in `new`, so a test app never touches the real recovery folder.
         let recovery_sweep = app.autosave_startup_sweep();
+        // Before any document opens, so no open races a half-finished move.
+        // Synchronous on purpose: boot runs before the event loop, so no open
+        // message can be handled until it returns, which a Task could not
+        // promise. The work is bounded (`pending_move::MAX_ENTRIES_PER_PASS`),
+        // but a recovery folder on a slow network home directory can still
+        // delay the first frame.
+        app.autosave_finish_pending_moves();
         // The installed-font probe walks the system font directories, so it
         // runs off the update thread; until it lands, named families render
         // in the bundled default (#510).
@@ -29,12 +46,19 @@ impl Signex {
         // The old prefs.json rules become the user's default profile; here,
         // not in `new`, so a test app never writes a profile library.
         let profile_migration = Self::migrate_default_profile_task();
+        let controls_probe = Self::detect_window_controls_task();
         (
             app,
             Task::batch(
-                [boot_task, font_scan, recovery_sweep, profile_migration]
-                    .into_iter()
-                    .chain(opens),
+                [
+                    boot_task,
+                    font_scan,
+                    recovery_sweep,
+                    profile_migration,
+                    controls_probe,
+                ]
+                .into_iter()
+                .chain(opens),
             ),
         )
     }
@@ -48,12 +72,16 @@ impl Signex {
     }
 
     pub fn new() -> (Self, Task<Message>) {
+        // One parse of `prefs.json` feeds every startup reader below; a
+        // missing or malformed file reads as `None`, i.e. every default.
+        let prefs_json = crate::fonts::load_prefs_json();
+        let prefs = prefs_json.as_ref();
         // Default panel layout — restored from disk if a previous
         // session persisted one, otherwise seeded with the Altium-ish
         // defaults: Projects + Components + Signal on the left,
         // Properties + Messages on the right, ERC on the bottom
         // (user's request — bottom is reserved for future log tails).
-        let mut dock = match crate::fonts::read_dock_layout() {
+        let mut dock = match crate::fonts::read_dock_layout_from(prefs) {
             Some(saved) => saved,
             None => {
                 // Which panels open, in tab order. *Where* each one
@@ -82,7 +110,7 @@ impl Signex {
             crate::dock::DockLayoutSnapshot::capture(&dock),
         );
 
-        let initial_component_filter = crate::fonts::read_component_filter();
+        let initial_component_filter = crate::fonts::read_component_filter_from(prefs);
         let search_prefs = crate::persist::SearchPrefsSync::new(std::sync::Arc::new(
             crate::fonts::PrefsSearchStore::user_prefs(),
         ));
@@ -94,24 +122,28 @@ impl Signex {
         // widget's effective flag (so the very first PCB frame honours the
         // saved toggle before the user opens Preferences) plus the
         // `ui_state.pcb_gpu_render` saved mirror and its Preferences draft.
-        let pcb_gpu_render = crate::fonts::read_pcb_gpu_render_pref();
+        let pcb_gpu_render = crate::fonts::read_pcb_gpu_render_pref_from(prefs);
         pcb_canvas.gpu_render = pcb_gpu_render;
         // #629 — same shape for the three Symbol Editor settings: one read
         // each, feeding both the committed field and its Preferences draft.
         // Reading twice would be harmless today but invites the two to be
         // seeded from different parses of a file edited mid-launch.
-        let symbol_grid_size_mm = crate::fonts::read_symbol_grid_size_mm_pref();
-        let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref();
-        let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref();
-        let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref();
-        let ui_scale = crate::fonts::read_ui_scale_pref();
-        let annotate_undo = crate::fonts::read_annotate_undo_pref();
-        let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref();
-        let autosave_enabled = crate::fonts::read_autosave_enabled_pref();
+        let symbol_grid_size_mm = crate::fonts::read_symbol_grid_size_mm_pref_from(prefs);
+        let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref_from(prefs);
+        let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref_from(prefs);
+        let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref_from(prefs);
+        let ui_scale =
+            crate::fonts::read_ui_scale_pref_from(prefs, &crate::fonts::prefs_file_path());
+        let annotate_undo = crate::fonts::read_annotate_undo_pref_from(prefs);
+        let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
+        let window_controls_placement =
+            crate::fonts::read_window_controls_placement_pref_from(prefs);
+        let autosave_enabled = crate::fonts::read_autosave_enabled_pref_from(prefs);
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
-        let grid_size_mm =
-            crate::fonts::read_grid_size_mm_pref().unwrap_or(crate::canvas::grid::GRID_SIZES_MM[1]);
+        let erc_severity_boot = crate::fonts::read_erc_severity_overrides_from(prefs);
+        let grid_size_mm = crate::fonts::read_grid_size_mm_pref_from(prefs)
+            .unwrap_or(crate::canvas::grid::GRID_SIZES_MM[1]);
         let standard_lib_dir = helpers::find_standard_symbols_dir();
         let mut standard_libraries = standard_lib_dir
             .as_deref()
@@ -199,10 +231,10 @@ impl Signex {
                 // Persisted user-toggleable state (UX §1.5). Reads
                 // fall back to defaults when the prefs file is absent
                 // or the key missing — same as a fresh install.
-                theme_id: crate::fonts::read_theme_pref(),
-                unit: crate::fonts::read_unit_pref(),
-                grid_visible: crate::fonts::read_grid_visible_pref(),
-                snap_enabled: crate::fonts::read_snap_enabled_pref(),
+                theme_id: crate::fonts::read_theme_pref_from(prefs),
+                unit: crate::fonts::read_unit_pref_from(prefs),
+                grid_visible: crate::fonts::read_grid_visible_pref_from(prefs),
+                snap_enabled: crate::fonts::read_snap_enabled_pref_from(prefs),
                 cursor_x: 0.0,
                 cursor_y: 0.0,
                 cursor_document: None,
@@ -210,9 +242,11 @@ impl Signex {
                 grid_size_mm,
                 visible_grid_mm: 1.27,
                 snap_hotspots: true,
-                ui_font_name: crate::fonts::read_ui_font_pref(),
-                component_classes: crate::fonts::read_component_classes_pref(),
-                preferences_draft_component_classes: crate::fonts::read_component_classes_pref(),
+                ui_font_name: crate::fonts::read_ui_font_pref_from(prefs),
+                component_classes: crate::fonts::read_component_classes_pref_from(prefs),
+                preferences_draft_component_classes: crate::fonts::read_component_classes_pref_from(
+                    prefs,
+                ),
                 keymap_profiles,
                 active_keymap,
                 keymap_pending_sequence: Vec::new(),
@@ -229,11 +263,12 @@ impl Signex {
                 panel_list_open: false,
                 preferences_open: false,
                 keyboard_shortcuts_open: false,
+                shortcut_sections: None,
                 about_open: false,
                 recent_projects: crate::recent_projects::RecentProjects::from_paths(
-                    crate::fonts::read_recent_projects(),
+                    crate::fonts::read_recent_projects_from(prefs),
                 ),
-                first_run_tour_open: !crate::fonts::read_first_run_tour_dismissed(),
+                first_run_tour_open: !crate::fonts::read_first_run_tour_dismissed_from(prefs),
                 find_replace: crate::find_replace::FindReplaceState::default(),
                 preferences_nav: crate::preferences::PrefNav::Appearance,
                 // #631 — seeded from the saved theme, not hardcoded. This
@@ -242,10 +277,10 @@ impl Signex {
                 // fixed it there); the canvas now renders from it, so a
                 // user whose saved theme is not Signex would have opened
                 // to the wrong canvas colours.
-                preferences_draft_theme: crate::fonts::read_theme_pref(),
+                preferences_draft_theme: crate::fonts::read_theme_pref_from(prefs),
                 preferences_draft_font: String::new(),
-                grid_style: crate::fonts::read_grid_style_pref(),
-                preferences_draft_grid_style: crate::fonts::read_grid_style_pref(),
+                grid_style: crate::fonts::read_grid_style_pref_from(prefs),
+                preferences_draft_grid_style: crate::fonts::read_grid_style_pref_from(prefs),
                 pcb_gpu_render,
                 preferences_draft_pcb_gpu_render: pcb_gpu_render,
                 ui_scale,
@@ -256,6 +291,12 @@ impl Signex {
                 preferences_draft_annotate_undo: annotate_undo,
                 move_keeps_wires,
                 preferences_draft_move_keeps_wires: move_keeps_wires,
+                window_controls_placement,
+                preferences_draft_window_controls_placement: window_controls_placement,
+                window_controls_placement_at_boot: window_controls_placement,
+                desktop_button_layout: None,
+                main_window_mode: iced::window::Mode::Windowed,
+                main_window_monitor_size: None,
                 autosave_enabled,
                 preferences_draft_autosave_enabled: autosave_enabled,
                 symbol_grid_size_mm,
@@ -285,7 +326,6 @@ impl Signex {
                 remove_dialog: None,
                 project_close_confirm: None,
                 app_quit_confirm: None,
-                project_options: None,
                 enable_version_control: None,
                 grid_properties: None,
                 selection_filter_custom: None,
@@ -296,7 +336,9 @@ impl Signex {
                 erc_run_rule_set: None,
                 pending_profile_update: None,
                 erc_running: false,
-                erc_severity_override: crate::fonts::read_erc_severity_overrides(),
+                erc_severity_override: erc_severity_boot.clone(),
+                preferences_draft_erc_severity: erc_severity_boot.clone(),
+                preferences_seed_erc_severity: erc_severity_boot,
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,
                 annotate_dialog_open: false,
@@ -316,9 +358,12 @@ impl Signex {
                 parameter_manager_open: false,
                 reorder_picker: None,
                 move_pick: None,
-                pin_matrix_overrides: crate::fonts::read_pin_matrix_overrides(),
+                pin_matrix_overrides: crate::fonts::read_pin_matrix_overrides_from(prefs),
                 annotate_locked: std::collections::HashSet::new(),
                 annotate_preview: Default::default(),
+                reprefix_generation: 0,
+                reprefix_confirm: None,
+                reprefix_window_close_pending: false,
                 selection_mode: crate::schematic_runtime::hit_test::SelectionMode::default(),
                 pending_net_color: None,
                 wire_color_overrides: std::collections::HashMap::new(),
@@ -357,6 +402,7 @@ impl Signex {
                 recovery_check_due: Vec::new(),
                 dirty_paths: std::collections::HashSet::new(),
                 net_class_history: std::collections::HashMap::new(),
+                project_tabs: std::collections::HashMap::new(),
                 net_class_picks: std::collections::HashMap::new(),
                 next_project_id: 0,
                 next_undo_group: 0,
@@ -387,8 +433,8 @@ impl Signex {
                     // the app value is assembled, below.
                     symbol_grid_style: crate::render_config::GridStyle::Dots,
                     snap_hotspots: true,
-                    ui_font_name: crate::fonts::read_ui_font_pref(),
-                    component_classes: crate::fonts::read_component_classes_pref(),
+                    ui_font_name: crate::fonts::read_ui_font_pref_from(prefs),
+                    component_classes: crate::fonts::read_component_classes_pref_from(prefs),
                     canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
                     canvas_font_size: 11.0,
                     canvas_font_bold: false,
@@ -405,6 +451,7 @@ impl Signex {
                     selected_lib_symbol: None,
                     components_split: 250.0,
                     project_tree: vec![],
+                    project_tree_builds: 0,
                     project_tree_selected: None,
                     navigator: crate::panels::NavigatorModel::default(),
                     library_row_detail: None,
@@ -441,9 +488,11 @@ impl Signex {
                         .iter()
                         .copied()
                         .collect(),
-                    custom_filter_presets: crate::fonts::read_custom_filter_presets(),
+                    custom_filter_presets: crate::fonts::read_custom_filter_presets_from(prefs),
                     active_custom_filter_tab: 0,
-                    footprint_filter_presets: crate::fonts::read_footprint_filter_presets(),
+                    footprint_filter_presets: crate::fonts::read_footprint_filter_presets_from(
+                        prefs,
+                    ),
                     page_format_mode: crate::panels::PageFormatMode::default(),
                     sheet_frame: Default::default(),
                     page_origin: crate::panels::PageOrigin::default(),
@@ -470,8 +519,12 @@ impl Signex {
                 paused_git_projects: std::collections::HashSet::new(),
                 pending_opens: Default::default(),
                 pending_restores: Default::default(),
+                dir_case: Default::default(),
                 altium_import_running: None,
                 project_folder_renames: std::collections::HashSet::new(),
+                project_writes: Vec::new(),
+                moved_project_dirs: Vec::new(),
+                deferred_git_commits: Vec::new(),
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,
@@ -513,9 +566,9 @@ impl Signex {
                     .iter()
                     .copied()
                     .collect(),
-                custom_filter_presets: crate::fonts::read_custom_filter_presets(),
+                custom_filter_presets: crate::fonts::read_custom_filter_presets_from(prefs),
                 active_custom_filter_tab: 0,
-                footprint_filter_presets: crate::fonts::read_footprint_filter_presets(),
+                footprint_filter_presets: crate::fonts::read_footprint_filter_presets_from(prefs),
                 selection_slots: std::array::from_fn(|_| Vec::new()),
                 last_tool: std::collections::HashMap::new(),
                 pending_power: None,
@@ -552,20 +605,62 @@ impl Signex {
         // modal off the main window, and Phase 3 will do the same for
         // undocked tabs. The returned Task produces the settled Id once
         // winit confirms the window is mapped.
-        let (main_id, open_task) = iced::window::open(iced::window::Settings {
-            size: iced::Size::new(1400.0, 900.0),
-            icon: super::bundled_window_icon(),
-            // Borderless main window: the custom chrome in
-            // `Signex::view_main_window_chrome` supplies wordmark +
-            // menus + drag zone + search bar + min/max/close. Edge
-            // resize handles inside `view_main_for` add 6 px strips
-            // that call `iced::window::drag_resize` per direction so
-            // the user can still drag-resize the window.
-            decorations: false,
-            ..Default::default()
-        });
+        let (main_id, open_task) = iced::window::open(main_window_settings(
+            crate::chrome::controls::resolve(
+                crate::chrome::controls::ChromePlatform::current(),
+                window_controls_placement,
+                None,
+            )
+            .is_native(),
+        ));
         app.ui_state.main_window_id = Some(main_id);
         let boot_task = open_task.map(|id| Message::Window(WindowMsg::MainWindowOpened(id)));
         (app, boot_task)
+    }
+}
+
+/// Settings for the main window. Every case is borderless (the custom strip
+/// replaces the title bar) except macOS with native traffic lights, where the
+/// OS keeps its title bar, made transparent so the strip draws behind it.
+fn main_window_settings(native_decorations: bool) -> iced::window::Settings {
+    iced::window::Settings {
+        size: iced::Size::new(1400.0, 900.0),
+        icon: super::bundled_window_icon(),
+        // Without native decorations the strip draws the buttons, and the
+        // 6 px strips in `resize_edges_overlay` provide edge resizing.
+        decorations: native_decorations,
+        // Without this winit closes the window on its own and the close
+        // request never reaches the unsaved-changes guard.
+        exit_on_close_request: false,
+        platform_specific: native_title_bar(native_decorations),
+        ..Default::default()
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn native_title_bar(native: bool) -> iced::window::settings::PlatformSpecific {
+    iced::window::settings::PlatformSpecific {
+        title_hidden: native,
+        titlebar_transparent: native,
+        fullsize_content_view: native,
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn native_title_bar(_native: bool) -> iced::window::settings::PlatformSpecific {
+    iced::window::settings::PlatformSpecific::default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::main_window_settings;
+
+    #[test]
+    fn the_main_window_routes_close_requests_through_the_app() {
+        for native in [true, false] {
+            let s = main_window_settings(native);
+            assert!(!s.exit_on_close_request, "native={native}");
+            assert_eq!(s.decorations, native);
+        }
     }
 }

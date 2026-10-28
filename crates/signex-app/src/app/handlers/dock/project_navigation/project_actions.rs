@@ -3,23 +3,6 @@
 use super::*;
 
 impl Signex {
-    pub(crate) fn open_project_options_dialog(&mut self, tree_path: Vec<usize>) {
-        let Some(&project_idx) = tree_path.first() else {
-            return;
-        };
-        let Some(project) = self.document_state.projects.get(project_idx) else {
-            return;
-        };
-        self.ui_state.project_options = Some(crate::app::ProjectOptionsState {
-            project_idx,
-            name: project.data.name.clone(),
-            directory: project.data.dir.clone(),
-            schematic_root: project.data.schematic_root.clone(),
-            pcb_file: project.data.pcb_file.clone(),
-            library_count: project.data.libraries.len(),
-        });
-    }
-
     /// Validate Project — promote the project to active, ensure its
     /// root schematic is open, then dispatch the existing ERC dialog.
     /// `tree_path[0]` is the owning project; we open the schematic

@@ -1,3 +1,4 @@
+// Own process: builds a wgpu device; two in one process SIGSEGV on lavapipe, #889.
 //! Pixel goldens for the GPU smoke scenes (#113 item 3).
 //!
 //! Each scene renders offscreen at 128x128 RGBA8 and is compared against a

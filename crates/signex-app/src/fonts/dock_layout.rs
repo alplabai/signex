@@ -47,9 +47,11 @@ impl crate::dock::DockLayoutStore for PrefsDockLayoutStore {
 /// Rebuild a DockArea from persisted JSON. Returns None when no saved
 /// layout exists so the caller can fall back to the default seed.
 pub fn read_dock_layout() -> Option<crate::dock::DockArea> {
-    let path = prefs_path();
-    let bytes = std::fs::read(&path).ok()?;
-    let json: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    read_dock_layout_from(load_prefs_json().as_ref())
+}
+
+pub fn read_dock_layout_from(json: Option<&serde_json::Value>) -> Option<crate::dock::DockArea> {
+    let json = json?;
     let dock_v = json.get("dock")?.as_object()?;
     let mut dock = crate::dock::DockArea::new();
     for (region_key, pos) in [

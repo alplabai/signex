@@ -5,6 +5,9 @@ use std::path::PathBuf;
 use super::super::*;
 
 mod altium_import;
+mod dir_case;
+#[cfg(test)]
+mod dir_case_tests;
 mod git;
 #[cfg(test)]
 mod git_tests;
@@ -15,6 +18,7 @@ mod open;
 mod open_read;
 #[cfg(test)]
 mod open_read_tests;
+mod project_save;
 mod recent;
 #[cfg(test)]
 mod restore_cancel_tests;

@@ -29,7 +29,19 @@ impl LocalGitAdapter {
         let mut out = given.to_vec();
         let mut pins: Vec<(String, String)> = Vec::new();
         for table in candidate.tables.values() {
+            // Only the `datasheet` cell can pin a PDF, and a pin always
+            // spells out its `hash_pinned` kind there: a row without that
+            // text is skipped before the costly conversion to a component
+            // (#1522). A row with no such cell, or one holding a JSON
+            // escape that could spell the kind another way, is converted.
             for lib_row in &table.rows {
+                if lib_row
+                    .cells
+                    .get("datasheet")
+                    .is_some_and(|cell| !cell.contains("hash_pinned") && !cell.contains("\\u"))
+                {
+                    continue;
+                }
                 let Ok(row) = library_row_to_component(lib_row) else {
                     continue;
                 };
@@ -140,13 +152,11 @@ impl LocalGitAdapter {
             ));
         }
         **guard = previous_file;
-        if let Err(stamp_err) = self.note_own_write(&String::from_utf8_lossy(&previous)) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %self.file_path.display(),
-                "restored, but the disk stamp could not be recorded: {stamp_err}"
-            );
-        }
+        // `previous` was read after the reload, so another writer's bytes
+        // may be what went back on disk: the next access reloads them
+        // rather than trusting memory, and, as a load, it takes the full
+        // write (#416).
+        self.forget_disk();
         LibraryError::Backend(format!(
             "the row was not saved: its datasheet PDF could not be committed ({commit_err})"
         ))

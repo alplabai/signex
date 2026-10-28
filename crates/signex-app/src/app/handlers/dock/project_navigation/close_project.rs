@@ -265,6 +265,7 @@ impl Signex {
         // else None when the workspace is empty.
         self.document_state.projects.retain(|p| p.id != target_id);
         self.document_state.net_class_history.remove(&target_id);
+        self.document_state.project_tabs.remove(&target_id);
         self.forget_net_class_picks_of(target_id);
         self.document_state.rules_history.remove(&target_id);
         self.document_state.profile_drift_noted.remove(&target_id);
@@ -315,7 +316,7 @@ impl Signex {
     /// The project whose directory holds `path`; the deepest one when
     /// directories nest (the inner volume is the one the file lives on). An
     /// empty dir would claim every path, so it is skipped.
-    pub(super) fn project_owning(&self, path: &std::path::Path) -> Option<&LoadedProject> {
+    pub(crate) fn project_owning(&self, path: &std::path::Path) -> Option<&LoadedProject> {
         self.document_state
             .projects
             .iter()
@@ -347,9 +348,10 @@ impl Signex {
         if held.len() > 1 {
             self.ensure_variants_agree(&held)?;
         }
-        self.save_held_path(&held[0])?;
+        let target = self.write_target(&held).clone();
+        self.save_held_path(&target)?;
         let key = path_key_with(path, fold);
-        for variant in &held[1..] {
+        for variant in held.iter().filter(|p| **p != target) {
             if let Some(tab) = self
                 .document_state
                 .tabs
@@ -366,9 +368,10 @@ impl Signex {
     }
 
     /// Ok only when every spelling is a schematic engine and all of them
-    /// encode to the same bytes (so one write loses nothing). Otherwise logs
-    /// the ambiguity to the Messages panel, naming each spelling, and errs.
-    pub(super) fn ensure_variants_agree(&self, held: &[std::path::PathBuf]) -> anyhow::Result<()> {
+    /// encode to the same bytes (so one write loses nothing). Otherwise errs
+    /// with the advice first and the paths last, because Messages clips an
+    /// entry; the caller logs it, so a refusal is one line.
+    pub(crate) fn ensure_variants_agree(&self, held: &[std::path::PathBuf]) -> anyhow::Result<()> {
         let encode = |p: &std::path::PathBuf| -> Option<String> {
             let engine = self.document_state.engines.get(p)?;
             signex_types::format::SnxSchematic::new(engine.document().clone())
@@ -384,19 +387,16 @@ impl Signex {
             .map(|p| p.display().to_string())
             .collect::<Vec<_>>()
             .join(" and ");
-        let message = format!(
-            "{names} are open under different spellings of one file with different \
-             contents; nothing was saved so no edits are overwritten. Close one of \
-             them and retry"
-        );
-        crate::diagnostics::log_warning(message.clone());
-        anyhow::bail!(message)
+        anyhow::bail!(
+            "Nothing was saved, no edits overwritten: one file is open under different \
+             spellings with different contents, close one and retry: {names}"
+        )
     }
 
     /// Every spelling an engine / editor / project is held under that matches
     /// `path` under `fold` (sorted, so the save order is deterministic), or
     /// `path` itself when nothing is held for it.
-    pub(super) fn held_spellings(
+    pub(crate) fn held_spellings(
         &self,
         path: &std::path::Path,
         fold: CaseFold,
@@ -845,6 +845,7 @@ mod tests {
             id,
             path: dir.join("p.snxprj"),
             data: signex_types::project::ProjectData {
+                description: None,
                 name: "p".into(),
                 dir: dir.to_string_lossy().into_owned(),
                 schematic_root: None,
@@ -862,6 +863,7 @@ mod tests {
             pending_libraries: std::collections::HashMap::new(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         });
         let path = dir.join("lib.snxlib").join("footprints").join("g.snxfpt");
         let file =

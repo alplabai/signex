@@ -16,8 +16,8 @@
 //! skipping, overlay compositing, draw order and error reporting.
 //!
 //! Mounted by: [`crate::pcb_canvas`] (the PCB editor), via `app/view/mod.rs`.
-//! The schematic and Symbol Editor surfaces are not mounted yet — see #199
-//! and #642.
+//! The schematic is mounted by [`crate::canvas::gpu_mount`]; the Symbol
+//! Editor is not mounted yet — see #642.
 //!
 //! iced's shader `Primitive::draw` composites into the shared render pass over
 //! whatever was already drawn behind the widget (it never clears its own
@@ -119,9 +119,9 @@ impl SceneSurface for PcbSurface {
     /// rest of the app rather than unclamped.
     const TEXT_SIZE: TextSizePolicy = TextSizePolicy::new(6.0, 64.0);
     /// Mirrors the PCB CPU replay's own clamps — `pcb_canvas::draw_lines` and
-    /// `draw_circles` both `.max(0.5)`.
-    const MIN_STROKE_PX: f32 = 0.5;
-    const MIN_RADIUS_PX: f32 = 0.5;
+    /// `draw_circles` both floor via `renderer_scene_canvas::MIN_STROKE_PX`.
+    const MIN_STROKE_PX: f32 = crate::renderer_scene_canvas::MIN_STROKE_PX;
+    const MIN_RADIUS_PX: f32 = crate::renderer_scene_canvas::MIN_RADIUS_PX;
 }
 
 /// The schematic editor's scene surface.
@@ -260,6 +260,26 @@ pub struct ScenePrimitive<S: SceneSurface> {
     surface: PhantomData<S>,
 }
 
+impl<S: SceneSurface> ScenePrimitive<S> {
+    /// A primitive for a program that builds its scene inside
+    /// `shader::Program::draw` (the schematic, whose cull bounds only `draw`
+    /// knows) instead of holding one ready-made like [`SceneShaderProgram`].
+    pub fn new(
+        scene: Arc<Scene>,
+        generation: Option<u64>,
+        offset_px: [f32; 2],
+        scale_px_per_mm: f32,
+    ) -> Self {
+        Self {
+            scene,
+            generation,
+            offset_px,
+            scale_px_per_mm,
+            surface: PhantomData,
+        }
+    }
+}
+
 impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
     type Pipeline = ScenePipeline;
 
@@ -355,10 +375,9 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         // `(em * scale).clamp(min, max) * dpi`.
         //
         // `upload` stages axis-aligned items only — a glyph atlas cannot
-        // rotate (`TextItem::is_axis_aligned`). Harmless while the PCB is the
-        // only surface here (its scene carries no text), but a surface whose
-        // scene does carry rotated text — the schematic, when #199 mounts it —
-        // owes those items a CPU canvas pass, or they vanish.
+        // rotate (`TextItem::is_axis_aligned`). The PCB scene carries no text; the
+        // schematic's rotated items get their CPU pass from the overlay canvas
+        // in `crate::canvas::gpu_mount`.
         let text_size = TextSizePolicy::new(S::TEXT_SIZE.min_px * dpi, S::TEXT_SIZE.max_px * dpi);
         let mut font_system = iced::advanced::graphics::text::font_system()
             .write()

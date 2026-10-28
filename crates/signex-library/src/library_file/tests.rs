@@ -16,12 +16,12 @@ fn fixture_manifest() -> SnxlibManifest {
     }
 }
 
-fn make_row(columns: &[&str], values: &[&str]) -> LibraryRow {
+fn make_row(columns: &[&str], values: &[&str]) -> Arc<LibraryRow> {
     let mut row = LibraryRow::default();
     for (col, val) in columns.iter().zip(values) {
         row.cells.insert((*col).to_string(), (*val).to_string());
     }
-    row
+    Arc::new(row)
 }
 
 fn fixture_table_resistors() -> LibraryTable {
@@ -153,7 +153,7 @@ name = "X"
 
 #[test]
 fn parse_rejects_duplicate_columns() {
-    let s = r#"format = "snxlib/1"
+    let s = r#"format = "snxlib/2"
 library_id = "0192a8c0-0000-7000-8000-000000000000"
 
 [library]
@@ -171,7 +171,7 @@ row_id	mpn	mpn
 
 #[test]
 fn parse_rejects_cell_count_mismatch() {
-    let s = r#"format = "snxlib/1"
+    let s = r#"format = "snxlib/2"
 library_id = "0192a8c0-0000-7000-8000-000000000000"
 
 [library]
@@ -192,7 +192,7 @@ only_two_cells	missing
 /// before any rows are added.
 #[test]
 fn header_only_tsv_is_empty_rows() {
-    let s = r#"format = "snxlib/1"
+    let s = r#"format = "snxlib/2"
 library_id = "0192a8c0-0000-7000-8000-000000000000"
 
 [library]
@@ -213,7 +213,7 @@ row_id	mpn
 /// hang the table off.
 #[test]
 fn parse_rejects_empty_tsv() {
-    let s = r#"format = "snxlib/1"
+    let s = r#"format = "snxlib/2"
 library_id = "0192a8c0-0000-7000-8000-000000000000"
 
 [library]
@@ -406,7 +406,7 @@ fn write_accepts_non_ascii_cells_and_columns() {
 /// the spec doc so a future schema change has to update both.
 #[test]
 fn parse_example_from_plan() {
-    let s = "format = \"snxlib/1\"\n\
+    let s = "format = \"snxlib/2\"\n\
                  library_id = \"0192a8c0-0000-7000-8000-000000000123\"\n\
                  \n\
                  [library]\n\
@@ -669,7 +669,7 @@ fn untyped_tables_skip_column_types_block() {
 /// be confusing.
 #[test]
 fn parse_rejects_column_type_for_unknown_column() {
-    let s = "format = \"snxlib/1\"\n\
+    let s = "format = \"snxlib/2\"\n\
                  library_id = \"0192a8c0-0000-7000-8000-000000000000\"\n\
                  \n\
                  [library]\n\
@@ -695,7 +695,7 @@ fn parse_rejects_column_type_for_unknown_column() {
 /// the column as `string`.
 #[test]
 fn parse_rejects_unknown_type_token() {
-    let s = "format = \"snxlib/1\"\n\
+    let s = "format = \"snxlib/2\"\n\
                  library_id = \"0192a8c0-0000-7000-8000-000000000000\"\n\
                  \n\
                  [library]\n\
@@ -841,7 +841,7 @@ fn round_trip_table_name_with_control_characters() {
 fn table_with_rows(header: &str, rows: &[&str]) -> String {
     let body = rows.join("\n");
     format!(
-        "format = \"snxlib/1\"\nlibrary_id = \"0192a8c0-0000-7000-8000-000000000000\"\n\n\
+        "format = \"snxlib/2\"\nlibrary_id = \"0192a8c0-0000-7000-8000-000000000000\"\n\n\
          [library]\nname = \"X\"\n\n[tables.t]\ntsv = '''\n{header}\n{body}\n'''\n"
     )
 }

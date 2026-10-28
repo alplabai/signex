@@ -98,8 +98,8 @@ In code:
   syntax) → replaced by `parse_signex_markup` using Markdown-extension
   syntax with `_~text~_` overbar for active-low signal naming.
 - `kicad_auto_net_name_from_pins` (returning `Net-(<r>-Pad<p>)`) →
-  replaced by `auto_net_name(sheet, pins)` returning
-  `unnamed-<sheet>:<ref>:<pin>`.
+  deleted; unnamed nets are named `N$<id>` by the netlist builder
+  (`crates/signex-net/src/build/mod.rs`).
 - Native file formats `.snxsch` and `.snxpcb` defined as TOML envelopes
   with TSV bulk-block bodies (same format family as `.snxlib` /
   `.snxsym` / `.snxfpt`).

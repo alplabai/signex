@@ -190,6 +190,14 @@ impl Signex {
             );
             return iced::Task::none();
         }
+        if self.refuse_with_notice_while_project_moves(
+            &path,
+            "create",
+            crate::app::state::ErrorNotice::create,
+        ) {
+            return iced::Task::none();
+        }
+        self.begin_project_write(&path);
         // The blank sheet is written off the update thread; the project is
         // looked up again by id when the write lands.
         iced::Task::perform(
@@ -217,6 +225,7 @@ impl Signex {
         path: std::path::PathBuf,
         result: Result<(), String>,
     ) {
+        self.end_project_write(&path);
         if let Err(e) = result {
             crate::diagnostics::log_error("Add New Schematic", &anyhow::anyhow!("{e}"));
             return;
@@ -244,12 +253,20 @@ impl Signex {
         else {
             return iced::Task::none();
         };
+        if self.refuse_with_notice_while_project_moves(
+            &project_dir,
+            "add files to",
+            crate::app::state::ErrorNotice::create,
+        ) {
+            return iced::Task::none();
+        }
         let fold =
             crate::app::state::project_case::fold_of(self.document_state.project_by_id(project_id));
         let plans: Vec<_> = paths
             .into_iter()
             .map(|p| add_io::plan_existing(&project_dir, p, fold))
             .collect();
+        self.begin_project_write(&project_dir);
         iced::Task::perform(
             async move {
                 add_io::on_blocking_pool(move || {
@@ -263,6 +280,7 @@ impl Signex {
             move |results| {
                 Message::Project(ProjectMsg::AddExistingFilesCopied {
                     project_id,
+                    project_dir: project_dir.clone(),
                     results,
                 })
             },
@@ -274,8 +292,10 @@ impl Signex {
     pub(crate) fn handle_add_existing_files_copied(
         &mut self,
         project_id: ProjectId,
+        project_dir: &std::path::Path,
         results: Result<Vec<Result<std::path::PathBuf, String>>, String>,
     ) -> iced::Task<Message> {
+        self.end_project_write(project_dir);
         let results = match results {
             Ok(r) => r,
             Err(e) => vec![Err(e)],

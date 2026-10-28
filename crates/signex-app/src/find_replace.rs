@@ -28,6 +28,9 @@ pub enum FindReplaceMsg {
     QueryChanged(String),
     ReplacementChanged(String),
     SelectResult(usize),
+    /// Step to the next / previous match, wrapping at both ends.
+    NextResult,
+    PreviousResult,
     ReplaceCurrent,
     ReplaceAll,
 }

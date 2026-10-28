@@ -140,8 +140,9 @@ impl AppState {
     // and Postgres so the route handlers can stay backend-agnostic.
     //
     // The row body is round-tripped as JSON via `ComponentRow`'s serde impl
-    // so adding fields later (e.g. when v3.0 lifts `PlmReserved` into wire
-    // format) doesn't require a schema migration.
+    // so a new `ComponentRow` field needs no SQL migration. New fields are
+    // required in the JSON: rows stored before a field existed are not
+    // supported.
 
     /// Insert a brand-new row. Returns `Ok(false)` when a row with the
     /// same `(library_id, table, row_id)` already exists so the caller

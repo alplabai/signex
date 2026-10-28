@@ -237,12 +237,16 @@ impl SchematicCanvas<'_> {
             // Active Bar zone: top margin + bar height + slack, centered.
             if pos.y < crate::active_bar::BAR_ZONE_HEIGHT_PX {
                 // Calculate which Active Bar button was right-clicked
-                let bar_width: f32 = crate::active_bar::BAR_WIDTH_PX;
-                let bar_x = (bounds.width - bar_width) / 2.0;
+                let tool = self.prefs.current_tool;
+                let bar_width = crate::active_bar::bar_width_for(tool);
+                // The bar is centred on the window; `bounds.x` is this
+                // canvas's window-space left edge.
+                let bar_x =
+                    crate::active_bar::bar_left_in_window(tool, self.prefs.window_width) - bounds.x;
                 let rel_x = pos.x - bar_x;
                 if rel_x >= 0.0
                     && rel_x < bar_width
-                    && let Some(menu) = crate::active_bar::menu_at(rel_x)
+                    && let Some(menu) = crate::active_bar::menu_at(tool, rel_x)
                 {
                     return Some(canvas::Action::publish(Message::ActiveBar(
                         crate::active_bar::ActiveBarMsg::ToggleMenu(menu),

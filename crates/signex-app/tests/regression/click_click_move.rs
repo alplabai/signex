@@ -398,6 +398,8 @@ fn canvas_event(
             auto_focus: false,
             zoom_step: 1.1,
             draw_mode: signex_app::app::DrawMode::Ortho90,
+            current_tool: signex_app::app::Tool::Select,
+            window_width: 1400.0,
             wire_color_overrides: &overrides,
             wire_class_styles: &class_styles,
             wire_class_revision: 0,

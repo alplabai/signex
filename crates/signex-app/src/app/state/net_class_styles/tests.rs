@@ -424,6 +424,7 @@ fn project_with(classes: Vec<NetClass>) -> LoadedProject {
         path: PathBuf::from("P.snxprj"),
         data: ProjectData {
             name: "P".to_string(),
+            description: None,
             dir: String::new(),
             schematic_root: None,
             pcb_file: None,
@@ -440,6 +441,7 @@ fn project_with(classes: Vec<NetClass>) -> LoadedProject {
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     }
 }
 
