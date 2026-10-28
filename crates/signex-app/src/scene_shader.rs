@@ -420,8 +420,8 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
 
     fn draw(&self, pipeline: &Self::Pipeline, render_pass: &mut wgpu::RenderPass<'_>) -> bool {
         let camera = pipeline.camera.bind_group();
-        // Composite in the shared `GPU_SCENE_DRAW_ORDER` (fills, then strokes,
-        // then pads, then text on top). The order lives in one const so it can be diffed
+        // Composite in the shared `GPU_SCENE_DRAW_ORDER` (drawings at the very
+        // back, then fills, then strokes, then pads, then text on top). The order lives in one const so it can be diffed
         // against the CPU replays: both `pcb_canvas::draw_scene` and the
         // schematic replay now draw their base buckets in this order (#645,
         // #653), pinned by the `scene::order` parity tests. GPU parity stays

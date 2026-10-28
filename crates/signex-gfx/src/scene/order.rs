@@ -37,6 +37,9 @@
 //! and text buckets the PCB never emits. Every base pass on every path now
 //! puts fills at the back, with one deliberate exception: pads.
 //!
+//! Drawings are the backmost bucket (maintainer decision, #1579 — drawings
+//! are documentation and never cover the circuit).
+//!
 //! Pads are the exception because the maintainer's call for the PCB is that a
 //! pad renders ABOVE the traces and vias that land on it, while zone pours and
 //! rule areas stay beneath them. So pads go to their own
@@ -56,8 +59,9 @@ pub enum SceneBucket {
     /// Polygons composited above the stroke buckets; PCB pads are its
     /// producer. Maps to `Scene::top_polygons`.
     TopPolygons,
-    /// Mixed-kind drawings in file paint order; sits right after `Polygons`
-    /// so they stay under wires, pins and text. Maps to `Scene::drawings`.
+    /// Mixed-kind drawings in file paint order, at the very back (before
+    /// `Polygons`) so they stay under every circuit element. Maps to
+    /// `Scene::drawings`.
     Drawings,
     Texts,
     OverlayLines,
@@ -69,14 +73,14 @@ pub enum SceneBucket {
 }
 
 /// Draw order of the GPU scene shader (`scene_shader::ScenePrimitive::draw`):
-/// fills, then strokes, then the top polygons (PCB pads), then text on top. Overlay and ERC buckets never
+/// drawings, then fills, then strokes, then the top polygons (PCB pads), then text on top. Overlay and ERC buckets never
 /// appear here — `ScenePrimitive::draw` composites overlay geometry in its
 /// own dedicated pass strictly AFTER this order (so it always renders on
 /// top, matching the CPU's separate overlay pass below), and ERC markers are
 /// schematic-only.
 pub const GPU_SCENE_DRAW_ORDER: &[SceneBucket] = &[
-    SceneBucket::Polygons,
     SceneBucket::Drawings,
+    SceneBucket::Polygons,
     SceneBucket::Lines,
     SceneBucket::Arcs,
     SceneBucket::Circles,
@@ -91,7 +95,7 @@ pub const GPU_SCENE_DRAW_ORDER: &[SceneBucket] = &[
 /// The only order here that names every [`SceneBucket`] — this replay is the
 /// one path that draws all twelve.
 ///
-/// Its six base buckets are [`GPU_SCENE_DRAW_ORDER`], in that order: fills
+/// Its seven base buckets are [`GPU_SCENE_DRAW_ORDER`], in that order: fills
 /// first, so a symbol body fill or a label-marker flag sits *under* the wires
 /// and pins that run into it. Until #645 this replay drew Polygons fourth —
 /// after Lines, Circles and Arcs — and a body fill hid the wire beneath it,
@@ -112,8 +116,8 @@ pub const GPU_SCENE_DRAW_ORDER: &[SceneBucket] = &[
 /// walk them, and a future producer would otherwise land them at the wrong
 /// depth.
 pub const CPU_SCHEMATIC_DRAW_ORDER: &[SceneBucket] = &[
-    SceneBucket::Polygons,
     SceneBucket::Drawings,
+    SceneBucket::Polygons,
     SceneBucket::Lines,
     SceneBucket::Arcs,
     SceneBucket::Circles,
@@ -160,8 +164,8 @@ mod tests {
     #[test]
     fn gpu_scene_draw_order_is_fills_then_strokes_then_text() {
         let expected: &[SceneBucket] = &[
-            SceneBucket::Polygons,
             SceneBucket::Drawings,
+            SceneBucket::Polygons,
             SceneBucket::Lines,
             SceneBucket::Arcs,
             SceneBucket::Circles,
@@ -238,8 +242,8 @@ mod tests {
     #[test]
     fn cpu_schematic_draw_order_is_base_then_overlays_then_erc() {
         let expected: &[SceneBucket] = &[
-            SceneBucket::Polygons,
             SceneBucket::Drawings,
+            SceneBucket::Polygons,
             SceneBucket::Lines,
             SceneBucket::Arcs,
             SceneBucket::Circles,
@@ -397,21 +401,19 @@ mod tests {
         }
     }
 
-    /// Drawings paint over polygon fills and under every stroke bucket, on
-    /// every path that draws them (#1579).
+    /// Drawings are the backmost bucket on every path that draws them: under
+    /// polygon fills and every stroke bucket (#1579).
     #[test]
-    fn drawings_draw_after_polygons_and_before_lines() {
+    fn drawings_draw_before_polygons_in_both_schematic_orders() {
         for order in [GPU_SCENE_DRAW_ORDER, CPU_SCHEMATIC_DRAW_ORDER] {
-            let drawings = index_of(order, SceneBucket::Drawings).unwrap();
             assert_eq!(
-                index_of(order, SceneBucket::Polygons).unwrap() + 1,
-                drawings,
-                "drawings sit right after polygons"
+                order.first(),
+                Some(&SceneBucket::Drawings),
+                "drawings are the first bucket"
             );
-            assert_eq!(
-                index_of(order, SceneBucket::Lines).unwrap(),
-                drawings + 1,
-                "lines sit right after drawings"
+            assert!(
+                index_of(order, SceneBucket::Drawings).unwrap()
+                    < index_of(order, SceneBucket::Polygons).unwrap()
             );
         }
     }

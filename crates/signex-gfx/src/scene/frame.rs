@@ -27,8 +27,8 @@ pub struct Scene {
     /// and vias that run into it; zone pours stay in `polygons`, under them.
     pub top_polygons: Vec<GpuPolygon>,
     /// Drawings in file paint order, mixed kinds, drawn as per-kind runs that
-    /// keep that order (#1579). Sits just above `polygons` and under every
-    /// stroke bucket. Covered by [`DirtyFlags::DRAWINGS`].
+    /// keep that order (#1579). The backmost bucket: under `polygons` and
+    /// every stroke bucket. Covered by [`DirtyFlags::DRAWINGS`].
     pub drawings: Vec<OrderedItem>,
     pub texts: Vec<TextItem>,
     pub overlay_lines: Vec<LineSegment>,
