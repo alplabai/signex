@@ -76,28 +76,20 @@ pub fn save_new_profile(
 ) -> std::io::Result<(RuleProfile, PathBuf)> {
     let name = name.trim();
     std::fs::create_dir_all(dir)?;
+    // A profile's identity is its `name`, not its file name: a library file
+    // that parses under a name already holds that name whatever it is called.
+    let taken: Vec<String> = read_library(dir)
+        .into_iter()
+        .filter_map(|(_, parsed)| parsed.ok().map(|p| p.name))
+        .collect();
     let candidates = std::iter::once(name.to_string())
         .chain((2u32..10_000).map(|n| format!("{name} {n}")))
-        .filter(|candidate| !candidate.eq_ignore_ascii_case(BUILTIN_PROFILE_NAME));
+        .filter(|candidate| !candidate.eq_ignore_ascii_case(BUILTIN_PROFILE_NAME))
+        .filter(|candidate| !taken.iter().any(|t| t.eq_ignore_ascii_case(candidate)));
     for candidate in candidates {
-        let path = dir.join(file_name_for(&candidate));
-        match std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-        {
-            Ok(placeholder) => {
-                drop(placeholder);
-                let profile = RuleProfile::new(candidate, "1.0", erc);
-                if let Err(e) =
-                    signex_types::atomic_io::atomic_write(&path, &profile.to_json_bytes())
-                {
-                    // Our own empty placeholder; nothing of the user's is lost.
-                    std::fs::remove_file(&path).ok();
-                    return Err(e);
-                }
-                return Ok((profile, path));
-            }
+        let profile = RuleProfile::new(candidate, "1.0", erc.clone());
+        match write_new_profile(dir, &profile) {
+            Ok(path) => return Ok((profile, path)),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(e) => return Err(e),
         }
@@ -106,6 +98,29 @@ pub fn save_new_profile(
         std::io::ErrorKind::AlreadyExists,
         "no free profile name",
     ))
+}
+
+/// Write `profile` to its file only if that file does not exist yet:
+/// reserve the name with an exclusive create, then fill it atomically.
+/// `AlreadyExists` means the file is someone else's and was not touched.
+///
+/// A crash between the reservation and the write leaves a zero-byte file;
+/// [`read_library`] ignores those, so it is never reported as a corrupt
+/// profile (it only keeps its file name from being reused).
+fn write_new_profile(dir: &Path, profile: &RuleProfile) -> std::io::Result<PathBuf> {
+    let path = dir.join(file_name_for(&profile.name));
+    drop(
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)?,
+    );
+    if let Err(e) = signex_types::atomic_io::atomic_write(&path, &profile.to_json_bytes()) {
+        // Our own empty placeholder; nothing of the user's is lost.
+        std::fs::remove_file(&path).ok();
+        return Err(e);
+    }
+    Ok(path)
 }
 
 /// What a successful "Save as profile" produced.
@@ -146,7 +161,9 @@ enum FileError {
     Invalid(RuleProfileError),
 }
 
-/// Every `.snxrules` file in the library with what reading it gave.
+/// Every `.snxrules` file in the library with what reading it gave. A
+/// zero-byte file is a reservation a crashed save left behind, not a profile,
+/// and is left out.
 fn read_library(dir: &Path) -> Vec<(PathBuf, Result<RuleProfile, FileError>)> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
@@ -155,18 +172,24 @@ fn read_library(dir: &Path) -> Vec<(PathBuf, Result<RuleProfile, FileError>)> {
         .filter_map(Result::ok)
         .map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|e| e == RULE_PROFILE_EXTENSION))
-        .map(|p| {
+        .filter_map(|p| {
             let parsed = match std::fs::read(&p) {
+                Ok(bytes) if bytes.is_empty() => return None,
                 Ok(bytes) => RuleProfile::from_json_bytes(&bytes).map_err(FileError::Invalid),
                 Err(e) => Err(FileError::Unreadable(e)),
             };
-            (p, parsed)
+            Some((p, parsed))
         })
         .collect()
 }
 
 /// Every readable profile in the library, sorted by name. A file that does
-/// not parse is skipped here (it is still on disk, untouched).
+/// not parse is skipped (it is still on disk, untouched).
+///
+/// Test-only: the app has no profile picker yet, and a production caller
+/// would need the parse errors this drops. Add an error-returning variant
+/// when a picker needs one.
+#[cfg(test)]
 pub fn list_profiles(dir: &Path) -> Vec<RuleProfile> {
     let mut out: Vec<RuleProfile> = read_library(dir)
         .into_iter()
@@ -194,6 +217,7 @@ pub fn resolve_profile(
     };
     let mut matches: Vec<(PathBuf, RuleProfile)> = Vec::new();
     let mut unreadable = None;
+    let mut other_unreadable: Vec<PathBuf> = Vec::new();
     let expected_file = file_name_for(&reference.name);
     for (path, parsed) in read_library(dir) {
         match parsed {
@@ -203,7 +227,9 @@ pub fn resolve_profile(
             Err(e) if path.file_name().is_some_and(|f| *f == *expected_file) => {
                 unreadable = Some((path, e));
             }
-            _ => {}
+            // Under another file name it might still hold this profile.
+            Err(_) => other_unreadable.push(path),
+            Ok(_) => {}
         }
     }
     if matches.len() > 1 {
@@ -222,7 +248,19 @@ pub fn resolve_profile(
         return Ok(Some((profile, SOURCE_USER)));
     }
     match unreadable {
-        None => Ok(None),
+        None if other_unreadable.is_empty() => Ok(None),
+        None => {
+            other_unreadable.sort();
+            let files: Vec<String> = other_unreadable
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect();
+            Err(format!(
+                "no readable profile is named \"{}\", but {} could not be read and may hold it",
+                reference.name,
+                files.join(", ")
+            ))
+        }
         Some((path, FileError::Invalid(RuleProfileError::UnsupportedSchema(v)))) => Err(format!(
             "the profile file {} was written by a newer Signex (schema {v})",
             path.display()

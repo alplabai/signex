@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use crate::app::Signex;
 use crate::library::messages::EditorMsg;
+use crate::library::refresh::RefreshFollowUp;
 use crate::library::state::{
     ComponentPreviewState, EditorAddress, LibraryDisplaySettings, OpenLibrary,
 };
@@ -195,6 +196,7 @@ fn a_clean_preview_follows_a_browser_cell_commit_in_content_and_revision() {
     app.library.editors.get_mut(&address).unwrap().dirty = false;
 
     commit_cell(&mut app, &address, "R-115b");
+    app.land_pending_refresh(&address.library_path);
 
     let preview = editor(&app, &address);
     assert_eq!(preview.row.internal_pn.as_str(), "R-115b");
@@ -351,7 +353,7 @@ fn a_preview_with_a_half_typed_value_is_not_reloaded_over() {
 fn a_stale_primitive_bind_from_the_preview_offers_the_reload() {
     let (mut app, address) = app_with_row(2, 1);
 
-    app.apply_primitive_pick_to_preview(
+    let _ = app.apply_primitive_pick_to_preview(
         address.clone(),
         signex_library::PrimitiveKind::Symbol,
         PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
@@ -429,11 +431,112 @@ fn a_refused_browser_row_bind_refreshes_the_cache_so_a_retry_is_not_refused_agai
     };
     assert_eq!(cached_base(&app), Some(1), "the cache starts stale");
 
-    app.apply_primitive_pick_to_browser_row(
+    let _ = app.apply_primitive_pick_to_browser_row(
         address.clone(),
         signex_library::PrimitiveKind::Symbol,
         PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
     );
 
+    app.land_pending_refresh(&address.library_path);
+
     assert_eq!(cached_base(&app), Some(2), "the refusal re-reads the rows");
+}
+
+/// The read lands a moment after the write, so the cell shows the saved
+/// row at once instead of flashing the old value, and the next commit
+/// starts from the saved revision.
+#[test]
+fn a_browser_cell_commit_shows_the_saved_row_before_the_re_read_lands() {
+    let (mut app, address) = app_with_row(1, 1);
+
+    commit_cell(&mut app, &address, "R-115b");
+
+    let cached = app
+        .library
+        .library_at(&address.library_path)
+        .and_then(|lib| lib.tables.get(TABLE))
+        .and_then(|rows| rows.first())
+        .expect("row cached");
+    assert_eq!(cached.internal_pn.as_str(), "R-115b");
+    assert_eq!(cached.server_revision, Some(2));
+}
+
+/// A re-read that a newer one superseded applies nothing, but the
+/// follow-up it was started with is not lost: it runs when the latest
+/// read lands. Here row A's clean preview must catch up with the saved
+/// row even though row B's request came in before A's read finished.
+#[test]
+fn a_superseded_refreshs_follow_up_runs_when_the_latest_lands() {
+    let (mut app, address) = app_with_row(2, 1);
+    app.library.editors.get_mut(&address).unwrap().dirty = false;
+    let path = address.library_path.clone();
+    let _ = app.refresh_library_task(&path, RefreshFollowUp::CleanEditors(vec![address.row_id]));
+    let superseded = app.library.refresh_generations[&path];
+    let other_row = RowId::from_uuid(Uuid::new_v4());
+    let _ = app.refresh_library_task(&path, RefreshFollowUp::CleanEditors(vec![other_row]));
+
+    // The older read reports first: nothing applies, nothing follows yet.
+    app.land_refresh_with_generation(&path, superseded);
+    assert_eq!(editor(&app, &address).row.server_revision, Some(1));
+
+    app.land_pending_refresh(&path);
+    assert_eq!(
+        editor(&app, &address).row.server_revision,
+        Some(2),
+        "A's clean preview follows the saved row"
+    );
+}
+
+/// The same, with the committed cells of two rows: the first commit's
+/// follow-up must survive the second commit's request.
+#[test]
+fn two_quick_commits_still_refresh_the_first_rows_clean_preview() {
+    let (mut app, address) = app_with_row(1, 1);
+    app.library.editors.get_mut(&address).unwrap().dirty = false;
+    commit_cell(&mut app, &address, "R-115b");
+    // A second commit's request (another row) is made before the first
+    // read lands.
+    let other_row = RowId::from_uuid(Uuid::new_v4());
+    let _ = app.refresh_library_task(
+        &address.library_path,
+        RefreshFollowUp::CleanEditors(vec![other_row]),
+    );
+
+    app.land_pending_refresh(&address.library_path);
+
+    let preview = editor(&app, &address);
+    assert_eq!(preview.row.internal_pn.as_str(), "R-115b");
+    assert_eq!(preview.row.server_revision, Some(2));
+}
+
+/// A failed async refresh with no follow-up (Add Existing on a mounted
+/// library, a table add, a retry...) must still reach the Messages panel,
+/// once, naming the library.
+#[test]
+fn a_failed_refresh_without_a_follow_up_warns_once_naming_the_library() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, address) = app_with_row(1, 1);
+    let path = address.library_path.clone();
+    let name = app
+        .library
+        .library_at(&path)
+        .expect("open")
+        .display_name
+        .clone();
+    let _ = app.refresh_library_task(&path, RefreshFollowUp::Nothing);
+    let generation = app.library.refresh_generations[&path];
+    let failed = Err(signex_library::LibraryError::Backend("marker-1374".into()));
+
+    app.handle_refresh_finished(
+        path,
+        generation,
+        crate::library::refresh::RefreshSnapshotCell::new(failed),
+    );
+
+    let hits: Vec<_> = crate::diagnostics::recent_entries()
+        .into_iter()
+        .filter(|entry| entry.message.contains("marker-1374"))
+        .collect();
+    assert_eq!(hits.len(), 1, "exactly one warning for the failed read");
+    assert!(hits[0].message.contains(&name), "it names the library");
 }

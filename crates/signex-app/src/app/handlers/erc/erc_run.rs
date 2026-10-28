@@ -14,7 +14,6 @@ impl Signex {
     /// set falls back to this machine's preferences (the pre-#1085 behaviour)
     /// and says so once per project open in the Messages panel.
     fn erc_rule_settings(&mut self) -> (RuleOverrides, PinMatrixOverrides) {
-        self.ui_state.erc_run_rule_set = Some(self.current_rule_set_identity());
         let project = self.document_state.active_document_project();
         let Some(rules) = project.and_then(|p| p.data.rules.as_ref()) else {
             let unreadable = project.is_some_and(|p| p.data.has_unreadable_rules());
@@ -93,6 +92,7 @@ impl Signex {
     /// Capture the run's inputs from live state (memory only, no IO), claim a
     /// new generation and flag the run as in flight.
     pub(super) fn begin_erc_run(&mut self) -> (u64, super::erc_job::ErcRunInputs) {
+        let rule_set = self.current_rule_set_identity();
         let (overrides, pin_matrix_overrides) = self.erc_rule_settings();
         let ds = &self.document_state;
         let tab_paths = ds
@@ -119,6 +119,7 @@ impl Signex {
             root,
             project_dir: ds.active_document_project().map(|p| p.dir().to_path_buf()),
             overrides,
+            rule_set,
             config: signex_erc::ErcConfig::with_pin_matrix_overrides(&pin_matrix_overrides),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
         };
@@ -147,7 +148,7 @@ impl Signex {
 
     /// Apply a finished run's result - unless a newer run has started since.
     /// Returns whether violations were applied.
-    fn apply_erc_run_result(
+    pub(super) fn apply_erc_run_result(
         &mut self,
         generation: u64,
         result: &Result<super::erc_job::ErcRunOutcome, String>,
@@ -164,6 +165,9 @@ impl Signex {
                 return false;
             }
         };
+        // The rows now in the cache were produced under this rule set; only a
+        // successful, current run may name it in the report header.
+        self.ui_state.erc_run_rule_set = Some(outcome.rule_set.clone());
         for warning in &outcome.warnings {
             crate::diagnostics::log_warning(warning);
         }

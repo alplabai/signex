@@ -74,6 +74,7 @@ pub fn stock_library_file() -> LibraryFile {
         pricing: Default::default(),
     };
     LibraryFile {
+        layout: Default::default(),
         manifest,
         tables: BTreeMap::from([(COMPONENT_TABLE.to_string(), table)]),
     }
