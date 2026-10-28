@@ -36,12 +36,15 @@ and how to verify a download. This guide does not repeat it.
 
 ## 2. First launch
 
-Start Signex. With no document open you see a start screen with three
+Start Signex. With no document open you see a start screen with four
 buttons:
 
 - **New Project**
 - **Open Project…** (with its keyboard shortcut shown next to it)
+- **Open Sample Project**
 - **Keyboard Shortcuts (F1)**
+
+![First launch: the start screen with the Welcome to Signex card in the bottom-right corner](../assets/screenshots/guide/01-first-launch.png)
 
 On your very first launch a small card titled **Welcome to Signex** also
 appears in the bottom-right corner of the window. It lists the three gestures
@@ -92,6 +95,10 @@ Signex refuses, and writes nothing, when:
 The reason appears in the error notice and in the Messages panel.
 
 The project loads and the blank schematic opens in a tab, ready to draw on.
+The Projects panel on the left lists the project, its **Source Documents**
+folder and the new sheet.
+
+![A new project: the Projects panel lists First-Board and its sheet, and the blank A4 sheet is open in a tab](../assets/screenshots/guide/02-new-project.png)
 
 **Enable Version Control** refuses to start a git repository in your home
 folder, in Desktop, Documents or Downloads, in a filesystem root, in a folder that holds more than this one project, or in a folder
@@ -102,9 +109,8 @@ project that already lives in a shared folder still opens normally.
 
 To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 
-> **Sample project.** A bundled sample project (**Help ▸ Open Sample
-> Project**) is proposed in [#787](https://github.com/alplabai/signex/pull/787)
-> and is not available yet.
+> **Sample project.** **Help ▸ Open Sample Project** (also a button on the
+> start screen) unpacks a bundled sample project and opens it.
 
 ## 4. Canvas basics
 
@@ -137,6 +143,15 @@ the bundled parts." The **Installed** and **Global** sections have a
 **+ Add Library…** button, and **File ▸ Library ▸ Open Library…** mounts a
 `.snxlib` library. Type in **Filter components…** to narrow the list. Clicking
 a part row opens its Component Preview tab.
+
+The **Stock** library ships symbols and footprints but no component rows yet,
+so its section lists no parts and its count reads `(0)`: there is nothing in
+it to place. To follow this guide, mount a library that has a resistor row
+(**+ Add Library…** or **File ▸ Library ▸ Open Library…**). In the screenshots
+below that is a library named **My Parts** whose single row, `R-10K`, uses the
+bundled stock resistor symbol.
+
+![The Components panel: the Installed section lists My Parts with its R-10K row and a Place button; the Stock section lists no parts](../assets/screenshots/guide/03-components-panel.png)
 
 To place a part, open a schematic sheet, then either:
 
@@ -541,20 +556,25 @@ Drawn / Checked / Approved row.
 ## Walkthrough: a saved schematic with a wired symbol
 
 This is sections 3 to 10 as one run. Each step names the section with the
-detail. Step 3 cannot be completed from the UI yet; see its note.
+detail. The screenshots were taken from the real application, driven through
+these same steps.
 
 1. **Create the project.** Choose **File ▸ New Project**, name it in the
    **New Project** save dialog, and keep the `.snxprj` ending (section 3).
    Signex creates a folder named after the project; a blank `.snxsch` in it
    opens in a tab.
-2. **Find a part.** Open **View ▸ Components** and expand **Stock**
-   (section 5). Type in **Filter components…** to find the part.
-3. **Place it.** Intended path: **File ▸ Library ▸ Place Component…**, select
-   the part, press **Place**. *Not working yet:* the **Place** button closes
-   the picker without placing (section 5). Everything below then runs on a
-   sheet without a part.
-4. **Wire it.** Choose **Place ▸ Wire**, click to start, click to bend, and
-   double-click to stop (section 6). End each wire on a pin end of the part.
+2. **Find a part.** Open **View ▸ Components** and look for the part in the
+   section that holds your library. The **Stock** section lists no parts yet
+   (section 5), so mount a library with a resistor row first. Type in
+   **Filter components…** to narrow the list.
+3. **Place it.** Press **Place** at the end of the part's row, or choose
+   **File ▸ Library ▸ Place Component…**, select the part and press **Place**.
+   The part follows the cursor on the grid. Click once on the sheet to drop
+   it; it is named `R1`. Press `Esc` to let go of the part (section 5).
+4. **Wire it.** Choose **Place ▸ Wire** (`P` then `W`), click on the end of a
+   pin to start, click where the wire should end, and double-click to stop.
+   Do the same on the other pin (section 6). With **Snap to Hotspots** on, which
+   is the default, a click near a pin lands on its end.
 5. **Name the net.** Choose **Place ▸ Net Label**, click the wire, press `Esc`,
    double-click the label, type the name, and press `Enter` (section 7).
 6. **Annotate.** Press `Alt+A` (**Design ▸ Annotation ▸ Annotate Schematics
@@ -564,6 +584,40 @@ detail. Step 3 cannot be completed from the UI yet; see its note.
 8. **Save.** Press `Ctrl+S` or choose **File ▸ Save** (section 10). Signex
    writes the sheet to its `.snxsch` file. Close the tab and reopen it with
    **File ▸ Open Recent** to check that the wires and labels came back.
+
+Here is the sheet after steps 1 to 4: the resistor `R1` is placed and a wire
+runs from each of its pins. The tab shows a red dot, which means the sheet has
+changes that are not saved yet.
+
+![A schematic with the resistor R1 placed and a wire on each pin, ready to save](../assets/screenshots/guide/04-placed-and-wired.png)
+
+### What lands on disk
+
+Nothing is written until you save. After **Save**, the project folder holds
+exactly three files, `First-Board` being the name used here:
+
+| File | Holds |
+|---|---|
+| `First-Board.snxprj` | The project file, still empty. |
+| `First-Board.snxsch` | The sheet: everything below. |
+| `.gitignore` | The Signex-managed ignore block. |
+
+The `.snxsch` file is plain text and diffs cleanly. Its parts, in order:
+
+- a header: the format (`snxsch/1`), the sheet id, the paper size, and the
+  Signex version that wrote it;
+- `[sheets.components]`: one row per placed part, with its designator (`R1`),
+  the library and symbol it came from, its position and rotation, and its
+  value (here `10K-0603`);
+- `[sheets.wires]`: one row per wire segment, start and end point and stroke
+  width. Positions are whole nanometres, so the pin end at 147.32 mm, 97.79 mm
+  is written `147320000  97790000`;
+- `[sheets.junctions]` and `[sheets.labels]`: empty here, since the sheet has
+  neither (net labels go in `[sheets.labels]`; section 7);
+- per-part and per-sheet details, including a copy of each library symbol the
+  sheet uses, so the sheet opens without its library mounted.
+
+A saved sheet no longer shows the red dot on its tab.
 
 ## 12. File types
 
@@ -621,3 +675,23 @@ There is no default shortcut for **File ▸ New Project** in the Altium profile.
 - Report a bug or request a feature in the
   [issue tracker](https://github.com/alplabai/signex/issues). **Help ▸ Report
   an Issue** opens it from inside the application.
+
+## Regenerating the screenshots
+
+The images in `assets/screenshots/guide/` are rendered by a test, not
+captured by hand, so they can be redone after a UI change. The test drives the
+real application state through its own messages (new project, mount a library,
+place a part, draw wires, save), draws the real window view with iced's wgpu
+renderer into an offscreen 1600 x 1000 texture, with the default theme and the
+bundled fonts, and writes the PNG files. To regenerate them:
+
+```text
+cargo test -p signex-app --test guide_screenshots -- --ignored --nocapture
+```
+
+The test is `#[ignore]`d, so CI does not run it. It needs a Vulkan adapter;
+on a machine without a GPU install Mesa lavapipe (`mesa-vulkan-drivers`).
+Set `SIGNEX_GUIDE_SCREENSHOTS_DIR` to write somewhere other than the guide
+folder. Look at the images before committing them: a blank canvas or missing
+text means the harness broke. When the guide text names something that a
+screenshot shows, change both together.

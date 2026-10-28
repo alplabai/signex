@@ -79,3 +79,26 @@ fn guide_describes_placing_and_has_no_merge_leftovers() {
         );
     }
 }
+
+/// Every screenshot the guide shows is checked in: a rename of the files
+/// `tests/guide_screenshots.rs` writes, or a typo in a path, would leave a
+/// broken image on the page.
+#[test]
+fn guide_screenshots_exist_and_are_reasonably_small() {
+    let docs = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs");
+    let mut found = 0;
+    for line in GUIDE.lines() {
+        let Some(start) = line.find("](../assets/screenshots/guide/") else {
+            continue;
+        };
+        let rest = &line[start + 2..];
+        let path = &rest[..rest.find(')').expect("closing parenthesis")];
+        let file = docs.join(path);
+        let len = std::fs::metadata(&file)
+            .unwrap_or_else(|e| panic!("guide image {path} is missing: {e}"))
+            .len();
+        assert!(len < 400_000, "{path} is {len} bytes; optimise it");
+        found += 1;
+    }
+    assert!(found >= 3, "the guide shows at least three screenshots");
+}
