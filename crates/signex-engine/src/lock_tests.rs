@@ -5,6 +5,10 @@ use crate::*;
 use signex_types::schematic::{InstancePath, Point, SelectedKind, Symbol};
 use uuid::Uuid;
 
+fn lib_symbol_named(id: &str) -> signex_types::schematic::LibSymbol {
+    serde_json::from_value(serde_json::json!({ "id": id })).unwrap()
+}
+
 fn id(n: u128) -> Uuid {
     Uuid::from_u128(n)
 }
@@ -172,6 +176,19 @@ fn refused_commands() -> Vec<(&'static str, Command)> {
                 symbol: id(1),
                 placement: InstancePath::from_chain(vec![id(100), id(101)]),
                 reference: "R9".into(),
+            },
+        ),
+        (
+            "change the component",
+            Command::ChangeComponent {
+                symbol_id: id(1),
+                replacement: crate::ComponentReplacement {
+                    lib_symbol: lib_symbol_named("Device:C"),
+                    library_id: None,
+                    row_id: None,
+                    library_version: String::new(),
+                    value: String::new(),
+                },
             },
         ),
         (

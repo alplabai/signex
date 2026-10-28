@@ -90,6 +90,7 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         Command::UpdateSymbolTextSize { symbol_id, .. }
         | Command::UpdateSymbolLibId { symbol_id, .. }
         | Command::UpdateSymbolFootprint { symbol_id, .. }
+        | Command::ChangeComponent { symbol_id, .. }
         | Command::UpdateSymbolFields { symbol_id, .. }
         | Command::SetSymbolBodyStyle { symbol_id, .. }
         | Command::SetSymbolField { symbol_id, .. } => (vec![*symbol_id], "edited"),
