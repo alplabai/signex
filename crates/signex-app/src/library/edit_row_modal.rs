@@ -17,9 +17,6 @@ use super::messages::{BrowserEditMsg, LibraryMessage};
 use super::modal_chrome::close_x;
 use super::state::{DeleteConfirmState, EditRowModalState};
 
-const MODAL_W: f32 = 720.0;
-const MODAL_H: f32 = 640.0;
-
 const CONFIRM_W: f32 = 480.0;
 const CONFIRM_H: f32 = 230.0;
 
@@ -385,8 +382,8 @@ pub fn view<'a>(
 
     container(
         column![header, body, error_row, footer]
-            .width(Length::Fixed(MODAL_W))
-            .height(Length::Fixed(MODAL_H)),
+            .width(Length::Fixed(super::modal_chrome::EDIT_ROW_W))
+            .height(Length::Fixed(super::modal_chrome::EDIT_ROW_H)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
