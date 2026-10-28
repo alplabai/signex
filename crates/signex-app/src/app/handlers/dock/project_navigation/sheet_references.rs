@@ -171,7 +171,7 @@ impl Signex {
                 .sheet;
             let engine = signex_engine::Engine::new_with_path(sheet, Some(parent.clone()))
                 .map_err(|e| format!("could not be loaded: {e}"))?;
-            self.document_state.engines.insert(parent.clone(), engine);
+            self.document_state.insert_engine(parent.clone(), engine);
             self.adopt_net_colors_of(parent);
             self.clear_net_color_steps(parent);
         }
@@ -188,7 +188,7 @@ impl Signex {
         // own the path for the rest of the session and shadow a later open.
         if loaded_here && !matches!(&result, Ok(done) if done.changed) {
             self.forget_net_colors_of(parent);
-            self.document_state.engines.remove(parent);
+            self.document_state.remove_engine(parent);
         }
         let result = result?;
         if result.changed {

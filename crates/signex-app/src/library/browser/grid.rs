@@ -312,7 +312,7 @@ pub(super) fn view_grid<'a>(
                     .cell_edit
                     .get(&buf_key)
                     .cloned()
-                    .unwrap_or(row_value);
+                    .unwrap_or_else(|| c.kind.edit_seed(r));
 
                 let library_for_input = lib_pb.clone();
                 let column_for_input = column_key.clone();

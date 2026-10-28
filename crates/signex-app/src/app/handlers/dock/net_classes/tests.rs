@@ -240,7 +240,7 @@ fn choosing_none_for_an_unmatched_net_says_nothing() {
 
 #[test]
 fn choices_list_none_then_the_classes_and_show_the_first_match() {
-    use crate::panels::{NO_NET_CLASS, net_class_choice, net_class_choices};
+    use crate::panels::{NetClassChoice, net_class_choice, net_class_choices};
     let mut f = Fixture::new();
     f.send(NetClassMsg::Add);
     f.send(NetClassMsg::AssignNet {
@@ -249,7 +249,46 @@ fn choices_list_none_then_the_classes_and_show_the_first_match() {
         class: Some("Class 1".into()),
     });
 
-    assert_eq!(net_class_choices(&f.classes), [NO_NET_CLASS, "Class 1"]);
-    assert_eq!(net_class_choice(&f.classes, "GND"), "Class 1");
-    assert_eq!(net_class_choice(&f.classes, "SDA"), NO_NET_CLASS);
+    assert_eq!(
+        net_class_choices(&f.classes),
+        [
+            NetClassChoice::NoClass,
+            NetClassChoice::Class("Class 1".into())
+        ]
+    );
+    assert_eq!(
+        net_class_choice(&f.classes, "GND"),
+        NetClassChoice::Class("Class 1".into())
+    );
+    assert_eq!(net_class_choice(&f.classes, "SDA"), NetClassChoice::NoClass);
+}
+
+#[test]
+fn a_loaded_class_named_none_is_still_a_class_when_picked() {
+    use crate::panels::{NetClassChoice, net_class_choice, net_class_choices};
+    // The engine refuses to Add or Rename a class to `(none)`, but a `.snxprj`
+    // written by hand or by an older build can carry one.
+    let dir = std::env::temp_dir().join(format!("signex-none-class-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).expect("tempdir");
+    let path = dir.join("p.snxprj");
+    std::fs::write(
+        &path,
+        r#"{"name":"p","dir":"","schematic_root":null,"pcb_file":null,"net_classes":[{"name":"(none)","nets":["GND"]}]}"#,
+    )
+    .expect("write project");
+    let data = signex_types::project::parse_project(&path).expect("parse project");
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(data.net_classes.len(), 1, "the class loaded");
+
+    let shown = net_class_choice(&data.net_classes, "GND");
+    assert_eq!(shown, NetClassChoice::Class("(none)".into()));
+    assert_eq!(
+        shown.into_class(),
+        Some("(none)".to_string()),
+        "picking it assigns that class instead of clearing the net"
+    );
+    let choices = net_class_choices(&data.net_classes);
+    assert_eq!(choices.len(), 2);
+    assert_ne!(choices[0], choices[1], "the no-class entry is distinct");
+    assert_eq!(NetClassChoice::NoClass.into_class(), None);
 }

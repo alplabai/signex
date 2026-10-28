@@ -41,7 +41,9 @@ pub(super) fn param_value_for_commit(
     buf: &str,
 ) -> Result<ParamValue, ParamRefusal> {
     match existing {
-        // Preserve the unit on commit by reading the existing value.
+        // Preserve the unit on commit by reading the existing value. The
+        // typed number is in the stored unit: the cell is seeded from the
+        // stored form (`ColumnKind::edit_seed`).
         Some(ParamValue::Measurement { unit, .. }) => parse_finite_f64(buf)
             .map(|value| ParamValue::Measurement {
                 value,

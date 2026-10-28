@@ -182,6 +182,8 @@ impl Signex {
     /// the user just deleted. A parked dirty engine or draft would
     /// otherwise survive in `dirty_paths` and be written back by Save All.
     fn drop_deleted_documents(&mut self, deleted: &std::path::Path, fold: CaseFold) {
+        // The file is gone: a replace that read it earlier must not bring it back.
+        self.document_state.note_document_written_behind_engines();
         let gone = |p: &std::path::PathBuf| path_is_under(p, deleted, fold);
         let dead: Vec<_> = self
             .document_state

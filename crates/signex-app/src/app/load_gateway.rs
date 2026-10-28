@@ -108,7 +108,7 @@ impl Signex {
                     self.document_state.dirty_paths.remove(&new_path);
                 }
 
-                self.document_state.engines.insert(new_path.clone(), engine);
+                self.document_state.insert_engine(new_path.clone(), engine);
                 self.document_state.active_path = Some(new_path);
                 Some(result)
             }

@@ -275,35 +275,72 @@ fn stale_lock(git_dir: &Path) -> Option<std::path::PathBuf> {
         .find(|path| path.extension().is_some_and(|e| e == "lock") && is_stale(path))
 }
 
-/// Project a `git2::Commit` onto the trait-level [`HistoryEntry`].
-///
-/// Diff-stat fields (`additions`, `deletions`, `files_changed`) stay
-/// at the scaffold defaults — Stage 17 ships the list shape without
-/// the lazy diff plumbing. The author timestamp is preferred over
-/// the committer's so rebases/cherry-picks don't visually skew the
-/// "12 minutes ago" labels.
-pub(super) fn commit_to_history_entry(commit: &git2::Commit<'_>) -> HistoryEntry {
-    let author = commit.author();
-    let secs = author.when().seconds();
-    let time =
-        chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0).unwrap_or_else(chrono::Utc::now);
-    let raw = commit.message().unwrap_or("");
-    let (subject, body) = match raw.find("\n\n") {
-        Some(i) => (raw[..i].trim_end().to_string(), raw[i + 2..].to_string()),
-        None => (raw.trim_end().to_string(), String::new()),
-    };
-    HistoryEntry {
-        sha: commit.id().to_string(),
-        author_name: author.name().unwrap_or_default().to_string(),
-        author_email: author.email().unwrap_or_default().to_string(),
-        time,
-        subject,
-        body,
-        parent_shas: commit.parent_ids().map(|id| id.to_string()).collect(),
-        files_changed: Vec::new(),
-        additions: 0,
-        deletions: 0,
+/// Refuse an insert whose `row_id` or `internal_pn` is already stored in
+/// any table of `lf`; the part number is the library-wide key.
+pub(super) fn check_insert_unique(
+    lf: &LibraryFile,
+    row_id: &str,
+    internal_pn: &str,
+) -> Result<(), LibraryError> {
+    for (name, table) in &lf.tables {
+        for stored in &table.rows {
+            if stored.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(row_id) {
+                return Err(LibraryError::Conflict(format!(
+                    "row {row_id} already exists in table {name:?}"
+                )));
+            }
+        }
     }
+    check_pn_unique(lf, internal_pn, None)
+}
+
+/// [`check_pn_unique`] for an edit, run only when the PN changes from the
+/// stored row's (trimmed), so a library that already holds duplicate PNs
+/// still lets their other fields be edited.
+pub(super) fn check_pn_change(
+    lf: &LibraryFile,
+    table: &str,
+    row_id: &str,
+    internal_pn: &str,
+) -> Result<(), LibraryError> {
+    let stored_pn = lf.tables.get(table).and_then(|t| {
+        t.rows
+            .iter()
+            .find(|r| r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(row_id))
+            .and_then(|r| r.cells.get("internal_pn"))
+    });
+    if stored_pn.is_some_and(|s| s.trim() == internal_pn.trim()) {
+        return Ok(());
+    }
+    check_pn_unique(lf, internal_pn, Some(row_id))
+}
+
+/// Refuse a part number another row already holds. A blank PN is a draft
+/// the user has not filled in yet, so it never conflicts. `except_row_id`
+/// names the row being edited, which may keep its own PN. Both sides are
+/// compared trimmed, so `"PN-A "` clashes with `"PN-A"`; the comparison
+/// stays case-sensitive because part numbers can be case-significant.
+pub(super) fn check_pn_unique(
+    lf: &LibraryFile,
+    internal_pn: &str,
+    except_row_id: Option<&str>,
+) -> Result<(), LibraryError> {
+    let wanted = internal_pn.trim();
+    if wanted.is_empty() {
+        return Ok(());
+    }
+    for (name, table) in &lf.tables {
+        for stored in &table.rows {
+            let own = except_row_id.is_some()
+                && stored.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == except_row_id;
+            if !own && stored.cells.get("internal_pn").map(|s| s.trim()) == Some(wanted) {
+                return Err(LibraryError::Conflict(format!(
+                    "internal_pn {internal_pn:?} already exists in table {name:?}"
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// True if `commit` modified `rel_path` relative to *any* of its
