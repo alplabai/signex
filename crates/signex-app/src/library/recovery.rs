@@ -50,6 +50,10 @@ use uuid::Uuid;
 use super::messages::LibraryMessage;
 use super::modal_chrome::{close_x, primary_btn, secondary_btn};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 const MODAL_W: f32 = 520.0;
 
 /// One of the three recovery flows. At most one is open at a time.
@@ -136,7 +140,7 @@ fn library_missing_view<'a>(
 
     let header = container(
         row![
-            text("Library Missing").size(14).color(text_c),
+            text("Library Missing").size(TS.heading).color(text_c),
             Space::new().width(Length::Fill),
             close_x(
                 LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
@@ -153,14 +157,14 @@ fn library_missing_view<'a>(
             "Signex couldn't find the library's .snxlib file. \
              It may have been moved, renamed, or deleted."
         )
-        .size(11)
+        .size(TS.body)
         .color(muted),
         Space::new().height(8),
         text(format!("Expected: {}", path.display()))
-            .size(11)
+            .size(TS.body)
             .color(muted),
     ]
-    .spacing(2);
+    .spacing(SP.xs);
 
     let footer = container(
         row![
@@ -189,7 +193,8 @@ fn library_missing_view<'a>(
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
-        column![header, container(body).padding([14, 16]), footer].width(Length::Fixed(MODAL_W)),
+        column![header, container(body).padding([14.0, SP.xl]), footer]
+            .width(Length::Fixed(MODAL_W)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
@@ -208,7 +213,9 @@ fn git_missing_view<'a>(
 
     let header = container(
         row![
-            text("Git Repository Missing").size(14).color(text_c),
+            text("Git Repository Missing")
+                .size(TS.heading)
+                .color(text_c),
             Space::new().width(Length::Fill),
             close_x(
                 LibraryMessage::RecoveryGitMissing(GitMissingChoice::Cancel),
@@ -226,25 +233,26 @@ fn git_missing_view<'a>(
              directory is missing. Past per-primitive history can't \
              be read until the repository is restored."
         )
-        .size(11)
+        .size(TS.body)
         .color(muted),
         Space::new().height(8),
         text(format!("Library: {}", path.display()))
-            .size(11)
+            .size(TS.body)
             .color(muted),
     ]
-    .spacing(2);
+    .spacing(SP.xs);
 
     if let Some(url) = remote {
         summary_lines = summary_lines.push(Space::new().height(4));
-        summary_lines = summary_lines.push(text(format!("Remote: {}", url)).size(11).color(muted));
+        summary_lines =
+            summary_lines.push(text(format!("Remote: {}", url)).size(TS.body).color(muted));
     }
 
     if let Some(reason) = error {
         summary_lines = summary_lines.push(Space::new().height(8));
         summary_lines = summary_lines.push(
             text(format!("Re-init failed: {reason}"))
-                .size(11)
+                .size(TS.body)
                 .color(iced::Color::from_rgb(0.86, 0.40, 0.36)),
         );
     }
@@ -256,7 +264,7 @@ fn git_missing_view<'a>(
              directory. Past commits are lost; new edits are tracked \
              from this point forward.",
         )
-        .size(11)
+        .size(TS.body)
         .color(iced::Color::from_rgb(0.86, 0.40, 0.36)),
     );
 
@@ -298,8 +306,12 @@ fn git_missing_view<'a>(
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
-        column![header, container(summary_lines).padding([14, 16]), footer]
-            .width(Length::Fixed(MODAL_W)),
+        column![
+            header,
+            container(summary_lines).padding([14.0, SP.xl]),
+            footer
+        ]
+        .width(Length::Fixed(MODAL_W)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
@@ -329,7 +341,7 @@ fn broken_binding_view<'a>(
     let header = container(
         row![
             text(format!("Broken {} Binding", kind_label))
-                .size(14)
+                .size(TS.heading)
                 .color(text_c),
             Space::new().width(Length::Fill),
             close_x(
@@ -348,18 +360,18 @@ fn broken_binding_view<'a>(
             table,
             kind_label.to_lowercase()
         ))
-        .size(11)
+        .size(TS.body)
         .color(muted),
         Space::new().height(8),
         text(format!("Library: {}", library_path.display()))
-            .size(11)
+            .size(TS.body)
             .color(muted),
-        text(format!("Row: {}", row_id)).size(11).color(muted),
+        text(format!("Row: {}", row_id)).size(TS.body).color(muted),
         text(format!("Missing UUID: {}", missing_uuid))
-            .size(11)
+            .size(TS.body)
             .color(muted),
     ]
-    .spacing(2);
+    .spacing(SP.xs);
 
     let footer = container(
         row![
@@ -388,7 +400,8 @@ fn broken_binding_view<'a>(
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
-        column![header, container(body).padding([14, 16]), footer].width(Length::Fixed(MODAL_W)),
+        column![header, container(body).padding([14.0, SP.xl]), footer]
+            .width(Length::Fixed(MODAL_W)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
@@ -401,7 +414,7 @@ fn broken_binding_view<'a>(
 fn destructive_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, LibraryMessage> {
     let bg = iced::Color::from_rgb(0.74, 0.25, 0.22);
     let fg = iced::Color::WHITE;
-    button(container(text(label.to_string()).size(11).color(fg)).padding([4, 14]))
+    button(container(text(label.to_string()).size(TS.body).color(fg)).padding([SP.s, 14.0]))
         .on_press(message)
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: Some(iced::Background::Color(bg)),
@@ -425,7 +438,7 @@ fn disabled_btn<'a>(
         a: text_color.a * 0.5,
         ..text_color
     };
-    container(container(text(label.to_string()).size(11).color(muted)).padding([4, 14]))
+    container(container(text(label.to_string()).size(TS.body).color(muted)).padding([SP.s, 14.0]))
         .style(move |_: &Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(
                 1.0, 1.0, 1.0, 0.02,

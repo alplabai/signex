@@ -1,7 +1,12 @@
 //! Projects and Navigator panel views plus the project-tree model.
 
 use super::*;
+use crate::styles::{Spacing, TypeScale};
 use iced::widget::column;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// Per-sheet info for the project tree.
 #[derive(Debug, Clone, PartialEq)]
@@ -274,11 +279,11 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if ctx.project_tree.is_empty() {
         let muted = theme_ext::text_secondary(&ctx.tokens);
         column![
-            text("No project open").size(11).color(muted),
+            text("No project open").size(TS.body).color(muted),
             text("").size(4),
-            text("File > Open to begin").size(10).color(muted),
+            text("File > Open to begin").size(TS.caption).color(muted),
         ]
-        .spacing(2)
+        .spacing(SP.xs)
         .padding(6)
         .width(Length::Fill)
         .into()
@@ -309,7 +314,7 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 // ─── Navigator Panel ──────────────────────────────────────────
 
 pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(2).padding(6).width(Length::Fill);
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
     col = col.push(section_title("Sheets", &ctx.tokens));
     col = col.push(separator(&ctx.tokens));
 
@@ -318,7 +323,7 @@ pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if ctx.navigator.tree.is_empty() {
         col = col.push(
             text("No project")
-                .size(10)
+                .size(TS.caption)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         );
     } else {

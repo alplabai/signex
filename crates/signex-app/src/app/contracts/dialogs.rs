@@ -459,7 +459,7 @@ pub enum FileMsg {
         sha: String,
         edit_stamp: crate::app::restore_job::EditStamp,
         result: Result<
-            Box<crate::app::restore_job::RestoreJobDocument>,
+            Box<crate::app::restore_job::RestoredFile>,
             crate::app::restore_job::RestoreFailure,
         >,
     },
@@ -538,6 +538,12 @@ pub enum ProjectMsg {
     FsFactsProbed(
         u64,
         Result<Box<crate::app::state::project_fs::ProjectFsFacts>, String>,
+    ),
+    /// The off-thread Navigator hierarchy assembly finished (#1470); `Err`
+    /// is a worker that died. Applied only while its generation is the latest.
+    NavigatorAssembled(
+        u64,
+        Result<Box<crate::app::state::navigator_job::NavigatorAssembly>, String>,
     ),
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex

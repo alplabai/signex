@@ -132,7 +132,7 @@ impl DockArea {
                     .color(text_c)
                     .wrapping(iced::widget::text::Wrapping::None),
             )
-            .padding([4, 10]);
+            .padding([SP.s, 10.0]);
             let tab = mouse_area(signex_widgets::tab_pill::TabPill::new(inner, pill_style))
                 .on_enter(DockMessage::TabHoverEnter(position, i))
                 .on_exit(DockMessage::TabHoverExit(position, i))
@@ -162,11 +162,11 @@ impl DockArea {
             PanelPosition::Bottom => svg_icon(icons::icon_collapse_down(tid)),
         };
         let close_btn = button(svg_icon(icons::icon_close(tid)))
-            .padding([5, 4])
+            .padding([5.0, SP.s])
             .style(button::text)
             .on_press(DockMessage::ClosePanel(position, region.active));
         let collapse_btn = button(collapse_icon)
-            .padding([5, 4])
+            .padding([5.0, SP.s])
             .style(button::text)
             .on_press(DockMessage::ToggleCollapse(position));
 
@@ -311,7 +311,7 @@ impl DockArea {
 
             container(rail)
                 .height(Length::Fill)
-                .padding([3, 2])
+                .padding([3.0, SP.xs])
                 .style(styles::collapsed_rail(&ctx.tokens))
                 .into()
         } else {

@@ -7,8 +7,13 @@
 
 use super::super::*;
 use crate::panels::PaperEdge;
+use crate::styles::{Spacing, TypeScale};
 use iced::widget::column;
 use signex_types::schematic::{SheetOrientation, SheetSize};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// Custom Selection Filters collapsible section — tabbed editor for up to
 /// `CUSTOM_FILTER_PRESET_LIMIT` named presets. Pulled out of
@@ -47,23 +52,25 @@ pub fn view_custom_selection_filters_section<'a>(
                     c = c.push(
                         container(
                             text("No presets yet. Click + to define one.")
-                                .size(11)
+                                .size(TS.body)
                                 .color(muted_c),
                         )
-                        .padding([4, 8]),
+                        .padding([SP.s, SP.m]),
                     );
                     c = c.push(
                         container(
-                            iced::widget::button(text("+ Add Filter").size(11).color(primary_c))
-                                .padding([4, 10])
-                                .on_press(PanelMsg::AddCustomFilterPreset),
+                            iced::widget::button(
+                                text("+ Add Filter").size(TS.body).color(primary_c),
+                            )
+                            .padding([SP.s, 10.0])
+                            .on_press(PanelMsg::AddCustomFilterPreset),
                         )
-                        .padding([4, 8]),
+                        .padding([SP.s, SP.m]),
                     );
                     return c;
                 }
                 let mut tabs = iced::widget::Row::new()
-                    .spacing(2)
+                    .spacing(SP.xs)
                     .align_y(iced::Alignment::Center);
                 for (idx, preset) in presets.iter().enumerate() {
                     let label = if preset.name.trim().is_empty() {
@@ -81,28 +88,28 @@ pub fn view_custom_selection_filters_section<'a>(
                 }
                 if presets.len() < CUSTOM_FILTER_PRESET_LIMIT {
                     tabs = tabs.push(
-                        iced::widget::button(text("+").size(12).color(primary_c))
+                        iced::widget::button(text("+").size(TS.label).color(primary_c))
                             .padding([3, 10])
                             .on_press(PanelMsg::AddCustomFilterPreset),
                     );
                 }
-                c = c.push(container(tabs).padding([4, 8]));
+                c = c.push(container(tabs).padding([SP.s, SP.m]));
                 let preset = &presets[active_tab];
                 let included: std::collections::HashSet<SelectionFilter> =
                     preset.filters.iter().copied().collect();
                 let header = row![
                     iced::widget::text_input("Preset name", &preset.name)
-                        .size(11)
+                        .size(TS.body)
                         .padding([3, 6])
                         .on_input(move |s| PanelMsg::RenameCustomFilterPreset(active_tab, s))
                         .width(Length::Fill),
-                    iced::widget::button(text("Delete").size(10).color(primary_c))
-                        .padding([3, 8])
+                    iced::widget::button(text("Delete").size(TS.caption).color(primary_c))
+                        .padding([3.0, SP.m])
                         .on_press(PanelMsg::RemoveCustomFilterPreset(active_tab)),
                 ]
-                .spacing(4)
+                .spacing(SP.s)
                 .align_y(iced::Alignment::Center);
-                let mut wrap = Wrap::new().spacing(4.0).line_spacing(4.0);
+                let mut wrap = Wrap::new().spacing(SP.s).line_spacing(4.0);
                 for &f in SelectionFilter::ALL {
                     wrap = wrap.push(preset_chip(
                         f.label(),
@@ -114,8 +121,8 @@ pub fn view_custom_selection_filters_section<'a>(
                     ));
                 }
                 c = c.push(
-                    container(column![header, container(wrap).padding([4, 0])].spacing(4))
-                        .padding([6, 8]),
+                    container(column![header, container(wrap).padding([SP.s, 0.0])].spacing(SP.s))
+                        .padding([6.0, SP.m]),
                 );
                 c
             },
@@ -199,7 +206,7 @@ pub fn view_properties_general<'a>(
                         .spacing(0.0)
                         .width(Length::Fill),
                     )
-                    .padding([2, 8]),
+                    .padding([SP.xs, SP.m]),
                 );
                 // Altium-style: Visible Grid and Snap Grid are independent
                 c = c.push(form_grid_row(
@@ -322,7 +329,7 @@ pub fn view_properties_general<'a>(
                         .spacing(0.0)
                         .width(Length::Fill),
                     )
-                    .padding([2, 8]),
+                    .padding([SP.xs, SP.m]),
                 );
                 let (sheet_size, orientation) = SheetSize::parse(&paper_size);
                 // Standard + Template modes share the size picker. Custom mode
@@ -345,10 +352,10 @@ pub fn view_properties_general<'a>(
                             c = c.push(
                                 container(
                                     text("Template: using A-series defaults")
-                                        .size(10)
+                                        .size(TS.caption)
                                         .color(muted),
                                 )
-                                .padding([0, 8]),
+                                .padding([0.0, SP.m]),
                             );
                         }
                     }
@@ -397,7 +404,8 @@ pub fn view_properties_general<'a>(
                 }
                 let (w, h) = paper_dimensions(&paper_size);
                 let dims = format!("Width: {w:.0}mm  Height: {h:.0}mm");
-                c = c.push(container(text(dims).size(10).color(muted)).padding([3, 8]));
+                c = c
+                    .push(container(text(dims).size(TS.caption).color(muted)).padding([3.0, SP.m]));
                 c = c.push(form_label("Border and Zones", muted));
                 c = c.push(form_check_row(
                     "Show Border",
@@ -509,7 +517,7 @@ pub fn view_properties_parameters<'a>(
             .spacing(0.0)
             .width(Length::Fill),
         )
-        .padding([4, 8]),
+        .padding([SP.s, SP.m]),
     );
 
     // Table header
@@ -518,17 +526,17 @@ pub fn view_properties_parameters<'a>(
         container(
             row![
                 text("Name")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::FillPortion(3)),
                 text("Value")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::FillPortion(2)),
             ]
-            .spacing(4.0),
+            .spacing(SP.s),
         )
-        .padding([4, 8])
+        .padding([SP.s, SP.m])
         .width(Length::Fill),
     );
     col = col.push(thin_sep(border_c));
@@ -575,18 +583,18 @@ pub fn param_table_row<'a, M: 'a>(
         container(
             row![
                 text(name.to_string())
-                    .size(11)
+                    .size(TS.body)
                     .color(name_c)
                     .width(Length::FillPortion(3))
                     .wrapping(iced::widget::text::Wrapping::None),
                 text(value.to_string())
-                    .size(11)
+                    .size(TS.body)
                     .color(val_c)
                     .width(Length::FillPortion(2)),
             ]
-            .spacing(4.0),
+            .spacing(SP.s),
         )
-        .padding([4, 8])
+        .padding([SP.s, SP.m])
         .width(Length::Fill),
         thin_sep(border_c),
     ]
@@ -605,8 +613,8 @@ pub fn props_tab_btn(
     border_c: Color,
 ) -> Element<'static, PanelMsg> {
     let text_c = if active { text_active } else { text_inactive };
-    iced::widget::button(text(label.to_string()).size(11).color(text_c))
-        .padding([4, 12])
+    iced::widget::button(text(label.to_string()).size(TS.body).color(text_c))
+        .padding([SP.s, SP.l])
         .on_press(msg)
         .style(move |_: &Theme, status: iced::widget::button::Status| {
             let hover = matches!(status, iced::widget::button::Status::Hovered);
@@ -643,7 +651,7 @@ pub fn custom_filter_tab(
     let text_off = Color::from_rgba8(0x99, 0x9D, 0xAE, 1.0);
     iced::widget::button(
         text(label)
-            .size(11)
+            .size(TS.body)
             .color(if active { text_on } else { text_off }),
     )
     .padding([3, 10])
@@ -685,11 +693,11 @@ pub fn preset_chip(
     let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
     iced::widget::button(
         text(label.to_string())
-            .size(10)
+            .size(TS.caption)
             .color(if enabled { text_on } else { text_off })
             .align_x(iced::alignment::Horizontal::Center),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .on_press(PanelMsg::ToggleCustomFilterPresetMember(preset_idx, filter))
     .style(move |_: &Theme, status: iced::widget::button::Status| {
         let bg = match status {
@@ -733,11 +741,11 @@ pub fn seg_btn<'a>(
     let text_c = if active { text_active } else { text_inactive };
     iced::widget::button(
         text(label.to_string())
-            .size(11)
+            .size(TS.body)
             .color(text_c)
             .align_x(iced::alignment::Horizontal::Center),
     )
-    .padding([4, 0])
+    .padding([SP.s, 0.0])
     .width(Length::Fill)
     .on_press(msg)
     .style(move |_: &Theme, status: iced::widget::button::Status| {

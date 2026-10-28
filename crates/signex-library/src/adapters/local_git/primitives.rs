@@ -247,6 +247,7 @@ impl LocalGitAdapter {
                 &repo,
                 removed_rel_path.map(Path::new),
                 Path::new(rel_path),
+                None,
                 &extras,
                 &sig,
                 &commit_message,

@@ -111,7 +111,6 @@ impl Signex {
             crate::dock::DockLayoutSnapshot::capture(&dock),
         );
 
-        let initial_component_filter = crate::fonts::read_component_filter_from(prefs);
         let search_prefs = crate::persist::SearchPrefsSync::new(std::sync::Arc::new(
             crate::fonts::PrefsSearchStore::user_prefs(),
         ));
@@ -145,15 +144,6 @@ impl Signex {
         let default_rule_profile = crate::fonts::read_default_rule_profile_pref_from(prefs);
         let grid_size_mm = crate::fonts::read_grid_size_mm_pref_from(prefs)
             .unwrap_or(crate::canvas::grid::GRID_SIZES_MM[1]);
-        let standard_lib_dir = helpers::find_standard_symbols_dir();
-        let mut standard_libraries = standard_lib_dir
-            .as_deref()
-            .map(helpers::list_standard_libraries)
-            .unwrap_or_default();
-        if !standard_libraries.is_empty() {
-            standard_libraries.insert(0, helpers::ALL_LIBRARIES.to_string());
-        }
-
         // Keyboard shortcut profiles: prefer the user's saved set from
         // the OS config dir, else fall back to the bundled Altium /
         // Classic built-ins (which must always parse). The active
@@ -393,6 +383,8 @@ impl Signex {
                     crate::autosave::default_recovery_dir(),
                 ),
                 project_fs: Default::default(),
+                navigator_job: Default::default(),
+                ownership: Default::default(),
                 erc_fallback_noted: Default::default(),
                 profile_drift_noted: Default::default(),
                 rules_history: Default::default(),
@@ -453,13 +445,6 @@ impl Signex {
 
                     properties_tab: 0,
                     net_classes: Default::default(),
-                    standard_libraries,
-                    active_library: None,
-                    library_symbols: vec![],
-                    selected_component: None,
-                    selected_pins: vec![],
-                    selected_lib_symbol: None,
-                    components_split: 250.0,
                     project_tree: vec![],
                     project_tree_builds: 0,
                     project_tree_selected: None,
@@ -488,7 +473,6 @@ impl Signex {
                     paper_edge_drafts: Vec::new(),
                     numeric_draft: None,
                     title_block_sheet: None,
-                    component_filter: initial_component_filter,
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
                     erc_diagnostics: Vec::new(),
@@ -516,8 +500,6 @@ impl Signex {
                     document_font_family: None,
                 },
                 history: crate::panels::history::HistoryPanelState::default(),
-                standard_lib_dir,
-                loaded_lib: std::collections::HashMap::new(),
                 preview: None,
                 page_setup_memory: Default::default(),
                 tab_placements: Default::default(),
@@ -527,7 +509,8 @@ impl Signex {
                 bom_preview: None,
                 pending_git_commits: Vec::new(),
                 inflight_git_commits: std::collections::HashSet::new(),
-                requeued_git_commits: std::collections::HashMap::new(),
+                unbound_git_commits: std::collections::HashSet::new(),
+                git_commit_sequences: std::collections::HashMap::new(),
                 active_git_repos: std::collections::HashSet::new(),
                 paused_git_projects: std::collections::HashSet::new(),
                 pending_opens: Default::default(),
@@ -595,14 +578,33 @@ impl Signex {
             app.ui_state.grid_visible,
             app.ui_state.visible_grid_mm as f64,
         );
-        // v0.9 Stage 9: load + mount globally-configured libraries
-        // before the first frame so the Components Panel's Global
-        // section is populated from the get-go.
-        app.library.global_libraries =
-            crate::panels::components_panel::global_prefs::load_and_mount_all(&mut app.library);
-        // #328 — the bundled stock library is mounted every launch, not
-        // user-configured; a missing one warns and leaves the section empty.
-        crate::panels::components_panel::stock::mount_stock(&mut app.library);
+        // v0.9 Stage 9: the globally-configured libraries and the bundled
+        // stock library (#328) are mounted off the UI thread (#1470): the
+        // config list and the stock path probe are cheap, but every manifest
+        // and table read runs in a Task, so the first frame is not blocked.
+        // Each lands as `LibraryMessage::MountFinished`; a missing library
+        // warns and stays empty.
+        app.library.global_libraries = crate::panels::components_panel::global_prefs::load();
+        let configured: Vec<std::path::PathBuf> = app
+            .library
+            .global_libraries
+            .iter()
+            .map(|entry| entry.path.clone())
+            .collect();
+        // The stock library registers first, so a global entry or project
+        // library naming the same file finds it already pending and read-only.
+        let stock_path = crate::panels::components_panel::stock::register_stock(&mut app.library);
+        let global_paths: Vec<std::path::PathBuf> = configured
+            .into_iter()
+            .filter(|path| {
+                app.library
+                    .request_mount(path, crate::library::mount::MountIntent::Silent)
+                    == crate::library::mount::MountRequest::Spawn
+            })
+            .collect();
+        let mount_task = iced::Task::batch([crate::library::mount::spawn_pending_mounts(
+            stock_path.into_iter().chain(global_paths).collect(),
+        )]);
         // #630 — seed the two render surfaces that consume a grid style
         // from the saved preferences. Everything else the old
         // `render_config` global carried (canvas font/size/style) had no
@@ -623,7 +625,10 @@ impl Signex {
             .is_native(),
         ));
         app.ui_state.main_window_id = Some(main_id);
-        let boot_task = open_task.map(|id| Message::Window(WindowMsg::MainWindowOpened(id)));
+        let boot_task = iced::Task::batch([
+            open_task.map(|id| Message::Window(WindowMsg::MainWindowOpened(id))),
+            mount_task,
+        ]);
         (app, boot_task)
     }
 }
@@ -663,6 +668,7 @@ fn native_title_bar(_native: bool) -> iced::window::settings::PlatformSpecific {
 #[cfg(test)]
 mod tests {
     use super::main_window_settings;
+    use crate::app::Signex;
 
     #[test]
     fn the_main_window_routes_close_requests_through_the_app() {
@@ -671,5 +677,15 @@ mod tests {
             assert!(!s.exit_on_close_request, "native={native}");
             assert_eq!(s.decorations, native);
         }
+    }
+
+    /// #1470 — startup mounts nothing before the first frame: the stock and
+    /// global libraries come in as Tasks, so `new()` returns with every
+    /// library still unmounted (and no install-directory probe ran).
+    #[test]
+    fn bootstrap_returns_before_any_library_is_mounted() {
+        let (app, _boot) = Signex::new();
+        assert!(app.library.open_libraries.is_empty());
+        assert!(app.library.stock_library.is_none());
     }
 }
