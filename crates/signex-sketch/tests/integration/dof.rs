@@ -16,7 +16,7 @@ use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::error::SolveError;
 use signex_sketch::id::ConstraintId;
 use signex_sketch::solver::dof::{DofColor, entity_colours, over_constraint_ids};
-use signex_sketch::solver::jacobian::numerical_jacobian;
+use signex_sketch::solver::jacobian::jacobian;
 use signex_sketch::solver::lm::{SolveResult, solve_lm};
 
 /// Default Solver tolerance + iteration cap, used by these tests.
@@ -46,7 +46,7 @@ fn dof_under_constrained_marks_blue() {
     // constraints this is an m=0 matrix; QR rank = 0, n = state.len()
     // = 2, so the coarse rule classifies as Under.
     let packed = pack(&s.data);
-    let j = numerical_jacobian(&s.data, &result.state, &packed.index, &empty_params())
+    let j = jacobian(&s.data, &result.state, &packed.index, &empty_params())
         .expect("Jacobian builds even on empty constraint set");
 
     let colours = entity_colours(&s.data, &result, &j, &result.index, &empty_params());
@@ -89,7 +89,7 @@ fn dof_fully_constrained_marks_black() {
         .expect("anchored line solves cleanly");
 
     let packed = pack(&s.data);
-    let j = numerical_jacobian(&s.data, &result.state, &packed.index, &empty_params())
+    let j = jacobian(&s.data, &result.state, &packed.index, &empty_params())
         .expect("Jacobian builds at solved state");
 
     let colours = entity_colours(&s.data, &result, &j, &result.index, &empty_params());
@@ -174,7 +174,7 @@ fn dof_over_constrained_marks_red() {
         Err(other) => panic!("unexpected solve error on conflicting constraints: {other:?}"),
     };
 
-    let j = numerical_jacobian(&s.data, &result.state, &result.index, &empty_params())
+    let j = jacobian(&s.data, &result.state, &result.index, &empty_params())
         .expect("Jacobian builds at solved state");
 
     // Both Distance constraints should be flagged. (At minimum one
@@ -264,7 +264,7 @@ fn dof_parametric_over_constraint_marks_red() {
         Err(other) => panic!("unexpected solve error on conflicting constraints: {other:?}"),
     };
 
-    let j = numerical_jacobian(&s.data, &result.state, &result.index, &params)
+    let j = jacobian(&s.data, &result.state, &result.index, &params)
         .expect("Jacobian builds at solved state");
 
     let over_ids = over_constraint_ids(&s.data, &result, &params);

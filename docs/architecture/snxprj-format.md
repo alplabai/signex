@@ -182,6 +182,11 @@ without bumping the `snxprj/1` token. It is deliberately not a child of
   the standard of the project that owns the target sheet
   (`signex_types::designator::resolve_prefix`). `#` references (power ports,
   flags) and the `generic` class are never remapped.
+- A library row can override the table prefix with the `designator_prefix` text
+  parameter in its `ParamMap` (`ComponentRow::designator_prefix_override`);
+  precedence is the edited reference, the row override, the class table, then
+  the symbol designator. Re-prefix to standard (#1315) only rewrites
+  `Symbol.reference` on the sheets; the `.snxprj` format does not change.
 - Parsing is tolerant like `rules`: an unknown standard string (or any value
   this build cannot read) never stops the project opening. The section is kept
   verbatim in the unknown-key bag, written back untouched, not applied, and

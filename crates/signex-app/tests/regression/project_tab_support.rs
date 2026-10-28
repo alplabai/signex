@@ -42,6 +42,7 @@ pub fn fixture() -> Fixture {
         net_classes: Vec::new(),
         rules: None,
         annotation: None,
+        parameters: Default::default(),
         unknown: Default::default(),
     };
     write_project(&prj, &data).unwrap();

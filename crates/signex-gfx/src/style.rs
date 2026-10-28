@@ -22,6 +22,8 @@ pub enum ColorSlot {
     Ghost = 11,
     LassoStroke = 12,
     LassoFill = 13,
+    DrcError = 14,
+    DrcWarning = 15,
 }
 
 /// Compact style reference sent alongside primitive data.

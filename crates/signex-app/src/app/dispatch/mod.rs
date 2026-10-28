@@ -176,6 +176,7 @@ impl Signex {
                             ModalId::AnnotateResetConfirm => {
                                 self.ui_state.annotate_reset_confirm = false
                             }
+                            ModalId::ReprefixConfirm => self.ui_state.reprefix_confirm = None,
                             ModalId::ErcDialog => self.ui_state.erc_dialog_open = false,
                             ModalId::Preferences => {
                                 // Backstop for a Preferences window destroyed
@@ -342,6 +343,7 @@ impl Signex {
                     per_window.paper_width_mm,
                     per_window.paper_height_mm,
                 );
+                per_window.special_strings = self.special_strings_for_path(&path);
                 per_window.designators = self.designators_for_path(&path);
                 per_window.fit_to_content();
                 self.interaction_state.canvases.insert(id, per_window);

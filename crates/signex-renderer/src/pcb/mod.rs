@@ -423,6 +423,16 @@ mod tests {
     }
 
     #[test]
+    fn drc_markers_resolve_through_drc_slots() {
+        use signex_gfx::style::ColorSlot;
+        assert_eq!(super::emit::drc_slot(Severity::Error), ColorSlot::DrcError);
+        assert_eq!(
+            super::emit::drc_slot(Severity::Warning),
+            ColorSlot::DrcWarning
+        );
+    }
+
+    #[test]
     fn pcb_renderer_updates_each_family_with_matching_dirty_flag() {
         let board = sample_board();
         let snapshot = PcbSnapshot::from_board(&board);

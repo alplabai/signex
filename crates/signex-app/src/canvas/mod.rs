@@ -14,12 +14,15 @@ mod drag_layers;
 pub(crate) mod drag_preview;
 mod draw;
 mod erc_marker;
+pub(crate) mod gpu_mount;
 pub mod grid;
 mod input;
 mod move_pick;
 mod shape_preview;
 mod shift_selection;
+mod special_strings;
 
+use gpu_mount::ContentMode;
 use shift_selection::shift_snapshot_for_selection;
 
 use iced::event::Event;
@@ -31,6 +34,7 @@ pub use camera::Camera;
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 pub use move_pick::MovePick;
 pub use shape_preview::ShapePreviewKind;
+pub use special_strings::SpecialStrings;
 
 use crate::schematic_runtime::SchematicSheetExt as _;
 
@@ -101,6 +105,9 @@ pub struct CanvasSlot {
     /// The static layer and lifted items of a move-drag in flight (#1335);
     /// dropped when the drag ends, is cancelled, or the document changes.
     drag_layers: std::cell::RefCell<drag_layers::DragLayers>,
+    /// Published from the GPU overlay's `update` while a move is in flight;
+    /// see [`gpu_mount::DragOnCpu`].
+    drag_on_cpu: gpu_mount::DragOnCpu,
     /// The **sole** home of the schematic pan/zoom camera (ADR-0001 §A1: no
     /// shadow copies of widget state). `RefCell` gives interior mutability so
     /// `canvas::Program::update` — which only borrows `&self` — can mutate it,
@@ -152,6 +159,9 @@ pub struct CanvasSlot {
     /// Border, zone markers and title block for the paper, lowered by the
     /// app with the same lowering the PDF uses (#1079). Drawn in sheet mm.
     pub sheet_frame: Vec<signex_output::template::FramePrimitive>,
+    /// What `${TOKEN}` special strings resolve to in this sheet's text
+    /// notes (#1080); `None` leaves the text as stored.
+    pub special_strings: Option<SpecialStrings>,
     /// Designators of the placement this tab was opened through (#1151), by
     /// symbol uuid, for the symbols whose designator there differs from their
     /// `reference`. Empty for a tab with no recorded placement. Set by the app
@@ -228,6 +238,7 @@ impl CanvasSlot {
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             content_scene: std::cell::RefCell::new(Default::default()),
             drag_layers: std::cell::RefCell::new(Default::default()),
+            drag_on_cpu: Default::default(),
             camera: std::cell::RefCell::new(Camera::default()),
             render_cache: None,
             selected: Vec::new(),
@@ -244,6 +255,7 @@ impl CanvasSlot {
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
             sheet_frame: Vec::new(),
+            special_strings: None,
             designators: std::collections::HashMap::new(),
             designators_key: None,
             erc_markers: Vec::new(),
@@ -288,6 +300,7 @@ impl CanvasSlot {
         self.content_cache.clear();
         self.content_scene.get_mut().invalidate();
         self.drag_layers.get_mut().clear();
+        self.drag_on_cpu.clear();
     }
 
     /// Current pan/zoom as `(offset_x_px, offset_y_px, scale_px_per_mm)`,
@@ -317,6 +330,7 @@ impl CanvasSlot {
     ) {
         self.render_cache = render_cache;
         self.content_scene.get_mut().invalidate();
+        self.drag_on_cpu.clear();
     }
 
     #[cfg(test)]
@@ -459,6 +473,9 @@ impl CanvasViewPrefs<'_> {
 pub struct SchematicCanvas<'a> {
     slot: &'a CanvasSlot,
     prefs: CanvasViewPrefs<'a>,
+    /// Whether this canvas draws the whole sheet or only what the GPU shader
+    /// beneath it cannot (#199).
+    mode: ContentMode,
 }
 
 impl<'a> SchematicCanvas<'a> {
@@ -467,6 +484,7 @@ impl<'a> SchematicCanvas<'a> {
         crate::schematic_runtime::SceneOverrides {
             wire_styling: Some(self.prefs.wire_styling()),
             designators: Some(&self.slot.designators),
+            special_strings: self.slot.special_strings.as_ref(),
         }
     }
 
@@ -556,41 +574,8 @@ impl<'a> SchematicCanvas<'a> {
         drag_preview::ghost_delta(dx, dy, self.prefs.snap_enabled, self.camera().scale)
     }
 
-    pub fn new(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Self {
-        Self { slot, prefs }
-    }
-
-    /// Compute the "focus" uuid set when auto_focus is on — members of
-    /// the current selection. Returns None when auto_focus is off; the
-    /// renderer then draws every item at full alpha.
-    ///
-    /// #631 — lives on the borrowing view, not the slot: `auto_focus` is
-    /// a `UiState` setting read through `prefs`, while `selected` is the
-    /// window's own state reached through `Deref`.
-    fn auto_focus_set(&self) -> Option<std::collections::HashSet<uuid::Uuid>> {
-        if !self.prefs.auto_focus {
-            return None;
-        }
-        let mut set = std::collections::HashSet::new();
-        for item in &self.selected {
-            set.insert(item.uuid);
-        }
-        Some(set)
-    }
-}
-
-impl std::ops::Deref for SchematicCanvas<'_> {
-    type Target = CanvasSlot;
-
-    fn deref(&self) -> &Self::Target {
-        self.slot
-    }
-}
-
-impl canvas::Program<Message> for SchematicCanvas<'_> {
-    type State = CanvasState;
-
-    fn update(
+    /// Route one input event to its handler.
+    fn dispatch_event(
         &self,
         state: &mut CanvasState,
         event: &Event,
@@ -647,6 +632,58 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         }
     }
 
+    pub fn new(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Self {
+        Self {
+            slot,
+            prefs,
+            mode: ContentMode::Cpu,
+        }
+    }
+
+    /// Compute the "focus" uuid set when auto_focus is on — members of
+    /// the current selection. Returns None when auto_focus is off; the
+    /// renderer then draws every item at full alpha.
+    ///
+    /// #631 — lives on the borrowing view, not the slot: `auto_focus` is
+    /// a `UiState` setting read through `prefs`, while `selected` is the
+    /// window's own state reached through `Deref`.
+    fn auto_focus_set(&self) -> Option<std::collections::HashSet<uuid::Uuid>> {
+        if !self.prefs.auto_focus {
+            return None;
+        }
+        let mut set = std::collections::HashSet::new();
+        for item in &self.selected {
+            set.insert(item.uuid);
+        }
+        Some(set)
+    }
+}
+
+impl std::ops::Deref for SchematicCanvas<'_> {
+    type Target = CanvasSlot;
+
+    fn deref(&self) -> &Self::Target {
+        self.slot
+    }
+}
+
+impl canvas::Program<Message> for SchematicCanvas<'_> {
+    type State = CanvasState;
+
+    fn update(
+        &self,
+        state: &mut CanvasState,
+        event: &Event,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Option<canvas::Action<Message>> {
+        let action = self.dispatch_event(state, event, bounds, cursor);
+        if self.mode == ContentMode::GpuOverlay {
+            return self.publish_drag(state, action);
+        }
+        action
+    }
+
     fn draw(
         &self,
         state: &CanvasState,
@@ -657,8 +694,11 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
     ) -> Vec<canvas::Geometry> {
         let mut layers = Vec::with_capacity(4);
 
-        // Layer 1: background (grid + paper)
-        layers.push(self.draw_background(renderer, bounds));
+        // Layer 1: background (grid + paper). A GPU-mounted sheet has the
+        // backdrop canvas for it beneath the shader.
+        if self.mode == ContentMode::Cpu {
+            layers.push(self.draw_background(renderer, bounds));
+        }
 
         let drag_offset = self.drag_delta(state);
 
@@ -785,6 +825,10 @@ pub enum CanvasEvent {
 
 #[cfg(test)]
 mod active_bar_hit;
+#[cfg(test)]
+mod gpu_mount_drag_tests;
+#[cfg(test)]
+mod gpu_mount_tests;
 
 #[cfg(test)]
 mod tests {

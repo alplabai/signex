@@ -247,6 +247,7 @@ fn write_project(dir: &Path, name: &str, libs: &[PathBuf]) -> PathBuf {
         net_classes: Vec::new(),
         rules: None,
         annotation: None,
+        parameters: Default::default(),
         unknown: Default::default(),
     };
     signex_types::project::write_project(&path, &data).expect("write_project");
