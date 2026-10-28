@@ -6,6 +6,8 @@ use signex_app::app::{
     ContextMenuMsg, EditMsg, FileMsg, Message, ProjectCloseChoice, ProjectGeneralFacts, ProjectMsg,
     TabContextAction, WindowMsg,
 };
+use signex_app::dock::DockMessage;
+use signex_app::panels::PanelMsg;
 
 use crate::project_tab_support::{
     add_net_class, edit_description, fixture, is_dirty, on_disk, open_dirty_root_sheet, open_tab,
@@ -290,4 +292,46 @@ fn quit_save_all_with_a_dirty_sheet_and_project_tab_edits_writes_both_and_return
         assert_eq!(on_disk(&f.prj).description.as_deref(), Some("at quit"));
         assert!(f.app.document_state.dirty_paths.is_empty());
     });
+}
+
+#[test]
+fn a_history_restore_of_the_project_tab_is_refused_and_changes_nothing() {
+    let _ = signex_app::diagnostics::init_logging();
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "unsaved edit");
+    assert!(is_dirty(&f));
+    let bytes = std::fs::read(&f.prj).unwrap();
+
+    let _restore_task = f.app.update(Message::Dock(DockMessage::Panel(
+        PanelMsg::HistoryRestoreClicked {
+            sha: "0000000000000000000000000000000000000000".to_string(),
+        },
+    )));
+
+    assert!(
+        !f.app.document_state.pending_restores.contains(&f.prj),
+        "no restore worker was started"
+    );
+    assert_eq!(
+        std::fs::read(&f.prj).unwrap(),
+        bytes,
+        "the file is untouched"
+    );
+    assert!(is_dirty(&f), "the unsaved-edit marker stays");
+    assert_eq!(
+        f.app.document_state.projects[0].data.description.as_deref(),
+        Some("unsaved edit"),
+        "the loaded project keeps its in-memory data"
+    );
+    let prj = f.prj.display().to_string();
+    assert!(
+        signex_app::diagnostics::recent_entries().iter().any(|e| {
+            e.message.contains("was not restored")
+                && e.message
+                    .contains("restoring a project file from History is not supported")
+                && e.message.contains(&prj)
+        }),
+        "the refusal reaches Messages"
+    );
 }
