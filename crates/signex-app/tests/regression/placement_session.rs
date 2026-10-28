@@ -590,6 +590,7 @@ fn closing_the_project_mid_session_drops_it() {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: Default::default(),
