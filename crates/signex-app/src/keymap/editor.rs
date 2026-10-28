@@ -5,7 +5,21 @@ use crate::keymap::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-type TriggerEditKey = (AppCommandId, ShortcutContext);
+/// Identity of one trigger row: its position in the active profile's
+/// bindings, and in that binding's trigger list (#1378).
+///
+/// Several rows can share a command and context (`place_wire` is bound to
+/// both `P W` and `Ctrl+W`), so neither names the row on its own. Edits
+/// replace a trigger in place and never reorder, so a slot stays valid for
+/// as long as the active profile does; drafts are dropped on any profile
+/// switch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct BindingSlot {
+    pub binding: usize,
+    pub trigger: usize,
+}
+
+type TriggerEditKey = BindingSlot;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeymapEditorModel {
@@ -50,41 +64,51 @@ impl KeymapEditorModel {
         active
             .bindings
             .iter()
-            .flat_map(|binding| {
+            .enumerate()
+            .flat_map(|(binding_index, binding)| {
                 let source = source.clone();
-                binding.triggers.iter().map(move |trigger| {
-                    let command = binding.action.command().cloned();
-                    let metadata = command.as_ref().and_then(metadata_for);
-                    let draft_key = command
-                        .as_ref()
-                        .map(|command| (command.clone(), binding.context));
-                    let trigger_text = draft_key
-                        .as_ref()
-                        .and_then(|key| self.trigger_drafts.get(key))
-                        .cloned()
-                        .unwrap_or_else(|| trigger.display_text());
-                    let trigger_valid = draft_key
-                        .as_ref()
-                        .is_none_or(|key| !self.invalid_trigger_drafts.contains(key));
-                    KeymapEditorRow {
-                        command,
-                        group: metadata
-                            .map(|metadata| metadata.group)
-                            .unwrap_or(CommandGroup::General),
-                        category: metadata
-                            .map(|metadata| metadata.category.to_string())
-                            .unwrap_or_else(|| "uncategorized".to_string()),
-                        label: metadata
-                            .map(|metadata| metadata.label.to_string())
-                            .or_else(|| binding.action.command().map(fallback_label))
-                            .unwrap_or_else(|| "No action".to_string()),
-                        context: binding.context,
-                        trigger: trigger_text,
-                        trigger_valid,
-                        keyboard_editable: matches!(trigger, ShortcutTrigger::KeySequence(_)),
-                        source: source.clone(),
-                    }
-                })
+                binding
+                    .triggers
+                    .iter()
+                    .enumerate()
+                    .filter(move |(_, trigger)| {
+                        !unbind_only_cancels_a_row(active, binding_index, trigger)
+                    })
+                    .map(move |(trigger_index, trigger)| {
+                        let command = binding.action.command().cloned();
+                        let metadata = command.as_ref().and_then(metadata_for);
+                        let slot = BindingSlot {
+                            binding: binding_index,
+                            trigger: trigger_index,
+                        };
+                        let trigger_text = self
+                            .trigger_drafts
+                            .get(&slot)
+                            .cloned()
+                            .unwrap_or_else(|| trigger.display_text());
+                        let trigger_valid = !self.invalid_trigger_drafts.contains(&slot);
+                        KeymapEditorRow {
+                            slot,
+                            command,
+                            group: metadata
+                                .map(|metadata| metadata.group)
+                                .unwrap_or(CommandGroup::General),
+                            category: metadata
+                                .map(|metadata| metadata.category.to_string())
+                                .unwrap_or_else(|| "uncategorized".to_string()),
+                            label: metadata
+                                .map(|metadata| metadata.label.to_string())
+                                .or_else(|| binding.action.command().map(fallback_label))
+                                .unwrap_or_else(|| "No action".to_string()),
+                            context: binding.context,
+                            trigger: trigger_text,
+                            trigger_valid,
+                            keyboard_editable: matches!(trigger, ShortcutTrigger::KeySequence(_)),
+                            unbound: is_unbind_binding(binding)
+                                || is_shadowed_by_unbind(active, binding_index, trigger),
+                            source: source.clone(),
+                        }
+                    })
             })
             .collect()
     }
@@ -151,13 +175,11 @@ impl KeymapEditorModel {
 
     pub fn edit_active_trigger(
         &mut self,
-        command: AppCommandId,
-        context: ShortcutContext,
+        slot: BindingSlot,
         trigger_text: String,
     ) -> Result<(), ProfileLoadError> {
-        let key = (command.clone(), context);
-        self.trigger_drafts
-            .insert(key.clone(), trigger_text.clone());
+        let key = slot;
+        self.trigger_drafts.insert(key, trigger_text.clone());
 
         if !self.active_profile_is_custom() {
             self.invalid_trigger_drafts.insert(key);
@@ -174,7 +196,7 @@ impl KeymapEditorModel {
             }
         };
 
-        self.apply_active_trigger(command, context, trigger);
+        self.apply_active_trigger(slot, trigger)?;
         self.invalid_trigger_drafts.remove(&key);
         Ok(())
     }
@@ -203,23 +225,23 @@ impl KeymapEditorModel {
 
     fn apply_active_trigger(
         &mut self,
-        command: AppCommandId,
-        context: ShortcutContext,
+        slot: BindingSlot,
         trigger: ShortcutTrigger,
-    ) {
+    ) -> Result<(), ProfileLoadError> {
         let profile = self.profiles.active_profile_mut();
-        if let Some(binding) = profile.bindings.iter_mut().rev().find(|binding| {
-            binding.context == context && binding.action.command() == Some(&command)
-        }) {
-            binding.triggers = vec![trigger];
-            return;
-        }
-
-        profile.bindings.push(ShortcutBinding {
-            action: ShortcutBindingAction::Command(command),
-            context,
-            triggers: vec![trigger],
-        });
+        let target = profile
+            .bindings
+            .get_mut(slot.binding)
+            .and_then(|binding| binding.triggers.get_mut(slot.trigger))
+            .ok_or_else(|| {
+                tracing::warn!(
+                    target: "signex::keymap",
+                    "shortcut edit dropped: its binding is no longer in the active profile"
+                );
+                ProfileLoadError::UnknownBindingSlot
+            })?;
+        *target = trigger;
+        Ok(())
     }
 
     fn clear_trigger_drafts(&mut self) {
@@ -239,6 +261,9 @@ pub struct KeymapEditorProfile {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeymapEditorRow {
+    /// Which binding trigger this row is, so an edit reaches this row and
+    /// no other (#1378).
+    pub slot: BindingSlot,
     pub command: Option<AppCommandId>,
     /// Coarse editor-surface bucket used to group rows in the editor.
     /// Rows without command metadata fall back to [`CommandGroup::General`].
@@ -249,6 +274,9 @@ pub struct KeymapEditorRow {
     pub trigger: String,
     pub trigger_valid: bool,
     pub keyboard_editable: bool,
+    /// A later `Unbind` of this command on this trigger and context shadows
+    /// the row: it is listed, but the shortcut does not work.
+    pub unbound: bool,
     pub source: KeymapEditorSource,
 }
 
@@ -286,4 +314,46 @@ impl From<ShortcutProfile> for KeymapEditorModel {
             .expect("single-profile editor model uses its profile as active");
         Self::new(profiles)
     }
+}
+
+fn is_unbind_binding(binding: &ShortcutBinding) -> bool {
+    matches!(binding.action, ShortcutBindingAction::Unbind(_))
+}
+
+/// An `Unbind` trigger that cancels an earlier `Command` row of the same
+/// command, context and trigger is that row's `unbound` flag, not a row of
+/// its own. Any other `Unbind` (no matching row) stays listed, so the
+/// editor can still show it (#1378).
+fn unbind_only_cancels_a_row(
+    profile: &ShortcutProfile,
+    binding_index: usize,
+    trigger: &ShortcutTrigger,
+) -> bool {
+    let binding = &profile.bindings[binding_index];
+    let ShortcutBindingAction::Unbind(command) = &binding.action else {
+        return false;
+    };
+    profile.bindings[..binding_index].iter().any(|earlier| {
+        matches!(&earlier.action, ShortcutBindingAction::Command(c) if c == command)
+            && earlier.context == binding.context
+            && earlier.triggers.contains(trigger)
+    })
+}
+
+/// Whether a binding after `binding_index` unbinds the same command on the
+/// same context and trigger, which makes that `Command` row dead.
+fn is_shadowed_by_unbind(
+    profile: &ShortcutProfile,
+    binding_index: usize,
+    trigger: &ShortcutTrigger,
+) -> bool {
+    let binding = &profile.bindings[binding_index];
+    let ShortcutBindingAction::Command(command) = &binding.action else {
+        return false;
+    };
+    profile.bindings[binding_index + 1..].iter().any(|later| {
+        matches!(&later.action, ShortcutBindingAction::Unbind(c) if c == command)
+            && later.context == binding.context
+            && later.triggers.contains(trigger)
+    })
 }

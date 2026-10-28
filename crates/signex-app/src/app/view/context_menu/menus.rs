@@ -24,7 +24,7 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Keyboard-shortcut hints for the canvas menu, resolved from the active
-/// keymap profile (with the historic Altium defaults as fallbacks) before
+/// keymap profile (empty when the profile does not bind the command) before
 /// the pure builder runs.
 pub(super) struct CanvasShortcuts {
     pub find: String,
@@ -138,18 +138,18 @@ impl Signex {
             .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet);
         let drawing_selected = !self.selected_drawing_ids().is_empty();
         let active_submenu = self.interaction_state.context_submenu;
-        // Shortcut hints read from the active keymap profile, falling
-        // back to the historic Altium defaults when a command is unbound.
+        // Shortcut hints read from the active keymap profile; a command
+        // it does not bind has none.
         let sc = CanvasShortcuts {
-            find: self.keymap_shortcut_label("find", "Ctrl+F"),
-            cut: self.keymap_shortcut_label("cut", "Ctrl+X"),
-            copy: self.keymap_shortcut_label("copy", "Ctrl+C"),
-            paste: self.keymap_shortcut_label("paste", "Ctrl+V"),
-            smart_paste: self.keymap_shortcut_label("smart_paste", "Shift+Ctrl+V"),
-            rotate: self.keymap_shortcut_label("rotate_counterclockwise", "Space"),
-            mirror_x: self.keymap_shortcut_label("mirror_x", "X"),
-            mirror_y: self.keymap_shortcut_label("mirror_y", "Y"),
-            delete: self.keymap_shortcut_label("delete_selection", "Del"),
+            find: self.keymap_shortcut_label("find"),
+            cut: self.keymap_shortcut_label("cut"),
+            copy: self.keymap_shortcut_label("copy"),
+            paste: self.keymap_shortcut_label("paste"),
+            smart_paste: self.keymap_shortcut_label("smart_paste"),
+            rotate: self.keymap_shortcut_label("rotate_counterclockwise"),
+            mirror_x: self.keymap_shortcut_label("mirror_x"),
+            mirror_y: self.keymap_shortcut_label("mirror_y"),
+            delete: self.keymap_shortcut_label("delete_selection"),
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let entries = canvas_menu_entries(

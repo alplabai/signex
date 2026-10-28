@@ -252,6 +252,15 @@ impl LibraryAdapter for ReadOnlyAdapter {
         self.refuse()
     }
 
+    fn update_rows(
+        &self,
+        _targets: &[(String, RowId)],
+        _edit: &mut crate::adapter::RowEdit<'_>,
+        _message: &str,
+    ) -> Result<Vec<crate::adapter::RowEditOutcome>, LibraryError> {
+        self.refuse()
+    }
+
     fn relocate_library_file(&mut self, _new_file: &Path) -> Result<(), LibraryError> {
         self.refuse()
     }
