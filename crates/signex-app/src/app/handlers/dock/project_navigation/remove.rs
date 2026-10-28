@@ -85,19 +85,25 @@ impl Signex {
                     blockers.parent_names()
                 ),
             ),
-            RemoveChoice::DeleteFile if blockers.unknown.is_some() => (
-                ErrorNotice::delete,
-                format!(
-                    "\"{}\" was not deleted: whether another sheet places it cannot be ruled \
+            RemoveChoice::DeleteFile
+                if blockers.unknown.is_some() && !state.target_path.is_dir() =>
+            {
+                (
+                    ErrorNotice::delete,
+                    format!(
+                        "\"{}\" was not deleted: whether another sheet places it cannot be ruled \
                      out ({}). Try again once the project has been read, or exclude it instead.",
-                    state.display_name,
-                    blockers.unknown.as_deref().unwrap_or_default()
-                ),
-            ),
+                        state.display_name,
+                        blockers.unknown.as_deref().unwrap_or_default()
+                    ),
+                )
+            }
             _ => return false,
         };
         crate::diagnostics::log_warning(&why);
         self.document_state.error_notice = Some(notice(why));
+        // Into the Messages panel snapshot now, whichever path asked.
+        self.refresh_panel_ctx();
         true
     }
 

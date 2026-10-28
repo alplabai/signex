@@ -24,6 +24,8 @@ mod missing_child;
 #[cfg(test)]
 mod nested_row_incomplete_tests;
 #[cfg(test)]
+mod nested_row_messages_tests;
+#[cfg(test)]
 mod nested_row_safety_tests;
 #[cfg(test)]
 mod nested_row_spelling_tests;

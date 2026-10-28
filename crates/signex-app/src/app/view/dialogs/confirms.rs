@@ -121,8 +121,10 @@ impl Signex {
         // place is not deleted either, and a sheet that is not a project page
         // has nothing to exclude (#1618).
         let blockers = self.remove_blockers(st);
+        // A `.snxlib` is a directory package: it is never a placed sheet.
+        let is_dir = st.target_path.extension().and_then(|e| e.to_str()) == Some("snxlib");
         let mut remove_options = column![].spacing(SP.m);
-        if !st.is_outside_project && !blockers.blocks_delete() {
+        if !st.is_outside_project && !blockers.blocks_delete(is_dir) {
             remove_options = remove_options.push(option_card(
                 "Delete file",
                 "File will be removed from project and permanently deleted.",
@@ -153,7 +155,7 @@ impl Signex {
                 .color(text_muted),
             );
         }
-        if let Some(why) = blockers.unknown.as_deref() {
+        if let Some(why) = blockers.unknown.as_deref().filter(|_| !is_dir) {
             prompt = prompt.push(
                 text(format!(
                     "It cannot be deleted from here: whether another sheet places it is not \
@@ -163,7 +165,7 @@ impl Signex {
                 .color(text_muted),
             );
         }
-        if !blockers.blocks_delete()
+        if !blockers.blocks_delete(is_dir)
             && !st.is_outside_project
             && let Some(parent) = &blockers.own_parent
         {

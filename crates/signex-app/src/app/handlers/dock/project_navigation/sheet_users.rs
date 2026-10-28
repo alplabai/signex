@@ -43,8 +43,10 @@ impl RemoveBlockers {
     }
 
     /// Delete is withheld: another sheet places the file, or that is unknown.
-    pub(crate) fn blocks_delete(&self) -> bool {
-        !self.other_parents.is_empty() || self.unknown.is_some()
+    /// A directory (a `.snxlib` package) can never be placed as a sheet, so
+    /// incomplete data does not hold it back.
+    pub(crate) fn blocks_delete(&self, is_dir: bool) -> bool {
+        !self.other_parents.is_empty() || (self.unknown.is_some() && !is_dir)
     }
 }
 

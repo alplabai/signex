@@ -41,7 +41,7 @@ fn delete_is_refused(app: &mut Signex, victim: &Path) {
     let key = key(app, &["victim.snxsch"]);
     open_remove(app, &key);
     let dialog = app.ui_state.remove_dialog.clone().expect("dialog opens");
-    assert!(app.remove_blockers(&dialog).blocks_delete());
+    assert!(app.remove_blockers(&dialog).blocks_delete(false));
     let confirmed = app.handle_remove_confirm(RemoveChoice::DeleteFile);
     assert_eq!(confirmed.units(), 0);
     assert!(victim.exists(), "the file stays on disk");
