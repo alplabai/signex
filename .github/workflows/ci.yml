@@ -44,8 +44,8 @@ jobs:
   # postgres). A draft PR skips them, and so does a PR that only touches
   # prose; the lint job and the `ci · required` aggregator always run. Push,
   # merge-queue and manual runs always build, so trunk is never merged
-  # untested, and a draft cannot be merged at all. Prose rule and controls:
-  # scripts/ci_build_needed.sh.
+  # untested, and a draft cannot be merged at all. The decision and its
+  # controls: scripts/ci_build_needed.sh.
   changes:
     name: changes · build needed?
     runs-on: ubuntu-latest
@@ -59,21 +59,18 @@ jobs:
       - name: Decide
         id: decide
         env:
-          EVENT: ${{ github.event_name }}
-          IS_DRAFT: ${{ github.event.pull_request.draft }}
+          CI_EVENT: ${{ github.event_name }}
+          CI_DRAFT: ${{ github.event.pull_request.draft }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          if [ "$EVENT" != pull_request ]; then
-            build=true
-          elif [ "$IS_DRAFT" = true ]; then
-            # Work in progress costs the shared runner quota nothing beyond
-            # lint; "Ready for review" triggers the full run.
-            build=false
-          else
-            # --no-renames: a move out of crates/ must list the deleted path
-            # too, or `crates/x.rs -> docs/x.rs` would look like prose.
-            build=$(git diff --no-renames --name-only "$BASE_SHA"...HEAD | bash scripts/ci_build_needed.sh)
-          fi
+          # Only a PR has a base to diff against. --no-renames: a move out of
+          # crates/ must list the deleted path too, or `crates/x.rs ->
+          # docs/x.rs` would look like prose.
+          build=$(
+            if [ -n "$BASE_SHA" ]; then
+              git diff --no-renames --name-only "$BASE_SHA"...HEAD
+            fi | bash scripts/ci_build_needed.sh
+          )
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "Rust jobs needed: $build"
 
