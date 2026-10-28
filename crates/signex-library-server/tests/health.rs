@@ -37,4 +37,5 @@ async fn version_returns_crate_version() {
     let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(body["name"], "signex-library-server");
     assert_eq!(body["row_schema"], signex_library::ROW_SCHEMA);
+    assert_eq!(body["primitive_revisions"], true);
 }

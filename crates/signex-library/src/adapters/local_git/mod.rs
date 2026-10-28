@@ -155,6 +155,7 @@ impl LocalGitAdapter {
         fs::create_dir_all(&root_dir)?;
 
         let library_file = LibraryFile {
+            layout: Default::default(),
             manifest: snx_manifest,
             tables: std::collections::BTreeMap::new(),
         };
@@ -422,6 +423,7 @@ pub use write_lock::{
 };
 mod helpers;
 pub(crate) mod lfs;
+mod pinned_assets;
 mod primitives;
 mod write_lock;
 

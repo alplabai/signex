@@ -35,6 +35,8 @@ impl PaperSize {
         (self.width_mm, self.height_mm)
     }
 
+    /// Resolve a stored paper-size token; an unrecognised one is A4
+    /// landscape, matching what the canvas draws for it.
     fn parse(s: &str) -> Self {
         let (size, orientation) = signex_types::schematic::SheetSize::parse(s);
         let (width_mm, height_mm) = size.dimensions_mm(orientation);
@@ -381,7 +383,7 @@ impl ErcContext {
             .symbols
             .iter()
             .filter_map(|sym| {
-                let lib_sym = snapshot.lib_symbols.get(&sym.lib_id)?;
+                let lib_sym = snapshot.resolve_lib_symbol(sym)?;
                 let pins = lib_sym
                     .pins
                     .iter()
@@ -566,6 +568,8 @@ fn summarize_nets(
         PinDirection::OpenDrainHigh,
     ];
 
+    let mut all_roots: Vec<(i64, i64)> = all_roots.into_iter().collect();
+    all_roots.sort_unstable();
     all_roots
         .into_iter()
         .map(|root| {
@@ -938,6 +942,18 @@ mod tests {
         let nets = summarize_nets(&wires, &labels, &[], &syms);
         assert_eq!(nets[0].name, "+3V3");
         assert_eq!(nets[0].names, ["+3V3", "I2C_PWR"]);
+    }
+
+    #[test]
+    fn paper_size_resolves_every_app_sheet_size() {
+        let dims = |t: &str| PaperSize::parse(t).dimensions_mm();
+        assert_eq!(dims("A4"), (297.0, 210.0));
+        assert_eq!(dims("A5"), (210.0, 148.0));
+        assert_eq!(dims("Tabloid"), (431.8, 279.4));
+        assert_eq!(dims("Legal"), (355.6, 215.9));
+        assert_eq!(dims("Bogus"), (297.0, 210.0));
+        assert_eq!(dims("A4 portrait"), (210.0, 297.0));
+        assert_eq!(dims("Custom 300x200"), (300.0, 200.0));
     }
 
     #[test]

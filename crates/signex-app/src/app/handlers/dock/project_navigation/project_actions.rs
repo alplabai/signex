@@ -1,8 +1,4 @@
-//! Project-level context-menu actions for the project-navigation dock —
-//!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
+//! Project-level context-menu actions for the project-navigation dock (add, rename, remove, exclude).
 
 use super::*;
 
@@ -44,6 +40,7 @@ impl Signex {
         };
         let schematic_root = project.data.schematic_root.clone();
         self.document_state.active_project = Some(project_id);
+        self.drop_pending_profile_update_for_other_project();
 
         // If the active tab already belongs to this project we're good;
         // otherwise open the schematic_root so ERC has a sheet to walk.

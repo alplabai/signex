@@ -889,6 +889,10 @@ pub enum SymbolFileError {
          {value:?}; cells must be free of \\t, \\n, and the literal \"'''\""
     )]
     InvalidTsvCell { column: &'static str, value: String },
+    /// A pin function name containing `|`, which separates a pin's
+    /// functions on disk, so it would reload as two functions.
+    #[error("pin function {value:?} contains '|', which separates pin functions; rename it")]
+    PipeInPinFunction { value: String },
     #[error("pins_tsv block is empty (no header row)")]
     EmptyPinsTsv,
     #[error("pins_tsv header does not match the expected schema; got columns {got:?}")]

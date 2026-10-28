@@ -148,6 +148,22 @@ fn incomplete_header(note: &[String]) -> String {
     out
 }
 
+/// Escape `\`, `"` and line breaks so a net name can't break out of its quotes
+/// or forge extra listing lines.
+fn escape_quoted(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for ch in name.chars() {
+        match ch {
+            '\\' => out.push_str(r"\\"),
+            '"' => out.push_str(r#"\""#),
+            '\n' => out.push_str(r"\n"),
+            '\r' => out.push_str(r"\r"),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
 /// A plain, deterministic net listing: one `net <id> "<name>"` line per net (in
 /// the netlist's stable id order) followed by its `reference.pin` terminals (in
 /// the order the derivation already sorted them). A stable, contract-driven
@@ -167,7 +183,7 @@ fn render_listing(
     let _ = writeln!(out, "# Signex netlist");
     let _ = writeln!(out, "# {} nets", netlist.nets.len());
     for net in &netlist.nets {
-        let _ = writeln!(out, "net {} \"{}\"", net.id.0, net.name);
+        let _ = writeln!(out, "net {} \"{}\"", net.id.0, escape_quoted(&net.name));
         for t in &net.terminals {
             let _ = writeln!(out, "  {}.{}", t.reference, t.pin);
         }
@@ -186,6 +202,14 @@ mod tests {
             format: NetlistFormat::Listing,
             ..NetlistOptions::default()
         }
+    }
+
+    #[test]
+    fn listing_escapes_net_names() {
+        assert_eq!(
+            escape_quoted("a\"b\\c\nnet 9 \"X\""),
+            r#"a\"b\\c\nnet 9 \"X\""#
+        );
     }
 
     #[test]

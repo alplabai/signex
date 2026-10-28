@@ -74,6 +74,7 @@ impl Signex {
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
         self.sync_panel_ctx_mirrors();
+        self.library.sync_view_caches();
         let class_styles = self.refresh_net_class_styles();
         self.sync_label_class_pick();
         self.sync_diagnostics_panel_ctx();
@@ -149,6 +150,7 @@ impl Signex {
             .and_then(|t| t.project_id)
         {
             self.document_state.active_project = Some(pid);
+            self.drop_pending_profile_update_for_other_project();
         }
 
         self.sync_visible_document_from_active_tab();

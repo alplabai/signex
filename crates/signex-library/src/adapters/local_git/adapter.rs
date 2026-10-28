@@ -93,8 +93,8 @@ impl LibraryAdapter for LocalGitAdapter {
                         "table {new_owned:?} already exists"
                     )));
                 }
-                let entry = lf.tables.remove(&old_owned).expect("contains_key checked");
-                lf.tables.insert(new_owned, entry);
+                // Through the file, so the table keeps its unknown keys (#1435).
+                lf.rename_table(&old_owned, &new_owned);
                 Ok(())
             },
             msg,
@@ -217,12 +217,8 @@ impl LibraryAdapter for LocalGitAdapter {
                         new_entry.key
                     )));
                 }
-                for c in lf.manifest.classes.iter_mut() {
-                    if c.key == owned_old {
-                        *c = new_entry.clone();
-                        break;
-                    }
-                }
+                // Through the file, so the class keeps its unknown keys (#1435).
+                lf.rename_class(&owned_old, new_entry.clone());
                 Ok(())
             },
             msg,
@@ -339,13 +335,24 @@ impl LibraryAdapter for LocalGitAdapter {
         row: ComponentRow,
         msg: &str,
     ) -> Result<Option<u64>, LibraryError> {
+        self.update_row_with_assets(table, row, msg, &[])
+    }
+
+    fn update_row_with_assets(
+        &self,
+        table: &str,
+        row: ComponentRow,
+        msg: &str,
+        asset_rel_paths: &[String],
+    ) -> Result<Option<u64>, LibraryError> {
+        self.check_datasheet_assets(asset_rel_paths)?;
         let table_owned = table.to_string();
         let row_id = row.row_id;
         let base = row.server_revision;
         let lib_row = component_to_library_row(&row)?;
         let new_base = row_base(&lib_row);
         let fallback = format!("update row {row_id} in {table_owned}");
-        self.mutate_library_file(
+        self.mutate_library_file_with_assets(
             move |lf| {
                 let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
                     LibraryError::NotFound(format!("table {table_owned} not in library"))
@@ -362,13 +369,14 @@ impl LibraryAdapter for LocalGitAdapter {
                         check_row_base(slot, base)?;
                         declare_alternate_symbols_column(&mut entry.columns, &lib_row);
                         *slot = lib_row;
-                        Ok(())
+                        Ok(true)
                     }
                     None => Err(LibraryError::NotFound(format!(
                         "row {row_id} in table {table_owned}"
                     ))),
                 }
             },
+            asset_rel_paths,
             msg,
             &fallback,
         )?;

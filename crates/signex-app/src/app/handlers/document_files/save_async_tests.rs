@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
+use super::restore_commit_tests::restore;
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::state::WindowKind;
 use crate::app::{FileMsg, Message, Signex};
@@ -28,6 +29,7 @@ fn land(app: &mut Signex, path: &Path, revision: u64) {
         net_color_revision: 0,
         save_as_from: None,
         result: Ok(SaveOutcome::Written),
+        recovery_hold: None,
     })));
 }
 
@@ -345,7 +347,7 @@ fn a_restore_that_reads_as_non_utf8_refuses_to_undo_it() {
     let (mut app, path) = app_with_pcb(dir.path());
     let old = commit_revision(dir.path(), &path, &[0xff, 0xfe, 0x00, 0x80]);
     commit_revision(dir.path(), &path, &encoded(&empty_board()));
-    app.handle_history_restore_clicked(&old);
+    restore(&mut app, &old);
     assert!(app.document_state.error_notice.is_some(), "restore card");
     assert!(no_commit_requested(&app));
     assert!(
@@ -394,7 +396,7 @@ fn ctrl_s_after_a_successful_restore_keeps_the_restored_bytes() {
     );
     let old = commit_revision(dir.path(), &path, &restored);
     commit_revision(dir.path(), &path, &encoded(&empty_board()));
-    app.handle_history_restore_clicked(&old);
+    restore(&mut app, &old);
     assert!(app.document_state.error_notice.is_none());
     assert!(!app.document_state.dirty_paths.contains(&path));
     assert_eq!(app.document_state.pending_git_commits.len(), 1);
@@ -418,7 +420,7 @@ fn ctrl_s_after_a_successful_restore_keeps_the_restored_bytes() {
     assert_eq!(log.lines().count(), 3, "two revisions plus the restore");
 }
 
-fn empty_board() -> signex_types::pcb::PcbBoard {
+pub(super) fn empty_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         unknown: Default::default(),
         uuid: uuid::Uuid::new_v4(),

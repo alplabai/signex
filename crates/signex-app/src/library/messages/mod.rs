@@ -12,8 +12,8 @@
 use std::path::PathBuf;
 
 use signex_library::{
-    AlternateStatus, BodyShape, ComponentClass, ComponentSummary, DistributorSource,
-    LifecycleState, PrimitiveRef, SimKind, SimModel,
+    AlternateStatus, BodyShape, ComponentClass, DistributorSource, LifecycleState, PrimitiveRef,
+    SimKind, SimModel,
 };
 use uuid::Uuid;
 
@@ -28,7 +28,7 @@ pub type Version = u32;
 
 mod datasheet;
 mod library_message;
-pub use datasheet::{DatasheetMsg, PickedPdf};
+pub use datasheet::{DatasheetMsg, PickedFile, PickedPdf};
 pub use library_message::{LibraryMessage, ResolvedPlacement, ResolvedSymbolChoice};
 
 /// User choice from the close-library confirmation modal.
@@ -572,7 +572,7 @@ pub enum PickerMsg {
     /// Left-dock library panel search box edited.
     PanelSearchChanged(String),
     FilterChanged(String),
-    SelectComponent(ComponentSummary),
+    SelectComponent(uuid::Uuid),
     PlaceSelected,
 }
 

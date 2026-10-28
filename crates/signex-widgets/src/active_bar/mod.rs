@@ -103,14 +103,24 @@ impl<M: 'static + Clone> ActiveBarItem<M> {
 /// item list is the only truth about what got drawn, so a bar that
 /// gains, loses, or reorders a slot moves its dropdowns automatically.
 pub fn slot_offsets<M: 'static + Clone>(items: &[ActiveBarItem<M>]) -> (Vec<f32>, f32) {
-    let mut offsets = Vec::with_capacity(items.len());
+    let widths: Vec<f32> = items.iter().map(ActiveBarItem::width).collect();
+    offsets_for_widths(&widths)
+}
+
+/// [`slot_offsets`] for a bar described only by its slot widths.
+///
+/// Lets a consumer that knows the bar's slot order but has no item
+/// list (a hit-test running outside the view) use the same row maths
+/// as the renderer instead of re-deriving it.
+pub fn offsets_for_widths(widths: &[f32]) -> (Vec<f32>, f32) {
+    let mut offsets = Vec::with_capacity(widths.len());
     let mut x = BAR_PADDING;
-    for (i, item) in items.iter().enumerate() {
+    for (i, width) in widths.iter().enumerate() {
         if i > 0 {
             x += ROW_SPACING;
         }
         offsets.push(x);
-        x += item.width();
+        x += width;
     }
     (offsets, x + BAR_PADDING)
 }

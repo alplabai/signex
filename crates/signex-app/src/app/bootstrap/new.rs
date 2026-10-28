@@ -26,10 +26,13 @@ impl Signex {
         let font_scan = Task::perform(crate::fonts::catalog::scan_in_background(), |()| {
             Message::Ui(UiMsg::InstalledFontsScanned)
         });
+        // The old prefs.json rules become the user's default profile; here,
+        // not in `new`, so a test app never writes a profile library.
+        let profile_migration = Self::migrate_default_profile_task();
         (
             app,
             Task::batch(
-                [boot_task, font_scan, recovery_sweep]
+                [boot_task, font_scan, recovery_sweep, profile_migration]
                     .into_iter()
                     .chain(opens),
             ),
@@ -290,6 +293,8 @@ impl Signex {
                 erc_violations_by_path: std::collections::HashMap::new(),
                 erc_focus_global_index: None,
                 erc_run_generation: 0,
+                erc_run_rule_set: None,
+                pending_profile_update: None,
                 erc_running: false,
                 erc_severity_override: crate::fonts::read_erc_severity_overrides(),
                 net_colors: std::collections::HashMap::new(),
@@ -335,6 +340,7 @@ impl Signex {
                 ),
                 project_fs: Default::default(),
                 erc_fallback_noted: Default::default(),
+                profile_drift_noted: Default::default(),
                 rules_history: Default::default(),
                 missing_fonts: Default::default(),
                 tabs: vec![],
@@ -348,6 +354,7 @@ impl Signex {
                 active_project: None,
                 instance_note_scopes: std::collections::HashSet::new(),
                 instance_note_due: false,
+                recovery_check_due: Vec::new(),
                 dirty_paths: std::collections::HashSet::new(),
                 net_class_history: std::collections::HashMap::new(),
                 net_class_picks: std::collections::HashMap::new(),
@@ -368,6 +375,7 @@ impl Signex {
                     lib_symbol_count: 0,
                     lib_symbol_names: vec![],
                     placed_symbols: vec![],
+                    symbol_lists_key: None,
                     tokens: signex_types::theme::theme_tokens(ThemeId::Signex),
                     theme_id: ThemeId::Signex,
                     unit: Unit::Mm,
@@ -419,6 +427,7 @@ impl Signex {
                     title_block: std::collections::BTreeMap::new(),
                     title_block_drafts: Vec::new(),
                     paper_edge_drafts: Vec::new(),
+                    numeric_draft: None,
                     title_block_sheet: None,
                     component_filter: initial_component_filter,
                     collapsed_sections: std::collections::HashSet::new(),
@@ -459,7 +468,8 @@ impl Signex {
                 requeued_git_commits: std::collections::HashMap::new(),
                 active_git_repos: std::collections::HashSet::new(),
                 paused_git_projects: std::collections::HashSet::new(),
-                pending_opens: std::collections::HashSet::new(),
+                pending_opens: Default::default(),
+                pending_restores: Default::default(),
                 altium_import_running: None,
                 project_folder_renames: std::collections::HashSet::new(),
             },
