@@ -24,11 +24,11 @@ pub(crate) fn settle(app: &mut Signex, force: bool) {
 /// `(label, nested labels)` for each Source Documents row.
 fn shape(app: &Signex) -> Vec<(String, Vec<String>)> {
     fn labels(nodes: &[TreeNode]) -> Vec<String> {
-        nodes.iter().map(|n| n.label.clone()).collect()
+        nodes.iter().map(|n| n.key.clone()).collect()
     }
     source_documents(app)
         .iter()
-        .map(|n| (n.label.clone(), labels(&n.children)))
+        .map(|n| (n.key.clone(), labels(&n.children)))
         .collect()
 }
 
@@ -50,10 +50,10 @@ fn children_nest_under_their_parent_and_loose_pages_stay_on_top() {
     settle(&mut app, false);
 
     let tree = source_documents(&app);
-    let docs: Vec<&str> = tree.iter().map(|n| n.label.as_str()).collect();
+    let docs: Vec<&str> = tree.iter().map(|n| n.key.as_str()).collect();
     assert_eq!(docs, ["top.snxsch", "other.snxsch"], "mid and leaf nest");
-    assert_eq!(tree[0].children[0].label, "mid.snxsch");
-    assert_eq!(tree[0].children[0].children[0].label, "leaf.snxsch");
+    assert_eq!(tree[0].children[0].key, "mid.snxsch");
+    assert_eq!(tree[0].children[0].children[0].key, "leaf.snxsch");
     assert!(
         tree[1].children.is_empty(),
         "the loose page has no children"

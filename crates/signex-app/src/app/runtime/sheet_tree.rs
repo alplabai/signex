@@ -132,12 +132,12 @@ pub(super) fn project_sheet_rows(
         .enumerate()
         .filter_map(|(i, (entry, _))| {
             let children = top_children.remove(&i)?;
-            let mut info = row(
-                &entry.name,
-                &entry.filename,
-                &dir.join(&entry.filename),
-                marks,
-            );
+            let abs = dir.join(&entry.filename);
+            let mut info = row(&entry.name, &entry.filename, &abs, marks);
+            info.sym_count = entry.symbols_count;
+            info.wire_count = entry.wires_count;
+            info.label_count = entry.labels_count;
+            info.missing = facts.is_missing(&abs);
             info.children = children;
             Some(info)
         })
