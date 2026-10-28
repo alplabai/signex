@@ -218,3 +218,23 @@ fn above_drawings_go_to_the_front_bucket_in_file_order() {
         ["polygon"]
     );
 }
+
+/// The render cache refreshes only the collections a patch names; the drawings
+/// patch must carry the placements with it, or an edit in the Properties
+/// panel would not reach the canvas (#1583).
+#[test]
+fn a_drawings_refresh_copies_the_placements() {
+    let mut src = empty_snapshot();
+    let drawing = rect(FillType::None);
+    src.drawing_placements
+        .insert(drawing.uuid(), DrawingPlacement::Above);
+    src.drawings = vec![drawing.clone()];
+    let mut dst = empty_snapshot();
+
+    copy_invalidated(&mut dst, &src, RenderInvalidation::DRAWINGS);
+
+    assert_eq!(
+        dst.drawing_placement(drawing.uuid()),
+        DrawingPlacement::Above
+    );
+}

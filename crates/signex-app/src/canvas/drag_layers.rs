@@ -93,6 +93,8 @@ fn filtered(snap: &SchematicSheet, keep: &dyn Fn(Uuid) -> bool) -> SchematicShee
         uuid: snap.uuid,
         font_family: snap.font_family.clone(),
         lib_symbols: snap.lib_symbols.clone(),
+        // A drawing keeps its placement in whichever layer it lands (#1583).
+        drawing_placements: snap.drawing_placements.clone(),
         symbols: keep_where(&snap.symbols, |s| s.uuid, keep),
         wires: keep_where(&snap.wires, |w| w.uuid, keep),
         junctions: keep_where(&snap.junctions, |j| j.uuid, keep),
@@ -159,6 +161,7 @@ pub(super) fn split_ghost(
         uuid: ghost.uuid,
         font_family: ghost.font_family.clone(),
         lib_symbols: ghost.lib_symbols.clone(),
+        drawing_placements: ghost.drawing_placements.clone(),
         ..SchematicSheet::default()
     };
     macro_rules! kind {

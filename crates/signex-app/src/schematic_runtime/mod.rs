@@ -248,6 +248,8 @@ fn copy_invalidated(
     }
     if invalidation.intersects(R::DRAWINGS) {
         dst.drawings.clone_from(&src.drawings);
+        // Placements are edited under the same patch (#1583).
+        dst.drawing_placements.clone_from(&src.drawing_placements);
     }
     if invalidation.intersects(R::LIB_SYMBOLS) {
         dst.lib_symbols.clone_from(&src.lib_symbols);

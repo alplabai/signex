@@ -197,6 +197,14 @@ fn the_placement_row_sets_a_drawing_above_and_undo_restores() {
         DrawingFieldEdit::Placement(DrawingPlacement::Above),
     ));
     assert_eq!(placement(&app), DrawingPlacement::Above);
+    // The canvas draws from its render cache, which must see it too.
+    let cached = app
+        .interaction_state
+        .active_canvas()
+        .active_snapshot()
+        .expect("the active sheet has a render snapshot")
+        .drawing_placement(Uuid::from_u128(2));
+    assert_eq!(cached, DrawingPlacement::Above);
 
     app.document_state
         .active_engine_mut()

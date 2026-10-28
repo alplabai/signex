@@ -707,6 +707,39 @@ fn a_dragging_slot_and_an_idle_one_do_not_collide_on_the_idle_generation() {
     });
 }
 
+/// A drawing placed above the circuit stays above it while it is dragged, in
+/// the moving layer, and is not in the static layer's front bucket (#1583).
+#[test]
+fn a_dragged_above_drawing_keeps_its_placement_in_both_layers() {
+    use signex_types::schematic::DrawingPlacement;
+    let mut sheet = fixture();
+    let SchDrawing::Rect { uuid, .. } = sheet.drawings[0] else {
+        panic!("the fixture's first drawing is a rectangle");
+    };
+    sheet
+        .drawing_placements
+        .insert(uuid, DrawingPlacement::Above);
+    let mut slot = slot_with(&sheet);
+    slot.selected = vec![SelectedItem::new(uuid, SelectedKind::Drawing)];
+    rig(&slot, |p| {
+        let mut state = CanvasState::default();
+        assert_eq!(content(p).scene.drawings_front.len(), 1, "idle: above");
+
+        let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+        send(&p.overlay, &mut state, press, at(208.0, 116.0));
+        drag_to(&p.overlay, &mut state, 240.0);
+        assert!(state.move_dragging);
+
+        let moved = moving(p);
+        assert_eq!(moved.scene.drawings_front.len(), 1, "moving layer: above");
+        assert!(moved.scene.drawings.is_empty());
+        assert!(
+            content(p).scene.drawings_front.is_empty(),
+            "the static layer no longer holds it"
+        );
+    });
+}
+
 /// A moved drawing leaves the static layer's ordered bucket for the moving
 /// layer's, so the drag layer carries the bucket too (#1579).
 #[test]
