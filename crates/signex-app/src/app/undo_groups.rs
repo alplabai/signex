@@ -309,12 +309,11 @@ impl Signex {
             record.undone = members;
             record.dropped.extend(dropped_now);
         }
-        let moved = match active_invalidation {
+        match active_invalidation {
             Some(invalidation) => {
                 self.finish_schematic_mutation(invalidation, true, update_selection_info)
             }
             None => false,
-        };
-        moved
+        }
     }
 }
