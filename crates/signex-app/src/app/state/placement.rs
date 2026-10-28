@@ -13,6 +13,31 @@ use signex_engine::PlacementPayload;
 
 use crate::canvas::PlacementGhost;
 
+/// What is on the cursor.
+pub enum PlacementKind {
+    /// A library part: placed again and again, each copy with the next
+    /// designator counted for `prefix`, until Esc or a right-click.
+    Part { prefix: String },
+    /// Pasted content: keeps its own designators and is placed once.
+    Paste,
+}
+
+impl PlacementKind {
+    /// Designator letters, for a part.
+    #[must_use]
+    pub fn prefix(&self) -> Option<&str> {
+        match self {
+            Self::Part { prefix } => Some(prefix),
+            Self::Paste => None,
+        }
+    }
+
+    #[must_use]
+    pub fn is_paste(&self) -> bool {
+        matches!(self, Self::Paste)
+    }
+}
+
 pub struct PlacementSession {
     /// What a click places, with its current orientation.
     pub payload: PlacementPayload,
@@ -21,24 +46,23 @@ pub struct PlacementSession {
     /// A designator typed in the Tab form: used by the next click, then
     /// stepped. `None` means the next free number for the prefix.
     pub reference_override: Option<String>,
-    /// Designator letters (`R`, `U`, `D`) the next number is counted for.
-    pub prefix: String,
+    /// A part (repeats, steps designators) or a paste (once, keeps its own).
+    pub kind: PlacementKind,
     /// The payload as drawn at the cursor; rebuilt whenever the payload
     /// changes.
     pub ghost: PlacementGhost,
 }
 
 impl PlacementSession {
-    /// A session for `payload` on `target_sheet`. A click leaves it armed, so
-    /// the next click places another copy, until Esc or a right-click.
+    /// A session for `payload` on `target_sheet`.
     #[must_use]
-    pub fn new(payload: PlacementPayload, target_sheet: PathBuf, prefix: String) -> Self {
-        let ghost = PlacementGhost::new(payload.fragment().clone());
+    pub fn new(payload: PlacementPayload, target_sheet: PathBuf, kind: PlacementKind) -> Self {
+        let ghost = PlacementGhost::new(&payload);
         Self {
             payload,
             target_sheet,
             reference_override: None,
-            prefix,
+            kind,
             ghost,
         }
     }
@@ -46,7 +70,7 @@ impl PlacementSession {
     /// Replace the payload (a turn, a Tab edit, the next designator) and
     /// redraw the ghost from it.
     pub fn set_payload(&mut self, payload: PlacementPayload) {
-        self.ghost = PlacementGhost::new(payload.fragment().clone());
+        self.ghost = PlacementGhost::new(&payload);
         self.payload = payload;
     }
 }

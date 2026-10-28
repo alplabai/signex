@@ -175,7 +175,11 @@ impl Signex {
         let mut fragment = signex_types::schematic::SchematicSheet::default();
         fragment.lib_symbols.insert(body.id.clone(), body);
         fragment.symbols.push(placed);
-        self.arm_placement_session(PlacementPayload::new(fragment), target_sheet, prefix);
+        self.arm_placement_session(
+            PlacementPayload::new(fragment),
+            target_sheet,
+            crate::app::state::PlacementKind::Part { prefix },
+        );
         Ok(())
     }
 
@@ -223,14 +227,7 @@ impl Signex {
         else {
             return;
         };
-        let differs = match (
-            serde_json::to_string(existing),
-            serde_json::to_string(fresh),
-        ) {
-            (Ok(a), Ok(b)) => a != b,
-            _ => false,
-        };
-        if differs {
+        if !existing.same_body(fresh) {
             crate::diagnostics::log_warning(format!(
                 "Library symbol for {internal_pn} changed since it was first placed; the sheet keeps its existing copy. Select a placed {internal_pn} and use \"Update from library\" in Properties to adopt the new one."
             ));

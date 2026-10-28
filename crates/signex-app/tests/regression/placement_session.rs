@@ -208,7 +208,7 @@ fn resolve_completing_after_esc_does_not_arm() {
     );
 }
 
-fn second_sheet(app: &mut Signex) -> PathBuf {
+pub(crate) fn second_sheet(app: &mut Signex) -> PathBuf {
     let path = PathBuf::from("other-1252.snxsch");
     let sheet = signex_types::schematic::SchematicSheet {
         uuid: uuid::Uuid::new_v4(),
@@ -590,6 +590,7 @@ fn closing_the_project_mid_session_drops_it() {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: Default::default(),
