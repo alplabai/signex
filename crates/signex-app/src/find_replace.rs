@@ -4,6 +4,12 @@ use signex_engine::TextTarget;
 use signex_types::schematic::SelectedItem;
 use signex_types::theme::ThemeTokens;
 
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
+
 #[derive(Debug, Clone)]
 pub struct FindMatch {
     pub item: SelectedItem,
@@ -52,24 +58,24 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
 
     let header = container(
         row![
-            text(title).size(14).color(text_primary),
+            text(title).size(TS.heading).color(text_primary),
             Space::new().width(Length::Fill),
-            button(text("Close").size(11).color(text_secondary))
+            button(text("Close").size(TS.body).color(text_secondary))
                 .on_press(FindReplaceMsg::Close)
                 .style(crate::styles::menu_item(tokens)),
         ]
         .align_y(iced::Alignment::Center)
-        .spacing(8),
+        .spacing(SP.m),
     )
     .padding([10, 14])
     .style(crate::styles::toolbar_strip(tokens));
 
     let query_row = row![
-        text("Find").size(11).color(text_secondary).width(80),
+        text("Find").size(TS.body).color(text_secondary).width(80),
         text_input("Search text", &state.query)
             .on_input(FindReplaceMsg::QueryChanged)
-            .padding([6, 8])
-            .size(12)
+            .padding([6.0, SP.m])
+            .size(TS.label)
             .width(Length::Fill),
     ]
     .align_y(iced::Alignment::Center)
@@ -79,11 +85,14 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
     if state.replace_mode {
         form = form.push(
             row![
-                text("Replace").size(11).color(text_secondary).width(80),
+                text("Replace")
+                    .size(TS.body)
+                    .color(text_secondary)
+                    .width(80),
                 text_input("Replacement text", &state.replacement)
                     .on_input(FindReplaceMsg::ReplacementChanged)
-                    .padding([6, 8])
-                    .size(12)
+                    .padding([6.0, SP.m])
+                    .size(TS.label)
                     .width(Length::Fill),
             ]
             .align_y(iced::Alignment::Center)
@@ -93,16 +102,16 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
     form = form.push(
         container(
             text(format!("{} match(es)", state.matches.len()))
-                .size(10)
+                .size(TS.caption)
                 .color(text_secondary),
         )
-        .padding([2, 0]),
+        .padding([SP.xs, 0.0]),
     );
 
     let results: Vec<Element<'a, FindReplaceMsg>> = if state.matches.is_empty() {
         vec![
-            container(text("No matches").size(11).color(text_secondary))
-                .padding([10, 12])
+            container(text("No matches").size(TS.body).color(text_secondary))
+                .padding([10.0, SP.l])
                 .width(Length::Fill)
                 .into(),
         ]
@@ -121,16 +130,20 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
                 button(
                     row![
                         column![
-                            text(hit.kind_label.clone()).size(11).color(text_primary),
-                            text(hit.text.clone()).size(10).color(text_secondary),
+                            text(hit.kind_label.clone())
+                                .size(TS.body)
+                                .color(text_primary),
+                            text(hit.text.clone())
+                                .size(TS.caption)
+                                .color(text_secondary),
                         ]
-                        .spacing(2)
+                        .spacing(SP.xs)
                         .width(Length::Fill),
                     ]
                     .width(Length::Fill),
                 )
                 .width(Length::Fill)
-                .padding([8, 10])
+                .padding([SP.m, 10.0])
                 .on_press(FindReplaceMsg::SelectResult(idx))
                 .style(move |_: &Theme, status: button::Status| {
                     let bg = match status {
@@ -155,24 +168,24 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
 
     let replace_current: Element<'a, FindReplaceMsg> =
         if state.replace_mode && state.selected_index.is_some() {
-            button(text("Replace Current").size(11).color(text_primary))
+            button(text("Replace Current").size(TS.body).color(text_primary))
                 .on_press(FindReplaceMsg::ReplaceCurrent)
                 .style(crate::styles::menu_item(tokens))
                 .into()
         } else {
-            container(text("Replace Current").size(11).color(text_secondary))
+            container(text("Replace Current").size(TS.body).color(text_secondary))
                 .padding([6, 10])
                 .into()
         };
 
     let replace_all: Element<'a, FindReplaceMsg> =
         if state.replace_mode && !state.matches.is_empty() {
-            button(text("Replace All").size(11).color(text_primary))
+            button(text("Replace All").size(TS.body).color(text_primary))
                 .on_press(FindReplaceMsg::ReplaceAll)
                 .style(crate::styles::menu_item(tokens))
                 .into()
         } else {
-            container(text("Replace All").size(11).color(text_secondary))
+            container(text("Replace All").size(TS.body).color(text_secondary))
                 .padding([6, 10])
                 .into()
         };
@@ -180,7 +193,7 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
     let footer = row![
         container(
             text("Targets: labels, notes, designators, values")
-                .size(10)
+                .size(TS.caption)
                 .color(text_secondary)
         ),
         Space::new().width(Length::Fill),
@@ -188,13 +201,13 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
         replace_all,
     ]
     .align_y(iced::Alignment::Center)
-    .spacing(8);
+    .spacing(SP.m);
 
     let dialog = container(
         column![
             header,
-            container(form).padding([12, 14]),
-            container(scrollable(column(results).spacing(4)).height(Length::Fill))
+            container(form).padding([SP.l, 14.0]),
+            container(scrollable(column(results).spacing(SP.s)).height(Length::Fill))
                 .padding([10, 10]),
             container(footer).padding([10, 14]),
         ]
