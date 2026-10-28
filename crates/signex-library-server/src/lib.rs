@@ -209,9 +209,17 @@ pub fn with_rate_limit_trusted(
             governor_for_cleanup.limiter().retain_recent();
         }
     });
-    router.layer(GovernorLayer {
+    let probes = router.clone();
+    let limited = router.layer(GovernorLayer {
         config: governor_conf,
-    })
+    });
+    // Probe endpoints bypass the governor so a health check is never answered
+    // with 429. They are still served by the same router, so its CORS layer
+    // and its own /health and /version handlers apply unchanged.
+    Router::new()
+        .route_service("/health", probes.clone().into_service())
+        .route_service("/version", probes.into_service())
+        .fallback_service(limited)
 }
 
 /// Constant-time check of an `Authorization: Bearer <token>` header against
