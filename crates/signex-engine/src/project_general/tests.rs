@@ -89,3 +89,40 @@ fn history_is_capped() {
     }
     assert_eq!(steps, HISTORY_LIMIT);
 }
+
+fn set_parameter(name: &str, value: &str) -> ProjectGeneralCommand {
+    ProjectGeneralCommand::SetParameter {
+        name: name.to_string(),
+        value: value.to_string(),
+    }
+}
+
+#[test]
+fn parameters_are_set_cleared_removed_and_undone() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    assert!(history.apply(&mut data, set_parameter("rev", "B")));
+    history.close_run();
+    assert!(history.apply(&mut data, set_parameter("Voltage", "")));
+    assert_eq!(data.parameters.get("Voltage").map(String::as_str), Some(""));
+    history.close_run();
+    // Clearing a title-block key drops it; a user key stays until removed.
+    assert!(history.apply(&mut data, set_parameter("rev", "")));
+    assert!(!data.parameters.contains_key("rev"));
+    history.close_run();
+    assert!(history.apply(
+        &mut data,
+        ProjectGeneralCommand::RemoveParameter("Voltage".into())
+    ));
+    assert!(data.parameters.is_empty());
+    assert!(!history.apply(
+        &mut data,
+        ProjectGeneralCommand::RemoveParameter("Voltage".into())
+    ));
+    assert!(history.undo(&mut data));
+    assert!(data.parameters.contains_key("Voltage"));
+    assert!(history.undo(&mut data));
+    assert_eq!(data.parameters.get("rev").map(String::as_str), Some("B"));
+    assert!(history.redo(&mut data));
+    assert!(!data.parameters.contains_key("rev"));
+}

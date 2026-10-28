@@ -507,6 +507,13 @@ impl Signex {
                     .collect()
             })
             .unwrap_or_default();
+        let project_parameters = self
+            .document_state
+            .active_path
+            .as_deref()
+            .and_then(|path| self.document_state.document_project(path))
+            .map(|project| project.data.parameters.clone())
+            .unwrap_or_default();
         // Drafts stay with the sheet they were typed on (shown and committed
         // only there); a closed sheet's drafts are dropped.
         let title_block_drafts: Vec<crate::panels::TitleBlockDraft> = self
@@ -632,6 +639,7 @@ impl Signex {
             child_sheet_name_buf,
             child_sheet_file_buf,
             title_block,
+            project_parameters,
             title_block_drafts,
             paper_edge_drafts,
             numeric_draft,
@@ -734,6 +742,7 @@ mod tests {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                parameters: Default::default(),
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),
@@ -802,6 +811,7 @@ mod tests {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                parameters: Default::default(),
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),

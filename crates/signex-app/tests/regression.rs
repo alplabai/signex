@@ -262,6 +262,10 @@ mod library_update_apply;
 mod non_finite_edits;
 #[path = "regression/numeric_drafts.rs"]
 mod numeric_drafts;
+#[path = "regression/paste_on_cursor.rs"]
+mod paste_on_cursor;
+#[path = "regression/placement_session.rs"]
+mod placement_session;
 #[path = "regression/reprefix_standard.rs"]
 mod reprefix_standard;
 
@@ -347,6 +351,8 @@ mod net_classes_panel;
 mod sheet_frame_canvas;
 
 // #1202 — the Project document tab replaces the Project Options modal.
+#[path = "regression/project_parameters.rs"]
+mod project_parameters;
 #[path = "regression/project_tab.rs"]
 mod project_tab;
 #[path = "regression/project_tab_rename.rs"]

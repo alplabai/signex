@@ -343,6 +343,7 @@ impl Signex {
                     per_window.paper_width_mm,
                     per_window.paper_height_mm,
                 );
+                per_window.special_strings = self.special_strings_for_path(&path);
                 per_window.designators = self.designators_for_path(&path);
                 per_window.fit_to_content();
                 self.interaction_state.canvases.insert(id, per_window);
@@ -477,6 +478,7 @@ impl Signex {
                     b: (c.b * 255.0).round() as u8,
                     a: 255,
                 };
+                self.cancel_placement_session();
                 self.ui_state.pending_net_color = Some(color);
                 self.interaction_state.active_canvas_mut().pending_net_color = Some(color);
                 Task::none()

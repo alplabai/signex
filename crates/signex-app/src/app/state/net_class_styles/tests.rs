@@ -409,6 +409,7 @@ fn project_with(classes: Vec<NetClass>) -> LoadedProject {
             net_classes: classes,
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
