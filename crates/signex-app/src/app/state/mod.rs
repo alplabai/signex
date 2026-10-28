@@ -22,6 +22,7 @@ mod profile_update;
 pub(crate) mod project_case;
 pub(crate) mod project_fs;
 mod reference_policy;
+pub(crate) mod rule_profile_ui;
 pub(crate) mod rules_history;
 pub(crate) mod scope;
 mod sheet_read;

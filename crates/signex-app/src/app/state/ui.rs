@@ -37,16 +37,21 @@ pub struct UiState {
     /// semantics — mutated as the user edits, copied back into
     /// `component_classes` + persisted on Save.
     pub preferences_draft_component_classes: Vec<crate::fonts::ComponentClassEntry>,
-    /// Draft of `erc_severity_override` for Preferences ▸ Electrical Rules:
-    /// edited by the chips, committed + persisted on Save, re-seeded from
-    /// the committed map on Discard.
-    pub preferences_draft_erc_severity:
-        std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    /// What the draft was seeded from. Dirty and Save work on the delta
-    /// between draft and this snapshot, so a change the ERC dialog commits
-    /// while Preferences is open is neither "unsaved" nor reverted by Save.
-    pub preferences_seed_erc_severity:
-        std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    /// Preferences ▸ Rule Profiles (#1608).
+    pub profile_manager: crate::app::state::rule_profile_ui::ProfileManager,
+    /// The boot task is still reading the `User Default` profile into
+    /// `erc_severity_override` / `pin_matrix_overrides`. Edits of the machine's
+    /// rules wait for it: writing the maps back before they hold the file's
+    /// rules would replace them with defaults.
+    pub machine_rules_loading: bool,
+    /// The profile new projects start from; `None` means "User Default if
+    /// the machine has one, else Signex Default" (#1608). Persisted in
+    /// `prefs.json`.
+    pub default_rule_profile: Option<String>,
+    /// The open "Save as profile" dialog of the ERC dialog (#1608).
+    pub save_profile_dialog: Option<crate::app::state::rule_profile_ui::SaveProfileDialog>,
+    /// Profile file writes waiting their turn (#1608).
+    pub profile_writes: crate::app::state::rule_profile_ui::ProfileWriteQueue,
     /// Loaded keyboard-shortcut profiles (bundled Altium / Classic
     /// built-ins plus any user profile in the OS config dir). Drives
     /// shortcut dispatch and the Help ▸ Keyboard Shortcuts reference.
@@ -353,7 +358,10 @@ pub struct UiState {
     /// An "Update from profile" waiting for the user's confirmation, with the
     /// diff it would apply (#1085). Nothing is changed until confirmed.
     pub pending_profile_update: Option<crate::app::state::PendingProfileUpdate>,
-    /// Per-rule severity override — if empty, the rule's default is used.
+    /// The machine's rule set, as the `User Default` profile holds it (#1608):
+    /// per-rule severity overrides, used by a project that stores no rules of
+    /// its own. If empty, each rule's default is used. Loaded from the profile
+    /// at launch and written back to it on every edit.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     /// Net-color overrides keyed by net-label text. Drives the Active-Bar
@@ -546,7 +554,6 @@ impl UiState {
             || self.preferences_draft_ui_scale_percent
                 != crate::ui_scale::scale_to_percent(self.ui_scale)
             || self.preferences_draft_component_classes != self.component_classes
-            || self.preferences_draft_erc_severity != self.preferences_seed_erc_severity
             || self
                 .preferences_keymap_editor
                 .differs_from(&self.keymap_profiles)

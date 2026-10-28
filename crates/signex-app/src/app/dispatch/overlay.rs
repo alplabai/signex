@@ -454,7 +454,16 @@ impl Signex {
                 self.handle_erc_run_finished(generation, &result)
             }
             ErcMsg::StoreRulesInProject => self.handle_store_erc_rules_in_project(),
-            ErcMsg::ProfileSaveRequested { name } => self.handle_profile_save_requested(name),
+            ErcMsg::ProfileSaveDialogOpened => self.handle_profile_save_dialog_opened(),
+            ErcMsg::ProfileSaveNameChanged(name) => self.handle_profile_save_name_changed(name),
+            ErcMsg::ProfileSaveVersionChanged(version) => {
+                self.handle_profile_save_version_changed(version)
+            }
+            ErcMsg::ProfileSaveSubmitted => self.handle_profile_save_submitted(),
+            ErcMsg::ProfileSaveOverwriteConfirmed => self.handle_profile_save_overwrite_confirmed(),
+            ErcMsg::ProfileSaveCancelled => self.handle_profile_save_cancelled(),
+            ErcMsg::UserDefaultLoaded(result) => self.handle_user_default_loaded(&result),
+            ErcMsg::ProfileWriteFinished(result) => self.handle_profile_write_finished(&result),
             ErcMsg::ProfileSaved { project, result } => self.handle_profile_saved(project, &result),
             ErcMsg::ProfileUpdateRequested => self.handle_profile_update_requested(),
             ErcMsg::ProfileLoadedForUpdate { project, result } => {
@@ -482,36 +491,15 @@ impl Signex {
         }
     }
 
-    /// Cycle one pin-matrix cell Error -> Warning -> Info -> Off -> Error and
-    /// persist the result. A pair of pin types is unordered, so the mirrored
-    /// cell is written with it: the dialog then never shows two different
-    /// verdicts for the same pair. A value equal to the baseline drops the
-    /// override instead of storing it.
+    /// Cycle one pin-matrix cell of the project's stored rules, or of the
+    /// machine's rules when the project stores none.
     pub(crate) fn handle_pin_matrix_cell_cycled(&mut self, row: u8, col: u8) -> Task<Message> {
-        use signex_erc::pin_matrix::baseline_cell;
         if self.edit_project_erc_rules(|rules| {
             signex_erc::project_rules::cycle_pin_cell(rules, row, col)
         }) {
             return Task::none();
         }
-        let current = self
-            .ui_state
-            .pin_matrix_overrides
-            .get(&(row, col))
-            .copied()
-            .unwrap_or_else(|| baseline_cell(row, col));
-        let next = current.cycled();
-        for key in [(row, col), (col, row)] {
-            if next == baseline_cell(key.0, key.1) {
-                self.ui_state.pin_matrix_overrides.remove(&key);
-            } else {
-                self.ui_state.pin_matrix_overrides.insert(key, next);
-            }
-        }
-        let overrides = self.ui_state.pin_matrix_overrides.clone();
-        crate::fonts::background_pref_write("pin_matrix", move || {
-            crate::fonts::write_pin_matrix_overrides(&overrides)
-        })
+        self.cycle_machine_pin_cell(row, col)
     }
 
     /// Preferences modal family handler (namespaced, ADR-0001 D3).

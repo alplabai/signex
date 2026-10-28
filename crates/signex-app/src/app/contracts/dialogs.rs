@@ -109,16 +109,31 @@ pub enum ErcMsg {
     /// Copy this machine's ERC preferences into the active project's
     /// `.snxprj` rule set (written on the next explicit save, #1085).
     StoreRulesInProject,
-    /// "Save as profile": write the project's stored ERC rules to the user's
-    /// profile library as a new file under `name` (a taken name gets a
-    /// numeric suffix; an existing profile is never replaced).
-    ProfileSaveRequested { name: String },
-    /// The profile file was written (or why it was not). On success the
+    /// "Save as profile": open the dialog that asks for a name and version
+    /// (#1608). Writes nothing.
+    ProfileSaveDialogOpened,
+    /// The Save-as dialog's name field changed.
+    ProfileSaveNameChanged(String),
+    /// The Save-as dialog's version field changed.
+    ProfileSaveVersionChanged(String),
+    /// Save in the Save-as dialog: validate, then write unless the name
+    /// exists (then ask first).
+    ProfileSaveSubmitted,
+    /// The user agreed to replace the existing profile of that name.
+    ProfileSaveOverwriteConfirmed,
+    /// Go back from the overwrite question, or close the Save-as dialog.
+    ProfileSaveCancelled,
+    /// The profile file was written, found taken, or failed. On success the
     /// project records the written profile as its provenance.
     ProfileSaved {
         project: crate::app::state::ProjectId,
-        result: std::sync::Arc<Result<crate::rule_profiles::SavedProfile, String>>,
+        result: std::sync::Arc<Result<crate::rule_profiles::SaveOutcome, String>>,
     },
+    /// The `User Default` profile (the machine's rules) was read at launch.
+    /// `Ok(None)`: the machine has none yet.
+    UserDefaultLoaded(std::sync::Arc<Result<Option<signex_types::project::RuleProfile>, String>>),
+    /// A queued profile file write finished; the next one may start.
+    ProfileWriteFinished(std::sync::Arc<Result<(), String>>),
     /// "Update from profile": look up the profile the project was seeded
     /// from and show what applying it would change.
     ProfileUpdateRequested,

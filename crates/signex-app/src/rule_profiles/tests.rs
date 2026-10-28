@@ -2,12 +2,30 @@ use std::collections::HashMap;
 
 use signex_erc::project_rules::profile::{BUILTIN_PROFILE_NAME, SOURCE_BUILTIN, builtin_profile};
 use signex_erc::{RuleKind, Severity};
-use signex_types::project::RuleProfileRef;
+use signex_types::project::{RuleProfile, RuleProfileRef};
 
 use super::*;
 
 fn dir() -> tempfile::TempDir {
     tempfile::tempdir().unwrap()
+}
+
+/// Every profile in the library except the shipped one, in listing order.
+fn list_profiles(dir: &Path) -> Vec<RuleProfile> {
+    list_library(Some(dir))
+        .profiles
+        .into_iter()
+        .filter(|l| l.kind != ProfileKind::Builtin)
+        .map(|l| l.profile)
+        .collect()
+}
+
+/// Write `profile` to its default file name, replacing what is there.
+fn save_profile(dir: &Path, profile: &RuleProfile) -> std::io::Result<PathBuf> {
+    std::fs::create_dir_all(dir)?;
+    let path = dir.join(file_name_for(&profile.name));
+    signex_types::atomic_io::atomic_write(&path, &profile.to_json_bytes())?;
+    Ok(path)
 }
 
 #[test]
@@ -122,59 +140,6 @@ fn some_rules(rule: &str) -> signex_types::project::ErcRules {
 }
 
 #[test]
-fn save_as_profile_never_overwrites_an_existing_file() {
-    let tmp = dir();
-    let (first, first_path) = save_new_profile(tmp.path(), "Demo rules", some_rules("a")).unwrap();
-    let before = std::fs::read(&first_path).unwrap();
-
-    let (second, second_path) =
-        save_new_profile(tmp.path(), "Demo rules", some_rules("b")).unwrap();
-    let (third, _) = save_new_profile(tmp.path(), "Demo rules", some_rules("c")).unwrap();
-
-    assert_eq!(first.name, "Demo rules");
-    assert_eq!(second.name, "Demo rules 2");
-    assert_eq!(third.name, "Demo rules 3");
-    assert_ne!(first_path, second_path);
-    assert_eq!(std::fs::read(&first_path).unwrap(), before);
-    assert_eq!(list_profiles(tmp.path()).len(), 3);
-}
-
-#[test]
-fn save_as_profile_never_uses_the_shipped_name() {
-    let tmp = dir();
-    for requested in [BUILTIN_PROFILE_NAME, "signex default"] {
-        let (saved, _) = save_new_profile(tmp.path(), requested, some_rules("a")).unwrap();
-        assert!(!saved.name.eq_ignore_ascii_case(BUILTIN_PROFILE_NAME));
-        assert!(saved.name.ends_with(" 2") || saved.name.ends_with(" 3"));
-    }
-}
-
-#[test]
-fn concurrent_saves_of_one_name_end_as_distinct_files() {
-    let tmp = dir();
-    let path = tmp.path().to_path_buf();
-    let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
-    let handles: Vec<_> = (0..8)
-        .map(|_| {
-            let (path, barrier) = (path.clone(), barrier.clone());
-            std::thread::spawn(move || {
-                barrier.wait();
-                save_new_profile(&path, "Same", builtin_profile().erc).unwrap()
-            })
-        })
-        .collect();
-    let mut files: Vec<_> = handles.into_iter().map(|h| h.join().unwrap().1).collect();
-    files.sort();
-    files.dedup();
-    assert_eq!(files.len(), 8, "every save got its own file");
-    assert_eq!(
-        list_profiles(tmp.path()).len(),
-        8,
-        "all are complete profiles"
-    );
-}
-
-#[test]
 fn a_newer_schema_profile_reports_that_instead_of_missing() {
     let tmp = dir();
     std::fs::write(
@@ -239,27 +204,6 @@ fn a_profile_file_the_os_will_not_read_is_reported_not_missing() {
 }
 
 #[test]
-fn save_as_profile_skips_a_name_held_under_another_file_name() {
-    let tmp = dir();
-    let mut held = builtin_profile();
-    held.name = "Demo rules".into();
-    std::fs::write(
-        tmp.path().join("renamed-by-hand.snxrules"),
-        held.to_json_bytes(),
-    )
-    .unwrap();
-
-    let (saved, path) = save_new_profile(tmp.path(), "Demo rules", some_rules("a")).unwrap();
-    assert_eq!(saved.name, "Demo rules 2");
-    assert_eq!(path.file_name().unwrap(), "demo-rules-2.snxrules");
-    let names: Vec<_> = list_profiles(tmp.path())
-        .into_iter()
-        .map(|p| p.name)
-        .collect();
-    assert_eq!(names.iter().filter(|n| *n == "Demo rules").count(), 1);
-}
-
-#[test]
 fn an_unreadable_file_under_another_name_is_listed_not_ignored() {
     let tmp = dir();
     std::fs::write(tmp.path().join("odd-name.snxrules"), b"{not json").unwrap();
@@ -301,9 +245,9 @@ fn an_empty_placeholder_from_a_crash_is_not_a_corrupt_profile() {
             .is_none()
     );
     assert!(list_profiles(tmp.path()).is_empty());
-    // Save as moves on to the next free name instead of failing.
-    let (saved, _) = save_new_profile(tmp.path(), "Company", some_rules("a")).unwrap();
-    assert_eq!(saved.name, "Company 2");
+    // Save as refuses the name rather than replace what it cannot read.
+    let err = save_named_profile(tmp.path(), "Company", "1.0", some_rules("a"), false).unwrap_err();
+    assert!(err.contains("company.snxrules"), "{err}");
     assert!(stale.exists(), "the placeholder is left alone");
 }
 

@@ -15,9 +15,15 @@ use signex_types::project::{
     RULE_PROFILE_EXTENSION, RuleProfile, RuleProfileError, RuleProfileRef,
 };
 
+mod manage;
 mod migrate;
+mod seed;
+pub use manage::*;
 pub use migrate::{ProfileMigration, migrate_prefs_to_default_profile};
+pub use seed::rules_for_new_project;
 
+#[cfg(test)]
+mod manage_tests;
 #[cfg(test)]
 mod tests;
 
@@ -50,56 +56,6 @@ pub fn file_name_for(name: &str) -> String {
     format!("{stem}.{RULE_PROFILE_EXTENSION}")
 }
 
-/// Write `profile` into the library, creating the folder when needed.
-/// A profile of the same name is replaced, so only callers that have already
-/// checked the file is free (or mean to replace it) use this; "Save as
-/// profile" goes through [`save_new_profile`].
-pub fn save_profile(dir: &Path, profile: &RuleProfile) -> std::io::Result<PathBuf> {
-    std::fs::create_dir_all(dir)?;
-    let path = dir.join(file_name_for(&profile.name));
-    signex_types::atomic_io::atomic_write(&path, &profile.to_json_bytes())?;
-    Ok(path)
-}
-
-/// Save `erc` as a new profile that never replaces anything: the first of
-/// `name`, `name 2`, `name 3`, ... whose file this call could reserve and
-/// which is not the shipped profile's name. Returns the profile as written and
-/// its path.
-///
-/// The file is reserved with an exclusive create before it is written, so two
-/// concurrent saves of one name cannot pick the same file: the loser sees
-/// `AlreadyExists` and moves on to the next name.
-pub fn save_new_profile(
-    dir: &Path,
-    name: &str,
-    erc: signex_types::project::ErcRules,
-) -> std::io::Result<(RuleProfile, PathBuf)> {
-    let name = name.trim();
-    std::fs::create_dir_all(dir)?;
-    // A profile's identity is its `name`, not its file name: a library file
-    // that parses under a name already holds that name whatever it is called.
-    let taken: Vec<String> = read_library(dir)
-        .into_iter()
-        .filter_map(|(_, parsed)| parsed.ok().map(|p| p.name))
-        .collect();
-    let candidates = std::iter::once(name.to_string())
-        .chain((2u32..10_000).map(|n| format!("{name} {n}")))
-        .filter(|candidate| !candidate.eq_ignore_ascii_case(BUILTIN_PROFILE_NAME))
-        .filter(|candidate| !taken.iter().any(|t| t.eq_ignore_ascii_case(candidate)));
-    for candidate in candidates {
-        let profile = RuleProfile::new(candidate, "1.0", erc.clone());
-        match write_new_profile(dir, &profile) {
-            Ok(path) => return Ok((profile, path)),
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(e) => return Err(e),
-        }
-    }
-    Err(std::io::Error::new(
-        std::io::ErrorKind::AlreadyExists,
-        "no free profile name",
-    ))
-}
-
 /// Write `profile` to its file only if that file does not exist yet:
 /// reserve the name with an exclusive create, then fill it atomically.
 /// `AlreadyExists` means the file is someone else's and was not touched.
@@ -107,7 +63,7 @@ pub fn save_new_profile(
 /// A crash between the reservation and the write leaves a zero-byte file;
 /// [`read_library`] ignores those, so it is never reported as a corrupt
 /// profile (it only keeps its file name from being reused).
-fn write_new_profile(dir: &Path, profile: &RuleProfile) -> std::io::Result<PathBuf> {
+pub(super) fn write_new_profile(dir: &Path, profile: &RuleProfile) -> std::io::Result<PathBuf> {
     let path = dir.join(file_name_for(&profile.name));
     drop(
         std::fs::OpenOptions::new()
@@ -132,29 +88,9 @@ pub struct SavedProfile {
     pub summary: String,
 }
 
-/// [`save_new_profile`] plus the provenance record and the message line.
-pub fn save_as_profile(
-    dir: &Path,
-    name: &str,
-    erc: signex_types::project::ErcRules,
-) -> Result<SavedProfile, String> {
-    let name = name.trim();
-    let (profile, path) = save_new_profile(dir, name, erc)
-        .map_err(|e| format!("Could not save profile \"{name}\": {e}"))?;
-    let note = if profile.name == name {
-        String::new()
-    } else {
-        format!(" (\"{name}\" was already taken)")
-    };
-    Ok(SavedProfile {
-        reference: user_profile_ref(&profile),
-        summary: format!("\"{}\"{note} at {}", profile.name, path.display()),
-    })
-}
-
 /// Why a library file gave no profile.
 #[derive(Debug)]
-enum FileError {
+pub(super) enum FileError {
     /// The file exists but the OS refused to read it (permissions, a
     /// directory named like a profile, ...).
     Unreadable(std::io::Error),
@@ -164,7 +100,7 @@ enum FileError {
 /// Every `.snxrules` file in the library with what reading it gave. A
 /// zero-byte file is a reservation a crashed save left behind, not a profile,
 /// and is left out.
-fn read_library(dir: &Path) -> Vec<(PathBuf, Result<RuleProfile, FileError>)> {
+pub(super) fn read_library(dir: &Path) -> Vec<(PathBuf, Result<RuleProfile, FileError>)> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
@@ -181,22 +117,6 @@ fn read_library(dir: &Path) -> Vec<(PathBuf, Result<RuleProfile, FileError>)> {
             Some((p, parsed))
         })
         .collect()
-}
-
-/// Every readable profile in the library, sorted by name. A file that does
-/// not parse is skipped (it is still on disk, untouched).
-///
-/// Test-only: the app has no profile picker yet, and a production caller
-/// would need the parse errors this drops. Add an error-returning variant
-/// when a picker needs one.
-#[cfg(test)]
-pub fn list_profiles(dir: &Path) -> Vec<RuleProfile> {
-    let mut out: Vec<RuleProfile> = read_library(dir)
-        .into_iter()
-        .filter_map(|(_, parsed)| parsed.ok())
-        .collect();
-    out.sort_by(|a, b| a.name.cmp(&b.name));
-    out
 }
 
 /// The local profile a project's provenance record names: the shipped one

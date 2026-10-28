@@ -175,7 +175,7 @@ impl Created {
 /// `<stem>.snxsch`, then the managed `.gitignore` block (#1117). Returns the
 /// `.snxprj` actually written. A failure removes what this call created.
 /// Runs on a blocking worker, never in `update`.
-pub(super) fn write_new_project_files(chosen: &Path) -> Result<PathBuf> {
+pub(super) fn write_new_project_files(chosen: &Path, seed: &RuleSeed) -> Result<PathBuf> {
     let (_, stem) = new_project_parts(chosen)?;
     let target = resolve_new_project(chosen)?;
     let mut created = Created::default();
@@ -184,6 +184,9 @@ pub(super) fn write_new_project_files(chosen: &Path) -> Result<PathBuf> {
     });
     if result.is_err() {
         created.roll_back(&target.folder);
+    }
+    if result.is_ok() {
+        seed_project_rules(&target.project_path, seed);
     }
     if result.is_ok() && target.nested_in_same_named_parent {
         crate::diagnostics::log_info(format!(
@@ -196,6 +199,38 @@ pub(super) fn write_new_project_files(chosen: &Path) -> Result<PathBuf> {
         ));
     }
     result.map(|()| target.project_path)
+}
+
+/// Where a new project's rule set comes from (#1608). Captured on the UI
+/// thread; the worker reads the profile file.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct RuleSeed {
+    /// The profile library folder, `None` when the platform has none.
+    pub dir: Option<PathBuf>,
+    /// The profile the user chose as the default, if any.
+    pub selected: Option<String>,
+}
+
+/// Store a copy of the default rule profile in the new `.snxprj`, with its
+/// provenance. The project already exists, so a failure here is reported and
+/// the project is left as created: it then uses the machine's rules until
+/// the user stores some.
+fn seed_project_rules(project_path: &Path, seed: &RuleSeed) {
+    let (rules, notes) =
+        crate::rule_profiles::rules_for_new_project(seed.dir.as_deref(), seed.selected.as_deref());
+    for note in notes {
+        crate::diagnostics::log_warning(format!("[new project] {note}"));
+    }
+    let stored = signex_types::project::parse_project(project_path).and_then(|mut data| {
+        data.rules = Some(rules);
+        signex_types::project::write_project(project_path, &data)
+    });
+    if let Err(e) = stored {
+        crate::diagnostics::log_warning(format!(
+            "[new project] the default rule profile was not stored in {}: {e}",
+            project_path.display()
+        ));
+    }
 }
 
 /// `ensure_gitignore` writes the managed `.gitignore` block; it is a
@@ -272,6 +307,98 @@ mod tests {
                 .iter()
                 .any(|e| e.message.starts_with("[git] .gitignore not updated")),
             "the failure must reach the Messages panel"
+        );
+    }
+
+    fn library_with_company() -> (tempfile::TempDir, signex_types::project::RuleProfile) {
+        let lib = tempfile::tempdir().unwrap();
+        let mut erc = signex_types::project::ErcRules::default();
+        erc.severity.insert("unused_pin".into(), "off".into());
+        let profile = signex_types::project::RuleProfile::new("Company", "4", erc);
+        std::fs::write(lib.path().join("company.snxrules"), profile.to_json_bytes()).unwrap();
+        (lib, profile)
+    }
+
+    #[test]
+    fn a_new_project_stores_a_copy_of_the_selected_profile() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (lib, profile) = library_with_company();
+        let seed = RuleSeed {
+            dir: Some(lib.path().to_path_buf()),
+            selected: Some("Company".into()),
+        };
+
+        let written = write_new_project_files(&tmp.path().join("Seeded.snxprj"), &seed).unwrap();
+        let data = signex_types::project::parse_project(&written).unwrap();
+        let rules = data.rules.expect("the new project stores rules");
+        assert_eq!(rules.erc, profile.erc);
+        let reference = rules.profile.expect("provenance");
+        assert_eq!(
+            (
+                reference.name.as_str(),
+                reference.source.as_str(),
+                reference.version.as_str()
+            ),
+            ("Company", "user", "4")
+        );
+        assert_eq!(reference.sha256, profile.content_sha256());
+        assert!(written.parent().unwrap().join("Seeded.snxsch").is_file());
+
+        // A copy, not a link: editing the profile later leaves the project's
+        // rules as they were, and the recorded hash shows the drift.
+        let mut edited = profile.clone();
+        edited
+            .erc
+            .severity
+            .insert("unused_pin".into(), "error".into());
+        std::fs::write(lib.path().join("company.snxrules"), edited.to_json_bytes()).unwrap();
+        let again = signex_types::project::parse_project(&written).unwrap();
+        assert_eq!(again.rules.unwrap().erc, profile.erc);
+    }
+
+    #[test]
+    fn a_new_project_with_no_profile_chosen_gets_the_shipped_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let seed = RuleSeed {
+            dir: Some(tmp.path().join("no-library-yet")),
+            selected: None,
+        };
+        let written = write_new_project_files(&tmp.path().join("Plain.snxprj"), &seed).unwrap();
+        let rules = signex_types::project::parse_project(&written)
+            .unwrap()
+            .rules
+            .expect("rules stored");
+        let reference = rules.profile.expect("provenance");
+        assert_eq!(
+            (reference.name.as_str(), reference.source.as_str()),
+            ("Signex Default", "builtin")
+        );
+        assert_eq!(
+            rules.erc,
+            signex_erc::project_rules::profile::builtin_profile().erc
+        );
+    }
+
+    #[test]
+    fn a_chosen_profile_that_is_gone_does_not_stop_the_project_being_created() {
+        let _ = crate::diagnostics::init_logging();
+        let tmp = tempfile::tempdir().unwrap();
+        let lib = tempfile::tempdir().unwrap();
+        let seed = RuleSeed {
+            dir: Some(lib.path().to_path_buf()),
+            selected: Some("Missing".into()),
+        };
+        let written = write_new_project_files(&tmp.path().join("Fallback.snxprj"), &seed).unwrap();
+        let rules = signex_types::project::parse_project(&written)
+            .unwrap()
+            .rules
+            .unwrap();
+        assert_eq!(rules.profile.unwrap().name, "Signex Default");
+        assert!(
+            crate::diagnostics::recent_entries().iter().any(
+                |e| e.message.contains("\"Missing\"") && e.message.starts_with("[new project]")
+            ),
+            "the fallback must reach the Messages panel"
         );
     }
 

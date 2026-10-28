@@ -1,11 +1,16 @@
-//! ERC severity / pin-matrix preference IO. Split from `fonts.rs`.
+//! ERC preference IO. Split from `fonts.rs`.
+//!
+//! The machine's ERC rules are the `User Default` rule profile now (#1608), not
+//! `prefs.json` keys. The two readers below stay only for the one-time
+//! migration of an old `erc_severity` / `pin_matrix` into that profile; nothing
+//! writes those keys any more. `prefs.json` keeps one ERC setting: which
+//! profile new projects start from.
 
 use super::*;
 
-/// Read ERC severity overrides from preferences file. Returns an empty
-/// map if the file is absent or the key missing — callers treat "no
-/// entry" as "use the rule's default severity", matching the ui_state
-/// semantic used throughout the app.
+/// Read the old ERC severity overrides from the preferences file, for the
+/// migration into the `User Default` profile. Returns an empty map if the
+/// file is absent or the key missing.
 pub fn read_erc_severity_overrides()
 -> std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity> {
     read_erc_severity_overrides_from(load_prefs_json().as_ref())
@@ -33,42 +38,16 @@ pub fn read_erc_severity_overrides_from(
     out
 }
 
-/// Persist the ERC severity-override map. Stored as an object keyed by
-/// rule name so the file stays human-readable when the user edits it by
-/// hand.
-pub fn write_erc_severity_overrides(
-    overrides: &std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-) {
-    update_prefs_json(&prefs_path(), "erc_severity", |prefs| {
-        let mut obj = serde_json::Map::new();
-        for (rule, sev) in overrides {
-            obj.insert(
-                erc_rule_kind_key(*rule).to_string(),
-                serde_json::Value::String(erc_severity_key(*sev).to_string()),
-            );
-        }
-        prefs.insert("erc_severity".to_string(), serde_json::Value::Object(obj));
-    })
-}
-
-fn erc_rule_kind_key(rule: signex_erc::RuleKind) -> &'static str {
-    rule.key()
-}
-
 fn parse_erc_rule_kind(s: &str) -> Option<signex_erc::RuleKind> {
     signex_erc::RuleKind::from_key(s)
-}
-
-fn erc_severity_key(sev: signex_erc::Severity) -> &'static str {
-    sev.key()
 }
 
 fn parse_erc_severity(s: &str) -> Option<signex_erc::Severity> {
     signex_erc::Severity::from_key(s)
 }
 
-/// Read the pin-connection matrix overrides. Keys stored as `"row,col"`
-/// strings and values as the same severity strings as ERC overrides.
+/// Read the old pin-connection matrix overrides, for the same migration. Keys
+/// were stored as `"row,col"` strings, values as severity strings.
 pub fn read_pin_matrix_overrides() -> std::collections::HashMap<(u8, u8), signex_erc::Severity> {
     read_pin_matrix_overrides_from(load_prefs_json().as_ref())
 }
@@ -101,18 +80,89 @@ pub fn read_pin_matrix_overrides_from(
     out
 }
 
-/// Persist pin-connection matrix overrides.
-pub fn write_pin_matrix_overrides(
-    overrides: &std::collections::HashMap<(u8, u8), signex_erc::Severity>,
-) {
-    update_prefs_json(&prefs_path(), "pin_matrix", |prefs| {
-        let mut obj = serde_json::Map::new();
-        for ((r, c), sev) in overrides {
-            obj.insert(
-                format!("{r},{c}"),
-                serde_json::Value::String(erc_severity_key(*sev).to_string()),
+/// The profile new projects start from, as `prefs.json` names it. `None`
+/// when no choice was made or the value is not a non-empty string.
+pub fn read_default_rule_profile_pref_from(json: Option<&serde_json::Value>) -> Option<String> {
+    json?
+        .get("default_rule_profile")?
+        .as_str()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+}
+
+/// Persist the default-profile choice; `None` removes the key ("automatic").
+pub fn write_default_rule_profile_pref(name: Option<&str>) {
+    write_default_rule_profile_pref_at(&prefs_path(), name)
+}
+
+pub fn write_default_rule_profile_pref_at(path: &Path, name: Option<&str>) {
+    update_prefs_json(path, "default_rule_profile", |prefs| match name {
+        Some(name) => {
+            prefs.insert(
+                "default_rule_profile".to_string(),
+                serde_json::Value::String(name.to_string()),
             );
         }
-        prefs.insert("pin_matrix".to_string(), serde_json::Value::Object(obj));
+        None => {
+            prefs.remove("default_rule_profile");
+        }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn read_back(path: &Path) -> Option<String> {
+        let json: serde_json::Value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+        read_default_rule_profile_pref_from(Some(&json))
+    }
+
+    #[test]
+    fn the_default_profile_choice_round_trips_and_keeps_other_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("prefs.json");
+        std::fs::write(&path, r#"{"theme": "nord"}"#).unwrap();
+
+        assert_eq!(read_back(&path), None);
+        write_default_rule_profile_pref_at(&path, Some("Company"));
+        assert_eq!(read_back(&path).as_deref(), Some("Company"));
+        write_default_rule_profile_pref_at(&path, Some("Other"));
+        assert_eq!(read_back(&path).as_deref(), Some("Other"));
+
+        write_default_rule_profile_pref_at(&path, None);
+        assert_eq!(read_back(&path), None);
+        let json: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(json["theme"], "nord", "other settings survive every write");
+        assert!(json.get("default_rule_profile").is_none());
+    }
+
+    #[test]
+    fn a_blank_or_non_string_choice_reads_as_automatic() {
+        for raw in [
+            r#"{"default_rule_profile": ""}"#,
+            r#"{"default_rule_profile": "   "}"#,
+            r#"{"default_rule_profile": 3}"#,
+            r#"{}"#,
+        ] {
+            let json: serde_json::Value = serde_json::from_str(raw).unwrap();
+            assert_eq!(
+                read_default_rule_profile_pref_from(Some(&json)),
+                None,
+                "{raw}"
+            );
+        }
+        assert_eq!(read_default_rule_profile_pref_from(None), None);
+    }
+
+    #[test]
+    fn a_broken_prefs_file_is_not_overwritten_by_the_choice() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("prefs.json");
+        std::fs::write(&path, b"{not json").unwrap();
+        write_default_rule_profile_pref_at(&path, Some("Company"));
+        assert_eq!(std::fs::read(&path).unwrap(), b"{not json");
+    }
 }
