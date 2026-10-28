@@ -133,6 +133,8 @@ fn browser_commits_pn(app: &mut Signex, snxlib: &std::path::Path, row_id: RowId,
         row_id,
         column: "internal_pn".to_string(),
     }));
+    // The re-read the commit started, landing as the runtime would.
+    app.land_pending_refresh(snxlib);
 }
 
 fn save_preview(app: &mut Signex, address: &EditorAddress) {

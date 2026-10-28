@@ -37,8 +37,8 @@ impl Signex {
         // The write the save started has finished: it must be settled
         // (and its in-flight mark released) whatever the mount has become.
         let msg = match msg {
-            EditorMsg::Datasheet(DatasheetMsg::AssetsStored(result)) => {
-                self.finish_staged_asset_store(&address, result);
+            EditorMsg::Datasheet(DatasheetMsg::AssetsStored { generation, result }) => {
+                self.finish_staged_asset_store(&address, generation, result);
                 return Task::none();
             }
             // A refused file is also reported to the Messages panel, not

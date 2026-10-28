@@ -31,14 +31,36 @@ pub(super) fn content_library_distributors<'a>(
     // map to `PrefMsg::LibrarySettings` for every Settings sub-
     // variant; non-Settings library messages are ignored (they're
     // never produced by `distributor_apis::view`).
-    let pane =
-        crate::library::settings::distributor_apis::view(settings, tokens).map(|lm| match lm {
-            crate::library::messages::LibraryMessage::Settings(s) => PrefMsg::LibrarySettings(s),
-            // distributor_apis::view never produces anything else.
-            _ => PrefMsg::Close,
-        });
+    let pane = crate::library::settings::distributor_apis::view(settings, tokens)
+        .map(wrap_library_message);
 
     column![header, container(pane).padding([0, 20]).width(Length::Fill)]
         .spacing(0)
         .into()
+}
+
+/// Wrap a library-panel message for the Preferences modal. Anything that
+/// is not a `Settings(_)` message is inert (`PrefMsg::Noop`) — it must never
+/// dismiss the dialog.
+fn wrap_library_message(lm: crate::library::messages::LibraryMessage) -> PrefMsg {
+    match lm {
+        crate::library::messages::LibraryMessage::Settings(s) => PrefMsg::LibrarySettings(s),
+        _ => PrefMsg::Noop,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::library::messages::LibraryMessage;
+
+    #[test]
+    fn non_settings_library_message_does_not_close_preferences() {
+        let msg = wrap_library_message(LibraryMessage::OpenLibraryDialog);
+        assert!(
+            !matches!(msg, PrefMsg::Close),
+            "unmatched library message must not close Preferences"
+        );
+        assert!(matches!(msg, PrefMsg::Noop));
+    }
 }

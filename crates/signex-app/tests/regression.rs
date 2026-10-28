@@ -101,6 +101,10 @@ mod primitive_dirty_quit;
 #[path = "regression/dirty_paths_gateway.rs"]
 mod dirty_paths_gateway;
 
+// #1250 — a locked symbol refuses delete and move, with a Messages note.
+#[path = "regression/symbol_locked_enforced.rs"]
+mod symbol_locked_enforced;
+
 // #768 — an over-cap foreign-column save names the objects to delete.
 #[path = "regression/foreign_column_save_blocked.rs"]
 mod foreign_column_save_blocked;
@@ -245,6 +249,10 @@ mod library_symbol_drift;
 // #1231 — Properties lists a placed symbol's library row documents.
 #[path = "regression/library_row_documents.rs"]
 mod library_row_documents;
+// #1338 — a placed symbol's library link survives save and reopen, and the
+// open-time scan it switches on behaves.
+#[path = "regression/library_link_reopen.rs"]
+mod library_link_reopen;
 #[path = "regression/library_update_apply.rs"]
 mod library_update_apply;
 #[path = "regression/non_finite_edits.rs"]

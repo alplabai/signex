@@ -311,6 +311,8 @@ pub fn justification_grid(
         }
     };
 
+    // A label has only four anchor directions, so the nine cells map onto
+    // them (corners follow their edge; centre re-sends the current one).
     let hl = |dir: LabelDir| current_dir == dir;
 
     iced::widget::column![

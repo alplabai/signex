@@ -7,23 +7,19 @@
 //! generation (polygon offset + raster fill + thermal-relief geometry)
 //! lands in v0.15.
 
-use std::collections::BTreeMap;
-
 use signex_library::primitive::footprint::{
     FpPour, LayerId, NetRef, Polygon, PourFillType as LibPourFill, ThermalReliefStyle as LibThermal,
 };
 use signex_sketch::SketchError;
 use signex_sketch::attr::PourFillType as SkPourFill;
 use signex_sketch::entity::EntityKind;
-use signex_sketch::expr::ast::ExprNode;
-use signex_sketch::expr::eval::{EvalContext, eval};
-use signex_sketch::expr::parse::parse;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::unit::Quantity;
 use std::collections::HashMap;
 
-use crate::profile::{TraceError, trace_closed_profile};
+use crate::eval_util::{build_ctx, opt_eval_mm};
+use crate::profile::TraceError;
+use crate::traced_loops::TracedLoops;
 
 /// Bake every PourAttr-tagged closed profile into `out`.
 pub fn bake_pours(
@@ -33,7 +29,8 @@ pub fn bake_pours(
     out: &mut Vec<FpPour>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
-    let ctx = build_ctx(params_canonical);
+    let ctx = build_ctx(sketch, params_canonical);
+    let mut loops = TracedLoops::default();
     for entity in &sketch.entities {
         if entity.bake_skipped() {
             continue;
@@ -47,13 +44,17 @@ pub fn bake_pours(
             EntityKind::Line { .. } | EntityKind::Arc { .. }
         ) {
             warnings.push(format!(
-                "entity {}: PourAttr requires a Line or Arc seed (Circles land in v0.14.2); skipping",
+                "entity {}: PourAttr requires a Line or Arc seed (Circle seeds are not supported); skipping",
                 entity.id
             ));
             continue;
         }
+        let attribute = format!("{attr:?}");
+        if loops.contains(&attribute, entity.id) {
+            continue;
+        }
 
-        let vertices = match trace_closed_profile(sketch, solve, entity.id) {
+        let vertices = match loops.trace(&attribute, sketch, solve, entity.id) {
             Ok(v) => v,
             Err(TraceError::OpenChain) => {
                 warnings.push(format!(
@@ -82,20 +83,20 @@ pub fn bake_pours(
             Ok(v) => v.unwrap_or(0.0),
             Err(e) => {
                 warnings.push(format!(
-                    "entity {}: PourAttr.clearance_expr failed to evaluate ({e}); using 0",
+                    "entity {}: PourAttr.clearance_expr failed to evaluate ({e}); pour skipped",
                     entity.id
                 ));
-                0.0
+                continue;
             }
         };
         let min_thickness = match opt_eval_mm(&attr.min_thickness_expr, &ctx) {
             Ok(v) => v.unwrap_or(0.0),
             Err(e) => {
                 warnings.push(format!(
-                    "entity {}: PourAttr.min_thickness_expr failed to evaluate ({e}); using 0",
+                    "entity {}: PourAttr.min_thickness_expr failed to evaluate ({e}); pour skipped",
                     entity.id
                 ));
-                0.0
+                continue;
             }
         };
 
@@ -111,29 +112,6 @@ pub fn bake_pours(
         });
     }
     Ok(())
-}
-
-fn build_ctx(params_canonical: &HashMap<String, f64>) -> EvalContext {
-    let mut params: BTreeMap<String, ExprNode> = BTreeMap::new();
-    for (name, value) in params_canonical {
-        params.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
-    }
-    EvalContext {
-        params,
-        array_index: None,
-    }
-}
-
-fn opt_eval_mm(expr: &Option<String>, ctx: &EvalContext) -> Result<Option<f64>, String> {
-    let s = match expr.as_deref() {
-        Some(s) => s.trim(),
-        None => return Ok(None),
-    };
-    let body = s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s);
-    let ast = parse(body).map_err(|e| format!("parse: {e:?}"))?;
-    let q = eval(&ast, ctx).map_err(|e| format!("eval: {e:?}"))?;
-    let mm = q.as_mm().map_err(|e| format!("unit: {e:?}"))?;
-    Ok(Some(mm))
 }
 
 fn map_fill(s: SkPourFill) -> LibPourFill {
@@ -280,5 +258,90 @@ mod tests {
         bake_pours(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
         assert_eq!(out[0].fill_type, LibPourFill::None);
         assert_eq!(out[0].layer.as_str(), "Bottom Layer");
+    }
+
+    #[test]
+    fn tagging_every_edge_bakes_the_loop_once() {
+        let attr = PourAttr {
+            layer: SignexLayer::TopCopper,
+            net: None,
+            fill_type: PourFillType::Solid,
+            thermal_relief: ThermalRelief::default(),
+            clearance_expr: None,
+            min_thickness_expr: None,
+            priority: 0,
+        };
+        let mut data = rectangle_with_pour(attr.clone());
+        for e in data
+            .entities
+            .iter_mut()
+            .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+        {
+            e.pour = Some(attr.clone());
+        }
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_pours(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        assert_eq!(out.len(), 1);
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    fn pour_attr(layer: SignexLayer, clearance: Option<&str>) -> PourAttr {
+        PourAttr {
+            layer,
+            net: None,
+            fill_type: PourFillType::Solid,
+            thermal_relief: ThermalRelief::default(),
+            clearance_expr: clearance.map(String::from),
+            min_thickness_expr: None,
+            priority: 0,
+        }
+    }
+
+    #[test]
+    fn one_loop_tagged_with_two_layers_bakes_once_per_layer() {
+        let mut data = rectangle_with_pour(pour_attr(SignexLayer::TopCopper, None));
+        let third = data
+            .entities
+            .iter_mut()
+            .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+            .nth(2)
+            .unwrap();
+        third.pour = Some(pour_attr(SignexLayer::BottomCopper, None));
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_pours(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        let mut layers: Vec<&str> = out.iter().map(|o| o.layer.as_str()).collect();
+        layers.sort();
+        assert_eq!(layers, vec!["Bottom Layer", "Top Layer"]);
+    }
+
+    #[test]
+    fn a_bare_number_clearance_is_read_as_millimetres() {
+        let data = rectangle_with_pour(pour_attr(SignexLayer::TopCopper, Some("0.2")));
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_pours(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        assert_eq!(out.len(), 1, "{warnings:?}");
+        assert!((out[0].clearance - 0.2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_pour_with_an_unevaluable_clearance_is_skipped_not_baked_at_zero() {
+        let data = rectangle_with_pour(pour_attr(SignexLayer::TopCopper, Some("= no_such_param")));
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_pours(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        assert!(out.is_empty(), "{out:?}");
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("clearance_expr") && w.contains("skipped")),
+            "{warnings:?}"
+        );
     }
 }

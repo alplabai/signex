@@ -32,6 +32,17 @@ pub enum LibraryError {
     /// a server counter or, for a local library, a content hash.
     #[error("changed by someone else since you read it; reload to see their version")]
     RowChanged { current_revision: u64 },
+    /// Like [`Self::RowChanged`], for a symbol, footprint or sim model.
+    /// `subject` names it (`symbol <uuid>`) so the caller can keep the
+    /// local edit and offer save-as as well as reload.
+    #[error(
+        "{subject} was changed by someone else since you read it; save your edit as a new copy, \
+         or reload to see their version"
+    )]
+    PrimitiveChanged {
+        subject: String,
+        current_revision: u64,
+    },
     /// The version-control guard refused to start a repository in a folder
     /// that holds more than the project (#1205). The text says why.
     #[error("{0}")]
@@ -131,6 +142,29 @@ pub struct HistoryEntry {
     /// Removed lines/keys for this commit (lazy — 0 in the scaffold).
     #[serde(default)]
     pub deletions: u32,
+}
+
+/// A primitive together with the revision this copy was read at — the
+/// primitive tier's counterpart of `ComponentRow::server_revision`. The
+/// caller that holds the copy keeps the revision with it and hands it back
+/// as the base of its save, so the base is always "what this copy was read
+/// at", never "what someone last read". `None` for a backend that does not
+/// version primitives (a local library) and for a primitive being created.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Versioned<T> {
+    pub value: T,
+    pub revision: Option<u64>,
+}
+
+/// Refuse a base revision on a backend that hands none out: silently
+/// dropping it would turn a conditional save into an unconditional one.
+fn refuse_unversioned_base(base: Option<u64>) -> Result<(), LibraryError> {
+    match base {
+        None => Ok(()),
+        Some(_) => Err(LibraryError::Backend(
+            "this library does not version primitives; save without a base revision".into(),
+        )),
+    }
 }
 
 /// Storage backend abstraction. All flavours (LocalGit, Database, Plm)
@@ -547,6 +581,72 @@ pub trait LibraryAdapter: Send + Sync {
         Err(LibraryError::Backend(
             "save_sim not implemented for this adapter".into(),
         ))
+    }
+
+    // ── Versioned primitive reads / saves ───────────────────────────────
+    //
+    // A shared library server versions every primitive. `get_*_versioned`
+    // returns the revision the copy was read at; `save_*_versioned` sends it
+    // back as the base, and the save is refused with
+    // `LibraryError::RowChanged` when the stored primitive has moved on.
+    // On a versioned backend a `None` base creates the primitive
+    // (`Conflict` if it exists). The saved revision comes back so the next
+    // save of the same copy can use it. The defaults carry `None` both ways
+    // and call the plain `save_*`, so a `None`-base save is only create-only
+    // when the plain `save_*` is. A shared backend must therefore make its
+    // plain `save_*` create-only (as `DatabaseAdapter` does); a local
+    // single-writer backend such as `LocalGitAdapter` overwrites, which is
+    // fine there because nobody else writes the copy.
+
+    fn get_symbol_versioned(&self, uuid: Uuid) -> Result<Versioned<Symbol>, LibraryError> {
+        self.get_symbol(uuid).map(|value| Versioned {
+            value,
+            revision: None,
+        })
+    }
+
+    fn get_footprint_versioned(&self, uuid: Uuid) -> Result<Versioned<Footprint>, LibraryError> {
+        self.get_footprint(uuid).map(|value| Versioned {
+            value,
+            revision: None,
+        })
+    }
+
+    fn get_sim_versioned(&self, uuid: Uuid) -> Result<Versioned<SimModel>, LibraryError> {
+        self.get_sim(uuid).map(|value| Versioned {
+            value,
+            revision: None,
+        })
+    }
+
+    fn save_symbol_versioned(
+        &self,
+        sym: Symbol,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        refuse_unversioned_base(base)?;
+        self.save_symbol(sym, message).map(|()| None)
+    }
+
+    fn save_footprint_versioned(
+        &self,
+        fp: Footprint,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        refuse_unversioned_base(base)?;
+        self.save_footprint(fp, message).map(|()| None)
+    }
+
+    fn save_sim_versioned(
+        &self,
+        sm: SimModel,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        refuse_unversioned_base(base)?;
+        self.save_sim(sm, message).map(|()| None)
     }
 
     fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {

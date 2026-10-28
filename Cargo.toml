@@ -68,6 +68,9 @@ iced_aw = { version = "0.13", default-features = false, features = [
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 toml = "0.8"
+# Format-preserving edit of a .snxlib that holds unknown keys (#1435). Same
+# version and features `toml` already builds, so it adds no crate.
+toml_edit = "0.22"
 
 # Identity
 uuid = { version = "1.23.1", features = ["v4", "v7", "serde"] }

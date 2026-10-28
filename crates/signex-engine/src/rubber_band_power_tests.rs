@@ -184,3 +184,23 @@ fn a_conflicted_port_of_the_same_value_is_not_joined() {
     let members = assert_kept(&mut e, r1, "GND", &[pwr1]);
     assert!(!members.contains(&(pwr3, "1".to_string())), "{members:?}");
 }
+
+/// A port from a file that predates its library entry still drags its wire.
+#[test]
+fn an_entry_less_port_stretches_its_wire_when_dragged() {
+    let mut sheet = test_sheet();
+    let (port, _r1) = wired_gnd_port(&mut sheet);
+    sheet.lib_symbols.remove("GND");
+    let mut e = Engine::new(sheet).unwrap();
+    mv(&mut e, vec![symbol_item(port)], 0.0, 10.0, true);
+    let at_new_tip = e.document().wires.iter().any(|w| {
+        [w.start, w.end]
+            .iter()
+            .any(|p| (p.x - 30.0).abs() < 1e-6 && (p.y - 60.0).abs() < 1e-6)
+    });
+    assert!(
+        at_new_tip,
+        "wire did not follow the port: {:?}",
+        segments(&e)
+    );
+}
