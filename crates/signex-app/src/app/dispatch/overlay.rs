@@ -75,7 +75,7 @@ impl Signex {
 
     /// Project lifecycle family handler (namespaced, ADR-0001 D3).
     /// Covers the project-close / app-quit confirm modals, the Project
-    /// Options dismiss, the Add-Existing / Add-New-Schematic file-picker
+    /// tab and its `.snxprj` write completion, the Add-Existing / Add-New-Schematic file-picker
     /// completions, and the async git-commit completion.
     pub(crate) fn dispatch_project_message(&mut self, msg: ProjectMsg) -> Task<Message> {
         match msg {
@@ -91,14 +91,11 @@ impl Signex {
                 self.handle_project_fs_probed(generation, facts)
             }
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
-            ProjectMsg::DesignatorStandardPicked(standard) => {
-                self.handle_designator_standard_picked(standard);
+            ProjectMsg::Tab(msg) => {
+                self.dispatch_project_tab_message(msg);
                 Task::none()
             }
-            ProjectMsg::CloseOptions => {
-                self.ui_state.project_options = None;
-                Task::none()
-            }
+            ProjectMsg::FileSaved(done) => self.handle_project_file_saved(*done),
             ProjectMsg::AddExistingFilePicked { project_id, paths } => {
                 self.handle_add_existing_file_picked(project_id, paths)
             }

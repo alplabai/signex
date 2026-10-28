@@ -265,6 +265,7 @@ impl Signex {
         // else None when the workspace is empty.
         self.document_state.projects.retain(|p| p.id != target_id);
         self.document_state.net_class_history.remove(&target_id);
+        self.document_state.project_tabs.remove(&target_id);
         self.forget_net_class_picks_of(target_id);
         self.document_state.rules_history.remove(&target_id);
         self.document_state.profile_drift_noted.remove(&target_id);
@@ -347,9 +348,10 @@ impl Signex {
         if held.len() > 1 {
             self.ensure_variants_agree(&held)?;
         }
-        self.save_held_path(&held[0])?;
+        let target = self.write_target(&held).clone();
+        self.save_held_path(&target)?;
         let key = path_key_with(path, fold);
-        for variant in &held[1..] {
+        for variant in held.iter().filter(|p| **p != target) {
             if let Some(tab) = self
                 .document_state
                 .tabs
@@ -845,6 +847,7 @@ mod tests {
             id,
             path: dir.join("p.snxprj"),
             data: signex_types::project::ProjectData {
+                description: None,
                 name: "p".into(),
                 dir: dir.to_string_lossy().into_owned(),
                 schematic_root: None,

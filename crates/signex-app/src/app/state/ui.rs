@@ -291,9 +291,6 @@ pub struct UiState {
     /// request that intersects `dirty_paths`. Cleared on any of the
     /// three button choices.
     pub app_quit_confirm: Option<crate::app::AppQuitConfirmState>,
-    /// v0.9 read-only Project Options metadata modal — `Some` while
-    /// the user has the right-click → Project Options… popup open.
-    pub project_options: Option<crate::app::ProjectOptionsState>,
     /// v0.11 Enable Version Control modal — opened from the
     /// project root context menu when the project dir has no
     /// `.git/` yet.
