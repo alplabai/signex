@@ -2,7 +2,7 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, cmd_item_if, cmd_stub, item, item_if, stub, submenu,
+    cmd, cmd_item, cmd_item_gated, cmd_item_if, item, item_if, stub, submenu, unavailable,
 };
 use super::{MenuEntry, MenuMessage};
 use crate::app::command::enablement::cycle_grid_menu_enabled;
@@ -66,7 +66,7 @@ fn open_recent(ctx: &MenuContext) -> Vec<MenuEntry> {
         })
         .collect();
     if entries.is_empty() {
-        entries.push(stub("No recent projects"));
+        entries.push(unavailable("No recent projects"));
     }
     entries.push(SEP);
     entries.push(item_if(
@@ -177,8 +177,16 @@ fn arrange(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        cmd_stub(ctx, cmd("zoom_in_at_cursor", "Zoom In", "Ctrl+=")),
-        cmd_stub(ctx, cmd("zoom_out_at_cursor", "Zoom Out", "Ctrl+-")),
+        cmd_item_gated(
+            ctx,
+            cmd("zoom_in_at_cursor", "Zoom In", "Ctrl+="),
+            MenuMessage::ZoomIn,
+        ),
+        cmd_item_gated(
+            ctx,
+            cmd("zoom_out_at_cursor", "Zoom Out", "Ctrl+-"),
+            MenuMessage::ZoomOut,
+        ),
         cmd_item_gated(
             ctx,
             cmd("zoom_to_fit", "Fit All", "Home"),
@@ -229,10 +237,18 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
             cmd("open_components_panel", "Component...", "P"),
             MenuMessage::PlaceComponent,
         ),
-        stub("Power Port"),
+        item_if(
+            "Power Port",
+            MenuMessage::PlacePowerPort,
+            ctx.commands.has_schematic,
+        ),
         SEP,
-        stub("Text"),
-        stub("No Connect"),
+        item_if("Text", MenuMessage::PlaceText, ctx.commands.has_schematic),
+        item_if(
+            "No Connect",
+            MenuMessage::PlaceNoConnect,
+            ctx.commands.has_schematic,
+        ),
         stub("Sheet Entry"),
     ]
 }
@@ -247,7 +263,13 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
             MenuMessage::Erc,
         ),
         SEP,
-        stub("Generate BOM"),
+        // The same working BOM dialog File > Export > Bill of Materials
+        // opens (#1251).
+        item_if(
+            "Generate BOM",
+            MenuMessage::ExportBom,
+            ctx.commands.has_schematic,
+        ),
     ]
 }
 

@@ -37,6 +37,9 @@ mod status;
 mod symbol_context;
 mod widgets;
 
+#[cfg(test)]
+mod planned_tests;
+
 pub(crate) use element_properties::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
 };
@@ -74,8 +77,8 @@ pub use footprint_context::{
     FootprintEditorPanelContext, FootprintLibInternalRow, FootprintLibSibling, FootprintModeKind,
     FootprintPadSummary, FootprintSelectedSilkSummary, FootprintSketchEntitySummary,
     FootprintSolveSummary, KeepoutKindFlag, KeepoutSummary, NumberingSchemeKindUi,
-    OverConstraintSummary, PadShapeParamSummary, PourSummary, SilkKindGeometry,
-    SketchPadAttrSummary, SnapOptionFlag,
+    OverConstraintSummary, PadShapeParamSummary, PourSummary, RejectedConflictSummary,
+    SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
 pub use library::LibraryRowDetail;
 pub(super) use library::{view_footprint_library, view_library_row_properties, view_sch_library};

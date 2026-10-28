@@ -365,6 +365,11 @@ mod net_classes_panel;
 #[path = "regression/sheet_frame_canvas.rs"]
 mod sheet_frame_canvas;
 
+// #1249 / #1251 — planned Active Bar tools arm and place nothing; Generate
+// BOM opens the BOM dialog.
+#[path = "regression/planned_tools.rs"]
+mod planned_tools;
+
 // #1202 — the Project document tab replaces the Project Options modal.
 #[path = "regression/project_parameters.rs"]
 mod project_parameters;
