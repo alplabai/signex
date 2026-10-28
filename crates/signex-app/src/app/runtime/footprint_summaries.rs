@@ -38,6 +38,33 @@ pub(super) fn build_over_constraint_summaries(
     fp: &signex_library::primitive::footprint::Footprint,
     out: &signex_sketch::solver::FullSolveOutput,
 ) -> Vec<crate::panels::OverConstraintSummary> {
+    let mut summaries = constraint_summaries(fp, &out.over_constraints, out);
+    // Unevaluable rows sort FIRST: the user cannot judge them from a
+    // number, so they must not be buried under rows that at least
+    // carry one. The rest stay descending by magnitude.
+    summaries.sort_by(|a, b| match (a.residual_magnitude, b.residual_magnitude) {
+        (None, None) => std::cmp::Ordering::Equal,
+        (None, Some(_)) => std::cmp::Ordering::Less,
+        (Some(_), None) => std::cmp::Ordering::Greater,
+        (Some(x), Some(y)) => y.partial_cmp(&x).unwrap_or(std::cmp::Ordering::Equal),
+    });
+    summaries
+}
+
+/// #1649 — the constraints the solver found redundant but consistent, in
+/// constraint order, as panel rows (the residual is ~0 by construction).
+pub(super) fn build_redundant_constraint_summaries(
+    fp: &signex_library::primitive::footprint::Footprint,
+    out: &signex_sketch::solver::FullSolveOutput,
+) -> Vec<crate::panels::OverConstraintSummary> {
+    constraint_summaries(fp, &out.redundant_constraints, out)
+}
+
+fn constraint_summaries(
+    fp: &signex_library::primitive::footprint::Footprint,
+    ids: &[signex_sketch::id::ConstraintId],
+    out: &signex_sketch::solver::FullSolveOutput,
+) -> Vec<crate::panels::OverConstraintSummary> {
     use crate::panels::OverConstraintSummary;
     use signex_sketch::constraint::ConstraintKind;
 
@@ -45,10 +72,10 @@ pub(super) fn build_over_constraint_summaries(
         Some(s) => s,
         None => return Vec::new(),
     };
-    if out.over_constraints.is_empty() {
+    if ids.is_empty() {
         return Vec::new();
     }
-    let over_set: std::collections::HashSet<_> = out.over_constraints.iter().copied().collect();
+    let over_set: std::collections::HashSet<_> = ids.iter().copied().collect();
 
     let kind_label = |k: &ConstraintKind| -> &'static str {
         use ConstraintKind::*;
@@ -99,7 +126,7 @@ pub(super) fn build_over_constraint_summaries(
         }
     };
 
-    let mut summaries: Vec<OverConstraintSummary> = sketch
+    sketch
         .constraints
         .iter()
         .filter(|c| over_set.contains(&c.id))
@@ -112,17 +139,7 @@ pub(super) fn build_over_constraint_summaries(
                 focus_entity_id: first_focus(&c.kind),
             }
         })
-        .collect();
-    // Unevaluable rows sort FIRST: the user cannot judge them from a
-    // number, so they must not be buried under rows that at least
-    // carry one. The rest stay descending by magnitude.
-    summaries.sort_by(|a, b| match (a.residual_magnitude, b.residual_magnitude) {
-        (None, None) => std::cmp::Ordering::Equal,
-        (None, Some(_)) => std::cmp::Ordering::Less,
-        (Some(_), None) => std::cmp::Ordering::Greater,
-        (Some(x), Some(y)) => y.partial_cmp(&x).unwrap_or(std::cmp::Ordering::Equal),
-    });
-    summaries
+        .collect()
 }
 
 /// Residual magnitude for one over-constrained constraint, or `None`
@@ -272,6 +289,7 @@ mod tests {
             },
             colours: std::collections::HashMap::new(),
             over_constraints,
+            redundant_constraints: Vec::new(),
             jacobian: Vec::new(),
             params,
         };
@@ -279,6 +297,24 @@ mod tests {
         let mut fp = Footprint::empty("test");
         fp.sketch = Some(data);
         (fp, out)
+    }
+
+    /// #1649 — the redundant list becomes panel rows, in constraint order,
+    /// and a sketch with none yields no rows.
+    #[test]
+    fn redundant_constraints_become_panel_rows() {
+        let scaffold = two_point_scaffold();
+        let c = distance(&scaffold, DimTarget::Literal(5.0));
+        let cid = c.id;
+        let (fp, mut out) = output_for(scaffold, vec![c], ResolvedParams::new());
+        out.over_constraints.clear();
+        assert!(build_redundant_constraint_summaries(&fp, &out).is_empty());
+
+        out.redundant_constraints = vec![cid];
+        let rows = build_redundant_constraint_summaries(&fp, &out);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].constraint_id, cid);
+        assert_eq!(rows[0].kind_label, "DistancePtPt");
     }
 
     /// GH #599 — the panel used to re-resolve `sketch.parameters` and
