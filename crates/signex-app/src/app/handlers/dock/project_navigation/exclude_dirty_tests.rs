@@ -361,10 +361,16 @@ fn an_exclude_save_in_an_undecided_folder_names_the_kept_spelling() {
     );
     assert!(!lists_lib(&app));
     // The dialog lists files by the project's own rule (host default while
-    // undecided), so the retry excludes `Lib` without writing `lib`: its
-    // marker and engine survive, and Quit and Save All still catch it.
-    assert!(app.document_state.dirty_paths.contains(&lower));
-    assert!(app.document_state.engines.contains_key(&lower));
+    // undecided). Where the host folds (Windows) that list holds `lib` too,
+    // so the retry writes it and clears its marker. Where the host keeps case
+    // apart, the retry excludes `Lib` without writing `lib`: its marker and
+    // engine survive, and Quit and Save All still catch it.
+    if CaseFold::host_default().fold_case {
+        assert!(!app.document_state.dirty_paths.contains(&lower));
+    } else {
+        assert!(app.document_state.dirty_paths.contains(&lower));
+        assert!(app.document_state.engines.contains_key(&lower));
+    }
 }
 
 /// #1077 — the project's rule decides, even when it is the opposite of the
