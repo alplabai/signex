@@ -19,6 +19,10 @@ mod print_preview;
 
 use super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 // ── Submenu chevron — single source of truth ─────────────────────────
 //
 // Right-pointing angle quote (U+203A), NOT the BLACK RIGHT-POINTING
@@ -101,7 +105,7 @@ impl Signex {
                     }
                     .map(Message::Dock);
                     iced::widget::container(iced::widget::scrollable(panel))
-                        .padding(8)
+                        .padding(SP.m)
                         .into()
                 }
                 // Detached Component Preview window — render the same
@@ -165,8 +169,8 @@ impl Signex {
             is_last: true,
             accent_position: AccentPosition::Bottom,
         };
-        let inner =
-            container(row![text(title.to_string()).size(11).color(text_c)]).padding([4, 10]);
+        let inner = container(row![text(title.to_string()).size(TS.body).color(text_c)])
+            .padding([SP.s, 10.0]);
         let pill = TabPill::new(inner, pill_style);
         // Anchor near the cursor (right + below) so the pointer
         // remains visible while the ghost trails it.
@@ -451,10 +455,10 @@ impl Signex {
                 container(
                     column![
                         iced::widget::text("Component Editor — state not yet loaded")
-                            .size(13)
+                            .size(TS.title)
                             .color(crate::styles::ti(tokens.text_secondary)),
                     ]
-                    .spacing(4)
+                    .spacing(SP.s)
                     .align_x(iced::Alignment::Center),
                 )
                 .center(Length::Fill)
@@ -515,7 +519,7 @@ impl Signex {
                     // renderable rather than crashing.
                     return container(
                         iced::widget::text("Library Browser — state not yet loaded")
-                            .size(13)
+                            .size(TS.title)
                             .color(crate::styles::ti(tokens.text_secondary)),
                     )
                     .center(Length::Fill)
