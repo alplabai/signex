@@ -168,7 +168,7 @@ fn kinds(ids: &Ids) -> Vec<ConstraintKind> {
         },
         TangentArcArc {
             a1: c1,
-            a2: a2,
+            a2,
             internal: true,
         },
         SymmetricAboutLine {
