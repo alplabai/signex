@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
+use signex_sketch::SketchError;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::unit::Quantity;
 
@@ -37,6 +38,21 @@ fn eval_quantity(expr: &str, ctx: &EvalContext) -> Result<Quantity, String> {
 pub(crate) fn eval_mm(expr: &str, ctx: &EvalContext) -> Result<f64, String> {
     let ast = parse(strip_eq_prefix(expr)).map_err(|e| format!("parse: {e:?}"))?;
     crate::params::eval_length_mm(&ast, ctx).map_err(crate::params::describe)
+}
+
+/// [`eval_mm`] with the typed error, for callers that propagate
+/// [`SketchError`] (pad baking). Same parse + unitless-as-mm rule.
+pub(crate) fn eval_length(expr: &str, ctx: &EvalContext) -> Result<f64, SketchError> {
+    let ast = parse(strip_eq_prefix(expr)).map_err(SketchError::Expr)?;
+    crate::params::eval_length_mm(&ast, ctx)
+}
+
+/// Optional counterpart of [`eval_length`].
+pub(crate) fn opt_eval_length(
+    expr: &Option<String>,
+    ctx: &EvalContext,
+) -> Result<Option<f64>, SketchError> {
+    expr.as_deref().map(|e| eval_length(e, ctx)).transpose()
 }
 
 /// Evaluate an optional length expression to millimetres.
