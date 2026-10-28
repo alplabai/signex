@@ -266,6 +266,17 @@ impl Signex {
         edit: crate::app::contracts::DrawingFieldEdit,
     ) -> iced::Task<crate::app::Message> {
         use signex_types::schematic::SchDrawing;
+        if let crate::app::contracts::DrawingFieldEdit::Placement(placement) = edit {
+            self.apply_engine_command(
+                signex_engine::Command::SetDrawingPlacement {
+                    ids: vec![target_uuid],
+                    placement,
+                },
+                true,
+                true,
+            );
+            return iced::Task::none();
+        }
         let Some(engine) = self.document_state.active_engine() else {
             return iced::Task::none();
         };

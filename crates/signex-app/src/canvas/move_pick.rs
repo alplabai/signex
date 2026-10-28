@@ -234,6 +234,7 @@ mod tests {
             title_block: Default::default(),
             lib_symbols: Default::default(),
             net_colors: Default::default(),
+            drawing_placements: Default::default(),
             frame: Default::default(),
             font_family: None,
         };
