@@ -435,6 +435,7 @@ pub use write_lock::{
     write_lock_path,
 };
 mod helpers;
+pub use helpers::component_to_library_row;
 pub(crate) mod lfs;
 mod pinned_assets;
 mod primitives;
