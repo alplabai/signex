@@ -8,6 +8,10 @@
 
 use super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 impl Signex {
     /// Altium-style Move Selection dialog. Two numeric inputs plus
     /// OK / Cancel. No header on the body: the dialog opens in its own
@@ -23,19 +27,19 @@ impl Signex {
 
         let field = |label: &'static str, value: &str, msg: fn(String) -> Message| {
             column![
-                text(label).size(10).color(text_muted),
+                text(label).size(TS.caption).color(text_muted),
                 text_input("0.00", value)
                     .on_input(msg)
-                    .padding([4, 8])
-                    .size(12),
+                    .padding([SP.s, SP.m])
+                    .size(TS.label),
             ]
-            .spacing(4)
+            .spacing(SP.s)
         };
 
         let body = container(
             column![
                 text(format!("{} item(s) selected", selection_count))
-                    .size(11)
+                    .size(TS.body)
                     .color(text_muted),
                 Space::new().height(12),
                 row![
@@ -64,17 +68,18 @@ impl Signex {
         } else {
             iced::Color::from_rgba(1.0, 1.0, 1.0, 0.4)
         };
-        let mut ok_btn = button(container(text("Apply").size(11).color(ok_fg)).padding([4, 14]))
-            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(ok_bg)),
-                border: iced::Border {
-                    width: 0.0,
-                    radius: 3.0.into(),
-                    ..iced::Border::default()
-                },
-                text_color: ok_fg,
-                ..iced::widget::button::Style::default()
-            });
+        let mut ok_btn =
+            button(container(text("Apply").size(TS.body).color(ok_fg)).padding([SP.s, 14.0]))
+                .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(ok_bg)),
+                    border: iced::Border {
+                        width: 0.0,
+                        radius: 3.0.into(),
+                        ..iced::Border::default()
+                    },
+                    text_color: ok_fg,
+                    ..iced::widget::button::Style::default()
+                });
         if ok_enabled {
             ok_btn = ok_btn.on_press(Message::MoveSelection(MoveSelectionMsg::Apply));
         }
@@ -82,7 +87,7 @@ impl Signex {
         let footer = container(
             row![
                 Space::new().width(iced::Length::Fill),
-                button(container(text("Cancel").size(11).color(text_c)).padding([4, 14]))
+                button(container(text("Cancel").size(TS.body).color(text_c)).padding([SP.s, 14.0]))
                     .on_press(Message::MoveSelection(MoveSelectionMsg::Close))
                     .style(move |_: &iced::Theme, _| iced::widget::button::Style {
                         background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -119,31 +124,33 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text_secondary);
         let border = crate::styles::ti(tokens.border);
-        button(container(text("\u{00D7}".to_string()).size(14).color(text_c)).padding([0, 6]))
-            .on_press(message)
-            .style(
-                move |_: &iced::Theme, status: iced::widget::button::Status| {
-                    let bg = match status {
-                        iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.1),
-                        )),
-                        _ => Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.03,
-                        ))),
-                    };
-                    iced::widget::button::Style {
-                        background: bg,
-                        border: iced::Border {
-                            width: 1.0,
-                            radius: 3.0.into(),
-                            color: border,
-                        },
-                        text_color: text_c,
-                        ..iced::widget::button::Style::default()
-                    }
-                },
-            )
-            .into()
+        button(
+            container(text("\u{00D7}".to_string()).size(TS.heading).color(text_c)).padding([0, 6]),
+        )
+        .on_press(message)
+        .style(
+            move |_: &iced::Theme, status: iced::widget::button::Status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(
+                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.1),
+                    )),
+                    _ => Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.03,
+                    ))),
+                };
+                iced::widget::button::Style {
+                    background: bg,
+                    border: iced::Border {
+                        width: 1.0,
+                        radius: 3.0.into(),
+                        color: border,
+                    },
+                    text_color: text_c,
+                    ..iced::widget::button::Style::default()
+                }
+            },
+        )
+        .into()
     }
 
     /// Altium F5 Net Color palette — list of net labels with a per-net
@@ -193,17 +200,17 @@ impl Signex {
             (0xA0, 0xA0, 0xA0),
         ];
 
-        let mut rows_col = column![].spacing(4);
+        let mut rows_col = column![].spacing(SP.s);
         if nets.is_empty() {
             rows_col = rows_col.push(
                 text("No net labels on the active sheet.")
-                    .size(11)
+                    .size(TS.body)
                     .color(text_muted),
             );
         } else {
             for net in nets {
                 let current = self.ui_state.net_colors.get(&net).copied();
-                let mut swatches = row![].spacing(4).align_y(iced::Alignment::Center);
+                let mut swatches = row![].spacing(SP.s).align_y(iced::Alignment::Center);
                 for (r, g, b) in PALETTE {
                     let is_current = current.is_some_and(|c| c.r == *r && c.g == *g && c.b == *b);
                     let swatch_color = iced::Color::from_rgb8(*r, *g, *b);
@@ -244,7 +251,7 @@ impl Signex {
                 // Clear-override button
                 let net_clear = net.clone();
                 swatches = swatches.push(
-                    button(container(text("×").size(10).color(text_c)).padding([0, 6]))
+                    button(container(text("×").size(TS.caption).color(text_c)).padding([0, 6]))
                         .on_press(Message::NetColor(NetColorMsg::Set {
                             net: net_clear,
                             color: None,
@@ -266,13 +273,13 @@ impl Signex {
                 rows_col = rows_col.push(
                     row![
                         text(net)
-                            .size(11)
+                            .size(TS.body)
                             .color(text_c)
                             .width(iced::Length::FillPortion(2)),
                         swatches,
                     ]
                     .align_y(iced::Alignment::Center)
-                    .padding([2, 8]),
+                    .padding([SP.xs, SP.m]),
                 );
             }
         }
@@ -310,7 +317,7 @@ impl Signex {
         let Some(engine) = self.document_state.active_engine() else {
             return container(
                 column![
-                    container(text("No active schematic.").size(11).color(text_muted))
+                    container(text("No active schematic.").size(TS.body).color(text_muted))
                         .padding([14, 14]),
                 ]
                 .width(iced::Length::Fixed(900.0))
@@ -334,30 +341,30 @@ impl Signex {
         let header_row = {
             let mut r = row![
                 text("Reference")
-                    .size(10)
+                    .size(TS.caption)
                     .color(text_muted)
                     .width(iced::Length::Fixed(100.0)),
                 text("Value")
-                    .size(10)
+                    .size(TS.caption)
                     .color(text_muted)
                     .width(iced::Length::Fixed(160.0)),
                 text("Footprint")
-                    .size(10)
+                    .size(TS.caption)
                     .color(text_muted)
                     .width(iced::Length::Fixed(200.0)),
             ];
             for k in &keys {
                 r = r.push(
                     text(k.clone())
-                        .size(10)
+                        .size(TS.caption)
                         .color(text_muted)
                         .width(iced::Length::Fixed(140.0)),
                 );
             }
-            r.padding([4, 8])
+            r.padding([SP.s, SP.m])
         };
 
-        let mut rows_col = column![].spacing(2);
+        let mut rows_col = column![].spacing(SP.xs);
         rows_col = rows_col.push(header_row);
         for sym in &doc.symbols {
             if sym.is_power {
@@ -365,15 +372,15 @@ impl Signex {
             }
             let mut r = row![
                 text(sym.reference.clone())
-                    .size(11)
+                    .size(TS.body)
                     .color(text_c)
                     .width(iced::Length::Fixed(100.0)),
                 text(sym.value.clone())
-                    .size(11)
+                    .size(TS.body)
                     .color(text_c)
                     .width(iced::Length::Fixed(160.0)),
                 text(sym.footprint.clone())
-                    .size(11)
+                    .size(TS.body)
                     .color(text_muted)
                     .width(iced::Length::Fixed(200.0)),
             ];
@@ -390,12 +397,12 @@ impl Signex {
                                 value: new_val,
                             })
                         })
-                        .padding([2, 6])
-                        .size(11)
+                        .padding([SP.xs, 6.0])
+                        .size(TS.body)
                         .width(iced::Length::Fixed(140.0)),
                 );
             }
-            rows_col = rows_col.push(r.padding([2, 8]));
+            rows_col = rows_col.push(r.padding([SP.xs, SP.m]));
         }
 
         container(
@@ -557,12 +564,12 @@ impl Signex {
                 let v255 = (value * 255.0).round() as i32;
                 row![
                     text(label)
-                        .size(11)
+                        .size(TS.body)
                         .color(text_muted)
                         .width(iced::Length::Fixed(16.0)),
                     text_input("0", &v255.to_string())
-                        .size(11)
-                        .padding([3, 8])
+                        .size(TS.body)
+                        .padding([3.0, SP.m])
                         .width(iced::Length::Fixed(70.0))
                         .on_input(move |s| Message::NetColor(NetColorMsg::CustomChannel(chan, s))),
                 ]
@@ -590,7 +597,7 @@ impl Signex {
         );
 
         let rgb_col = column![
-            text("Custom RGB").size(11).color(text_c),
+            text("Custom RGB").size(TS.body).color(text_c),
             Space::new().height(6),
             channel_row("R", draft.r, Channel::R),
             channel_row("G", draft.g, Channel::G),
@@ -598,14 +605,14 @@ impl Signex {
             Space::new().height(10),
             preview_box,
             Space::new().height(4),
-            text(preview_hex).size(10).color(text_muted),
+            text(preview_hex).size(TS.caption).color(text_muted),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .width(iced::Length::Fixed(150.0));
 
         let body = row![
             column![
-                text("Quick Pick").size(11).color(text_c),
+                text("Quick Pick").size(TS.body).color(text_c),
                 Space::new().height(6),
                 palette_col,
             ]
@@ -617,7 +624,7 @@ impl Signex {
 
         let footer = row![
             Space::new().width(iced::Length::Fill),
-            button(container(text("Cancel").size(11).color(text_c)).padding([4, 14]),)
+            button(container(text("Cancel").size(TS.body).color(text_c)).padding([SP.s, 14.0]),)
                 .on_press(Message::NetColor(NetColorMsg::CustomShow(false)))
                 .style(move |_: &iced::Theme, _| iced::widget::button::Style {
                     background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -633,7 +640,8 @@ impl Signex {
                 }),
             Space::new().width(8),
             button(
-                container(text("Use Color").size(11).color(iced::Color::WHITE)).padding([4, 14]),
+                container(text("Use Color").size(TS.body).color(iced::Color::WHITE))
+                    .padding([SP.s, 14.0]),
             )
             .on_press(Message::NetColor(NetColorMsg::CustomSubmit(draft)))
             .style(move |_: &iced::Theme, _| iced::widget::button::Style {
@@ -655,7 +663,7 @@ impl Signex {
             column![
                 container(
                     row![
-                        text("Pick Net Color").size(13).color(text_c),
+                        text("Pick Net Color").size(TS.title).color(text_c),
                         Space::new().width(iced::Length::Fill),
                         self.view_close_x(Message::NetColor(NetColorMsg::CustomShow(false))),
                     ]

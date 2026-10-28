@@ -61,7 +61,7 @@ impl Signex {
         // in-flight save + commit is waited for.
         let next = self.wait_for_pricing_then(next);
         // Every `background_pref_write` started so far (Save Preferences,
-        // recent projects, ERC severities, toggles) must land before exit
+        // recent projects, filter presets, toggles) must land before exit
         // (#1351).
         let next = wait_for_pref_writes_then(next);
         // Profile edits still queued (the machine's rules, a profile edited in
@@ -100,9 +100,15 @@ impl Signex {
 
 /// Wait (bounded) for every in-flight ordered preference write, then `next`.
 fn wait_for_pref_writes_then(next: Task<Message>) -> Task<Message> {
+    #[cfg(test)]
+    let probe = crate::fonts::take_wait_probe();
     Task::perform(
-        async {
-            tokio::task::spawn_blocking(|| {
+        async move {
+            tokio::task::spawn_blocking(move || {
+                #[cfg(test)]
+                if let Some(probe) = &probe {
+                    probe.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
                 if !crate::fonts::wait_for_pref_writes(PREF_WRITE_QUIT_LIMIT) {
                     crate::diagnostics::log_error(
                         "Preferences were not fully saved before exit",

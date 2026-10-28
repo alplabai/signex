@@ -231,12 +231,13 @@ fn quitting_right_after_save_waits_for_the_preference_writes() {
     // writes (or, if it never waits, until it would exit), so the writes
     // cannot land first by luck of timing.
     let busy = crate::fonts::PrefsIoHold::take();
-    crate::fonts::reset_pref_wait_started();
+    let wait_started = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    crate::fonts::install_wait_probe(wait_started.clone());
     let exit_reached = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let releaser = {
         let exit_reached = exit_reached.clone();
         std::thread::spawn(move || {
-            while !crate::fonts::pref_wait_started()
+            while !wait_started.load(std::sync::atomic::Ordering::SeqCst)
                 && !exit_reached.load(std::sync::atomic::Ordering::SeqCst)
             {
                 std::thread::yield_now();
@@ -265,4 +266,108 @@ fn quitting_right_after_save_waits_for_the_preference_writes() {
 
     assert!(exited, "the quit chain reaches its exit step");
     releaser.join().expect("releaser thread");
+}
+
+fn blank_project() -> signex_types::project::ProjectData {
+    signex_types::project::ProjectData {
+        description: None,
+        name: "p".into(),
+        dir: String::new(),
+        schematic_root: None,
+        pcb_file: None,
+        sheets: Vec::new(),
+        variant_definitions: Vec::new(),
+        active_variant: None,
+        libraries: Vec::new(),
+        enable_git: false,
+        net_classes: Vec::new(),
+        rules: None,
+        annotation: None,
+        parameters: Default::default(),
+        unknown: Default::default(),
+    }
+}
+
+/// hkngln #1602 item 2: right after a Save the prefs write may not have
+/// landed. A library opened, mounted or created then must still start from the
+/// saved values, not from what `prefs.json` holds. The Save tasks are never
+/// run here, so the file keeps its old contents for the whole test.
+#[test]
+fn a_library_opened_right_after_save_takes_the_saved_defaults() {
+    use crate::render_config::PinSelectionMode;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let existing = dir.path().join("existing.snxlib");
+    let mounted = dir.path().join("mounted.snxlib");
+    let created = dir.path().join("created.snxlib");
+    let fold = crate::app::CaseFold::default();
+    for path in [&existing, &mounted] {
+        crate::library::commands::create_library_at(
+            &mut crate::library::LibraryState::default(),
+            &mut blank_project(),
+            path.clone(),
+            false,
+            false,
+            fold,
+        )
+        .expect("fixture library");
+    }
+
+    let (mut app, _task) = Signex::new();
+    let new_size = 0.635_f32;
+    let new_pins = match app.ui_state.symbol_pin_selection {
+        PinSelectionMode::PinOnly => PinSelectionMode::TextAndPin,
+        PinSelectionMode::TextAndPin => PinSelectionMode::PinOnly,
+    };
+    let new_classes = vec![crate::fonts::ComponentClassEntry {
+        key: "zz_1602".into(),
+        label: "Zz 1602".into(),
+    }];
+    app.ui_state.preferences_draft_symbol_grid_size_mm = new_size;
+    app.ui_state.preferences_draft_symbol_pin_selection = new_pins;
+    app.ui_state.preferences_draft_component_classes = new_classes.clone();
+
+    let _writes_not_run = app.dispatch_update(save_message());
+
+    assert_ne!(
+        crate::fonts::read_symbol_grid_size_mm_pref(),
+        new_size,
+        "fixture: the prefs file has not caught up"
+    );
+
+    app.library
+        .open_library(existing.clone())
+        .expect("open the library");
+    let opened = app.library.library_at(&existing).expect("opened");
+    assert_eq!(opened.display.grid_size_mm, new_size, "open: grid size");
+    assert_eq!(
+        opened.display.pin_selection, new_pins,
+        "open: pin selection"
+    );
+
+    let prepared = crate::library::mount::prepare_mount(&mounted).expect("prepare");
+    app.library.mount_prepared(prepared).expect("mount");
+    let mounted_entry = app.library.library_at(&mounted).expect("mounted");
+    assert_eq!(
+        mounted_entry.display.grid_size_mm, new_size,
+        "mount: grid size"
+    );
+    assert_eq!(mounted_entry.display.pin_selection, new_pins, "mount: pins");
+
+    let id = crate::library::commands::create_library_at(
+        &mut app.library,
+        &mut blank_project(),
+        created.clone(),
+        false,
+        false,
+        fold,
+    )
+    .expect("create");
+    let adapter = app.library.set.get(id).expect("created library is mounted");
+    let keys: Vec<String> = adapter
+        .library_classes()
+        .into_iter()
+        .map(|c| c.key)
+        .collect();
+    assert_eq!(keys, vec!["zz_1602".to_string()], "create: classes");
 }

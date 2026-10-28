@@ -704,6 +704,7 @@ mod refresh;
 mod refresh_tests;
 mod relocate;
 mod symbol_choice;
+mod table_scan;
 #[cfg(test)]
 mod tests;
 mod under_folder;

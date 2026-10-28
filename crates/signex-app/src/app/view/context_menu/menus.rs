@@ -19,6 +19,10 @@ use crate::menu_bar::cmd_label;
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Keyboard-shortcut hints for the canvas menu, resolved from the active
 /// keymap profile (with the historic Altium defaults as fallbacks) before
 /// the pure builder runs.
@@ -80,8 +84,8 @@ impl Signex {
             let row_label = *label;
             let row_step = *step_mm;
             let btn = button(
-                container(text(row_label).size(11).color(lbl_color))
-                    .padding([4, 12])
+                container(text(row_label).size(TS.body).color(lbl_color))
+                    .padding([SP.s, SP.l])
                     .width(iced::Length::Fill),
             )
             .padding(0)
@@ -105,7 +109,7 @@ impl Signex {
         }
 
         container(col)
-            .padding(4)
+            .padding(SP.s)
             .style(move |_: &iced::Theme| iced::widget::container::Style {
                 background: Some(iced::Background::Color(panel_bg)),
                 border: iced::Border {
@@ -247,7 +251,7 @@ pub(super) fn canvas_menu_entries(
         if drawing_selected {
             v.push(submenu_launcher(
                 tokens,
-                None,
+                Some(ic::icon_dd_align_menu(tid)),
                 "Arrange",
                 ContextSubmenu::Arrange,
                 active_submenu == Some(ContextSubmenu::Arrange),

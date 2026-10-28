@@ -758,7 +758,7 @@ pub use erc::*;
 pub use misc::*;
 pub use ordered_write::{OrderedPrefWrite, background_pref_write, wait_for_pref_writes};
 #[cfg(test)]
-pub(crate) use ordered_write::{pref_wait_started, reset_pref_wait_started};
+pub(crate) use ordered_write::{install_wait_probe, take_wait_probe};
 pub use presets::*;
 pub use recent::*;
 
