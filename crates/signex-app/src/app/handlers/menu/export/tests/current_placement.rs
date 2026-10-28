@@ -63,6 +63,7 @@ fn placed_twice_listing(dir: &tempfile::TempDir, listed: &[&str]) -> (Signex, Pa
     write(&child, child_sheet);
     let mut app = app_workspace(&dir.path().to_string_lossy(), listed);
     app.open_or_focus_sheet_path(top.clone());
+    app.refresh_panel_ctx();
     app.settle_navigator();
     (app, top, child)
 }
@@ -70,12 +71,13 @@ fn placed_twice_listing(dir: &tempfile::TempDir, listed: &[&str]) -> (Signex, Pa
 /// Descend through the sheet symbol `placement` of the focused `top` by the
 /// canvas route (double-click / context menu both end in this call).
 pub(crate) fn descend_by_canvas(app: &mut Signex, placement: u128) {
-    app.settle_navigator();
     app.interaction_state.active_canvas_mut().selected = vec![SelectedItem::new(
         Uuid::from_u128(placement),
         SelectedKind::ChildSheet,
     )];
     assert!(app.open_selected_child_sheet());
+    app.refresh_panel_ctx();
+    app.settle_navigator();
 }
 
 /// What "Current page" prints for the focused `child`: its first symbol's
@@ -444,6 +446,8 @@ pub(crate) fn three_levels_on_disk(dir: &tempfile::TempDir) -> (Signex, PathBuf,
     write(&path("leaf.snxsch"), leaf);
     let mut app = app_workspace(&dir.path().to_string_lossy(), &["top.snxsch"]);
     app.open_or_focus_sheet_path(path("top.snxsch"));
+    app.refresh_panel_ctx();
+    app.settle_navigator();
     (
         app,
         path("top.snxsch"),

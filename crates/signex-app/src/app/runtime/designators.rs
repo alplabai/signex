@@ -59,10 +59,8 @@ impl Signex {
     pub(crate) fn shown_placement(&self, path: &std::path::Path) -> Option<InstancePath> {
         let document_state = &self.document_state;
         let recorded = document_state.tab_placements.get(path);
-        let hierarchy = document_state
-            .panel_ctx
-            .navigator
-            .current_hierarchy()
+        let hierarchy = self
+            .settled_navigator_hierarchy()
             .filter(|_| document_state.active_path.as_deref() == Some(path));
         let Some(hierarchy) = hierarchy else {
             return recorded.cloned();
@@ -102,11 +100,14 @@ impl Signex {
     /// it (#1224).
     pub(crate) fn known_single_placement(&self, path: &std::path::Path) -> bool {
         !self.shared_with_another_open_project(path)
+            // A pending hierarchy may predate an edit that added a placement.
+            && self.navigator_is_settled()
             && self
                 .document_state
                 .panel_ctx
                 .navigator
-                .current_hierarchy()
+                .hierarchy
+                .as_ref()
                 .is_some_and(|h| h.is_complete() && h.placements_of(path).len() <= 1)
     }
 

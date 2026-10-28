@@ -291,18 +291,6 @@ pub(crate) fn open_sheets_snapshot_of(
         .collect()
 }
 
-/// [`assemble_project_sheets_from`] that moves each sheet out of `open` instead
-/// of cloning it again: the walk looks a path up at most once.
-pub(crate) fn assemble_project_sheets_taking(
-    open: OpenSheets,
-    pages: &[PathBuf],
-    root_path: &Path,
-    fold: CaseFold,
-) -> ProjectSheetSet {
-    let open = std::cell::RefCell::new(open);
-    assemble_project_sheets_with(&|p| open.borrow_mut().remove(p), pages, root_path, fold)
-}
-
 /// [`assemble_project_sheets`] over a snapshot instead of the live state.
 pub(crate) fn assemble_project_sheets_from(
     open: &OpenSheets,

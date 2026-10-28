@@ -4,6 +4,29 @@
 use super::*;
 
 impl Signex {
+    /// The current index path of the row `key` names. A project root row is
+    /// identified by its project id, so it resolves even before the tree is
+    /// built; any other row is looked up by key in the tree as it is now. A
+    /// row that no longer exists yields `None`, never its neighbour.
+    pub(super) fn resolve_tree_row(
+        &self,
+        key: &signex_widgets::tree_view::TreeKey,
+    ) -> Option<Vec<usize>> {
+        if let Some(path) = signex_widgets::tree_view::resolve_path(
+            self.document_state.panel_ctx.project_tree.as_slice(),
+            key,
+        ) {
+            return Some(path);
+        }
+        let [root] = key.as_slice() else { return None };
+        let idx = self
+            .document_state
+            .projects
+            .iter()
+            .position(|p| p.id.to_string() == *root)?;
+        Some(vec![idx])
+    }
+
     /// The id of the project that owns the tree row at `tree_path`.
     pub(super) fn project_id_at_tree_path(
         &self,

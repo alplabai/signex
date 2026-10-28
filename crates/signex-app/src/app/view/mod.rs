@@ -96,9 +96,14 @@ impl Signex {
                 // window id they render into.
                 super::state::WindowKind::UndockedTab { .. } => self.view_main_for(window_id),
                 super::state::WindowKind::DetachedPanel(kind) => {
-                    let panel = crate::panels::view_panel(*kind, &self.document_state.panel_ctx)
-                        .map(crate::dock::DockMessage::Panel)
-                        .map(Message::Dock);
+                    let ctx = &self.document_state.panel_ctx;
+                    let panel = if *kind == crate::panels::PanelKind::Components {
+                        crate::panels::components_panel::view(&self.library, ctx, &ctx.tokens)
+                            .map(crate::dock::DockMessage::Library)
+                    } else {
+                        crate::panels::view_panel(*kind, ctx).map(crate::dock::DockMessage::Panel)
+                    }
+                    .map(Message::Dock);
                     iced::widget::container(iced::widget::scrollable(panel))
                         .padding(SP.m)
                         .into()
@@ -619,7 +624,7 @@ impl Signex {
             match Surface::select(self.document_state.active_project.is_some()) {
                 Surface::ProjectHint => start_screen::hint_view(tokens),
                 Surface::Start => {
-                    let open_shortcut = self.keymap_shortcut_label("open_document", "Ctrl+O");
+                    let open_shortcut = self.keymap_shortcut_label("open_document");
                     start_screen::view(
                         tokens,
                         &open_shortcut,

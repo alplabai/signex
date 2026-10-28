@@ -9,8 +9,8 @@
 //! 2. **Installed** — session-scoped, opened via the "+ Add Library…"
 //!    button on the Installed section header. Wiped on app close.
 //! 3. **Global** — persisted across launches via
-//!    `<config_dir>/signex/global_libraries.toml`. Loaded + mounted at
-//!    startup by [`global_prefs::load_and_mount_all`].
+//!    `<config_dir>/signex/global_libraries.toml`. Loaded at startup by
+//!    [`global_prefs::load`] and mounted off the UI thread.
 //!
 //! All three sources read from the same `LibraryState::open_libraries`
 //! Vec — `LibraryState::mount_source_for` does the bucketing at view
@@ -36,6 +36,10 @@ use signex_widgets::theme_ext;
 
 use crate::library::messages::LibraryMessage;
 use crate::library::state::{ComponentsMountSource, LibraryState, OpenLibrary};
+use crate::styles::Spacing;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: Spacing = Spacing::DEFAULT;
 
 pub mod global_prefs;
 pub mod stock;
@@ -79,10 +83,10 @@ pub fn view<'a>(
     // ── Header: filter input ─────────────────────────────────────
     let filter = text_input("Filter components…", &state.components_panel.filter)
         .on_input(LibraryMessage::ComponentsPanelSetFilter)
-        .padding(4)
+        .padding(SP.s)
         .size(PANEL_TEXT_SIZE);
 
-    let filter_row = container(filter).padding([4, 6]);
+    let filter_row = container(filter).padding([SP.s, 6.0]);
 
     // ── Three collapsible source sections ────────────────────────
     let mut col: Column<'a, LibraryMessage> =
@@ -125,7 +129,7 @@ pub fn view<'a>(
                     .size(PANEL_TEXT_SIZE)
                     .color(muted),
             )
-            .padding([10, 8]),
+            .padding([10.0, SP.m]),
         );
     }
 
@@ -173,7 +177,7 @@ fn view_section<'a>(
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([6, 8])
+    .padding([6.0, SP.m])
     .width(Length::Fill)
     .on_press(LibraryMessage::ComponentsPanelToggleSection(src))
     .style(move |_: &Theme, status: iced::widget::button::Status| {
@@ -196,7 +200,7 @@ fn view_section<'a>(
         ComponentsMountSource::Installed | ComponentsMountSource::Global
     ) {
         let add_btn = button(text("+ Add Library…").size(ROW_TEXT_SIZE).color(text_c))
-            .padding([2, 8])
+            .padding([SP.xs, SP.m])
             .on_press(LibraryMessage::ComponentsPanelAddLibrary(src))
             .style(crate::styles::menu_item(tokens));
         header_row = header_row.push(container(add_btn).padding([0, 6]));
@@ -221,8 +225,9 @@ fn view_section<'a>(
                     "Stock library not found. Reinstall Signex to restore the bundled parts."
                 }
             };
-            section_col = section_col
-                .push(container(text(empty_msg).size(ROW_TEXT_SIZE).color(muted)).padding([6, 16]));
+            section_col = section_col.push(
+                container(text(empty_msg).size(ROW_TEXT_SIZE).color(muted)).padding([6.0, SP.xl]),
+            );
         } else {
             let needle = state.components_panel.filter.trim().to_lowercase();
             for lib in libs_for_source.iter().copied() {
@@ -269,10 +274,10 @@ fn view_library_block<'a>(
                     .size(ROW_TEXT_SIZE)
                     .color(muted),
             ]
-            .spacing(4)
+            .spacing(SP.s)
             .align_y(iced::Alignment::Center),
         )
-        .padding([4, 16]),
+        .padding([SP.s, SP.xl]),
     );
 
     // Rows come from the cache `update` keeps current (lowercase keys and
@@ -304,7 +309,7 @@ fn view_library_block<'a>(
                 .size(ROW_TEXT_SIZE)
                 .color(muted),
             )
-            .padding([2, 28]),
+            .padding([SP.xs, 28.0]),
         );
     }
 
@@ -315,7 +320,7 @@ fn view_library_block<'a>(
                     .size(ROW_TEXT_SIZE)
                     .color(muted),
             )
-            .padding([2, 28]),
+            .padding([SP.xs, 28.0]),
         );
     }
 
@@ -360,9 +365,9 @@ fn view_row_button<'a>(
                 .width(Length::FillPortion(2))
                 .wrapping(iced::widget::text::Wrapping::None),
         ]
-        .spacing(4),
+        .spacing(SP.s),
     )
-    .padding([2, 28])
+    .padding([SP.xs, 28.0])
     .width(Length::Fill)
     .on_press(LibraryMessage::OpenComponentRow {
         library_path,

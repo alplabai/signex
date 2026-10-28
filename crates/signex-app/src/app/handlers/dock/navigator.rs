@@ -40,12 +40,18 @@ impl Signex {
     /// Single click highlights the row; a second click on it within 500 ms
     /// opens (or focuses) that sheet — the Projects tree's rule.
     fn navigator_row_clicked(&mut self, path: &[usize]) {
+        // A row of the previous hierarchy would record a placement the project
+        // may no longer have; the click is ignored until the rebuild lands.
+        if !self.navigator_is_settled() {
+            return;
+        }
         let navigator = &mut self.document_state.panel_ctx.navigator;
         let Some(node) = navigator.node_at(path) else {
             return;
         };
         let placement = navigator
-            .current_hierarchy()
+            .hierarchy
+            .as_ref()
             .and_then(|hierarchy| hierarchy.placement_at(path));
         let (sheet_path, kind, label, detail) = (
             node.path.clone(),
@@ -185,151 +191,6 @@ mod tests {
     }
 
     #[test]
-    fn a_fingerprint_change_defers_the_disk_read_to_a_task() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let (mut app, _) = three_level_project(&dir, &[]);
-
-        app.refresh_panel_ctx();
-        assert!(
-            app.document_state.panel_ctx.navigator.tree.is_empty(),
-            "refresh_panel_ctx must not read the sheets from disk"
-        );
-        let request = app
-            .document_state
-            .panel_ctx
-            .navigator
-            .wanted
-            .clone()
-            .expect("the refresh records what it wants built");
-
-        assert!(
-            app.start_navigator_build().is_some(),
-            "update starts the build as a Task"
-        );
-        assert!(
-            app.start_navigator_build().is_none(),
-            "the request is claimed once"
-        );
-
-        let open = app.navigator_open_snapshot(&request);
-        let built = crate::app::runtime::navigator_ctx::build_navigator_hierarchy(open, &request);
-        app.handle_navigator_built(request.generation, Ok(Box::new(built)));
-        assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Leaf"]);
-    }
-
-    #[test]
-    fn a_failed_build_is_asked_for_again_rather_than_leaving_the_panel_empty() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let (mut app, _) = three_level_project(&dir, &[]);
-        app.refresh_panel_ctx();
-        let failed = app
-            .document_state
-            .panel_ctx
-            .navigator
-            .wanted
-            .take()
-            .expect("first request");
-
-        app.handle_navigator_built(failed.generation, Err("worker panicked".into()));
-        app.refresh_panel_ctx();
-        assert!(
-            app.document_state.panel_ctx.navigator.wanted.is_some(),
-            "the next refresh asks for the hierarchy again"
-        );
-
-        app.settle_navigator();
-        assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Leaf"]);
-    }
-
-    #[test]
-    fn a_build_that_keeps_failing_is_not_retried_forever() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let (mut app, _) = three_level_project(&dir, &[]);
-        let mut attempts = 0;
-        loop {
-            app.refresh_panel_ctx();
-            let Some(request) = app.document_state.panel_ctx.navigator.wanted.take() else {
-                break;
-            };
-            attempts += 1;
-            assert!(attempts < 20, "the retry never stops");
-            app.handle_navigator_built(request.generation, Err("boom".into()));
-        }
-        assert!(attempts > 1, "a failure is retried at least once");
-    }
-
-    #[test]
-    fn an_unsaved_edit_on_an_open_sheet_behind_a_closed_one_reaches_the_hierarchy() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let (mut app, [root, _mid, leaf]) = three_level_project(&dir, &[]);
-        // root and leaf are open; mid, between them, is closed.
-        app.open_or_focus_sheet_path(root);
-        app.open_or_focus_sheet_path(leaf.clone());
-        let engine = app
-            .document_state
-            .engines
-            .get_mut(&leaf)
-            .expect("leaf open");
-        let mut document = engine.document().clone();
-        let mut extra = document.child_sheets.first().cloned().unwrap_or_else(|| {
-            sheet_with_net("R1", "N", &["extra.snxsch"]).child_sheets[0].clone()
-        });
-        extra.name = "Extra".into();
-        extra.filename = "extra.snxsch".into();
-        document.child_sheets.push(extra);
-        engine
-            .execute(signex_engine::Command::ReplaceDocument { document })
-            .expect("replace");
-
-        app.refresh_panel_ctx();
-        app.settle_navigator();
-
-        assert_eq!(
-            labels(&app, &[0, 0, 0, 0]),
-            ["root", "Mid", "Leaf", "Extra (missing)"],
-            "the unsaved reference on the open leaf is in the Navigator"
-        );
-    }
-
-    #[test]
-    fn a_build_overtaken_by_a_newer_request_is_dropped() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let (mut app, [_, _, leaf]) = three_level_project(&dir, &[]);
-        app.refresh_panel_ctx();
-        let stale = app
-            .document_state
-            .panel_ctx
-            .navigator
-            .wanted
-            .clone()
-            .expect("first request");
-        let open = app.navigator_open_snapshot(&stale);
-        let stale_built =
-            crate::app::runtime::navigator_ctx::build_navigator_hierarchy(open, &stale);
-
-        // Opening a sheet changes the fingerprint before the first build lands.
-        app.open_or_focus_sheet_path(leaf);
-        app.refresh_panel_ctx();
-        let fresh = app
-            .document_state
-            .panel_ctx
-            .navigator
-            .wanted
-            .clone()
-            .expect("second request");
-        assert_ne!(stale.generation, fresh.generation);
-
-        app.handle_navigator_built(stale.generation, Ok(Box::new(stale_built)));
-        assert!(
-            app.document_state.panel_ctx.navigator.hierarchy.is_none(),
-            "the stale result must not be applied"
-        );
-
-        app.settle_navigator();
-        assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Leaf"]);
-    }
-
-    #[test]
     fn navigator_shows_the_whole_hierarchy_even_with_a_leaf_focused() {
         let dir = tempfile::tempdir().expect("tempdir");
         let (mut app, [_, _, leaf]) = three_level_project(&dir, &[]);
@@ -409,6 +270,26 @@ mod tests {
             memo.1 = std::time::Instant::now() + std::time::Duration::from_secs(3600);
         }
         let _ = app.handle_dock_navigator_panel_message(&select);
+    }
+
+    #[test]
+    fn a_double_click_while_the_hierarchy_rebuilds_opens_nothing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (mut app, [_, mid, _]) = three_level_project(&dir, &[]);
+        app.refresh_panel_ctx();
+        app.settle_navigator();
+
+        // Opening a tab changes what the Navigator is built from.
+        app.open_or_focus_sheet_path(dir.path().join("leaf.snxsch"));
+        app.refresh_panel_ctx();
+        assert!(!app.navigator_is_settled(), "precondition: rebuild pending");
+
+        double_click(&mut app, &[0, 0]);
+
+        assert!(
+            !app.document_state.engines.contains_key(&mid),
+            "the row of the previous hierarchy must not open a sheet"
+        );
     }
 
     #[test]

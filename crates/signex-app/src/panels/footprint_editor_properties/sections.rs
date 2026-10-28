@@ -8,6 +8,11 @@ use super::super::{
 use super::managers::{render_grid_manager, render_other_section};
 use super::snap_options::render_snapping_mode_row;
 use super::{fp_is_collapsed, props_kv_row, props_section_header};
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 pub(super) fn view_sections<'a>(
     mut col: Column<'a, PanelMsg>,
@@ -52,19 +57,19 @@ pub(super) fn view_sections<'a>(
         // (Altium PCB Library editor parity): each can be on
         // simultaneously. Replaces the previous mutex sub-tab.
         col = col.push(
-            container(text("Snap targets").size(10).color(muted))
-                .padding([4, 8])
+            container(text("Snap targets").size(TS.caption).color(muted))
+                .padding([SP.s, SP.m])
                 .width(Length::Fill),
         );
         let snap_pill =
             |label: &'static str, flag: SnapOptionFlag, on: bool| -> Element<'static, PanelMsg> {
                 iced::widget::button(
                     text(label)
-                        .size(10)
+                        .size(TS.caption)
                         .color(if on { primary } else { muted })
                         .align_x(iced::alignment::Horizontal::Center),
                 )
-                .padding([3, 12])
+                .padding([3.0, SP.l])
                 .on_press(PanelMsg::FpEditorToggleSnapOption(flag))
                 .style(move |_: &Theme, status: iced::widget::button::Status| {
                     let bg = match status {
@@ -96,10 +101,10 @@ pub(super) fn view_sections<'a>(
                     snap_pill("Guides", SnapOptionFlag::SnapToGuides, opts.snap_to_guides),
                     snap_pill("Axes", SnapOptionFlag::SnapToAxes, opts.snap_to_axes),
                 ]
-                .spacing(4)
+                .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
             )
-            .padding([2, 8])
+            .padding([SP.xs, SP.m])
             .width(Length::Fill),
         );
 
@@ -112,20 +117,23 @@ pub(super) fn view_sections<'a>(
         // v0.13 — Altium-style "Objects for snapping" table. 12-row
         // checkbox list mapped to the snap_* fields on SnapOptions.
         col = col.push(
-            container(text("Objects for snapping").size(10).color(muted))
-                .padding([6, 8])
+            container(text("Objects for snapping").size(TS.caption).color(muted))
+                .padding([6.0, SP.m])
                 .width(Length::Fill),
         );
         let header = row![
             text("On/Off")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::Fixed(60.0)),
-            text("Objects").size(10).color(muted).width(Length::Fill),
+            text("Objects")
+                .size(TS.caption)
+                .color(muted)
+                .width(Length::Fill),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center);
-        col = col.push(container(header).padding([2, 8]).width(Length::Fill));
+        col = col.push(container(header).padding([SP.xs, SP.m]).width(Length::Fill));
         col = col.push(super::super::thin_sep(border_c));
         let snap_rows: &[(&str, SnapOptionFlag, bool)] = &[
             (
@@ -183,19 +191,19 @@ pub(super) fn view_sections<'a>(
                 container(
                     iced::widget::checkbox(on)
                         .on_toggle(move |_| PanelMsg::FpEditorToggleSnapOption(flag))
-                        .size(12)
+                        .size(TS.label)
                         .spacing(0),
                 )
                 .width(Length::Fixed(60.0))
                 .padding([0, 0]),
                 text(label_owned)
-                    .size(10)
+                    .size(TS.caption)
                     .color(primary)
                     .width(Length::Fill),
             ]
-            .spacing(4)
+            .spacing(SP.s)
             .align_y(iced::Alignment::Center);
-            col = col.push(container(row_w).padding([2, 8]).width(Length::Fill));
+            col = col.push(container(row_w).padding([SP.xs, SP.m]).width(Length::Fill));
         }
 
         // Snap Distance + Axis Snap Range numeric rows.
@@ -206,12 +214,12 @@ pub(super) fn view_sections<'a>(
             container(
                 row![
                     text(label.to_string())
-                        .size(10)
+                        .size(TS.caption)
                         .color(muted)
                         .width(Length::Fixed(110.0)),
                     text_input("", &format!("{value:.3}"))
-                        .size(10)
-                        .padding(2)
+                        .size(TS.caption)
+                        .padding(SP.xs)
                         .style(move |_: &Theme, _| iced::widget::text_input::Style {
                             background: iced::Background::Color(iced::Color::from_rgba(
                                 1.0, 1.0, 1.0, 0.04,
@@ -231,7 +239,7 @@ pub(super) fn view_sections<'a>(
                 .spacing(6)
                 .align_y(iced::Alignment::Center),
             )
-            .padding([2, 8])
+            .padding([SP.xs, SP.m])
             .width(Length::Fill)
             .into()
         };
@@ -300,21 +308,25 @@ pub(super) fn view_sections<'a>(
         if !fp_is_collapsed("fp_parameters", collapsed_sections) {
             if fp.sketch_parameters.is_empty() {
                 col = col.push(
-                    container(text("(none — add via expression)").size(10).color(muted))
-                        .padding([2, 8])
-                        .width(Length::Fill),
+                    container(
+                        text("(none — add via expression)")
+                            .size(TS.caption)
+                            .color(muted),
+                    )
+                    .padding([SP.xs, SP.m])
+                    .width(Length::Fill),
                 );
             } else {
                 for (name, expr) in &fp.sketch_parameters {
                     let name_clone = name.clone();
                     let row = row![
                         text(name)
-                            .size(10)
+                            .size(TS.caption)
                             .color(primary)
                             .width(Length::Fixed(110.0)),
                         text_input("expression…", expr)
-                            .size(10)
-                            .padding(2)
+                            .size(TS.caption)
+                            .padding(SP.xs)
                             .style(move |_: &Theme, _| iced::widget::text_input::Style {
                                 background: iced::Background::Color(iced::Color::from_rgba(
                                     1.0, 1.0, 1.0, 0.04,
@@ -336,7 +348,7 @@ pub(super) fn view_sections<'a>(
                     ]
                     .spacing(6)
                     .align_y(iced::Alignment::Center);
-                    col = col.push(container(row).padding([2, 8]).width(Length::Fill));
+                    col = col.push(container(row).padding([SP.xs, SP.m]).width(Length::Fill));
                 }
             }
         } // end if !fp_parameters collapsed
@@ -410,9 +422,13 @@ pub(super) fn view_sections<'a>(
                 // moves on.
                 if !s.over_constraints.is_empty() {
                     col = col.push(
-                        container(text("Conflicts (worst first)").size(10).color(muted))
-                            .padding([4, 8])
-                            .width(Length::Fill),
+                        container(
+                            text("Conflicts (worst first)")
+                                .size(TS.caption)
+                                .color(muted),
+                        )
+                        .padding([SP.s, SP.m])
+                        .width(Length::Fill),
                     );
                     for oc in s.over_constraints.iter().take(8) {
                         // GH #599 — an unevaluable residual says so.
@@ -428,10 +444,10 @@ pub(super) fn view_sections<'a>(
                         let inner: Element<'_, _> = if let Some(focus_id) = oc.focus_entity_id {
                             button(
                                 text(label)
-                                    .size(10)
+                                    .size(TS.caption)
                                     .color(Color::from_rgba(1.00, 0.55, 0.55, 1.00)),
                             )
-                            .padding([2, 8])
+                            .padding([SP.xs, SP.m])
                             .width(Length::Fill)
                             .on_press(PanelMsg::FpEditorSelectSketchEntity { id: focus_id })
                             .style(move |_t: &Theme, _| iced::widget::button::Style {
@@ -444,10 +460,10 @@ pub(super) fn view_sections<'a>(
                         } else {
                             container(
                                 text(label)
-                                    .size(10)
+                                    .size(TS.caption)
                                     .color(Color::from_rgba(1.00, 0.55, 0.55, 1.00)),
                             )
-                            .padding([2, 8])
+                            .padding([SP.xs, SP.m])
                             .width(Length::Fill)
                             .into()
                         };
@@ -471,15 +487,15 @@ pub(super) fn view_sections<'a>(
                                     .size(9)
                                     .color(muted),
                             )
-                            .padding([2, 8])
+                            .padding([SP.xs, SP.m])
                             .width(Length::Fill),
                         );
                     }
                 }
             } else {
                 col = col.push(
-                    container(text("(no solve yet)").size(10).color(muted))
-                        .padding([2, 8])
+                    container(text("(no solve yet)").size(TS.caption).color(muted))
+                        .padding([SP.xs, SP.m])
                         .width(Length::Fill),
                 );
             }
@@ -496,15 +512,15 @@ pub(super) fn view_sections<'a>(
         if !fp_is_collapsed("fp_solve_warnings", collapsed_sections) {
             if fp.solve_warnings.is_empty() {
                 col = col.push(
-                    container(text("(none)").size(10).color(muted))
-                        .padding([2, 8])
+                    container(text("(none)").size(TS.caption).color(muted))
+                        .padding([SP.xs, SP.m])
                         .width(Length::Fill),
                 );
             } else {
                 for w in fp.solve_warnings.iter().take(8) {
                     col = col.push(
                         container(text(w).size(9).color(muted))
-                            .padding([2, 8])
+                            .padding([SP.xs, SP.m])
                             .width(Length::Fill),
                     );
                 }
@@ -515,7 +531,7 @@ pub(super) fn view_sections<'a>(
                                 .size(9)
                                 .color(muted),
                         )
-                        .padding([2, 8])
+                        .padding([SP.xs, SP.m])
                         .width(Length::Fill),
                     );
                 }

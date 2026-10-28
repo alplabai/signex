@@ -14,9 +14,6 @@ fn send(app: &mut Signex, msg: FindReplaceMsg) {
 }
 
 fn project_search(app: &mut Signex, query: &str) {
-    // The scan reads the Navigator's hierarchy only once it is current.
-    app.refresh_panel_ctx();
-    app.settle_navigator();
     send(app, FindReplaceMsg::ScopeChanged(FindScope::Project));
     send(app, FindReplaceMsg::QueryChanged(query.into()));
     app.run_project_scan_blocking();
@@ -725,7 +722,11 @@ fn open_edit_save_close_mid_flight_refuses_the_replace_and_keeps_the_saved_edit(
         engine.save().expect("save");
         engine.revision()
     };
-    app.mark_saved(&child, revision, 0);
+    let saved_bytes = crate::app::state::CommitBytes {
+        bytes: std::sync::Arc::new(std::fs::read(&child).unwrap()),
+        sequence: 1,
+    };
+    app.mark_saved(&child, revision, 0, saved_bytes);
     let idx = app
         .document_state
         .tabs

@@ -95,10 +95,10 @@ impl Signex {
         if let Some(probe) = self.start_project_fs_probe(false) {
             tasks.push(probe);
         }
-        // Likewise the Navigator's sheet hierarchy: refresh records the
-        // request, the disk read runs here as a Task.
-        if let Some(build) = self.start_navigator_build() {
-            tasks.push(build);
+        // Likewise the Navigator hierarchy: the refresh records the request,
+        // the sheet reads run here off-thread (#1470).
+        if let Some(assembly) = self.start_navigator_assembly() {
+            tasks.push(assembly);
         }
         if tasks.len() == 1 {
             return tasks.pop().expect("one task");

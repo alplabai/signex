@@ -24,7 +24,7 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Keyboard-shortcut hints for the canvas menu, resolved from the active
-/// keymap profile (with the historic Altium defaults as fallbacks) before
+/// keymap profile (empty when the profile does not bind the command) before
 /// the pure builder runs.
 pub(super) struct CanvasShortcuts {
     pub find: String,
@@ -134,14 +134,14 @@ impl Signex {
             .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet);
         let drawing_selected = !self.selected_drawing_ids().is_empty();
         let active_submenu = self.interaction_state.context_submenu;
-        // Shortcut hints read from the active keymap profile, falling
-        // back to the historic Altium defaults when a command is unbound.
+        // Shortcut hints read from the active keymap profile; a command
+        // it does not bind has none.
         let sc = CanvasShortcuts {
-            find: self.keymap_shortcut_label("find", "Ctrl+F"),
-            cut: self.keymap_shortcut_label("cut", "Ctrl+X"),
-            copy: self.keymap_shortcut_label("copy", "Ctrl+C"),
-            paste: self.keymap_shortcut_label("paste", "Ctrl+V"),
-            smart_paste: self.keymap_shortcut_label("smart_paste", "Shift+Ctrl+V"),
+            find: self.keymap_shortcut_label("find"),
+            cut: self.keymap_shortcut_label("cut"),
+            copy: self.keymap_shortcut_label("copy"),
+            paste: self.keymap_shortcut_label("paste"),
+            smart_paste: self.keymap_shortcut_label("smart_paste"),
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let entries = canvas_menu_entries(
@@ -251,7 +251,7 @@ pub(super) fn canvas_menu_entries(
         if drawing_selected {
             v.push(submenu_launcher(
                 tokens,
-                None,
+                Some(ic::icon_dd_align_menu(tid)),
                 "Arrange",
                 ContextSubmenu::Arrange,
                 active_submenu == Some(ContextSubmenu::Arrange),

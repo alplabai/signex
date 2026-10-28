@@ -73,10 +73,8 @@ mod tests {
             .any(|w| w.contains("share a UUID"))
     }
 
-    /// Routed without `update`, which would hand the Navigator build to a Task
-    /// this test cannot await; `settle_navigator` runs it in place.
     fn deliver(app: &mut Signex, project_id: ProjectId, outcome: CaseProbeOutcome) {
-        let _ = app.dispatch_update(Message::Project(ProjectMsg::CaseProbed {
+        let _ = app.update(Message::Project(ProjectMsg::CaseProbed {
             project_id,
             outcome,
         }));

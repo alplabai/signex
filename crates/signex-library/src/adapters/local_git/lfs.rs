@@ -81,11 +81,45 @@ pub(crate) fn blob_for_path(
         return repo.blob_path(&workdir.join(rel_path));
     }
     let content = std::fs::read(workdir.join(rel_path)).map_err(io_error)?;
-    let blob = lfs_blob(repo, &content)?;
+    blob_for_bytes(repo, rel_path, &content)
+}
+
+/// The blob to commit for `content` as the file `rel_path`: its LFS pointer
+/// when the attributes say `filter=lfs`, else the bytes themselves. Unlike
+/// [`blob_for_path`] it never looks at the working tree, so the commit holds
+/// exactly the bytes the caller wrote or read, whatever the file says now.
+pub(crate) fn blob_for_bytes(
+    repo: &git2::Repository,
+    rel_path: &Path,
+    content: &[u8],
+) -> Result<git2::Oid, git2::Error> {
+    if !is_lfs_path(repo, rel_path)? {
+        return repo.blob(content);
+    }
+    let blob = lfs_blob(repo, content)?;
     // The object now lives only in `.git/lfs/objects/`: make sure a push
     // uploads it, even if LFS was enabled before any model existed.
     install_pre_push_hook(repo)?;
     Ok(blob)
+}
+
+/// The blob id the working-tree file at `rel_path` would be committed as:
+/// the hash of its bytes, or of its LFS pointer for a `filter=lfs` path.
+/// Nothing is written to the object database.
+pub(crate) fn working_blob_id(
+    repo: &git2::Repository,
+    workdir: &Path,
+    rel_path: &Path,
+) -> Result<git2::Oid, git2::Error> {
+    let abs = workdir.join(rel_path);
+    if !is_lfs_path(repo, rel_path)? {
+        return git2::Oid::hash_file(git2::ObjectType::Blob, abs);
+    }
+    let content = std::fs::read(&abs).map_err(io_error)?;
+    if is_pointer(&content) {
+        return git2::Oid::hash_object(git2::ObjectType::Blob, &content);
+    }
+    git2::Oid::hash_object(git2::ObjectType::Blob, &pointer_for(&content).0)
 }
 
 /// Replace every staged `filter=lfs` entry in `index` with its pointer.

@@ -42,7 +42,7 @@ const TEST_HOLDER: &str = "test@signex";
 /// Spin up a wiremock `MockServer` on a private runtime, run the setup
 /// closure to register expectations, then hand the adapter (built against
 /// the server URL) to the synchronous test body on a fresh thread.
-fn with_mock_server<S, T>(setup: S, test: T)
+pub(super) fn with_mock_server<S, T>(setup: S, test: T)
 where
     S: FnOnce(&MockServer) -> std::pin::Pin<Box<dyn Future<Output = ()> + '_>>,
     T: FnOnce(DatabaseAdapter) + Send + 'static,
@@ -526,7 +526,7 @@ fn a_reply_without_an_etag_drops_the_cached_primitive_check() {
 /// Build a `ComponentRow` fixture — same shape as `component::tests::fixture_row`
 /// but with controllable PN + class so the assertions in each test don't
 /// fight over identity.
-fn mk_row(pn: &str, class: &str) -> ComponentRow {
+pub(super) fn mk_row(pn: &str, class: &str) -> ComponentRow {
     let lib = Uuid::new_v4();
     let now = chrono::Utc::now();
     ComponentRow {
@@ -587,6 +587,20 @@ fn database_round_trip_row() {
             let get_body = body_for_get.clone();
             let put_body = body_for_put.clone();
             Box::pin(async move {
+                // The insert and the update check part-number uniqueness
+                // against the library's rows first.
+                Mock::given(method("GET"))
+                    .and(path("/tables"))
+                    .respond_with(
+                        ResponseTemplate::new(200).set_body_json(serde_json::json!(["resistors"])),
+                    )
+                    .mount(server)
+                    .await;
+                Mock::given(method("GET"))
+                    .and(path("/tables/resistors"))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+                    .mount(server)
+                    .await;
                 Mock::given(method("POST"))
                     .and(path("/tables/resistors/rows"))
                     .and(query_param("library_id", nil_for_mock.as_str()))
@@ -605,7 +619,7 @@ fn database_round_trip_row() {
                     .and(path(read_path_for_mock.as_str()))
                     .and(query_param("library_id", nil_for_mock.as_str()))
                     .respond_with(ResponseTemplate::new(200).set_body_json(get_body))
-                    .expect(1)
+                    .expect(2)
                     .mount(server)
                     .await;
 

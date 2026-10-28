@@ -233,11 +233,15 @@ fn keymap_table_row<'a>(
     let overridden_by = shadow_note(&row_model.trigger);
     let state = if !row_model.trigger_valid {
         "Invalid".to_string()
+    } else if row_model.unbound {
+        // The user's own unbind outranks the fixed-action note: the row
+        // does nothing, whatever it would have been shadowed by.
+        "Unbound".to_string()
     } else if let Some(note) = overridden_by.clone() {
         note
     } else if has_conflict {
         "Conflict".to_string()
-    } else if row_model.trigger.trim().is_empty() {
+    } else if row_model.unbound || row_model.trigger.trim().is_empty() {
         "Unbound".to_string()
     } else if row_model.keyboard_editable && active_profile_is_custom {
         "Editable".to_string()
@@ -246,8 +250,9 @@ fn keymap_table_row<'a>(
     } else {
         "Gesture".to_string()
     };
-    let state_warn = !row_model.trigger_valid || has_conflict || overridden_by.is_some();
-    let state_unbound = row_model.trigger.trim().is_empty();
+    let state_warn =
+        !row_model.trigger_valid || has_conflict || (overridden_by.is_some() && !row_model.unbound);
+    let state_unbound = row_model.unbound || row_model.trigger.trim().is_empty();
     let state_style = move |theme: &Theme| text::Style {
         color: Some(if state_warn {
             theme.palette().warning
@@ -276,6 +281,7 @@ fn keymap_table_row<'a>(
                     shortcut_chip(&row_model.trigger, tone),
                     button(container(text("Edit").size(TS.caption)).padding([3.0, SP.m]))
                         .on_press(PrefMsg::KeymapRecorderOpen {
+                            slot: row_model.slot,
                             command,
                             label,
                             context,
@@ -548,8 +554,8 @@ fn modifiers_label(modifiers: crate::keymap::Modifiers) -> String {
     if modifiers.ctrl {
         parts.push("Ctrl");
     }
-    if modifiers.command && !modifiers.ctrl {
-        parts.push("Cmd");
+    if modifiers.command {
+        parts.push(crate::keymap::Modifiers::command_key_name());
     }
     if modifiers.alt {
         parts.push("Alt");

@@ -8,6 +8,10 @@
 use super::*;
 use iced::widget::column;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Vertical table sidebar — replaces the old horizontal tab strip
 /// with a database-style master pane: each table is one row, the
 /// active one highlights, and `+ Table` (plus the inline create
@@ -27,7 +31,7 @@ pub(super) fn view_table_sidebar<'a>(
     let active_bg = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10);
 
     let mut col = column![]
-        .spacing(2)
+        .spacing(SP.xs)
         .padding(iced::Padding {
             top: 6.0,
             right: 0.0,
@@ -37,7 +41,7 @@ pub(super) fn view_table_sidebar<'a>(
         .width(Length::Fill);
 
     col = col.push(
-        container(text("Tables").size(11).color(muted)).padding(iced::Padding {
+        container(text("Tables").size(TS.body).color(muted)).padding(iced::Padding {
             top: 0.0,
             right: 8.0,
             bottom: 4.0,
@@ -81,7 +85,7 @@ pub(super) fn view_table_sidebar<'a>(
             ]
             .align_y(iced::Alignment::Center),
         )
-        .padding([4, 8])
+        .padding([SP.s, SP.m])
         .style(|_: &Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgb(
                 0.55, 0.18, 0.18,
@@ -92,7 +96,7 @@ pub(super) fn view_table_sidebar<'a>(
             },
             ..iced::widget::container::Style::default()
         });
-        col = col.push(container(banner).padding([2, 8]));
+        col = col.push(container(banner).padding([SP.xs, SP.m]));
     }
 
     for name in &names {
@@ -123,10 +127,10 @@ pub(super) fn view_table_sidebar<'a>(
                 .on_submit(LibraryMessage::BrowserConfirmRenameTable {
                     library_path: library_for_confirm.clone(),
                 })
-                .padding(4)
+                .padding(SP.s)
                 .size(BROWSER_TEXT_SIZE);
             let confirm = button(text("✓").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
-                .padding([4, 8])
+                .padding([SP.s, SP.m])
                 .on_press(LibraryMessage::BrowserConfirmRenameTable {
                     library_path: library_for_confirm,
                 })
@@ -143,7 +147,7 @@ pub(super) fn view_table_sidebar<'a>(
                     ..iced::widget::button::Style::default()
                 });
             let cancel = button(text("×").size(BROWSER_TEXT_SIZE).color(text_c))
-                .padding([4, 8])
+                .padding([SP.s, SP.m])
                 .on_press(LibraryMessage::BrowserCancelRenameTable {
                     library_path: library_for_cancel,
                 })
@@ -163,8 +167,8 @@ pub(super) fn view_table_sidebar<'a>(
                 ]
                 .align_y(iced::Alignment::Center),
             ]
-            .spacing(2)
-            .padding([4, 8]);
+            .spacing(SP.xs)
+            .padding([SP.s, SP.m]);
             if let Some(err) = browser.rename_error.as_ref() {
                 form = form.push(
                     text(err.clone())
@@ -229,7 +233,7 @@ pub(super) fn view_table_sidebar<'a>(
         let library_for_del = lib_pb.clone();
         let table_for_del = (*name).clone();
         let delete_btn = button(text("×").size(BROWSER_TEXT_SIZE + 1.0).color(muted))
-            .padding([3, 8])
+            .padding([3.0, SP.m])
             .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserDeleteTable {
                 library_path: library_for_del,
                 table: table_for_del,
@@ -314,14 +318,14 @@ pub(super) fn view_table_sidebar<'a>(
                 .on_submit(LibraryMessage::BrowserConfirmAddTable {
                     library_path: library_for_confirm.clone(),
                 })
-                .padding(4)
+                .padding(SP.s)
                 .size(BROWSER_TEXT_SIZE);
             let confirm = button(
                 text("Create")
                     .size(BROWSER_TEXT_SIZE)
                     .color(iced::Color::WHITE),
             )
-            .padding([4, 10])
+            .padding([SP.s, 10.0])
             .on_press(LibraryMessage::BrowserConfirmAddTable {
                 library_path: library_for_confirm,
             })
@@ -338,7 +342,7 @@ pub(super) fn view_table_sidebar<'a>(
                 ..iced::widget::button::Style::default()
             });
             let cancel = button(text("Cancel").size(BROWSER_TEXT_SIZE).color(text_c))
-                .padding([4, 10])
+                .padding([SP.s, 10.0])
                 .on_press(LibraryMessage::BrowserCancelAddTable {
                     library_path: library_for_cancel,
                 })
@@ -358,8 +362,8 @@ pub(super) fn view_table_sidebar<'a>(
                 name_input,
                 row![cancel, Space::new().width(4), confirm,].align_y(iced::Alignment::Center),
             ]
-            .spacing(4)
-            .padding([6, 12]);
+            .spacing(SP.s)
+            .padding([6.0, SP.l]);
             if let Some(err) = draft.error.as_ref() {
                 form = form.push(
                     text(err.clone())
@@ -377,7 +381,7 @@ pub(super) fn view_table_sidebar<'a>(
                 } else {
                     text_c
                 }))
-                .padding([4, 10])
+                .padding([SP.s, 10.0])
                 .width(Length::Fill)
                 .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserBeginAddTable {
                     library_path: library_for_begin,

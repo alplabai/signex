@@ -31,41 +31,12 @@ const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(500);
 /// same name and file.
 type OccurrenceKey = Vec<String>;
 
-/// Everything the off-thread hierarchy build needs besides the open sheets.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NavigatorBuildRequest {
-    pub generation: u64,
-    pub fingerprint: String,
-    pub root: PathBuf,
-    pub pages: Vec<PathBuf>,
-    pub fold: CaseFold,
-}
-
-/// What an off-thread Navigator build produced.
-#[derive(Debug, Clone)]
-pub struct NavigatorBuilt {
-    pub hierarchy: SheetHierarchy,
-    pub unreadable: Vec<(PathBuf, String)>,
-}
-
 /// State behind the Navigator panel.
 #[derive(Debug, Default)]
 pub struct NavigatorModel {
     /// What the hierarchy was built from; unchanged means the cached
     /// `hierarchy` is still current and the disk is not read again.
     pub fingerprint: String,
-    /// Fingerprint of the newest build asked for, whether it is still running
-    /// or has landed. Equal to `fingerprint` once it lands; a refresh whose
-    /// fingerprint matches neither asks for a new build.
-    pub requested: String,
-    /// Generation of the newest build asked for. A build result carrying any
-    /// other generation was overtaken by a later request and is dropped.
-    pub generation: u64,
-    /// Builds that failed in a row for the state in view; bounds the retry.
-    pub failed_builds: u8,
-    /// A build asked for by a refresh and not yet started; `update` takes it
-    /// and runs it off the UI thread.
-    pub wanted: Option<NavigatorBuildRequest>,
     /// The occurrence tree; `None` when no project is in view.
     pub hierarchy: Option<SheetHierarchy>,
     /// Rows derived from `hierarchy`: the root, then any loose pages. Holds
@@ -78,21 +49,9 @@ pub struct NavigatorModel {
 }
 
 impl NavigatorModel {
-    /// The hierarchy, only while it describes the state in view: `None` while
-    /// a build for a different state is asked for or running. Readers that
-    /// *decide* something from it (which designator an edit writes, which
-    /// placement a descent starts from) must use this, not `hierarchy`, which
-    /// stays on show for display until the new one lands.
-    pub fn current_hierarchy(&self) -> Option<&SheetHierarchy> {
-        self.hierarchy
-            .as_ref()
-            .filter(|_| self.wanted.is_none() && self.requested == self.fingerprint)
-    }
-
-    /// The hierarchy node a tree row path stands for; `None` while a rebuild is
-    /// pending, so a click cannot record a placement from a stale tree.
+    /// The hierarchy node a tree row path stands for.
     pub fn node_at(&self, tree_path: &[usize]) -> Option<&SheetNode> {
-        self.current_hierarchy()?.node_at(tree_path)
+        self.hierarchy.as_ref()?.node_at(tree_path)
     }
 
     /// Swap in a freshly built hierarchy, carrying the selection, the pending

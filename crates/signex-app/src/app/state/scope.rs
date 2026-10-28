@@ -20,6 +20,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use super::LoadedProject;
+pub(crate) use super::ownership_index::OwnershipIndex;
 use crate::app::project_sheets::{normalize_clamped, ownership_reference};
 
 pub(crate) use super::case_fold::CaseFold;
@@ -41,30 +42,6 @@ pub(crate) fn path_key_with(path: &Path, fold: CaseFold) -> String {
     super::path_key::fold_key(path, fold)
 }
 
-/// Project whose persisted `sheets` list names `path`, each project compared
-/// under its own `fold_of`.
-///
-/// Stricter than `DocumentState::project_for_path`, which matches on the
-/// parent directory alone: a schematic sitting inside a project's folder but
-/// never added to it belongs to no project, and must not drag that project's
-/// other sheets into an export.
-fn project_listing_sheet<'a>(
-    projects: &'a [LoadedProject],
-    path: &Path,
-    fold_of: &dyn Fn(&LoadedProject) -> CaseFold,
-    include: &dyn Fn(&LoadedProject) -> bool,
-) -> Option<&'a LoadedProject> {
-    projects.iter().filter(|p| include(p)).find(|p| {
-        let fold = fold_of(p);
-        let key = path_key_with(path, fold);
-        let dir = p.dir();
-        p.data
-            .sheets
-            .iter()
-            .any(|s| path_key_with(&dir.join(&s.filename), fold) == key)
-    })
-}
-
 /// `child path → parent path` over every loaded sheet, built from the parents'
 /// own `child_sheets` references (each resolved against the parent's
 /// directory, matching `project_sheets::project_graph`).
@@ -74,7 +51,10 @@ fn project_listing_sheet<'a>(
 /// resolved child key, the first-wins tie-break (lexicographically-smallest
 /// parent path) is the same every run, matching the identical hazard fixed in
 /// `project_sheets::project_graph`.
-fn parent_of(loaded: &HashMap<PathBuf, Vec<String>>, fold: CaseFold) -> HashMap<String, PathBuf> {
+pub(super) fn parent_of(
+    loaded: &HashMap<PathBuf, Vec<String>>,
+    fold: CaseFold,
+) -> HashMap<String, PathBuf> {
     let mut entries: Vec<(&PathBuf, &Vec<String>)> = loaded.iter().collect();
     entries.sort_by(|a, b| a.0.cmp(b.0));
 
@@ -94,35 +74,26 @@ fn parent_of(loaded: &HashMap<PathBuf, Vec<String>>, fold: CaseFold) -> HashMap<
 /// of its sheets. `loaded` maps each open sheet's path to the `filename`
 /// strings it references as children.
 ///
-/// Cycles in the hierarchy (a child re-referencing an ancestor) terminate on
-/// the visited set rather than looping — ERC reports those separately.
-///
-/// Each project is compared under its own probed `case_fold` (#694). A direct
-/// listing in ANY project beats a hierarchical claim by another, at every
-/// step of the walk.
+/// Builds a throwaway [`OwnershipIndex`]; callers that ask repeatedly use the
+/// one `DocumentState` keeps (`DocumentState::document_project`).
+#[cfg(test)]
 pub(crate) fn project_owning_sheet<'a>(
     projects: &'a [LoadedProject],
     loaded: &HashMap<PathBuf, Vec<String>>,
     path: &Path,
 ) -> Option<&'a LoadedProject> {
-    let mut folds: Vec<CaseFold> = Vec::new();
-    for project in projects {
-        if !folds.contains(&project.case_fold) {
-            folds.push(project.case_fold);
-        }
-    }
-    owning_sheet_walk(projects, loaded, path, &folds, &|p| p.case_fold)
+    OwnershipIndex::build(0, projects, loaded, None).owner(projects, path)
 }
 
 /// Every open engine whose sheet belongs to project `id`, by the same
 /// ownership rule as [`project_owning_sheet`].
 pub(crate) fn engines_in_project<'a>(
     projects: &[LoadedProject],
-    refs: &HashMap<PathBuf, Vec<String>>,
+    index: &OwnershipIndex,
     engines: &'a HashMap<PathBuf, signex_engine::Engine>,
     id: super::ProjectId,
 ) -> Vec<&'a signex_engine::Engine> {
-    engine_entries_in_project(projects, refs, engines, id)
+    engine_entries_in_project(projects, index, engines, id)
         .into_iter()
         .map(|(_, engine)| engine)
         .collect()
@@ -131,14 +102,16 @@ pub(crate) fn engines_in_project<'a>(
 /// [`engines_in_project`] keeping each engine's sheet path.
 pub(crate) fn engine_entries_in_project<'a>(
     projects: &[LoadedProject],
-    refs: &HashMap<PathBuf, Vec<String>>,
+    index: &OwnershipIndex,
     engines: &'a HashMap<PathBuf, signex_engine::Engine>,
     id: super::ProjectId,
 ) -> Vec<(&'a PathBuf, &'a signex_engine::Engine)> {
     engines
         .iter()
         .filter(|(path, _)| {
-            project_owning_sheet(projects, refs, path).is_some_and(|owner| owner.id == id)
+            index
+                .owner(projects, path)
+                .is_some_and(|owner| owner.id == id)
         })
         .collect()
 }
@@ -151,38 +124,7 @@ pub(crate) fn project_owning_sheet_with<'a>(
     path: &Path,
     fold: CaseFold,
 ) -> Option<&'a LoadedProject> {
-    owning_sheet_walk(projects, loaded, path, &[fold], &|_| fold)
-}
-
-/// The ownership walk. A direct listing in ANY project wins first, each
-/// project compared under its own fold. Otherwise the hierarchy is walked once
-/// per distinct rule in `folds`: a parent found under rule F is accepted only
-/// when the project listing it also has rule F, so a folding map can never
-/// attribute a different file to a case-sensitive project.
-fn owning_sheet_walk<'a>(
-    projects: &'a [LoadedProject],
-    loaded: &HashMap<PathBuf, Vec<String>>,
-    path: &Path,
-    folds: &[CaseFold],
-    fold_of: &dyn Fn(&LoadedProject) -> CaseFold,
-) -> Option<&'a LoadedProject> {
-    if let Some(project) = project_listing_sheet(projects, path, fold_of, &|_| true) {
-        return Some(project);
-    }
-    folds.iter().find_map(|&fold| {
-        let parents = parent_of(loaded, fold);
-        let same_rule = |p: &LoadedProject| fold_of(p) == fold;
-        let mut seen: HashSet<PathBuf> = HashSet::new();
-        let mut current = path.to_path_buf();
-        while seen.insert(current.clone()) {
-            let parent = parents.get(&path_key_with(&current, fold))?;
-            if let Some(project) = project_listing_sheet(projects, parent, &|_| fold, &same_rule) {
-                return Some(project);
-            }
-            current = parent.clone();
-        }
-        None
-    })
+    OwnershipIndex::build(0, projects, loaded, Some(fold)).owner(projects, path)
 }
 
 /// True when `path` is `root` or lies under it, compared component-wise on
@@ -589,7 +531,7 @@ mod tests {
         // the HashMap iterates first.
         //
         // The nondeterminism only surfaces ACROSS separately-built maps
-        // (production builds `child_sheet_refs()` from a `HashMap`), so reusing
+        // (production rebuilds `child_sheet_refs()` on every call), so reusing
         // one fixed instance proves nothing — a fixed map's iteration order
         // never changes between reads. Rebuild a FRESH map, in BOTH insertion
         // orders, on every iteration: sorted by parent path

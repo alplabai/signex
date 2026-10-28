@@ -26,19 +26,24 @@ pub(super) struct ScanInputs {
     pub(super) active: Option<PathBuf>,
     pub(super) fold: CaseFold,
     pub(super) hierarchy: Option<SheetHierarchy>,
+    /// The hierarchy is the current one (not pending a rebuild); only then
+    /// may a sheet count as placed at most once.
+    pub(super) hierarchy_settled: bool,
 }
 
 /// The designators a sheet's hits are read at: every placement the walk
 /// reaches it through, and whether that list is certain to be complete.
 pub(super) fn designator_scope_of(
     hierarchy: Option<&SheetHierarchy>,
+    settled: bool,
     path: &std::path::Path,
 ) -> DesignatorScope {
     let Some(hierarchy) = hierarchy else {
         return DesignatorScope::default();
     };
     let placements = hierarchy.placements_of(path);
-    let single = hierarchy.is_complete() && placements.len() <= 1;
+    // A pending hierarchy may predate an edit that added a placement.
+    let single = settled && hierarchy.is_complete() && placements.len() <= 1;
     DesignatorScope { placements, single }
 }
 
@@ -61,7 +66,7 @@ fn run_scan(inputs: ScanInputs) -> ProjectScan {
             scan.read_only.push(path);
             continue;
         }
-        let scope = designator_scope_of(inputs.hierarchy.as_ref(), &path);
+        let scope = designator_scope_of(inputs.hierarchy.as_ref(), inputs.hierarchy_settled, &path);
         for hit in signex_engine::scan_sheet(sheet, &inputs.query, &scope) {
             let placement_label = hit
                 .placement
@@ -148,7 +153,8 @@ impl Signex {
             root: project_sheets::resolve_netlist_root(ds)?,
             active: ds.active_path.clone(),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
-            hierarchy: ds.panel_ctx.navigator.current_hierarchy().cloned(),
+            hierarchy: ds.panel_ctx.navigator.hierarchy.clone(),
+            hierarchy_settled: self.navigator_is_settled(),
         })
     }
 

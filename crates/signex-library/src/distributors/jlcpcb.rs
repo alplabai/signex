@@ -28,7 +28,7 @@ pub struct JlcpcbAdapter {
     base_url: String,
     cache: Option<DistributorCache>,
     throttle: Mutex<Option<Instant>>,
-    http: reqwest::blocking::Client,
+    http: super::http::LazyClient,
 }
 
 impl JlcpcbAdapter {
@@ -37,7 +37,7 @@ impl JlcpcbAdapter {
             base_url: JLCPCB_DEFAULT_BASE.into(),
             cache,
             throttle: Mutex::new(None),
-            http: super::http::build_client(),
+            http: super::http::LazyClient::standard(),
         }
     }
 
@@ -46,7 +46,7 @@ impl JlcpcbAdapter {
             base_url: base_url.into(),
             cache,
             throttle: Mutex::new(None),
-            http: super::http::build_client(),
+            http: super::http::LazyClient::standard(),
         }
     }
 
@@ -62,6 +62,7 @@ impl JlcpcbAdapter {
         self.polite_wait();
         let resp = self
             .http
+            .get()?
             .post(url)
             .json(body)
             .send()
