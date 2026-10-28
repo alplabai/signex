@@ -100,7 +100,7 @@ impl Signex {
     }
 
     /// Tell the user which locked symbols an edit passed over.
-    fn report_locked_skips(skipped: &[String]) {
+    pub(crate) fn report_locked_skips(skipped: &[String]) {
         if skipped.is_empty() {
             return;
         }
