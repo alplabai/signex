@@ -159,6 +159,12 @@ pub struct UiState {
     /// Text inputs were unfocused for the confirm dialog that now locks the
     /// main window (once per lock).
     pub lock_unfocused: bool,
+    /// The quit confirm was refreshed because the unsaved list changed after it
+    /// opened (Discard All discarded nothing); the dialog says so.
+    pub quit_confirm_refreshed: bool,
+    /// How often an Edit Component Details window vanished unanswered, per
+    /// browser; after two it stays in the window so typed text is not lost.
+    pub edit_row_window_vanished: std::collections::HashMap<std::path::PathBuf, u8>,
     /// How often a recovery prompt's window vanished without being answered;
     /// after two it stays in the main window instead of reopening.
     pub recovery_window_vanished: u8,

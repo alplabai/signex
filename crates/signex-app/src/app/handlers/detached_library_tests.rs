@@ -155,3 +155,76 @@ fn a_tool_dialog_does_not_lock_and_a_recovery_prompt_is_a_confirm() {
         .expect("a message");
     assert!(format!("{message:?}").contains("Cancel"), "{message:?}");
 }
+
+fn edit_row_state(path: &Path) -> crate::library::state::EditRowModalState {
+    use signex_library::{
+        ComponentClass, ComponentRow, DatasheetRef, InternalPn, LifecycleState, ManufacturerPart,
+        ParamMap, PlmReserved, PrimitiveRef,
+    };
+    let row_id = signex_library::RowId::new();
+    let draft = ComponentRow {
+        alternate_symbols: Vec::new(),
+        row_id: row_id.0,
+        internal_pn: InternalPn::new("TEST_PN"),
+        class: ComponentClass::generic(),
+        datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        description: String::new(),
+        more_datasheets: Vec::new(),
+        state: LifecycleState::Draft,
+        symbol_ref: PrimitiveRef::new(uuid::Uuid::new_v4(), uuid::Uuid::new_v4()),
+        footprint_ref: None,
+        sim_ref: None,
+        pin_map_overrides: Vec::new(),
+        primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),
+        alternates: Vec::new(),
+        supply: Vec::new(),
+        parameters: ParamMap::new(),
+        plm: PlmReserved::default(),
+        version: "0.0.1".into(),
+        released: false,
+        symbol_version: String::new(),
+        footprint_version: String::new(),
+        sim_version: String::new(),
+        created: chrono::Utc::now(),
+        updated: chrono::Utc::now(),
+        content_hash: [0u8; 32],
+        server_revision: None,
+    };
+    let address = crate::library::state::EditorAddress::new(path.to_path_buf(), "t".into(), row_id);
+    crate::library::state::EditRowModalState::new(address, draft)
+}
+
+#[test]
+fn an_edit_form_whose_window_vanishes_keeps_its_text_and_comes_back_twice_at_most() {
+    let (mut app, _main, [a, _b]) = two_browsers();
+    for browser in app.library.library_browsers.values_mut() {
+        browser.delete_confirm = None;
+    }
+    let mut state = edit_row_state(&a);
+    state.tags_buf = "typed but not saved".into();
+    app.library
+        .library_browsers
+        .get_mut(&a)
+        .expect("a")
+        .edit_modal = Some(state);
+    for _ in 0..2 {
+        let _ = app.sync_detached_modals();
+        let id = app
+            .browser_modal_window(ModalId::LibraryEditRow, &a)
+            .expect("the edit window");
+        let _ = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(id)));
+        let kept = app.library.library_browsers[&a]
+            .edit_modal
+            .as_ref()
+            .expect("form kept");
+        assert_eq!(kept.tags_buf, "typed but not saved");
+    }
+    let _ = app.sync_detached_modals();
+    assert!(
+        app.browser_modal_window(ModalId::LibraryEditRow, &a)
+            .is_none(),
+        "after two vanishes the form stays in the main window"
+    );
+    assert!(app.library.library_browsers[&a].edit_modal.is_some());
+}

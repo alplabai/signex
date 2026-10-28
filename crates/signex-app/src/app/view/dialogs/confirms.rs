@@ -447,9 +447,21 @@ impl Signex {
             .height(Length::Fixed(160.0))
             .width(Length::Fill);
 
+        let refreshed_note: Element<'_, Message> = if self.ui_state.quit_confirm_refreshed {
+            container(
+                text("The unsaved list changed; review and confirm again.")
+                    .size(11)
+                    .color(iced::Color::from_rgb(0.90, 0.35, 0.30)),
+            )
+            .padding([10, 14])
+            .into()
+        } else {
+            Space::new().height(0).into()
+        };
         let dialog = container(
             column![
                 header,
+                refreshed_note,
                 container(
                     text(format!(
                         "You have {} unsaved item(s). Save before exiting?",

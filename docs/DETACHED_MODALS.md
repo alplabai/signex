@@ -72,7 +72,7 @@ Confirm and warning dialogs lock the main window; tool windows do not.
 | Close-library confirm | locking | Cancel (drafts untouched) | `detached_modals` |
 | Library delete confirm (per browser) | locking | Cancel for THAT browser; nothing deleted | `detached_library_tests` |
 | Library recovery | locking | Cancel (never a decision that deletes or rebinds; returns if its window vanishes, twice at most, then stays in the window) | `detached_library_tests`, `detached_confirm_tests` |
-| Library picker, primitive picker, document options, create options, updates, custom net colour | tool | Cancel, no write | `detached_modals` (picker, create options, net colour), `detached_library_tests` (net colour) |
+| Library picker, primitive picker, document options, create options, updates, custom net colour | tool | Cancel, no write | `detached_modals` generic loops, `detached_library_tests` (net colour) |
 | Library edit row (per browser) | tool | Cancel for THAT browser | same code path as delete confirm; no edit-row fixture |
 | Find / Replace, Grid Properties, Custom Selection Filter, Enable Version Control, About, Shortcuts, Calculator | tool | close | `detached_modals` |
 
@@ -105,10 +105,14 @@ Discard All on the quit confirm discards only what the confirm listed: an edit
 made since (through any route) refreshes the confirm and keeps every recovery
 copy; the project-close confirm already re-prompts the same way.
 
+## Accepted: in-window fallbacks paint above the lock
+
+If a tool window (Preferences, Annotate, ERC) could not open its own window it
+paints in the main window as before, above the lock layer, which sits below the
+dialogs. That is accepted: it is the in-window fallback of a tool dialog.
+
 ## Still in the window
 
 Command palette, context menus, dropdown pickers, Active Bar menus, the grid
 picker, the panel list, text edit, drag ghosts and the first-run tour stay in
-the main window. Primitive picker, document options, updates and the edit row
-have no fixture in the generic tests (their windows share the code of the ones
-that do).
+the main window.

@@ -299,6 +299,8 @@ impl Signex {
                 focused_window: None,
                 main_window_opened: false,
                 lock_unfocused: false,
+                quit_confirm_refreshed: false,
+                edit_row_window_vanished: Default::default(),
                 recovery_window_vanished: 0,
                 library_modal_owners: Default::default(),
                 main_window_monitor_size: None,

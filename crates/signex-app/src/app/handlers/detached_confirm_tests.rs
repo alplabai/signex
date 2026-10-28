@@ -211,6 +211,20 @@ fn discard_all_discards_only_what_the_confirm_listed() {
         confirm.dirty_paths.contains(&late),
         "the new item is listed"
     );
+    assert!(
+        app.ui_state.quit_confirm_refreshed,
+        "the dialog says the list changed"
+    );
+    let _ = app.sync_detached_modals();
+    let window = app
+        .detached_window_of(ModalId::AppQuitConfirm)
+        .expect("window");
+    let texts = crate::layout_probe::lay_out_texts(app.view(window), iced::Size::new(540.0, 380.0));
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.text.contains("The unsaved list changed"))
+    );
     assert!(app.document_state.dirty_paths.contains(&late));
     assert!(
         app.document_state
@@ -298,5 +312,27 @@ fn a_recovery_prompt_whose_window_vanishes_twice_stays_in_the_window() {
     assert!(
         app.document_state.autosave.current_offer().is_some(),
         "never decided for the user"
+    );
+}
+
+#[test]
+fn discard_all_never_deletes_a_copy_the_user_kept_with_later() {
+    // An earlier run's copy kept with "Later" is deferred, never written by
+    // this run, so it is not among the sidecars Discard All removes. Only a
+    // copy the user chose to Restore is adopted (it then describes the open
+    // document) and a copy this run wrote is tracked.
+    let (mut app, _main) = quit_app();
+    let kept = std::path::PathBuf::from("/p/kept-later.snxsch");
+    let restored = std::path::PathBuf::from("/p/restored.snxsch");
+    app.document_state.autosave.defer(&kept);
+    app.document_state.autosave.adopt_on_disk(&restored);
+    let removed = app.document_state.autosave.take_all_written();
+    assert!(
+        !removed.contains(&kept),
+        "a copy kept with Later survives Discard All"
+    );
+    assert!(
+        removed.contains(&restored),
+        "only the adopted (restored) copy is removed"
     );
 }

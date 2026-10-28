@@ -660,6 +660,7 @@ impl Signex {
             dirty_paths: dirty,
             dirty_rows,
         });
+        self.ui_state.quit_confirm_refreshed = false;
         Task::none()
     }
 
@@ -709,6 +710,7 @@ impl Signex {
                         dirty_paths: live,
                         dirty_rows: live_rows,
                     });
+                    self.ui_state.quit_confirm_refreshed = true;
                     return Task::none();
                 }
                 // The user declined to keep these edits, so their

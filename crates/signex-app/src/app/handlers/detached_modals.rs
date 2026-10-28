@@ -164,8 +164,20 @@ impl Signex {
                 .map(|(path, _)| path.clone())
                 .collect();
             open.sort();
+            if modal == ModalId::LibraryEditRow {
+                // A browser whose edit form is closed starts counting afresh.
+                self.ui_state
+                    .edit_row_window_vanished
+                    .retain(|path, _| open.contains(path));
+            }
             for path in &open {
-                if self.browser_modal_window(modal, path).is_none() {
+                let stays_in_window = modal == ModalId::LibraryEditRow
+                    && self
+                        .ui_state
+                        .edit_row_window_vanished
+                        .get(path)
+                        .is_some_and(|n| *n >= 2);
+                if !stays_in_window && self.browser_modal_window(modal, path).is_none() {
                     tasks.push(self.detach_browser_modal(modal, path.clone()));
                 }
             }
@@ -472,10 +484,37 @@ mod tests {
                     })
             }
             ModalId::NetColorCustom => app.ui_state.net_color_custom.show = true,
-            ModalId::NetlistIncompletePrompt
-            | ModalId::LibraryPrimitivePicker
-            | ModalId::LibraryDocumentOptions
-            | ModalId::LibraryUpdates => panic!("needs a heavier fixture"),
+            ModalId::LibraryPrimitivePicker => {
+                app.library.primitive_picker = Some(crate::library::state::PrimitivePickerState {
+                    kind: signex_library::PrimitiveKind::Symbol,
+                    target: crate::library::state::PrimitivePickerTarget::BrowserRow(
+                        crate::library::state::EditorAddress::new(
+                            "l.snxlib".into(),
+                            "t".into(),
+                            signex_library::RowId::new(),
+                        ),
+                    ),
+                    filter: String::new(),
+                    error: None,
+                    scroll_y: 0.0,
+                })
+            }
+            ModalId::LibraryDocumentOptions => {
+                app.library.document_options =
+                    Some(crate::library::state::DocumentOptionsModalState {
+                        library_path: "l.snxlib".into(),
+                        library_name: "l".into(),
+                        draft: Default::default(),
+                    })
+            }
+            ModalId::LibraryUpdates => {
+                app.library.library_updates =
+                    Some(crate::library::updates_dialog::LibraryUpdatesState::new(
+                        "p.snxsch".into(),
+                        Vec::new(),
+                    ))
+            }
+            ModalId::NetlistIncompletePrompt => panic!("needs an export context"),
             ModalId::LibraryEditRow | ModalId::LibraryDeleteConfirm => {
                 panic!("per-browser: see the browser tests")
             }
@@ -498,15 +537,9 @@ mod tests {
     /// Every followed dialog the fixtures can open (the netlist prompt needs a
     /// whole export context and has its own test).
     fn testable() -> impl Iterator<Item = ModalId> {
-        FOLLOWED.into_iter().filter(|m| {
-            !matches!(
-                m,
-                ModalId::NetlistIncompletePrompt
-                    | ModalId::LibraryPrimitivePicker
-                    | ModalId::LibraryDocumentOptions
-                    | ModalId::LibraryUpdates
-            )
-        })
+        FOLLOWED
+            .into_iter()
+            .filter(|m| *m != ModalId::NetlistIncompletePrompt)
     }
 
     fn window_of(app: &Signex, modal: ModalId) -> Option<iced::window::Id> {

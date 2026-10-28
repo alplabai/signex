@@ -259,15 +259,31 @@ impl Signex {
                             ModalId::NetColorCustom => self.ui_state.net_color_custom.show = false,
                             // Never auto-decided: the sync shows it again.
                             ModalId::LibraryRecovery => self.note_recovery_window_vanished(),
-                            ModalId::LibraryEditRow | ModalId::LibraryDeleteConfirm => {
+                            // The edit form keeps its typed text: the window comes
+                            // back, twice at most, then it stays in the window.
+                            ModalId::LibraryEditRow => {
+                                if let Some(path) = owner {
+                                    let count = self
+                                        .ui_state
+                                        .edit_row_window_vanished
+                                        .entry(path)
+                                        .or_insert(0);
+                                    *count += 1;
+                                    if *count == 2 {
+                                        crate::diagnostics::log_warning(
+                                            "An Edit Component Details window closed twice \
+                                             unanswered; it now stays in the main window",
+                                        );
+                                    }
+                                }
+                            }
+                            // A confirm that vanished is a Cancel.
+                            ModalId::LibraryDeleteConfirm => {
                                 if let Some(path) = owner
                                     && let Some(browser) =
                                         self.library.library_browsers.get_mut(&path)
                                 {
-                                    match modal {
-                                        ModalId::LibraryEditRow => browser.edit_modal = None,
-                                        _ => browser.delete_confirm = None,
-                                    }
+                                    browser.delete_confirm = None;
                                 }
                             }
                         },
