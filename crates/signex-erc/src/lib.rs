@@ -34,6 +34,7 @@ mod project_names;
 pub mod project_rules;
 pub mod rule;
 mod rules;
+pub mod waivers;
 
 pub use context::ErcContext;
 pub use diagnostic::{Diagnostic, LocationSpace};
