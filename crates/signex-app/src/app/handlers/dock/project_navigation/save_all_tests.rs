@@ -56,16 +56,24 @@ fn save_all_probed(
         rows: Vec::new(),
         next: SaveAllNext::Quit,
         probes,
+        undecided: Vec::new(),
     })
 }
 
 /// A Save All probed against the real filesystem, synchronously.
-fn save_all(app: &mut Signex, paths: &[PathBuf]) -> iced::Task<Message> {
-    let probes = super::save_all::probe_dirs(app.loose_parent_dirs(paths));
-    save_all_probed(app, paths, probes)
+pub(super) fn save_all(app: &mut Signex, paths: &[PathBuf]) -> iced::Task<Message> {
+    let (probes, undecided) = super::save_all::probe_dirs(app.loose_parent_dirs(paths));
+    app.begin_save_all_planned(SaveAllPlan {
+        context: "Save All".into(),
+        paths: paths.to_vec(),
+        rows: Vec::new(),
+        next: SaveAllNext::Quit,
+        probes,
+        undecided,
+    })
 }
 
-fn feed(app: &mut Signex, messages: Vec<Message>) {
+pub(super) fn feed(app: &mut Signex, messages: Vec<Message>) {
     for message in messages {
         let _ = app.update(message);
     }
@@ -187,7 +195,7 @@ fn quit_waits_for_the_writes_of_a_running_save_all() {
 
 /// Feed every completion in `messages` and hand back what the settle at
 /// their end returns: a task with no units means nothing closed.
-fn feed_then_settle(app: &mut Signex, messages: Vec<Message>) -> iced::Task<Message> {
+pub(super) fn feed_then_settle(app: &mut Signex, messages: Vec<Message>) -> iced::Task<Message> {
     let mut settled = None;
     for message in messages {
         match message {
@@ -319,7 +327,10 @@ fn kept_paths_compare_without_regard_to_order() {
 
 /// Two engines for one file, held as `Lib`/`lib`; the second carries a
 /// different edit (paper size) when `edit_second` is set.
-fn app_with_two_engine_variants(dir: &Path, edit_second: bool) -> (Signex, PathBuf, PathBuf) {
+pub(super) fn app_with_two_engine_variants(
+    dir: &Path,
+    edit_second: bool,
+) -> (Signex, PathBuf, PathBuf) {
     let upper = dir.join("Lib.snxsch");
     let lower = dir.join("lib.snxsch");
     // A project probed as case-folding pins the volume rule on every host.
@@ -446,7 +457,7 @@ fn loose_identical_variants(dir: &Path) -> (Signex, PathBuf, PathBuf) {
 
 /// Counts the document writes a Save All issues, performing each for real.
 #[derive(Default)]
-struct CountingSink(std::sync::Mutex<Vec<PathBuf>>);
+pub(super) struct CountingSink(pub(super) std::sync::Mutex<Vec<PathBuf>>);
 
 impl crate::persist::DocumentSink for CountingSink {
     fn write(&self, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
@@ -455,7 +466,7 @@ impl crate::persist::DocumentSink for CountingSink {
     }
 }
 
-fn count_writes(app: &mut Signex) -> std::sync::Arc<CountingSink> {
+pub(super) fn count_writes(app: &mut Signex) -> std::sync::Arc<CountingSink> {
     let sink = std::sync::Arc::new(CountingSink::default());
     app.document_state.document_saves = crate::persist::DocumentSaves::new(sink.clone());
     sink
