@@ -554,6 +554,46 @@ fn bake_linear_array_3_pads_along_x() {
     assert_eq!(out[2].number, "3");
 }
 
+#[test]
+fn a_numbered_grid_pad_size_follows_its_own_row_and_column() {
+    // Numbering writes the shared eval context's array index; each pad
+    // must still be sized at its own (i, j) (#1515 review).
+    let mut s = Sketch::new();
+    let p = s.add_point(0.0, 0.0);
+    s.attach_pad(p, smd_rect_pad("0", "1mm + i * 1mm", "1mm + j * 1mm"));
+    s.data.arrays.push(Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Grid {
+            source: p,
+            nx_expr: "2".into(),
+            ny_expr: "2".into(),
+            dx_expr: "5mm".into(),
+            dy_expr: "5mm".into(),
+            depopulation: None,
+        },
+        numbering: NumberingScheme::LinearIncrement {
+            start_expr: "1".into(),
+            step_expr: "1".into(),
+        },
+    });
+
+    let solve = solve(&s.data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    bake_arrays(&s.data, &solve, &HashMap::new(), &mut out, &mut warnings).expect("bake ok");
+
+    assert_eq!(out.len(), 4, "{warnings:?}");
+    for pad in &out {
+        let i = (pad.position[0] / 5.0).round();
+        let j = (pad.position[1] / 5.0).round();
+        assert!(
+            approx_eq(pad.size[0], 1.0 + i, 1e-9) && approx_eq(pad.size[1], 1.0 + j, 1e-9),
+            "pad at ({i}, {j}) sized {:?}",
+            pad.size
+        );
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Test 10b — v0.23 per-instance suppression skips selected (i, j).
 // ─────────────────────────────────────────────────────────────────────
