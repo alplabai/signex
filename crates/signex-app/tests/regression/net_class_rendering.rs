@@ -123,6 +123,7 @@ fn fixture() -> Signex {
             net_classes: vec![power],
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),

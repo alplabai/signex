@@ -525,7 +525,10 @@ pub fn build_renderer_snapshot(
         }
 
         parameter_texts.push(TextInput {
-            content: note.text.clone(),
+            content: match overrides.special_strings {
+                Some(special) => special.resolve(&note.text),
+                None => note.text.clone(),
+            },
             position: [note.position.x as f32, note.position.y as f32],
             size_mm: note
                 .font_size

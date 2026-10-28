@@ -20,6 +20,7 @@ mod input;
 mod move_pick;
 mod shape_preview;
 mod shift_selection;
+mod special_strings;
 
 use gpu_mount::ContentMode;
 use shift_selection::shift_snapshot_for_selection;
@@ -33,6 +34,7 @@ pub use camera::Camera;
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 pub use move_pick::MovePick;
 pub use shape_preview::ShapePreviewKind;
+pub use special_strings::SpecialStrings;
 
 use crate::schematic_runtime::SchematicSheetExt as _;
 
@@ -157,6 +159,9 @@ pub struct CanvasSlot {
     /// Border, zone markers and title block for the paper, lowered by the
     /// app with the same lowering the PDF uses (#1079). Drawn in sheet mm.
     pub sheet_frame: Vec<signex_output::template::FramePrimitive>,
+    /// What `${TOKEN}` special strings resolve to in this sheet's text
+    /// notes (#1080); `None` leaves the text as stored.
+    pub special_strings: Option<SpecialStrings>,
     /// Designators of the placement this tab was opened through (#1151), by
     /// symbol uuid, for the symbols whose designator there differs from their
     /// `reference`. Empty for a tab with no recorded placement. Set by the app
@@ -250,6 +255,7 @@ impl CanvasSlot {
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
             sheet_frame: Vec::new(),
+            special_strings: None,
             designators: std::collections::HashMap::new(),
             designators_key: None,
             erc_markers: Vec::new(),
@@ -478,6 +484,7 @@ impl<'a> SchematicCanvas<'a> {
         crate::schematic_runtime::SceneOverrides {
             wire_styling: Some(self.prefs.wire_styling()),
             designators: Some(&self.slot.designators),
+            special_strings: self.slot.special_strings.as_ref(),
         }
     }
 
