@@ -278,7 +278,10 @@ fn saving_reprobes_a_file_that_broke_while_the_dialog_was_open() {
     // the workflow the banner's own "repair it by hand" advice invites,
     // then save without ever closing the dialog.
     guard.seed_broken();
-    let _ = app.update(inner(PrefMsg::Save));
+    {
+        let task = app.update(inner(PrefMsg::Save));
+        crate::drive::drive(&mut app, task);
+    }
 
     // Assert
     let reported = app
@@ -371,7 +374,10 @@ fn erc_severity_override_equal_to_the_default_is_stored_verbatim() {
     app.ui_state.erc_severity_override.clear();
 
     // Act: ERC dialog
-    let _ = app.update(Message::Erc(ErcMsg::SeverityChanged(rule, default)));
+    {
+        let task = app.update(Message::Erc(ErcMsg::SeverityChanged(rule, default)));
+        crate::drive::drive(&mut app, task);
+    }
 
     // Assert
     assert_eq!(

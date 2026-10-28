@@ -129,6 +129,7 @@ impl Signex {
         // Reading twice would be harmless today but invites the two to be
         // seeded from different parses of a file edited mid-launch.
         let symbol_grid_size_mm = crate::fonts::read_symbol_grid_size_mm_pref_from(prefs);
+        let component_classes = crate::fonts::read_component_classes_pref_from(prefs);
         let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref_from(prefs);
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref_from(prefs);
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref_from(prefs);
@@ -235,10 +236,8 @@ impl Signex {
                 visible_grid_mm: 1.27,
                 snap_hotspots: true,
                 ui_font_name: crate::fonts::read_ui_font_pref_from(prefs),
-                component_classes: crate::fonts::read_component_classes_pref_from(prefs),
-                preferences_draft_component_classes: crate::fonts::read_component_classes_pref_from(
-                    prefs,
-                ),
+                component_classes: component_classes.clone(),
+                preferences_draft_component_classes: component_classes.clone(),
                 keymap_profiles,
                 active_keymap,
                 keymap_pending_sequence: Vec::new(),
@@ -587,7 +586,15 @@ impl Signex {
                 hover_started_at: None,
                 hover_screen_pos: None,
             },
-            library: crate::library::LibraryState::default(),
+            library: crate::library::LibraryState {
+                // The values parsed above, not a second read of `prefs.json`.
+                new_library_defaults: crate::library::NewLibraryDefaults {
+                    grid_size_mm: symbol_grid_size_mm,
+                    pin_selection: symbol_pin_selection,
+                    component_classes,
+                },
+                ..Default::default()
+            },
             native_menu: Default::default(),
         };
         // The PCB canvas starts from the loaded grid state, not its own
