@@ -25,7 +25,7 @@ the public KiCad source mirror. Each item scored:
 | Remediation | Items | Phase |
 |---|---|---|
 | Move-to-companion | `crates/kicad-parser/` (whole crate, 3,938 LOC); `crates/kicad-writer/` (whole crate, 2,274 LOC); `crates/signex-output/src/netlist/kicad_sexpr.rs` (336 LOC) | Phase 4 (clone) + Phase 5 (delete from main) |
-| Rewrite-clean-room | `signex-types::layer::{F_CU,…}` constants → `SignexLayer` enum; `signex-types::schematic::PinElectricalType` → `PinDirection`; `signex-types::schematic::PinShape` → `PinShapeStyle`; `signex-types::markup::parse_markup` → `parse_signex_markup` (Markdown-extension); `signex-types::markup::kicad_auto_net_name_from_pins` → `auto_net_name` (`unnamed-<sheet>:<ref>:<pin>` format) | Phase 2.1, 2.2, 2.3 |
+| Rewrite-clean-room | `signex-types::layer::{F_CU,…}` constants → `SignexLayer` enum; `signex-types::schematic::PinElectricalType` → `PinDirection`; `signex-types::schematic::PinShape` → `PinShapeStyle`; `signex-types::markup::parse_markup` → `parse_signex_markup` (Markdown-extension); `signex-types::markup::kicad_auto_net_name_from_pins` → deleted (unnamed nets are named `N$<id>` by `signex-net`'s netlist builder) | Phase 2.1, 2.2, 2.3 |
 | Delete | KiCad-format auto-net-name format string `Net-(<r>-Pad<p>)` (cannot be retained even renamed — direct format-string match) | Phase 2.3 |
 | Keep | `signex-types::layer::LayerId(u8)` newtype itself (just a u8 wrapper, generic); `signex-types::layer::LayerKind` enum (Signex-original variant set); `kicad-parser::sexpr` (generic Lisp parser, but moves with the crate to companion); ERC rule kinds (Altium-flavoured); coordinate system; net types; theme types; almost all of `signex-render`, `signex-engine`, `signex-app`, `signex-erc`, `signex-output` (excluding netlist exporter), `signex-widgets`, `signex-library` | (no action) |
 
@@ -86,7 +86,7 @@ the public KiCad source mirror. Each item scored:
 - **Match:** **Strong.** Most clear-cut derivation evidence in the codebase.
 - **Remediation:** **Rewrite-clean-room** + **Delete** (Phase 2.3).
   - `parse_markup` → `parse_signex_markup` (Markdown subset: `**bold**`, `*italic*`, `~~strike~~`, `^sup^`, `~sub~`, `[label](url)`, `\X` escape; per Q1 decision **adds `_~text~_` for overbar** to preserve digital-logic naming).
-  - `kicad_auto_net_name_from_pins` deleted; replaced with `auto_net_name` returning `unnamed-<sheet>:<ref>:<pin>` (KiCad format string cannot be kept — direct match).
+  - `kicad_auto_net_name_from_pins` deleted; the real naming is `N$<id>` in `crates/signex-net/src/build/mod.rs` (KiCad format string cannot be kept — direct match).
 
 ### 8. `signex-erc::RuleKind` (11 ERC rule kinds)
 

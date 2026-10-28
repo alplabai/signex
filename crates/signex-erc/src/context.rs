@@ -181,6 +181,9 @@ pub struct ErcNetPin {
     pub occurrence: InstancePath,
     /// That symbol's reference designator, for messages.
     pub reference: String,
+    /// The pin's number (or name when it has none): the `pin` half of
+    /// `reference.pin`.
+    pub number: String,
     /// World-space position of the pin tip.
     pub position: Point,
     pub direction: PinDirection,
@@ -542,6 +545,7 @@ fn summarize_nets(
                 symbol: sym.uuid,
                 occurrence: InstancePath::root(),
                 reference: sym.reference.clone(),
+                number: pin.number.clone(),
                 position: pin.world_pos,
                 direction: pin.electrical_type,
                 is_power_flag: sym.is_power && signex_net::is_power_flag(&sym.lib_id),

@@ -66,6 +66,7 @@ fn app_with_gated_sheet(dir: &Path, path: &Path) -> (Signex, mpsc::Receiver<()>,
         id,
         path: dir.join("P.snxprj"),
         data: ProjectData {
+            description: None,
             name: "P".into(),
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: None,
@@ -83,6 +84,7 @@ fn app_with_gated_sheet(dir: &Path, path: &Path) -> (Signex, mpsc::Receiver<()>,
         pending_libraries: Default::default(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
     let mut engine = signex_engine::Engine::new(sheet("A3")).unwrap();

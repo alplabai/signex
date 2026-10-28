@@ -23,6 +23,7 @@ use std::collections::{HashMap, HashSet};
 
 pub mod hit_test;
 pub mod label;
+pub mod lock_indicator;
 pub mod overlay;
 mod scene_cache;
 pub mod selection;

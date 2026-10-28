@@ -210,18 +210,6 @@ impl DockArea {
                     self.hovered_tab = None;
                 }
             }
-            DockMessage::ReorderTab { pos, from, to } => {
-                let region = match pos {
-                    PanelPosition::Left => &mut self.left,
-                    PanelPosition::Right => &mut self.right,
-                    PanelPosition::Bottom => &mut self.bottom,
-                };
-                if from < region.panels.len() && to < region.panels.len() {
-                    let panel = region.panels.remove(from);
-                    region.panels.insert(to, panel);
-                    region.active = to;
-                }
-            }
             DockMessage::TabClick(pos, idx) => {
                 // Mouse-up on tab: if UndockPanel did not fire, treat
                 // as click → select. If the drag started on a

@@ -44,7 +44,6 @@ pub(super) fn view_header<'a>(
             ..iced::widget::button::Style::default()
         });
 
-    // Add-table control. Either the inline name form (while
     let library_for_search = lib_pb.clone();
     let search = text_input("Search…", &browser.search)
         .on_input(move |s| LibraryMessage::BrowserSearchChanged {

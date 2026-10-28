@@ -134,7 +134,7 @@ impl Signex {
         };
         // One document per file: a spelling of the path a tab already holds
         // reuses that tab (#1149).
-        let file_path = self.resolve_held_spelling(file_path);
+        let file_path = self.resolve_held_spelling_now(file_path);
 
         // A rename or delete still moving this file would leave the new tab
         // on a path that is about to vanish (#859).

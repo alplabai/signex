@@ -10,11 +10,11 @@
 //!   (AVL, template defaults, etc.); keeping it TOML now lets the
 //!   schema grow without a migration.
 //!
-//! Errors are intentionally swallowed at the boundary because:
-//! - On startup, a missing/corrupt config must not block the app —
-//!   we fall back to [`DistributorSettings::default()`](crate::library::state::DistributorSettings).
-//! - On save, an I/O failure is non-critical — the next save will
-//!   just overwrite. A `tracing::warn!` surfaces the why.
+//! Error handling:
+//! - On load, a missing/corrupt config must not block the app — we
+//!   fall back to [`DistributorSettings::default()`](crate::library::state::DistributorSettings).
+//! - On save, failures are returned as `Err(String)` (and logged with
+//!   `tracing::warn!`) so the dispatcher can show them inline.
 
 use std::path::PathBuf;
 
@@ -109,8 +109,8 @@ pub fn config_path_for_dir(base: &std::path::Path) -> PathBuf {
     crate::config_root::config_root_for_dir(base).join(FILE_NAME)
 }
 
-/// Load the persisted preferred-order list. Returns the v0.9-library-plan.md
-/// default when the file is missing/empty/corrupt — startup is
+/// Load the persisted preferred-order list. Returns the default order
+/// when the file is missing/empty/corrupt — startup is
 /// best-effort.
 pub fn load_preferred_order() -> Vec<DistributorSource> {
     config_path()

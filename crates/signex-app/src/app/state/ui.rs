@@ -95,6 +95,13 @@ pub struct UiState {
     /// active keyboard-shortcut profile. Toggled from the Help menu
     /// and from F1.
     pub keyboard_shortcuts_open: bool,
+    /// Pre-grouped rows for the shortcuts modal, built by
+    /// [`Self::refresh_shortcut_sections`] when the modal opens and again
+    /// whenever `keymap_profiles` is replaced, so `view` does not rebuild
+    /// the editor model every frame (#1380). `None` means "not built":
+    /// the view then computes the sections inline, so a stale cache is
+    /// impossible by construction.
+    pub shortcut_sections: Option<Vec<crate::keyboard_shortcuts_modal::ShortcutSection>>,
     /// Help ▸ About Signex dialog.
     pub about_open: bool,
     /// File ▸ Open Recent — loaded from `prefs.json` at boot, updated on
@@ -130,6 +137,21 @@ pub struct UiState {
     pub move_keeps_wires: bool,
     /// Draft mirror of [`Self::move_keeps_wires`] for the Preferences dialog.
     pub preferences_draft_move_keeps_wires: bool,
+    /// Saved "Window controls" placement (where min/max/close go).
+    pub window_controls_placement: crate::chrome::controls::WindowControlsPlacement,
+    /// Draft mirror of [`Self::window_controls_placement`] for Preferences.
+    pub preferences_draft_window_controls_placement:
+        crate::chrome::controls::WindowControlsPlacement,
+    /// The placement the main window was created with. On macOS it decides
+    /// native vs drawn buttons and cannot change until a restart.
+    pub window_controls_placement_at_boot: crate::chrome::controls::WindowControlsPlacement,
+    /// Button arrangement the Linux desktop asked for; `None` until the
+    /// startup probe lands or when the desktop gave none.
+    pub desktop_button_layout: Option<crate::chrome::desktop::DesktopButtonLayout>,
+    /// Last known mode of the main window (fullscreen hides the macOS inset).
+    pub main_window_mode: iced::window::Mode,
+    /// Logical size of the monitor holding the main window, when known.
+    pub main_window_monitor_size: Option<iced::Size>,
     /// Opt-in autosave of recovery copies (#104). Off by default.
     pub autosave_enabled: bool,
     /// Draft mirror of [`Self::autosave_enabled`] for the Preferences dialog.
@@ -291,9 +313,6 @@ pub struct UiState {
     /// request that intersects `dirty_paths`. Cleared on any of the
     /// three button choices.
     pub app_quit_confirm: Option<crate::app::AppQuitConfirmState>,
-    /// v0.9 read-only Project Options metadata modal — `Some` while
-    /// the user has the right-click → Project Options… popup open.
-    pub project_options: Option<crate::app::ProjectOptionsState>,
     /// v0.11 Enable Version Control modal — opened from the
     /// project root context menu when the project dir has no
     /// `.git/` yet.
@@ -334,11 +353,9 @@ pub struct UiState {
     /// Per-rule severity override — if empty, the rule's default is used.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    /// Net-color overrides keyed by net-label text. Superseded by the
-    /// per-wire `wire_color_overrides` map below which the Active-Bar
-    /// net-colour flood populates; kept here so a future net-name
-    /// palette (maybe the F5 dialog) can cross-reference it without
-    /// another round-trip through state plumbing.
+    /// Net-color overrides keyed by net-label text. Drives the Active-Bar
+    /// net-colour menu state and the net-color modal; the canvas paints
+    /// from the per-wire `wire_color_overrides` map below.
     pub net_colors: std::collections::HashMap<String, signex_types::theme::Color>,
     /// AutoFocus mode — when true, non-selected items dim on the canvas.
     pub auto_focus: bool,
@@ -452,6 +469,32 @@ pub struct UiState {
 }
 
 impl UiState {
+    /// The one answer to "is the main window fullscreen" the strip and the
+    /// search-bar geometry share.
+    pub fn main_window_is_fullscreen(&self) -> bool {
+        crate::chrome::controls::is_effectively_fullscreen(
+            self.main_window_mode,
+            self.window_size,
+            self.main_window_monitor_size,
+        )
+    }
+
+    /// Replace the loaded profile set and rebuild the shortcuts-modal
+    /// cache from it, so the cache can never outlive the profiles it was
+    /// built from. (Callers recompile `active_keymap` themselves.)
+    pub fn set_keymap_profiles(&mut self, profiles: crate::keymap::ShortcutProfileSet) {
+        self.keymap_profiles = profiles;
+        self.refresh_shortcut_sections();
+    }
+
+    /// Rebuild the shortcuts-modal cache: built while the modal is open,
+    /// dropped otherwise (the next open rebuilds it).
+    pub fn refresh_shortcut_sections(&mut self) {
+        self.shortcut_sections = self
+            .keyboard_shortcuts_open
+            .then(|| crate::keyboard_shortcuts_modal::build_sections(&self.keymap_profiles));
+    }
+
     /// Per-wheel-notch zoom factor every canvas uses. Reads the DRAFT, like
     /// `grid_style`: it carries the live preview while Preferences is open
     /// and equals the saved value otherwise (Discard re-seeds the draft).
@@ -478,6 +521,7 @@ impl UiState {
             || self.preferences_draft_pcb_gpu_render != self.pcb_gpu_render
             || self.preferences_draft_annotate_undo != self.annotate_undo
             || self.preferences_draft_move_keeps_wires != self.move_keeps_wires
+            || self.preferences_draft_window_controls_placement != self.window_controls_placement
             || self.preferences_draft_autosave_enabled != self.autosave_enabled
             || self.preferences_draft_symbol_grid_style != self.symbol_grid_style
             // Exact `!=` on the f32 is deliberate: the picker assigns from

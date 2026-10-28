@@ -188,7 +188,9 @@ impl Signex {
                 continue;
             }
             tab.path = new_path.to_path_buf();
-            if let Some(title) = &new_title {
+            if tab.kind.as_project().is_some() {
+                tab.title = crate::app::project_tab::project_tab_title(new_path);
+            } else if let Some(title) = &new_title {
                 tab.title = title.clone();
             }
             match &mut tab.kind {

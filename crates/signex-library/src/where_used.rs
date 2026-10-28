@@ -215,6 +215,7 @@ mod tests {
             class: ComponentClass::generic(),
             datasheet: DatasheetRef::url(""),
             datasheet_label: String::new(),
+            description: String::new(),
             more_datasheets: Vec::new(),
             state: LifecycleState::Released,
             symbol_ref: symbol,

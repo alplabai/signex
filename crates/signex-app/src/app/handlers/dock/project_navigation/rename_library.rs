@@ -67,6 +67,14 @@ impl Signex {
             self.set_rename_error(&refusal);
             return iced::Task::none();
         }
+        // The worker rewrites the `.snxprj` directly. An off-thread write of
+        // it still in flight would land afterwards and put the old library
+        // path back; it runs only after `update` returns, so refuse (before
+        // anything moves) rather than wait.
+        if self.document_state.document_saves.is_saving(&project_path) {
+            self.refuse_rename_while_project_saving();
+            return iced::Task::none();
+        }
         let fold = self.document_state.fold_for_project(project);
         let id = self.document_state.pending_path_ops.begin_with_dependents(
             PathOpKind::RenameLibrary,

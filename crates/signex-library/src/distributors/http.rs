@@ -13,7 +13,11 @@ const HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Maximum time for one whole request (connect + send + response body).
 const HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
-const USER_AGENT: &str = "signex-library/0.9 (+https://signex.dev)";
+const USER_AGENT: &str = concat!(
+    "signex-library/",
+    env!("CARGO_PKG_VERSION"),
+    " (+https://signex.dev)"
+);
 
 /// A client builder preloaded with the user agent and both timeouts.
 /// Callers add adapter-specific options (e.g. redirect policy), then pass

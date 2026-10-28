@@ -240,18 +240,25 @@ impl Signex {
         )));
     }
 
-    /// Write one Component Preview row back through its library adapter
-    /// and clear the editor's dirty flag. Returns why a save failed so a
-    /// Save-All flow (app quit, project close) can keep the app open and
-    /// name the row instead of dropping the edit. A row whose editor is
-    /// already gone has nothing to save and counts as saved.
+    /// Write one Component Preview row that pins no staged PDF back through
+    /// its library adapter and clear the editor's dirty flag. Returns why a
+    /// save failed so a Save-All flow can keep the app open and name the
+    /// row instead of dropping the edit. A row whose editor is already gone
+    /// has nothing to save and counts as saved.
     ///
-    /// PDFs the row pins from this session are written here, on the
-    /// calling thread: a quit or project close needs them on disk before
-    /// it goes on. The Save button writes them on a worker instead.
+    /// No PDF is written here: a row that pins PDFs picked this session
+    /// goes through `begin_save_row` / `begin_save_row_in_batch`, which
+    /// write them on a worker first.
     pub(crate) fn try_save_row(&mut self, address: &EditorAddress) -> anyhow::Result<()> {
-        let written = self.store_staged_assets_blocking(address)?;
-        self.commit_row(address, &written)
+        if self
+            .library
+            .editors
+            .get(address)
+            .is_some_and(|state| state.saving_row.is_some())
+        {
+            anyhow::bail!("this row is still being saved; try again in a moment");
+        }
+        self.commit_row(address, &[])
     }
 
     /// Save the row through its adapter, committing the PDFs it pins from
