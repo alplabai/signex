@@ -33,6 +33,8 @@ impl Signex {
                 Some(Task::none())
             }
             MenuMessage::NextSheet => Some(self.step_schematic_sheet(true)),
+            MenuMessage::NextDocumentTab => Some(self.step_document_tab(true)),
+            MenuMessage::PreviousDocumentTab => Some(self.step_document_tab(false)),
             MenuMessage::PreviousSheet => Some(self.step_schematic_sheet(false)),
             MenuMessage::OpenPreferences => {
                 Some(self.update(Message::Preferences(PreferencesMsg::Open)))

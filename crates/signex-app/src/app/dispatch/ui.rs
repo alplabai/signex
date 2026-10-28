@@ -93,7 +93,11 @@ impl Signex {
                 self.finish_update()
             }
             UiMsg::GridCycle => {
-                let cycled = self.cycle_grid_size();
+                let cycled = self.cycle_grid_size(true);
+                Task::batch([cycled, self.finish_update()])
+            }
+            UiMsg::GridCycleBackward => {
+                let cycled = self.cycle_grid_size(false);
                 Task::batch([cycled, self.finish_update()])
             }
             UiMsg::GridPickerOpen => {
