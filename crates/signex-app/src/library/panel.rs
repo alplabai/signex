@@ -1,10 +1,9 @@
 //! Library left-dock panel — flat library list.
 //!
-//! The inline category-tree-with-row-grid the v0.9-refactor-2 plan §10
-//! sketched is now superseded by the main-window Library Browser tab
-//! (see [`crate::library::browser`]). This panel is reduced to a flat
-//! list of open libraries, each with a single `[Open]` button that
-//! opens the browser tab for that library.
+//! The per-library row grid lives in the main-window Library Browser
+//! tab (see [`crate::library::browser`]); this panel is a flat list of
+//! open libraries, each with a single `[Open]` button that opens the
+//! browser tab for that library.
 //!
 //! Shape:
 //!
@@ -85,22 +84,11 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
                 button(
                     text("Open")
                         .size(LIB_PANEL_TEXT_SIZE)
-                        .color(iced::Color::WHITE),
+                        .color(crate::styles::tokens::on_accent(tokens)),
                 )
                 .padding([2, 10])
                 .on_press(open_msg)
-                .style(|_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgb(
-                        0.00, 0.47, 0.84,
-                    ))),
-                    text_color: iced::Color::WHITE,
-                    border: Border {
-                        width: 0.0,
-                        radius: 3.0.into(),
-                        color: iced::Color::TRANSPARENT,
-                    },
-                    ..iced::widget::button::Style::default()
-                }),
+                .style(crate::styles::accent_button(tokens)),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center);

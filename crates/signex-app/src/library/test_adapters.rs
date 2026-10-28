@@ -301,6 +301,7 @@ impl LibraryAdapter for RevisionedRowAdapter {
 pub(crate) struct PricedAdapter {
     manifest: Manifest,
     pub(crate) priced_row: Uuid,
+    rows: Vec<signex_library::ComponentRow>,
 }
 
 impl PricedAdapter {
@@ -308,7 +309,14 @@ impl PricedAdapter {
         Self {
             manifest: FailingListingAdapter::new(library_id).manifest,
             priced_row: Uuid::new_v4(),
+            rows: Vec::new(),
         }
+    }
+
+    /// Serve `rows` from the one table.
+    pub(crate) fn with_rows(mut self, rows: Vec<signex_library::ComponentRow>) -> Self {
+        self.rows = rows;
+        self
     }
 }
 
@@ -322,7 +330,7 @@ impl LibraryAdapter for PricedAdapter {
     }
 
     fn read_table(&self, _name: &str) -> Result<Vec<signex_library::ComponentRow>, LibraryError> {
-        Ok(Vec::new())
+        Ok(self.rows.clone())
     }
 
     fn table_pricing(

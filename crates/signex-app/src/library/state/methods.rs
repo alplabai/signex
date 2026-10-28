@@ -598,36 +598,11 @@ impl OpenLibrary {
         // Stamp before reading: a write racing the read then costs one
         // extra refresh on the next poll, never a missed one.
         let stamp = signex_library::DiskStamp::of(&self.root).ok();
-        let names = adapter.list_tables()?;
-        let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
-        let mut summaries: Vec<ComponentSummary> = Vec::new();
-        let mut pricing: HashMap<Uuid, signex_library::RowPricing> = HashMap::new();
-        for name in names {
-            match adapter.table_pricing(&name) {
-                Ok(cached) => pricing.extend(cached),
-                Err(e) => tracing::warn!(
-                    target: "signex::library",
-                    table = %name,
-                    error = %e,
-                    "reload_tables: cached prices could not be read; none are shown"
-                ),
-            }
-            match adapter.read_table(&name) {
-                Ok(rows) => {
-                    summaries.extend(rows.iter().map(summarize_row));
-                    tables.insert(name, rows);
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        table = %name,
-                        error = %e,
-                        "read_table failed; entry left empty"
-                    );
-                    tables.insert(name, Vec::new());
-                }
-            }
-        }
+        let TableScan {
+            tables,
+            summaries,
+            pricing,
+        } = scan_tables(adapter, &self.root)?;
         self.tables = tables;
         self.pricing = pricing;
         self.cached_components = summaries;
@@ -718,6 +693,57 @@ pub(crate) fn resolved_path(path: &Path) -> PathBuf {
             }
         }
     }
+}
+
+/// Everything read from a library's tables: the rows, their picker
+/// summaries and the cached prices. The one scan behind both the
+/// synchronous `reload_tables` and the off-thread `LibrarySnapshot::read`,
+/// so the two cannot diverge (they once did on pricing and description).
+pub(super) struct TableScan {
+    pub tables: HashMap<String, Vec<ComponentRow>>,
+    pub summaries: Vec<ComponentSummary>,
+    pub pricing: HashMap<Uuid, signex_library::RowPricing>,
+}
+
+/// Read every table of the library at `root` through `adapter`. A table
+/// whose rows or prices cannot be read is reported and left empty; only
+/// `list_tables` failing is an error.
+pub(super) fn scan_tables(
+    adapter: &dyn LibraryAdapter,
+    root: &Path,
+) -> Result<TableScan, LibraryError> {
+    let mut scan = TableScan {
+        tables: HashMap::new(),
+        summaries: Vec::new(),
+        pricing: HashMap::new(),
+    };
+    for name in adapter.list_tables()? {
+        match adapter.table_pricing(&name) {
+            Ok(cached) => scan.pricing.extend(cached),
+            // To the Messages panel, not only the log: prices silently
+            // missing from the browser look like "never refreshed".
+            Err(e) => crate::diagnostics::log_warning(format!(
+                "Library {root} table {name}: cached prices could not be read ({e}); none are shown.",
+                root = root.display()
+            )),
+        }
+        match adapter.read_table(&name) {
+            Ok(rows) => {
+                scan.summaries.extend(rows.iter().map(summarize_row));
+                scan.tables.insert(name, rows);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    table = %name,
+                    error = %e,
+                    "read_table failed; entry left empty"
+                );
+                scan.tables.insert(name, Vec::new());
+            }
+        }
+    }
+    Ok(scan)
 }
 
 /// Picker/panel summary for one table row.
