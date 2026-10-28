@@ -283,6 +283,7 @@ impl Signex {
             &document.panel_ctx.tokens,
             document.inflight_git_commits.len(),
             altium_import_name.as_deref(),
+            self.measure_status(window_id).as_deref(),
         )
         .map(|req| Message::Ui(UiMsg::StatusBar(req)));
 

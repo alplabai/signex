@@ -11,7 +11,9 @@ pub(crate) use child_sheet_path::relative_within;
 mod clicked;
 mod descend;
 mod double_clicked;
+pub(crate) mod fit_view;
 mod layout_drag;
+mod measure_tool;
 mod move_pick;
 mod sheet_tool;
 mod sync_sheet_pins;
@@ -237,6 +239,7 @@ impl Signex {
                 }
                 self.clear_active_camera_caches();
             }
+            CanvasEvent::FitSelection => self.fit_selection(),
             CanvasEvent::CtrlClicked { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot()
                     && let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(

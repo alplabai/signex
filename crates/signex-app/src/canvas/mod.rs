@@ -36,7 +36,7 @@ pub use camera::Camera;
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 pub use move_pick::MovePick;
 pub use placement_ghost::PlacementGhost;
-pub use shape_preview::ShapePreviewKind;
+pub use shape_preview::{MeasureOverlay, ShapePreviewKind};
 pub use special_strings::SpecialStrings;
 
 use crate::schematic_runtime::SchematicSheetExt as _;
@@ -207,6 +207,8 @@ pub struct CanvasSlot {
     /// Two-click shape anchor + which shape is being drawn. Used by
     /// the rubber-band preview for Line / Rectangle / Circle.
     pub shape_anchor: Option<(signex_types::schematic::Point, ShapePreviewKind)>,
+    /// The last finished Measure-tool result (#1256).
+    pub measure: Option<MeasureOverlay>,
     /// Test-only: how often the drawn content was invalidated.
     #[cfg(test)]
     pub content_cache_clears: u32,
@@ -270,6 +272,7 @@ impl CanvasSlot {
             move_pick: None,
             move_epoch: 0,
             shape_anchor: None,
+            measure: None,
             #[cfg(test)]
             content_cache_clears: 0,
             #[cfg(test)]
@@ -410,6 +413,8 @@ pub struct CanvasViewPrefs<'a> {
     pub snap_grid_mm: f64,
     /// Wire clicks jump to the nearest pin end, wire end or junction (Shift+E).
     pub snap_hotspots: bool,
+    /// Display unit; the Measure overlay's readout follows it.
+    pub unit: signex_types::coord::Unit,
     /// The Wire tool is the active tool. Only wire clicks snap to hotspots
     /// (a Bus click snaps to the grid), so the hotspot marker and the
     /// rubber-band follow hotspots under this tool alone.
@@ -754,6 +759,8 @@ pub enum CanvasEvent {
     },
     CursorMoved,
     FitAll,
+    /// Frame the current selection (`zoom_to_selection_area`, #1256).
+    FitSelection,
     /// Recentre on the last reported cursor position, keeping the zoom.
     CenterAtCursor,
     /// Left-click at world coordinates — triggers hit-testing or tool action.
@@ -836,6 +843,7 @@ mod tests {
             snap_enabled: true,
             snap_grid_mm: 1.27,
             snap_hotspots: false,
+            unit: signex_types::coord::Unit::Mm,
             wire_tool_active: false,
             visible_grid_mm: 1.27,
             grid_style: crate::render_config::GridStyle::Dots,

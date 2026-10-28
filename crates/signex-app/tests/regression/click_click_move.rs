@@ -414,6 +414,7 @@ fn deliver(
             snap_enabled: false,
             snap_grid_mm: 1.27,
             snap_hotspots: false,
+            unit: signex_types::coord::Unit::Mm,
             wire_tool_active: false,
             visible_grid_mm: 1.27,
             grid_style: signex_app::render_config::GridStyle::Dots,
