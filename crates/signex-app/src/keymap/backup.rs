@@ -36,7 +36,26 @@ pub fn back_up_profile_file_at(path: &Path) -> Result<Option<PathBuf>, ProfileLo
     }
     let bak = free_aside_path(path).map_err(ProfileLoadError::Io)?;
     std::fs::copy(path, &bak).map_err(ProfileLoadError::Io)?;
+    stamp_written_now(&bak);
     Ok(Some(bak))
+}
+
+/// Windows `fs::copy` keeps the source's mtime, which would rank a backup
+/// by when its source was last edited. [`newest_backup_at`] ranks by write
+/// time, so stamp the copy now. Failure only affects the ordering, so it is
+/// logged rather than failing a backup that did land.
+fn stamp_written_now(backup: &Path) {
+    let stamped = std::fs::OpenOptions::new()
+        .write(true)
+        .open(backup)
+        .and_then(|file| file.set_modified(std::time::SystemTime::now()));
+    if let Err(error) = stamped {
+        tracing::warn!(
+            target: "signex::keymap",
+            "could not stamp the shortcuts backup {} with its write time ({error})",
+            backup.display()
+        );
+    }
 }
 
 /// [`back_up_profile_file_at`] against the resolved user config path,

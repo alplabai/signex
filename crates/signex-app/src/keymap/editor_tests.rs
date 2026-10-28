@@ -255,9 +255,11 @@ fn editing_a_slot_that_no_longer_exists_is_an_error() {
     );
 }
 
-// #1378 — an `Unbind` entry is the absence of a shortcut, not a shortcut.
+// #1378 — an `Unbind` with no `Command` row to cancel (a trigger this
+// profile never bound, or another context) stays listed, flagged unbound,
+// so Preferences can still show it.
 #[test]
-fn unbind_entries_are_not_listed_as_shortcut_rows() {
+fn an_unbind_with_no_matching_row_stays_listed_as_unbound() {
     use super::{
         ShortcutBinding, ShortcutBindingAction, ShortcutProfile, ShortcutProfileKind,
         ShortcutTrigger,
@@ -285,10 +287,14 @@ fn unbind_entries_are_not_listed_as_shortcut_rows() {
     };
     let editor = KeymapEditorModel::from(profile);
     let rows = editor.rows();
-    assert_eq!(rows.len(), 1, "only the live binding is listed: {rows:?}");
-    assert_eq!(rows[0].trigger, "F2");
-    // The slot still addresses the real binding index, not the filtered one.
-    assert_eq!(rows[0].slot.binding, 1);
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert_eq!(rows[0].trigger, "Ctrl+S");
+    assert!(rows[0].unbound, "the orphan unbind is flagged: {rows:?}");
+    assert_eq!(rows[0].slot.binding, 0);
+    assert_eq!(rows[1].trigger, "F2");
+    assert!(!rows[1].unbound);
+    // The slot addresses the real binding index.
+    assert_eq!(rows[1].slot.binding, 1);
 }
 
 // A `Command` row that a later `Unbind` (same command, context, trigger)
@@ -322,4 +328,35 @@ fn a_command_row_shadowed_by_a_later_unbind_is_flagged_unbound() {
     assert_eq!(rows.len(), 2, "{rows:?}");
     assert!(rows[0].unbound, "Ctrl+P is shadowed: {rows:?}");
     assert!(!rows[1].unbound, "F7 is live: {rows:?}");
+}
+
+// The unbind that cancels a listed row is that row's `unbound` flag, not a
+// second row.
+#[test]
+fn an_unbind_that_cancels_a_listed_row_is_not_a_row_of_its_own() {
+    use super::{
+        ShortcutBinding, ShortcutBindingAction, ShortcutProfile, ShortcutProfileKind,
+        ShortcutTrigger,
+    };
+    let command = AppCommandId::new("save_document").unwrap();
+    let binding = |action, trigger: &str| ShortcutBinding {
+        action,
+        context: ShortcutContext::Global,
+        triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+    };
+    let profile = ShortcutProfile {
+        id: "t".to_string(),
+        name: "T".to_string(),
+        kind: ShortcutProfileKind::Custom,
+        schema_version: 1,
+        description: None,
+        base_profile: None,
+        bindings: vec![
+            binding(ShortcutBindingAction::Command(command.clone()), "Ctrl+S"),
+            binding(ShortcutBindingAction::Unbind(command), "Ctrl+S"),
+        ],
+    };
+    let rows = KeymapEditorModel::from(profile).rows();
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert!(rows[0].unbound);
 }

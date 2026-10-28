@@ -73,6 +73,14 @@ impl Signex {
                     window,
                 ));
             }
+            // The released command may itself have opened a blocking modal
+            // (print preview): the restart stroke must not run behind it,
+            // same rule as at the top of this function.
+            if target.paints_overlay_stack() && self.has_blocking_modal() && is_single_key(&stroke)
+            {
+                self.cancel_pending_chord();
+                return Task::batch(tasks);
+            }
             self.ui_state.keymap_pending_sequence.push(stroke);
             if let Some(task) = self.take_keymap_match(&contexts, window) {
                 tasks.push(task);

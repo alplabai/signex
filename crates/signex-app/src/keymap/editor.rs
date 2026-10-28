@@ -1,5 +1,5 @@
 use crate::keymap::{
-    AppCommandId, BindingConflict, CommandGroup, CompiledKeymap, ProfileLoadError,
+    AppCommandId, BindingConflict, CommandGroup, CompiledKeymap, ProfileLoadError, ShortcutBinding,
     ShortcutBindingAction, ShortcutContext, ShortcutProfile, ShortcutProfileKind,
     ShortcutProfileSet, ShortcutTrigger, fallback_label, metadata_for,
 };
@@ -65,13 +65,15 @@ impl KeymapEditorModel {
             .bindings
             .iter()
             .enumerate()
-            .filter(|(_, binding)| !matches!(binding.action, ShortcutBindingAction::Unbind(_)))
             .flat_map(|(binding_index, binding)| {
                 let source = source.clone();
                 binding
                     .triggers
                     .iter()
                     .enumerate()
+                    .filter(move |(_, trigger)| {
+                        !unbind_only_cancels_a_row(active, binding_index, trigger)
+                    })
                     .map(move |(trigger_index, trigger)| {
                         let command = binding.action.command().cloned();
                         let metadata = command.as_ref().and_then(metadata_for);
@@ -102,7 +104,8 @@ impl KeymapEditorModel {
                             trigger: trigger_text,
                             trigger_valid,
                             keyboard_editable: matches!(trigger, ShortcutTrigger::KeySequence(_)),
-                            unbound: is_shadowed_by_unbind(active, binding_index, trigger),
+                            unbound: is_unbind_binding(binding)
+                                || is_shadowed_by_unbind(active, binding_index, trigger),
                             source: source.clone(),
                         }
                     })
@@ -311,6 +314,30 @@ impl From<ShortcutProfile> for KeymapEditorModel {
             .expect("single-profile editor model uses its profile as active");
         Self::new(profiles)
     }
+}
+
+fn is_unbind_binding(binding: &ShortcutBinding) -> bool {
+    matches!(binding.action, ShortcutBindingAction::Unbind(_))
+}
+
+/// An `Unbind` trigger that cancels an earlier `Command` row of the same
+/// command, context and trigger is that row's `unbound` flag, not a row of
+/// its own. Any other `Unbind` (no matching row) stays listed, so the
+/// editor can still show it (#1378).
+fn unbind_only_cancels_a_row(
+    profile: &ShortcutProfile,
+    binding_index: usize,
+    trigger: &ShortcutTrigger,
+) -> bool {
+    let binding = &profile.bindings[binding_index];
+    let ShortcutBindingAction::Unbind(command) = &binding.action else {
+        return false;
+    };
+    profile.bindings[..binding_index].iter().any(|earlier| {
+        matches!(&earlier.action, ShortcutBindingAction::Command(c) if c == command)
+            && earlier.context == binding.context
+            && earlier.triggers.contains(trigger)
+    })
 }
 
 /// Whether a binding after `binding_index` unbinds the same command on the

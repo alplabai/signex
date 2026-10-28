@@ -122,10 +122,11 @@ display text. Existing examples:
 - menu labels use `shortcut_for` in `menu_bar/mod.rs`
 - context menus use `keymap_shortcut_label` (`app/view/context_menu/items.rs`)
 
-A command the active profile has unbound shows no shortcut hint. Fallback
-display strings are allowed only for a command the profile never mentions
-(missing profiles, unavailable commands). They should not drive runtime
-dispatch.
+A command the active profile does not bind, or has unbound, shows no
+shortcut hint. The hardcoded fallback text in the menu bar applies only when
+there is no active keymap at all. A hint is the last `Command` binding that no
+later `Unbind` of the same command, context and strokes shadows. Fallback text
+never drives runtime dispatch.
 
 ## Intentional Non-Configurable Behavior
 

@@ -122,3 +122,21 @@ fn a_full_ladder_error_names_the_reason_before_the_path() {
     let reason_end = message.find(" beside ").expect("path follows the reason");
     assert!(reason_end < 40, "the reason must be short: {message}");
 }
+
+// A source file older than the existing backup (restored from a sync
+// folder, say) must not make the new copy rank as the older one: the copy
+// is ranked by when it was written, whatever mtime `fs::copy` carried over
+// (Windows keeps the source's).
+#[test]
+fn a_backup_of_an_older_source_still_ranks_newest() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = live_file(&tmp);
+    let existing = slot_path(&path, 1).unwrap();
+    write_at(&existing, 600);
+    write_at(&path, 3600);
+
+    let fresh = back_up_profile_file_at(&path).unwrap().unwrap();
+
+    assert_ne!(fresh, existing, "the existing backup is never overwritten");
+    assert_eq!(newest_backup_at(&path).unwrap(), Some(fresh));
+}
