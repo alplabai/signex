@@ -31,7 +31,6 @@ fn signex_new_constructs_with_default_state() {
     assert!(app.ui_state.rename_dialog.is_none());
     assert!(app.ui_state.remove_dialog.is_none());
     assert!(app.ui_state.project_close_confirm.is_none());
-    assert!(app.ui_state.project_options.is_none());
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -57,6 +56,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
 
     let id = app.document_state.mint_project_id();
     let data = ProjectData {
+        description: None,
         name: stem.to_string(),
         dir: dir.to_string_lossy().into_owned(),
         schematic_root: Some(format!("{stem}.snxsch")),
@@ -692,45 +692,7 @@ fn add_new_schematic_cancelled_picker_is_a_clean_noop() {
     assert!(app.document_state.tabs.is_empty());
 }
 
-// ─────────────────────────────────────────────────────────────────
-// §3.5 — Project Options modal (open + close lifecycle)
-// ─────────────────────────────────────────────────────────────────
-
-#[test]
-fn project_options_modal_opens_with_metadata_then_closes() {
-    let (mut app, tmp, _prj) = fixture_project_with_companions("Oscar");
-    // Add some sheets and libraries so library_count is meaningful.
-    {
-        let proj = &mut app.document_state.projects[0];
-        proj.data.sheets.push(SheetEntry {
-            name: "Power".into(),
-            filename: "Power.snxsch".into(),
-            symbols_count: 3,
-            wires_count: 5,
-            labels_count: 2,
-            unknown: Default::default(),
-        });
-    }
-
-    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::OpenProjectOptions(vec![0]),
-    )));
-
-    let state = app.ui_state.project_options.as_ref().expect("modal opened");
-    assert_eq!(state.project_idx, 0);
-    assert_eq!(state.name, "Oscar");
-    assert_eq!(state.directory, tmp.path().to_string_lossy().to_string());
-    assert_eq!(state.schematic_root.as_deref(), Some("Oscar.snxsch"));
-    assert_eq!(state.pcb_file.as_deref(), Some("Oscar.snxpcb"));
-    assert_eq!(state.library_count, 0);
-
-    // Close-X / Esc both fire CloseProjectOptions.
-    let _ = app.update(Message::Project(ProjectMsg::CloseOptions));
-    assert!(
-        app.ui_state.project_options.is_none(),
-        "Project Options modal closed after CloseProjectOptions"
-    );
-}
+// §3.5 — Project Options now opens the Project tab: see `project_tab.rs`.
 
 // ─────────────────────────────────────────────────────────────────
 // Modal lifecycle (rename / remove): buffer edit + close-without-submit
@@ -845,6 +807,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join("Hotel.snxprj");
     let data = ProjectData {
+        description: None,
         name: "Hotel".into(),
         dir: tmp.path().to_string_lossy().into_owned(),
         schematic_root: Some("Hotel.snxsch".into()),
@@ -1537,6 +1500,7 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
             id,
             path: prj.clone(),
             data: ProjectData {
+                description: None,
                 name: "Other".to_string(),
                 dir: tmp.path().to_string_lossy().into_owned(),
                 schematic_root: None,

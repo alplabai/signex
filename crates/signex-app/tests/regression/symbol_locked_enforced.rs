@@ -2,6 +2,7 @@
 //! why in the Messages panel.
 
 use signex_app::app::{EditMsg, Message, MoveSelectionMsg, Signex};
+use signex_app::canvas::CanvasEvent;
 use signex_app::diagnostics;
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind, Symbol};
 use std::path::PathBuf;
@@ -199,4 +200,81 @@ fn a_mixed_selection_moves_the_free_symbol_and_skips_the_locked_one() {
         before + 1,
         "the skip was not reported once"
     );
+}
+
+fn locked_position_and_rotation(app: &Signex) -> (f64, f64, f64) {
+    let symbol = &symbols(app)[0];
+    (symbol.position.x, symbol.position.y, symbol.rotation)
+}
+
+#[test]
+fn a_canvas_drag_leaves_a_locked_symbol_where_it_is() {
+    let (mut app, _) = locked_symbol_app("RLOCKDRAG1250");
+
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
+        dx: 10.0,
+        dy: 5.0,
+    }));
+
+    assert_eq!(locked_position_and_rotation(&app), (50.0, 0.0, 0.0));
+}
+
+#[test]
+fn keyboard_rotate_and_mirror_leave_a_locked_symbol_unchanged() {
+    let (mut app, _) = locked_symbol_app("RLOCKKEYS1250");
+    let before = symbols(&app)[0].clone();
+
+    for msg in [
+        EditMsg::RotateSelectedClockwise,
+        EditMsg::RotateSelectedCounterclockwise,
+        EditMsg::MirrorSelectedX,
+        EditMsg::MirrorSelectedY,
+    ] {
+        let _ = app.update(Message::Edit(msg));
+    }
+
+    let after = &symbols(&app)[0];
+    assert_eq!(after.rotation, before.rotation);
+    assert_eq!(after.mirror_x, before.mirror_x);
+    assert_eq!(after.mirror_y, before.mirror_y);
+    assert_eq!(after.position, before.position);
+}
+
+#[test]
+fn cut_skips_a_locked_symbol_without_touching_the_clipboard() {
+    let reference = "RLOCKCUT1250";
+    let (mut app, _) = locked_symbol_app(reference);
+    let needle = format!("Skipped 1 locked symbol(s): {reference}");
+    let before = logged(&needle);
+
+    let _ = app.update(Message::Edit(EditMsg::Cut));
+
+    assert_eq!(symbols(&app).len(), 1, "the locked symbol was cut");
+    assert!(
+        app.interaction_state.clipboard_symbols.is_empty(),
+        "the locked symbol reached the clipboard"
+    );
+    assert_eq!(logged(&needle), before + 1, "the skip was not reported");
+    assert_eq!(app.interaction_state.active_canvas().selected.len(), 1);
+}
+
+#[test]
+fn cut_takes_the_free_symbol_of_a_mixed_selection_only() {
+    let (mut app, locked, free, _) = find_replace_app("RLOCKCUTMIX1250");
+    app.interaction_state.active_canvas_mut().selected = vec![
+        SelectedItem::new(locked, SelectedKind::Symbol),
+        SelectedItem::new(free, SelectedKind::Symbol),
+    ];
+
+    let _ = app.update(Message::Edit(EditMsg::Cut));
+
+    let left: Vec<_> = symbols(&app).iter().map(|s| s.uuid).collect();
+    assert_eq!(left, vec![locked], "only the free symbol should be cut");
+    let copied: Vec<_> = app
+        .interaction_state
+        .clipboard_symbols
+        .iter()
+        .map(|s| s.uuid)
+        .collect();
+    assert_eq!(copied, vec![free]);
 }

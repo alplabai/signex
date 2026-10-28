@@ -118,6 +118,7 @@ fn push_project(app: &mut Signex, dir: &Path, name: &str) {
         id,
         path: prj,
         data: ProjectData {
+            description: None,
             name: name.into(),
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: None,

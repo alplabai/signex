@@ -104,6 +104,7 @@ fn fixture() -> Signex {
         path: dir.join("P.snxprj"),
         data: ProjectData {
             name: "P".to_string(),
+            description: None,
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: None,
             pcb_file: None,

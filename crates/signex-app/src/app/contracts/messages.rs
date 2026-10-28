@@ -197,6 +197,13 @@ pub enum UiMsg {
     /// Nothing to do. Produced by widgets / tasks that must emit a
     /// `Message` but carry no event.
     Noop,
+    /// Edit → Undo / Redo clicked in an undocked tab's own menu bar. Runs
+    /// the command against that window's document, as its shortcut does
+    /// (#1550); every other menu row still arrives as `Message::Menu`.
+    MenuInWindow {
+        window: iced::window::Id,
+        msg: MenuMessage,
+    },
     /// Async result of a per-file Git history load issued by the
     /// right-dock History panel. `generation` is the value of
     /// `DocumentState.history.generation` when the load was kicked off;
@@ -216,6 +223,8 @@ pub enum UiMsg {
     GridToggle,
     /// Clear the active canvas background cache (grid density change).
     GridCycle,
+    /// The reverse of [`UiMsg::GridCycle`]: step to the previous grid preset.
+    GridCycleBackward,
     /// v0.18.10 — open the Altium-style grid picker popup at the
     /// current `last_mouse_pos`. Footprint editor only (today);
     /// other contexts fall through to no-op.

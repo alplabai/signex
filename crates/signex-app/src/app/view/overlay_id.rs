@@ -79,7 +79,6 @@ pub(crate) enum OverlayId {
     RemoveDialog,
     ProjectCloseConfirm,
     AppQuitConfirm,
-    ProjectOptions,
     EnableVersionControl,
     GridProperties,
     SelectionFilterCustom,
@@ -118,7 +117,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 51] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 50] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -152,7 +151,6 @@ pub(crate) const PAINT_ORDER: [OverlayId; 51] = [
     OverlayId::RemoveDialog,
     OverlayId::ProjectCloseConfirm,
     OverlayId::AppQuitConfirm,
-    OverlayId::ProjectOptions,
     OverlayId::EnableVersionControl,
     OverlayId::GridProperties,
     OverlayId::SelectionFilterCustom,
@@ -252,7 +250,6 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::RemoveDialog
         | OverlayId::ProjectCloseConfirm
         | OverlayId::AppQuitConfirm
-        | OverlayId::ProjectOptions
         | OverlayId::EnableVersionControl
         | OverlayId::GridProperties
         | OverlayId::SelectionFilterCustom
@@ -334,7 +331,6 @@ impl Signex {
             OverlayId::RemoveDialog => layers.extend(self.remove_dialog_overlay()),
             OverlayId::ProjectCloseConfirm => layers.extend(self.project_close_confirm_overlay()),
             OverlayId::AppQuitConfirm => layers.extend(self.app_quit_confirm_overlay()),
-            OverlayId::ProjectOptions => layers.extend(self.project_options_overlay()),
             OverlayId::EnableVersionControl => layers.extend(self.enable_version_control_overlay()),
             OverlayId::GridProperties => layers.extend(self.grid_properties_overlay()),
             OverlayId::SelectionFilterCustom => {

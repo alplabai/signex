@@ -8,7 +8,7 @@ type MenuItemView = Item<'static, MenuMessage, Theme, iced::Renderer>;
 
 // ─── View: Menu Bar ──────────────────────────────────────────
 
-pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMessage> {
+pub fn view(tokens: &ThemeTokens, ctx: MenuContext<'_>) -> Element<'static, MenuMessage> {
     let mc = MenuColors::from_tokens(tokens);
     let mb = render_menu_bar(&menu_bar_model(&ctx), mc);
 

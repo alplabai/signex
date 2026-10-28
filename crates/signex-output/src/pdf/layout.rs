@@ -5,6 +5,7 @@
 
 use super::{Margins, PdfOptions, PdfScale};
 use crate::SheetSnapshot;
+use signex_types::schematic::{SchDrawing, arc_polyline, lower_placed_symbol, primitives_bounds};
 
 /// Bounding box of all schematic content (wires, buses, symbols, labels,
 /// junctions, notes, child sheets) in mm.
@@ -30,9 +31,19 @@ pub fn schematic_bbox(sheet: &SheetSnapshot) -> (f64, f64, f64, f64) {
     }
 
     for sym in &sheet.schematic.symbols {
-        // Expand by 5 mm each side to approximate the symbol body.
-        extend(sym.position.x - 5.0, sym.position.y - 5.0);
-        extend(sym.position.x + 5.0, sym.position.y + 5.0);
+        let lowered = lower_placed_symbol(sheet.schematic.lib_symbols.get(&sym.lib_id), sym);
+        match primitives_bounds(&lowered) {
+            // The drawn body, pins and graphics, in world space.
+            Some(b) => {
+                extend(b.min_x, b.min_y);
+                extend(b.max_x, b.max_y);
+            }
+            // No library body to measure: approximate it.
+            None => {
+                extend(sym.position.x - 5.0, sym.position.y - 5.0);
+                extend(sym.position.x + 5.0, sym.position.y + 5.0);
+            }
+        }
     }
 
     for label in &sheet.schematic.labels {
@@ -65,6 +76,51 @@ pub fn schematic_bbox(sheet: &SheetSnapshot) -> (f64, f64, f64, f64) {
         extend(cs.position.x + cs.size.0, cs.position.y + cs.size.1);
     }
 
+    for drawing in &sch.drawings {
+        match drawing {
+            SchDrawing::Line {
+                start, end, width, ..
+            }
+            | SchDrawing::Rect {
+                start, end, width, ..
+            } => {
+                let h = width * 0.5;
+                extend(start.x.min(end.x) - h, start.y.min(end.y) - h);
+                extend(start.x.max(end.x) + h, start.y.max(end.y) + h);
+            }
+            SchDrawing::Circle {
+                center,
+                radius,
+                width,
+                ..
+            } => {
+                let r = radius + width * 0.5;
+                extend(center.x - r, center.y - r);
+                extend(center.x + r, center.y + r);
+            }
+            SchDrawing::Arc {
+                start,
+                mid,
+                end,
+                width,
+                ..
+            } => {
+                let h = width * 0.5;
+                for p in arc_polyline(*start, *mid, *end) {
+                    extend(p.x - h, p.y - h);
+                    extend(p.x + h, p.y + h);
+                }
+            }
+            SchDrawing::Polyline { points, width, .. } => {
+                let h = width * 0.5;
+                for p in points {
+                    extend(p.x - h, p.y - h);
+                    extend(p.x + h, p.y + h);
+                }
+            }
+        }
+    }
+
     if x_min.is_infinite() || x_max.is_infinite() {
         (0.0, 0.0, 100.0, 100.0)
     } else {
@@ -85,6 +141,7 @@ fn sheet_is_empty(sheet: &SheetSnapshot) -> bool {
         && s.no_connects.is_empty()
         && s.text_notes.is_empty()
         && s.child_sheets.is_empty()
+        && s.drawings.is_empty()
 }
 
 /// The sheet's paper `(width_mm, height_mm)`, read through the shared
@@ -265,6 +322,56 @@ mod tests {
             end: Point::new(230.0, 120.0),
         });
         assert_eq!(schematic_bbox(&sheet), (10.0, 5.0, 230.0, 120.0));
+    }
+
+    #[test]
+    fn drawings_and_symbol_bodies_past_the_wires_are_inside_the_fit_box() {
+        use signex_types::schematic::{
+            FillType, Graphic, LibGraphic, LibSymbol, SchDrawing, Symbol,
+        };
+        let mut sheet = sheet_with_wire("A4");
+        let lib: LibSymbol = serde_json::from_value(serde_json::json!({"id": "T:Big"})).unwrap();
+        let mut lib = lib;
+        lib.graphics.push(LibGraphic {
+            unit: 0,
+            body_style: 1,
+            graphic: Graphic::Rectangle {
+                start: Point::new(-2.0, -2.0),
+                end: Point::new(2.0, 40.0),
+                width: 0.2,
+                fill: FillType::None,
+            },
+        });
+        sheet.schematic.lib_symbols.insert("T:Big".into(), lib);
+        sheet.schematic.symbols.push(Symbol {
+            lib_id: "T:Big".into(),
+            position: Point::new(450.0, 60.0),
+            ..Default::default()
+        });
+        sheet.schematic.drawings.push(SchDrawing::Rect {
+            uuid: uuid::Uuid::nil(),
+            start: Point::new(10.0, 10.0),
+            end: Point::new(400.0, 300.0),
+            width: 0.2,
+            fill: FillType::None,
+            stroke_color: None,
+        });
+        let (x1, y1, x2, y2) = schematic_bbox(&sheet);
+        assert!(x1 <= 10.0 && y1 <= 10.0 && x2 >= 452.0 && y2 >= 300.0);
+        // The symbol body reaches 2 mm right of its origin, past the drawing.
+        let opts = PdfOptions {
+            include_title_block: false,
+            ..PdfOptions::default()
+        };
+        let xform = PageTransform::new(&sheet, 297.0, 210.0, &opts, 1.0);
+        for (x, y) in [(10.0, 10.0), (400.0, 300.0), (452.0, 60.0)] {
+            let (px, py) = (xform.x(x) as f64, xform.px_y(y) as f64);
+            assert!(
+                (10.0 - 1e-6..=287.0 + 1e-6).contains(&px)
+                    && (10.0 - 1e-6..=200.0 + 1e-6).contains(&py),
+                "({x},{y}) lands off the page at ({px},{py})"
+            );
+        }
     }
 
     #[test]

@@ -118,7 +118,7 @@ pub struct AlignModal {
 
 /// Live, in-memory state of the Footprint canvas — drives interaction
 /// and rendering. The authoritative pad list lives on
-/// `ComponentEditorState.footprint.pads`; this struct mirrors it for
+/// `ComponentPreviewState.footprint.pads`; this struct mirrors it for
 /// the canvas's hit-test + draw layer.
 ///
 /// `PartialEq` is intentionally NOT derived: Phase 5.3 added

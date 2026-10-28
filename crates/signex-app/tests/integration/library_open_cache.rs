@@ -234,6 +234,7 @@ fn auto_mount_refreshes_an_already_mounted_library() {
 /// here would silently turn the warm path back into a cold one.
 fn project_referencing(dir: &Path, libs: &[PathBuf]) -> ProjectData {
     ProjectData {
+        description: None,
         name: "warm".to_string(),
         dir: dir.to_string_lossy().to_string(),
         schematic_root: None,

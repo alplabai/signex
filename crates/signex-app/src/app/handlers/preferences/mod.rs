@@ -402,7 +402,7 @@ impl Signex {
                 }
                 match crate::keymap::save_profile_set(&keymap_profiles) {
                     Ok(()) => {
-                        self.ui_state.keymap_profiles = keymap_profiles;
+                        self.ui_state.set_keymap_profiles(keymap_profiles);
                         self.ui_state.active_keymap =
                             std::sync::Arc::new(self.ui_state.keymap_profiles.compile_active());
                         self.ui_state.preferences_keymap_recorder = None;

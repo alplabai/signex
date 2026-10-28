@@ -61,6 +61,7 @@ mod tests {
             id,
             path: dir.join("P.snxprj"),
             data: ProjectData {
+                description: None,
                 name: "P".to_string(),
                 dir: dir.to_string_lossy().into_owned(),
                 schematic_root: None,

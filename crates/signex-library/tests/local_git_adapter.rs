@@ -255,6 +255,99 @@ fn save_then_get_symbol_round_trip() {
     assert_eq!(got, sym);
 }
 
+// ── Symbol uuid index (#1362) ────────────────────────────────────────────
+
+fn symbols_dir(file: &Path) -> PathBuf {
+    file.parent().unwrap().join("symbols")
+}
+
+/// A lookup served from the index reads one container: a broken sibling
+/// container is not even opened, so no scan problem is recorded.
+#[test]
+fn symbol_lookup_uses_index_instead_of_scanning() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "idx", false);
+    let sym = fixture_symbol("Alpha");
+    adapter.save_symbol(sym.clone(), "add").unwrap();
+    std::fs::write(symbols_dir(&file).join("broken.snxsym"), b"not toml {{").unwrap();
+    assert_eq!(adapter.get_symbol(sym.uuid).unwrap().uuid, sym.uuid);
+    assert!(adapter.symbol_file_problems().is_empty());
+}
+
+#[test]
+fn symbol_lookup_follows_save_and_resave() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_file, adapter) = init_adapter(&dir, "idx", false);
+    let a = fixture_symbol("Alpha");
+    let b = fixture_symbol("Beta");
+    adapter.save_symbol(a.clone(), "a").unwrap();
+    adapter.save_symbol(b.clone(), "b").unwrap();
+    let mut a2 = a.clone();
+    a2.description = "changed".into();
+    adapter.save_symbol(a2, "a2").unwrap();
+    assert_eq!(adapter.get_symbol(a.uuid).unwrap().description, "changed");
+    assert_eq!(adapter.get_symbol(b.uuid).unwrap().name, "Beta");
+}
+
+/// Container renamed outside the app: the stale index entry must fall back
+/// to a rescan and return the symbol from its new file.
+#[test]
+fn symbol_lookup_survives_external_rename() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "idx", false);
+    let sym = fixture_symbol("Alpha");
+    adapter.save_symbol(sym.clone(), "add").unwrap();
+    let old = symbols_dir(&file).join("alpha.snxsym");
+    let new = symbols_dir(&file).join("renamed.snxsym");
+    std::fs::rename(&old, &new).unwrap();
+    assert_eq!(adapter.get_symbol(sym.uuid).unwrap().uuid, sym.uuid);
+    // A re-save must update the renamed file, not recreate the old one.
+    adapter.save_symbol(sym.clone(), "again").unwrap();
+    assert!(new.exists());
+    assert!(!old.exists());
+}
+
+#[test]
+fn symbol_lookup_after_external_delete_is_not_found() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "idx", false);
+    let sym = fixture_symbol("Alpha");
+    adapter.save_symbol(sym.clone(), "add").unwrap();
+    std::fs::remove_file(symbols_dir(&file).join("alpha.snxsym")).unwrap();
+    assert!(matches!(
+        adapter.get_symbol(sym.uuid),
+        Err(LibraryError::NotFound(_))
+    ));
+}
+
+/// Another tool rewrites the container with different symbols: the indexed
+/// file no longer holds the uuid, so the lookup must not return it.
+#[test]
+fn symbol_lookup_after_external_edit_moves_symbol() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "idx", false);
+    let a = fixture_symbol("Alpha");
+    let b = fixture_symbol("Beta");
+    adapter.save_symbol(a.clone(), "a").unwrap();
+    adapter.save_symbol(b.clone(), "b").unwrap();
+    let alpha = symbols_dir(&file).join("alpha.snxsym");
+    let beta = symbols_dir(&file).join("beta.snxsym");
+    // Swap contents: each uuid now lives in the other file.
+    let (ta, tb) = (
+        std::fs::read(&alpha).unwrap(),
+        std::fs::read(&beta).unwrap(),
+    );
+    std::fs::write(&alpha, tb).unwrap();
+    std::fs::write(&beta, ta).unwrap();
+    assert_eq!(adapter.get_symbol(a.uuid).unwrap().name, "Alpha");
+    assert_eq!(adapter.get_symbol(b.uuid).unwrap().name, "Beta");
+    // A new symbol added externally is found after an index miss.
+    let c = fixture_symbol("Gamma");
+    let other = LocalGitAdapter::open(&file).unwrap();
+    other.save_symbol(c.clone(), "c").unwrap();
+    assert_eq!(adapter.get_symbol(c.uuid).unwrap().name, "Gamma");
+}
+
 #[test]
 fn get_symbol_missing_uuid_is_not_found() {
     let dir = tempfile::tempdir().unwrap();
