@@ -293,10 +293,18 @@ fn a_click_in_an_undocked_window_commits_to_that_windows_sheet() {
     let mut app = app_with_library(&f);
     let first = PathBuf::from("place-364.snxsch");
     let other = second_sheet(&mut app);
-    let window = iced::window::Id::unique();
     app.ui_state.main_window_id = Some(iced::window::Id::unique());
     // The undocked window shows the second sheet; the main window shows the
-    // first one and the part is armed for the second.
+    // first one and the part is armed for the second. The undock is
+    // requested first so its window entry exists, as in the app.
+    let idx = app
+        .document_state
+        .tabs
+        .iter()
+        .position(|t| t.path == other)
+        .expect("tab of the second sheet");
+    let _ = app.update(Message::Window(signex_app::app::WindowMsg::UndockTab(idx)));
+    let window = *app.ui_state.windows.keys().next().expect("undocked window");
     let _ = app.update(Message::Window(
         signex_app::app::WindowMsg::UndockedTabOpened {
             path: other.clone(),
@@ -563,6 +571,7 @@ fn closing_the_project_mid_session_drops_it() {
         path: prj,
         data: ProjectData {
             name: "P".to_owned(),
+            description: None,
             dir: dir.path().to_string_lossy().into_owned(),
             schematic_root: Some("A.snxsch".to_owned()),
             pcb_file: None,
@@ -586,6 +595,7 @@ fn closing_the_project_mid_session_drops_it() {
         pending_libraries: Default::default(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.tabs[0].project_id = Some(id);
 

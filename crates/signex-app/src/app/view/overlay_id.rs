@@ -79,12 +79,12 @@ pub(crate) enum OverlayId {
     RemoveDialog,
     ProjectCloseConfirm,
     AppQuitConfirm,
-    ProjectOptions,
     EnableVersionControl,
     GridProperties,
     SelectionFilterCustom,
     AnnotateDialog,
     AnnotateResetConfirm,
+    ReprefixConfirm,
     ErcDialog,
 
     // Library modals.
@@ -152,12 +152,12 @@ pub(crate) const PAINT_ORDER: [OverlayId; 51] = [
     OverlayId::RemoveDialog,
     OverlayId::ProjectCloseConfirm,
     OverlayId::AppQuitConfirm,
-    OverlayId::ProjectOptions,
     OverlayId::EnableVersionControl,
     OverlayId::GridProperties,
     OverlayId::SelectionFilterCustom,
     OverlayId::AnnotateDialog,
     OverlayId::AnnotateResetConfirm,
+    OverlayId::ReprefixConfirm,
     OverlayId::ErcDialog,
     OverlayId::LibraryPicker,
     OverlayId::EditRowModal,
@@ -252,12 +252,12 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::RemoveDialog
         | OverlayId::ProjectCloseConfirm
         | OverlayId::AppQuitConfirm
-        | OverlayId::ProjectOptions
         | OverlayId::EnableVersionControl
         | OverlayId::GridProperties
         | OverlayId::SelectionFilterCustom
         | OverlayId::AnnotateDialog
         | OverlayId::AnnotateResetConfirm
+        | OverlayId::ReprefixConfirm
         | OverlayId::ErcDialog
         | OverlayId::LibraryPicker
         | OverlayId::EditRowModal
@@ -334,7 +334,6 @@ impl Signex {
             OverlayId::RemoveDialog => layers.extend(self.remove_dialog_overlay()),
             OverlayId::ProjectCloseConfirm => layers.extend(self.project_close_confirm_overlay()),
             OverlayId::AppQuitConfirm => layers.extend(self.app_quit_confirm_overlay()),
-            OverlayId::ProjectOptions => layers.extend(self.project_options_overlay()),
             OverlayId::EnableVersionControl => layers.extend(self.enable_version_control_overlay()),
             OverlayId::GridProperties => layers.extend(self.grid_properties_overlay()),
             OverlayId::SelectionFilterCustom => {
@@ -342,6 +341,7 @@ impl Signex {
             }
             OverlayId::AnnotateDialog => layers.extend(self.annotate_dialog_overlay()),
             OverlayId::AnnotateResetConfirm => layers.extend(self.annotate_reset_confirm_overlay()),
+            OverlayId::ReprefixConfirm => layers.extend(self.reprefix_confirm_overlay()),
             OverlayId::ErcDialog => layers.extend(self.erc_dialog_overlay()),
             OverlayId::LibraryPicker => layers.extend(self.library_picker_overlay()),
             OverlayId::EditRowModal => layers.extend(self.edit_row_modal_overlay()),

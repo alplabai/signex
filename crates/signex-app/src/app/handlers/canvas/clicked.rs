@@ -372,11 +372,7 @@ impl Signex {
                         row_id: None,
                         library_version: String::new(),
                     };
-                    self.apply_engine_command(
-                        signex_engine::Command::PlaceSymbol { symbol: sym },
-                        false,
-                        false,
-                    );
+                    self.apply_engine_commands(signex_engine::place_power_port(sym), false, false);
                 }
             }
             Tool::Component => {

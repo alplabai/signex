@@ -31,7 +31,6 @@ fn signex_new_constructs_with_default_state() {
     assert!(app.ui_state.rename_dialog.is_none());
     assert!(app.ui_state.remove_dialog.is_none());
     assert!(app.ui_state.project_close_confirm.is_none());
-    assert!(app.ui_state.project_options.is_none());
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -57,6 +56,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
 
     let id = app.document_state.mint_project_id();
     let data = ProjectData {
+        description: None,
         name: stem.to_string(),
         dir: dir.to_string_lossy().into_owned(),
         schematic_root: Some(format!("{stem}.snxsch")),
@@ -78,6 +78,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         pending_libraries: std::collections::HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
 
@@ -529,6 +530,7 @@ fn f10_save_persists_snxprj_as_valid_json() {
 fn add_existing_landed(app: &mut Signex, paths: &[std::path::PathBuf]) {
     let _ = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
         project_id: app.document_state.projects[0].id,
+        project_dir: std::path::PathBuf::new(),
         results: Ok(paths.iter().cloned().map(Ok).collect()),
     }));
 }
@@ -691,45 +693,7 @@ fn add_new_schematic_cancelled_picker_is_a_clean_noop() {
     assert!(app.document_state.tabs.is_empty());
 }
 
-// ─────────────────────────────────────────────────────────────────
-// §3.5 — Project Options modal (open + close lifecycle)
-// ─────────────────────────────────────────────────────────────────
-
-#[test]
-fn project_options_modal_opens_with_metadata_then_closes() {
-    let (mut app, tmp, _prj) = fixture_project_with_companions("Oscar");
-    // Add some sheets and libraries so library_count is meaningful.
-    {
-        let proj = &mut app.document_state.projects[0];
-        proj.data.sheets.push(SheetEntry {
-            name: "Power".into(),
-            filename: "Power.snxsch".into(),
-            symbols_count: 3,
-            wires_count: 5,
-            labels_count: 2,
-            unknown: Default::default(),
-        });
-    }
-
-    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::OpenProjectOptions(vec![0]),
-    )));
-
-    let state = app.ui_state.project_options.as_ref().expect("modal opened");
-    assert_eq!(state.project_idx, 0);
-    assert_eq!(state.name, "Oscar");
-    assert_eq!(state.directory, tmp.path().to_string_lossy().to_string());
-    assert_eq!(state.schematic_root.as_deref(), Some("Oscar.snxsch"));
-    assert_eq!(state.pcb_file.as_deref(), Some("Oscar.snxpcb"));
-    assert_eq!(state.library_count, 0);
-
-    // Close-X / Esc both fire CloseProjectOptions.
-    let _ = app.update(Message::Project(ProjectMsg::CloseOptions));
-    assert!(
-        app.ui_state.project_options.is_none(),
-        "Project Options modal closed after CloseProjectOptions"
-    );
-}
+// §3.5 — Project Options now opens the Project tab: see `project_tab.rs`.
 
 // ─────────────────────────────────────────────────────────────────
 // Modal lifecycle (rename / remove): buffer edit + close-without-submit
@@ -844,6 +808,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join("Hotel.snxprj");
     let data = ProjectData {
+        description: None,
         name: "Hotel".into(),
         dir: tmp.path().to_string_lossy().into_owned(),
         schematic_root: Some("Hotel.snxsch".into()),
@@ -1008,6 +973,45 @@ fn app_exit_with_dirty_paths_opens_confirm_modal_instead_of_exiting() {
     // Data-loss guard: the dirty entry must still be present — nothing
     // was discarded by merely asking to exit.
     assert!(app.document_state.dirty_paths.contains(&dirty));
+}
+
+/// Every window opens with `exit_on_close_request: false`, so an OS close of
+/// the main window arrives as `WindowCloseRequested` and must hit the guard.
+#[test]
+fn os_close_of_the_main_window_with_dirty_paths_asks_before_quitting() {
+    let (mut app, _t) = Signex::new();
+    let main = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(main);
+    let dirty = PathBuf::from("/tmp/does-not-matter/board.snxsch");
+    app.document_state.dirty_paths.insert(dirty.clone());
+
+    let task = app.update(Message::Window(WindowMsg::WindowCloseRequested(main)));
+
+    let modal = app
+        .ui_state
+        .app_quit_confirm
+        .as_ref()
+        .expect("an OS close with unsaved edits must open the quit confirm modal");
+    assert!(modal.dirty_paths.contains(&dirty));
+    assert!(app.document_state.dirty_paths.contains(&dirty));
+    assert_eq!(
+        task.units(),
+        0,
+        "the window must not be closed or the app exited behind the modal"
+    );
+}
+
+#[test]
+fn os_close_of_the_main_window_with_no_dirty_paths_closes_it() {
+    let (mut app, _t) = Signex::new();
+    let main = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(main);
+    assert!(app.document_state.dirty_paths.is_empty());
+
+    let task = app.update(Message::Window(WindowMsg::WindowCloseRequested(main)));
+
+    assert!(app.ui_state.app_quit_confirm.is_none());
+    assert!(task.units() > 0, "a clean workspace proceeds to close");
 }
 
 #[test]
@@ -1541,6 +1545,7 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
             id,
             path: prj.clone(),
             data: ProjectData {
+                description: None,
                 name: "Other".to_string(),
                 dir: tmp.path().to_string_lossy().into_owned(),
                 schematic_root: None,
@@ -1558,6 +1563,7 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
             pending_libraries: std::collections::HashMap::new(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         },
     );
     (tmp, prj)

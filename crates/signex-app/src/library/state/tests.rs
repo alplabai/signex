@@ -75,7 +75,7 @@ fn open_library_total_rows_sums_tables() {
 
 /// Helper — minimal `ComponentRow` for the panel-side cache tests.
 /// The full row schema lives in `signex_library`'s tests.
-fn fixture_row(pn: &str) -> ComponentRow {
+pub(super) fn fixture_row(pn: &str) -> ComponentRow {
     use signex_library::{
         ComponentClass, DatasheetRef, InternalPn, LifecycleState, ManufacturerPart, ParamMap,
         PinPadOverride, PlmReserved,
@@ -88,6 +88,7 @@ fn fixture_row(pn: &str) -> ComponentRow {
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::new_v4()),
@@ -193,6 +194,7 @@ fn edit_row_modal_state_seeds_tags_buffer() {
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::new_v4()),
@@ -371,5 +373,35 @@ fn primitive_file_resolves_through_the_ref_library_id() {
                 "snxsym"
             )
             .is_none()
+    );
+}
+
+/// `reload_tables` (the open/mount path) left `pricing` empty, so a
+/// freshly mounted library showed no cached prices until a later
+/// `refresh_components`.
+#[test]
+fn reload_tables_loads_cached_pricing() {
+    let library_id = Uuid::new_v4();
+    let adapter = crate::library::test_adapters::PricedAdapter::new(library_id);
+    let mut lib = library_with_cached_primitives(Path::new("/tmp/priced.snxlib"), library_id);
+    assert!(lib.pricing.is_empty());
+
+    lib.reload_tables(&adapter).expect("reload");
+
+    assert!(lib.pricing.contains_key(&adapter.priced_row));
+}
+
+/// The row's description reaches the picker summary (#1474).
+#[test]
+fn summarize_row_carries_the_row_description() {
+    let mut row = fixture_row("C1");
+    row.description = "100 nF 50 V X7R".into();
+    assert_eq!(
+        super::methods::summarize_row(&row).description,
+        "100 nF 50 V X7R"
+    );
+    assert_eq!(
+        super::methods::summarize_row(&fixture_row("C2")).description,
+        ""
     );
 }

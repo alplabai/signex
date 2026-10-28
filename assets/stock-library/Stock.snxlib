@@ -1,4 +1,4 @@
-format = "snxlib/1"
+format = "snxlib/2"
 library_id = "019df45d-af5e-7a00-8c3b-dd3bf89b40ae"
 
 [library]
@@ -72,5 +72,5 @@ label = "Generic"
 
 [tables.components]
 tsv = '''
-row_id	internal_pn	class	datasheet	state	symbol_ref	footprint_ref	sim_ref	primary_mpn	alternates	supply	parameters	pin_map_overrides	created	updated	content_hash	version	released	symbol_version	footprint_version	sim_version
+row_id	internal_pn	class	datasheet	state	symbol_ref	footprint_ref	sim_ref	primary_mpn	alternates	supply	parameters	pin_map_overrides	created	updated	content_hash	version	released	symbol_version	footprint_version	sim_version	description
 '''

@@ -191,22 +191,37 @@ impl Signex {
         }
     }
 
+    /// Make `result` the engine of the active tab at `p`. A failed engine is
+    /// reported to the Messages panel and the engine already open there is
+    /// kept: it may hold unsaved edits that dropping it would lose silently.
+    fn install_active_engine(
+        &mut self,
+        p: PathBuf,
+        result: Result<signex_engine::Engine, signex_engine::EngineError>,
+    ) {
+        match result {
+            Ok(engine) => {
+                // The incoming sheet's saved colours replace those
+                // of the engine it stands in for.
+                self.forget_net_colors_of(&p);
+                self.document_state.engines.insert(p.clone(), engine);
+                self.adopt_net_colors_of(&p);
+                self.clear_net_color_steps(&p);
+                self.document_state.active_path = Some(p);
+            }
+            Err(error) => crate::diagnostics::log_warning(format!(
+                "{} could not be loaded into the editor ({error}); the sheet already open was kept",
+                p.display()
+            )),
+        }
+    }
+
     fn sync_engine_from_schematic(&mut self, schematic: Option<SchematicSheet>) {
         let path = self.active_tab_path();
         match (path, schematic) {
             (Some(p), Some(sheet)) => {
-                match signex_engine::Engine::new_with_path(sheet, Some(p.clone())) {
-                    Ok(engine) => {
-                        // The incoming sheet's saved colours replace those
-                        // of the engine it stands in for.
-                        self.forget_net_colors_of(&p);
-                        self.document_state.engines.insert(p.clone(), engine);
-                        self.adopt_net_colors_of(&p);
-                        self.clear_net_color_steps(&p);
-                        self.document_state.active_path = Some(p);
-                    }
-                    Err(_) => self.document_state.clear_active_engine(),
-                }
+                let result = signex_engine::Engine::new_with_path(sheet, Some(p.clone()));
+                self.install_active_engine(p, result);
             }
             _ => self.document_state.clear_active_engine(),
         }
@@ -699,11 +714,7 @@ impl Signex {
                 // Older documents may carry an empty paper_size (serde
                 // default); normalize so the Page Options selector and the
                 // drawn sheet agree on the effective A4 fallback.
-                if snapshot.paper_size.is_empty() {
-                    "A4".to_string()
-                } else {
-                    snapshot.paper_size.clone()
-                },
+                effective_paper_size(&snapshot.paper_size),
             )
         } else if let Some(snapshot) = self.active_pcb_snapshot() {
             (
@@ -790,6 +801,16 @@ pub(crate) fn report_unusable_zone_holes(path: &std::path::Path, board: &PcbBoar
     }
 }
 
+/// Paper token for the panel context: older documents carry an empty
+/// `paper_size` (serde default), which every reader treats as A4.
+pub(crate) fn effective_paper_size(paper_size: &str) -> String {
+    if paper_size.is_empty() {
+        "A4".to_string()
+    } else {
+        paper_size.to_string()
+    }
+}
+
 /// Tell the user, once per sheet load, that the sheet's `paper_size` names no
 /// size this build knows. The token is kept as written, so a save does not
 /// rewrite it, but the page is drawn and printed as A4 landscape meanwhile.
@@ -860,5 +881,43 @@ mod sheet_size_report_tests {
             let name = format!("known_size_{}", token.replace(' ', "_"));
             assert_eq!(open(token, &name), 0, "{token}");
         }
+    }
+}
+
+#[cfg(test)]
+mod effective_paper_size_tests {
+    use super::effective_paper_size;
+
+    #[test]
+    fn an_empty_paper_size_reads_as_a4_everywhere() {
+        assert_eq!(effective_paper_size(""), "A4");
+        assert_eq!(effective_paper_size("A3"), "A3");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// #1470 — an engine that fails to start must not displace the open one
+    /// (and its unsaved edits); the failure reaches the Messages panel.
+    #[test]
+    fn a_failed_engine_keeps_the_open_one_and_is_logged() {
+        let path = PathBuf::from("keep-1470.snxsch");
+        let needle = "keep-1470.snxsch could not be loaded";
+        let before = crate::diagnostics::logged_count(needle);
+        let (mut app, _boot) = Signex::new();
+        let engine =
+            signex_engine::Engine::new_with_path(SchematicSheet::default(), Some(path.clone()))
+                .unwrap();
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.active_path = Some(path.clone());
+
+        let failure = signex_engine::EngineError::MissingPath;
+        app.install_active_engine(path.clone(), Err(failure));
+
+        assert!(app.document_state.engines.contains_key(&path));
+        assert_eq!(app.document_state.active_path, Some(path));
+        assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
     }
 }

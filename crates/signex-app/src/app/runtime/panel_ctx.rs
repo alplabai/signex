@@ -447,6 +447,19 @@ impl Signex {
             )
         });
 
+        // The tree is a pure function of `projects`; keep the previous one
+        // (and its expand/collapse state) while they are unchanged (#1383).
+        let (kept_tree, previous_projects, project_tree_builds) = {
+            let ctx = &mut self.document_state.panel_ctx;
+            (
+                std::mem::take(&mut ctx.project_tree),
+                std::mem::take(&mut ctx.projects),
+                ctx.project_tree_builds,
+            )
+        };
+        let tree_unchanged = previous_projects == projects_panel
+            && (project_tree_builds > 0 || projects_panel.is_empty());
+        let kept_project_tree = if tree_unchanged { kept_tree } else { vec![] };
         let active_schematic_snapshot = self.active_render_snapshot();
         let active_pcb_snapshot = self.active_pcb_snapshot();
 
@@ -526,6 +539,7 @@ impl Signex {
         let page_origin = self.document_state.panel_ctx.page_origin;
         let sheet_color = self.document_state.panel_ctx.sheet_color;
         let erc_diagnostics = self.build_erc_diagnostic_entries();
+        let erc_waivers = self.erc_waiver_entries();
 
         let net_classes = self.net_class_panel_state();
 
@@ -550,7 +564,9 @@ impl Signex {
             has_schematic: self.has_active_schematic(),
             has_pcb: self.has_active_pcb(),
             paper_size: active_schematic_snapshot
-                .map(|snapshot| snapshot.paper_size.clone())
+                .map(|snapshot| {
+                    crate::app::load_gateway::effective_paper_size(&snapshot.paper_size)
+                })
                 .or_else(|| {
                     active_pcb_snapshot
                         .map(|snapshot| format!("PCB • {} layers", snapshot.layers.len()))
@@ -594,7 +610,8 @@ impl Signex {
             selected_pins,
             selected_lib_symbol,
             components_split,
-            project_tree: vec![],
+            project_tree: kept_project_tree,
+            project_tree_builds,
             project_tree_selected: self.document_state.panel_ctx.project_tree_selected.clone(),
             navigator,
             library_row_detail: self.compute_library_row_detail(),
@@ -623,6 +640,7 @@ impl Signex {
             collapsed_sections,
             pre_placement,
             erc_diagnostics,
+            erc_waivers,
             erc_focus_index: self.ui_state.erc_focus_global_index,
             erc_running: self.ui_state.erc_running,
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
@@ -642,8 +660,11 @@ impl Signex {
             history: self.document_state.history.clone(),
         };
         self.fill_symbol_lists(kept_symbol_lists);
-        self.document_state.panel_ctx.project_tree =
-            crate::panels::build_project_tree(&self.document_state.panel_ctx);
+        if !tree_unchanged {
+            let ctx = &mut self.document_state.panel_ctx;
+            ctx.project_tree = crate::panels::build_project_tree(ctx);
+            ctx.project_tree_builds = ctx.project_tree_builds.wrapping_add(1);
+        }
         // Sheet N of M and the project's title block can change with it.
         self.refresh_canvas_sheet_frame();
         self.refresh_canvas_designators();
@@ -690,6 +711,49 @@ mod tests {
         assert_eq!(app.document_state.panel_ctx.symbol_lists_key, key);
     }
 
+    /// #1383: the project tree is rebuilt only when what it shows changes,
+    /// and a changed sheet state does rebuild it.
+    #[test]
+    fn project_tree_is_reused_until_the_projects_change() {
+        let (mut app, _task) = Signex::new();
+        let id = app.document_state.mint_project_id();
+        app.document_state.projects.push(LoadedProject {
+            id,
+            path: PathBuf::from("snx-1383-tree/p.snxprj"),
+            data: ProjectData {
+                name: "p".to_string(),
+                description: None,
+                dir: "snx-1383-tree".to_string(),
+                schematic_root: Some("a.snxsch".to_string()),
+                pcb_file: None,
+                sheets: Vec::new(),
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: Vec::new(),
+                enable_git: false,
+                net_classes: Vec::new(),
+                rules: None,
+                annotation: None,
+                unknown: Default::default(),
+            },
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+            case_decided: false,
+        });
+        app.refresh_panel_ctx();
+        let builds = app.document_state.panel_ctx.project_tree_builds;
+        assert!(builds > 0 && !app.document_state.panel_ctx.project_tree.is_empty());
+
+        app.refresh_panel_ctx();
+        app.refresh_panel_ctx();
+        assert_eq!(app.document_state.panel_ctx.project_tree_builds, builds);
+
+        app.document_state.projects[0].data.pcb_file = Some("b.snxpcb".into());
+        app.refresh_panel_ctx();
+        assert_eq!(app.document_state.panel_ctx.project_tree_builds, builds + 1);
+    }
+
     /// #1383: a real engine edit moves the key, so the panel lists show the
     /// placed symbol instead of the reused (stale) ones.
     #[test]
@@ -720,6 +784,7 @@ mod tests {
             id,
             path: dir.join("P.snxprj"),
             data: ProjectData {
+                description: None,
                 name: "P".to_string(),
                 dir: dir.to_string_lossy().into_owned(),
                 schematic_root: None,
@@ -742,6 +807,7 @@ mod tests {
             pending_libraries: Default::default(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         });
 
         let request = app.project_fs_request();

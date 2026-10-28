@@ -42,9 +42,9 @@ struct OpenOverlays {
     // #514 — the rest of the Esc ladder. Each closes exactly one gap that
     // used to fall through to the `Tool::Select` reset behind the modal.
     annotate_reset_confirm_open: bool,
+    reprefix_confirm_open: bool,
     app_quit_confirm_open: bool,
     project_close_confirm_open: bool,
-    project_options_open: bool,
     grid_properties_open: bool,
     selection_filter_custom_open: bool,
     library_picker_open: bool,
@@ -55,7 +55,7 @@ struct OpenOverlays {
     /// `None` while no library-recovery dialog is open. `RecoveryDialog`
     /// (`crate::library::recovery`) itself carries a `PathBuf` (and, for
     /// the broken-binding case, a `String`/`Uuid`), so it can't be
-    /// embedded directly in this `Copy + Hash` struct — this discriminant
+    /// embedded directly in this plain-data struct — this discriminant
     /// is the cheap stand-in that lets Esc still pick the right one of
     /// the three dialogs' own Cancel-choice messages.
     recovery_kind: Option<RecoveryKind>,
@@ -74,6 +74,9 @@ struct OpenOverlays {
     /// `Subscription::with` as a `Copy` type, which is why this modal was
     /// the one documented hole in the ladder (#514, #526).
     delete_confirm: Option<std::path::PathBuf>,
+    /// The `.snxlib` whose Library Browser has the Edit Component
+    /// Details modal open, if any. Per-library, like `delete_confirm`.
+    edit_row_modal: Option<std::path::PathBuf>,
 }
 
 // `KeyContext` used to live here — the slice of modal state the
@@ -247,9 +250,6 @@ impl OpenOverlays {
             OverlayId::AppQuitConfirm => self
                 .app_quit_confirm_open
                 .then(|| Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::Cancel))),
-            OverlayId::ProjectOptions => self
-                .project_options_open
-                .then(|| Message::Project(ProjectMsg::CloseOptions)),
             OverlayId::EnableVersionControl => self
                 .enable_vc_open
                 .then(|| Message::EnableVersionControl(EnableVersionControlMsg::Close)),
@@ -271,16 +271,24 @@ impl OpenOverlays {
             OverlayId::AnnotateResetConfirm => self
                 .annotate_reset_confirm_open
                 .then(|| Message::Annotate(AnnotateMsg::CloseResetConfirm)),
+            // Child of the annotate dialog like the reset confirm; Esc cancels,
+            // it must never confirm a rewrite of the whole project.
+            OverlayId::ReprefixConfirm => self
+                .reprefix_confirm_open
+                .then(|| Message::Annotate(AnnotateMsg::ReprefixCancelled)),
             OverlayId::ErcDialog => self.erc_open.then(|| Message::Erc(ErcMsg::CloseDialog)),
 
             // ── Library modals ──────────────────────────────────────
             OverlayId::LibraryPicker => self
                 .library_picker_open
                 .then(|| Message::Library(crate::library::messages::LibraryMessage::ClosePicker)),
-            // The Edit Component Details modal is gated dead behind
-            // `EDIT_MODAL_ENABLED = false` — it needs a rung the day it is
-            // re-enabled, not before.
-            OverlayId::EditRowModal => None,
+            // Addressed to ONE library, like `DeleteConfirm`.
+            OverlayId::EditRowModal => self.edit_row_modal.clone().map(|library_path| {
+                Message::Library(crate::library::messages::LibraryMessage::BrowserEdit {
+                    library_path,
+                    msg: crate::library::messages::BrowserEditMsg::Cancel,
+                })
+            }),
             // The one rung carrying owned data, and the reason the ladder
             // moved out of the subscription in part 1: this Cancel is
             // addressed to ONE library, and a `PathBuf` could not ride
@@ -364,6 +372,7 @@ fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
     match modal {
         ModalId::AnnotateDialog => Some(OverlayId::AnnotateDialog),
         ModalId::AnnotateResetConfirm => Some(OverlayId::AnnotateResetConfirm),
+        ModalId::ReprefixConfirm => Some(OverlayId::ReprefixConfirm),
         ModalId::ErcDialog => Some(OverlayId::ErcDialog),
         ModalId::Preferences => Some(OverlayId::Preferences),
         ModalId::FindReplace => Some(OverlayId::FindReplace),
@@ -371,7 +380,6 @@ fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
         ModalId::RemoveDialog => Some(OverlayId::RemoveDialog),
         ModalId::PrintPreview => Some(OverlayId::PrintPreview),
         ModalId::BomPreview => Some(OverlayId::BomPreview),
-        ModalId::ProjectOptions => Some(OverlayId::ProjectOptions),
         ModalId::EnableVersionControl => Some(OverlayId::EnableVersionControl),
         ModalId::GridProperties => Some(OverlayId::GridProperties),
         ModalId::SelectionFilterCustom => Some(OverlayId::SelectionFilterCustom),
@@ -466,9 +474,10 @@ impl Signex {
             passive_calculator_open: self.ui_state.passive_calculator_open,
             annotate_reset_confirm_open: self.ui_state.annotate_reset_confirm
                 && !modal_detached(crate::app::state::ModalId::AnnotateResetConfirm),
+            reprefix_confirm_open: self.ui_state.reprefix_confirm.is_some()
+                && !modal_detached(crate::app::state::ModalId::ReprefixConfirm),
             app_quit_confirm_open: self.ui_state.app_quit_confirm.is_some(),
             project_close_confirm_open: self.ui_state.project_close_confirm.is_some(),
-            project_options_open: self.ui_state.project_options.is_some(),
             grid_properties_open: self.ui_state.grid_properties.is_some(),
             selection_filter_custom_open: self.ui_state.selection_filter_custom.is_some(),
             library_picker_open: self.library.picker.is_some(),
@@ -514,6 +523,14 @@ impl Signex {
                 .library_browsers
                 .iter()
                 .find(|(_, browser)| browser.delete_confirm.is_some())
+                .map(|(path, _)| path.clone()),
+            // MUST mirror `edit_row_modal_overlay`'s pick: first browser
+            // with an open edit modal.
+            edit_row_modal: self
+                .library
+                .library_browsers
+                .iter()
+                .find(|(_, browser)| browser.edit_modal.is_some())
                 .map(|(path, _)| path.clone()),
         }
     }
@@ -573,8 +590,9 @@ impl Signex {
         });
 
         // Mouse events for drag-to-resize/floating-drag.
-        // Subscribing to cursor move only while dragging avoids per-frame
-        // app updates when idle, which noticeably hurts smoothness on macOS.
+        // Dragging subscribes to cursor moves directly; the idle branch
+        // below still forwards CursorMoved (to keep `last_mouse_pos`
+        // fresh) but drops everything else it does not need.
         let drag_active = self.is_pointer_drag_active();
         let modal_drag_active = self.ui_state.modal_dragging.is_some();
         let mouse_sub = if modal_drag_active {
@@ -637,11 +655,10 @@ impl Signex {
         let window_close = iced::window::close_events()
             .map(|id| Message::Window(WindowMsg::SecondaryWindowClosed(id)));
         // OS close requests (native close button, Alt+F4, taskbar close).
-        // In daemon mode iced does NOT auto-close on these, so we route
-        // them explicitly: the main window goes through the unsaved-
-        // changes guard, any other window closes. Without this, an
-        // Alt+F4 on a dirty main window would otherwise be silently
-        // dropped (or, if iced ever auto-closed, lose unsaved edits).
+        // These only reach the app because every window is opened with
+        // `exit_on_close_request: false`; otherwise winit closes the window
+        // itself. The main window goes through the unsaved-changes guard,
+        // any other window closes.
         let window_close_request = iced::window::close_requests()
             .map(|id| Message::Window(WindowMsg::WindowCloseRequested(id)));
         // Window-resize subscription. `iced::event::listen()`'s
@@ -701,8 +718,11 @@ impl Signex {
         .map(Message::Library);
 
         // Opt-in autosave timer (#104); empty while the preference is off.
-        let autosave_tick =
-            crate::autosave::subscription(self.ui_state.autosave_enabled).map(Message::Autosave);
+        let autosave_tick = crate::autosave::subscription(
+            self.ui_state.autosave_enabled,
+            self.document_state.autosave.has_owed_moves(),
+        )
+        .map(Message::Autosave);
 
         Subscription::batch([
             kbd,
@@ -811,6 +831,7 @@ mod tests {
             ModalId::AnnotateDialog,
             ModalId::ErcDialog,
             ModalId::AnnotateResetConfirm,
+            ModalId::ReprefixConfirm,
             ModalId::PrintPreview,
             ModalId::BomPreview,
         ] {
@@ -868,10 +889,9 @@ mod tests {
     /// forces that. Documented modals that are deliberately NOT fields —
     /// so NOT covered by this test — are: the command palette and the
     /// keymap chord recorder (`palette_and_keymap_recorder_are_not_on_the_ladder`,
-    /// both swallow input earlier), the Edit Component Details modal
-    /// (dead behind `EDIT_MODAL_ENABLED = false`), and the per-browser
-    /// delete-confirm modal (its Cancel message needs a `library_path`
-    /// this `Copy` struct can't carry).
+    /// both swallow input earlier). The per-library rungs (`delete_confirm`,
+    /// `edit_row_modal`) carry an owned `library_path` and are covered by
+    /// `every_ladder_field_claims_escape` and the ranking tests instead.
     #[test]
     fn every_modal_claims_escape() {
         assert!(matches!(
@@ -932,6 +952,10 @@ mod tests {
             Some(Message::Annotate(AnnotateMsg::CloseResetConfirm))
         ));
         assert!(matches!(
+            only(|o| o.reprefix_confirm_open = true),
+            Some(Message::Annotate(AnnotateMsg::ReprefixCancelled))
+        ));
+        assert!(matches!(
             only(|o| o.app_quit_confirm_open = true),
             Some(Message::Project(ProjectMsg::AppQuitConfirm(
                 ProjectCloseChoice::Cancel
@@ -942,10 +966,6 @@ mod tests {
             Some(Message::Project(ProjectMsg::CloseConfirm(
                 ProjectCloseChoice::Cancel
             )))
-        ));
-        assert!(matches!(
-            only(|o| o.project_options_open = true),
-            Some(Message::Project(ProjectMsg::CloseOptions))
         ));
         assert!(matches!(
             only(|o| o.grid_properties_open = true),
@@ -1444,9 +1464,9 @@ mod tests {
             library_create_options_open,
             passive_calculator_open,
             annotate_reset_confirm_open,
+            reprefix_confirm_open,
             app_quit_confirm_open,
             project_close_confirm_open,
-            project_options_open,
             grid_properties_open,
             selection_filter_custom_open,
             library_picker_open,
@@ -1461,6 +1481,7 @@ mod tests {
             bom_preview_open,
             net_color_custom_open,
             delete_confirm,
+            edit_row_modal,
         ];
 
         type EscapeSetter = fn(&mut OpenOverlays);
@@ -1491,11 +1512,11 @@ mod tests {
             ("annotate_reset_confirm_open", |o| {
                 o.annotate_reset_confirm_open = true
             }),
+            ("reprefix_confirm_open", |o| o.reprefix_confirm_open = true),
             ("app_quit_confirm_open", |o| o.app_quit_confirm_open = true),
             ("project_close_confirm_open", |o| {
                 o.project_close_confirm_open = true
             }),
-            ("project_options_open", |o| o.project_options_open = true),
             ("grid_properties_open", |o| o.grid_properties_open = true),
             ("selection_filter_custom_open", |o| {
                 o.selection_filter_custom_open = true
@@ -1533,6 +1554,9 @@ mod tests {
             // message the rung resolves to, not on the path's value.
             ("delete_confirm", |o| {
                 o.delete_confirm = Some(std::path::PathBuf::from("fixture.snxlib"))
+            }),
+            ("edit_row_modal", |o| {
+                o.edit_row_modal = Some(std::path::PathBuf::from("fixture.snxlib"))
             }),
         ];
 

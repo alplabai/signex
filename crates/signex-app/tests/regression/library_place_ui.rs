@@ -32,10 +32,13 @@ fn select_in_picker(app: &mut Signex, f: &Fixture) {
     app.library.picker = Some(PickerState {
         filter: String::new(),
         selected: None,
+        ..PickerState::default()
     });
     dispatch_to_completion(
         app,
-        Message::Library(LibraryMessage::Picker(PickerMsg::SelectComponent(summary))),
+        Message::Library(LibraryMessage::Picker(PickerMsg::SelectComponent(
+            summary.row_id,
+        ))),
     );
 }
 

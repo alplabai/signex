@@ -74,6 +74,20 @@ pub enum AnnotateMsg {
         generation: u64,
         result: std::sync::Arc<Result<crate::app::handlers::erc::AnnotatePreviewLoad, String>>,
     },
+    /// "Re-prefix to standard" was pressed (#1315): ask the mounted libraries
+    /// for the class and prefix override of the project's placed parts.
+    ReprefixPressed,
+    /// The libraries answered the Re-prefix lookup. `generation` is the
+    /// request's token; a result a newer request replaced is dropped.
+    ReprefixRowsResolved {
+        generation: u64,
+        result: std::sync::Arc<Result<crate::library::reprefix_lookup::ReprefixLookup, String>>,
+    },
+    /// Confirm on the Re-prefix list: re-plan against the state of now and
+    /// apply it as one undo step.
+    ReprefixConfirmed,
+    /// Cancel (or Esc) on the Re-prefix list: nothing changes.
+    ReprefixCancelled,
 }
 
 /// ERC dialog message family (ADR-0001 D3). Namespaced under
@@ -260,9 +274,10 @@ pub enum ContextMenuMsg {
     SubmenuEnterPanel,
     /// Hover left the open submenu panel — starts the close timer.
     SubmenuLeavePanel,
-    /// 50 ms tick fired by the subscription while the context menu is
-    /// open; promotes a mature `pending_submenu` into an actual open
-    /// and a mature `pending_submenu_close` into an actual close.
+    /// Tick (50 ms) fired by the subscription while the context menu is
+    /// open; promotes a `pending_submenu` that has hovered long enough into
+    /// an actual open, and closes a submenu once `submenu_unhovered_since`
+    /// has aged.
     SubmenuTickHover,
 }
 
@@ -307,8 +322,6 @@ pub enum ExportMsg {
     },
     /// User picked a path for File → Export → ERC Report — format and write.
     ErcReportPathChosen(Result<std::path::PathBuf, String>),
-    /// The ERC report write completed — carries the path or the IO error.
-    ErcReportWritten(Result<std::path::PathBuf, String>),
     /// #431 — user clicked "Export anyway (incomplete)" on the
     /// netlist-incomplete prompt. Writes the partial `.net` (a clean file, no
     /// header) and logs the omitted pages as a warning, then clears the prompt.
@@ -324,6 +337,9 @@ pub enum ExportMsg {
 /// so the notice, advisory and log lines are applied on the UI thread.
 #[derive(Debug, Clone)]
 pub struct ExportWriteOutcome {
+    /// The file written, released from the rename guard
+    /// (`DocumentState::project_writes`) when the write lands.
+    pub path: std::path::PathBuf,
     /// `Err` holds the complete user-facing failure text.
     pub result: Result<(), String>,
     /// Logged when the write succeeded.
@@ -341,7 +357,7 @@ pub struct ExportWriteOutcome {
 #[derive(Debug, Clone)]
 pub enum SelectionFilterMsg {
     /// v0.18.14.1 — Custom Selection Filter modal launcher. Opens
-    /// the 8-row checkbox table over the active footprint editor.
+    /// the checkbox table of selection kinds over the active footprint editor.
     OpenCustom,
     /// v0.18.14.1 — Custom Selection Filter modal: Cancel / Esc.
     /// Discards the in-flight draft.
@@ -441,6 +457,13 @@ pub enum FileMsg {
     /// The off-thread volume probes of a Save All finished; its writes
     /// start now (#1216).
     SaveAllProbed(Box<SaveAllPlan>),
+    /// The off-thread identity probe of a loose document's directory finished
+    /// (#1447): the case rule open and Ctrl+S use to tell whether two
+    /// spellings are one file.
+    DirCaseProbed {
+        dir: PathBuf,
+        answer: crate::app::state::project_case::CaseProbeOutcome,
+    },
     /// Every write a Save All started has completed; carries what to do
     /// next (close the project, quit) and the failures already known.
     SaveAllSettled(Box<SaveAllSettle>),
@@ -502,11 +525,10 @@ pub enum ProjectMsg {
     /// confirmation modal, shown when the user tries to exit Signex
     /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.
     AppQuitConfirm(ProjectCloseChoice),
-    /// Dismiss the Project Options metadata modal.
-    CloseOptions,
-    /// The user picked a designator standard in Project Options (#1232);
-    /// `None` is "Library designator" (no standard).
-    DesignatorStandardPicked(Option<signex_types::designator::DesignatorStandard>),
+    /// A Project tab message (#1202), routed to the `project_tab` slice.
+    Tab(crate::app::ProjectTabMsg),
+    /// The off-thread `.snxprj` write a Project tab Ctrl+S started finished.
+    FileSaved(Box<crate::persist::ProjectSaveDone>),
     /// Result of the `Add Existing to Project…` file picker. Carries
     /// the owning project's id plus the user's picks (`None` on
     /// cancel, otherwise one or more paths from `pick_files`) so the
@@ -528,6 +550,9 @@ pub enum ProjectMsg {
     /// Messages panel. The outer `Err` is a worker that died.
     AddExistingFilesCopied {
         project_id: crate::app::state::ProjectId,
+        /// The folder the copies went into, released from the rename
+        /// guard (`DocumentState::project_writes`).
+        project_dir: std::path::PathBuf,
         results: Result<Vec<Result<std::path::PathBuf, String>>, String>,
     },
     /// The off-thread blank-schematic write behind `AddNewSchematicPicked`

@@ -803,9 +803,11 @@ pub use sheet_frame::{MAX_ZONES, SheetFrameSettings};
 mod sheet_size;
 pub use sheet_size::{MAX_PAGE_EDGE_MM, MIN_CUSTOM_EDGE_MM, SheetOrientation, SheetSize};
 mod hotspot;
-pub use hotspot::{SCHEMATIC_HOTSPOT_RADIUS_MM, hotspot_capture_radius, snap_to_hotspot};
+pub use hotspot::{
+    SCHEMATIC_HOTSPOT_RADIUS_MM, hotspot_capture_radius, snap_move_to_hotspot, snap_to_hotspot,
+};
 mod power_port_symbol;
-pub use power_port_symbol::{PowerPortStyle, power_port_graphics};
+pub use power_port_symbol::{PowerPortStyle, power_port_graphics, power_port_lib_symbol};
 mod symbol_geometry;
 pub use symbol_geometry::{
     SymbolPrimitive, arc_polyline, instance_pins, lower_placed_symbol, lower_symbol, pin_direction,

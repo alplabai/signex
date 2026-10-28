@@ -145,7 +145,7 @@ impl Signex {
                 };
                 match crate::keymap::restore_profiles_at(&live, &restored.set) {
                     Ok(previous) => {
-                        self.ui_state.keymap_profiles = restored.set.clone();
+                        self.ui_state.set_keymap_profiles(restored.set.clone());
                         self.ui_state.preferences_keymap_editor =
                             crate::keymap::KeymapEditorModel::new(restored.set);
                         self.ui_state.keymap_load_error = None;
@@ -313,27 +313,6 @@ impl Signex {
                     Ok(path) => format!("Exported keyboard shortcuts to {}.", path.display()),
                     Err(detail) => format!("Could not export keyboard shortcuts: {detail}"),
                 };
-            }
-            PrefMsg::KeymapBindingChanged {
-                command,
-                context,
-                trigger,
-            } => {
-                match self
-                    .ui_state
-                    .preferences_keymap_editor
-                    .edit_active_trigger(command, context, trigger)
-                {
-                    Ok(()) => {
-                        self.ui_state.preferences_keymap_status.clear();
-                        self.recompute_preferences_dirty();
-                    }
-                    Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Invalid shortcut: {error}");
-                        self.recompute_preferences_dirty();
-                    }
-                }
             }
             PrefMsg::KeymapRecorderOpen {
                 command,

@@ -108,7 +108,7 @@ mod tests {
             ..PdfOptions::default()
         };
         let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);
-        SvgRenderContext::from_sheet(sheet, &opts, w_mm, h_mm, 72.0 / 25.4, None).svg_document
+        SvgRenderContext::from_sheet(sheet, &opts, w_mm, h_mm, 72.0 / 25.4, None).svg_document()
     }
 
     #[test]

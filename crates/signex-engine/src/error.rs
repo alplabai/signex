@@ -40,6 +40,21 @@ pub enum EngineError {
     SelectionTransformUnsupported { what: String },
     #[error("the selection holds a coordinate that is not a finite number; it was not copied")]
     NonFiniteCoordinate,
+    #[error("{}", locked_message(references, action))]
+    SymbolLocked {
+        references: Vec<String>,
+        action: &'static str,
+    },
     #[error("an unrecorded edit is only allowed on a freshly loaded sheet with no undo history")]
     UnrecordedEditRefused,
+}
+
+fn locked_message(references: &[String], action: &str) -> String {
+    match references {
+        [one] => format!("{one} is locked and cannot be {action}; unlock it in Properties first"),
+        many => format!(
+            "{} are locked and cannot be {action}; unlock them in Properties first",
+            many.join(", ")
+        ),
+    }
 }

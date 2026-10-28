@@ -1,7 +1,6 @@
 //! Datasheet tab — one card per document on the row (#1231), the
 //! primary first, each with a label, a mode pick_list and a value
-//! control. Standalone Component-Preview tab per
-//! `v0.9-refactor-2-plan.md` §11.5.
+//! control. Standalone Component-Preview tab.
 //!
 //! Two modes per document:
 //!  * **URL** — plain text input. Sets `DatasheetRef::Url`.
