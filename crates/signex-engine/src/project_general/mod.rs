@@ -1,7 +1,7 @@
 //! Command-driven editing of the project's General settings (#1202).
 //!
 //! The Project tab's General and Parameters sections edit the `.snxprj`
-//! `description` and `parameters` (#1080) in place on the project's one in-memory `ProjectData`. The project name is
+//! `description`, `parameters` (#1080) and designator standard (#1421) in place on the project's one in-memory `ProjectData`. The project name is
 //! not edited here: it is the file stem, changed only by the Rename flow.
 //! Like the net-class table, the settings are tiny, so the history keeps
 //! snapshots rather than inverse commands. A snapshot holds only the fields
@@ -15,7 +15,8 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use signex_types::project::ProjectData;
+use signex_types::designator::DesignatorStandard;
+use signex_types::project::{AnnotationState, ProjectData};
 
 /// How many undo steps are kept.
 pub const HISTORY_LIMIT: usize = 100;
@@ -32,6 +33,11 @@ pub enum ProjectGeneralCommand {
     SetParameter { name: String, value: String },
     /// Delete a parameter.
     RemoveParameter(String),
+    /// Pick the designator standard (#1421); `None` is "Library designator".
+    /// Always its own undo step, and it closes the description typing run.
+    /// An unreadable section from a newer Signex is replaced only by a real
+    /// standard: picking `None` over it changes nothing.
+    SetDesignatorStandard(Option<DesignatorStandard>),
 }
 
 /// The `title_block` keys a project parameter shares with a sheet: empty
@@ -52,10 +58,11 @@ const TITLE_BLOCK_KEYS: [&str; 12] = [
 ];
 
 /// The fields the General section owns, as one undo snapshot.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 struct GeneralSnapshot {
     description: Option<String>,
     parameters: BTreeMap<String, String>,
+    annotation: AnnotationState,
 }
 
 impl GeneralSnapshot {
@@ -63,6 +70,7 @@ impl GeneralSnapshot {
         Self {
             description: data.description.clone(),
             parameters: data.parameters.clone(),
+            annotation: data.annotation_state(),
         }
     }
 
@@ -70,6 +78,7 @@ impl GeneralSnapshot {
     fn restore(self, data: &mut ProjectData) {
         data.description = self.description;
         data.parameters = self.parameters;
+        data.restore_annotation_state(self.annotation);
     }
 }
 
@@ -88,6 +97,10 @@ impl ProjectGeneralHistory {
     /// no-op records nothing.
     pub fn apply(&mut self, data: &mut ProjectData, command: ProjectGeneralCommand) -> bool {
         let before = GeneralSnapshot::of(data);
+        let is_pick = matches!(command, ProjectGeneralCommand::SetDesignatorStandard(_));
+        if is_pick {
+            self.run_open = false;
+        }
         match command {
             ProjectGeneralCommand::SetDescription(text) => {
                 data.description = (!text.is_empty()).then_some(text);
@@ -104,6 +117,11 @@ impl ProjectGeneralHistory {
             ProjectGeneralCommand::RemoveParameter(name) => {
                 data.parameters.remove(&name);
             }
+            ProjectGeneralCommand::SetDesignatorStandard(standard) => {
+                if !(standard.is_none() && data.has_unreadable_annotation()) {
+                    data.set_designator_standard(standard);
+                }
+            }
         }
         if GeneralSnapshot::of(data) == before {
             return false;
@@ -113,7 +131,8 @@ impl ProjectGeneralHistory {
             if self.undo.len() > HISTORY_LIMIT {
                 self.undo.remove(0);
             }
-            self.run_open = true;
+            // A pick stays a step of its own: the next edit opens a new one.
+            self.run_open = !is_pick;
         }
         self.redo.clear();
         true
