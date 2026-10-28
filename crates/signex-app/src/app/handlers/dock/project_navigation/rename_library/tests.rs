@@ -31,6 +31,7 @@ fn app_with_open_project(project_path: &Path) -> Signex {
             pending_libraries: Default::default(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         });
     app
 }

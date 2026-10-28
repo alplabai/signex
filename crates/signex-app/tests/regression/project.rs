@@ -69,6 +69,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         net_classes: Vec::new(),
         rules: None,
         annotation: None,
+        parameters: Default::default(),
         unknown: Default::default(),
     };
     app.document_state.projects.push(LoadedProject {
@@ -830,6 +831,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
         net_classes: Vec::new(),
         rules: None,
         annotation: None,
+        parameters: Default::default(),
         unknown: Default::default(),
     };
 
@@ -1472,12 +1474,17 @@ fn cut_leaves_non_cuttable_child_sheet_in_place_and_selected() {
         doc.symbols.is_empty(),
         "Cut must remove the cuttable Symbol from the engine document"
     );
+    let clipboard = app
+        .interaction_state
+        .clipboard
+        .as_ref()
+        .expect("Cut must populate the clipboard");
     assert_eq!(
-        app.interaction_state.clipboard_symbols.len(),
+        clipboard.payload.fragment().symbols.len(),
         1,
         "Cut must populate the clipboard with the cuttable Symbol"
     );
-    assert_eq!(app.interaction_state.clipboard_symbols[0].uuid, symbol_uuid);
+    assert_eq!(clipboard.payload.fragment().symbols[0].uuid, symbol_uuid);
 
     // The ChildSheet is not cuttable: still in the document, still selected.
     assert_eq!(
@@ -1562,6 +1569,7 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                parameters: Default::default(),
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),

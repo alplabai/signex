@@ -7,9 +7,11 @@ mod history;
 mod history_snapshot;
 mod lock;
 mod net_class_table;
+mod placement;
 mod power_port;
 mod project_general;
 mod selection;
+mod selection_payload;
 mod sheet;
 mod sheet_identity;
 mod sheet_placement;
@@ -54,6 +56,7 @@ pub use net_class_table::{
     StepId as NetClassStepId, apply_net_class_command,
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
+pub use placement::PlacementPayload;
 pub use power_port::{place_power_port, restyle_power_port};
 pub use project_general::{
     HISTORY_LIMIT as PROJECT_GENERAL_HISTORY_LIMIT, ProjectGeneralCommand, ProjectGeneralHistory,
@@ -61,6 +64,7 @@ pub use project_general::{
 pub use selection::{
     ClipboardSelection, SelectionAnchor, SelectionDetails, info_keys, partition_cuttable,
 };
+pub use selection_payload::CopiedSelection;
 pub use sheet::{
     blank_port_label_count, exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports,
 };

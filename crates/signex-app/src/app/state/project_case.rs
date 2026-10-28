@@ -58,6 +58,13 @@ pub(crate) fn spawn_case_probe(project_id: ProjectId, dir: PathBuf) -> Task<Mess
     })
 }
 
+/// The one answer for a directory nobody could decide: its case variants are
+/// one file. Two documents for one file can lose edits; one document for two
+/// files only costs a tab.
+pub(crate) fn undecided_identity_fold() -> CaseFold {
+    CaseFold::from_probe(true)
+}
+
 /// The Messages-panel line for a project whose volume could not be probed:
 /// the reason first, the path last, since the panel truncates near 157 bytes.
 pub(crate) fn undecided_message(
@@ -164,6 +171,7 @@ mod tests {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                parameters: Default::default(),
                 unknown: Default::default(),
             },
             pending_libraries: HashMap::new(),

@@ -39,7 +39,7 @@ pub(crate) use state::library_entry;
 pub(crate) mod stitched_netlist;
 mod symbol_history;
 mod undo_groups;
-pub use undo_groups::UndoGroupSheets;
+pub use undo_groups::{UndoGroupKind, UndoGroupSheets};
 pub(crate) mod view;
 
 pub use contracts::{

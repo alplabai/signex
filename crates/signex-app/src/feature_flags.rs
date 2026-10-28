@@ -76,8 +76,9 @@ pub const PCB_GPU_RENDER_DEFAULT: bool = false;
 /// (`signex_gfx` pipelines via [`crate::scene_shader::SchematicSurface`])
 /// instead of CPU `canvas::Frame` replay (#199).
 ///
-/// Held `false` until the mount lands and is signed off; nothing outside tests
-/// reads it yet. Once the mount reads it, flipping it is the whole change.
+/// Held `false` until the mount is signed off. Read at the mount site in
+/// `app/view/mod.rs`, which picks [`crate::canvas::gpu_mount`] over the plain
+/// CPU canvas, so flipping it is the whole change.
 pub const SCHEMATIC_GPU_RENDER_ENABLED: bool = false;
 
 #[cfg(test)]

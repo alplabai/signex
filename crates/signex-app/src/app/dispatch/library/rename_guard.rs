@@ -39,9 +39,6 @@ fn library_named_by(msg: &LibraryMessage) -> Option<&std::path::Path> {
         L::BrowserConfirmAddTable { library_path }
         | L::BrowserDeleteTable { library_path, .. }
         | L::BrowserConfirmRenameTable { library_path }
-        | L::BrowserConfirmAddClass { library_path }
-        | L::BrowserDeleteClass { library_path, .. }
-        | L::BrowserConfirmRenameClass { library_path }
         | L::BrowserAddComponent { library_path, .. }
         | L::BrowserDeleteRowConfirm { library_path, .. }
         | L::BrowserCellCommit { library_path, .. }
@@ -59,9 +56,6 @@ fn writes_through_adapter(msg: &LibraryMessage) -> bool {
         | L::BrowserConfirmAddTable { .. }
         | L::BrowserDeleteTable { .. }
         | L::BrowserConfirmRenameTable { .. }
-        | L::BrowserConfirmAddClass { .. }
-        | L::BrowserDeleteClass { .. }
-        | L::BrowserConfirmRenameClass { .. }
         | L::BrowserAddComponent { .. }
         | L::BrowserDeleteRowConfirm { .. }
         | L::BrowserCellCommit { .. }

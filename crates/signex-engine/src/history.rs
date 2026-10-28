@@ -90,6 +90,22 @@ impl Engine {
         Ok(Some(patch_pair))
     }
 
+    /// Undo the top entry when it belongs to `group`, and forget it: it does
+    /// not land on the redo stack. For a grouped run that failed halfway and
+    /// was reported as never having happened, so no Redo can bring half of it
+    /// back. `None` (nothing changed) when the top entry is not `group`'s.
+    pub fn discard_undo_group_top(
+        &mut self,
+        group: UndoGroupId,
+    ) -> Result<Option<PatchPair>, EngineError> {
+        if self.next_undo_group() != Some(group) {
+            return Ok(None);
+        }
+        let patch_pair = self.undo()?;
+        self.redo_stack.pop();
+        Ok(patch_pair)
+    }
+
     pub fn redo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         self.bump_revision();
         let Some(entry) = self.redo_stack.pop() else {

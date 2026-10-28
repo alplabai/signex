@@ -15,8 +15,12 @@ impl Signex {
     /// `RotateSelection` delta is counter-clockwise on screen for every
     /// symbol (it compensates for mirroring), so clockwise is -90.
     /// With the Bus Entry tool armed the turn applies to the entry about to
-    /// be placed instead.
+    /// be placed instead, and a part on the cursor turns before either.
     pub(crate) fn handle_selection_rotate_requested(&mut self, clockwise: bool) {
+        // A part on the cursor turns instead of the selection.
+        if self.rotate_placement(clockwise) {
+            return;
+        }
         if self.interaction_state.current_tool == Tool::BusEntry {
             let quarter_turns = if clockwise { -1 } else { 1 };
             self.set_pending_bus_entry_size(|size| BusEntry::rotated_size(size, quarter_turns));
@@ -47,6 +51,9 @@ impl Signex {
     }
 
     pub(crate) fn handle_selection_mirror_x_requested(&mut self) {
+        if self.mirror_placement(MirrorAxis::Vertical) {
+            return;
+        }
         if self.interaction_state.current_tool == Tool::BusEntry {
             self.set_pending_bus_entry_size(BusEntry::flipped_vertical);
             return;
@@ -55,6 +62,9 @@ impl Signex {
     }
 
     pub(crate) fn handle_selection_mirror_y_requested(&mut self) {
+        if self.mirror_placement(MirrorAxis::Horizontal) {
+            return;
+        }
         if self.interaction_state.current_tool == Tool::BusEntry {
             self.set_pending_bus_entry_size(BusEntry::flipped_horizontal);
             return;
