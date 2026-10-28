@@ -661,6 +661,9 @@ pub enum EditMsg {
     SmartPaste,
     /// Duplicate the current selection in place.
     Duplicate,
+    /// Reorder the selected drawings within the sheet's drawing list; the
+    /// selection's circuit elements are ignored (#1583).
+    ArrangeDrawings(signex_engine::DrawingArrange),
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of
@@ -689,4 +692,7 @@ pub enum DrawingFieldEdit {
     ArcEndAngle(f64),
     /// Override the stroke colour; `None` restores the theme default.
     StrokeColor(Option<signex_types::schematic::StrokeColor>),
+    /// Put the drawing behind or above the circuit (#1583). Not a field of
+    /// the drawing itself: it is stored per sheet.
+    Placement(signex_types::schematic::DrawingPlacement),
 }

@@ -899,3 +899,98 @@ fn a_rolled_back_replace_restores_both_sheets_and_leaves_no_redo() {
         "the tabless engine is gone"
     );
 }
+
+/// `top` places `child` once (the second placement of the fixture is deleted),
+/// then a designator Replace of the child's `R1` is prepared. Returns the
+/// removed second placement so a test can put it back.
+fn prepared_single_instance_replace(
+    app: &mut Signex,
+    top: &Path,
+) -> (u64, ReplacePrep, signex_types::schematic::ChildSheet) {
+    use signex_types::schematic::{SelectedItem, SelectedKind};
+    let second = app.document_state.engines[top]
+        .document()
+        .child_sheets
+        .iter()
+        .find(|cs| cs.uuid == uuid::Uuid::from_u128(PLACEMENT_B))
+        .cloned()
+        .expect("the second placement");
+    assert!(app.apply_engine_command(
+        signex_engine::Command::DeleteSelection {
+            items: vec![SelectedItem::new(second.uuid, SelectedKind::ChildSheet)],
+        },
+        true,
+        true,
+    ));
+    project_search(app, "R1");
+    set_replacement(app, "R7");
+    let matches = app.ui_state.find_replace.matches.clone();
+    let (generation, prep) = app.prepare_project_replace_blocking(matches).unwrap();
+    (generation, prep, second)
+}
+
+#[test]
+fn a_second_instance_placed_mid_flight_refuses_the_replace() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, child) = placed_twice_on_disk(&dir);
+    let (generation, prep, second) = prepared_single_instance_replace(&mut app, &top);
+    let before = app.document_state.documents_epoch;
+
+    // While the unopened child was being read, its second placement returns,
+    // by a route that leaves the epoch alone (an edit made straight on the
+    // open parent's engine; the session round trip of a gateway edit bumps it).
+    app.document_state
+        .engines
+        .get_mut(&top)
+        .unwrap()
+        .execute(signex_engine::Command::PlaceChildSheet {
+            child_sheet: second,
+        })
+        .unwrap();
+    assert_eq!(
+        app.document_state.documents_epoch, before,
+        "placing a sheet symbol does not move the epoch"
+    );
+    let on_disk = std::fs::read(&child).unwrap();
+    deliver(&mut app, generation, prep);
+
+    assert!(logged("Replace cancelled: a sheet symbol was placed"));
+    assert!(!app.document_state.engines.contains_key(&child));
+    assert!(app.document_state.undo_groups.is_empty());
+    assert_eq!(std::fs::read(&child).unwrap(), on_disk);
+}
+
+#[test]
+fn renaming_a_sheet_symbol_mid_flight_refuses_the_replace() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, child) = placed_twice_on_disk(&dir);
+    let (generation, prep, _second) = prepared_single_instance_replace(&mut app, &top);
+
+    app.document_state
+        .engines
+        .get_mut(&top)
+        .unwrap()
+        .execute(signex_engine::Command::ModifyChildSheet {
+            sheet_id: uuid::Uuid::from_u128(PLACEMENT_A),
+            name: Some("Renamed".into()),
+            filename: None,
+        })
+        .unwrap();
+    deliver(&mut app, generation, prep);
+
+    assert!(logged("Replace cancelled: a sheet symbol was placed"));
+    assert!(!app.document_state.engines.contains_key(&child));
+    assert!(app.document_state.undo_groups.is_empty());
+}
+
+#[test]
+fn an_unchanged_hierarchy_still_applies_the_replace() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, child) = placed_twice_on_disk(&dir);
+    let (generation, prep, _second) = prepared_single_instance_replace(&mut app, &top);
+
+    deliver(&mut app, generation, prep);
+
+    assert!(app.document_state.engines.contains_key(&child), "applied");
+    assert!(!app.document_state.undo_groups.is_empty());
+}

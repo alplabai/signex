@@ -86,6 +86,8 @@ pub enum CommandKind {
     SetTextFontFamily,
     SetSymbolDesignatorIn,
     SetDocumentFontFamily,
+    ArrangeDrawings,
+    SetDrawingPlacement,
 }
 
 #[derive(Debug, Clone)]
@@ -365,6 +367,33 @@ pub enum Command {
     SetDocumentFontFamily {
         font_family: Option<String>,
     },
+    /// Move the drawings `ids` within the sheet's drawing list, as one undo
+    /// step: the selected drawings keep their order among themselves, and an
+    /// id that names no drawing is ignored. Unchanged when nothing moves (the
+    /// selection is already at that end). See [`DrawingArrange`].
+    ArrangeDrawings {
+        ids: Vec<Uuid>,
+        arrange: DrawingArrange,
+    },
+    /// Put the drawings `ids` behind or above the circuit (#1583).
+    SetDrawingPlacement {
+        ids: Vec<Uuid>,
+        placement: signex_types::schematic::DrawingPlacement,
+    },
+}
+
+/// How [`Command::ArrangeDrawings`] moves the selected drawings. The list is
+/// painted first to last, so the end of the list is the front.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DrawingArrange {
+    /// Bring to Front: to the end of the list.
+    ToFront,
+    /// Send to Back: to the start of the list.
+    ToBack,
+    /// Bring Forward: past the next unselected drawing toward the front.
+    Forward,
+    /// Send Backward: past the previous unselected drawing toward the back.
+    Backward,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -438,6 +467,8 @@ impl Command {
             Command::SetTextFontFamily { .. } => CommandKind::SetTextFontFamily,
             Command::SetSymbolDesignatorIn { .. } => CommandKind::SetSymbolDesignatorIn,
             Command::SetDocumentFontFamily { .. } => CommandKind::SetDocumentFontFamily,
+            Command::ArrangeDrawings { .. } => CommandKind::ArrangeDrawings,
+            Command::SetDrawingPlacement { .. } => CommandKind::SetDrawingPlacement,
         }
     }
 }
