@@ -49,6 +49,10 @@ jobs:
   changes:
     name: changes · build needed?
     runs-on: ubuntu-latest
+    # pull-requests: read for the live draft lookup below.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       build: ${{ steps.decide.outputs.build }}
     steps:
@@ -60,9 +64,21 @@ jobs:
         id: decide
         env:
           CI_EVENT: ${{ github.event_name }}
-          CI_DRAFT: ${{ github.event.pull_request.draft }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # The draft flag is read live, not from the event payload: a push
+          # and "Ready for review" seconds apart left only the push's run,
+          # whose payload still said draft, so the ready PR got a green
+          # `ci · required` with no build. A failed lookup leaves CI_DRAFT
+          # empty, which builds.
+          CI_DRAFT=""
+          if [ -n "$PR_NUMBER" ]; then
+            CI_DRAFT=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft) || CI_DRAFT=""
+          fi
+          export CI_DRAFT
+          echo "Draft (live): ${CI_DRAFT:-unknown}"
           # Only a PR has a base to diff against. --no-renames: a move out of
           # crates/ must list the deleted path too, or `crates/x.rs ->
           # docs/x.rs` would look like prose.
