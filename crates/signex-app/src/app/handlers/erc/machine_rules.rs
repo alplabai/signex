@@ -14,7 +14,7 @@ use iced::Task;
 use signex_erc::project_rules::profile::adopt_profile;
 use signex_types::project::RuleProfile;
 
-use super::super::super::state::rule_profile_ui::{Dispatch, QueuedWrite, run_all};
+use super::super::super::state::rule_profile_ui::{Dispatch, QueuedWrite, WriteOutcome, run_all};
 use super::super::super::*;
 use super::rule_profiles::blocking;
 use crate::rule_profiles::{self, ProfileKind, USER_DEFAULT_PROFILE_NAME};
@@ -24,6 +24,12 @@ impl Signex {
     /// boot task is still reading them: a write would store defaults over the
     /// user's file. The ERC dialog says so (`machine_rules_notice`).
     fn machine_rules_editable(&self) -> bool {
+        if let Some(why) = &self.ui_state.machine_rules_locked {
+            crate::diagnostics::log_warning(format!(
+                "The machine's ERC rules are read-only this session: {why}"
+            ));
+            return false;
+        }
         if self.ui_state.machine_rules_loading {
             crate::diagnostics::log_warning(
                 "The machine's ERC rules are still loading from the User Default profile; \
@@ -37,6 +43,11 @@ impl Signex {
     /// A line for the ERC dialog when it edits the machine's rules and they
     /// are not in a state where edits are saved.
     pub(crate) fn machine_rules_notice(&self) -> Option<String> {
+        if let Some(why) = &self.ui_state.machine_rules_locked {
+            return Some(format!(
+                "The machine's rules are read-only this session, because your old ERC                  preferences could not be merged into User Default yet: {why}"
+            ));
+        }
         if self.ui_state.machine_rules_loading {
             return Some(
                 "Loading the User Default profile; changes wait until it has loaded.".into(),
@@ -145,7 +156,7 @@ impl Signex {
     /// edit that did not reach the disk.
     pub(crate) fn handle_profile_write_finished(
         &mut self,
-        result: &Result<Option<RuleProfile>, String>,
+        result: &Result<WriteOutcome, String>,
     ) -> Task<Message> {
         let machine = matches!(
             self.ui_state.profile_writes.running().map(|d| &d.write),
@@ -162,7 +173,10 @@ impl Signex {
                 }
                 relist = true;
             }
-            Ok(done) => {
+            // Another runner already ran this write; that says nothing about
+            // the file, so the problem state stays as it was.
+            Ok(WriteOutcome::Skipped) => {}
+            Ok(WriteOutcome::Done(done)) => {
                 if machine {
                     self.ui_state.machine_rules_problem = None;
                 }
@@ -177,8 +191,11 @@ impl Signex {
             Some(next) => run_profile_write(next),
             None => {
                 let manager = &mut self.ui_state.profile_manager;
-                let again = std::mem::take(&mut manager.relist_pending) || relist;
-                if again && manager.loaded {
+                // A listing held back (even the first one, before the pane
+                // counted as loaded) is read again now; a failed write only
+                // matters to a pane that is showing profiles.
+                let held_back = std::mem::take(&mut manager.relist_pending);
+                if held_back || (relist && manager.loaded) {
                     return Self::list_profiles_task();
                 }
                 Task::none()
@@ -267,7 +284,7 @@ impl Signex {
 fn run_profile_write(dispatch: Dispatch) -> Task<Message> {
     let Some(dir) = rule_profiles::profiles_dir() else {
         return Task::done(Message::Erc(ErcMsg::ProfileWriteFinished(Arc::new(Ok(
-            None,
+            WriteOutcome::Skipped,
         )))));
     };
     blocking(

@@ -552,7 +552,11 @@ impl Signex {
 
     /// Log the migration, then read the (possibly just created) `User Default`
     /// profile into the in-memory machine rules.
+    ///
+    /// A migration that was refused locks the machine's rules for the session:
+    /// the old preferences would fold over an edit made now on a later launch.
     pub(crate) fn handle_default_profile_migrated(
+        &mut self,
         result: &Result<ProfileMigration, String>,
     ) -> Task<Message> {
         match result {
@@ -561,11 +565,15 @@ impl Signex {
                 rule_profiles::USER_DEFAULT_PROFILE_NAME
             )),
             Ok(ProfileMigration::Folded) => crate::diagnostics::log_info(format!(
-                "Your newer ERC preferences were merged into the rule profile \"{}\", which is                  now where this machine's ERC rules are kept.",
+                "Your newer ERC preferences were merged into the rule profile \"{}\", which is \
+                 now where this machine's ERC rules are kept.",
                 rule_profiles::USER_DEFAULT_PROFILE_NAME
             )),
             Ok(_) => {}
-            Err(why) => crate::diagnostics::log_warning(why),
+            Err(why) => {
+                crate::diagnostics::log_warning(why);
+                self.ui_state.machine_rules_locked = Some(why.clone());
+            }
         }
         Self::load_user_default_task()
     }

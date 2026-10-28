@@ -6,7 +6,7 @@ use std::sync::Arc;
 use signex_erc::{RuleKind, Severity};
 use signex_types::project::ErcRules;
 
-use crate::app::state::rule_profile_ui::QueuedWrite;
+use crate::app::state::rule_profile_ui::{QueuedWrite, WriteOutcome};
 use crate::preferences::{ProfileAction, ProfilesMsg};
 use crate::rule_profiles::{self, ProfileKind};
 
@@ -97,10 +97,14 @@ fn editing_a_profile_writes_its_own_file_and_round_trips() {
     // The first snapshot, then the waiting one, as the queue would run them.
     let first = app.ui_state.profile_writes.running().cloned().unwrap();
     first.run(lib.path()).unwrap();
-    assert_eq!(app.handle_profile_write_finished(&Ok(None)).units(), 1);
+    assert_eq!(
+        app.handle_profile_write_finished(&Ok(WriteOutcome::Done(None)))
+            .units(),
+        1
+    );
     let second = app.ui_state.profile_writes.running().cloned().unwrap();
     second.run(lib.path()).unwrap();
-    let _ = app.handle_profile_write_finished(&Ok(None));
+    let _ = app.handle_profile_write_finished(&Ok(WriteOutcome::Done(None)));
 
     let reread = rule_profiles::list_library(Some(lib.path()));
     let company = reread
@@ -531,4 +535,36 @@ fn opening_preferences_forgets_the_last_sessions_questions_and_result() {
     let _ = app.handle_preferences_open_requested();
     let m = manager(&app);
     assert!(m.status.is_none() && m.confirm_delete.is_none() && m.confirm_reset.is_none());
+}
+
+#[test]
+fn a_pin_click_sends_the_level_the_screen_showed_not_a_cycle() {
+    let lib = tempfile::tempdir().unwrap();
+    let mut app = listed_app(lib.path());
+    select(&mut app, "Company");
+    let _ = app.handle_profiles_message(ProfilesMsg::PinCellCycled { row: 1, col: 4 });
+    let (_, edit) = queued_edit(&app);
+    let shown = signex_erc::pin_matrix::baseline_cell(1, 4).cycled();
+    assert_eq!(edit, crate::rule_profiles::RuleEdit::PinCell(1, 4, shown));
+
+    // The file already moved on (the cell was cycled elsewhere): the write
+    // still lands exactly on what the pane showed, not one step further.
+    rule_profiles::edit_profile_in_place(
+        lib.path(),
+        "Company",
+        crate::rule_profiles::RuleEdit::PinCell(1, 4, shown.cycled()),
+    )
+    .unwrap();
+    let running = app.ui_state.profile_writes.running().cloned().unwrap();
+    let _ = running.run(lib.path()).unwrap();
+    let stored = rule_profiles::list_library(Some(lib.path()));
+    let company = stored
+        .profiles
+        .iter()
+        .find(|p| p.profile.name == "Company")
+        .unwrap();
+    let key = signex_erc::project_rules::pin_matrix_key(1, 4).unwrap();
+    assert_eq!(company.profile.erc.pin_matrix[&key], shown.key());
+    let mirror = signex_erc::project_rules::pin_matrix_key(4, 1).unwrap();
+    assert_eq!(company.profile.erc.pin_matrix[&mirror], shown.key());
 }

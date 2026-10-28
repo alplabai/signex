@@ -451,7 +451,10 @@ mod tests {
         );
 
         // The queue's own worker then finds its write already done.
-        assert!(dispatch.run(lib.path()).unwrap().is_none());
+        assert_eq!(
+            dispatch.run(lib.path()).unwrap(),
+            crate::app::rule_profile_ui::WriteOutcome::Skipped
+        );
     }
 
     #[test]

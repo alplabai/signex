@@ -44,6 +44,11 @@ pub struct UiState {
     /// rules wait for it: writing the maps back before they hold the file's
     /// rules would replace them with defaults.
     pub machine_rules_loading: bool,
+    /// Why the machine's rules are read-only this session: the migration of
+    /// the old preferences into `User Default` was refused (the preferences
+    /// file could not record it, or `User Default` could not be read), so an
+    /// edit now could be overwritten by that migration on a later launch.
+    pub machine_rules_locked: Option<String>,
     /// Why the machine's rules are not being saved (the `User Default` file
     /// could not be read or written), shown in the ERC dialog. `None` when
     /// they are.

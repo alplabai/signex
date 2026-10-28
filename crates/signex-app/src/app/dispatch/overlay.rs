@@ -475,9 +475,7 @@ impl Signex {
             ErcMsg::ProfileDriftChecked { project, result } => {
                 self.handle_profile_drift_checked(project, &result)
             }
-            ErcMsg::DefaultProfileMigrated(result) => {
-                Self::handle_default_profile_migrated(&result)
-            }
+            ErcMsg::DefaultProfileMigrated(result) => self.handle_default_profile_migrated(&result),
             ErcMsg::RulesUndone => {
                 self.undo_project_rules();
                 Task::none()

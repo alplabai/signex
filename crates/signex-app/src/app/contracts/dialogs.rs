@@ -134,9 +134,7 @@ pub enum ErcMsg {
     UserDefaultLoaded(std::sync::Arc<Result<Option<signex_types::project::RuleProfile>, String>>),
     /// A queued profile file write finished; the next one may start. Carries
     /// the profile the file now holds, for an edit of a library profile.
-    ProfileWriteFinished(
-        std::sync::Arc<Result<Option<signex_types::project::RuleProfile>, String>>,
-    ),
+    ProfileWriteFinished(std::sync::Arc<Result<crate::app::rule_profile_ui::WriteOutcome, String>>),
     /// The quit path ran the writes still queued.
     ProfileWritesFlushed(std::sync::Arc<Result<(), String>>),
     /// "Update from profile": look up the profile the project was seeded

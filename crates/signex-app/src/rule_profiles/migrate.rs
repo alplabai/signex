@@ -15,6 +15,18 @@
 //! The old keys stay in `prefs.json`, unread once the marker is set. A build
 //! from before #1608 reads them and does not see edits made after the
 //! upgrade.
+//!
+//! Two narrow cases leave the marker set without the fold having happened, and
+//! the preferences' newer rules are then not merged: a second Signex instance
+//! created `User Default` between this one's check and its exclusive create
+//! (`AlreadyExists`; the other instance's file stands), and a crash between
+//! the marker write and the profile write. Both lose nothing that was in the
+//! profile; only the stale preferences' values are not applied.
+//!
+//! When the marker cannot be written the migration is refused and the app
+//! keeps the machine's rules read-only for the session
+//! (`UiState::machine_rules_locked`), so nothing edited in that session can be
+//! overwritten by the fold of a later launch.
 
 use std::path::Path;
 

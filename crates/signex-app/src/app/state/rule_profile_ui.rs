@@ -170,6 +170,16 @@ impl QueuedWrite {
 #[derive(Debug, Default)]
 pub struct WriteGate(Mutex<HashMap<String, u64>>);
 
+/// What running a queued write did.
+#[derive(Debug, Clone, PartialEq)]
+pub enum WriteOutcome {
+    /// The write ran; for a library-profile edit, the profile the file holds.
+    Done(Option<RuleProfile>),
+    /// Another runner (the quit path, New Project) already ran this write.
+    /// Says nothing about whether the file is healthy.
+    Skipped,
+}
+
 /// A write handed out by the queue, to be run on a worker.
 #[derive(Debug, Clone)]
 pub struct Dispatch {
@@ -181,8 +191,8 @@ pub struct Dispatch {
 
 impl Dispatch {
     /// Run the write unless it (or a later one for the same profile) already
-    /// ran. `Ok(None)` for a write that was skipped.
-    pub fn run(&self, dir: &Path) -> Result<Option<RuleProfile>, String> {
+    /// ran, which is [`WriteOutcome::Skipped`].
+    pub fn run(&self, dir: &Path) -> Result<WriteOutcome, String> {
         let mut applied = self
             .gate
             .0
@@ -190,10 +200,10 @@ impl Dispatch {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let newest = applied.entry(self.key.clone()).or_insert(0);
         if self.seq <= *newest {
-            return Ok(None);
+            return Ok(WriteOutcome::Skipped);
         }
         *newest = self.seq;
-        self.write.execute(dir)
+        self.write.execute(dir).map(WriteOutcome::Done)
     }
 }
 
@@ -292,7 +302,7 @@ mod tests {
                 .submit("A", QueuedWrite::UserDefault(erc("b")))
                 .is_none()
         );
-        let edit = RuleEdit::PinCell(1, 1);
+        let edit = RuleEdit::PinCell(1, 1, signex_erc::Severity::Off);
         let other = QueuedWrite::ProfileEdit {
             name: "Other".into(),
             edit,
@@ -324,12 +334,15 @@ mod tests {
         let mut queue = ProfileWriteQueue::default();
         let edit = QueuedWrite::ProfileEdit {
             name: "P".into(),
-            edit: RuleEdit::PinCell(1, 1),
+            edit: RuleEdit::PinCell(1, 1, signex_erc::Severity::Off),
         };
         let first = queue.submit("P", edit).unwrap();
         // Cycling a cell twice would undo it: a second run must not happen.
-        assert!(first.run(dir.path()).unwrap().is_some());
-        assert!(first.run(dir.path()).unwrap().is_none(), "skipped");
+        assert!(matches!(
+            first.run(dir.path()).unwrap(),
+            WriteOutcome::Done(Some(_))
+        ));
+        assert_eq!(first.run(dir.path()).unwrap(), WriteOutcome::Skipped);
         let bytes = std::fs::read(dir.path().join("p.snxrules")).unwrap();
         let stored = RuleProfile::from_json_bytes(&bytes).unwrap();
         assert_eq!(stored.erc.pin_matrix.len(), 1);

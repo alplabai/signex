@@ -35,7 +35,7 @@ impl Signex {
         list_task()
     }
 
-    pub(super) fn handle_profiles_message(&mut self, msg: ProfilesMsg) -> Task<Message> {
+    pub(crate) fn handle_profiles_message(&mut self, msg: ProfilesMsg) -> Task<Message> {
         match msg {
             ProfilesMsg::Listed(listing) => {
                 // A listing read before a pending write landed is older than
@@ -62,7 +62,20 @@ impl Signex {
                 self.edit_selected_profile(RuleEdit::Severity(rule, severity))
             }
             ProfilesMsg::PinCellCycled { row, col } => {
-                self.edit_selected_profile(RuleEdit::PinCell(row, col))
+                // The level the click moves the cell to, from what the screen
+                // shows, so the file ends up exactly there.
+                let target = self.ui_state.profile_manager.selected_profile().map(|l| {
+                    signex_erc::project_rules::resolve(&l.profile.erc)
+                        .pin_matrix
+                        .get(&(row, col))
+                        .copied()
+                        .unwrap_or_else(|| signex_erc::pin_matrix::baseline_cell(row, col))
+                        .cycled()
+                });
+                match target {
+                    Some(target) => self.edit_selected_profile(RuleEdit::PinCell(row, col, target)),
+                    None => Task::none(),
+                }
             }
             ProfilesMsg::ResetRequested => {
                 let manager = &mut self.ui_state.profile_manager;
@@ -162,7 +175,7 @@ impl Signex {
             (ProfileKind::UserDefault, RuleEdit::Severity(rule, severity)) => {
                 self.set_machine_severity(rule, severity)
             }
-            (ProfileKind::UserDefault, RuleEdit::PinCell(row, col)) => {
+            (ProfileKind::UserDefault, RuleEdit::PinCell(row, col, _)) => {
                 self.cycle_machine_pin_cell(row, col)
             }
             (ProfileKind::UserDefault, RuleEdit::ResetToShipped) => self.reset_machine_rules(),

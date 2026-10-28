@@ -5,7 +5,7 @@
 use signex_erc::{RuleKind, Severity};
 
 use crate::app::handlers::menu::export::tests::app_workspace;
-use crate::app::state::rule_profile_ui::QueuedWrite;
+use crate::app::state::rule_profile_ui::{QueuedWrite, WriteOutcome};
 use crate::rule_profiles::{self, SaveOutcome};
 
 fn workspace(tag: &str) -> crate::app::Signex {
@@ -293,7 +293,11 @@ fn the_no_project_dialog_writes_the_user_default_profile_not_prefs() {
         .expect("profile created");
     assert_eq!(stored.name, rule_profiles::USER_DEFAULT_PROFILE_NAME);
     assert_eq!(stored.erc.severity["unused_pin"], "off");
-    assert_eq!(app.handle_profile_write_finished(&Ok(None)).units(), 0);
+    assert_eq!(
+        app.handle_profile_write_finished(&Ok(WriteOutcome::Done(None)))
+            .units(),
+        0
+    );
     assert!(app.ui_state.profile_writes.is_idle());
 
     // Loading it back gives the dialog the same rules (a restart).
@@ -344,7 +348,7 @@ fn quick_edits_are_written_in_order_and_the_last_snapshot_wins() {
     // Each waiting write starts when the one before it ends.
     let mut started = 0;
     while let Some(write) = {
-        let next = app.handle_profile_write_finished(&Ok(None));
+        let next = app.handle_profile_write_finished(&Ok(WriteOutcome::Done(None)));
         (next.units() == 1).then(|| app.ui_state.profile_writes.running().cloned().unwrap())
     } {
         started += 1;
@@ -409,9 +413,9 @@ fn an_unreadable_user_default_is_reported_and_never_replaced_by_an_edit() {
 
 #[test]
 fn the_migration_is_followed_by_loading_the_user_default() {
-    let task = crate::app::Signex::handle_default_profile_migrated(&Ok(
-        rule_profiles::ProfileMigration::AlreadyDone,
-    ));
+    let mut app = no_project();
+    let task =
+        app.handle_default_profile_migrated(&Ok(rule_profiles::ProfileMigration::AlreadyDone));
     assert_eq!(task.units(), 1);
 }
 
@@ -458,7 +462,7 @@ fn the_dialog_says_when_the_machine_rules_are_loading_or_not_saving() {
     let _ = app.handle_profile_write_finished(&Err("disk full".into()));
     assert!(app.machine_rules_notice().unwrap().contains("disk full"));
     let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Info);
-    let _ = app.handle_profile_write_finished(&Ok(None));
+    let _ = app.handle_profile_write_finished(&Ok(WriteOutcome::Done(None)));
     assert_eq!(app.machine_rules_notice(), None);
 }
 
@@ -507,4 +511,74 @@ fn a_save_as_overwrite_asks_an_open_profile_pane_to_read_the_library_again() {
     app.ui_state.profile_manager.loaded = true;
     let id = app.document_state.projects[0].id;
     assert_eq!(app.handle_profile_saved(id, &Ok(done)).units(), 1);
+}
+
+// ---- re-review round ----
+
+#[test]
+fn a_refused_migration_keeps_the_machine_rules_read_only_for_the_session() {
+    let mut app = no_project();
+    let _ = app.handle_default_profile_migrated(&Err("prefs.json is not writable".into()));
+    let notice = app.machine_rules_notice().expect("the dialog says so");
+    assert!(
+        notice.contains("read-only") && notice.contains("not writable"),
+        "{notice}"
+    );
+
+    // The load that follows does not lift it, and no edit is taken, so the
+    // fold of a later launch has nothing of this session to overwrite.
+    let _ = app.handle_user_default_loaded(&Ok(None));
+    assert!(app.machine_rules_notice().unwrap().contains("read-only"));
+    assert_eq!(
+        app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Off)
+            .units(),
+        0
+    );
+    assert_eq!(app.handle_pin_matrix_cell_cycled(1, 1).units(), 0);
+    assert!(app.ui_state.erc_severity_override.is_empty());
+    assert!(app.ui_state.pin_matrix_overrides.is_empty());
+    assert!(
+        app.ui_state.profile_writes.is_idle(),
+        "nothing queued, nothing written"
+    );
+}
+
+#[test]
+fn a_write_the_new_project_already_ran_does_not_clear_a_reported_problem() {
+    use crate::app::rule_profile_ui::WriteOutcome;
+    let mut app = no_project();
+    let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Off);
+    app.ui_state.machine_rules_problem = Some("disk full".into());
+    let _ = app.handle_profile_write_finished(&Ok(WriteOutcome::Skipped));
+    assert_eq!(
+        app.ui_state.machine_rules_problem.as_deref(),
+        Some("disk full"),
+        "a skipped run says nothing about the file"
+    );
+    let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Info);
+    let _ = app.handle_profile_write_finished(&Ok(WriteOutcome::Done(None)));
+    assert_eq!(app.ui_state.machine_rules_problem, None);
+}
+
+#[test]
+fn the_first_listing_held_back_by_a_pending_write_is_read_again() {
+    use crate::app::rule_profile_ui::WriteOutcome;
+    use crate::preferences::ProfilesMsg;
+    let mut app = no_project();
+    assert!(
+        !app.ui_state.profile_manager.loaded,
+        "the pane has not loaded yet"
+    );
+    let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Off);
+
+    let listing = rule_profiles::list_library(None);
+    let _ = app.handle_profiles_message(ProfilesMsg::Listed(std::sync::Arc::new(listing)));
+    assert!(
+        !app.ui_state.profile_manager.loaded,
+        "held back, not applied"
+    );
+    assert!(app.ui_state.profile_manager.relist_pending);
+
+    let next = app.handle_profile_write_finished(&Ok(WriteOutcome::Done(None)));
+    assert_eq!(next.units(), 1, "the library is requested again");
 }

@@ -324,8 +324,10 @@ pub fn delete_profile(dir: &Path, name: &str) -> Result<(), String> {
 pub enum RuleEdit {
     /// One rule's severity.
     Severity(signex_erc::RuleKind, signex_erc::Severity),
-    /// Cycle one pin-matrix cell (and its mirror).
-    PinCell(u8, u8),
+    /// Set one pin-matrix cell (and its mirror) to a severity. A click sends
+    /// the level the screen showed, not "cycle", so a file that changed in
+    /// between lands exactly on what the user saw.
+    PinCell(u8, u8, signex_erc::Severity),
     /// Every rule back to the shipped profile's. Rule ids and keys this build
     /// does not know are kept.
     ResetToShipped,
@@ -333,10 +335,22 @@ pub enum RuleEdit {
 
 impl RuleEdit {
     pub fn apply(self, erc: &mut ErcRules) {
-        use signex_erc::project_rules::{cycle_pin_cell, set_severity};
+        use signex_erc::pin_matrix::baseline_cell;
+        use signex_erc::project_rules::{pin_matrix_key, set_severity};
         match self {
             RuleEdit::Severity(rule, severity) => set_severity(erc, rule, severity),
-            RuleEdit::PinCell(row, col) => cycle_pin_cell(erc, row, col),
+            RuleEdit::PinCell(row, col, target) => {
+                for (r, c) in [(row, col), (col, row)] {
+                    let Some(key) = pin_matrix_key(r, c) else {
+                        continue;
+                    };
+                    if target == baseline_cell(r, c) {
+                        erc.pin_matrix.remove(&key);
+                    } else {
+                        erc.pin_matrix.insert(key, target.key().to_string());
+                    }
+                }
+            }
             RuleEdit::ResetToShipped => {
                 *erc = adopt_profile(erc, &builtin_profile().erc);
             }

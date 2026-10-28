@@ -317,7 +317,7 @@ fn an_edit_is_applied_to_the_file_as_it_is_and_never_recreates_a_deleted_one() {
     assert_eq!(read(&tmp.path().join("acme.snxrules")), done);
 
     delete_profile(tmp.path(), "Acme").unwrap();
-    let edit = RuleEdit::PinCell(1, 1);
+    let edit = RuleEdit::PinCell(1, 1, signex_erc::Severity::Off);
     let err = edit_profile_in_place(tmp.path(), "Acme", edit).unwrap_err();
     assert!(err.contains("no longer in the library"), "{err}");
     assert!(!tmp.path().join("acme.snxrules").exists());
@@ -329,7 +329,12 @@ fn an_edit_never_replaces_a_file_it_cannot_read() {
     let tmp = dir();
     let path = tmp.path().join("acme.snxrules");
     std::fs::write(&path, b"{not json").unwrap();
-    let err = edit_profile_in_place(tmp.path(), "Acme", RuleEdit::PinCell(1, 1)).unwrap_err();
+    let err = edit_profile_in_place(
+        tmp.path(),
+        "Acme",
+        RuleEdit::PinCell(1, 1, signex_erc::Severity::Off),
+    )
+    .unwrap_err();
     assert!(!err.is_empty());
     assert_eq!(std::fs::read(&path).unwrap(), b"{not json");
 }
