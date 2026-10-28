@@ -226,20 +226,23 @@ fn keymap_table_row<'a>(
                 command == &conflict.first_command || command == &conflict.second_command
             })
     });
+    let overridden_by = shadow_note(&row_model.trigger);
     let state = if !row_model.trigger_valid {
-        "Invalid"
+        "Invalid".to_string()
+    } else if let Some(note) = overridden_by.clone() {
+        note
     } else if has_conflict {
-        "Conflict"
+        "Conflict".to_string()
     } else if row_model.trigger.trim().is_empty() {
-        "Unbound"
+        "Unbound".to_string()
     } else if row_model.keyboard_editable && active_profile_is_custom {
-        "Editable"
+        "Editable".to_string()
     } else if row_model.keyboard_editable {
-        "Create custom"
+        "Create custom".to_string()
     } else {
-        "Gesture"
+        "Gesture".to_string()
     };
-    let state_warn = !row_model.trigger_valid || has_conflict;
+    let state_warn = !row_model.trigger_valid || has_conflict || overridden_by.is_some();
     let state_unbound = row_model.trigger.trim().is_empty();
     let state_style = move |theme: &Theme| text::Style {
         color: Some(if state_warn {
@@ -357,6 +360,21 @@ fn shortcut_chip<'a>(label: &str, tone: ChipTone) -> Element<'a, PrefMsg> {
     .into()
 }
 
+/// The "overridden by <fixed action>" note for a binding whose stroke a
+/// fixed app key claims first (F1, Esc), or `None`.
+fn shadow_note(trigger: &str) -> Option<String> {
+    crate::app::dispatch::input::shadowing_fixed_key_for_trigger(trigger)
+        .map(|action| format!("Overridden by {action}"))
+}
+
+/// Recorder warning for a recorded chord that a fixed app key would
+/// swallow before the profile sees it.
+fn recorder_shadow_warning(trigger: &str) -> Option<String> {
+    crate::app::dispatch::input::shadowing_fixed_key_for_trigger(trigger).map(|action| {
+        format!("{trigger} is claimed by {action} and will never reach this binding.")
+    })
+}
+
 fn keymap_recorder_control<'a>(
     recorder: &'a crate::app::KeymapRecorderState,
 ) -> Element<'a, PrefMsg> {
@@ -404,6 +422,17 @@ fn keymap_recorder_control<'a>(
     if let Some(transient_modifiers) = transient_modifiers {
         capture_row = capture_row.push(transient_modifiers);
     }
+
+    let recorder_warning: Element<'a, PrefMsg> =
+        match recorder_shadow_warning(&recorder.trigger_text()) {
+            Some(message) if !recorder.strokes.is_empty() => text(message)
+                .size(11)
+                .style(|theme: &Theme| text::Style {
+                    color: Some(theme.palette().warning),
+                })
+                .into(),
+            _ => Space::new().into(),
+        };
 
     let record_button = if recorder.recording {
         button(container(text("Stop").size(11)).padding([5, 12]))
@@ -463,6 +492,7 @@ fn keymap_recorder_control<'a>(
             text("Press the exact keystroke to record it. ESC is recorded as a key; use Cancel to close.")
                 .size(10)
                 .style(iced::widget::text::secondary),
+            recorder_warning,
             row![
                 record_button,
                 button(container(text("Clear").size(11)).padding([5, 12]))
@@ -574,4 +604,38 @@ fn title_case(value: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::keymap::KeymapEditorModel;
+
+    #[test]
+    fn classic_f1_and_escape_bindings_are_flagged_overridden() {
+        let mut editor = KeymapEditorModel::built_ins().unwrap();
+        editor.set_active_profile("classic").unwrap();
+        let flagged = |command: &str| {
+            editor
+                .rows()
+                .iter()
+                .filter(|row| row.command.as_ref().map(|c| c.as_str()) == Some(command))
+                .map(|row| shadow_note(&row.trigger))
+                .collect::<Vec<_>>()
+        };
+        // Classic binds F1 to zoom_in_at_cursor and Escape to cancel_current_tool.
+        assert_eq!(flagged("zoom_in_at_cursor").iter().flatten().count(), 1);
+        assert!(flagged("cancel_current_tool").iter().all(Option::is_some));
+        assert!(!flagged("cancel_current_tool").is_empty());
+        assert!(shadow_note("Ctrl+F1").is_some());
+        assert_eq!(shadow_note("P W"), None);
+        assert_eq!(shadow_note("DoubleClick"), None);
+    }
+
+    #[test]
+    fn recorder_warns_only_for_shadowed_strokes() {
+        assert!(recorder_shadow_warning("Esc").is_some());
+        assert!(recorder_shadow_warning("X Esc").is_some());
+        assert!(recorder_shadow_warning("Ctrl+K").is_none());
+    }
 }

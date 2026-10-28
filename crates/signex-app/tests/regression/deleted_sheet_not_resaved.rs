@@ -53,6 +53,7 @@ fn add_project(app: &mut Signex, prj_path: &Path, sheet: &str) -> ProjectId {
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     id
 }
@@ -1000,7 +1001,13 @@ fn a_project_opened_while_the_resolve_runs_triggers_a_fresh_resolve() {
     let stale = app.resolve_sheet_refs_blocking();
     add_project(&mut app, &tmp.path().join("C.snxprj"), "c.snxsch");
 
-    // Park the probe: in-flight blocks new ones, so `units()` is exact.
+    // Park the probe: in-flight blocks new ones, so `units()` is exact. The
+    // open sheet's folder gets its case answer too, or the update would also
+    // start that probe.
+    let _ = app.update(Message::File(signex_app::app::FileMsg::DirCaseProbed {
+        dir: tmp.path().to_path_buf(),
+        answer: signex_app::app::CaseProbeOutcome::Decided(false),
+    }));
     let _claimed = app.document_state.project_fs.begin_probe(true);
     crate::settle_support::settle_history_panel(&mut app);
     let task = app.update(Message::Project(ProjectMsg::CloseRefsResolved {

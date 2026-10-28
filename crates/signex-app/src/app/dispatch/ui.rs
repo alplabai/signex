@@ -35,8 +35,8 @@ impl Signex {
                 Task::batch([save, self.finish_update()])
             }
             UiMsg::UnitCycled | UiMsg::StatusBar(StatusBarRequest::CycleUnit) => {
-                self.handle_unit_cycle_request();
-                self.finish_update()
+                let save = self.handle_unit_cycle_request();
+                Task::batch([save, self.finish_update()])
             }
             UiMsg::GridToggle | UiMsg::StatusBar(StatusBarRequest::ToggleGrid) => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
@@ -93,7 +93,11 @@ impl Signex {
                 self.finish_update()
             }
             UiMsg::GridCycle => {
-                let cycled = self.cycle_grid_size();
+                let cycled = self.cycle_grid_size(true);
+                Task::batch([cycled, self.finish_update()])
+            }
+            UiMsg::GridCycleBackward => {
+                let cycled = self.cycle_grid_size(false);
                 Task::batch([cycled, self.finish_update()])
             }
             UiMsg::GridPickerOpen => {

@@ -366,7 +366,7 @@ fn draw_lines(
     for line in visible(lines, extents, view) {
         let p0 = world_to_screen(camera, bounds, line.p0);
         let p1 = world_to_screen(camera, bounds, line.p1);
-        let width = (line.width * camera.scale).max(0.5);
+        let width = crate::renderer_scene_canvas::min_stroke_px(line.width * camera.scale);
         let color = color_from_rgba(line.color);
 
         if line.is_dashed() {
@@ -393,8 +393,10 @@ fn draw_circles(
 ) {
     for circle in visible(circles, extents, view) {
         let center = world_to_screen(camera, bounds, circle.center);
-        let radius = (circle.radius * camera.scale).max(0.5);
-        let stroke_width = (circle.stroke_width * camera.scale).max(0.5);
+        let radius =
+            (circle.radius * camera.scale).max(crate::renderer_scene_canvas::MIN_RADIUS_PX);
+        let stroke_width =
+            crate::renderer_scene_canvas::min_stroke_px(circle.stroke_width * camera.scale);
         let color = color_from_rgba(circle.color);
         let path = canvas::Path::circle(center, radius);
 
@@ -435,7 +437,9 @@ fn draw_polygons(
             frame.stroke(
                 &path,
                 canvas::Stroke::default()
-                    .with_width((polygon.stroke_width * camera.scale).max(0.5))
+                    .with_width(crate::renderer_scene_canvas::min_stroke_px(
+                        polygon.stroke_width * camera.scale,
+                    ))
                     .with_color(color_from_rgba(stroke_color)),
             );
         }

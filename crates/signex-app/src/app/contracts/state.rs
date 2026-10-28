@@ -193,6 +193,12 @@ pub struct SaveAllPlan {
     /// Directory -> whether its volume ignores case, for every directory
     /// the probe could decide. An undecided one is absent.
     pub probes: std::collections::HashMap<std::path::PathBuf, bool>,
+    /// The directories the probe could not decide, with its answer; the
+    /// Save All reports each from `update` and falls back to the host rule.
+    pub undecided: Vec<(
+        std::path::PathBuf,
+        crate::app::state::project_case::CaseProbeOutcome,
+    )>,
 }
 
 /// The tail of a Save All, sent when its writes have completed.
@@ -213,7 +219,25 @@ pub struct SaveAllSettle {
     /// Files held under several case-variant spellings: the spelling that
     /// was written, and the others it stands for. The others' dirty markers
     /// go once the written one is clean.
-    pub case_variants: Vec<(std::path::PathBuf, Vec<std::path::PathBuf>)>,
+    pub case_variants: Vec<CaseVariants>,
+}
+
+/// A file held under several case-variant spellings: the one written and
+/// the others it stands for, each pinned as it was when the write began.
+#[derive(Debug, Clone)]
+pub struct CaseVariants {
+    pub written: std::path::PathBuf,
+    pub others: Vec<PinnedSpelling>,
+}
+
+/// A spelling's state when a write began. One edited since (its engine
+/// revision or its net-colour revision moved) is not on disk, so its dirty
+/// marker stays.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PinnedSpelling {
+    pub path: std::path::PathBuf,
+    pub revision: u64,
+    pub net_color_revision: u64,
 }
 
 /// User choice from the project-close confirmation modal.

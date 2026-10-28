@@ -9,34 +9,61 @@
 
 use super::*;
 use crate::app::FileMsg;
-use crate::app::contracts::{SaveAllNext, SaveAllPlan, SaveAllSettle};
+use crate::app::contracts::{
+    CaseVariants, PinnedSpelling, SaveAllNext, SaveAllPlan, SaveAllSettle,
+};
+use crate::app::state::project_case::{CaseProbeOutcome, undecided_message};
 use crate::app::state::scope::{CaseFold, path_key_with};
 use crate::app::state::volume_case::probe_directory_case;
 use std::collections::HashMap;
 
 impl Signex {
     /// Start the write of one dirty file, matching `path` to the spelling it
-    /// is held under by the volume rule `fold`.
-    ///
-    /// The document maps are keyed by the exact spelling a document was
-    /// opened under, while `path` may match it only under `fold`. On a
-    /// folding host `Lib.snxsch` and `lib.snxsch` are ONE file, so two
-    /// documents held under both spellings cannot both be written: the
-    /// second write would silently replace the first's edits (#1077). The
-    /// write is refused unless every variant is an engine encoding to
-    /// identical bytes, and then the first spelling is written once. The
-    /// other spellings' dirty markers are cleared when the Save All settles
-    /// ([`Self::clear_saved_case_variants`]).
+    /// is held under by the volume rule `fold`; see [`Self::begin_held_save`].
+    #[cfg(test)]
     pub(super) fn begin_dirty_path_save_with(
         &mut self,
         path: &std::path::Path,
         fold: CaseFold,
     ) -> anyhow::Result<Option<Task<Message>>> {
         let held = self.held_spellings(path, fold);
+        let target = self.write_target(&held).clone();
+        self.begin_held_save(&held, &target)
+    }
+
+    /// Write one file held under `held` spellings (matched by a volume rule):
+    /// refuse differing variants, then write `target` once.
+    ///
+    /// The document maps are keyed by the exact spelling a document was
+    /// opened under, while the requested path may match a held spelling only
+    /// under the volume rule. On a folding host `Lib.snxsch` and `lib.snxsch`
+    /// are ONE file, so two documents held under both spellings cannot both
+    /// be written: the second write would silently replace the first's edits
+    /// (#1077). The write is refused unless every variant is an engine
+    /// encoding to identical bytes, and then the first dirty spelling is
+    /// written once. The other spellings' dirty markers are cleared when the
+    /// Save All settles ([`Self::clear_saved_case_variants`]).
+    fn begin_held_save(
+        &mut self,
+        held: &[std::path::PathBuf],
+        target: &std::path::Path,
+    ) -> anyhow::Result<Option<Task<Message>>> {
         if held.len() > 1 {
-            self.ensure_variants_agree(&held)?;
+            self.ensure_variants_agree(held)?;
         }
-        self.begin_held_path_save(&held[0])
+        self.begin_held_path_save(target)
+    }
+
+    /// The spelling to write among the `held` ones of a file: the first
+    /// dirty one, else the first. Writing a clean spelling would leave the
+    /// edited one's work unsaved (#1423).
+    pub(super) fn write_target<'a>(
+        &self,
+        held: &'a [std::path::PathBuf],
+    ) -> &'a std::path::PathBuf {
+        held.iter()
+            .find(|path| self.document_state.dirty_paths.contains(*path))
+            .unwrap_or(&held[0])
     }
 
     /// Start the write of one dirty path, routing by the kind of document
@@ -94,6 +121,7 @@ impl Signex {
             rows: rows.to_vec(),
             next,
             probes: HashMap::new(),
+            undecided: Vec::new(),
         };
         if dirs.is_empty() {
             return self.begin_save_all_planned(plan);
@@ -104,9 +132,10 @@ impl Signex {
                     .await
                     .unwrap_or_default()
             },
-            move |probes| {
+            move |(probes, undecided)| {
                 Message::File(FileMsg::SaveAllProbed(Box::new(SaveAllPlan {
                     probes,
+                    undecided,
                     ..plan
                 })))
             },
@@ -161,7 +190,15 @@ impl Signex {
             rows,
             next,
             probes,
+            undecided,
         } = plan;
+        for (dir, outcome) in &undecided {
+            crate::diagnostics::log_warning(undecided_message(
+                outcome,
+                dir,
+                CaseFold::host_default(),
+            ));
+        }
         let (context, paths, rows, probes) = (context.as_str(), &paths[..], &rows[..], &probes);
         let mut writes = Vec::new();
         // One file reached under several spellings is written once.
@@ -172,13 +209,27 @@ impl Signex {
             if !begun.insert(path_key_with(path, fold)) {
                 continue;
             }
-            if let [written, others @ ..] = self.held_spellings(path, fold).as_slice()
-                && !others.is_empty()
-            {
-                case_variants.push((written.clone(), others.to_vec()));
-            }
-            match self.begin_dirty_path_save_with(path, fold) {
-                Ok(task) => writes.extend(task),
+            let held = self.held_spellings(path, fold);
+            let target = self.write_target(&held).clone();
+            match self.begin_held_save(&held, &target) {
+                Ok(task) => {
+                    // Only a write that began can make the other spellings
+                    // clean; a refused one leaves every marker (#1423). Each
+                    // other is pinned now: one edited while the write runs
+                    // is not on disk and stays dirty.
+                    if held.len() > 1 {
+                        let others = held
+                            .iter()
+                            .filter(|p| **p != target)
+                            .map(|p| self.pin_spelling(p))
+                            .collect();
+                        case_variants.push(CaseVariants {
+                            written: target,
+                            others,
+                        });
+                    }
+                    writes.extend(task);
+                }
                 Err(err) => {
                     crate::diagnostics::log_error(
                         &format!("{context}: could not save {}", path.display()),
@@ -308,29 +359,45 @@ impl Signex {
         Task::none()
     }
 
+    /// `path` as it is now: the pair `mark_saved` guards for the written one.
+    fn pin_spelling(&self, path: &std::path::Path) -> PinnedSpelling {
+        PinnedSpelling {
+            path: path.to_path_buf(),
+            revision: self
+                .document_state
+                .engines
+                .get(path)
+                .map_or(0, |engine| engine.revision()),
+            net_color_revision: self.net_color_revision_of(path),
+        }
+    }
+
     /// A file held under several case-variant spellings was written once,
-    /// under the first. When that write left it clean, the other
-    /// spellings' markers go too: they name the same bytes on disk. Taken
-    /// from `variants` as they were when the write began, because a saved
-    /// document nothing holds open is released as soon as it is clean.
-    fn clear_saved_case_variants(
-        &mut self,
-        variants: &[(std::path::PathBuf, Vec<std::path::PathBuf>)],
-    ) {
-        for (written, others) in variants {
+    /// under `written`. When that write left it clean, each other
+    /// spelling's marker goes too, provided it was not edited since the
+    /// write began (still equal to its pin): it names the same bytes on
+    /// disk. A write that failed clears nothing. Taken from `variants` as
+    /// they were when the write began, because a saved document nothing
+    /// holds open is released as soon as it is clean.
+    fn clear_saved_case_variants(&mut self, variants: &[CaseVariants]) {
+        for CaseVariants { written, others } in variants {
             if self.document_state.dirty_paths.contains(written) {
                 continue;
             }
-            for tab in self
-                .document_state
-                .tabs
-                .iter_mut()
-                .filter(|tab| others.contains(&tab.path))
-            {
-                tab.dirty = false;
-            }
-            for other in others {
-                self.document_state.dirty_paths.remove(other);
+            let unchanged: Vec<_> = others
+                .iter()
+                .filter(|pinned| self.pin_spelling(&pinned.path) == **pinned)
+                .collect();
+            for pinned in unchanged {
+                for tab in self
+                    .document_state
+                    .tabs
+                    .iter_mut()
+                    .filter(|tab| tab.path == pinned.path)
+                {
+                    tab.dirty = false;
+                }
+                self.document_state.dirty_paths.remove(&pinned.path);
             }
         }
     }
@@ -387,13 +454,26 @@ pub(super) fn same_paths(a: &[std::path::PathBuf], b: &[std::path::PathBuf]) -> 
     a.iter().collect::<HashSet<_>>() == b.iter().collect::<HashSet<_>>()
 }
 
-/// Ask each directory's volume whether it ignores case; only a decided
-/// answer is kept.
-pub(super) fn probe_dirs(dirs: Vec<std::path::PathBuf>) -> HashMap<std::path::PathBuf, bool> {
-    dirs.into_iter()
-        .filter_map(|dir| match probe_directory_case(&dir) {
-            Ok(Some(ignores_case)) => Some((dir, ignores_case)),
-            _ => None,
-        })
-        .collect()
+/// The answers of [`probe_dirs`]: the decided ones, and the directories
+/// whose volume could not be asked.
+pub(super) type DirProbes = (
+    HashMap<std::path::PathBuf, bool>,
+    Vec<(std::path::PathBuf, CaseProbeOutcome)>,
+);
+
+/// Ask each directory's volume whether it ignores case. Pure: the caller
+/// reports the undecided ones from `update`.
+pub(super) fn probe_dirs(dirs: Vec<std::path::PathBuf>) -> DirProbes {
+    let mut decided = HashMap::new();
+    let mut undecided = Vec::new();
+    for dir in dirs {
+        match probe_directory_case(&dir) {
+            Ok(Some(ignores_case)) => {
+                decided.insert(dir, ignores_case);
+            }
+            Ok(None) => undecided.push((dir, CaseProbeOutcome::Undecided)),
+            Err(reason) => undecided.push((dir, CaseProbeOutcome::StatFailed(reason))),
+        }
+    }
+    (decided, undecided)
 }

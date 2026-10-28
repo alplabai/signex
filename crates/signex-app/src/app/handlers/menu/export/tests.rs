@@ -195,6 +195,7 @@ pub(crate) fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     // The sticky pointer every one of these regressions is about.
     app.document_state.active_project = Some(id);
@@ -1042,6 +1043,7 @@ pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
         pending_libraries: std::collections::HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
 }
 

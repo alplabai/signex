@@ -150,6 +150,7 @@ impl Signex {
             size,
             resizable: true,
             decorations: true,
+            exit_on_close_request: false,
             ..Default::default()
         });
         // Stash immediately so the first frame in the new window has a
@@ -200,6 +201,7 @@ impl Signex {
             size,
             resizable: true,
             decorations: true,
+            exit_on_close_request: false,
             ..Default::default()
         });
         self.ui_state.windows.insert(
@@ -433,6 +435,9 @@ pub(crate) fn detached_modal_settings(size: iced::Size) -> iced::window::Setting
         size,
         resizable: true,
         decorations: true,
+        // The close request must reach `WindowCloseRequested`, which runs
+        // the modal's own close message (the Preferences dirty guard).
+        exit_on_close_request: false,
         level: iced::window::Level::Normal,
         ..Default::default()
     }
@@ -470,5 +475,6 @@ mod tests {
         assert_eq!(s.size, size);
         assert!(s.resizable);
         assert!(s.decorations);
+        assert!(!s.exit_on_close_request);
     }
 }

@@ -275,14 +275,15 @@ impl Signex {
         Task::none()
     }
 
-    pub(crate) fn handle_unit_cycle_request(&mut self) {
+    pub(crate) fn handle_unit_cycle_request(&mut self) -> Task<Message> {
         self.ui_state.unit = match self.ui_state.unit {
             Unit::Mm => Unit::Mil,
             Unit::Mil => Unit::Inch,
             Unit::Inch => Unit::Micrometer,
             Unit::Micrometer => Unit::Mm,
         };
-        crate::fonts::write_unit_pref(self.ui_state.unit);
+        let unit = self.ui_state.unit;
+        crate::fonts::background_pref_write("unit", move || crate::fonts::write_unit_pref(unit))
     }
 
     pub(crate) fn resolve_child_sheet_path(
@@ -314,7 +315,7 @@ impl Signex {
     /// canvas double-click reaches here through `descend_through_sheet_symbol`.
     /// `true` when the sheet is now the focused tab.
     pub(crate) fn open_or_focus_sheet_path(&mut self, path: std::path::PathBuf) -> bool {
-        let path = self.resolve_held_spelling(path);
+        let path = self.resolve_held_spelling_now(path);
         if !path.exists() {
             crate::diagnostics::log_info(format!("Child-sheet file not found: {}", path.display()));
             return false;

@@ -15,8 +15,32 @@ pub struct RuleId(pub String);
 
 impl RuleId {
     pub fn builtin(kind: RuleKind) -> Self {
-        let slug = kind.label().to_ascii_lowercase().replace(' ', "_");
-        RuleId(format!("builtin::{slug}"))
+        // Explicit per variant: the id is persisted in saved profiles and
+        // project rule sets, so a label rewording must never rename it.
+        let id = match kind {
+            RuleKind::UnusedPin => "builtin::unused_pin",
+            RuleKind::DuplicateRefDesignator => "builtin::duplicate_reference_designator",
+            RuleKind::HierPortDisconnected => "builtin::hierarchical_port_disconnected",
+            RuleKind::DanglingWire => "builtin::dangling_wire_endpoint",
+            RuleKind::NetLabelConflict => "builtin::net_label_conflict",
+            RuleKind::OrphanLabel => "builtin::orphan_label",
+            RuleKind::BusBitWidthMismatch => "builtin::bus_bit-width_mismatch",
+            RuleKind::BadHierSheetPin => "builtin::bad_hierarchical_sheet_pin",
+            RuleKind::MissingPowerFlag => "builtin::missing_power_flag",
+            RuleKind::PowerPortShort => "builtin::power_port_short",
+            RuleKind::SymbolOutsideSheet => "builtin::symbol_outside_sheet_boundary",
+            RuleKind::AmbiguousLabelAnchor => "builtin::ambiguous_label_anchor",
+            RuleKind::PinTypeConflict => "builtin::pin_type_conflict",
+            RuleKind::PinsTouchNotConnected => "builtin::pins_touch_but_are_not_connected",
+            RuleKind::BusEntryUnlabeled => "builtin::bus_entry_without_a_member_label",
+            RuleKind::BusMemberNotInBus => "builtin::label_is_not_a_member_of_its_bus",
+            RuleKind::BusUnnamed => "builtin::bus_name_missing_or_invalid",
+            RuleKind::BusNameConflict => "builtin::bus_names_disagree",
+            RuleKind::BusLabelOnWire => "builtin::bus_label_on_a_wire",
+            RuleKind::NetMultipleNames => "builtin::net_has_multiple_names",
+            RuleKind::LocalLabelNameOnOtherSheets => "builtin::local_label_name_on_other_sheets",
+        };
+        RuleId(id.to_string())
     }
 
     pub fn user(name: &str) -> Self {
@@ -122,6 +146,83 @@ impl RuleDefinition {
             scope: AnalysisScope::Sheet,
             applicability: Applicability::All,
             default_severity: kind.default_severity(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every built-in id string is persisted in saved profiles and project
+    /// rule sets, so it must never follow a label rewording.
+    const PINNED_IDS: [(RuleKind, &str); 21] = [
+        (RuleKind::UnusedPin, "builtin::unused_pin"),
+        (
+            RuleKind::DuplicateRefDesignator,
+            "builtin::duplicate_reference_designator",
+        ),
+        (
+            RuleKind::HierPortDisconnected,
+            "builtin::hierarchical_port_disconnected",
+        ),
+        (RuleKind::DanglingWire, "builtin::dangling_wire_endpoint"),
+        (RuleKind::NetLabelConflict, "builtin::net_label_conflict"),
+        (RuleKind::OrphanLabel, "builtin::orphan_label"),
+        (
+            RuleKind::BusBitWidthMismatch,
+            "builtin::bus_bit-width_mismatch",
+        ),
+        (
+            RuleKind::BadHierSheetPin,
+            "builtin::bad_hierarchical_sheet_pin",
+        ),
+        (RuleKind::MissingPowerFlag, "builtin::missing_power_flag"),
+        (RuleKind::PowerPortShort, "builtin::power_port_short"),
+        (
+            RuleKind::SymbolOutsideSheet,
+            "builtin::symbol_outside_sheet_boundary",
+        ),
+        (
+            RuleKind::AmbiguousLabelAnchor,
+            "builtin::ambiguous_label_anchor",
+        ),
+        (RuleKind::PinTypeConflict, "builtin::pin_type_conflict"),
+        (
+            RuleKind::PinsTouchNotConnected,
+            "builtin::pins_touch_but_are_not_connected",
+        ),
+        (
+            RuleKind::BusEntryUnlabeled,
+            "builtin::bus_entry_without_a_member_label",
+        ),
+        (
+            RuleKind::BusMemberNotInBus,
+            "builtin::label_is_not_a_member_of_its_bus",
+        ),
+        (RuleKind::BusUnnamed, "builtin::bus_name_missing_or_invalid"),
+        (RuleKind::BusNameConflict, "builtin::bus_names_disagree"),
+        (RuleKind::BusLabelOnWire, "builtin::bus_label_on_a_wire"),
+        (
+            RuleKind::NetMultipleNames,
+            "builtin::net_has_multiple_names",
+        ),
+        (
+            RuleKind::LocalLabelNameOnOtherSheets,
+            "builtin::local_label_name_on_other_sheets",
+        ),
+    ];
+
+    #[test]
+    fn builtin_ids_are_pinned_for_every_rule() {
+        assert_eq!(PINNED_IDS.len(), RuleKind::ALL.len());
+        for kind in RuleKind::ALL {
+            let pinned = PINNED_IDS
+                .iter()
+                .find(|(k, _)| *k == kind)
+                .unwrap_or_else(|| panic!("{kind:?} has no pinned id"));
+            assert_eq!(RuleId::builtin(kind).as_str(), pinned.1, "{kind:?}");
+            assert_eq!(RuleId::builtin(kind).builtin_kind(), Some(kind));
         }
     }
 }

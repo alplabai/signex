@@ -156,17 +156,17 @@ mod tests {
         assert_eq!(task.units(), 0);
     }
 
-    /// `clear_net_highlighting` is a real catalog entry
-    /// (`keymap/catalog/schematic.rs`) with no arm in `core_to_message`
+    /// `measure_distance` is a real catalog entry
+    /// (`keymap/catalog`) with no arm in `core_to_message`
     /// yet — it must resolve to a no-op too, not panic.
     #[test]
     fn catalog_id_with_no_bridge_arm_is_a_no_op_and_does_not_panic() {
         let (mut app, _task) = Signex::new();
 
-        let command = AppCommandId::new("clear_net_highlighting").unwrap();
+        let command = AppCommandId::new("measure_distance").unwrap();
         assert!(
             crate::keymap::metadata_for(&command).is_some(),
-            "test fixture drifted: clear_net_highlighting is no longer a catalog id"
+            "test fixture drifted: measure_distance is no longer a catalog id"
         );
 
         let task = app.dispatch_command(&command, CommandArgs::none(), None);
@@ -236,6 +236,76 @@ mod tests {
         let _ = app.update(core_message(&next));
 
         assert_eq!(app.document_state.active_tab, 1);
+    }
+
+    fn run(app: &mut Signex, id: &str) {
+        let _ = app.update(core_message(&AppCommandId::new(id).unwrap()));
+    }
+
+    /// #103 - `next_document_tab` / `previous_document_tab` step through
+    /// every tab kind, wrapping at both ends.
+    #[test]
+    fn document_tab_commands_cycle_all_tabs_and_wrap() {
+        let mut app = app_with_tabs(vec![TabKind::Schematic, TabKind::Pcb, TabKind::Schematic]);
+        run(&mut app, "next_document_tab");
+        assert_eq!(app.document_state.active_tab, 1, "lands on the PCB tab");
+        run(&mut app, "next_document_tab");
+        run(&mut app, "next_document_tab");
+        assert_eq!(app.document_state.active_tab, 0, "wraps forward");
+        run(&mut app, "previous_document_tab");
+        assert_eq!(app.document_state.active_tab, 2, "wraps backward");
+    }
+
+    /// #103 - `previous_grid` and `cycle_snap_grid_backward` undo `next_grid`.
+    #[test]
+    fn previous_grid_commands_step_the_grid_back() {
+        let sizes = crate::canvas::grid::GRID_SIZES_MM;
+        for id in ["previous_grid", "cycle_snap_grid_backward"] {
+            let (mut app, _task) = Signex::new();
+            app.ui_state.grid_size_mm = sizes[1];
+            run(&mut app, id);
+            assert_eq!(app.ui_state.grid_size_mm, sizes[0], "{id}");
+            run(&mut app, id);
+            assert_eq!(
+                app.ui_state.grid_size_mm,
+                sizes[sizes.len() - 1],
+                "{id} wraps"
+            );
+        }
+    }
+
+    /// #103 - `find_next` / `find_previous` step the current match, wrap,
+    /// and do nothing without matches.
+    #[test]
+    fn find_commands_step_the_current_match() {
+        use signex_types::schematic::{SelectedItem, SelectedKind};
+        let (mut app, _task) = Signex::new();
+        run(&mut app, "find_next");
+        assert_eq!(app.ui_state.find_replace.selected_index, None, "no matches");
+
+        let uuid = uuid::Uuid::new_v4();
+        app.ui_state.find_replace.matches = (0..3)
+            .map(|_| crate::find_replace::FindMatch {
+                item: SelectedItem::new(uuid, SelectedKind::Label),
+                target: signex_engine::TextTarget::Label(uuid),
+                kind_label: String::new(),
+                text: String::new(),
+            })
+            .collect();
+        run(&mut app, "find_next");
+        assert_eq!(app.ui_state.find_replace.selected_index, Some(0));
+        run(&mut app, "find_previous");
+        assert_eq!(
+            app.ui_state.find_replace.selected_index,
+            Some(2),
+            "wraps back"
+        );
+        run(&mut app, "find_next");
+        assert_eq!(
+            app.ui_state.find_replace.selected_index,
+            Some(0),
+            "wraps forward"
+        );
     }
 
     fn core_message(command: &AppCommandId) -> Message {

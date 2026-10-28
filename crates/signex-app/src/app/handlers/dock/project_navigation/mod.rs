@@ -33,6 +33,8 @@ mod rename;
 mod rename_library;
 mod save_all;
 #[cfg(test)]
+mod save_all_case_variant_tests;
+#[cfg(test)]
 mod save_all_gate_tests;
 #[cfg(test)]
 mod save_all_tests;

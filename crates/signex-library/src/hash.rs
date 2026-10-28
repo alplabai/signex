@@ -42,6 +42,9 @@ struct CanonView<'a> {
     datasheet_label: &'a str,
     #[serde(skip_serializing_if = "<[_]>::is_empty")]
     more_datasheets: &'a [DatasheetDoc],
+    // Skipped while empty so a row without one keeps its hash.
+    #[serde(skip_serializing_if = "str::is_empty")]
+    description: &'a str,
     symbol_ref: &'a PrimitiveRef,
     footprint_ref: Option<&'a PrimitiveRef>,
     sim_ref: Option<&'a PrimitiveRef>,
@@ -67,6 +70,7 @@ impl<'a> CanonView<'a> {
             datasheet: &row.datasheet,
             datasheet_label: &row.datasheet_label,
             more_datasheets: &row.more_datasheets,
+            description: &row.description,
             symbol_ref: &row.symbol_ref,
             footprint_ref: row.footprint_ref.as_ref(),
             sim_ref: row.sim_ref.as_ref(),
@@ -154,6 +158,7 @@ mod tests {
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::url(""),
             datasheet_label: String::new(),
+            description: String::new(),
             more_datasheets: Vec::new(),
             state: LifecycleState::Released,
             symbol_ref: PrimitiveRef::new(lib, Uuid::nil()),
@@ -260,6 +265,16 @@ mod tests {
             DatasheetRef::url("e.pdf"),
         ));
         assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&c).unwrap());
+    }
+
+    #[test]
+    fn hash_changes_with_description_and_ignores_empty() {
+        let a = fixture_row();
+        let mut b = fixture_row();
+        b.description = "100 nF".into();
+        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
+        b.description.clear();
+        assert_eq!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
     }
 
     fn hex(bytes: &[u8; 32]) -> String {
