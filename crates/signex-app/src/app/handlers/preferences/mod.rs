@@ -112,6 +112,7 @@ impl Signex {
         // The Appearance status line is transient feedback about one
         // export, not a draft — a fresh dialog (or a Discard) must not
         // reopen showing the last session's result.
+        self.ui_state.profile_manager.clear_transient();
         self.ui_state.preferences_theme_status.clear();
         // Same rule for the prefs-file recovery result — one action's
         // outcome, not a draft.

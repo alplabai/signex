@@ -4,7 +4,6 @@
 
 use signex_erc::{RuleKind, Severity};
 
-use super::machine_rules::execute_profile_write;
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::state::rule_profile_ui::QueuedWrite;
 use crate::rule_profiles::{self, SaveOutcome};
@@ -265,7 +264,7 @@ fn escape_closes_the_save_form_first_then_the_erc_dialog() {
 // ---- the machine's rules are the User Default profile ----
 
 fn queued_user_default(app: &crate::app::Signex) -> signex_types::project::ErcRules {
-    match app.ui_state.profile_writes.running() {
+    match app.ui_state.profile_writes.running().map(|d| &d.write) {
         Some(QueuedWrite::UserDefault(erc)) => erc.clone(),
         other => panic!("expected a queued User Default write, got {other:?}"),
     }
@@ -288,13 +287,13 @@ fn the_no_project_dialog_writes_the_user_default_profile_not_prefs() {
         .running()
         .cloned()
         .expect("queued");
-    execute_profile_write(lib.path(), write).unwrap();
+    write.run(lib.path()).unwrap();
     let stored = rule_profiles::load_user_default(lib.path())
         .unwrap()
         .expect("profile created");
     assert_eq!(stored.name, rule_profiles::USER_DEFAULT_PROFILE_NAME);
     assert_eq!(stored.erc.severity["unused_pin"], "off");
-    assert_eq!(app.handle_profile_write_finished(&Ok(())).units(), 0);
+    assert_eq!(app.handle_profile_write_finished(&Ok(None)).units(), 0);
     assert!(app.ui_state.profile_writes.is_idle());
 
     // Loading it back gives the dialog the same rules (a restart).
@@ -341,12 +340,17 @@ fn quick_edits_are_written_in_order_and_the_last_snapshot_wins() {
     );
     let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Error);
 
-    execute_profile_write(lib.path(), first).unwrap();
-    let next = app.handle_profile_write_finished(&Ok(()));
-    assert_eq!(next.units(), 1, "the waiting snapshot starts");
-    let second = app.ui_state.profile_writes.running().cloned().unwrap();
-    execute_profile_write(lib.path(), second).unwrap();
-    let _ = app.handle_profile_write_finished(&Ok(()));
+    first.run(lib.path()).unwrap();
+    // Each waiting write starts when the one before it ends.
+    let mut started = 0;
+    while let Some(write) = {
+        let next = app.handle_profile_write_finished(&Ok(None));
+        (next.units() == 1).then(|| app.ui_state.profile_writes.running().cloned().unwrap())
+    } {
+        started += 1;
+        write.run(lib.path()).unwrap();
+    }
+    assert_eq!(started, 2, "both waiting snapshots ran, in order");
 
     let stored = rule_profiles::load_user_default(lib.path())
         .unwrap()
@@ -399,7 +403,7 @@ fn an_unreadable_user_default_is_reported_and_never_replaced_by_an_edit() {
 
     let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Off);
     let write = app.ui_state.profile_writes.running().cloned().unwrap();
-    assert!(execute_profile_write(lib.path(), write).is_err());
+    assert!(write.run(lib.path()).is_err());
     assert_eq!(std::fs::read(&file).unwrap(), b"{not json");
 }
 
@@ -429,4 +433,78 @@ fn loading_a_profile_with_rules_from_a_newer_build_keeps_the_known_ones() {
         app.ui_state.erc_severity_override[&RuleKind::UnusedPin],
         Severity::Off
     );
+}
+
+// ---- review round ----
+
+#[test]
+fn the_dialog_says_when_the_machine_rules_are_loading_or_not_saving() {
+    let mut app = no_project();
+    assert_eq!(app.machine_rules_notice(), None);
+
+    app.ui_state.machine_rules_loading = true;
+    assert!(app.machine_rules_notice().unwrap().contains("Loading"));
+    let _ = app.handle_user_default_loaded(&Err("bad json".into()));
+    let notice = app.machine_rules_notice().unwrap();
+    assert!(
+        notice.contains("bad json") && notice.contains("not saving"),
+        "{notice}"
+    );
+
+    // A write that fails keeps the notice; one that succeeds clears it.
+    let _ = app.handle_user_default_loaded(&Ok(None));
+    assert_eq!(app.machine_rules_notice(), None);
+    let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Off);
+    let _ = app.handle_profile_write_finished(&Err("disk full".into()));
+    assert!(app.machine_rules_notice().unwrap().contains("disk full"));
+    let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Info);
+    let _ = app.handle_profile_write_finished(&Ok(None));
+    assert_eq!(app.machine_rules_notice(), None);
+}
+
+#[test]
+fn drift_is_checked_for_the_named_project_not_the_active_tab() {
+    let mut app = workspace("drift-id");
+    // A second project that recorded a profile; the first (active) one did not.
+    let mut second = app.document_state.projects[0].clone();
+    second.id = app.document_state.mint_project_id();
+    second.path = second.path.with_file_name("Other.snxprj");
+    second.data.rules = Some(signex_types::project::ProjectRules {
+        profile: Some(signex_types::project::RuleProfileRef {
+            name: "Company".into(),
+            source: "user".into(),
+            sha256: "recorded".into(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    });
+    let second_id = second.id;
+    app.document_state.projects.push(second);
+    let active = app.document_state.projects[0].id;
+    app.document_state.active_project = Some(active);
+
+    assert_eq!(
+        app.check_profile_drift_task().units(),
+        0,
+        "the active project records none"
+    );
+    assert_eq!(app.check_profile_drift_task_for(second_id).units(), 1);
+    assert_eq!(app.check_profile_drift_task_for(active).units(), 0);
+}
+
+#[test]
+fn a_save_as_overwrite_asks_an_open_profile_pane_to_read_the_library_again() {
+    let mut app = with_dialog("relist");
+    let id = app.document_state.projects[0].id;
+    let done = SaveOutcome::Saved(rule_profiles::SavedProfile {
+        reference: signex_types::project::RuleProfileRef::default(),
+        summary: "\"Mine\"".into(),
+    });
+    let closed = app.handle_profile_saved(id, &Ok(done.clone()));
+    assert_eq!(closed.units(), 0, "no pane open, nothing to refresh");
+
+    let mut app = with_dialog("relist2");
+    app.ui_state.profile_manager.loaded = true;
+    let id = app.document_state.projects[0].id;
+    assert_eq!(app.handle_profile_saved(id, &Ok(done)).units(), 1);
 }

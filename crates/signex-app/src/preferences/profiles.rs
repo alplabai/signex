@@ -42,6 +42,13 @@ pub enum ProfilesMsg {
     DuplicateRequested,
     /// Rename the selected profile to the name field.
     RenameRequested,
+    /// Ask before putting the selected profile's rules back to the shipped
+    /// ones.
+    ResetRequested,
+    /// The user confirmed the reset.
+    ResetConfirmed,
+    /// The user backed out of the reset.
+    ResetCancelled,
     /// Ask before deleting the selected profile.
     DeleteRequested,
     /// The user confirmed the delete.
@@ -134,7 +141,10 @@ pub(super) fn content_profiles<'a>(
             let editable = listed.kind != ProfileKind::Builtin;
             let resolved = signex_erc::project_rules::resolve(&listed.profile.erc);
             let caption = if editable {
-                format!("Editing \"{}\"", listed.profile.name)
+                format!(
+                    "Editing \"{}\". Changes are saved to the profile's file immediately.",
+                    listed.profile.name
+                )
             } else {
                 format!(
                     "\"{}\" is read-only. Duplicate it to change the rules.",
@@ -149,11 +159,11 @@ pub(super) fn content_profiles<'a>(
                 on_severity: |rule, severity| pane(ProfilesMsg::SeverityChanged(rule, severity)),
                 on_pin_cell: |row, col| pane(ProfilesMsg::PinCellCycled { row, col }),
             });
-            body = body.push(
-                column![text(caption).size(12).style(text_primary), editor]
-                    .spacing(8)
-                    .padding([12, 20]),
-            );
+            let mut editing = column![text(caption).size(12).style(text_primary)].spacing(8);
+            if editable {
+                editing = editing.push(reset_row(manager, &listed.profile.name));
+            }
+            body = body.push(editing.push(editor).padding([12, 20]));
         }
         None => {
             body = body.push(
@@ -276,9 +286,12 @@ fn actions_row(manager: &ProfileManager) -> Element<'_, PrefMsg> {
     buttons = match &manager.confirm_delete {
         Some(name) => buttons
             .push(
-                text(format!("Delete \"{name}\"?"))
-                    .size(11)
-                    .style(text_warning),
+                text(format!(
+                    "Delete \"{name}\"? Projects that recorded it keep their rules but can no \
+                     longer find it for Update from profile."
+                ))
+                .size(11)
+                .style(text_warning),
             )
             .push(
                 button(text("Delete").size(11))
@@ -314,4 +327,33 @@ fn actions_row(manager: &ProfileManager) -> Element<'_, PrefMsg> {
     )
     .padding([8, 20])
     .into()
+}
+
+/// "Reset to Signex Default" for an editable profile, with its confirmation.
+fn reset_row<'a>(manager: &'a ProfileManager, name: &'a str) -> Element<'a, PrefMsg> {
+    if manager.confirm_reset.as_deref() == Some(name) {
+        return row![
+            text(format!(
+                "Put every rule of \"{name}\" back to the Signex Default values?"
+            ))
+            .size(11)
+            .style(text_warning),
+            button(text("Reset").size(11))
+                .padding([5, 12])
+                .on_press(pane(ProfilesMsg::ResetConfirmed))
+                .style(danger_button_style),
+            button(text("Keep").size(11))
+                .padding([5, 12])
+                .on_press(pane(ProfilesMsg::ResetCancelled))
+                .style(secondary_button_style),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center)
+        .into();
+    }
+    button(text("Reset to Signex Default").size(11))
+        .padding([5, 12])
+        .on_press_maybe((!manager.busy).then(|| pane(ProfilesMsg::ResetRequested)))
+        .style(secondary_button_style)
+        .into()
 }

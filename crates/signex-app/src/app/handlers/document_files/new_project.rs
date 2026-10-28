@@ -209,6 +209,10 @@ pub(crate) struct RuleSeed {
     pub dir: Option<PathBuf>,
     /// The profile the user chose as the default, if any.
     pub selected: Option<String>,
+    /// Profile writes still queued when New Project was chosen. The worker runs
+    /// them before it reads the library, so an edit made a moment ago is in
+    /// the profile the new project copies.
+    pub pending: Vec<crate::app::rule_profile_ui::Dispatch>,
 }
 
 /// Store a copy of the default rule profile in the new `.snxprj`, with its
@@ -216,6 +220,13 @@ pub(crate) struct RuleSeed {
 /// the project is left as created: it then uses the machine's rules until
 /// the user stores some.
 fn seed_project_rules(project_path: &Path, seed: &RuleSeed) {
+    if let Some(dir) = seed.dir.as_deref()
+        && let Err(why) = crate::app::rule_profile_ui::run_all(dir, &seed.pending)
+    {
+        crate::diagnostics::log_warning(format!(
+            "[new project] a queued profile change was not saved first: {why}"
+        ));
+    }
     let (rules, notes) =
         crate::rule_profiles::rules_for_new_project(seed.dir.as_deref(), seed.selected.as_deref());
     for note in notes {
@@ -326,6 +337,7 @@ mod tests {
         let seed = RuleSeed {
             dir: Some(lib.path().to_path_buf()),
             selected: Some("Company".into()),
+            pending: Vec::new(),
         };
 
         let written = write_new_project_files(&tmp.path().join("Seeded.snxprj"), &seed).unwrap();
@@ -362,6 +374,7 @@ mod tests {
         let seed = RuleSeed {
             dir: Some(tmp.path().join("no-library-yet")),
             selected: None,
+            pending: Vec::new(),
         };
         let written = write_new_project_files(&tmp.path().join("Plain.snxprj"), &seed).unwrap();
         let rules = signex_types::project::parse_project(&written)
@@ -387,6 +400,7 @@ mod tests {
         let seed = RuleSeed {
             dir: Some(lib.path().to_path_buf()),
             selected: Some("Missing".into()),
+            pending: Vec::new(),
         };
         let written = write_new_project_files(&tmp.path().join("Fallback.snxprj"), &seed).unwrap();
         let rules = signex_types::project::parse_project(&written)
@@ -400,6 +414,44 @@ mod tests {
             ),
             "the fallback must reach the Messages panel"
         );
+    }
+
+    #[test]
+    fn a_new_project_copies_the_machine_rules_including_an_edit_still_queued() {
+        use crate::app::rule_profile_ui::{ProfileWriteQueue, QueuedWrite};
+        let tmp = tempfile::tempdir().unwrap();
+        let lib = tempfile::tempdir().unwrap();
+        // The machine's rules on disk, then an edit that has not been written.
+        crate::rule_profiles::write_user_default(lib.path(), {
+            let mut erc = signex_types::project::ErcRules::default();
+            erc.severity.insert("unused_pin".into(), "error".into());
+            erc
+        })
+        .unwrap();
+        let mut queue = ProfileWriteQueue::default();
+        let mut edited = signex_types::project::ErcRules::default();
+        edited.severity.insert("unused_pin".into(), "off".into());
+        let dispatch = queue
+            .submit("User Default", QueuedWrite::UserDefault(edited))
+            .unwrap();
+        let seed = RuleSeed {
+            dir: Some(lib.path().to_path_buf()),
+            selected: None,
+            pending: queue.pending(),
+        };
+
+        let written = write_new_project_files(&tmp.path().join("Queued.snxprj"), &seed).unwrap();
+        let rules = signex_types::project::parse_project(&written)
+            .unwrap()
+            .rules
+            .expect("rules stored");
+        assert_eq!(
+            rules.erc.severity["unused_pin"], "off",
+            "the queued edit is in the copy"
+        );
+
+        // The queue's own worker then finds its write already done.
+        assert!(dispatch.run(lib.path()).unwrap().is_none());
     }
 
     #[test]

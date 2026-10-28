@@ -110,6 +110,29 @@ pub fn write_default_rule_profile_pref_at(path: &Path, name: Option<&str>) {
     })
 }
 
+/// Whether the old `erc_severity` / `pin_matrix` keys were already folded into
+/// the `User Default` profile (#1608).
+pub fn read_erc_rules_in_profile_from(json: Option<&serde_json::Value>) -> bool {
+    json.and_then(|json| json.get("erc_rules_in_profile")?.as_bool())
+        .unwrap_or(false)
+}
+
+/// Set or clear the fold marker. Returns the refusal when `prefs.json` cannot
+/// be updated (an unreadable file is never overwritten).
+pub fn write_erc_rules_in_profile_marker(folded: bool) -> Result<(), String> {
+    write_erc_rules_in_profile_marker_at(&prefs_path(), folded)
+}
+
+pub fn write_erc_rules_in_profile_marker_at(path: &Path, folded: bool) -> Result<(), String> {
+    try_update_prefs_json(path, "erc_rules_in_profile", |prefs| {
+        if folded {
+            prefs.insert("erc_rules_in_profile".into(), serde_json::Value::Bool(true));
+        } else {
+            prefs.remove("erc_rules_in_profile");
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

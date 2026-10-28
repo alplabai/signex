@@ -464,6 +464,7 @@ impl Signex {
             ErcMsg::ProfileSaveCancelled => self.handle_profile_save_cancelled(),
             ErcMsg::UserDefaultLoaded(result) => self.handle_user_default_loaded(&result),
             ErcMsg::ProfileWriteFinished(result) => self.handle_profile_write_finished(&result),
+            ErcMsg::ProfileWritesFlushed(result) => Self::handle_profile_writes_flushed(&result),
             ErcMsg::ProfileSaved { project, result } => self.handle_profile_saved(project, &result),
             ErcMsg::ProfileUpdateRequested => self.handle_profile_update_requested(),
             ErcMsg::ProfileLoadedForUpdate { project, result } => {

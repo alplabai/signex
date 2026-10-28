@@ -296,19 +296,58 @@ fn delete_removes_only_that_profile_and_protects_the_machine_set() {
 }
 
 #[test]
-fn an_in_place_edit_rewrites_its_file_and_never_recreates_a_deleted_one() {
+fn an_edit_is_applied_to_the_file_as_it_is_and_never_recreates_a_deleted_one() {
+    use signex_erc::{RuleKind, Severity};
     let tmp = dir();
     save_named_profile(tmp.path(), "Acme", "1.0", rules("a", "error"), false).unwrap();
-    let mut edited = read(&tmp.path().join("acme.snxrules"));
-    edited.erc.severity.insert("b".into(), "info".into());
-    write_profile_in_place(tmp.path(), &edited).unwrap();
-    assert_eq!(read(&tmp.path().join("acme.snxrules")), edited);
+
+    // The file changed behind the screen's back (another window's Save as, a
+    // hand edit): the edit lands on that, not on an older copy.
+    let mut elsewhere = read(&tmp.path().join("acme.snxrules"));
+    elsewhere.erc.severity.insert("b".into(), "info".into());
+    std::fs::write(tmp.path().join("acme.snxrules"), elsewhere.to_json_bytes()).unwrap();
+    let done = edit_profile_in_place(
+        tmp.path(),
+        "Acme",
+        RuleEdit::Severity(RuleKind::UnusedPin, Severity::Off),
+    )
+    .unwrap();
+    assert_eq!(done.erc.severity["b"], "info", "the other change is kept");
+    assert_eq!(done.erc.severity["unused_pin"], "off");
+    assert_eq!(read(&tmp.path().join("acme.snxrules")), done);
 
     delete_profile(tmp.path(), "Acme").unwrap();
-    let err = write_profile_in_place(tmp.path(), &edited).unwrap_err();
+    let edit = RuleEdit::PinCell(1, 1);
+    let err = edit_profile_in_place(tmp.path(), "Acme", edit).unwrap_err();
     assert!(err.contains("no longer in the library"), "{err}");
     assert!(!tmp.path().join("acme.snxrules").exists());
-    assert!(write_profile_in_place(tmp.path(), &builtin_profile()).is_err());
+    assert!(edit_profile_in_place(tmp.path(), BUILTIN_PROFILE_NAME, edit).is_err());
+}
+
+#[test]
+fn an_edit_never_replaces_a_file_it_cannot_read() {
+    let tmp = dir();
+    let path = tmp.path().join("acme.snxrules");
+    std::fs::write(&path, b"{not json").unwrap();
+    let err = edit_profile_in_place(tmp.path(), "Acme", RuleEdit::PinCell(1, 1)).unwrap_err();
+    assert!(!err.is_empty());
+    assert_eq!(std::fs::read(&path).unwrap(), b"{not json");
+}
+
+#[test]
+fn reset_to_shipped_restores_every_known_rule_and_keeps_unknown_ones() {
+    let tmp = dir();
+    let mut erc = rules("unused_pin", "off");
+    erc.severity.insert("future_rule".into(), "error".into());
+    erc.pin_matrix.insert("output/output".into(), "off".into());
+    save_named_profile(tmp.path(), "Acme", "1.0", erc, false).unwrap();
+    let done = edit_profile_in_place(tmp.path(), "Acme", RuleEdit::ResetToShipped).unwrap();
+    assert_eq!(
+        done.erc.severity["unused_pin"],
+        builtin_profile().erc.severity["unused_pin"]
+    );
+    assert!(done.erc.pin_matrix.is_empty());
+    assert_eq!(done.erc.severity["future_rule"], "error");
 }
 
 #[test]

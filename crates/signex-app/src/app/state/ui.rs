@@ -44,6 +44,10 @@ pub struct UiState {
     /// rules wait for it: writing the maps back before they hold the file's
     /// rules would replace them with defaults.
     pub machine_rules_loading: bool,
+    /// Why the machine's rules are not being saved (the `User Default` file
+    /// could not be read or written), shown in the ERC dialog. `None` when
+    /// they are.
+    pub machine_rules_problem: Option<String>,
     /// The profile new projects start from; `None` means "User Default if
     /// the machine has one, else Signex Default" (#1608). Persisted in
     /// `prefs.json`.

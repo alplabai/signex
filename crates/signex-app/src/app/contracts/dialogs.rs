@@ -132,8 +132,13 @@ pub enum ErcMsg {
     /// The `User Default` profile (the machine's rules) was read at launch.
     /// `Ok(None)`: the machine has none yet.
     UserDefaultLoaded(std::sync::Arc<Result<Option<signex_types::project::RuleProfile>, String>>),
-    /// A queued profile file write finished; the next one may start.
-    ProfileWriteFinished(std::sync::Arc<Result<(), String>>),
+    /// A queued profile file write finished; the next one may start. Carries
+    /// the profile the file now holds, for an edit of a library profile.
+    ProfileWriteFinished(
+        std::sync::Arc<Result<Option<signex_types::project::RuleProfile>, String>>,
+    ),
+    /// The quit path ran the writes still queued.
+    ProfileWritesFlushed(std::sync::Arc<Result<(), String>>),
     /// "Update from profile": look up the profile the project was seeded
     /// from and show what applying it would change.
     ProfileUpdateRequested,

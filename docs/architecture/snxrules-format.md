@@ -85,9 +85,15 @@ reported (both paths named) rather than one being picked.
 none runs with, and what the ERC dialog edits when no project is open. It is an
 ordinary profile file, edited from the ERC dialog and from Preferences ▸ Rule
 Profiles alike; nothing writes the old `erc_severity` / `pin_matrix` keys of
-`prefs.json` any more. The first run after upgrading moves those keys into
-`User Default` once (the keys stay in `prefs.json`, unread afterwards). Keys of
-the file this build does not know are kept when it is edited.
+`prefs.json` any more. The first run after upgrading folds the old
+`erc_severity` / `pin_matrix` keys into `User Default` once: for every rule this
+build knows the preferences' value wins (a v0.15 build kept writing them after
+it first made the profile, so they are the newer state), and keys of the
+profile this build does not know are kept. The marker `erc_rules_in_profile` in
+`prefs.json` records the fold and is written first, so a preferences file that
+cannot be updated never causes a second fold over later edits. The old keys
+stay in `prefs.json`, unread; a build from before this change reads them and
+does not see edits made after the upgrade.
 
 Which profile a new project starts from is the `default_rule_profile` key of
 `prefs.json` (a profile name). With none chosen a new project copies `User

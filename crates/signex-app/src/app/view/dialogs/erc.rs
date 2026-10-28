@@ -111,9 +111,20 @@ impl Signex {
                 "Editing the \"User Default\" rule profile (this machine's rules)."
             }
         };
-        let mut footer = row![text(scope_note).size(10).color(text_muted)]
-            .spacing(8)
-            .align_y(iced::Alignment::Center);
+        // Editing the machine's rules while they are loading, or while the
+        // User Default file cannot be read or written: say so here, not only
+        // in the log.
+        let mut scope = column![text(scope_note).size(10).color(text_muted)].spacing(2);
+        if stored.is_none()
+            && let Some(notice) = self.machine_rules_notice()
+        {
+            scope = scope.push(
+                text(notice)
+                    .size(10)
+                    .color(Color::from_rgb(0.9, 0.35, 0.35)),
+            );
+        }
+        let mut footer = row![scope].spacing(8).align_y(iced::Alignment::Center);
         // A rule set from a newer Signex sits unread in the file; storing
         // would replace it on save, so the action is not offered.
         if has_project && stored.is_none() && !unreadable {

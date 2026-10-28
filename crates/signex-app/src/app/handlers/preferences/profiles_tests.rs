@@ -6,7 +6,6 @@ use std::sync::Arc;
 use signex_erc::{RuleKind, Severity};
 use signex_types::project::ErcRules;
 
-use super::super::erc::execute_profile_write;
 use crate::app::state::rule_profile_ui::QueuedWrite;
 use crate::preferences::{ProfileAction, ProfilesMsg};
 use crate::rule_profiles::{self, ProfileKind};
@@ -97,11 +96,11 @@ fn editing_a_profile_writes_its_own_file_and_round_trips() {
 
     // The first snapshot, then the waiting one, as the queue would run them.
     let first = app.ui_state.profile_writes.running().cloned().unwrap();
-    execute_profile_write(lib.path(), first).unwrap();
-    assert_eq!(app.handle_profile_write_finished(&Ok(())).units(), 1);
+    first.run(lib.path()).unwrap();
+    assert_eq!(app.handle_profile_write_finished(&Ok(None)).units(), 1);
     let second = app.ui_state.profile_writes.running().cloned().unwrap();
-    execute_profile_write(lib.path(), second).unwrap();
-    let _ = app.handle_profile_write_finished(&Ok(()));
+    second.run(lib.path()).unwrap();
+    let _ = app.handle_profile_write_finished(&Ok(None));
 
     let reread = rule_profiles::list_library(Some(lib.path()));
     let company = reread
@@ -144,11 +143,16 @@ fn editing_the_machine_profile_uses_the_same_store_as_the_erc_dialog() {
         Severity::Off
     );
     assert!(matches!(
-        app.ui_state.profile_writes.running(),
+        app.ui_state.profile_writes.running().map(|d| &d.write),
         Some(QueuedWrite::UserDefault(_))
     ));
     // The open editor shows it at once.
-    let shown = &manager(&app).selected_profile().unwrap().profile.erc;
+    let shown = manager(&app)
+        .selected_profile()
+        .unwrap()
+        .profile
+        .erc
+        .clone();
     assert_eq!(shown.severity["unused_pin"], "off");
 }
 
@@ -278,21 +282,19 @@ fn new_duplicate_and_rename_start_one_write_when_the_library_is_idle() {
     let mut app = listed_app(lib.path());
     select(&mut app, "Company");
     let _ = app.handle_profiles_message(ProfilesMsg::NameInputChanged("Copy".into()));
-    assert_eq!(
-        app.handle_profiles_message(ProfilesMsg::CreateRequested)
-            .units(),
-        1
-    );
-    assert_eq!(
-        app.handle_profiles_message(ProfilesMsg::DuplicateRequested)
-            .units(),
-        1
-    );
-    assert_eq!(
-        app.handle_profiles_message(ProfilesMsg::RenameRequested)
-            .units(),
-        1
-    );
+    for request in [
+        ProfilesMsg::CreateRequested,
+        ProfilesMsg::DuplicateRequested,
+        ProfilesMsg::RenameRequested,
+    ] {
+        let name = format!("{request:?}");
+        assert_eq!(app.handle_profiles_message(request).units(), 1, "{name}");
+        assert!(manager(&app).busy);
+        // The worker reports (here: a failure, which leaves the selection).
+        let _ = app
+            .handle_profiles_message(ProfilesMsg::ActionFinished(Arc::new(Err("stopped".into()))));
+        assert!(!manager(&app).busy);
+    }
 
     // The shipped profile and the machine's rules cannot be renamed.
     select(&mut app, "User Default");
@@ -301,4 +303,232 @@ fn new_duplicate_and_rename_start_one_write_when_the_library_is_idle() {
             .units(),
         0
     );
+}
+
+// ---- review round: stale listings, busy actions, reset, notices ----
+
+fn queued_edit(app: &crate::app::Signex) -> (String, crate::rule_profiles::RuleEdit) {
+    match app.ui_state.profile_writes.running().map(|d| &d.write) {
+        Some(QueuedWrite::ProfileEdit { name, edit }) => (name.clone(), *edit),
+        other => panic!("expected a queued profile edit, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_pane_edit_queues_the_one_change_not_the_whole_profile() {
+    let lib = tempfile::tempdir().unwrap();
+    let mut app = listed_app(lib.path());
+    select(&mut app, "Company");
+    let _ = app.handle_profiles_message(ProfilesMsg::SeverityChanged(
+        RuleKind::DanglingWire,
+        Severity::Info,
+    ));
+    let (name, edit) = queued_edit(&app);
+    assert_eq!(name, "Company");
+    assert_eq!(
+        edit,
+        crate::rule_profiles::RuleEdit::Severity(RuleKind::DanglingWire, Severity::Info)
+    );
+}
+
+#[test]
+fn a_stale_listing_does_not_hide_a_pending_edit_and_is_read_again_afterwards() {
+    let lib = tempfile::tempdir().unwrap();
+    let mut app = listed_app(lib.path());
+    select(&mut app, "Company");
+    let _ = app.handle_profiles_message(ProfilesMsg::SeverityChanged(
+        RuleKind::DanglingWire,
+        Severity::Info,
+    ));
+    let shown = manager(&app).listing.clone();
+
+    // A listing that was read before the write landed.
+    let stale = rule_profiles::list_library(Some(lib.path()));
+    let _ = app.handle_profiles_message(ProfilesMsg::Listed(Arc::new(stale)));
+    assert_eq!(
+        manager(&app).listing,
+        shown,
+        "the older listing is not applied"
+    );
+    assert!(manager(&app).relist_pending);
+
+    // The write ends: the pane shows the file's truth and reads the library.
+    let running = app.ui_state.profile_writes.running().cloned().unwrap();
+    let done = running.run(lib.path());
+    let next = app.handle_profile_write_finished(&done);
+    assert_eq!(next.units(), 1, "the library is read again");
+    assert!(!manager(&app).relist_pending);
+    let on_disk = rule_profiles::list_library(Some(lib.path()));
+    let company = |l: &rule_profiles::ProfileListing| {
+        l.profiles
+            .iter()
+            .find(|p| p.profile.name == "Company")
+            .unwrap()
+            .profile
+            .clone()
+    };
+    assert_eq!(company(&manager(&app).listing), company(&on_disk));
+}
+
+#[test]
+fn a_failed_pane_write_is_shown_in_the_pane_and_the_library_is_read_again() {
+    let lib = tempfile::tempdir().unwrap();
+    let mut app = listed_app(lib.path());
+    select(&mut app, "Company");
+    let _ = app.handle_profiles_message(ProfilesMsg::PinCellCycled { row: 1, col: 1 });
+    let next = app.handle_profile_write_finished(&Err("disk full".into()));
+    let (is_error, text) = manager(&app).status.clone().unwrap();
+    assert!(is_error && text.contains("disk full"), "{text}");
+    assert_eq!(next.units(), 1, "the screen is rebuilt from the files");
+}
+
+#[test]
+fn edits_wait_while_a_create_rename_or_delete_runs() {
+    let lib = tempfile::tempdir().unwrap();
+    let mut app = listed_app(lib.path());
+    select(&mut app, "Company");
+    let _ = app.handle_profiles_message(ProfilesMsg::NameInputChanged("Copy".into()));
+    assert_eq!(
+        app.handle_profiles_message(ProfilesMsg::DuplicateRequested)
+            .units(),
+        1
+    );
+    assert!(manager(&app).busy);
+
+    let before = manager(&app).listing.clone();
+    let task = app.handle_profiles_message(ProfilesMsg::SeverityChanged(
+        RuleKind::DanglingWire,
+        Severity::Info,
+    ));
+    assert_eq!(task.units(), 0);
+    assert_eq!(
+        manager(&app).listing,
+        before,
+        "the edit was refused, not half applied"
+    );
+    assert!(app.ui_state.profile_writes.is_idle());
+    assert!(manager(&app).status.clone().unwrap().0);
+    // A second library action is refused too.
+    assert_eq!(
+        app.handle_profiles_message(ProfilesMsg::CreateRequested)
+            .units(),
+        0
+    );
+
+    let _ = app.handle_profiles_message(ProfilesMsg::ActionFinished(Arc::new(Ok(
+        ProfileAction::Created("Copy".into()),
+    ))));
+    assert!(!manager(&app).busy);
+    select(&mut app, "Company");
+    let task = app.handle_profiles_message(ProfilesMsg::SeverityChanged(
+        RuleKind::DanglingWire,
+        Severity::Info,
+    ));
+    assert_eq!(task.units(), 1, "edits work again");
+}
+
+#[test]
+fn reset_to_shipped_asks_first_and_covers_library_machine_and_shipped_profiles() {
+    let lib = tempfile::tempdir().unwrap();
+    let mut app = listed_app(lib.path());
+
+    select(&mut app, "Signex Default");
+    let _ = app.handle_profiles_message(ProfilesMsg::ResetRequested);
+    assert_eq!(
+        manager(&app).confirm_reset,
+        None,
+        "nothing to reset on the shipped profile"
+    );
+
+    select(&mut app, "Company");
+    let _ = app.handle_profiles_message(ProfilesMsg::ResetRequested);
+    assert_eq!(manager(&app).confirm_reset.as_deref(), Some("Company"));
+    assert!(
+        app.ui_state.profile_writes.is_idle(),
+        "asking changes nothing"
+    );
+    let _ = app.handle_profiles_message(ProfilesMsg::ResetCancelled);
+    assert_eq!(manager(&app).confirm_reset, None);
+    assert_eq!(
+        app.handle_profiles_message(ProfilesMsg::ResetConfirmed)
+            .units(),
+        0,
+        "a confirm without the question does nothing"
+    );
+
+    let _ = app.handle_profiles_message(ProfilesMsg::ResetRequested);
+    assert_eq!(
+        app.handle_profiles_message(ProfilesMsg::ResetConfirmed)
+            .units(),
+        1
+    );
+    assert_eq!(
+        queued_edit(&app).1,
+        crate::rule_profiles::RuleEdit::ResetToShipped
+    );
+    let shown = manager(&app)
+        .selected_profile()
+        .unwrap()
+        .profile
+        .erc
+        .clone();
+    assert_eq!(
+        shown.severity["unused_pin"],
+        signex_erc::project_rules::profile::builtin_profile()
+            .erc
+            .severity["unused_pin"]
+    );
+    let running = app.ui_state.profile_writes.running().cloned().unwrap();
+    let _ = app.handle_profile_write_finished(&running.run(lib.path()));
+    let stored = rule_profiles::list_library(Some(lib.path()));
+    let company = stored
+        .profiles
+        .iter()
+        .find(|p| p.profile.name == "Company")
+        .unwrap();
+    assert_eq!(
+        company.profile.erc.severity["unused_pin"],
+        shown.severity["unused_pin"]
+    );
+
+    // The machine's rules go back to the shipped ones through the dialog's store.
+    app.ui_state
+        .erc_severity_override
+        .insert(RuleKind::UnusedPin, Severity::Off);
+    select(&mut app, "User Default");
+    let _ = app.handle_profiles_message(ProfilesMsg::ResetRequested);
+    let _ = app.handle_profiles_message(ProfilesMsg::ResetConfirmed);
+    assert!(app.ui_state.erc_severity_override.is_empty());
+    assert!(matches!(
+        app.ui_state.profile_writes.running().map(|d| &d.write),
+        Some(QueuedWrite::UserDefault(_))
+    ));
+}
+
+#[test]
+fn rename_and_delete_say_what_happens_to_projects_that_recorded_the_profile() {
+    let mut app = app();
+    for action in [
+        ProfileAction::Renamed {
+            old: "A".into(),
+            new: "B".into(),
+        },
+        ProfileAction::Deleted("A".into()),
+    ] {
+        let _ = app.handle_profiles_message(ProfilesMsg::ActionFinished(Arc::new(Ok(action))));
+        let (_, text) = manager(&app).status.clone().unwrap();
+        assert!(text.contains("keep their rules"), "{text}");
+    }
+}
+
+#[test]
+fn opening_preferences_forgets_the_last_sessions_questions_and_result() {
+    let lib = tempfile::tempdir().unwrap();
+    let mut app = listed_app(lib.path());
+    app.ui_state.profile_manager.status = Some((true, "old result".into()));
+    app.ui_state.profile_manager.confirm_delete = Some("Company".into());
+    app.ui_state.profile_manager.confirm_reset = Some("Company".into());
+    let _ = app.handle_preferences_open_requested();
+    let m = manager(&app);
+    assert!(m.status.is_none() && m.confirm_delete.is_none() && m.confirm_reset.is_none());
 }

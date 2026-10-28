@@ -19,7 +19,7 @@ mod manage;
 mod migrate;
 mod seed;
 pub use manage::*;
-pub use migrate::{ProfileMigration, migrate_prefs_to_default_profile};
+pub use migrate::{PrefsRules, ProfileMigration, migrate_prefs_to_default_profile};
 pub use seed::rules_for_new_project;
 
 #[cfg(test)]

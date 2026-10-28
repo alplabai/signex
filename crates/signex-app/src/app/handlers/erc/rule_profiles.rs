@@ -245,6 +245,13 @@ impl Signex {
         };
         self.ui_state.save_profile_dialog = None;
         crate::diagnostics::log_info(format!("Saved ERC rules as profile {}.", saved.summary));
+        // An open Rule Profiles pane holds a listing from before this write
+        // (an overwrite changed a profile it shows); read it again.
+        let relist = if self.ui_state.profile_manager.loaded {
+            Self::list_profiles_task()
+        } else {
+            Task::none()
+        };
         let Some(mut rules) = self
             .document_state
             .active_document_project()
@@ -255,13 +262,13 @@ impl Signex {
                 "The profile was saved, but the project it came from is no longer the active \
                  one, so the project does not record it.",
             );
-            return Task::none();
+            return relist;
         };
         if rules.profile.as_ref() != Some(&saved.reference) {
             rules.profile = Some(saved.reference.clone());
             self.replace_project_rules(Some(rules), true);
         }
-        Task::none()
+        relist
     }
 
     // ---- Update from profile ----------------------------------------------
@@ -441,7 +448,21 @@ impl Signex {
     /// was seeded from has changed locally. Cheap no-op for a project that
     /// records no profile or was already told.
     pub(crate) fn check_profile_drift_task(&self) -> Task<Message> {
-        let Some((project, reference)) = self.active_profile_ref() else {
+        match self.document_state.active_document_project() {
+            Some(project) => self.check_profile_drift_task_for(project.id),
+            None => Task::none(),
+        }
+    }
+
+    /// [`Self::check_profile_drift_task`] for a named project, not the one the
+    /// active tab happens to belong to (a project opened from another's tab).
+    pub(crate) fn check_profile_drift_task_for(&self, project: ProjectId) -> Task<Message> {
+        let Some(reference) = self
+            .document_state
+            .project_by_id(project)
+            .and_then(|p| p.data.rules.as_ref())
+            .and_then(|r| r.profile.clone())
+        else {
             return Task::none();
         };
         if self.document_state.profile_drift_noted.contains(&project) {
@@ -501,12 +522,25 @@ impl Signex {
         };
         blocking(
             move || {
+                let severity = crate::fonts::read_erc_severity_overrides();
+                let pin_matrix = crate::fonts::read_pin_matrix_overrides();
+                let folded = crate::fonts::read_erc_rules_in_profile_from(
+                    crate::fonts::load_prefs_json().as_ref(),
+                );
                 rule_profiles::migrate_prefs_to_default_profile(
                     &dir,
-                    &crate::fonts::read_erc_severity_overrides(),
-                    &crate::fonts::read_pin_matrix_overrides(),
+                    &rule_profiles::PrefsRules {
+                        severity: &severity,
+                        pin_matrix: &pin_matrix,
+                        folded,
+                    },
+                    &crate::fonts::write_erc_rules_in_profile_marker,
                 )
-                .map_err(|e| format!("Could not create the default rule profile: {e}"))
+                .map_err(|e| {
+                    format!(
+                        "Could not merge the ERC preferences into the default rule profile: {e}"
+                    )
+                })
             },
             |joined| {
                 Message::Erc(ErcMsg::DefaultProfileMigrated(Arc::new(
@@ -524,6 +558,10 @@ impl Signex {
         match result {
             Ok(ProfileMigration::Migrated) => crate::diagnostics::log_info(format!(
                 "Your ERC preferences were saved as the rule profile \"{}\".",
+                rule_profiles::USER_DEFAULT_PROFILE_NAME
+            )),
+            Ok(ProfileMigration::Folded) => crate::diagnostics::log_info(format!(
+                "Your newer ERC preferences were merged into the rule profile \"{}\", which is                  now where this machine's ERC rules are kept.",
                 rule_profiles::USER_DEFAULT_PROFILE_NAME
             )),
             Ok(_) => {}

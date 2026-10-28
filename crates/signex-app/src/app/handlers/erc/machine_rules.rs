@@ -5,33 +5,24 @@
 //! profile, not in `prefs.json`. `UiState::erc_severity_override` and
 //! `pin_matrix_overrides` are the in-memory copy the ERC run and the dialog
 //! read; every edit updates them and queues a write of the profile. File IO
-//! runs in a `Task`, one write at a time (see `ProfileWriteQueue`).
+//! runs in a `Task`, one write at a time (see `ProfileWriteQueue`), and the
+//! quit path waits for the queue (`wait_for_profile_writes_then`).
 
-use std::path::Path;
 use std::sync::Arc;
 
 use iced::Task;
 use signex_erc::project_rules::profile::adopt_profile;
 use signex_types::project::RuleProfile;
 
-use super::super::super::state::rule_profile_ui::QueuedWrite;
+use super::super::super::state::rule_profile_ui::{Dispatch, QueuedWrite, run_all};
 use super::super::super::*;
 use super::rule_profiles::blocking;
 use crate::rule_profiles::{self, ProfileKind, USER_DEFAULT_PROFILE_NAME};
 
-/// Run one queued write against `dir`. The body of the worker task, apart
-/// from the Task plumbing so tests can run it on a temp folder.
-pub(crate) fn execute_profile_write(dir: &Path, write: QueuedWrite) -> Result<(), String> {
-    match write {
-        QueuedWrite::UserDefault(erc) => rule_profiles::write_user_default(dir, erc),
-        QueuedWrite::Profile(profile) => rule_profiles::write_profile_in_place(dir, &profile),
-    }
-}
-
 impl Signex {
     /// Whether the machine's rules may be edited now. They may not while the
     /// boot task is still reading them: a write would store defaults over the
-    /// user's file.
+    /// user's file. The ERC dialog says so (`machine_rules_notice`).
     fn machine_rules_editable(&self) -> bool {
         if self.ui_state.machine_rules_loading {
             crate::diagnostics::log_warning(
@@ -41,6 +32,19 @@ impl Signex {
             return false;
         }
         true
+    }
+
+    /// A line for the ERC dialog when it edits the machine's rules and they
+    /// are not in a state where edits are saved.
+    pub(crate) fn machine_rules_notice(&self) -> Option<String> {
+        if self.ui_state.machine_rules_loading {
+            return Some(
+                "Loading the User Default profile; changes wait until it has loaded.".into(),
+            );
+        }
+        self.ui_state.machine_rules_problem.as_ref().map(|why| {
+            format!("User Default is not saving: {why} Your changes last until you quit.")
+        })
     }
 
     /// Set one rule's severity in the machine's rules and queue the write.
@@ -89,6 +93,16 @@ impl Signex {
         self.persist_machine_rules()
     }
 
+    /// Put the machine's rules back to the shipped ones.
+    pub(crate) fn reset_machine_rules(&mut self) -> Task<Message> {
+        if !self.machine_rules_editable() {
+            return Task::none();
+        }
+        self.ui_state.erc_severity_override.clear();
+        self.ui_state.pin_matrix_overrides.clear();
+        self.persist_machine_rules()
+    }
+
     /// Queue a write of the in-memory machine rules to the `User Default`
     /// profile, and show them in an open Preferences profile list.
     fn persist_machine_rules(&mut self) -> Task<Message> {
@@ -120,22 +134,88 @@ impl Signex {
             return Task::none();
         }
         match self.ui_state.profile_writes.submit(key, write) {
-            Some(write) => run_profile_write(write),
+            Some(dispatch) => run_profile_write(dispatch),
             None => Task::none(),
         }
     }
 
+    /// A queued write ended. A failure is shown where the user is looking (the
+    /// Rule Profiles pane, or the ERC dialog for the machine's rules) as well
+    /// as logged; the pane reads the files again so it never keeps showing an
+    /// edit that did not reach the disk.
     pub(crate) fn handle_profile_write_finished(
         &mut self,
-        result: &Result<(), String>,
+        result: &Result<Option<RuleProfile>, String>,
     ) -> Task<Message> {
-        if let Err(why) = result {
-            crate::diagnostics::log_warning(why);
+        let machine = matches!(
+            self.ui_state.profile_writes.running().map(|d| &d.write),
+            Some(QueuedWrite::UserDefault(_))
+        );
+        let mut relist = false;
+        match result {
+            Err(why) => {
+                crate::diagnostics::log_warning(why);
+                if machine {
+                    self.ui_state.machine_rules_problem = Some(why.clone());
+                } else {
+                    self.ui_state.profile_manager.status = Some((true, why.clone()));
+                }
+                relist = true;
+            }
+            Ok(done) => {
+                if machine {
+                    self.ui_state.machine_rules_problem = None;
+                }
+                if let Some(profile) = done {
+                    self.ui_state
+                        .profile_manager
+                        .replace_profile(profile.clone());
+                }
+            }
         }
         match self.ui_state.profile_writes.finished() {
             Some(next) => run_profile_write(next),
-            None => Task::none(),
+            None => {
+                let manager = &mut self.ui_state.profile_manager;
+                let again = std::mem::take(&mut manager.relist_pending) || relist;
+                if again && manager.loaded {
+                    return Self::list_profiles_task();
+                }
+                Task::none()
+            }
         }
+    }
+
+    /// Run every queued profile write, in order, before `next`. The quit path
+    /// calls this: a snapshot still waiting behind the running write must not
+    /// be lost when the process exits.
+    pub(crate) fn wait_for_profile_writes_then(&mut self, next: Task<Message>) -> Task<Message> {
+        let pending = self.ui_state.profile_writes.pending();
+        let Some(dir) = rule_profiles::profiles_dir().filter(|_| !pending.is_empty()) else {
+            return next;
+        };
+        blocking(
+            move || run_all(&dir, &pending),
+            |joined| {
+                Message::Erc(ErcMsg::ProfileWritesFlushed(Arc::new(
+                    joined.and_then(|r| r),
+                )))
+            },
+        )
+        .chain(next)
+    }
+
+    /// The writes still queued, for a worker that must read the profile
+    /// library after them (`run_all` first, then read).
+    pub(crate) fn pending_profile_writes(&self) -> Vec<Dispatch> {
+        self.ui_state.profile_writes.pending()
+    }
+
+    pub(crate) fn handle_profile_writes_flushed(result: &Result<(), String>) -> Task<Message> {
+        if let Err(why) = result {
+            crate::diagnostics::log_warning(why);
+        }
+        Task::none()
     }
 
     /// Boot task, after the migration: read the `User Default` profile into
@@ -157,6 +237,7 @@ impl Signex {
         self.ui_state.machine_rules_loading = false;
         match result {
             Ok(Some(profile)) => {
+                self.ui_state.machine_rules_problem = None;
                 let resolved = signex_erc::project_rules::resolve(&profile.erc);
                 self.ui_state.erc_severity_override = resolved.severity;
                 self.ui_state.pin_matrix_overrides = resolved.pin_matrix;
@@ -168,24 +249,29 @@ impl Signex {
                     ));
                 }
             }
-            Ok(None) => {}
+            Ok(None) => self.ui_state.machine_rules_problem = None,
             // The file stays as it is: a later edit refuses to replace an
             // unreadable profile, so the user's file is never overwritten.
-            Err(why) => crate::diagnostics::log_warning(format!(
-                "The machine's ERC rules could not be read, so this session uses the built-in \
-                 defaults and the file is left untouched: {why}"
-            )),
+            Err(why) => {
+                crate::diagnostics::log_warning(format!(
+                    "The machine's ERC rules could not be read, so this session uses the \
+                     built-in defaults and the file is left untouched: {why}"
+                ));
+                self.ui_state.machine_rules_problem = Some(why.clone());
+            }
         }
         Task::none()
     }
 }
 
-fn run_profile_write(write: QueuedWrite) -> Task<Message> {
+fn run_profile_write(dispatch: Dispatch) -> Task<Message> {
     let Some(dir) = rule_profiles::profiles_dir() else {
-        return Task::done(Message::Erc(ErcMsg::ProfileWriteFinished(Arc::new(Ok(())))));
+        return Task::done(Message::Erc(ErcMsg::ProfileWriteFinished(Arc::new(Ok(
+            None,
+        )))));
     };
     blocking(
-        move || execute_profile_write(&dir, write),
+        move || dispatch.run(&dir),
         |joined| {
             Message::Erc(ErcMsg::ProfileWriteFinished(Arc::new(
                 joined.and_then(|r| r),

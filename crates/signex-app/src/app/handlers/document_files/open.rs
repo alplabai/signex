@@ -62,6 +62,7 @@ impl Signex {
                 let seed = RuleSeed {
                     dir: crate::rule_profiles::profiles_dir(),
                     selected: self.ui_state.default_rule_profile.clone(),
+                    pending: self.pending_profile_writes(),
                 };
                 iced::Task::perform(
                     super::super::dock::project_navigation::add_io::on_blocking_pool({
@@ -356,7 +357,7 @@ impl Signex {
         self.document_state.active_project = Some(id);
         // A project that recorded a rule profile learns, off the update loop,
         // whether the local copy of that profile has changed since (#1608).
-        let drift = self.check_profile_drift_task();
+        let drift = self.check_profile_drift_task_for(id);
         Ok((id, iced::Task::batch([mount_task, drift])))
     }
 

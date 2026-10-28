@@ -317,21 +317,57 @@ pub fn delete_profile(dir: &Path, name: &str) -> Result<(), String> {
     std::fs::remove_file(&path).map_err(|e| io_error("delete", name, &e))
 }
 
-/// Write an edited library profile back to its own file. Fails if the file is
-/// gone (a deleted profile is not silently recreated) or the profile is the
-/// shipped one.
-pub fn write_profile_in_place(dir: &Path, profile: &RuleProfile) -> Result<(), String> {
-    if profile.name.eq_ignore_ascii_case(BUILTIN_PROFILE_NAME) {
+/// One change to a profile's rules, applied to the file as it is on disk
+/// when the write runs, not to a copy the screen held earlier, so an edit made
+/// elsewhere in between (another window's Save as, a hand edit) is kept.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuleEdit {
+    /// One rule's severity.
+    Severity(signex_erc::RuleKind, signex_erc::Severity),
+    /// Cycle one pin-matrix cell (and its mirror).
+    PinCell(u8, u8),
+    /// Every rule back to the shipped profile's. Rule ids and keys this build
+    /// does not know are kept.
+    ResetToShipped,
+}
+
+impl RuleEdit {
+    pub fn apply(self, erc: &mut ErcRules) {
+        use signex_erc::project_rules::{cycle_pin_cell, set_severity};
+        match self {
+            RuleEdit::Severity(rule, severity) => set_severity(erc, rule, severity),
+            RuleEdit::PinCell(row, col) => cycle_pin_cell(erc, row, col),
+            RuleEdit::ResetToShipped => {
+                *erc = adopt_profile(erc, &builtin_profile().erc);
+            }
+        }
+    }
+}
+
+/// Re-read the file of the library profile `name`, apply `edit`, write it back
+/// and return what the file now holds. Fails if the file is gone (a deleted
+/// profile is not silently recreated), cannot be read (it is left alone), or
+/// the profile is the shipped one.
+pub fn edit_profile_in_place(
+    dir: &Path,
+    name: &str,
+    edit: RuleEdit,
+) -> Result<RuleProfile, String> {
+    if name.eq_ignore_ascii_case(BUILTIN_PROFILE_NAME) {
         return Err("The shipped profile cannot be edited; duplicate it first.".into());
     }
-    let Slot::Holds(path) = locate(dir, &profile.name)? else {
+    let Slot::Holds(path) = locate(dir, name)? else {
         return Err(format!(
-            "Profile \"{}\" is no longer in the library, so the edit was not saved.",
-            profile.name
+            "Profile \"{name}\" is no longer in the library, so the edit was not saved."
         ));
     };
+    let bytes = std::fs::read(&path).map_err(|e| io_error("read", name, &e))?;
+    let mut profile = RuleProfile::from_json_bytes(&bytes)
+        .map_err(|e| format!("Could not read profile \"{name}\": {e}"))?;
+    edit.apply(&mut profile.erc);
     signex_types::atomic_io::atomic_write(&path, &profile.to_json_bytes())
-        .map_err(|e| io_error("save", &profile.name, &e))
+        .map_err(|e| io_error("save", name, &e))?;
+    Ok(profile)
 }
 
 /// The machine's rule set, if it has been created.

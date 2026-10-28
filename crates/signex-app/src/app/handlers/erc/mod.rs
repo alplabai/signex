@@ -17,8 +17,6 @@ pub(crate) use annotate_preview::{AnnotatePreviewCache, AnnotatePreviewLoad};
 pub(crate) use erc_job::ErcRunOutcome;
 pub(crate) use reprefix_confirm::ReprefixConfirm;
 mod machine_rules;
-#[cfg(test)]
-pub(crate) use machine_rules::execute_profile_write;
 mod modals;
 mod net_focus;
 mod net_waivers;

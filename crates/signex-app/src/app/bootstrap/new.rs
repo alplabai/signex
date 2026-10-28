@@ -344,6 +344,7 @@ impl Signex {
                 profile_manager: Default::default(),
                 default_rule_profile,
                 machine_rules_loading: false,
+                machine_rules_problem: None,
                 save_profile_dialog: None,
                 profile_writes: Default::default(),
                 net_colors: std::collections::HashMap::new(),

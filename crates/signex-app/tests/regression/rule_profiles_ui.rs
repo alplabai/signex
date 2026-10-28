@@ -9,7 +9,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use signex_app::app::{ErcMsg, FileMsg, Message, PreferencesMsg, Signex};
+use signex_app::app::{ErcMsg, FileMsg, Message, PreferencesMsg, Signex, WindowMsg};
 use signex_app::preferences::{PrefMsg, PrefNav, ProfilesMsg};
 use signex_app::rule_profiles::{self, SaveOutcome};
 use signex_erc::{RuleKind, Severity};
@@ -588,5 +588,192 @@ fn opening_a_project_whose_profile_is_unchanged_says_nothing() {
             .iter()
             .any(|e| e.message.contains(&name)),
         "no drift, no note"
+    );
+}
+
+// ---- review round ----
+
+#[test]
+fn quitting_writes_the_profile_edits_still_queued() {
+    let _serial = serial();
+    let _prefs = PrefsPathGuard::capture();
+    let _lib = ProfilesDirGuard::empty();
+    let (mut app, _t) = Signex::new();
+    app.ui_state.erc_severity_override.clear();
+    app.ui_state.pin_matrix_overrides.clear();
+
+    // The first write is handed to a worker that has not finished (its Task is
+    // never run here); the next two wait behind it.
+    let _running = app.update(erc(ErcMsg::SeverityChanged(
+        RuleKind::UnusedPin,
+        Severity::Off,
+    )));
+    let _waiting = app.update(erc(ErcMsg::SeverityChanged(
+        RuleKind::DanglingWire,
+        Severity::Info,
+    )));
+    let _more = app.update(erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 1 }));
+    assert!(!app.ui_state.profile_writes.is_idle());
+    assert!(
+        !library().join("user-default.snxrules").exists(),
+        "nothing written yet"
+    );
+
+    // Ctrl+Q: the main window closes.
+    let main = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(main);
+    let quit = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(main)));
+    finish(&mut app, quit);
+
+    let stored = read_profile("user-default.snxrules");
+    assert_eq!(stored.erc.severity["unused_pin"], "off");
+    assert_eq!(
+        stored.erc.severity["dangling_wire"], "info",
+        "the newest edits are not lost"
+    );
+    assert_eq!(stored.erc.pin_matrix.len(), 1);
+}
+
+#[test]
+fn a_pane_edit_after_a_save_as_overwrite_keeps_the_overwritten_rules() {
+    let _serial = serial();
+    let _prefs = PrefsPathGuard::capture();
+    let _lib = ProfilesDirGuard::empty();
+    let tmp = TempDir::new().unwrap();
+    let (mut app, _t) = Signex::new();
+    new_project(&mut app, &tmp, "Demo");
+    rule_profiles::save_named_profile(
+        &library(),
+        "Team",
+        "1.0",
+        rules("unused_pin", "error"),
+        false,
+    )
+    .unwrap();
+
+    // Preferences is open on the profile, which it listed with the old rules.
+    open_profiles_pane(&mut app);
+    drive(&mut app, pane(ProfilesMsg::Selected("Team".into())));
+    assert_eq!(
+        app.ui_state
+            .profile_manager
+            .selected_profile()
+            .unwrap()
+            .profile
+            .erc,
+        rules("unused_pin", "error")
+    );
+
+    // The ERC dialog overwrites that profile with the project's rules.
+    drive(&mut app, erc(ErcMsg::ProfileSaveDialogOpened));
+    drive(&mut app, erc(ErcMsg::ProfileSaveNameChanged("Team".into())));
+    drive(&mut app, erc(ErcMsg::ProfileSaveSubmitted));
+    drive(&mut app, erc(ErcMsg::ProfileSaveOverwriteConfirmed));
+    let overwritten = read_profile("team.snxrules").erc;
+    assert_ne!(overwritten, rules("unused_pin", "error"));
+    assert_eq!(
+        app.ui_state
+            .profile_manager
+            .selected_profile()
+            .unwrap()
+            .profile
+            .erc,
+        overwritten,
+        "the pane read the library again after the overwrite"
+    );
+
+    // An edit in the pane builds on the overwritten rules, not the old ones.
+    drive(
+        &mut app,
+        pane(ProfilesMsg::SeverityChanged(
+            RuleKind::DanglingWire,
+            Severity::Off,
+        )),
+    );
+    let after = read_profile("team.snxrules").erc;
+    assert_eq!(after.severity["dangling_wire"], "off");
+    let mut expected = overwritten.clone();
+    expected
+        .severity
+        .insert("dangling_wire".into(), "off".into());
+    assert_eq!(after, expected, "nothing the overwrite wrote was reverted");
+}
+
+#[test]
+fn a_pane_edit_keeps_a_change_made_to_the_file_behind_the_panes_back() {
+    let _serial = serial();
+    let _prefs = PrefsPathGuard::capture();
+    let _lib = ProfilesDirGuard::empty();
+    let (mut app, _t) = Signex::new();
+    rule_profiles::save_named_profile(
+        &library(),
+        "Team",
+        "1.0",
+        rules("unused_pin", "error"),
+        false,
+    )
+    .unwrap();
+    open_profiles_pane(&mut app);
+    drive(&mut app, pane(ProfilesMsg::Selected("Team".into())));
+
+    // A hand edit while the pane is open.
+    let mut hand = read_profile("team.snxrules");
+    hand.erc
+        .severity
+        .insert("bad_hier_sheet_pin".into(), "info".into());
+    std::fs::write(library().join("team.snxrules"), hand.to_json_bytes()).unwrap();
+
+    drive(
+        &mut app,
+        pane(ProfilesMsg::SeverityChanged(
+            RuleKind::DanglingWire,
+            Severity::Off,
+        )),
+    );
+    let after = read_profile("team.snxrules").erc;
+    assert_eq!(
+        after.severity["bad_hier_sheet_pin"], "info",
+        "the hand edit survives"
+    );
+    assert_eq!(after.severity["dangling_wire"], "off");
+}
+
+#[test]
+fn the_first_launch_after_upgrade_folds_newer_prefs_into_an_older_user_default() {
+    let _serial = serial();
+    let _prefs = PrefsPathGuard::capture();
+    let _lib = ProfilesDirGuard::empty();
+    // v0.15 state: a User Default made once, then prefs.json kept changing.
+    rule_profiles::write_user_default(&library(), rules("dangling_wire", "off")).unwrap();
+    let prefs = signex_app::fonts::prefs_file_path();
+    std::fs::create_dir_all(prefs.parent().unwrap()).unwrap();
+    std::fs::write(
+        &prefs,
+        br#"{"erc_severity": {"dangling_wire": "error", "unused_pin": "info"}}"#,
+    )
+    .unwrap();
+
+    let migrate = || {
+        let (mut app, task) = Signex::boot(Vec::new());
+        settle_task(&mut app, task);
+        app
+    };
+    let _ = migrate();
+    let folded = read_profile("user-default.snxrules");
+    assert_eq!(
+        folded.erc.severity["dangling_wire"], "error",
+        "the newer prefs value wins"
+    );
+    assert_eq!(folded.erc.severity["unused_pin"], "info");
+    let marker: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&prefs).unwrap()).unwrap();
+    assert_eq!(marker["erc_rules_in_profile"], true);
+
+    // Edit the profile, relaunch: the stale prefs keys do not win again.
+    rule_profiles::write_user_default(&library(), rules("dangling_wire", "warning")).unwrap();
+    let _ = migrate();
+    assert_eq!(
+        read_profile("user-default.snxrules").erc.severity["dangling_wire"],
+        "warning"
     );
 }

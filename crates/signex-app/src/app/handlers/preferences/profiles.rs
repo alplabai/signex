@@ -10,13 +10,12 @@
 use std::sync::Arc;
 
 use iced::Task;
-use signex_erc::project_rules::{cycle_pin_cell, set_severity};
 
 use super::super::super::state::rule_profile_ui::QueuedWrite;
 use super::super::super::*;
 use super::super::erc::blocking;
 use crate::preferences::{PrefMsg, PrefNav, ProfileAction, ProfilesMsg};
-use crate::rule_profiles::{self, ProfileKind};
+use crate::rule_profiles::{self, ProfileKind, RuleEdit};
 
 fn message(msg: ProfilesMsg) -> Message {
     Message::Preferences(PreferencesMsg::Inner(PrefMsg::Profiles(msg)))
@@ -28,12 +27,24 @@ impl Signex {
         if self.ui_state.preferences_nav != PrefNav::RuleProfiles {
             return Task::none();
         }
+        Self::list_profiles_task()
+    }
+
+    /// Read the profile library off the update loop.
+    pub(crate) fn list_profiles_task() -> Task<Message> {
         list_task()
     }
 
     pub(super) fn handle_profiles_message(&mut self, msg: ProfilesMsg) -> Task<Message> {
         match msg {
             ProfilesMsg::Listed(listing) => {
+                // A listing read before a pending write landed is older than
+                // the screen: applying it would show (and the next edit build
+                // on) a state the user already changed. Read again after.
+                if !self.ui_state.profile_writes.is_idle() {
+                    self.ui_state.profile_manager.relist_pending = true;
+                    return Task::none();
+                }
                 self.ui_state
                     .profile_manager
                     .apply_listing((*listing).clone());
@@ -44,16 +55,33 @@ impl Signex {
                 manager.name_input = name.clone();
                 manager.selected = Some(name);
                 manager.confirm_delete = None;
+                manager.confirm_reset = None;
                 Task::none()
             }
-            ProfilesMsg::SeverityChanged(rule, severity) => self.edit_selected_profile(
-                move |app| app.set_machine_severity(rule, severity),
-                move |erc| set_severity(erc, rule, severity),
-            ),
-            ProfilesMsg::PinCellCycled { row, col } => self.edit_selected_profile(
-                move |app| app.cycle_machine_pin_cell(row, col),
-                move |erc| cycle_pin_cell(erc, row, col),
-            ),
+            ProfilesMsg::SeverityChanged(rule, severity) => {
+                self.edit_selected_profile(RuleEdit::Severity(rule, severity))
+            }
+            ProfilesMsg::PinCellCycled { row, col } => {
+                self.edit_selected_profile(RuleEdit::PinCell(row, col))
+            }
+            ProfilesMsg::ResetRequested => {
+                let manager = &mut self.ui_state.profile_manager;
+                manager.confirm_reset = manager
+                    .selected_profile()
+                    .filter(|l| l.kind != ProfileKind::Builtin)
+                    .map(|l| l.profile.name.clone());
+                Task::none()
+            }
+            ProfilesMsg::ResetCancelled => {
+                self.ui_state.profile_manager.confirm_reset = None;
+                Task::none()
+            }
+            ProfilesMsg::ResetConfirmed => {
+                if self.ui_state.profile_manager.confirm_reset.take().is_none() {
+                    return Task::none();
+                }
+                self.edit_selected_profile(RuleEdit::ResetToShipped)
+            }
             ProfilesMsg::NameInputChanged(name) => {
                 self.ui_state.profile_manager.name_input = name;
                 Task::none()
@@ -110,33 +138,42 @@ impl Signex {
         }
     }
 
-    /// Apply an editor click to the selected profile. The machine's rules take
-    /// `machine`; a library profile is edited in memory with `edit` and its
-    /// new state queued for its file; the shipped profile ignores the click.
-    fn edit_selected_profile(
-        &mut self,
-        machine: impl FnOnce(&mut Self) -> Task<Message>,
-        edit: impl FnOnce(&mut signex_types::project::ErcRules),
-    ) -> Task<Message> {
-        let Some(kind) = self
-            .ui_state
-            .profile_manager
-            .selected_profile()
-            .map(|l| l.kind)
-        else {
+    /// Apply an editor click to the selected profile. The machine's rules go
+    /// through the same path as the ERC dialog; a library profile is changed in
+    /// memory at once and the same one change is queued for its file, where it
+    /// is applied to what the file holds when the write runs. The shipped
+    /// profile ignores the click.
+    fn edit_selected_profile(&mut self, edit: RuleEdit) -> Task<Message> {
+        let manager = &mut self.ui_state.profile_manager;
+        if manager.busy {
+            manager.status = Some((
+                true,
+                "A profile is being created, renamed or deleted; try the edit again in a \
+                 moment."
+                    .into(),
+            ));
+            return Task::none();
+        }
+        let Some(kind) = manager.selected_profile().map(|l| l.kind) else {
             return Task::none();
         };
-        match kind {
-            ProfileKind::Builtin => Task::none(),
-            ProfileKind::UserDefault => machine(self),
-            ProfileKind::User => {
+        match (kind, edit) {
+            (ProfileKind::Builtin, _) => Task::none(),
+            (ProfileKind::UserDefault, RuleEdit::Severity(rule, severity)) => {
+                self.set_machine_severity(rule, severity)
+            }
+            (ProfileKind::UserDefault, RuleEdit::PinCell(row, col)) => {
+                self.cycle_machine_pin_cell(row, col)
+            }
+            (ProfileKind::UserDefault, RuleEdit::ResetToShipped) => self.reset_machine_rules(),
+            (ProfileKind::User, edit) => {
                 let Some(entry) = self.ui_state.profile_manager.selected_profile_mut() else {
                     return Task::none();
                 };
-                edit(&mut entry.profile.erc);
-                let profile = entry.profile.clone();
-                let key = profile.name.clone();
-                self.submit_profile_write(&key, QueuedWrite::Profile(profile))
+                edit.apply(&mut entry.profile.erc);
+                let name = entry.profile.name.clone();
+                let key = name.clone();
+                self.submit_profile_write(&key, QueuedWrite::ProfileEdit { name, edit })
             }
         }
     }
@@ -186,7 +223,7 @@ impl Signex {
         &mut self,
         work: impl FnOnce(&std::path::Path) -> Result<ProfileAction, String> + Send + 'static,
     ) -> Task<Message> {
-        if !self.ui_state.profile_writes.is_idle() {
+        if !self.ui_state.profile_writes.is_idle() || self.ui_state.profile_manager.busy {
             self.ui_state.profile_manager.status = Some((
                 true,
                 "A change is still being saved; try again in a moment.".into(),
@@ -200,6 +237,7 @@ impl Signex {
             ));
             return Task::none();
         };
+        self.ui_state.profile_manager.busy = true;
         blocking(
             move || work(&dir),
             |joined| {
@@ -211,6 +249,7 @@ impl Signex {
     }
 
     fn profile_action_finished(&mut self, result: &Result<ProfileAction, String>) -> Task<Message> {
+        self.ui_state.profile_manager.busy = false;
         let mut follow = vec![list_task()];
         match result {
             Err(why) => {
@@ -227,12 +266,18 @@ impl Signex {
                             follow.push(self.choose_default_profile(Some(new.clone())));
                         }
                         (
-                            format!("Renamed \"{old}\" to \"{new}\"."),
+                            format!(
+                                "Renamed \"{old}\" to \"{new}\". Projects that recorded \"{old}\" \
+                                 keep their rules but can no longer find it for Update from profile."
+                            ),
                             Some(new.clone()),
                         )
                     }
                     ProfileAction::Deleted(name) => {
-                        let mut text = format!("Deleted profile \"{name}\".");
+                        let mut text = format!(
+                            "Deleted profile \"{name}\". Projects that recorded it keep their \
+                             rules but can no longer find it for Update from profile."
+                        );
                         if self.ui_state.default_rule_profile.as_deref() == Some(name.as_str()) {
                             text.push_str(" New projects now use the automatic default.");
                             follow.push(self.choose_default_profile(None));
