@@ -18,7 +18,7 @@ pub fn parse(src: &str) -> Result<Vec<RuleAst>, Vec<DslError>> {
         Ok(rules) => Ok(rules),
         Err(errors) => Err(errors
             .into_iter()
-            .map(|(offset, message)| DslError::Parse(offset, offset, message))
+            .map(|(start, end, message)| DslError::Parse(start, end, message))
             .collect()),
     }
 }
@@ -121,6 +121,35 @@ mod tests {
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule_id.as_str(), "user::net_rule");
         assert_eq!(diagnostics[0].message, "Driver net");
+    }
+
+    #[test]
+    fn net_diagnostic_anchors_on_first_pin_in_stable_order() {
+        use signex_erc::context::ErcNetPin;
+        use signex_types::schematic::InstancePath;
+        let mk = |reference: &str, x: f64, id: u128| ErcNetPin {
+            symbol: format!("{id:032x}").parse().expect("uuid"),
+            occurrence: InstancePath::root(),
+            reference: reference.to_string(),
+            position: Point::new(x, 5.0),
+            direction: PinDirection::Output,
+            is_power_flag: false,
+        };
+        let mut ctx = sample_context();
+        ctx.nets[0].pins = vec![mk("U9", 90.0, 9), mk("U2", 20.0, 2)];
+        let src = r#"rule r on net when has_driver() then error "x""#;
+        let eval_fns = parse_validate_compile_to_eval_fns(src).expect("compiles");
+        let d = &eval_fns[0](&ctx)[0];
+        assert_eq!(d.location, Point::new(20.0, 5.0));
+        assert_eq!(
+            d.primary.as_ref().map(|p| p.uuid),
+            Some(ctx.nets[0].pins[1].symbol)
+        );
+        // No pins: unchanged unplaced behaviour.
+        ctx.nets[0].pins.clear();
+        let d = &eval_fns[0](&ctx)[0];
+        assert_eq!(d.location, Point::new(0.0, 0.0));
+        assert!(d.primary.is_none());
     }
 
     #[test]

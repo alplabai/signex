@@ -217,16 +217,31 @@ fn evaluate_rule(
         TargetKind::Net => {
             for net in &ctx.nets {
                 if eval_expr(expr, Subject::Net(net)) {
+                    // Anchor on the net's first pin in a stable order so the
+                    // finding is locatable; an unanchored net stays unplaced.
+                    let anchor = net.pins.iter().min_by(|a, b| {
+                        (a.reference.as_str(), a.position.x, a.position.y)
+                            .partial_cmp(&(b.reference.as_str(), b.position.x, b.position.y))
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    let (location, location_space, primary) = match anchor {
+                        Some(pin) => (
+                            pin.position,
+                            LocationSpace::ThisSheet,
+                            Some(SelectedItem::new(pin.symbol, SelectedKind::Symbol)),
+                        ),
+                        None => (Point::new(0.0, 0.0), LocationSpace::Unplaced, None),
+                    };
                     out.push(Diagnostic {
                         rule_id: rule_id.clone(),
                         rule_kind,
                         severity,
                         message: message.to_string(),
-                        location: Point::new(0.0, 0.0),
-                        location_space: LocationSpace::Unplaced,
+                        location,
+                        location_space,
                         child_sheet: None,
                         owner_sheet: None,
-                        primary: None,
+                        primary,
                         peer: None,
                     });
                 }
