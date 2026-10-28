@@ -39,8 +39,7 @@ pub enum ContextSubmenu {
     Place,
     Align,
     /// Project-tree → "Add New to Project ›" launcher. Items are
-    /// version-tagged placeholders today — actual document creation
-    /// lands with project-write support in v0.9.
+    /// version-tagged placeholders today; they do not create documents yet.
     AddNewToProject,
 }
 

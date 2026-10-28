@@ -127,11 +127,9 @@ impl Signex {
             // between `build_catalog` and here is a no-op rather than a
             // panic; `core_to_message` logs which one and why.
             CommandAction::Command(command) => {
-                // `bridge::` rather than the `command::core_to_message`
-                // re-export — #367 (PR #504) makes that re-export private.
-                // Once #504 lands this becomes
-                // `self.dispatch_command(&command, CommandArgs::none(), None)`,
-                // which is the single funnel the epic is aiming at.
+                // Calls the bridge directly; routing through
+                // `self.dispatch_command(..)` (the single funnel, #278)
+                // is the remaining palette rewiring step.
                 match crate::app::command::bridge::core_to_message(&command) {
                     Some(message) => self.dispatch_update(message),
                     None => Task::none(),
