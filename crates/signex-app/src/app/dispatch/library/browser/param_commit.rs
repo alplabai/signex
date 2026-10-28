@@ -41,7 +41,15 @@ pub(super) fn param_value_for_commit(
     buf: &str,
 ) -> Result<ParamValue, ParamRefusal> {
     match existing {
-        Some(pv @ ParamValue::Measurement { .. }) => measurement_for_commit(pv, buf),
+        // Preserve the unit on commit by reading the existing value. The
+        // typed number is in the stored unit: the cell is seeded from the
+        // stored form (`ColumnKind::edit_seed`).
+        Some(ParamValue::Measurement { unit, .. }) => parse_finite_f64(buf)
+            .map(|value| ParamValue::Measurement {
+                value,
+                unit: unit.clone(),
+            })
+            .map_err(|_| refusal("a finite number; the cell's unit is kept", existing)),
         Some(ParamValue::Number(_)) => parse_finite_f64(buf)
             .map(ParamValue::Number)
             .map_err(|_| refusal("a finite number", existing)),
@@ -71,41 +79,6 @@ pub(super) fn param_value_for_commit(
         // yet) takes the buffer verbatim — there is no type to lose.
         _ => Ok(ParamValue::Text(buf.to_string())),
     }
-}
-
-/// The cell shows a measurement through `ParamValue::display` (`4.7 kΩ`
-/// for `{4700, "ohm"}`; `100 nF` for the legacy `{0.1, "uF"}`), so a
-/// number typed into it is read in the prefix the user saw, not in the
-/// stored unit's base. The result is stored in canonical base form
-/// (`{5600, "ohm"}`); retyping the value already shown changes nothing, so
-/// an untouched row keeps its stored form and content hash. A unit this
-/// build does not know keeps its string and takes the number as typed.
-fn measurement_for_commit(existing: &ParamValue, buf: &str) -> Result<ParamValue, ParamRefusal> {
-    use signex_types::quantity::{Unit, quantity_from_parts};
-    const EXPECTED: &str = "a finite number; the cell's unit is kept";
-    let ParamValue::Measurement { unit, .. } = existing else {
-        return Err(refusal(EXPECTED, Some(existing)));
-    };
-    let typed = parse_finite_f64(buf).map_err(|_| refusal(EXPECTED, Some(existing)))?;
-    let known = existing
-        .as_quantity()
-        .filter(|q| !matches!(q.unit(), Unit::Other(_)));
-    let Some(shown) = known else {
-        return Ok(ParamValue::Measurement {
-            value: typed,
-            unit: unit.clone(),
-        });
-    };
-    let (_, prefix) = shown.eng_parts();
-    let entered = quantity_from_parts(buf, prefix, shown.unit().clone())
-        .map_err(|_| refusal(EXPECTED, Some(existing)))?;
-    if entered == shown {
-        return Ok(existing.clone());
-    }
-    Ok(ParamValue::Measurement {
-        value: entered.base(),
-        unit: entered.unit().token().to_string(),
-    })
 }
 
 fn refusal(expected: &'static str, existing: Option<&ParamValue>) -> ParamRefusal {
@@ -198,10 +171,9 @@ mod tests {
         assert_eq!(
             committed.ok(),
             Some(ParamValue::Measurement {
-                value: 10_000.0,
-                unit: "ohm".to_string(),
-            }),
-            "typed in the displayed kΩ, stored as base"
+                value: 10.0,
+                unit: "kΩ".to_string(),
+            })
         );
     }
 

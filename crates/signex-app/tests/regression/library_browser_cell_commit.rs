@@ -258,13 +258,12 @@ fn base_of(v: &ParamValue) -> f64 {
     v.as_quantity().expect("a measurement").base()
 }
 
-/// #1572 — the cell shows `4.7 kΩ` for `{4700, "ohm"}`; a number typed
-/// into it is read in the prefix the user saw, not in the stored unit's
-/// base. Typing 5.6 must give 5.6 kΩ, not 5.6 Ω.
+/// #1572 phase 1 changes nothing about how a browser cell commits: the
+/// cell is seeded with the stored form (`4700 ohm`), the typed number is
+/// in the stored unit, and the stored unit string is kept.
 #[test]
-fn a_number_typed_into_a_canonical_cell_keeps_the_displayed_prefix() {
-    let stored = commit_into_measurement(4700.0, "ohm", "5.6");
-    assert_eq!(base_of(&stored), 5600.0, "stored {stored:?}");
+fn a_number_typed_into_a_canonical_cell_is_in_the_stored_unit() {
+    let stored = commit_into_measurement(4700.0, "ohm", "5600");
     assert_eq!(
         stored,
         ParamValue::Measurement {
@@ -274,23 +273,31 @@ fn a_number_typed_into_a_canonical_cell_keeps_the_displayed_prefix() {
     );
 }
 
-/// The legacy `{0.1, "uF"}` cell shows `100 nF`; typing 220 means 220 nF.
+/// A legacy `{4.7, "kΩ"}` cell is seeded `4.7 kΩ`; typing 5.6 stores
+/// `{5.6, "kΩ"}`, not a rewritten base form.
 #[test]
-fn a_number_typed_into_a_legacy_cell_keeps_the_displayed_prefix() {
-    let stored = commit_into_measurement(0.1, "uF", "220");
-    assert_eq!(base_of(&stored), 220e-9, "stored {stored:?}");
-}
-
-/// Retyping the number the cell already shows is a no-op, so an untouched
-/// legacy row keeps its stored form (and its content hash).
-#[test]
-fn retyping_the_displayed_number_leaves_a_legacy_row_as_stored() {
-    let stored = commit_into_measurement(4.7, "kΩ", "4.7");
+fn a_number_typed_into_a_legacy_cell_keeps_the_stored_unit_string() {
+    let stored = commit_into_measurement(4.7, "kΩ", "5.6");
     assert_eq!(
         stored,
         ParamValue::Measurement {
-            value: 4.7,
+            value: 5.6,
             unit: "kΩ".into()
         }
     );
+}
+
+/// Retyping the seeded number leaves the row as stored.
+#[test]
+fn retyping_the_seeded_number_leaves_the_row_as_stored() {
+    for (value, unit) in [(4700.0, "ohm"), (4.7, "kΩ"), (0.1, "uF")] {
+        let stored = commit_into_measurement(value, unit, &value.to_string());
+        assert_eq!(
+            stored,
+            ParamValue::Measurement {
+                value,
+                unit: unit.into()
+            }
+        );
+    }
 }

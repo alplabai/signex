@@ -118,6 +118,11 @@ pub fn split_unit_string(text: &str) -> Option<(SiPrefix, Unit)> {
     if unit.allowed_prefixes().contains(&prefix) {
         return Some((prefix, unit));
     }
+    // `m` is milli, so a lowercase `mhz` would be milli-hertz, which is
+    // not a component value; legacy data that writes it means MHz. `mohm`
+    // is different: milli is one of the ohm's allowed prefixes (it took
+    // the branch above), so `mohm` stays milliohm and only a prefix the
+    // unit does not use is reinterpreted.
     match (&unit, prefix) {
         (Unit::Farad, SiPrefix::Milli) => Some((prefix, unit)),
         (Unit::Hertz, SiPrefix::Milli) if compact == compact.to_lowercase() => {
