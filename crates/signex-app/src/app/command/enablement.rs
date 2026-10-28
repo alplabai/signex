@@ -128,7 +128,9 @@ impl Signex {
     /// The handlers act on the main window's active tab, from whichever
     /// window the key came in, so the facts are the main window's. The
     /// only exception is `undocked_has_canvas`, for Fit All, which an
-    /// undocked tab routes to its own canvas. Any other window (a detached
+    /// undocked tab routes to its own canvas. (Undo / Redo from an
+    /// undocked tab never get here with that window: `dispatch_command`
+    /// reruns them inside it.) Any other window (a detached
     /// panel or modal, a component editor) adds nothing, so Ctrl+S typed
     /// there still saves the main window's document.
     pub(crate) fn command_context(&self, window: Option<iced::window::Id>) -> CommandContext {
@@ -157,7 +159,7 @@ impl Signex {
 
     /// Whether `window` is an undocked tab window showing a schematic or a
     /// PCB.
-    fn undocked_tab_has_canvas(&self, window: Option<iced::window::Id>) -> bool {
+    pub(super) fn undocked_tab_has_canvas(&self, window: Option<iced::window::Id>) -> bool {
         let ui = &self.ui_state;
         window.is_some_and(|id| {
             ui.main_window_id != Some(id)
@@ -548,6 +550,65 @@ mod tests {
         assert!(is_enabled(&id("zoom_to_fit"), &ctx));
         assert!(!is_enabled(&id("paste"), &ctx));
         assert!(!is_enabled(&id("save_document_as"), &ctx));
+    }
+
+    /// #1546: Ctrl+Z typed in an undocked schematic window steps that
+    /// window's sheet, even while the main window shows another document
+    /// with history of its own.
+    #[test]
+    fn undo_in_an_undocked_window_steps_that_windows_sheet() {
+        let (mut app, footprint) = with_footprint_editor();
+        app.document_state
+            .footprint_editors
+            .get_mut(&footprint)
+            .unwrap()
+            .push_history();
+        let main_tab = app.document_state.active_tab;
+
+        let path = PathBuf::from("undocked.snxsch");
+        let mut engine =
+            signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default()).unwrap();
+        let document = engine.document().clone();
+        engine
+            .execute(signex_engine::Command::ReplaceDocument { document })
+            .unwrap();
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.tabs.insert(
+            0,
+            TabInfo {
+                title: "undocked".into(),
+                path: path.clone(),
+                cached_document: None,
+                dirty: false,
+                project_id: None,
+                kind: TabKind::Schematic,
+            },
+        );
+        app.document_state.active_tab = main_tab + 1;
+        let window = iced::window::Id::unique();
+        app.ui_state.windows.insert(
+            window,
+            crate::app::state::WindowKind::UndockedTab {
+                path: path.clone(),
+                title: "undocked".into(),
+            },
+        );
+        app.interaction_state
+            .canvases
+            .insert(window, crate::canvas::CanvasSlot::new());
+
+        let _ = app.dispatch_command(&id("undo"), CommandArgs::none(), Some(window));
+
+        let engine = &app.document_state.engines[&path];
+        assert!(engine.can_redo(), "the undocked sheet was undone");
+        assert!(
+            !app.document_state.footprint_editors[&footprint]
+                .history
+                .is_empty(),
+            "the main window's footprint editor kept its step"
+        );
+        assert_eq!(app.document_state.active_tab, main_tab + 1);
+        assert_eq!(app.document_state.active_path, None);
     }
 
     /// #907 review: Save As and Print explain in the Messages panel why
