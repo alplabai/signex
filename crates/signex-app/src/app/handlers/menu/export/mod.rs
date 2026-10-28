@@ -19,7 +19,7 @@ mod placements;
 mod print_preview;
 mod raster_job;
 mod sheet_numbers;
-mod write;
+pub(crate) mod write;
 #[cfg(test)]
 pub(crate) use write::settle;
 #[cfg(test)]

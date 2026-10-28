@@ -131,6 +131,20 @@ impl SheetHierarchy {
         self.top_level().nth(first)?.descend(rest)
     }
 
+    /// The path of every node the walk placed, for the file-status checks
+    /// that tell when a missing sheet appears or a present one goes (#1618).
+    pub fn node_paths(&self) -> Vec<&Path> {
+        fn collect<'a>(node: &'a SheetNode, out: &mut Vec<&'a Path>) {
+            if node.kind != SheetNodeKind::Rejected {
+                out.push(&node.path);
+            }
+            node.children.iter().for_each(|child| collect(child, out));
+        }
+        let mut out = Vec::new();
+        self.top_level().for_each(|node| collect(node, &mut out));
+        out
+    }
+
     /// Whether `path` is a page the walk starts at (the root or a loose page)
     /// rather than a sheet some symbol places.
     pub fn starts_a_walk(&self, path: &Path) -> bool {

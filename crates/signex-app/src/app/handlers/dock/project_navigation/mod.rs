@@ -20,6 +20,17 @@ mod exclude_dirty;
 mod exclude_dirty_tests;
 #[cfg(test)]
 mod library_row_tests;
+mod missing_child;
+#[cfg(test)]
+mod nested_row_incomplete_tests;
+#[cfg(test)]
+mod nested_row_messages_tests;
+#[cfg(test)]
+mod nested_row_safety_tests;
+#[cfg(test)]
+mod nested_row_spelling_tests;
+#[cfg(test)]
+mod nested_row_tests;
 mod open_document;
 mod project_actions;
 mod project_rename;
@@ -42,6 +53,7 @@ mod save_all_gate_tests;
 #[cfg(test)]
 mod save_all_tests;
 mod sheet_references;
+pub(crate) mod sheet_users;
 #[cfg(test)]
 mod subdir_entry_tests;
 #[cfg(test)]
@@ -121,7 +133,9 @@ impl Signex {
                 );
                 if is_double {
                     self.interaction_state.last_tree_click = None;
-                    if let Some(node) = selected_node {
+                    if let Some(missing) = self.missing_child_sheet_at(path) {
+                        follow = self.offer_create_child_sheet(&missing);
+                    } else if let Some(node) = selected_node {
                         match self.open_project_tree_document(path, node.label.clone()) {
                             Ok(task) => follow = task,
                             Err(error) => crate::diagnostics::log_error(
@@ -178,7 +192,12 @@ impl Signex {
         let tree_path = match action.row_key() {
             Some(key) => match self.resolve_tree_row(key) {
                 Some(path) => path,
-                None => return Task::none(),
+                None => {
+                    crate::diagnostics::log_warning(
+                        "Project tree action dropped: its row is gone or moved under another sheet since the menu opened. Open the menu again on the row.",
+                    );
+                    return Task::none();
+                }
             },
             None => Vec::new(),
         };
