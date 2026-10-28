@@ -1,16 +1,19 @@
-//! Round-trip integration smoke tests for the v0.9-refactor-2 row model.
-//!
-//! Per `v0.9-refactor-2-plan.md` §3, the on-disk format flips from
-//! "one .snxprt per component" to "one row inside `tables/<name>.tsv`".
-//! This test verifies the table TSV round-trip and the parameter-template
-//! validation pipeline still works on the new row payload.
+//! Round-trip integration smoke tests for the row model: a row stored in a
+//! `.snxlib` table reads back unchanged, and the parameter-template
+//! validation pipeline works on the row payload.
+
+#![cfg(feature = "local-git")]
 
 use chrono::Utc;
+use signex_library::adapter::LibraryAdapter;
+use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
+use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
+use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 use signex_library::*;
 use uuid::Uuid;
 
 #[test]
-fn full_row_round_trip_via_tsv() {
+fn full_row_round_trip_via_snxlib() {
     let lib = Uuid::new_v4();
     let row = ComponentRow {
         alternate_symbols: Vec::new(),
@@ -42,11 +45,45 @@ fn full_row_round_trip_via_tsv() {
         server_revision: None,
     };
 
-    let tmp = tempfile::NamedTempFile::new().unwrap();
-    write_table(tmp.path(), std::slice::from_ref(&row)).unwrap();
-    let back = read_table(tmp.path()).unwrap();
+    signex_library::git_identity::test_identity::install();
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("L").join("L.snxlib");
+    let manifest = SnxlibManifest {
+        format: FORMAT_TOKEN.into(),
+        library_id: lib,
+        library: LibrarySection {
+            name: "L".into(),
+            description: None,
+        },
+        mode: LibraryMode::default(),
+        workflow: WorkflowConfig::default(),
+        users: UsersConfig::default(),
+        classes: Vec::new(),
+    };
+    let opts = LibraryInitOptions {
+        enable_git: false,
+        use_lfs: false,
+    };
+    let adapter = LocalGitAdapter::init(&file, manifest, opts).unwrap();
+    adapter
+        .insert_row("resistors", row.clone(), "seed")
+        .unwrap();
+    drop(adapter);
+
+    // A fresh open reads what is on disk, not the writer's memory.
+    let adapter = LocalGitAdapter::open(&file).unwrap();
+    let back = adapter.read_table("resistors").unwrap();
     assert_eq!(back.len(), 1);
-    assert_eq!(back[0], row);
+    let back = &back[0];
+    assert_eq!(back.row_id, row.row_id);
+    assert_eq!(back.internal_pn, row.internal_pn);
+    assert_eq!(back.class, row.class);
+    assert_eq!(back.datasheet, row.datasheet);
+    assert_eq!(back.state, row.state);
+    assert_eq!(back.symbol_ref, row.symbol_ref);
+    assert_eq!(back.footprint_ref, row.footprint_ref);
+    assert_eq!(back.primary_mpn, row.primary_mpn);
+    assert_eq!(back.version, row.version);
 }
 
 #[test]

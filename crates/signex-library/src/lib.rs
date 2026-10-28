@@ -118,10 +118,7 @@ pub use primitive::{
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]
 pub use search_index::{TantivyIndexError, TantivySearchIndex};
-pub use tables::{
-    ALTERNATE_SYMBOLS_COLUMN, TABLE_HEADER, TableSchema, append_row, delete_row, read_table,
-    update_row, write_table,
-};
+pub use tables::{ALTERNATE_SYMBOLS_COLUMN, TABLE_HEADER, TableSchema};
 pub use templates::{ParamKind, ParamSlot, ParameterTemplate, TemplateRegistry, TemplateViolation};
 pub use validate::validate_row_for_write;
 pub use where_used::{UseSite, WhereUsedIndex};
