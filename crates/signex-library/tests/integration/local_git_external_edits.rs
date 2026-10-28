@@ -52,6 +52,7 @@ fn row(internal_pn: &str, library_id: Uuid) -> ComponentRow {
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(library_id, Uuid::now_v7()),

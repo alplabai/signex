@@ -193,9 +193,9 @@ uuid                                  ref   library    pos_x  pos_y  rotation  v
 
 [sheets.wires]
 content = """
-uuid                                  net  start_x  start_y  end_x  end_y  stroke_width
-00000000-0000-0000-0000-000000000011  ""   0        0        10     0      0
-00000000-0000-0000-0000-000000000012  ""   0        20       10     20     0
+uuid                                  start_x  start_y  end_x  end_y  stroke_width
+00000000-0000-0000-0000-000000000011  0        0        10     0      0
+00000000-0000-0000-0000-000000000012  0        20       10     20     0
 """
 
 [sheets.junctions]

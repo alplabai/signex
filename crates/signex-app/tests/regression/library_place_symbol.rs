@@ -78,14 +78,26 @@ fn build(name: &str, symbol_ref: Option<(Uuid, Uuid)>) -> Fixture {
 }
 
 fn build_with(name: &str, symbol_ref: Option<(Uuid, Uuid)>, symbol: Symbol) -> Fixture {
-    build_with_class(name, symbol_ref, symbol, "IC")
+    build_with_class(name, symbol_ref, symbol, "IC", ParamMap::new())
+}
+
+/// A library whose symbol carries designator letters `designator` (`R?`).
+pub(crate) fn fixture_with_designator(designator: &str) -> Fixture {
+    let mut symbol = two_unit_symbol();
+    symbol.designator = designator.into();
+    build_with("lib", None, symbol)
 }
 
 /// A library whose single row has component class `class` and a `D?` symbol.
 pub(crate) fn fixture_of_class(class: &str) -> Fixture {
+    fixture_with_parameters(class, ParamMap::new())
+}
+
+/// [`fixture_of_class`] with `parameters` on the row (e.g. a prefix override).
+pub(crate) fn fixture_with_parameters(class: &str, parameters: ParamMap) -> Fixture {
     let mut symbol = two_unit_symbol();
     symbol.designator = "D?".into();
-    build_with_class("lib", None, symbol, class)
+    build_with_class("lib", None, symbol, class, parameters)
 }
 
 fn build_with_class(
@@ -93,13 +105,28 @@ fn build_with_class(
     symbol_ref: Option<(Uuid, Uuid)>,
     symbol: Symbol,
     class: &str,
+    parameters: ParamMap,
 ) -> Fixture {
-    build_in_mode(name, symbol_ref, symbol, class, WorkflowMode::Personal)
+    build_in_mode(
+        name,
+        symbol_ref,
+        symbol,
+        class,
+        parameters,
+        WorkflowMode::Personal,
+    )
 }
 
 /// A library named `name` whose manifest runs the Team workflow.
 pub(crate) fn team_fixture(name: &str) -> Fixture {
-    build_in_mode(name, None, two_unit_symbol(), "IC", WorkflowMode::Team)
+    build_in_mode(
+        name,
+        None,
+        two_unit_symbol(),
+        "IC",
+        ParamMap::new(),
+        WorkflowMode::Team,
+    )
 }
 
 fn build_in_mode(
@@ -107,6 +134,7 @@ fn build_in_mode(
     symbol_ref: Option<(Uuid, Uuid)>,
     symbol: Symbol,
     class: &str,
+    parameters: ParamMap,
     mode: WorkflowMode,
 ) -> Fixture {
     signex_library::git_identity::test_identity::install();
@@ -158,6 +186,7 @@ fn build_in_mode(
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: match symbol_ref {
@@ -170,7 +199,7 @@ fn build_in_mode(
         primary_mpn: ManufacturerPart::draft("Acme", "TWO-1"),
         alternates: Vec::new(),
         supply: Vec::new(),
-        parameters: ParamMap::new(),
+        parameters,
         plm: PlmReserved::default(),
         version: "1.2.3".into(),
         released: false,
@@ -230,7 +259,7 @@ pub(crate) fn app_with_libraries(libs: &[&Fixture]) -> Signex {
 }
 
 /// The worker half, run directly (the `Task` wraps it in `spawn_blocking`).
-fn resolve(f: &Fixture, row: Uuid) -> Result<Box<ResolvedPlacement>, String> {
+pub(crate) fn resolve(f: &Fixture, row: Uuid) -> Result<Box<ResolvedPlacement>, String> {
     resolve_with(f, row, &[f])
 }
 
@@ -246,29 +275,53 @@ fn resolve_with(
     resolve_placement(&f.snxlib, "ICs", signex_library::RowId(row), &open).map(Box::new)
 }
 
+/// Where `place` clicks: a grid point of the empty test sheet.
+pub(crate) const PLACE_AT: (f64, f64) = (25.4, 38.1);
+
 /// Feed a worker result back as the completion message, targeting `sheet`.
-fn complete(
+/// The part is now on the cursor; a click commits it.
+pub(crate) fn complete(
     app: &mut Signex,
     f: &Fixture,
     sheet: &str,
     result: Result<Box<ResolvedPlacement>, String>,
 ) {
+    let arm_epoch = app.interaction_state.placement_epoch;
     let _ = app.update(Message::Library(LibraryMessage::LibraryComponentResolved {
         target_sheet: PathBuf::from(sheet),
+        arm_epoch,
         library_path: f.snxlib.clone(),
         result,
     }));
+}
+
+/// A canvas click at `at`, as the canvas publishes it.
+pub(crate) fn click(app: &mut Signex, at: (f64, f64)) {
+    let _ = app.update(Message::CanvasEvent(
+        signex_app::canvas::CanvasEvent::Clicked {
+            world_x: at.0,
+            world_y: at.1,
+        },
+    ));
 }
 
 /// Place `a`'s row, whose symbol lives in `b`, on the active sheet.
 pub(crate) fn place_across(app: &mut Signex, a: &Fixture, b: &Fixture) {
     let resolved = resolve_with(a, a.row_id, &[a, b]).expect("resolves across libraries");
     complete(app, a, "place-364.snxsch", Ok(resolved));
+    click(app, PLACE_AT);
 }
 
-/// Worker + completion against the sheet `app_with_library` made active.
+/// Worker + completion: the part is on the cursor, nothing placed yet.
+pub(crate) fn arm(app: &mut Signex, f: &Fixture) {
+    complete(app, f, "place-364.snxsch", resolve(f, f.row_id));
+}
+
+/// Worker + completion + click against the sheet `app_with_library` made
+/// active.
 pub(crate) fn place(app: &mut Signex, f: &Fixture) {
     complete(app, f, "place-364.snxsch", resolve(f, f.row_id));
+    click(app, PLACE_AT);
 }
 
 pub(crate) fn doc(app: &Signex) -> &SchematicSheet {
@@ -417,24 +470,14 @@ fn the_picker_message_places_end_to_end_with_no_io_in_update() {
         ));
         let _ = app.update(message);
     }
+    // The part is on the cursor; only the click commits it.
+    assert!(app.interaction_state.placement.is_some());
+    assert!(doc(&app).symbols.is_empty());
+    click(&mut app, PLACE_AT);
     assert_eq!(doc(&app).symbols.len(), 1);
     assert_eq!(doc(&app).lib_symbols.len(), 1);
     assert_eq!(doc(&app).symbols[0].row_id, Some(f.row_id));
     assert!(app.document_state.error_notice.is_none());
-}
-
-#[test]
-fn a_repeated_drop_is_offset_from_the_part_already_there() {
-    let f = fixture();
-    let mut app = app_with_library(&f);
-    place(&mut app, &f);
-    place(&mut app, &f);
-    place(&mut app, &f);
-
-    let s = &doc(&app).symbols;
-    assert_ne!(s[0].position, s[1].position);
-    assert_ne!(s[1].position, s[2].position);
-    assert_ne!(s[0].position, s[2].position);
 }
 
 #[test]
@@ -445,6 +488,7 @@ fn replacing_after_the_library_symbol_changed_warns_and_keeps_the_sheet_copy() {
     let mut edited = first.clone();
     edited.lib_symbol.pins.clear();
     complete(&mut app, &f, "place-364.snxsch", Ok(first.clone()));
+    click(&mut app, PLACE_AT);
     let kept = doc(&app).lib_symbols.values().next().unwrap().pins.len();
     assert!(kept > 0);
 
@@ -544,6 +588,7 @@ fn a_symbol_from_another_open_library_is_placed_keyed_on_its_library() {
     let mut app = app_with_libraries(&[&a, &b]);
     let resolved = resolve_with(&a, a.row_id, &[&a, &b]).expect("resolves across libraries");
     complete(&mut app, &a, "place-364.snxsch", Ok(resolved));
+    click(&mut app, PLACE_AT);
 
     let sheet = doc(&app);
     assert_eq!(sheet.symbols.len(), 1);

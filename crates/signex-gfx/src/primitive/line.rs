@@ -6,7 +6,7 @@
 
 /// Straight line segment with width and style.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct LineSegment {
     pub p0: [f32; 2],
     pub p1: [f32; 2],

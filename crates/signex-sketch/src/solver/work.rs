@@ -16,14 +16,15 @@
 //!
 //! | step | work units |
 //! |---|---|
-//! | central-difference Jacobian | `2·n·m` |
+//! | Jacobian (accounted as central differences) | `2·n·m` |
 //! | one LM iteration | `(2n + 2)·m + m·n² + n³` |
 //! | row-space projection (undo pass) | `m²·n + m³` |
 
 use crate::error::SolveError;
 
-/// Work of one central-difference Jacobian: two residual evaluations per
-/// state variable, each over `m` rows.
+/// Work charged for one Jacobian: two residual evaluations per state
+/// variable, each over `m` rows. The analytic Jacobian does less; the charge
+/// is kept so a given budget solves or fails exactly as before.
 pub(crate) fn jacobian_cost(n: usize, m: usize) -> u64 {
     2u64.saturating_mul(n as u64).saturating_mul(m as u64)
 }

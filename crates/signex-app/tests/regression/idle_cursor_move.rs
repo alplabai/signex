@@ -122,11 +122,13 @@ fn push_git_project(app: &mut Signex, dir: &Path) {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
 }
 

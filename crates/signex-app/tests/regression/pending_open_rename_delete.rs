@@ -42,11 +42,13 @@ fn project_with_sheet(dir: &Path) -> (Signex, PathBuf) {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
     (app, sheet)

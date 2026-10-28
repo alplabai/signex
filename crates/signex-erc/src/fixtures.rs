@@ -237,6 +237,7 @@ pub(crate) fn net_of(symbols: &[ErcSymbol]) -> ErcNet {
                 symbol: s.uuid,
                 occurrence: signex_types::schematic::InstancePath::root(),
                 reference: s.reference.clone(),
+                number: p.number.clone(),
                 position: p.world_pos,
                 direction: p.electrical_type,
                 is_power_flag: s.is_power && signex_net::is_power_flag(&s.lib_id),

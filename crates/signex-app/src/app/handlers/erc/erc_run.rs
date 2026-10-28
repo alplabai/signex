@@ -121,6 +121,11 @@ impl Signex {
             overrides,
             rule_set,
             config: signex_erc::ErcConfig::with_pin_matrix_overrides(&pin_matrix_overrides),
+            net_waivers: ds
+                .active_document_project()
+                .and_then(|p| p.data.rules.as_ref())
+                .map(|r| r.erc_net_waivers.clone())
+                .unwrap_or_default(),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
         };
 
@@ -183,6 +188,7 @@ impl Signex {
             .get(self.document_state.active_tab)
             .map(|t| t.path.clone());
         self.ui_state.erc_violations_by_path = outcome.by_path.clone();
+        self.ui_state.erc_waived_hidden = outcome.waived_hidden.clone();
         self.ui_state.erc_focus_global_index = self
             .ui_state
             .erc_violations_by_path
@@ -208,12 +214,20 @@ impl Signex {
             .unwrap_or_default();
         // Only a point in THIS sheet's own coordinates may be drawn here; a
         // child-space or unplaced one would land on empty canvas (#956).
+        // A net-level finding is drawn at its net's representative pin with the
+        // distinct net marker; a No-ERC directive never reaches it.
         self.interaction_state.active_canvas_mut().erc_markers = violations
             .iter()
-            .filter(|v| v.location_space == signex_erc::LocationSpace::ThisSheet)
+            .filter(|v| {
+                matches!(
+                    v.location_space,
+                    signex_erc::LocationSpace::ThisSheet | signex_erc::LocationSpace::Net
+                )
+            })
             .map(|v| crate::canvas::ErcMarker {
                 x: v.location.x,
                 y: v.location.y,
+                net_level: v.location_space == signex_erc::LocationSpace::Net,
                 severity: match v.severity {
                     signex_erc::Severity::Error => crate::canvas::ErcMarkerSeverity::Error,
                     signex_erc::Severity::Warning => crate::canvas::ErcMarkerSeverity::Warning,
@@ -261,7 +275,12 @@ impl Signex {
                         world_x: v.location.x,
                         world_y: v.location.y,
                         select: v.primary,
-                        locatable: v.location_space == signex_erc::LocationSpace::ThisSheet,
+                        locatable: matches!(
+                            v.location_space,
+                            signex_erc::LocationSpace::ThisSheet | signex_erc::LocationSpace::Net
+                        ),
+                        net: v.net.clone(),
+                        rule_id: v.rule_id.to_string(),
                     });
                 }
             }
@@ -329,7 +348,7 @@ impl Signex {
             }
             _ => {
                 self.ui_state.erc_focus_global_index = Some(clamped);
-                self.handle_focus_at(target.world_x, target.world_y, target.select)
+                self.focus_erc_entry(&target)
             }
         }
     }
@@ -352,11 +371,11 @@ impl Signex {
         self.ensure_sheet_open_and_active(&target.sheet_path);
 
         self.ui_state.erc_focus_global_index = Some(clamped);
-        self.handle_focus_at(target.world_x, target.world_y, target.select)
+        self.focus_erc_entry(&target)
     }
 
     pub(crate) fn ensure_sheet_open_and_active(&mut self, path: &std::path::Path) {
-        let path = &self.resolve_held_spelling(path.to_path_buf());
+        let path = &self.resolve_held_spelling_now(path.to_path_buf());
         if let Some(index) = self
             .document_state
             .tabs

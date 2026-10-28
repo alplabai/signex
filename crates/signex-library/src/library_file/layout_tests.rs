@@ -8,7 +8,7 @@ use crate::manifest::{LibraryMode, UserEntry};
 /// Not the canonical layout on purpose: keys out of order, a comment, unknown
 /// keys at every level the reader knows about.
 const DOC: &str = r#"library_id = "0190a000-0000-7000-8000-000000000001"
-format = "snxlib/1"
+format = "snxlib/2"
 future_root = "keep"   # a comment
 
 [library]
@@ -282,7 +282,7 @@ fn a_written_text_that_lost_an_unknown_key_is_refused() {
     );
 }
 
-const CLEAN: &str = "format = \"snxlib/1\"
+const CLEAN: &str = "format = \"snxlib/2\"
 library_id = \"0190a000-0000-7000-8000-000000000001\"
 classes = []
 

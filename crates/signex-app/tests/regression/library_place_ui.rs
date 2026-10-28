@@ -10,7 +10,7 @@ use signex_app::library::LibraryMessage;
 use signex_app::library::messages::PickerMsg;
 use signex_app::library::state::PickerState;
 
-use crate::library_place_symbol::{Fixture, app_with_library, doc, fixture, run};
+use crate::library_place_symbol::{Fixture, PLACE_AT, app_with_library, click, doc, fixture, run};
 
 /// Dispatch `message`, then keep running the tasks it spawns until quiet.
 fn dispatch_to_completion(app: &mut Signex, message: Message) {
@@ -56,6 +56,7 @@ fn the_picker_place_action_places_on_the_active_schematic() {
     select_in_picker(&mut app, &f);
 
     place_selected(&mut app);
+    click(&mut app, PLACE_AT);
 
     assert_eq!(doc(&app).symbols.len(), 1);
     assert_eq!(doc(&app).symbols[0].row_id, Some(f.row_id));
@@ -69,6 +70,7 @@ fn the_picker_place_is_one_undo_step() {
     let mut app = app_with_library(&f);
     select_in_picker(&mut app, &f);
     place_selected(&mut app);
+    click(&mut app, PLACE_AT);
     assert_eq!(doc(&app).symbols.len(), 1);
 
     let _ = app.update(Message::Edit(EditMsg::Undo));
@@ -89,6 +91,7 @@ fn a_components_panel_row_place_action_places_on_the_active_schematic() {
             row_id: signex_library::RowId(f.row_id),
         }),
     );
+    click(&mut app, PLACE_AT);
 
     assert_eq!(doc(&app).symbols.len(), 1);
     assert!(app.document_state.error_notice.is_none());

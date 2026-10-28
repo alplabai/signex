@@ -518,6 +518,7 @@ mod tests {
                     class_styles: &setup.classes,
                 }),
                 designators: None,
+                special_strings: None,
             },
         )
     }

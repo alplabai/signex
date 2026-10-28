@@ -67,6 +67,11 @@ pub(super) fn random_row(rng: &mut Rng, w: &World, row_id: Uuid) -> ComponentRow
             "IEC",
         ));
     }
+    let description = if rng.one_in(3) {
+        "100 nF \"X7R\" µ".to_string()
+    } else {
+        String::new()
+    };
     let at = chrono::DateTime::from_timestamp(1_700_000_000 + rng.below(1000) as i64, 0).unwrap();
     ComponentRow {
         alternate_symbols,
@@ -100,6 +105,7 @@ pub(super) fn random_row(rng: &mut Rng, w: &World, row_id: Uuid) -> ComponentRow
         content_hash: [0u8; 32],
         server_revision: None,
         datasheet_label: String::new(),
+        description,
         more_datasheets: Vec::new(),
     }
 }

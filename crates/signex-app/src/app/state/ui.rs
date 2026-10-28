@@ -137,6 +137,21 @@ pub struct UiState {
     pub move_keeps_wires: bool,
     /// Draft mirror of [`Self::move_keeps_wires`] for the Preferences dialog.
     pub preferences_draft_move_keeps_wires: bool,
+    /// Saved "Window controls" placement (where min/max/close go).
+    pub window_controls_placement: crate::chrome::controls::WindowControlsPlacement,
+    /// Draft mirror of [`Self::window_controls_placement`] for Preferences.
+    pub preferences_draft_window_controls_placement:
+        crate::chrome::controls::WindowControlsPlacement,
+    /// The placement the main window was created with. On macOS it decides
+    /// native vs drawn buttons and cannot change until a restart.
+    pub window_controls_placement_at_boot: crate::chrome::controls::WindowControlsPlacement,
+    /// Button arrangement the Linux desktop asked for; `None` until the
+    /// startup probe lands or when the desktop gave none.
+    pub desktop_button_layout: Option<crate::chrome::desktop::DesktopButtonLayout>,
+    /// Last known mode of the main window (fullscreen hides the macOS inset).
+    pub main_window_mode: iced::window::Mode,
+    /// Logical size of the monitor holding the main window, when known.
+    pub main_window_monitor_size: Option<iced::Size>,
     /// Opt-in autosave of recovery copies (#104). Off by default.
     pub autosave_enabled: bool,
     /// Draft mirror of [`Self::autosave_enabled`] for the Preferences dialog.
@@ -322,6 +337,9 @@ pub struct UiState {
     /// entry without rerunning the analysis.
     pub erc_violations_by_path:
         std::collections::HashMap<std::path::PathBuf, Vec<signex_erc::Violation>>,
+    /// Findings each waived (rule id, net) pair hid in the newest run
+    /// (#1581); 0 hidden means the waiver matched nothing (e.g. renamed net).
+    pub erc_waived_hidden: std::collections::BTreeMap<(String, String), usize>,
     /// Global cursor into the flattened ERC diagnostics list spanning all
     /// sheets in `erc_violations_by_path`. Used by next/prev navigation.
     pub erc_focus_global_index: Option<usize>,
@@ -392,6 +410,15 @@ pub struct UiState {
     /// Cached Annotate-dialog preview; loaded off-thread and re-derived in
     /// `update`, never in `view` (#111).
     pub annotate_preview: crate::app::handlers::erc::AnnotatePreviewCache,
+    /// Token of the newest Re-prefix to standard library lookup (#1315); a
+    /// result carrying an older one is dropped.
+    pub reprefix_generation: u64,
+    /// The Re-prefix to standard confirm: the planned changes, awaiting a
+    /// Confirm. `None` when no confirm is open.
+    pub reprefix_confirm: Option<crate::app::handlers::erc::ReprefixConfirm>,
+    /// A confirm was dropped while its detached window was open: the next
+    /// `finish_update` closes that window.
+    pub reprefix_window_close_pending: bool,
     /// Altium-style rubber-band selection mode. Drives how the box
     /// drag classifies hits (Inside / Outside / TouchingLine).
     pub selection_mode: crate::schematic_runtime::hit_test::SelectionMode,
@@ -454,6 +481,16 @@ pub struct UiState {
 }
 
 impl UiState {
+    /// The one answer to "is the main window fullscreen" the strip and the
+    /// search-bar geometry share.
+    pub fn main_window_is_fullscreen(&self) -> bool {
+        crate::chrome::controls::is_effectively_fullscreen(
+            self.main_window_mode,
+            self.window_size,
+            self.main_window_monitor_size,
+        )
+    }
+
     /// Replace the loaded profile set and rebuild the shortcuts-modal
     /// cache from it, so the cache can never outlive the profiles it was
     /// built from. (Callers recompile `active_keymap` themselves.)
@@ -496,6 +533,7 @@ impl UiState {
             || self.preferences_draft_pcb_gpu_render != self.pcb_gpu_render
             || self.preferences_draft_annotate_undo != self.annotate_undo
             || self.preferences_draft_move_keeps_wires != self.move_keeps_wires
+            || self.preferences_draft_window_controls_placement != self.window_controls_placement
             || self.preferences_draft_autosave_enabled != self.autosave_enabled
             || self.preferences_draft_symbol_grid_style != self.symbol_grid_style
             // Exact `!=` on the f32 is deliberate: the picker assigns from
