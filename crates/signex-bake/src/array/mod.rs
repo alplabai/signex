@@ -73,6 +73,28 @@ fn within_instance_cap(
     }
 }
 
+/// Evaluate a count expression to a rounded integer, requiring a plain
+/// number. A length or angle typed as a count (`5mm`, `90deg`) pushes a
+/// bake warning and returns `None` so the caller skips the array, rather
+/// than silently baking `value.round()` of a canonical mm / rad scalar.
+fn eval_count(
+    label: &str,
+    field: &str,
+    source: signex_sketch::id::SketchEntityId,
+    ast: &signex_sketch::expr::ast::ExprNode,
+    ctx: &signex_sketch::expr::eval::EvalContext,
+    warnings: &mut Vec<String>,
+) -> Result<Option<i64>, signex_sketch::SketchError> {
+    let q = signex_sketch::expr::eval::eval(ast, ctx).map_err(signex_sketch::SketchError::Expr)?;
+    if q.unit.family() != signex_sketch::unit::UnitFamily::Count {
+        warnings.push(format!(
+            "{label} array source {source}: {field} did not resolve to a plain number — array skipped"
+        ));
+        return Ok(None);
+    }
+    Ok(Some(q.value.round() as i64))
+}
+
 use grid::{GridSpec, bake_grid};
 use linear::bake_linear;
 use polar::bake_polar;

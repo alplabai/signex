@@ -637,6 +637,9 @@ pub struct ComponentsPanelState {
     /// the rich `mpn:LM317 lifecycle:preferred` syntax (plan §5) is
     /// a follow-up.
     pub filter: String,
+    /// Searchable row list the panel draws; kept current by
+    /// `LibraryState::sync_view_caches` (#1353).
+    pub rows: PanelRows,
 }
 
 /// State for the Tools ▸ Document Options modal — keyed by the
@@ -681,6 +684,9 @@ pub struct LibraryCreateOptionsState {
 }
 
 mod methods;
+mod panel_rows;
+#[cfg(test)]
+mod panel_rows_tests;
 mod picker_cache;
 #[cfg(test)]
 mod picker_cache_tests;
@@ -695,6 +701,7 @@ mod tests;
 mod under_folder;
 
 pub use methods::*;
+pub use panel_rows::PanelRows;
 pub use picker_cache::{PickerEntry, PickerRows};
 pub use preview::*;
 pub use refresh::{LibrarySnapshot, RefreshFinish, RefreshStart};

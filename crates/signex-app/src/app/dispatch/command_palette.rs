@@ -127,13 +127,7 @@ impl Signex {
             // between `build_catalog` and here is a no-op rather than a
             // panic; `core_to_message` logs which one and why.
             CommandAction::Command(command) => {
-                // Calls the bridge directly; routing through
-                // `self.dispatch_command(..)` (the single funnel, #278)
-                // is the remaining palette rewiring step.
-                match crate::app::command::bridge::core_to_message(&command) {
-                    Some(message) => self.dispatch_update(message),
-                    None => Task::none(),
-                }
+                self.dispatch_command(&command, crate::app::command::CommandArgs::none(), None)
             }
             CommandAction::Panel(panel) => {
                 Task::done(Message::Overlay(OverlayMsg::OpenPanel(panel)))
@@ -244,5 +238,29 @@ mod tests {
         app.refresh_command_palette_if_stale();
 
         assert_eq!(app.ui_state.command_palette.total_matches, 2);
+    }
+
+    /// #1351 - a palette row goes through the same funnel as a keystroke,
+    /// so a command with nothing to act on is dropped, not run.
+    #[test]
+    fn a_palette_command_obeys_the_enablement_gate() {
+        use crate::app::command_palette::{CommandEntry, CommandSource};
+        let (mut app, _task) = Signex::new();
+        assert!(app.document_state.active_engine().is_none());
+        let before = app.interaction_state.current_tool;
+        let palette = &mut app.ui_state.command_palette;
+        palette.open = true;
+        palette.results = vec![CommandEntry {
+            source: CommandSource::Command,
+            label: "Place Wire".into(),
+            detail: String::new(),
+            action: CommandAction::Command(crate::keymap::AppCommandId::new("place_wire").unwrap()),
+        }];
+        palette.selected_index = 0;
+
+        let _ = app.execute_command_palette_selected();
+
+        assert_eq!(app.interaction_state.current_tool, before);
+        assert!(!app.ui_state.command_palette.open);
     }
 }

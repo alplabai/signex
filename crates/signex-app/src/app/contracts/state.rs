@@ -193,6 +193,12 @@ pub struct SaveAllPlan {
     /// Directory -> whether its volume ignores case, for every directory
     /// the probe could decide. An undecided one is absent.
     pub probes: std::collections::HashMap<std::path::PathBuf, bool>,
+    /// The directories the probe could not decide, with its answer; the
+    /// Save All reports each from `update` and falls back to the host rule.
+    pub undecided: Vec<(
+        std::path::PathBuf,
+        crate::app::state::project_case::CaseProbeOutcome,
+    )>,
 }
 
 /// The tail of a Save All, sent when its writes have completed.
@@ -213,7 +219,25 @@ pub struct SaveAllSettle {
     /// Files held under several case-variant spellings: the spelling that
     /// was written, and the others it stands for. The others' dirty markers
     /// go once the written one is clean.
-    pub case_variants: Vec<(std::path::PathBuf, Vec<std::path::PathBuf>)>,
+    pub case_variants: Vec<CaseVariants>,
+}
+
+/// A file held under several case-variant spellings: the one written and
+/// the others it stands for, each pinned as it was when the write began.
+#[derive(Debug, Clone)]
+pub struct CaseVariants {
+    pub written: std::path::PathBuf,
+    pub others: Vec<PinnedSpelling>,
+}
+
+/// A spelling's state when a write began. One edited since (its engine
+/// revision or its net-colour revision moved) is not on disk, so its dirty
+/// marker stays.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PinnedSpelling {
+    pub path: std::path::PathBuf,
+    pub revision: u64,
+    pub net_color_revision: u64,
 }
 
 /// User choice from the project-close confirmation modal.
@@ -303,7 +327,8 @@ pub enum ProjectTreeAction {
     /// project name (the `.snxprj` stem). Submit renames the trio
     /// `<old>.snxprj` / `<old>.snxsch` / `<old>.snxpcb` in lockstep.
     OpenProjectRenameDialog(Vec<usize>),
-    /// v0.9 project-root: open the Project Options metadata modal.
+    /// Project root: Project Options… opens (or focuses) the project's
+    /// Project tab (#1202).
     OpenProjectOptions(Vec<usize>),
     /// v0.9 project-root: open a file dialog and add the picked file
     /// to the project. Files outside the project directory are copied
@@ -444,20 +469,6 @@ pub struct EnableVersionControlState {
     /// A confirmed run is on the blocking pool: the dialog shows it as
     /// working and ignores edits and a second Confirm until it finishes.
     pub working: bool,
-}
-
-/// State for the read-only "Project Options" modal — the v0.9 surface
-/// is a metadata summary (name / dir / schematic root / pcb file /
-/// libraries). Editing happens through the dedicated rename / library
-/// flows; a future revision can promote this to a full editor.
-#[derive(Debug, Clone)]
-pub struct ProjectOptionsState {
-    pub project_idx: usize,
-    pub name: String,
-    pub directory: String,
-    pub schematic_root: Option<String>,
-    pub pcb_file: Option<String>,
-    pub library_count: usize,
 }
 
 /// State for the "Remove from Project" modal. `Delete` removes the file

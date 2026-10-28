@@ -25,7 +25,7 @@ pub(super) fn draw_silk_graphics(
         let is_selected = selected_idx == Some(idx);
         let colour = if is_selected { highlight } else { base_colour };
         let mut stroke_px = if g.stroke_width > 0.0 {
-            (g.stroke_width as f32 * cstate.scale).max(0.5)
+            crate::renderer_scene_canvas::min_stroke_px(g.stroke_width as f32 * cstate.scale)
         } else {
             stroke_default_px
         };

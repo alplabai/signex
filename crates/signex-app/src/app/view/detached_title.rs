@@ -19,7 +19,6 @@ pub(crate) fn detached_modal_title(modal: ModalId) -> &'static str {
         ModalId::RemoveDialog => "Remove",
         ModalId::PrintPreview => "Export PDF",
         ModalId::BomPreview => "Bill of Materials",
-        ModalId::ProjectOptions => "Project Options",
         ModalId::EnableVersionControl => "Enable Version Control",
         ModalId::GridProperties => "Grid Properties",
         ModalId::SelectionFilterCustom => "Custom Selection Filter",

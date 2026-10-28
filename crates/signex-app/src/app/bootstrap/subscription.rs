@@ -44,7 +44,6 @@ struct OpenOverlays {
     annotate_reset_confirm_open: bool,
     app_quit_confirm_open: bool,
     project_close_confirm_open: bool,
-    project_options_open: bool,
     grid_properties_open: bool,
     selection_filter_custom_open: bool,
     library_picker_open: bool,
@@ -250,9 +249,6 @@ impl OpenOverlays {
             OverlayId::AppQuitConfirm => self
                 .app_quit_confirm_open
                 .then(|| Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::Cancel))),
-            OverlayId::ProjectOptions => self
-                .project_options_open
-                .then(|| Message::Project(ProjectMsg::CloseOptions)),
             OverlayId::EnableVersionControl => self
                 .enable_vc_open
                 .then(|| Message::EnableVersionControl(EnableVersionControlMsg::Close)),
@@ -377,7 +373,6 @@ fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
         ModalId::RemoveDialog => Some(OverlayId::RemoveDialog),
         ModalId::PrintPreview => Some(OverlayId::PrintPreview),
         ModalId::BomPreview => Some(OverlayId::BomPreview),
-        ModalId::ProjectOptions => Some(OverlayId::ProjectOptions),
         ModalId::EnableVersionControl => Some(OverlayId::EnableVersionControl),
         ModalId::GridProperties => Some(OverlayId::GridProperties),
         ModalId::SelectionFilterCustom => Some(OverlayId::SelectionFilterCustom),
@@ -474,7 +469,6 @@ impl Signex {
                 && !modal_detached(crate::app::state::ModalId::AnnotateResetConfirm),
             app_quit_confirm_open: self.ui_state.app_quit_confirm.is_some(),
             project_close_confirm_open: self.ui_state.project_close_confirm.is_some(),
-            project_options_open: self.ui_state.project_options.is_some(),
             grid_properties_open: self.ui_state.grid_properties.is_some(),
             selection_filter_custom_open: self.ui_state.selection_filter_custom.is_some(),
             library_picker_open: self.library.picker.is_some(),
@@ -959,10 +953,6 @@ mod tests {
             Some(Message::Project(ProjectMsg::CloseConfirm(
                 ProjectCloseChoice::Cancel
             )))
-        ));
-        assert!(matches!(
-            only(|o| o.project_options_open = true),
-            Some(Message::Project(ProjectMsg::CloseOptions))
         ));
         assert!(matches!(
             only(|o| o.grid_properties_open = true),
@@ -1463,7 +1453,6 @@ mod tests {
             annotate_reset_confirm_open,
             app_quit_confirm_open,
             project_close_confirm_open,
-            project_options_open,
             grid_properties_open,
             selection_filter_custom_open,
             library_picker_open,
@@ -1513,7 +1502,6 @@ mod tests {
             ("project_close_confirm_open", |o| {
                 o.project_close_confirm_open = true
             }),
-            ("project_options_open", |o| o.project_options_open = true),
             ("grid_properties_open", |o| o.grid_properties_open = true),
             ("selection_filter_custom_open", |o| {
                 o.selection_filter_custom_open = true

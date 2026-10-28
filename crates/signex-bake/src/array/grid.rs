@@ -88,14 +88,12 @@ pub(super) fn bake_grid(
         params: params_ast.clone(),
         array_index: Some((0, 0)),
     };
-    let nx = eval(&nx_ast, &ctx)
-        .map_err(SketchError::Expr)?
-        .value
-        .round() as i64;
-    let ny = eval(&ny_ast, &ctx)
-        .map_err(SketchError::Expr)?
-        .value
-        .round() as i64;
+    let Some(nx) = super::eval_count("grid", "nx_expr", source, &nx_ast, &ctx, warnings)? else {
+        return Ok(());
+    };
+    let Some(ny) = super::eval_count("grid", "ny_expr", source, &ny_ast, &ctx, warnings)? else {
+        return Ok(());
+    };
     if nx <= 0 || ny <= 0 {
         warnings.push(format!(
             "grid array source {source}: nx={nx}, ny={ny} — array skipped"

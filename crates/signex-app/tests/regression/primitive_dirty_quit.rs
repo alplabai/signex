@@ -118,6 +118,7 @@ fn push_project(app: &mut Signex, dir: &Path, name: &str) {
         id,
         path: prj,
         data: ProjectData {
+            description: None,
             name: name.into(),
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: None,
@@ -185,6 +186,7 @@ fn preview_row() -> ComponentRow {
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(uuid::Uuid::new_v4(), uuid::Uuid::new_v4()),

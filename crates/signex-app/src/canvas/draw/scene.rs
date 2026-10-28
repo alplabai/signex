@@ -385,6 +385,7 @@ impl SchematicCanvas<'_> {
                     .map(|marker| crate::schematic_runtime::overlay::ErcMarker {
                         x_mm: marker.x,
                         y_mm: marker.y,
+                        net_level: marker.net_level,
                         severity: match marker.severity {
                             ErcMarkerSeverity::Error => {
                                 crate::schematic_runtime::overlay::ErcSeverity::Error

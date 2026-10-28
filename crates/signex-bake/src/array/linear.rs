@@ -7,7 +7,7 @@ use signex_library::primitive::footprint::Pad as LibPad;
 use signex_sketch::SketchError;
 use signex_sketch::array::NumberingScheme;
 use signex_sketch::expr::ast::ExprNode;
-use signex_sketch::expr::eval::{EvalContext, eval};
+use signex_sketch::expr::eval::EvalContext;
 use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
@@ -74,8 +74,11 @@ pub(super) fn bake_linear(
         params: params_ast.clone(),
         array_index: Some((0, 0)),
     };
-    let count_q = eval(&count_ast, &ctx).map_err(SketchError::Expr)?;
-    let count = count_q.value.round() as i64;
+    let Some(count) =
+        super::eval_count("linear", "count_expr", source, &count_ast, &ctx, warnings)?
+    else {
+        return Ok(());
+    };
     if count <= 0 {
         warnings.push(format!(
             "linear array source {source}: count_expr resolved to {count} — array skipped"
