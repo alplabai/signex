@@ -68,9 +68,8 @@ impl Signex {
     /// The context-menu route: open the child when its file exists, else the
     /// Create Sheet dialog.
     pub(crate) fn create_child_sheet_from_symbol(&mut self, symbol_id: Uuid) -> Task<Message> {
-        match self.sheet_symbol_identity(symbol_id) {
-            Some((_, filename)) => self.descend_through_sheet_symbol(symbol_id, &filename),
-            None => {}
+        if let Some((_, filename)) = self.sheet_symbol_identity(symbol_id) {
+            self.descend_through_sheet_symbol(symbol_id, &filename);
         }
         Task::none()
     }
