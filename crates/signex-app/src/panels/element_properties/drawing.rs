@@ -377,6 +377,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             | signex_types::schematic::SchDrawing::Polyline { stroke_color, .. } => *stroke_color,
         });
         col = col.push(drawing_stroke_color_row(current_color, muted));
+        col = col.push(drawing_placement_row(ctx.selected_drawing_placement, muted));
     }
     col.into()
 }
@@ -499,6 +500,57 @@ fn drawing_stroke_color_row<'a>(
                 is_active(Some(rgb(0xE0, 0xE0, 0xE0))),
                 Color::from_rgb(0.88, 0.88, 0.88),
             ),
+        ]
+        .spacing(4)
+        .width(Length::FillPortion(3)),
+    ]
+    .padding([4, PROPERTY_ROW_PAD_X])
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+/// Behind / Above the circuit. Drawings default to behind, so a highlight or
+/// callout laid over symbols and wires is the one that needs choosing (#1583).
+fn drawing_placement_row<'a>(
+    current: signex_types::schematic::DrawingPlacement,
+    muted: Color,
+) -> Element<'a, PanelMsg> {
+    use crate::app::contracts::DrawingFieldEdit as E;
+    use signex_types::schematic::DrawingPlacement;
+    let tile = |label: &'static str, placement: DrawingPlacement| -> Element<'a, PanelMsg> {
+        let active = current == placement;
+        iced::widget::button(text(label).size(10))
+            .padding([3, 8])
+            .on_press(PanelMsg::UpdateDrawingEdit(E::Placement(placement)))
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(Background::Color(if active {
+                    Color::from_rgb(0.20, 0.36, 0.58)
+                } else {
+                    Color::from_rgba(0.25, 0.25, 0.28, 0.4)
+                })),
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: Color::from_rgb(0.28, 0.28, 0.32),
+                },
+                text_color: if active {
+                    Color::from_rgb(1.0, 1.0, 1.0)
+                } else {
+                    muted
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+    };
+    row![
+        text("Placement")
+            .size(10)
+            .color(muted)
+            .width(Length::FillPortion(2)),
+        row![
+            tile("Behind circuit", DrawingPlacement::Behind),
+            tile("Above circuit", DrawingPlacement::Above),
         ]
         .spacing(4)
         .width(Length::FillPortion(3)),

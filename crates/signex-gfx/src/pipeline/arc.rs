@@ -159,6 +159,12 @@ impl ArcPipeline {
         render_pass.draw(0..6, 0..self.instance_count);
     }
 
+    /// The render pipeline, for callers that draw sub-ranges of their own
+    /// buffers with it (`pipeline::ordered`).
+    pub(crate) fn render_pipeline(&self) -> &wgpu::RenderPipeline {
+        &self.render_pipeline
+    }
+
     pub fn instance_count(&self) -> u32 {
         self.instance_count
     }

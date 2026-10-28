@@ -7,6 +7,7 @@
 use crate::primitive::arc::Arc;
 use crate::primitive::circle::Circle;
 use crate::primitive::line::LineSegment;
+use crate::primitive::ordered::OrderedItem;
 use crate::primitive::polygon::GpuPolygon;
 use crate::primitive::text::TextItem;
 use rstar::{AABB, Envelope};
@@ -157,6 +158,15 @@ fn polygon_envelope(polygon: &GpuPolygon) -> Option<AABB<[f32; 2]>> {
     ))
 }
 
+fn ordered_envelope(item: &OrderedItem) -> Option<AABB<[f32; 2]>> {
+    match item {
+        OrderedItem::Line(line) => Some(line_envelope(line)),
+        OrderedItem::Circle(circle) => Some(circle_envelope(circle)),
+        OrderedItem::Arc(arc) => Some(arc_envelope(arc)),
+        OrderedItem::Polygon(polygon) => polygon_envelope(polygon),
+    }
+}
+
 fn text_envelope(text: &TextItem) -> AABB<[f32; 2]> {
     let safe_size = text.size_mm.max(0.01);
     let char_count = text.content.chars().count().max(1) as f32;
@@ -198,6 +208,7 @@ pub struct UploadCounters {
     pub circle_uploads: u32,
     pub arc_uploads: u32,
     pub polygon_uploads: u32,
+    pub drawing_uploads: u32,
     pub text_uploads: u32,
     pub grid_refreshes: u32,
     pub overlay_line_uploads: u32,
@@ -215,6 +226,7 @@ impl UploadCounters {
             + self.circle_uploads
             + self.arc_uploads
             + self.polygon_uploads
+            + self.drawing_uploads
             + self.text_uploads
             + self.grid_refreshes
             + self.overlay_line_uploads
@@ -231,6 +243,7 @@ impl UploadCounters {
             + self.circle_uploads
             + self.arc_uploads
             + self.polygon_uploads
+            + self.drawing_uploads
             + self.text_uploads
             + self.overlay_line_uploads
             + self.overlay_circle_uploads
@@ -260,6 +273,12 @@ pub trait SceneUploadTarget {
     /// Polygons drawn above the stroke buckets; dirty-gated by
     /// `DirtyFlags::POLYGONS` together with [`Self::upload_polygons`].
     fn upload_top_polygons(&mut self, polygons: &[GpuPolygon]);
+    /// Drawings in paint order; the cull must keep that order. Dirty-gated by
+    /// `DirtyFlags::DRAWINGS`.
+    fn upload_drawings(&mut self, drawings: &[OrderedItem]);
+    /// Drawings placed above the circuit; dirty-gated by
+    /// `DirtyFlags::DRAWINGS` together with [`Self::upload_drawings`].
+    fn upload_drawings_front(&mut self, drawings: &[OrderedItem]);
     fn upload_texts(
         &mut self,
         texts: &[TextItem],
@@ -326,6 +345,17 @@ pub fn apply_dirty_uploads_with_culling<T: SceneUploadTarget>(
         // are one upload decision, not two.
         let top_polygons = cull_items(&scene.top_polygons, viewport, polygon_envelope);
         target.upload_top_polygons(top_polygons.as_ref());
+    }
+
+    if dirty.contains(DirtyFlags::DRAWINGS) {
+        // `cull_items` keeps survivors in list order, which is the point.
+        let drawings = cull_items(&scene.drawings, viewport, ordered_envelope);
+        target.upload_drawings(drawings.as_ref());
+        counters.drawing_uploads += 1;
+
+        // Same dirty category and the same counter: one upload decision.
+        let front = cull_items(&scene.drawings_front, viewport, ordered_envelope);
+        target.upload_drawings_front(front.as_ref());
     }
 
     if dirty.contains(DirtyFlags::TEXT) {

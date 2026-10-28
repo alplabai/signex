@@ -201,6 +201,21 @@ pub(super) fn align_entries(tid: ThemeId, selected: usize) -> Vec<DropdownEntry<
     ]
 }
 
+/// Arrange submenu — order the selected drawings (#1583). Offered only while
+/// the selection holds a drawing, so every row is live.
+pub(super) fn arrange_entries() -> Vec<DropdownEntry<Message>> {
+    use signex_engine::DrawingArrange as D;
+    [
+        ("Bring to Front", D::ToFront),
+        ("Send to Back", D::ToBack),
+        ("Bring Forward", D::Forward),
+        ("Send Backward", D::Backward),
+    ]
+    .into_iter()
+    .map(|(label, arrange)| dd_kb(None, label, "", ContextAction::ArrangeDrawings(arrange)))
+    .collect()
+}
+
 /// Add New to Project submenu — the master "Add New" picker for the
 /// right-clicked project (resolved as `target`). Schematic / Component
 /// Library / Symbol Library are wired; the rest stay version-badged stubs
@@ -294,6 +309,7 @@ impl Signex {
             ContextSubmenu::Align => {
                 align_entries(tid, self.interaction_state.canvas.selected.len())
             }
+            ContextSubmenu::Arrange => arrange_entries(),
             ContextSubmenu::AddNewToProject => {
                 // The right-clicked project lives at `tree_path[0]` —
                 // resolve it off the captured menu state so the action
