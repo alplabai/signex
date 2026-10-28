@@ -315,8 +315,12 @@ pub fn fuzzy_score(query: &str, target: &str) -> Option<i32> {
         return Some(0);
     }
     let q: Vec<char> = query.chars().flat_map(char::to_lowercase).collect();
-    let t: Vec<char> = target.chars().flat_map(char::to_lowercase).collect();
-    let t_orig: Vec<char> = target.chars().collect();
+    // Lowercasing can expand one char into several; keep an original-case
+    // char per lowercased char so both vectors share indices.
+    let (t, t_orig): (Vec<char>, Vec<char>) = target
+        .chars()
+        .flat_map(|c| c.to_lowercase().map(move |l| (l, c)))
+        .unzip();
     if q.len() > t.len() {
         return None;
     }
@@ -379,6 +383,13 @@ pub fn fuzzy_score(query: &str, target: &str) -> Option<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fuzzy_score_survives_lowercase_expansion() {
+        // U+0130 lowercases to two chars; indices must stay aligned.
+        assert!(fuzzy_score("ab", "\u{130}ab").is_some());
+        assert!(fuzzy_score("x", "\u{130}\u{130}\u{130}").is_none());
+    }
 
     #[test]
     fn empty_query_passes_all() {

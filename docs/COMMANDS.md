@@ -8,11 +8,11 @@ for the file format.
 **Generated — do not edit by hand.** Produced from
 `crates/signex-app/src/keymap/catalog/` and
 `crates/signex-app/assets/keyboard-shortcuts/` by
-`crates/signex-app/tests/command_reference.rs`, which fails if this
+`crates/signex-app/tests/integration/command_reference.rs`, which fails if this
 file drifts. Regenerate with:
 
 ```sh
-UPDATE_DOCS=1 cargo test -p signex-app --test command_reference
+UPDATE_DOCS=1 cargo test -p signex-app --test integration command_reference
 ```
 
 A command listed here resolves in the keymap. Not all of them reach an
@@ -84,7 +84,7 @@ shrink.
 | `print` | Print | file | `Ctrl+P` | `Ctrl+P` |
 | `redo` | Redo | edit | `Ctrl+Y` | `Ctrl+Y` |
 | `refresh_view` | Refresh/redraw | view | `End` | `F5` |
-| `remove_last_vertex` | Remove last placed vertex while drawing | interactive | `Backspace`, `Delete` | — |
+| `remove_last_vertex` | Remove last placed vertex while drawing | interactive | `Backspace` | — |
 | `repeat_last_item` | Repeat last item | edit | — | `Insert` |
 | `report_manager_bom` | Report Manager / BOM | reports | `R I` | — |
 | `reset_local_coordinates` | Reset local coordinates | view | — | `Space` |

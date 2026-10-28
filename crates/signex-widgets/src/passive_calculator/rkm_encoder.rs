@@ -12,6 +12,9 @@ use super::network::format_value;
 use super::production_date_code::{ProductionDateCode, ProductionDateCycle, ProductionMonth};
 use super::rkm_code::{RatedPower, RkmCode, TemperatureCoefficient};
 
+/// Width (px) shared by the Component and Tolerance pickers.
+const WIDE_PICK_W: f32 = 125.0;
+
 #[derive(Debug, Clone)]
 pub enum RkmEncoderMessage {
     KindChanged(ComponentKind),
@@ -150,7 +153,7 @@ impl RkmEncoder {
                     Some(self.kind),
                     RkmEncoderMessage::KindChanged,
                 )
-                .width(125),
+                .width(WIDE_PICK_W),
             ),
             labeled(
                 "Value",
@@ -180,7 +183,7 @@ impl RkmEncoder {
                     Some(self.tolerance),
                     RkmEncoderMessage::ToleranceChanged,
                 )
-                .width(125),
+                .width(WIDE_PICK_W),
             ),
         ]
         .spacing(12)

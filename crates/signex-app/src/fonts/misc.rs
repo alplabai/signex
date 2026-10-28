@@ -1,6 +1,7 @@
 //! Misc UI preference IO (first-run tour, component filter, browser searches). Split from `fonts.rs`.
 
 use super::*;
+use crate::chrome::controls::WindowControlsPlacement;
 
 // ──────────────────────────────────────────────────────────────────────────
 // First-run tour (UX_IMPROVEMENTS_OVER_ALTIUM §4.3)
@@ -11,11 +12,11 @@ use super::*;
 /// X button, Esc, or any canvas interaction) the flag flips to `true`
 /// and stays that way for the lifetime of the prefs file.
 pub fn read_first_run_tour_dismissed() -> bool {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return false;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+    read_first_run_tour_dismissed_from(load_prefs_json().as_ref())
+}
+
+pub fn read_first_run_tour_dismissed_from(json: Option<&serde_json::Value>) -> bool {
+    let Some(json) = json else {
         return false;
     };
     json["first_run_tour_dismissed"].as_bool().unwrap_or(false)
@@ -39,11 +40,11 @@ pub fn write_first_run_tour_dismissed(dismissed: bool) {
 /// when missing or malformed — that's the same as a fresh session for
 /// the panel.
 pub fn read_component_filter() -> String {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return String::new();
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+    read_component_filter_from(load_prefs_json().as_ref())
+}
+
+pub fn read_component_filter_from(json: Option<&serde_json::Value>) -> String {
+    let Some(json) = json else {
         return String::new();
     };
     json["component_filter"].as_str().unwrap_or("").to_string()
@@ -144,8 +145,11 @@ pub fn read_zoom_step_percent_pref() -> u8 {
 }
 
 pub fn read_zoom_step_percent_pref_at(path: &Path) -> u8 {
-    read_prefs_json(path)
-        .and_then(|json| json["zoom_step_percent"].as_f64())
+    read_zoom_step_percent_pref_from(read_prefs_json(path).as_ref())
+}
+
+pub fn read_zoom_step_percent_pref_from(json: Option<&serde_json::Value>) -> u8 {
+    json.and_then(|json| json["zoom_step_percent"].as_f64())
         .filter(|v| v.is_finite())
         .map(|v| crate::canvas::Camera::clamp_zoom_step_percent(v.round() as i64))
         .unwrap_or(crate::canvas::Camera::ZOOM_STEP_PERCENT_DEFAULT)
@@ -172,8 +176,13 @@ pub fn read_annotate_undo_pref() -> crate::annotate_undo::AnnotateUndo {
 }
 
 pub fn read_annotate_undo_pref_at(path: &Path) -> crate::annotate_undo::AnnotateUndo {
-    read_prefs_json(path)
-        .and_then(|json| json["annotate_undo"].as_str().map(str::to_string))
+    read_annotate_undo_pref_from(read_prefs_json(path).as_ref())
+}
+
+pub fn read_annotate_undo_pref_from(
+    json: Option<&serde_json::Value>,
+) -> crate::annotate_undo::AnnotateUndo {
+    json.and_then(|json| json["annotate_undo"].as_str().map(str::to_string))
         .map(|token| crate::annotate_undo::AnnotateUndo::from_token(&token))
         .unwrap_or_default()
 }
@@ -202,8 +211,11 @@ pub fn read_move_keeps_wires_pref() -> bool {
 }
 
 pub fn read_move_keeps_wires_pref_at(path: &Path) -> bool {
-    read_prefs_json(path)
-        .and_then(|json| json["move_keeps_wires"].as_bool())
+    read_move_keeps_wires_pref_from(read_prefs_json(path).as_ref())
+}
+
+pub fn read_move_keeps_wires_pref_from(json: Option<&serde_json::Value>) -> bool {
+    json.and_then(|json| json["move_keeps_wires"].as_bool())
         .unwrap_or(true)
 }
 
@@ -218,6 +230,41 @@ pub fn write_move_keeps_wires_pref_at(path: &Path, enabled: bool) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Window controls placement
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read where the main window's min/max/close buttons go. Anything missing
+/// or unrecognised is `Auto`.
+pub fn read_window_controls_placement_pref() -> WindowControlsPlacement {
+    read_window_controls_placement_pref_at(&prefs_path())
+}
+
+pub fn read_window_controls_placement_pref_at(path: &Path) -> WindowControlsPlacement {
+    read_window_controls_placement_pref_from(read_prefs_json(path).as_ref())
+}
+
+pub fn read_window_controls_placement_pref_from(
+    json: Option<&serde_json::Value>,
+) -> WindowControlsPlacement {
+    json.and_then(|json| json["window_controls_placement"].as_str())
+        .map(WindowControlsPlacement::from_token)
+        .unwrap_or_default()
+}
+
+pub fn write_window_controls_placement_pref(placement: WindowControlsPlacement) {
+    write_window_controls_placement_pref_at(&prefs_path(), placement)
+}
+
+pub fn write_window_controls_placement_pref_at(path: &Path, placement: WindowControlsPlacement) {
+    update_prefs_json(path, "window_controls_placement", |prefs| {
+        prefs.insert(
+            "window_controls_placement".to_string(),
+            serde_json::json!(placement.token()),
+        );
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Autosave recovery copies (#104)
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -228,8 +275,11 @@ pub fn read_autosave_enabled_pref() -> bool {
 }
 
 pub fn read_autosave_enabled_pref_at(path: &Path) -> bool {
-    read_prefs_json(path)
-        .and_then(|json| json["autosave_enabled"].as_bool())
+    read_autosave_enabled_pref_from(read_prefs_json(path).as_ref())
+}
+
+pub fn read_autosave_enabled_pref_from(json: Option<&serde_json::Value>) -> bool {
+    json.and_then(|json| json["autosave_enabled"].as_bool())
         .unwrap_or(false)
 }
 
@@ -255,8 +305,13 @@ pub fn read_ui_scale_pref() -> f32 {
 }
 
 pub fn read_ui_scale_pref_at(path: &Path) -> f32 {
-    let json = read_prefs_json(path);
-    let read = crate::ui_scale::parse_ui_scale(json.as_ref().and_then(|j| j.get("ui_scale")));
+    read_ui_scale_pref_from(read_prefs_json(path).as_ref(), path)
+}
+
+/// [`read_ui_scale_pref_at`] over an already-parsed `json`; `path` only
+/// names the file in the warning.
+pub fn read_ui_scale_pref_from(json: Option<&serde_json::Value>, path: &Path) -> f32 {
+    let read = crate::ui_scale::parse_ui_scale(json.and_then(|j| j.get("ui_scale")));
     if let Some(problem) = &read.problem {
         crate::diagnostics::log_warning(format!("{}: {problem}", path.display()));
     }

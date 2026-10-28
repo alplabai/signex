@@ -140,8 +140,9 @@ impl AppState {
     // and Postgres so the route handlers can stay backend-agnostic.
     //
     // The row body is round-tripped as JSON via `ComponentRow`'s serde impl
-    // so adding fields later (e.g. when v3.0 lifts `PlmReserved` into wire
-    // format) doesn't require a schema migration.
+    // so a new `ComponentRow` field needs no SQL migration. New fields are
+    // required in the JSON: rows stored before a field existed are not
+    // supported.
 
     /// Insert a brand-new row. Returns `Ok(false)` when a row with the
     /// same `(library_id, table, row_id)` already exists so the caller
@@ -439,18 +440,44 @@ impl AppState {
     // share one generic helper per backend with the table name as a parameter.
     // sqlx doesn't templatise table names, so we route through a `match`.
 
-    pub async fn insert_symbol(&self, library_id: Uuid, sym: &Symbol) -> sqlx::Result<()> {
+    /// Create a symbol; `false` when `(library_id, uuid)` already exists.
+    pub async fn insert_symbol(&self, library_id: Uuid, sym: &Symbol) -> sqlx::Result<bool> {
         let payload = serde_json::to_string(sym).map_err(decode_err)?;
-        upsert_primitive(
+        insert_primitive(
             &self.pool, "symbols", library_id, sym.uuid, &sym.name, &payload,
         )
         .await
     }
 
-    pub async fn fetch_symbol(&self, library_id: Uuid, uuid: Uuid) -> sqlx::Result<Option<Symbol>> {
+    /// Replace a symbol if it is still at `base_revision`.
+    pub async fn update_symbol(
+        &self,
+        library_id: Uuid,
+        sym: &Symbol,
+        base_revision: i64,
+    ) -> sqlx::Result<RowWrite> {
+        let payload = serde_json::to_string(sym).map_err(decode_err)?;
+        update_primitive(
+            &self.pool,
+            "symbols",
+            library_id,
+            sym.uuid,
+            &sym.name,
+            &payload,
+            base_revision,
+        )
+        .await
+    }
+
+    /// The symbol and the revision it is stored at.
+    pub async fn fetch_symbol(
+        &self,
+        library_id: Uuid,
+        uuid: Uuid,
+    ) -> sqlx::Result<Option<(Symbol, i64)>> {
         fetch_primitive_payload(&self.pool, "symbols", library_id, uuid)
             .await?
-            .map(|p| serde_json::from_str(&p).map_err(decode_err))
+            .map(|(p, rev)| Ok((serde_json::from_str(&p).map_err(decode_err)?, rev)))
             .transpose()
     }
 
@@ -461,9 +488,10 @@ impl AppState {
         list_primitive_summaries(&self.pool, "symbols", library_id).await
     }
 
-    pub async fn insert_footprint(&self, library_id: Uuid, fp: &Footprint) -> sqlx::Result<()> {
+    /// Create a footprint; `false` when `(library_id, uuid)` already exists.
+    pub async fn insert_footprint(&self, library_id: Uuid, fp: &Footprint) -> sqlx::Result<bool> {
         let payload = serde_json::to_string(fp).map_err(decode_err)?;
-        upsert_primitive(
+        insert_primitive(
             &self.pool,
             "footprints",
             library_id,
@@ -474,17 +502,38 @@ impl AppState {
         .await
     }
 
+    /// Replace a footprint if it is still at `base_revision`.
+    pub async fn update_footprint(
+        &self,
+        library_id: Uuid,
+        fp: &Footprint,
+        base_revision: i64,
+    ) -> sqlx::Result<RowWrite> {
+        let payload = serde_json::to_string(fp).map_err(decode_err)?;
+        update_primitive(
+            &self.pool,
+            "footprints",
+            library_id,
+            fp.uuid,
+            &fp.name,
+            &payload,
+            base_revision,
+        )
+        .await
+    }
+
+    /// The footprint and the revision it is stored at.
     pub async fn fetch_footprint(
         &self,
         library_id: Uuid,
         uuid: Uuid,
-    ) -> sqlx::Result<Option<Footprint>> {
+    ) -> sqlx::Result<Option<(Footprint, i64)>> {
         fetch_primitive_payload(&self.pool, "footprints", library_id, uuid)
             .await?
-            .map(|p| {
+            .map(|(p, rev)| {
                 let mut fp: Footprint = serde_json::from_str(&p).map_err(decode_err)?;
                 fp.repair_stored_sketch();
-                Ok(fp)
+                Ok((fp, rev))
             })
             .transpose()
     }
@@ -496,15 +545,41 @@ impl AppState {
         list_primitive_summaries(&self.pool, "footprints", library_id).await
     }
 
-    pub async fn insert_sim(&self, library_id: Uuid, sm: &SimModel) -> sqlx::Result<()> {
+    /// Create a sim model; `false` when `(library_id, uuid)` already exists.
+    pub async fn insert_sim(&self, library_id: Uuid, sm: &SimModel) -> sqlx::Result<bool> {
         let payload = serde_json::to_string(sm).map_err(decode_err)?;
-        upsert_primitive(&self.pool, "sims", library_id, sm.uuid, &sm.name, &payload).await
+        insert_primitive(&self.pool, "sims", library_id, sm.uuid, &sm.name, &payload).await
     }
 
-    pub async fn fetch_sim(&self, library_id: Uuid, uuid: Uuid) -> sqlx::Result<Option<SimModel>> {
+    /// Replace a sim model if it is still at `base_revision`.
+    pub async fn update_sim(
+        &self,
+        library_id: Uuid,
+        sm: &SimModel,
+        base_revision: i64,
+    ) -> sqlx::Result<RowWrite> {
+        let payload = serde_json::to_string(sm).map_err(decode_err)?;
+        update_primitive(
+            &self.pool,
+            "sims",
+            library_id,
+            sm.uuid,
+            &sm.name,
+            &payload,
+            base_revision,
+        )
+        .await
+    }
+
+    /// The sim model and the revision it is stored at.
+    pub async fn fetch_sim(
+        &self,
+        library_id: Uuid,
+        uuid: Uuid,
+    ) -> sqlx::Result<Option<(SimModel, i64)>> {
         fetch_primitive_payload(&self.pool, "sims", library_id, uuid)
             .await?
-            .map(|p| serde_json::from_str(&p).map_err(decode_err))
+            .map(|(p, rev)| Ok((serde_json::from_str(&p).map_err(decode_err)?, rev)))
             .transpose()
     }
 
@@ -527,27 +602,26 @@ fn assert_primitive_table(table: &str) {
     );
 }
 
-async fn upsert_primitive(
+/// Plain `INSERT`: `false` when `(library_id, uuid)` already exists. A
+/// create never overwrites a primitive; replacing goes through
+/// [`update_primitive`] with the revision the writer read.
+async fn insert_primitive(
     pool: &DbPool,
     table: &'static str,
     library_id: Uuid,
     uuid: Uuid,
     name: &str,
     payload: &str,
-) -> sqlx::Result<()> {
+) -> sqlx::Result<bool> {
     assert_primitive_table(table);
     let now = Utc::now().to_rfc3339();
-    match pool {
+    // sqlx 0.8 doesn't templatise identifiers; format!() with the
+    // whitelisted table is safe (see `assert_primitive_table`).
+    let result = match pool {
         DbPool::Sqlite(pool) => {
-            // sqlx 0.8 doesn't templatise identifiers; format!() with the
-            // whitelisted table is safe (see `assert_primitive_table`).
             let sql = format!(
                 "INSERT INTO {table} (library_id, uuid, name, payload, created_at, updated_at) \
-                 VALUES (?, ?, ?, ?, ?, ?) \
-                 ON CONFLICT(library_id, uuid) DO UPDATE SET \
-                     name = excluded.name, \
-                     payload = excluded.payload, \
-                     updated_at = excluded.updated_at",
+                 VALUES (?, ?, ?, ?, ?, ?)",
             );
             sqlx::query(&sql)
                 .bind(library_id.to_string())
@@ -557,16 +631,13 @@ async fn upsert_primitive(
                 .bind(&now)
                 .bind(&now)
                 .execute(pool)
-                .await?;
+                .await
+                .map(|_| ())
         }
         DbPool::Postgres(pool) => {
             let sql = format!(
                 "INSERT INTO {table} (library_id, uuid, name, payload, created_at, updated_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6) \
-                 ON CONFLICT (library_id, uuid) DO UPDATE SET \
-                     name = EXCLUDED.name, \
-                     payload = EXCLUDED.payload, \
-                     updated_at = EXCLUDED.updated_at",
+                 VALUES ($1, $2, $3, $4, $5, $6)",
             );
             sqlx::query(&sql)
                 .bind(library_id.to_string())
@@ -576,37 +647,108 @@ async fn upsert_primitive(
                 .bind(&now)
                 .bind(&now)
                 .execute(pool)
-                .await?;
+                .await
+                .map(|_| ())
         }
+    };
+    match result {
+        Ok(()) => Ok(true),
+        Err(e) if is_unique_violation(&e) => Ok(false),
+        Err(e) => Err(e),
     }
-    Ok(())
 }
 
+/// Replace a primitive if it is still at `base_revision`, bumping the
+/// revision. One `UPDATE ... WHERE revision = ?`, so of two writers with
+/// the same base only one wins.
+async fn update_primitive(
+    pool: &DbPool,
+    table: &'static str,
+    library_id: Uuid,
+    uuid: Uuid,
+    name: &str,
+    payload: &str,
+    base_revision: i64,
+) -> sqlx::Result<RowWrite> {
+    assert_primitive_table(table);
+    let now = Utc::now().to_rfc3339();
+    let affected = match pool {
+        DbPool::Sqlite(pool) => {
+            let sql = format!(
+                "UPDATE {table} SET name = ?, payload = ?, updated_at = ?, \
+                     revision = revision + 1 \
+                 WHERE library_id = ? AND uuid = ? AND revision = ?",
+            );
+            sqlx::query(&sql)
+                .bind(name)
+                .bind(payload)
+                .bind(&now)
+                .bind(library_id.to_string())
+                .bind(uuid.to_string())
+                .bind(base_revision)
+                .execute(pool)
+                .await?
+                .rows_affected()
+        }
+        DbPool::Postgres(pool) => {
+            let sql = format!(
+                "UPDATE {table} SET name = $1, payload = $2, updated_at = $3, \
+                     revision = revision + 1 \
+                 WHERE library_id = $4 AND uuid = $5 AND revision = $6",
+            );
+            sqlx::query(&sql)
+                .bind(name)
+                .bind(payload)
+                .bind(&now)
+                .bind(library_id.to_string())
+                .bind(uuid.to_string())
+                .bind(base_revision)
+                .execute(pool)
+                .await?
+                .rows_affected()
+        }
+    };
+    if affected > 0 {
+        return Ok(RowWrite::Applied {
+            revision: base_revision + 1,
+        });
+    }
+    // Matched nothing: the primitive is gone, or moved past the base.
+    Ok(
+        match fetch_primitive_payload(pool, table, library_id, uuid).await? {
+            Some((_, current_revision)) => RowWrite::Stale { current_revision },
+            None => RowWrite::Missing,
+        },
+    )
+}
+
+/// The stored JSON and its revision, read in one query.
 async fn fetch_primitive_payload(
     pool: &DbPool,
     table: &'static str,
     library_id: Uuid,
     uuid: Uuid,
-) -> sqlx::Result<Option<String>> {
+) -> sqlx::Result<Option<(String, i64)>> {
     assert_primitive_table(table);
     match pool {
         DbPool::Sqlite(pool) => {
-            let sql = format!("SELECT payload FROM {table} WHERE library_id = ? AND uuid = ?");
-            let row = sqlx::query(&sql)
+            let sql =
+                format!("SELECT payload, revision FROM {table} WHERE library_id = ? AND uuid = ?");
+            sqlx::query_as(&sql)
                 .bind(library_id.to_string())
                 .bind(uuid.to_string())
                 .fetch_optional(pool)
-                .await?;
-            Ok(row.map(|r| r.get::<String, _>("payload")))
+                .await
         }
         DbPool::Postgres(pool) => {
-            let sql = format!("SELECT payload FROM {table} WHERE library_id = $1 AND uuid = $2");
-            let row = sqlx::query(&sql)
+            let sql = format!(
+                "SELECT payload, revision FROM {table} WHERE library_id = $1 AND uuid = $2"
+            );
+            sqlx::query_as(&sql)
                 .bind(library_id.to_string())
                 .bind(uuid.to_string())
                 .fetch_optional(pool)
-                .await?;
-            Ok(row.map(|r| r.get::<String, _>("payload")))
+                .await
         }
     }
 }

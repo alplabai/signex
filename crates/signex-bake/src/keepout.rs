@@ -27,7 +27,8 @@ use signex_sketch::entity::EntityKind;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 
-use crate::profile::{TraceError, trace_closed_profile};
+use crate::profile::TraceError;
+use crate::traced_loops::TracedLoops;
 
 pub fn bake_keepouts(
     sketch: &SketchData,
@@ -35,6 +36,7 @@ pub fn bake_keepouts(
     out: &mut Vec<FpKeepout>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
+    let mut loops = TracedLoops::default();
     for entity in &sketch.entities {
         if entity.bake_skipped() {
             continue;
@@ -48,13 +50,17 @@ pub fn bake_keepouts(
             EntityKind::Line { .. } | EntityKind::Arc { .. }
         ) {
             warnings.push(format!(
-                "entity {}: KeepoutAttr requires a Line or Arc seed (Circles land in v0.14.2); skipping",
+                "entity {}: KeepoutAttr requires a Line or Arc seed (Circle seeds are not supported); skipping",
                 entity.id
             ));
             continue;
         }
+        let attribute = format!("{attr:?}");
+        if loops.contains(&attribute, entity.id) {
+            continue;
+        }
 
-        match trace_closed_profile(sketch, solve, entity.id) {
+        match loops.trace(&attribute, sketch, solve, entity.id) {
             Ok(vertices) => out.push(FpKeepout {
                 boundary: Polygon::new(vertices),
                 layer: LayerId::new(attr.layer.altium_label()),
@@ -236,5 +242,54 @@ mod tests {
         let mut warnings = Vec::new();
         bake_keepouts(&data, &solved, &mut out, &mut warnings).unwrap();
         assert_eq!(out[0].forbids, KeepoutForbid::Copper);
+    }
+
+    #[test]
+    fn tagging_every_edge_bakes_the_loop_once() {
+        let attr = KeepoutAttr {
+            layer: SignexLayer::TopCopper,
+            kinds: KeepoutKinds::default(),
+        };
+        let mut data = rectangle_with_keepout(attr.clone());
+        for e in data
+            .entities
+            .iter_mut()
+            .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+        {
+            e.keepout = Some(attr.clone());
+        }
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_keepouts(&data, &solved, &mut out, &mut warnings).unwrap();
+        assert_eq!(out.len(), 1);
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn one_loop_tagged_with_two_layers_bakes_once_per_layer() {
+        let top = KeepoutAttr {
+            layer: SignexLayer::TopCopper,
+            kinds: KeepoutKinds::default(),
+        };
+        let bottom = KeepoutAttr {
+            layer: SignexLayer::BottomCopper,
+            kinds: KeepoutKinds::default(),
+        };
+        let mut data = rectangle_with_keepout(top);
+        let third = data
+            .entities
+            .iter_mut()
+            .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+            .nth(2)
+            .unwrap();
+        third.keepout = Some(bottom);
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_keepouts(&data, &solved, &mut out, &mut warnings).unwrap();
+        let mut layers: Vec<&str> = out.iter().map(|o| o.layer.as_str()).collect();
+        layers.sort();
+        assert_eq!(layers, vec!["Bottom Layer", "Top Layer"]);
     }
 }

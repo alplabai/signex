@@ -48,17 +48,20 @@ impl Signex {
             .to_string()
     }
 
-    fn component_prefix_from_lib_id(lib_id: &str) -> String {
+    /// Legacy `lib_id` placements know no component class and no row, so the
+    /// standard has nothing to key on: the value's own leading letters decide,
+    /// through the same resolver as a library-row placement. Only the letters
+    /// are handed over: a value starting with `#` or a space has none, and
+    /// falls back to `U`, because this path never builds a power symbol and a
+    /// `#` reference on an ordinary part would drop it out of annotation.
+    fn component_prefix_from_lib_id(&self, lib_id: &str) -> String {
+        let standard = self
+            .document_state
+            .active_document_project()
+            .and_then(|p| p.data.designator_standard());
         let value = Self::component_value_from_lib_id(lib_id);
-        let prefix: String = value
-            .chars()
-            .take_while(|ch| ch.is_ascii_alphabetic())
-            .collect();
-        if prefix.is_empty() {
-            "U".to_string()
-        } else {
-            prefix.to_ascii_uppercase()
-        }
+        let letters = signex_types::designator::alphabetic_prefix(&value);
+        signex_types::designator::resolve_prefix(standard, None, None, letters)
     }
 
     fn increment_designator(reference: &str) -> Option<String> {
@@ -71,32 +74,40 @@ impl Signex {
         let value = digits.parse::<u32>().ok()?;
         Some(format!(
             "{prefix}{:0width$}",
-            value + 1,
+            value.checked_add(1)?,
             width = digits.len()
         ))
     }
 
+    /// The next free `prefix` designator across every open sheet of the
+    /// active project (#1470), so `R5` is not offered on sheet B while sheet
+    /// A already holds it. Sheets of the project that are not open as tabs
+    /// are not read: that needs disk IO, which `update` must not do.
     pub(crate) fn next_designator_for_prefix(&self, prefix: &str) -> String {
-        let next_index = self
-            .active_render_snapshot()
-            .map(|snapshot| {
-                snapshot
-                    .symbols
-                    .iter()
-                    .filter_map(|symbol| {
-                        let reference = symbol.reference.trim();
-                        if !reference.starts_with(prefix) {
-                            return None;
-                        }
-                        reference[prefix.len()..].parse::<u32>().ok()
-                    })
-                    .max()
-                    .unwrap_or(0)
-                    + 1
+        let ds = &self.document_state;
+        let active_project = ds
+            .active_path
+            .as_deref()
+            .map(|active| ds.document_project(active));
+        let max_used = ds
+            .engines
+            .iter()
+            .filter(|(path, _)| match active_project {
+                // A loose sheet shares no designators with another document.
+                Some(None) | None => ds.active_path.as_deref() == Some(path.as_path()),
+                Some(Some(owner)) => ds
+                    .document_project(path)
+                    .is_some_and(|p| std::ptr::eq(p, owner)),
             })
-            .unwrap_or(1);
+            .flat_map(|(_, engine)| engine.document().symbols.iter())
+            .filter_map(|symbol| {
+                let reference = symbol.reference.trim();
+                reference.strip_prefix(prefix)?.parse::<u32>().ok()
+            })
+            .max()
+            .unwrap_or(0);
 
-        format!("{prefix}{next_index}")
+        format!("{prefix}{}", max_used.saturating_add(1))
     }
 
     pub(crate) fn current_component_defaults(&self) -> Option<(String, String)> {
@@ -110,7 +121,7 @@ impl Signex {
             .map(|pp| pp.designator.trim().to_string())
             .filter(|designator| !designator.is_empty())
             .unwrap_or_else(|| {
-                self.next_designator_for_prefix(&Self::component_prefix_from_lib_id(lib_id))
+                self.next_designator_for_prefix(&self.component_prefix_from_lib_id(lib_id))
             });
         Some((value, designator))
     }
@@ -129,7 +140,7 @@ impl Signex {
             .map(|pp| pp.designator.trim().to_string())
             .filter(|designator| !designator.is_empty())
             .unwrap_or_else(|| {
-                self.next_designator_for_prefix(&Self::component_prefix_from_lib_id(&lib_id))
+                self.next_designator_for_prefix(&self.component_prefix_from_lib_id(&lib_id))
             });
         let value = self
             .document_state
@@ -204,7 +215,7 @@ impl Signex {
         self.apply_engine_command(signex_engine::Command::PlaceSymbol { symbol }, false, false);
 
         let next_designator = Self::increment_designator(&reference).unwrap_or_else(|| {
-            self.next_designator_for_prefix(&Self::component_prefix_from_lib_id(&lib_id))
+            self.next_designator_for_prefix(&self.component_prefix_from_lib_id(&lib_id))
         });
 
         if let Some(ref mut pp) = self.document_state.panel_ctx.pre_placement {
@@ -460,5 +471,56 @@ impl Signex {
                 false,
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod designator_tests {
+    use super::Signex;
+
+    #[test]
+    fn designator_increment_does_not_overflow() {
+        assert_eq!(Signex::increment_designator("R4294967295"), None);
+        assert_eq!(
+            Signex::increment_designator("R009").as_deref(),
+            Some("R010")
+        );
+    }
+
+    fn sheet_holding(reference: &str) -> signex_types::schematic::SchematicSheet {
+        let mut sheet = signex_types::schematic::SchematicSheet::default();
+        sheet.symbols.push(signex_types::schematic::Symbol {
+            reference: reference.to_string(),
+            ..Default::default()
+        });
+        sheet
+    }
+
+    /// #1470 — the next designator clears every open sheet of the project,
+    /// not only the active one, and ignores a sheet of another project.
+    #[test]
+    fn next_designator_spans_the_open_sheets_of_the_active_project() {
+        use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
+        let dir = std::path::PathBuf::from("/w/a");
+        let mut app = app_workspace("/w/a", &["a.snxsch", "b.snxsch"]);
+        open_with(
+            &mut app.document_state,
+            &dir.join("a.snxsch"),
+            sheet_holding("R4"),
+        );
+        open_with(
+            &mut app.document_state,
+            &dir.join("b.snxsch"),
+            sheet_holding("R1"),
+        );
+        open_with(
+            &mut app.document_state,
+            &std::path::PathBuf::from("/elsewhere/c.snxsch"),
+            sheet_holding("R9"),
+        );
+        app.document_state.active_path = Some(dir.join("b.snxsch"));
+
+        assert_eq!(app.next_designator_for_prefix("R"), "R5");
+        assert_eq!(app.next_designator_for_prefix("C"), "C1");
     }
 }

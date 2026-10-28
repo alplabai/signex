@@ -980,6 +980,7 @@ fn width_rule(ctx: &ErcContext, out: &mut Vec<crate::diagnostic::Diagnostic>) {
 mod bus_hier_tests;
 mod bus_runs_tests;
 mod bus_tests;
+mod index_equivalence;
 
 fn hier_label(text: &str, pos: Point) -> ErcLabel {
     ErcLabel {
