@@ -465,6 +465,7 @@ impl Signex {
                     drawing_edit_buf: std::collections::HashMap::new(),
                     drawing_edit_buf_for: None,
                     selected_drawing: None,
+                    selected_drawing_placement: Default::default(),
                     selected_child_sheet: None,
                     child_sheet_border_picker_open: false,
                     child_sheet_fill_picker_open: false,

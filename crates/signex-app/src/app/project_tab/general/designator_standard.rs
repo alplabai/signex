@@ -1,10 +1,10 @@
 //! The "Designator standard" row of the General section (#1232): the view,
 //! and the write path it drives.
 //!
-//! The write mutates the project's `ProjectData` and flips its `.snxprj`
-//! dirty; the file is written by the normal explicit save (atomic write). It
-//! is not an undo step: the picker is the whole edit surface and re-picking
-//! restores the previous value.
+//! A pick is applied through the General section's undo history
+//! (`ProjectGeneralCommand::SetDesignatorStandard`, #1421), in order with
+//! description and parameter edits; it flips the `.snxprj` dirty and the
+//! file is written by the normal explicit save (atomic write).
 
 use iced::widget::{column, pick_list, text};
 use iced::{Element, Length};
@@ -12,9 +12,9 @@ use signex_types::designator::DesignatorStandard;
 use signex_types::theme::ThemeTokens;
 
 use super::view::{labelled, tab_message};
+use crate::app::Message;
 use crate::app::project_tab::ProjectTabMsg;
-use crate::app::state::{LoadedProject, ProjectId};
-use crate::app::{Message, Signex};
+use crate::app::state::LoadedProject;
 use crate::styles::{Spacing, TypeScale};
 
 /// One picker entry: a standard, or `None` for "Library designator".
@@ -69,34 +69,4 @@ pub(super) fn row<'a>(project: &'a LoadedProject, tokens: &ThemeTokens) -> Eleme
         picker
     };
     labelled("Designator standard", field, tokens)
-}
-
-impl Signex {
-    /// Set (or, with `None`, clear) the designator standard of the project.
-    pub(in crate::app::project_tab) fn set_project_designator_standard(
-        &mut self,
-        project_id: ProjectId,
-        standard: Option<DesignatorStandard>,
-    ) {
-        let ds = &mut self.document_state;
-        let Some(project) = ds.projects.iter_mut().find(|p| p.id == project_id) else {
-            crate::diagnostics::log_warning(
-                "Project tab: the project was closed; the designator standard was not changed",
-            );
-            return;
-        };
-        // An unreadable section from a newer Signex is replaced only by a real
-        // standard; re-picking "Library designator" must not discard it.
-        let unreadable = project.data.has_unreadable_annotation();
-        if unreadable && standard.is_none() {
-            return;
-        }
-        if !unreadable && project.data.designator_standard() == standard {
-            return;
-        }
-        project.data.set_designator_standard(standard);
-        let path = project.path.clone();
-        ds.dirty_paths.insert(path);
-        self.refresh_panel_ctx();
-    }
 }

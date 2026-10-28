@@ -21,11 +21,10 @@ impl Signex {
                 project_id,
                 standard,
             } => {
-                // A pick is its own undo step, not part of the typing run.
-                if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
-                    tab.general_history.close_run();
-                }
-                self.set_project_designator_standard(project_id, standard);
+                self.apply_project_general(
+                    project_id,
+                    ProjectGeneralCommand::SetDesignatorStandard(standard),
+                );
             }
             ProjectTabMsg::ParameterEdited {
                 project_id,

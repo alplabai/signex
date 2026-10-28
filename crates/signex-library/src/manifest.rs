@@ -68,6 +68,20 @@ fn serialize_auth_reference<S: serde::Serializer>(
     serializer.serialize_str(auth)
 }
 
+/// Replace the userinfo of `scheme://user:pass@host/...` with
+/// `<redacted>`, so a credential embedded in a URL never reaches a log.
+/// A URL without userinfo is returned unchanged.
+fn redact_url_userinfo(url: &str) -> String {
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return url.to_string();
+    };
+    let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    match rest[..authority_end].rfind('@') {
+        Some(at) => format!("{scheme}://<redacted>@{}", &rest[at + 1..]),
+        None => url.to_string(),
+    }
+}
+
 impl std::fmt::Debug for LibraryMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -79,7 +93,7 @@ impl std::fmt::Debug for LibraryMode {
                     "<redacted>"
                 };
                 f.debug_struct("Database")
-                    .field("url", url)
+                    .field("url", &redact_url_userinfo(url))
                     .field("auth", &shown)
                     .finish()
             }
@@ -353,6 +367,28 @@ auth = "@signex-keychain:alplab-libserver"
                 .unwrap()
                 .contains("@signex-keychain:lab")
         );
+    }
+
+    #[test]
+    fn database_url_userinfo_is_redacted_in_debug() {
+        let mode = LibraryMode::Database {
+            url: "https://alice:hunter2@lib.example:8443/api?x=a@b".into(),
+            auth: String::new(),
+        };
+        let shown = format!("{mode:?}");
+        assert!(
+            !shown.contains("alice") && !shown.contains("hunter2"),
+            "{shown}"
+        );
+        assert!(
+            shown.contains("https://<redacted>@lib.example:8443/api?x=a@b"),
+            "{shown}"
+        );
+        let plain = LibraryMode::Database {
+            url: "https://lib.example/api@v1".into(),
+            auth: String::new(),
+        };
+        assert!(format!("{plain:?}").contains("https://lib.example/api@v1"));
     }
 
     #[test]

@@ -436,6 +436,9 @@ impl Signex {
                 // above Align: the same 3 rows + 1 sep, then
                 // Place / Part Actions / Sheet Actions / References.
                 ContextSubmenu::Align => TOP_PAD + 7.0 * ROW_H + SEP_H,
+                // Arrange sits right under Align, but only when a drawing is
+                // selected (#1583).
+                ContextSubmenu::Arrange => TOP_PAD + 8.0 * ROW_H + SEP_H,
                 // AddNewToProject only fires from the project-tree
                 // menu, never from the canvas menu — fall through
                 // to a safe placeholder if the state somehow leaks
