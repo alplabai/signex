@@ -144,9 +144,31 @@ To place a part, open a schematic sheet, then either:
   **Place**; or
 - press **Place** at the end of a part's row in the Components panel.
 
-The part is dropped near the centre of the view with the next free
-designator, and one **Undo** removes it. With no schematic open, Signex shows
-a **Place Failed** notice instead.
+The part attaches to the cursor and follows it on the grid. While it is
+attached:
+
+- **Rotate and mirror** it with the keys that rotate and mirror a selection
+  (section 13: `Space` rotates in the default profile; `X` and `Y` mirror). They
+  turn the part on the cursor, not whatever is selected on the sheet.
+- Press `Tab` to open the pre-placement properties in the Properties panel:
+  the value, the designator and the rotation. Placement pauses until you press
+  **Resume**.
+- Click to place it. One click is one **Undo** step. The part stays on the
+  cursor, and each further click places another copy with the next free
+  designator (R1, R2, R3...). A designator typed in the `Tab` form is used for
+  the next click and then counts up from it. If that designator is already on
+  the sheet, the click uses the next free one and the Messages panel says so.
+  A blank value in the `Tab` form is ignored: the part keeps its value.
+  Pressing on the sheet while a part is on the cursor always places it; it
+  never moves or selects what is already there.
+  A part with several units places unit 1 under a new number at each click.
+- Press `Esc` or right-click to let go of the part.
+
+The part belongs to the sheet that was showing when you picked it. Switching to
+another tab, or closing the sheet, lets go of it, and a click on another sheet
+never places into it. A sheet written by a newer Signex is read-only in this
+build: Signex says so in the Messages panel and does not attach the part. With
+no schematic open, Signex shows a **Place Failed** notice instead.
 
 **Datasheets.** A part's Component Preview tab has a **Datasheet** tab that
 holds one or more documents: a datasheet per manufacturer, an errata, an
@@ -376,6 +398,42 @@ A schematic without placed parts produces an empty BOM.
 
 The same menu also offers **Netlist (Protel .NET)…** and **ERC Report…**
 (saved as `erc-report.txt` by default).
+
+### Title block, project parameters and special strings
+
+The title block of every sheet is filled from **project parameters**. Open the
+project's **Project** tab (project tree, **Project Options**) and choose
+**Parameters**: title, document number, revision, date, company, drawn by,
+checked by and approved by apply to every sheet, and **Custom parameters** adds
+your own name/value pairs. Edits there are undoable with `Ctrl+Z` and are saved
+to the `.snxprj` with `Ctrl+S`.
+
+A sheet can override a value: in the sheet's **Properties** panel, **Title
+Block** section, type the value for that sheet. The label shows `(project)`
+while the field is empty and takes the project's value, and `(overrides
+project)` while the sheet has its own. Clear the field to fall back to the
+project's value.
+
+Any text note, and the title block, can use these special strings. They
+resolve the same way on the canvas, in the PDF and in the SVG page:
+
+| String | Value |
+|---|---|
+| `${PROJECT_NAME}` | the project's name |
+| `${TITLE}` | title |
+| `${DOCUMENTNUMBER}` | document number |
+| `${REVISION}` (or `${REV}`) | revision |
+| `${DATE}` | date |
+| `${COMPANY}` | company |
+| `${DRAWNBY}`, `${CHECKEDBY}`, `${APPROVEDBY}` | the sign-off names |
+| `${COMMENT1}` to `${COMMENT4}` | the four comment lines |
+| `${SHEETNUMBER}`, `${SHEETCOUNT}` | this sheet's number and the sheet count |
+| `${SHEETNAME}`, `${FILENAME}` | the sheet's name and file name |
+| `${NAME}` | a custom parameter called `NAME` (case matters) |
+
+An unknown string prints as empty text. The standard title block prints the
+title, document number, revision, sheet, date, company, file name and the
+Drawn / Checked / Approved row.
 
 ## Walkthrough: a saved schematic with a wired symbol
 

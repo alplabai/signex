@@ -90,6 +90,9 @@ pub struct SvgEvaluatorInputs<'a> {
     pub global_refdes: &'a HashMap<String, String>,
     pub net_name_by_symbol_pin: &'a HashMap<String, HashMap<String, String>>,
     pub cell: &'a str,
+    /// Resolves `${TOKEN}` special strings in text notes, the same context
+    /// the title block resolves with. `None` leaves the text as stored.
+    pub special_strings: Option<&'a crate::SubstitutionContext<'a>>,
 }
 
 fn fill_to_rgb(

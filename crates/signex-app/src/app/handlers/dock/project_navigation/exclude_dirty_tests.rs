@@ -445,6 +445,7 @@ fn save_all_ignores_a_project_with_an_empty_dir() {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),

@@ -122,6 +122,13 @@ pub struct InteractionState {
     pub selection_slots: [Vec<signex_types::schematic::SelectedItem>; 8],
     pub last_tool: std::collections::HashMap<String, crate::active_bar::ActiveBarAction>,
     pub pending_power: Option<(String, String)>,
+    /// A library part attached to the cursor, waiting for its click.
+    pub placement: Option<super::PlacementSession>,
+    /// Token for library reads. Every pick takes a new value and carries it,
+    /// so only the LATEST pick may arm a session; Esc, a right-click and any
+    /// tool change bump it too, so a read that finishes after a cancel arms
+    /// nothing. Arming itself leaves it alone.
+    pub placement_epoch: u64,
     pub pending_port: Option<(signex_types::schematic::LabelType, String)>,
     /// Orientation and size of the next bus entry (Space / Shift+Space / X / Y
     /// while the Bus Entry tool is armed). The signs are the orientation; see

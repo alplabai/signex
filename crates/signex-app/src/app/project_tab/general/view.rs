@@ -17,11 +17,11 @@ const LABEL_COLUMN_EMS: f32 = 12.0;
 /// Widest the section's rows grow, in `body`-size characters.
 const SECTION_MAX_EMS: f32 = 48.0;
 
-pub(super) fn tab_message(msg: ProjectTabMsg) -> Message {
+pub(in crate::app::project_tab) fn tab_message(msg: ProjectTabMsg) -> Message {
     Message::Project(ProjectMsg::Tab(msg))
 }
 
-pub(super) fn labelled<'a>(
+pub(in crate::app::project_tab) fn labelled<'a>(
     label: &'a str,
     field: impl Into<Element<'a, Message>>,
     tokens: &ThemeTokens,
