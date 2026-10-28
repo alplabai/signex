@@ -542,11 +542,6 @@ mod tests {
         control
     }
 
-    // GH #599 — the result used to survive an edit that left the target
-    // unreadable, and the summary then rendered against `target = 0.0`:
-    // "Target" read 0 and all three deltas were measured against 0 while
-    // Nominal / Minimum / Maximum still showed the real network. No
-    // error text either, because TargetChanged clears validation_error.
     #[test]
     fn switching_to_a_passive_tab_selects_that_kind_for_edits() {
         let mut control = CalculatorControl::default();
@@ -559,6 +554,11 @@ mod tests {
         assert_eq!(control.state(ComponentKind::Resistor).target_input, "220");
     }
 
+    // GH #599 — the result used to survive an edit that left the target
+    // unreadable, and the summary then rendered against `target = 0.0`:
+    // "Target" read 0 and all three deltas were measured against 0 while
+    // Nominal / Minimum / Maximum still showed the real network. No
+    // error text either, because TargetChanged clears validation_error.
     #[test]
     fn an_unreadable_target_edit_drops_the_result_it_was_solved_for() {
         let mut control = calculated();

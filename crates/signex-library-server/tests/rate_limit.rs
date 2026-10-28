@@ -2,12 +2,15 @@
 //! `oneshot` tests never exercise it. Serve over a real socket and assert
 //! that a burst past the limit is answered with 429.
 
-use signex_library_server::{RATE_LIMIT_BURST_SIZE, router, with_rate_limit};
+use signex_library_server::{
+    RATE_LIMIT_BURST_SIZE, router, router_with_in_memory_state, with_rate_limit,
+};
 use std::net::SocketAddr;
 
 #[tokio::test]
 async fn burst_beyond_limit_is_rejected_with_429() {
-    let app = with_rate_limit(router());
+    // A real limited route (`/tables`), not a probe: probes bypass the governor.
+    let app = with_rate_limit(router_with_in_memory_state().await.unwrap());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move {
@@ -69,5 +72,37 @@ async fn health_and_version_are_never_rate_limited() {
                 .as_u16();
             assert_eq!(status, 200, "/{path} request {i} was not served");
         }
+    }
+}
+
+#[tokio::test]
+async fn probes_outside_the_governor_keep_the_cors_headers() {
+    let app = with_rate_limit(router_with_in_memory_state().await.unwrap());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
+    });
+    let client = reqwest::Client::builder().no_proxy().build().unwrap();
+    for path in ["health", "version"] {
+        let response = client
+            .get(format!("http://{addr}/{path}"))
+            .header("Origin", "https://signex.dev")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(
+            response
+                .headers()
+                .get("access-control-allow-origin")
+                .and_then(|v| v.to_str().ok()),
+            Some("https://signex.dev"),
+            "/{path} lost its CORS header"
+        );
     }
 }
