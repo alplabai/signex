@@ -217,28 +217,13 @@ pub struct LibraryBrowserState {
     /// Most recent rename error (e.g. duplicate target name).
     /// Surfaces inline next to the rename input.
     pub rename_error: Option<String>,
-    /// In-flight `+ Class` form — `Some` while the user is typing
-    /// a new class key + label. Confirm dispatches
-    /// `update_library_classes` with the appended row.
-    pub adding_class: Option<NewClassDraft>,
-    /// In-flight class rename — `(original_key, key_buffer, label_buffer)`.
-    pub renaming_class: Option<(String, String, String)>,
-    /// Most recent class-edit error (validation, duplicate key, etc).
-    pub class_error: Option<String>,
     /// Filtered, sorted rows and derived columns of the active table (#1374),
     /// kept current by `LibraryState::sync_view_caches`; `view` reads it
     /// instead of recomputing every frame.
     pub view_cache: Option<super::browser::BrowserViewCache>,
-}
-
-/// `+ Class` inline form state — separate key + label inputs since
-/// the canonical class identifier (`key`) is distinct from the
-/// human-readable display label.
-#[derive(Debug, Clone, Default)]
-pub struct NewClassDraft {
-    pub key: String,
-    pub label: String,
-    pub error: Option<String>,
+    /// Where the grid is scrolled to, as reported by its scrollable. The
+    /// grid builds only the rows in this window (#1355).
+    pub grid_scroll: super::browser::GridScroll,
 }
 
 /// Active sort key + direction for the Library Browser grid.
@@ -266,10 +251,8 @@ impl LibraryBrowserState {
             delete_error: None,
             renaming_table: None,
             rename_error: None,
-            adding_class: None,
-            renaming_class: None,
-            class_error: None,
             view_cache: None,
+            grid_scroll: super::browser::GridScroll::default(),
         }
     }
 
@@ -455,6 +438,9 @@ pub struct LibraryState {
     /// per `TabKind::LibraryBrowser(path)` tab in the main window's
     /// tab bar; insert on tab open, drop on tab close.
     pub library_browsers: HashMap<PathBuf, LibraryBrowserState>,
+    /// The library whose browser tab was showing at the last update, so a
+    /// switch to another tab can be told apart from a repeat of the same one.
+    pub shown_browser: Option<PathBuf>,
     /// Primitive picker modal state — `None` while closed. Opened from
     /// the Component Preview tab's Symbol/Footprint pane, the New
     /// Component modal, and the Edit Component Details modal.

@@ -461,8 +461,7 @@ impl LocalGitAdapter {
 
     /// Read the table named `table` as a snapshot of [`ComponentRow`]s,
     /// scoped to whatever the legacy [`TABLE_HEADER`] columns are.
-    /// Returns an empty vec for unknown tables (matches the old
-    /// `tables/<name>.tsv` "missing file = empty" semantics).
+    /// Returns an empty vec for unknown tables.
     pub(super) fn snapshot_table(&self, name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
         self.refresh_for_read();
         let guard = self

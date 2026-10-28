@@ -64,6 +64,7 @@ impl Default for LibraryState {
             close_library_confirm: None,
             template_registry: Arc::new(TemplateRegistry::new_with_builtins()),
             library_browsers: HashMap::new(),
+            shown_browser: None,
             primitive_picker: None,
             document_options: None,
             recovery: None,

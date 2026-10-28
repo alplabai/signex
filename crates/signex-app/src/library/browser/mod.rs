@@ -1,27 +1,11 @@
 //! Library Browser tab — the main-window surface for working with
 //! library rows.
 //!
-//! Layout:
-//!
-//! ```text
-//! ┌─[ <name>.snxlib ]──────────────────────────────────────────┐
-//! │ [Resistors] [Capacitors] [Connectors] [+]   Search: [____] │  ← tab strip
-//! ├──────────────────────────────────────────┬─────────────────┤
-//! │ ┌──────┬────────┬──────┬─────┬─────┐     │  [ Preview  ]   │
-//! │ │ PN   │ Mfr    │ MPN  │ Val │ Pkg │     │  [   symbol  ]  │
-//! │ │ R10K │ Vishay │ CRC… │ 10k │0805 │  ←  │  ───────────── │
-//! │ │ R47K │ Yageo  │ RC0… │ 47k │0805 │     │  [ footprint ]  │
-//! │ └──────┴────────┴──────┴─────┴─────┘     │                 │
-//! │   Add Component  Delete Selected         │                 │
-//! └──────────────────────────────────────────┴─────────────────┘
-//! ```
-//!
-//! Phase 1 = read-only-plus-modal-edit semantics. The grid is rendered
-//! as `text` widgets; row click selects (drives the side preview pane);
-//! row double-click is reserved for the upcoming Edit Component Details
-//! modal (Phase 2). Add Component and Delete Selected are wired through
-//! the existing library messages; Delete fires immediately without a
-//! confirm modal until Phase 2 lands.
+//! Layout: a table sidebar on the left; on the right a header
+//! (search, lifecycle filter) above the row grid and its action row.
+//! Row click selects; row detail lives in the right-edge Properties
+//! panel. Add Component and Delete Selected are wired through the
+//! library messages.
 
 use std::collections::BTreeMap;
 
@@ -42,11 +26,13 @@ mod columns;
 mod empty_state;
 mod grid;
 mod header;
-mod preview;
+mod keyed;
 mod price;
 mod sidebar;
+mod size_sensor;
 mod sort;
 mod view_cache;
+mod window;
 
 use action_row::view_action_row;
 use empty_state::view_empty_state;
@@ -55,14 +41,10 @@ use header::view_header;
 use sidebar::view_table_sidebar;
 pub use view_cache::BrowserViewCache;
 use view_cache::active_table;
+pub use window::{GridScroll, grid_scroll_id, reveal_row_offset, visible_rows};
 
 const BROWSER_TEXT_SIZE: f32 = 11.0;
 const BROWSER_HEADER_SIZE: f32 = 10.0;
-#[expect(
-    dead_code,
-    reason = "F15 removed the preview pane; the width hint is retained in case the Properties panel needs it"
-)]
-const PREVIEW_PANE_WIDTH: f32 = 380.0;
 const MAX_PARAM_COLUMNS: usize = 4;
 /// Width reserved at the start of every grid row for the per-row
 /// lifecycle indicator dot (Stage 18). The header row uses an empty
@@ -200,9 +182,6 @@ pub fn view<'a>(
     // and Pick Symbol / Pick Footprint live in the right-edge
     // Properties panel now (`view_library_row_properties`), so the
     // Library Browser tab body keeps the full width for the grid.
-    // `view_preview_pane` is retained but no longer mounted here;
-    // remove it in a follow-up cleanup pass once the Properties-panel
-    // approach is locked.
     //
     // The Row needs explicit `Length::Fill` width — the
     // `feedback_iced_layout.md` anti-pattern: a Fill child inside a

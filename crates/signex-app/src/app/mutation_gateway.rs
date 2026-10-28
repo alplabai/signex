@@ -425,7 +425,7 @@ impl Signex {
         if invalidation.intersects(crate::schematic_runtime::RenderInvalidation::PAPER)
             && let Some(token) = self
                 .active_render_snapshot()
-                .map(|snapshot| snapshot.paper_size.clone())
+                .map(|snapshot| super::load_gateway::effective_paper_size(&snapshot.paper_size))
         {
             self.document_state.panel_ctx.paper_size = token;
             self.apply_page_dimensions_to_canvas();

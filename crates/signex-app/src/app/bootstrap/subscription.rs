@@ -55,7 +55,7 @@ struct OpenOverlays {
     /// `None` while no library-recovery dialog is open. `RecoveryDialog`
     /// (`crate::library::recovery`) itself carries a `PathBuf` (and, for
     /// the broken-binding case, a `String`/`Uuid`), so it can't be
-    /// embedded directly in this `Copy + Hash` struct — this discriminant
+    /// embedded directly in this plain-data struct — this discriminant
     /// is the cheap stand-in that lets Esc still pick the right one of
     /// the three dialogs' own Cancel-choice messages.
     recovery_kind: Option<RecoveryKind>,
@@ -587,8 +587,9 @@ impl Signex {
         });
 
         // Mouse events for drag-to-resize/floating-drag.
-        // Subscribing to cursor move only while dragging avoids per-frame
-        // app updates when idle, which noticeably hurts smoothness on macOS.
+        // Dragging subscribes to cursor moves directly; the idle branch
+        // below still forwards CursorMoved (to keep `last_mouse_pos`
+        // fresh) but drops everything else it does not need.
         let drag_active = self.is_pointer_drag_active();
         let modal_drag_active = self.ui_state.modal_dragging.is_some();
         let mouse_sub = if modal_drag_active {
