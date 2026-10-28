@@ -1,8 +1,8 @@
 //! Drift guard (#272): every `AppCommandId` a menu surface names must
 //! resolve in the command catalog (`CommandMetadata`). The menu surfaces
 //! reference commands by string id — `menu_bar` via `cmd(..)` in
-//! `model/menus.rs` (which resolves `shortcut_for` / `cmd_label`), the context menu via `keymap_shortcut_label` — and derive
-//! the row's shortcut (and, since #282, its label) from that id. If a menu
+//! `model/menus.rs` (which resolves `shortcut_for` / `cmd_label`), the
+//! context menu via `keymap_shortcut_label` — and derive the row's shortcut (and, since #282, its label) from that id. If a menu
 //! adds a row keyed on an id with no catalog entry, the shortcut/label
 //! lookup silently falls back to the literal and the command never reaches
 //! the Keyboard Shortcuts pane / palette. This test scans the menu source
@@ -28,8 +28,9 @@ const MENU_SOURCES: &[&str] = &[
 ];
 
 /// Call shapes that take a command id as their first string argument.
-/// Each menu row keyed on a command names it through one of these.
-const ID_CALLS: &[&str] = &["cmd(", "cmd_label(", "keymap_shortcut_label("];
+/// Each menu row keyed on a command names it through one of these. `" cmd("`
+/// carries a leading space so it cannot match `cmd_item(`, `fn cmd(` etc.
+const ID_CALLS: &[&str] = &[" cmd(", "cmd_label(", "keymap_shortcut_label("];
 
 /// Pull the first `"..."` string-literal argument that follows `call` in
 /// `src`, collecting one id per call site. Deliberately tiny (no regex

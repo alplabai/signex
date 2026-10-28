@@ -67,7 +67,6 @@ fn eval_gate(gate: &str, ctx: &MenuContext) -> bool {
         "never" => false,
         "sch" => ctx.commands.has_schematic,
         "cyclegrid" => cycle_grid_menu_enabled(&ctx.commands),
-        "-" => true,
         other => {
             let id = other.strip_prefix("cmd:").expect("known gate");
             enabled(ctx, id)
@@ -117,9 +116,36 @@ fn golden_labels_and_shortcuts_match_helpers() {
     }
 }
 
+/// Whitespace and trailing commas removed, so a call rustfmt wrapped over
+/// several lines still matches.
+fn squash(text: &str) -> String {
+    text.split_whitespace()
+        .collect::<String>()
+        .replace(",)", ")")
+}
+
+/// The model resolves labels through the command catalog, so the fixture
+/// label alone would not notice a changed fallback literal: pin each
+/// `cmd(id, label, shortcut)` call in the model source to the fixture.
+#[test]
+fn golden_fallback_literals_are_pinned_in_the_model_source() {
+    let source = squash(include_str!("model/menus.rs"));
+    let mut pinned = 0;
+    for row in rows() {
+        let (label, id, shortcut) = (row[2], row[3], row[4]);
+        if id == "-" {
+            continue;
+        }
+        let call = squash(&format!("cmd(\"{id}\", \"{label}\", \"{shortcut}\")"));
+        assert!(source.contains(&call), "fallbacks of {id} differ: {call}");
+        pinned += 1;
+    }
+    assert!(pinned >= 30, "only {pinned} command rows pinned");
+}
+
 // ─── The declarative model reproduces the golden fixture ────────────────
 
-use super::model::{Menu, MenuEntry, menu_bar_model};
+use super::model::{ItemState, Menu, MenuEntry, menu_bar_model};
 
 /// One fixture row per entry, columns `path kind label command_id shortcut
 /// action` plus the entry's enablement as `1` / `0` (`-` for containers).
@@ -132,24 +158,19 @@ fn flatten(menu: &Menu, parent: Option<&str>, out: &mut Vec<(String, char)>) {
             MenuEntry::Separator => out.push((format!("{path}/---\tseparator\t-\t-\t-\t-"), '-')),
             MenuEntry::Submenu(sub) => flatten(sub, Some(&path), out),
             MenuEntry::Item(item) => {
-                let kind = if item.action.is_none() {
-                    "stub"
-                } else {
-                    "item"
+                let (kind, action) = match &item.state {
+                    ItemState::Placeholder => ("stub", "-".to_string()),
+                    ItemState::Live { action, .. } => ("item", format!("{action:?}")),
                 };
                 let (id, text) = item
                     .shortcut
                     .as_ref()
-                    .map_or(("-", "-"), |s| (s.command_id, s.text.as_str()));
-                let action = item
-                    .action
-                    .as_ref()
-                    .map_or("-".to_string(), |a| format!("{a:?}"));
+                    .map_or(("-", "-"), |s| (s.command_id.as_str(), s.text.as_str()));
                 let cols = format!(
                     "{path}/{}\t{kind}\t{}\t{id}\t{text}\t{action}",
                     item.label, item.label
                 );
-                out.push((cols, if item.is_enabled { '1' } else { '0' }));
+                out.push((cols, if item.is_enabled() { '1' } else { '0' }));
             }
         }
     }
@@ -254,7 +275,7 @@ fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
             MenuEntry::Item(item) => {
                 let Some(sc) = &item.shortcut else { continue };
                 let keymap = ctx.active_keymap.as_ref().expect("keymap");
-                let command = crate::keymap::AppCommandId::new(sc.command_id).expect("id");
+                let command = sc.command_id.clone();
                 match keymap.shortcut_label(&command) {
                     Some(label) => assert_eq!(sc.text, label, "shortcut of {}", sc.command_id),
                     None => assert!(!sc.text.is_empty(), "fallback of {}", sc.command_id),
@@ -264,4 +285,17 @@ fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
             MenuEntry::Separator => {}
         }
     }
+}
+
+/// The chrome clamps its search bar with this width; it is derived from the
+/// model's root titles and must stay at its pre-model value (38 label chars).
+#[test]
+fn approx_menu_bar_width_is_unchanged() {
+    assert_eq!(
+        super::model::root_titles(),
+        [
+            "File", "Edit", "View", "Place", "Design", "Tools", "Window", "Help"
+        ]
+    );
+    assert_eq!(super::approx_menu_bar_width(), 493.0);
 }

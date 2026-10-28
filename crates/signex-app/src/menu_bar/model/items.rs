@@ -1,6 +1,7 @@
 //! Row constructors the menu builders share.
 
-use super::{Menu, MenuEntry, MenuItem, Shortcut};
+use super::{ItemState, Menu, MenuEntry, MenuItem, Shortcut};
+use crate::keymap::AppCommandId;
 use crate::menu_bar::{MenuContext, MenuMessage, cmd_label, enabled, shortcut_for};
 
 /// A keymap-backed row: the command id, the label used when the command
@@ -21,56 +22,53 @@ pub(super) const fn cmd(id: &'static str, label: &'static str, shortcut: &'stati
     }
 }
 
-fn plain(label: &str, action: Option<MenuMessage>, is_enabled: bool) -> MenuEntry {
+fn plain(label: &str, state: ItemState) -> MenuEntry {
     MenuEntry::Item(MenuItem {
         label: label.to_owned(),
-        action,
         shortcut: None,
-        is_enabled,
+        state,
     })
+}
+
+fn live(action: MenuMessage, is_enabled: bool) -> ItemState {
+    ItemState::Live { action, is_enabled }
 }
 
 /// An always-enabled row.
 pub(super) fn item(label: &str, action: MenuMessage) -> MenuEntry {
-    plain(label, Some(action), true)
+    plain(label, live(action, true))
 }
 
 /// A live row, greyed out unless `is_enabled`.
 pub(super) fn item_if(label: &str, action: MenuMessage, is_enabled: bool) -> MenuEntry {
-    plain(label, Some(action), is_enabled)
+    plain(label, live(action, is_enabled))
 }
 
 /// A placeholder with no handler yet.
 pub(super) fn stub(label: &str) -> MenuEntry {
-    plain(label, None, false)
+    plain(label, ItemState::Placeholder)
 }
 
-fn command_row(
-    ctx: &MenuContext,
-    cmd: Cmd,
-    action: Option<MenuMessage>,
-    is_enabled: bool,
-) -> MenuEntry {
+fn command_row(ctx: &MenuContext, cmd: Cmd, state: ItemState) -> MenuEntry {
+    let shortcut = AppCommandId::new(cmd.id).ok().and_then(|command_id| {
+        shortcut_for(ctx, cmd.id, cmd.shortcut).map(|text| Shortcut { command_id, text })
+    });
     MenuEntry::Item(MenuItem {
         label: cmd_label(cmd.id, cmd.label),
-        action,
-        shortcut: shortcut_for(ctx, cmd.id, cmd.shortcut).map(|text| Shortcut {
-            command_id: cmd.id,
-            text,
-        }),
-        is_enabled,
+        shortcut,
+        state,
     })
 }
 
 /// A keymap-backed row that is always enabled.
 pub(super) fn cmd_item(ctx: &MenuContext, cmd: Cmd, action: MenuMessage) -> MenuEntry {
-    command_row(ctx, cmd, Some(action), true)
+    command_row(ctx, cmd, live(action, true))
 }
 
 /// A keymap-backed row enabled exactly when its command is
 /// ([`crate::app::command::is_enabled`]).
 pub(super) fn cmd_item_gated(ctx: &MenuContext, cmd: Cmd, action: MenuMessage) -> MenuEntry {
-    command_row(ctx, cmd, Some(action), enabled(ctx, cmd.id))
+    command_row(ctx, cmd, live(action, enabled(ctx, cmd.id)))
 }
 
 /// A keymap-backed row with its own enablement rule.
@@ -80,12 +78,12 @@ pub(super) fn cmd_item_if(
     action: MenuMessage,
     is_enabled: bool,
 ) -> MenuEntry {
-    command_row(ctx, cmd, Some(action), is_enabled)
+    command_row(ctx, cmd, live(action, is_enabled))
 }
 
 /// A keymap-backed placeholder with no handler yet.
 pub(super) fn cmd_stub(ctx: &MenuContext, cmd: Cmd) -> MenuEntry {
-    command_row(ctx, cmd, None, false)
+    command_row(ctx, cmd, ItemState::Placeholder)
 }
 
 pub(super) fn submenu(title: &str, entries: Vec<MenuEntry>) -> MenuEntry {

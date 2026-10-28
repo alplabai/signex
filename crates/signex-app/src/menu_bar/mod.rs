@@ -275,13 +275,6 @@ const MENU_LABEL_SIZE: f32 = 12.0;
 const MENU_SHORTCUT_SIZE: f32 = 11.0;
 const MENU_CHEVRON_SIZE: f32 = 18.0;
 
-/// Root menu labels rendered by `view`. Listed here so chrome
-/// layout code can estimate the menu bar's natural width without
-/// re-laying out the actual widgets.
-const MENU_ROOT_LABELS: &[&str] = &[
-    "File", "Edit", "View", "Place", "Design", "Tools", "Window", "Help",
-];
-
 /// Approximate visible width of the menu bar in pixels. Includes the
 /// Signex wordmark on the left, plus the sum of root button widths
 /// (label glyphs at `MENU_LABEL_SIZE` + horizontal padding from
@@ -298,7 +291,7 @@ pub fn approx_menu_bar_width() -> f32 {
     const CHROME_LEFT_PAD: f32 = 8.0;
     // Gap between wordmark and the first menu root button.
     const WORDMARK_TO_MENU_GAP: f32 = 8.0;
-    let labels_total: f32 = MENU_ROOT_LABELS
+    let labels_total: f32 = model::root_titles()
         .iter()
         .map(|l| l.chars().count() as f32 * PX_PER_CHAR + PER_BTN_PADDING)
         .sum();
