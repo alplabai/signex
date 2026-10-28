@@ -22,6 +22,7 @@
 
 pub mod ids;
 pub mod manifest;
+pub mod rows;
 pub mod symbols;
 
 use std::error::Error;
