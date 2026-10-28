@@ -44,21 +44,32 @@ fn deferred_requery(id: iced::window::Id, retries_left: u8) -> Task<Message> {
     Task::future(async { tokio::time::sleep(FULLSCREEN_EXIT_SETTLE).await }).then(move |()| {
         iced::window::mode(id).then(move |mode| {
             iced::window::monitor_size(id).then(move |monitor| {
-                iced::window::size(id).then(move |size| {
-                    let mut steps = vec![
-                        Task::done(Message::Window(WindowMsg::MainWindowModeRead(mode))),
-                        Task::done(Message::Window(WindowMsg::MainWindowMonitorSizeRead(
-                            monitor,
-                        ))),
-                    ];
-                    if should_requery_again(mode, size, monitor, retries_left) {
-                        steps.push(deferred_requery(id, retries_left - 1));
-                    }
-                    Task::batch(steps)
-                })
+                iced::window::size(id)
+                    .then(move |size| publish_and_rechain(id, mode, monitor, size, retries_left))
             })
         })
     })
+}
+
+/// The last step of a [`deferred_requery`] round: publish what it read and
+/// chain the next round while the window still reads as fullscreen.
+fn publish_and_rechain(
+    id: iced::window::Id,
+    mode: iced::window::Mode,
+    monitor: Option<iced::Size>,
+    size: iced::Size,
+    retries_left: u8,
+) -> Task<Message> {
+    let mut steps = vec![
+        Task::done(Message::Window(WindowMsg::MainWindowModeRead(mode))),
+        Task::done(Message::Window(WindowMsg::MainWindowMonitorSizeRead(
+            monitor,
+        ))),
+    ];
+    if should_requery_again(mode, size, monitor, retries_left) {
+        steps.push(deferred_requery(id, retries_left - 1));
+    }
+    Task::batch(steps)
 }
 
 impl Signex {
@@ -184,27 +195,40 @@ mod tests {
         }
     }
 
-    /// Only a native-style window stored as fullscreen schedules the
-    /// deferred re-query; a drawn or non-mac style runs no queries at all.
+    /// A drawn style never reads the window mode, on every platform.
     #[test]
-    fn mode_queries_run_only_for_the_native_style() {
-        use crate::chrome::controls::WindowControlsPlacement::{Auto, Trailing};
+    fn a_drawn_style_runs_no_mode_queries() {
+        use crate::chrome::controls::WindowControlsPlacement::Trailing;
         let (mut app, _task) = Signex::new();
-        let id = iced::window::Id::unique();
-
         app.ui_state.window_controls_placement_at_boot = Trailing;
         app.ui_state.window_controls_placement = Trailing;
-        assert_eq!(app.main_window_mode_task(id).units(), 0);
+        app.ui_state.main_window_mode = iced::window::Mode::Fullscreen;
 
+        assert_eq!(
+            app.main_window_mode_task(iced::window::Id::unique())
+                .units(),
+            0
+        );
+    }
+
+    /// The native macOS style queries the mode, and a window stored as
+    /// fullscreen also schedules the deferred re-query.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_native_style_requeries_only_while_fullscreen() {
+        use crate::chrome::controls::WindowControlsPlacement::Auto;
+        let (mut app, _task) = Signex::new();
+        let id = iced::window::Id::unique();
         app.ui_state.window_controls_placement_at_boot = Auto;
         app.ui_state.window_controls_placement = Auto;
-        if app.window_controls_layout().is_native() {
-            app.ui_state.main_window_mode = iced::window::Mode::Windowed;
-            let windowed = app.main_window_mode_task(id).units();
-            app.ui_state.main_window_mode = iced::window::Mode::Fullscreen;
-            let fullscreen = app.main_window_mode_task(id).units();
-            assert!(windowed > 0 && fullscreen > windowed);
-        }
+        assert!(app.window_controls_layout().is_native());
+
+        app.ui_state.main_window_mode = iced::window::Mode::Windowed;
+        let windowed = app.main_window_mode_task(id).units();
+        app.ui_state.main_window_mode = iced::window::Mode::Fullscreen;
+        let fullscreen = app.main_window_mode_task(id).units();
+
+        assert!(windowed > 0 && fullscreen > windowed);
     }
 
     #[test]

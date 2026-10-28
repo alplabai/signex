@@ -5,7 +5,7 @@
 
 use super::controls::WindowButton;
 use crate::ignore::IgnoreResult as _;
-use std::process::{Command, Output, Stdio};
+use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
 /// Which buttons the desktop lists on each side of the title bar. The first
@@ -158,7 +158,9 @@ fn detect_gnome() -> Result<Option<DesktopButtonLayout>, ProbeTimedOut> {
 
 /// Run `command` and collect its stdout, killing it after `limit`.
 /// `Ok(None)` when it could not be started or waited on, which callers treat
-/// like any other unreadable source.
+/// like any other unreadable source. Only for small-output children: `limit`
+/// bounds the child's exit, not reading its stdout, so a grandchild that
+/// inherits the pipe could hold the read open.
 fn output_within(mut command: Command, limit: Duration) -> Result<Option<Output>, ProbeTimedOut> {
     let Ok(mut child) = command
         .stdin(Stdio::null())
@@ -173,17 +175,22 @@ fn output_within(mut command: Command, limit: Duration) -> Result<Option<Output>
         match child.try_wait() {
             Ok(Some(_)) => return Ok(child.wait_with_output().ok()),
             Ok(None) if Instant::now() >= deadline => {
-                // Best effort: the child may have exited since the poll.
-                child
-                    .kill()
-                    .ignore("the timed-out probe child may already be gone");
-                child.wait().ignore("reaping the killed probe child");
+                kill_and_reap(&mut child);
                 return Err(ProbeTimedOut);
             }
             Ok(None) => std::thread::sleep(POLL_INTERVAL),
-            Err(_) => return Ok(None),
+            Err(_) => {
+                kill_and_reap(&mut child);
+                return Ok(None);
+            }
         }
     }
+}
+
+/// Best effort: the child may have exited since the last poll.
+fn kill_and_reap(child: &mut Child) {
+    child.kill().ignore("the probe child may already be gone");
+    child.wait().ignore("reaping the killed probe child");
 }
 
 fn detect_kde() -> Option<DesktopButtonLayout> {
@@ -198,6 +205,15 @@ fn detect_kde() -> Option<DesktopButtonLayout> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use WindowButton::{Close, Maximize, Minimize};
+
+    fn layout(leading: &[WindowButton], trailing: &[WindowButton]) -> Option<DesktopButtonLayout> {
+        Some(DesktopButtonLayout {
+            leading: leading.to_vec(),
+            trailing: trailing.to_vec(),
+        })
+    }
 
     #[cfg(unix)]
     #[test]
@@ -219,14 +235,6 @@ mod tests {
             .expect("no timeout")
             .expect("echo runs");
         assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "hi");
-    }
-    use WindowButton::{Close, Maximize, Minimize};
-
-    fn layout(leading: &[WindowButton], trailing: &[WindowButton]) -> Option<DesktopButtonLayout> {
-        Some(DesktopButtonLayout {
-            leading: leading.to_vec(),
-            trailing: trailing.to_vec(),
-        })
     }
 
     #[test]
