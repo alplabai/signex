@@ -4,7 +4,7 @@ use super::*;
 use iced::widget::column;
 
 /// Per-sheet info for the project tree.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SheetInfo {
     pub name: String,
     pub filename: String,
@@ -33,10 +33,10 @@ pub struct SheetInfo {
 /// Per-project bundle surfaced to the Projects panel. One entry per
 /// `LoadedProject` in `DocumentState.projects`. `build_project_tree`
 /// iterates this list to emit one tree root per project.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ProjectPanelInfo {
     pub id: crate::app::ProjectId,
-    /// Display name (project stem — "MyBoard" from "MyBoard.standard_pro").
+    /// Display name (project stem — "MyBoard" from "MyBoard.snxprj").
     pub name: String,
     /// Root schematic filename shown as the "project file" under each
     /// root, when present.
@@ -83,7 +83,7 @@ pub struct ProjectPanelInfo {
 /// the v0.9 `.snxlib`-as-file model — symbols / footprints / sims
 /// are not surfaced here. Browsing the library's contents is the
 /// Library Browser tab's job; double-clicking the leaf opens it.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LibraryNodeInfo {
     /// Display name for the row — `<entry.path>.file_name()` or the
     /// manifest name when the library is mounted.

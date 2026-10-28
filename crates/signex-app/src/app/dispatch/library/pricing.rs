@@ -11,6 +11,7 @@ use super::*;
 use crate::library::pricing::{
     LineLevel, PricingRefreshRun, QUIT_WAIT, SetOnDrop, report_lines, run_job,
 };
+use crate::library::refresh::RefreshFollowUp;
 
 impl Signex {
     /// Menu entry point. `update` only validates and spawns; the network and
@@ -98,12 +99,8 @@ impl Signex {
                 "Refresh All Pricing failed for {name}: {reason}"
             )),
         }
-        if self.library.library_at(&library_path).is_some()
-            && let Err(e) = self.library.refresh_components(&library_path)
-        {
-            crate::diagnostics::log_warning(format!(
-                "{name}: prices were saved but the library view could not be reloaded: {e}"
-            ));
+        if self.library.library_at(&library_path).is_some() {
+            return self.refresh_library_task(&library_path, RefreshFollowUp::PricingSaved);
         }
         Task::none()
     }

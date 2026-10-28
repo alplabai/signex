@@ -179,6 +179,36 @@ impl ShortcutProfileSet {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CompiledKeymap {
     bindings: Vec<CompiledBinding>,
+    /// Per-command menu label, derived from `bindings` at compile time so
+    /// `shortcut_label` is a map hit instead of a reverse scan plus a
+    /// `String` join per menu row per frame (#1380). `None` marks a
+    /// command whose winning binding is an unbind / no-action.
+    labels: BTreeMap<AppCommandId, Option<String>>,
+}
+
+fn label_index(bindings: &[CompiledBinding]) -> BTreeMap<AppCommandId, Option<String>> {
+    let mut labels = BTreeMap::new();
+    // Reverse scan: the last binding for a command wins, so the first one
+    // seen from the back is the one to record.
+    for binding in bindings.iter().rev() {
+        let Some(command) = binding.action.command() else {
+            continue;
+        };
+        labels
+            .entry(command.clone())
+            .or_insert_with(|| match &binding.action {
+                ShortcutBindingAction::Command(_) => Some(
+                    binding
+                        .sequence
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                ),
+                ShortcutBindingAction::Unbind(_) | ShortcutBindingAction::NoAction => None,
+            });
+    }
+    labels
 }
 
 impl CompiledKeymap {
@@ -200,7 +230,8 @@ impl CompiledKeymap {
                 }
             }
         }
-        Self { bindings }
+        let labels = label_index(&bindings);
+        Self { bindings, labels }
     }
 
     pub fn lookup(&self, input: &[KeyStroke], contexts: &[ShortcutContext]) -> KeyLookup {
@@ -231,6 +262,13 @@ impl CompiledKeymap {
     }
 
     pub fn shortcut_label(&self, command: &AppCommandId) -> Option<String> {
+        self.labels.get(command).cloned().flatten()
+    }
+
+    /// The reverse-scan lookup the label index replaces; kept so a test
+    /// can prove the index agrees with it.
+    #[cfg(test)]
+    pub(crate) fn shortcut_label_linear(&self, command: &AppCommandId) -> Option<String> {
         // The last matching binding wins (later profile layers / sections
         // override earlier ones), hence the reversed scan.
         let binding = self

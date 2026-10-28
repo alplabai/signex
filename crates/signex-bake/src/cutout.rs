@@ -20,7 +20,8 @@ use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 
 use crate::eval_util::{build_ctx, opt_eval_mm};
-use crate::profile::{TraceError, trace_closed_profile};
+use crate::profile::TraceError;
+use crate::traced_loops::TracedLoops;
 
 pub fn bake_cutouts(
     sketch: &SketchData,
@@ -29,7 +30,8 @@ pub fn bake_cutouts(
     out: &mut Vec<FpCutout>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
-    let ctx = build_ctx(params_canonical);
+    let ctx = build_ctx(sketch, params_canonical);
+    let mut loops = TracedLoops::default();
     for entity in &sketch.entities {
         if entity.bake_skipped() {
             continue;
@@ -43,27 +45,31 @@ pub fn bake_cutouts(
             EntityKind::Line { .. } | EntityKind::Arc { .. }
         ) {
             warnings.push(format!(
-                "entity {}: BoardCutoutAttr requires a Line or Arc seed (Circles land in v0.14.2); skipping",
+                "entity {}: BoardCutoutAttr requires a Line or Arc seed (Circle seeds are not supported); skipping",
                 entity.id
             ));
             continue;
         }
+        let attribute = format!("{attr:?}");
+        if loops.contains(&attribute, entity.id) {
+            continue;
+        }
 
-        match trace_closed_profile(sketch, solve, entity.id) {
+        match loops.trace(&attribute, sketch, solve, entity.id) {
             Ok(vertices) => {
                 // v0.15 — evaluate the corner-radius expression into
-                // mm. Empty expression → 0 (sharp corner); eval
-                // failure → 0 + warning so the bake doesn't silently
-                // drop the user's authoring intent.
+                // mm. Empty expression → 0 (sharp corner); an eval
+                // failure skips the cutout with a warning, since a sharp
+                // corner would silently change the board outline.
                 let edge_radius_mm = match opt_eval_mm(&attr.edge_radius_expr, &ctx) {
                     Ok(Some(v)) => v,
                     Ok(None) => 0.0,
                     Err(e) => {
                         warnings.push(format!(
-                            "entity {}: BoardCutoutAttr.edge_radius_expr failed to evaluate ({e}); using 0",
+                            "entity {}: BoardCutoutAttr.edge_radius_expr failed to evaluate ({e}); cutout skipped",
                             entity.id
                         ));
-                        0.0
+                        continue;
                     }
                 };
                 out.push(FpCutout {
@@ -170,6 +176,22 @@ mod tests {
     }
 
     #[test]
+    fn a_bare_number_edge_radius_is_read_as_millimetres() {
+        // The Edge radius field takes free text; "0.5" must not drop the
+        // cutout from the footprint (#1440 review).
+        let data = rectangle_with_cutout(BoardCutoutAttr {
+            edge_radius_expr: Some("0.5".into()),
+            through: true,
+        });
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_cutouts(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        assert_eq!(out.len(), 1, "{warnings:?}");
+        assert!((out[0].edge_radius_mm - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
     fn bake_cutout_edge_radius_evaluated() {
         let data = rectangle_with_cutout(BoardCutoutAttr {
             edge_radius_expr: Some("1mm".into()),
@@ -200,5 +222,73 @@ mod tests {
         assert_eq!(out.len(), 1);
         assert!(!out[0].through, "v0.15 — partial-depth flag now propagates");
         assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn tagging_every_edge_bakes_the_loop_once() {
+        let attr = BoardCutoutAttr {
+            edge_radius_expr: None,
+            through: true,
+        };
+        let mut data = rectangle_with_cutout(attr.clone());
+        for e in data
+            .entities
+            .iter_mut()
+            .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+        {
+            e.board_cutout = Some(attr.clone());
+        }
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_cutouts(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        assert_eq!(out.len(), 1);
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn one_loop_tagged_with_two_attributes_bakes_once_per_attribute() {
+        let through = BoardCutoutAttr {
+            edge_radius_expr: None,
+            through: true,
+        };
+        let partial = BoardCutoutAttr {
+            edge_radius_expr: None,
+            through: false,
+        };
+        let mut data = rectangle_with_cutout(through);
+        let third = data
+            .entities
+            .iter_mut()
+            .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+            .nth(2)
+            .unwrap();
+        third.board_cutout = Some(partial);
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_cutouts(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        let mut through_flags: Vec<bool> = out.iter().map(|c| c.through).collect();
+        through_flags.sort();
+        assert_eq!(through_flags, vec![false, true]);
+    }
+
+    #[test]
+    fn a_cutout_with_an_unevaluable_radius_is_skipped_not_baked_sharp() {
+        let data = rectangle_with_cutout(BoardCutoutAttr {
+            edge_radius_expr: Some("= no_such_param".into()),
+            through: true,
+        });
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_cutouts(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        assert!(out.is_empty(), "{out:?}");
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("edge_radius_expr") && w.contains("skipped")),
+            "{warnings:?}"
+        );
     }
 }

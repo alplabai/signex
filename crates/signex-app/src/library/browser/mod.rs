@@ -1,27 +1,11 @@
 //! Library Browser tab — the main-window surface for working with
 //! library rows.
 //!
-//! Layout:
-//!
-//! ```text
-//! ┌─[ <name>.snxlib ]──────────────────────────────────────────┐
-//! │ [Resistors] [Capacitors] [Connectors] [+]   Search: [____] │  ← tab strip
-//! ├──────────────────────────────────────────┬─────────────────┤
-//! │ ┌──────┬────────┬──────┬─────┬─────┐     │  [ Preview  ]   │
-//! │ │ PN   │ Mfr    │ MPN  │ Val │ Pkg │     │  [   symbol  ]  │
-//! │ │ R10K │ Vishay │ CRC… │ 10k │0805 │  ←  │  ───────────── │
-//! │ │ R47K │ Yageo  │ RC0… │ 47k │0805 │     │  [ footprint ]  │
-//! │ └──────┴────────┴──────┴─────┴─────┘     │                 │
-//! │   Add Component  Delete Selected         │                 │
-//! └──────────────────────────────────────────┴─────────────────┘
-//! ```
-//!
-//! Phase 1 = read-only-plus-modal-edit semantics. The grid is rendered
-//! as `text` widgets; row click selects (drives the side preview pane);
-//! row double-click is reserved for the upcoming Edit Component Details
-//! modal (Phase 2). Add Component and Delete Selected are wired through
-//! the existing library messages; Delete fires immediately without a
-//! confirm modal until Phase 2 lands.
+//! Layout: a table sidebar on the left; on the right a header
+//! (search, lifecycle filter) above the row grid and its action row.
+//! Row click selects; row detail lives in the right-edge Properties
+//! panel. Add Component and Delete Selected are wired through the
+//! library messages.
 
 use std::collections::BTreeMap;
 
@@ -42,26 +26,26 @@ mod columns;
 mod empty_state;
 mod grid;
 mod header;
-mod preview;
+mod keyed;
 mod price;
 mod sidebar;
+mod size_sensor;
 mod sort;
+mod view_cache;
+mod window;
 
 use action_row::view_action_row;
-use columns::{derive_columns, row_matches_filter};
 use empty_state::view_empty_state;
 use grid::view_grid;
 use header::view_header;
 use sidebar::view_table_sidebar;
-use sort::sort_by_cell_key;
+pub use view_cache::BrowserViewCache;
+use view_cache::active_table;
+pub use window::{GridScroll, grid_scroll_id, reveal_row_offset, visible_rows};
+pub(crate) use window::{OVERSCAN_ROWS, visible_range};
 
 const BROWSER_TEXT_SIZE: f32 = 11.0;
 const BROWSER_HEADER_SIZE: f32 = 10.0;
-#[expect(
-    dead_code,
-    reason = "F15 removed the preview pane; the width hint is retained in case the Properties panel needs it"
-)]
-const PREVIEW_PANE_WIDTH: f32 = 380.0;
 const MAX_PARAM_COLUMNS: usize = 4;
 /// Width reserved at the start of every grid row for the per-row
 /// lifecycle indicator dot (Stage 18). The header row uses an empty
@@ -126,60 +110,49 @@ pub fn view<'a>(
     let header = view_header(library_path, lib, browser, tokens, read_only);
 
     // Body — left grid, right preview pane.
-    let active_table = browser.active_table.as_deref().unwrap_or_else(|| {
-        // Fall back to first sorted table name when active_table is
-        // unset — matches the open-tab handler's seeding logic.
-        let mut names: Vec<&String> = lib.tables.keys().collect();
-        names.sort();
-        names.first().map(|s| s.as_str()).unwrap_or("")
-    });
-
+    let active_table = active_table(lib, browser);
     let rows: &[ComponentRow] = lib
         .tables
         .get(active_table)
         .map(|v| v.as_slice())
         .unwrap_or(&[]);
 
-    let needle = browser.search.trim().to_lowercase();
-    let lifecycle_filter = browser.lifecycle_filter;
-    let class_filter = browser.class_filter.as_deref();
-    let mut visible: Vec<&ComponentRow> = rows
-        .iter()
-        .filter(|r| lifecycle_filter.allows(r.state))
-        .filter(|r| class_filter.is_none_or(|cls| r.class.as_str() == cls))
-        .filter(|r| needle.is_empty() || row_matches_filter(r, &needle))
-        .collect();
-
-    let prices = price::PriceView::new(&lib.pricing, library_state.clock, rows);
-    let columns = derive_columns(
-        rows,
-        lib.library_id,
-        &library_state.template_registry,
-        active_table,
-        &prices,
+    // The filtered + sorted rows and the derived columns come from the
+    // cache `update` keeps current; a miss (a path that skipped the sync)
+    // recomputes for this frame only.
+    let rebuilt;
+    let cache = match browser.view_cache.as_ref().filter(|c| {
+        c.matches(
+            library_state.data_version,
+            library_state.clock,
+            active_table,
+            browser,
+        )
+    }) {
+        Some(cache) => cache,
+        None => {
+            rebuilt = BrowserViewCache::build(
+                lib,
+                &library_state.template_registry,
+                library_state.clock,
+                library_state.data_version,
+                browser,
+            );
+            &rebuilt
+        }
+    };
+    let visible: Vec<&ComponentRow> = cache.visible.iter().filter_map(|&i| rows.get(i)).collect();
+    let prices = price::PriceView::with_main_currency(
+        &lib.pricing,
+        library_state.clock,
+        &cache.main_currency,
     );
-
-    // Stage 8: apply the user's sort selection to the visible rows
-    // before grid rendering. The grid view is a pure projection of
-    // `visible`, so sorting here doesn't ripple into the render path.
-    if let Some(sort) = browser.sort_by.as_ref()
-        && let Some(column) = columns.iter().find(|c| c.kind.sort_key() == sort.key)
-    {
-        sort_by_cell_key(
-            &mut visible,
-            |row| match column.kind {
-                columns::ColumnKind::Price => prices.sort_value(row),
-                _ => column.kind.cell_value(row),
-            },
-            sort.descending,
-        );
-    }
 
     let grid = view_grid(
         library_path,
         active_table,
         &visible,
-        &columns,
+        &cache.columns,
         browser,
         grid::GridCaches {
             dangling: &lib.dangling,
@@ -210,9 +183,6 @@ pub fn view<'a>(
     // and Pick Symbol / Pick Footprint live in the right-edge
     // Properties panel now (`view_library_row_properties`), so the
     // Library Browser tab body keeps the full width for the grid.
-    // `view_preview_pane` is retained but no longer mounted here;
-    // remove it in a follow-up cleanup pass once the Properties-panel
-    // approach is locked.
     //
     // The Row needs explicit `Length::Fill` width — the
     // `feedback_iced_layout.md` anti-pattern: a Fill child inside a

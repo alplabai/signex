@@ -12,14 +12,18 @@ impl Signex {
     /// Same preset list as the grid pickers. The snap grid (the size the
     /// status bar shows) steps; the visible grid follows it unless the user
     /// set the two apart.
-    pub(crate) fn cycle_grid_size(&mut self) -> Task<Message> {
+    pub(crate) fn cycle_grid_size(&mut self, forward: bool) -> Task<Message> {
         let sizes = crate::canvas::grid::GRID_SIZES_MM;
         let current = self.ui_state.grid_size_mm;
         let i = sizes
             .iter()
             .position(|s| (s - current).abs() < f32::EPSILON)
             .unwrap_or(sizes.len() - 1);
-        let next = sizes[(i + 1) % sizes.len()];
+        let next = if forward {
+            sizes[(i + 1) % sizes.len()]
+        } else {
+            sizes[(i + sizes.len() - 1) % sizes.len()]
+        };
         let linked = (self.ui_state.visible_grid_mm - current).abs() < f32::EPSILON;
         let mut tasks =
             vec![
@@ -58,7 +62,7 @@ impl Signex {
                 self.interaction_state.pcb_canvas.clear_bg_cache();
                 Some(Task::none())
             }
-            MenuMessage::CycleGrid => Some(self.cycle_grid_size()),
+            MenuMessage::CycleGrid => Some(self.cycle_grid_size(true)),
             MenuMessage::ZoomIn | MenuMessage::ZoomOut => {
                 let zoom_in = matches!(msg, MenuMessage::ZoomIn);
                 let step = self.ui_state.effective_zoom_step();

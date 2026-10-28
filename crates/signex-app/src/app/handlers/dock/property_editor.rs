@@ -109,19 +109,8 @@ impl Signex {
                 new_lib_id,
                 rotation_degrees,
             } => {
-                self.apply_engine_command(
-                    signex_engine::Command::UpdateSymbolLibId {
-                        symbol_id: *symbol_id,
-                        lib_id: new_lib_id.clone(),
-                    },
-                    true,
-                    false,
-                );
-                self.apply_engine_command(
-                    signex_engine::Command::SetSymbolRotation {
-                        symbol_id: *symbol_id,
-                        rotation_degrees: *rotation_degrees,
-                    },
+                self.apply_engine_commands(
+                    signex_engine::restyle_power_port(*symbol_id, new_lib_id, *rotation_degrees),
                     true,
                     true,
                 );

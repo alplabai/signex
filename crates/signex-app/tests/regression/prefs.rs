@@ -432,6 +432,35 @@ fn prefs_annotate_undo_round_trips_and_missing_key_is_one_step() {
     );
 }
 
+#[test]
+fn prefs_window_controls_placement_round_trips_and_unknown_is_auto() {
+    use signex_app::chrome::controls::WindowControlsPlacement;
+    let (_tmp, path) = temp_prefs_path();
+    assert_eq!(
+        signex_app::fonts::read_window_controls_placement_pref_at(&path),
+        WindowControlsPlacement::Auto,
+        "no file gives the default"
+    );
+
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, br#"{"window_controls_placement":"sideways"}"#).unwrap();
+    assert_eq!(
+        signex_app::fonts::read_window_controls_placement_pref_at(&path),
+        WindowControlsPlacement::Auto,
+        "an unknown token gives the default"
+    );
+
+    for &placement in WindowControlsPlacement::ALL {
+        signex_app::fonts::write_window_controls_placement_pref_at(&path, placement);
+        assert_eq!(
+            signex_app::fonts::read_window_controls_placement_pref_at(&path),
+            placement
+        );
+    }
+    let raw: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(raw["window_controls_placement"], "trailing");
+}
+
 // ─────────────────────────────────────────────────────────────────
 // #1469 — toggles persist off the UI thread, newest value wins
 // ─────────────────────────────────────────────────────────────────

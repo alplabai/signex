@@ -1,23 +1,6 @@
-//! A move-drag on the GPU-mounted schematic (#199 S3).
-//!
-//! The drag is split the way the CPU preview splits it (`drag_layers`, #1335):
-//! the items it leaves alone are the **static scene**, built once per drag and
-//! again on zoom, on a pan past its margin, or on a new revision, and kept
-//! resident on the GPU under one generation; the items it moves are the
-//! **moving scene**, rebuilt each cursor step and uploaded every frame (it is
-//! small). They are two primitive types, [`SchematicSurface`] and
-//! [`SchematicDragSurface`], because iced prepares every primitive of one type
-//! before rendering any of them, so two of one type in a window would overwrite
-//! each other. A moving item draws above every unmoved one, as in the CPU
-//! preview.
-//!
-//! The drag state lives in the overlay's `Program::State`, which the shaders
-//! cannot reach. `update` therefore leaves the frame it computed in a
-//! [`PublishedDrag`] on the slot. A click-click float can be ended by an app
-//! message (Delete, Undo) that no canvas event announces, but iced forwards
-//! `RedrawRequested` to `Program::update` before every draw, so `update` has
-//! re-judged the gesture (`drag_delta` drops a stale float) by the time a shader
-//! reads the mark. The mark therefore needs no staleness check of its own.
+//! A move-drag on the GPU-mounted schematic (#199 S3): the static and moving
+//! scenes, and the [`PublishedDrag`] mark `update` leaves for the shaders. The
+//! design is in `docs/architecture/schematic-gpu-mount.md`.
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -150,12 +133,13 @@ impl SchematicCanvas<'_> {
         state: &CanvasState,
         action: Option<canvas::Action<Message>>,
     ) -> Option<canvas::Action<Message>> {
-        let offset = self.drag_delta(state);
-        // Idle, and nothing published to retire: no key to build (it clones the
-        // selection), and this runs on every event.
-        if offset.is_none() && !self.published_drag.is_live() {
+        // Idle, and nothing published to retire: no snapped delta to compute
+        // and no key to build (it clones the selection); this runs on every
+        // event.
+        if !self.is_moving(state) && !self.published_drag.is_live() {
             return action;
         }
+        let offset = self.drag_delta(state);
         let was_live = self.published_drag.is_live();
         let revision = self.render_cache.as_ref().map_or(0, |c| c.revision());
         let key = FrameKey {
@@ -178,6 +162,22 @@ impl SchematicCanvas<'_> {
             return action;
         }
         Some(with_redraw(action))
+    }
+
+    /// The rubber-banded frame already computed for this drag delta, if any
+    /// (`refresh_drag_ghost` fills it from `update`).
+    pub(super) fn ready_ghost_frame(
+        &self,
+        state: &CanvasState,
+        drag_offset: Option<(f64, f64)>,
+        revision: u64,
+    ) -> Option<drag_layers::DragFrame> {
+        if !self.prefs.move_keeps_wires {
+            return None;
+        }
+        let (dx, dy) = drag_offset?;
+        let (gx, gy) = self.ghost_delta(dx, dy);
+        state.ghost.ready_frame(revision, &self.selected, gx, gy)
     }
 
     /// The static layer of `frame` as a scene with its generation.

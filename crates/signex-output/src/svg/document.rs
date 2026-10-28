@@ -3,7 +3,7 @@
 //! `from_sheet` composes a schematic page into the `SvgElement` list
 //! (page fill, wires/buses/junctions, labels, notes, child sheets,
 //! drawings, symbols); `rasterize_rgba*` renders that list to RGBA
-//! pixels; `encode_svg_document` serializes it to an SVG string.
+//! pixels; [`SvgRenderContext::svg_document`] serializes it to an SVG string on demand.
 //!
 //! Extracted verbatim from the SVG exporter (`svg/mod.rs`); pure code
 //! motion, zero behaviour change.
@@ -296,6 +296,10 @@ impl SvgRenderContext {
         }
 
         // Full symbol body graphics from library definitions.
+        let mut lib_by_id: HashMap<&str, &signex_types::schematic::LibSymbol> = HashMap::new();
+        for ls in sheet.schematic.lib_symbols.values() {
+            lib_by_id.entry(ls.id.as_str()).or_insert(ls);
+        }
         for sym in &sheet.schematic.symbols {
             let symbol_vars = symbol_eval_variables(sym);
             let mut refdes_vars = HashMap::new();
@@ -319,26 +323,22 @@ impl SvgRenderContext {
                     ))
             });
 
-            if let Some(lib) = sheet
-                .schematic
-                .lib_symbols
-                .values()
-                .find(|ls| ls.id == sym.lib_id)
-            {
-                push_symbol_lib_graphics(&mut elements, sym, Some(lib), &xform, palette);
+            let lib = lib_by_id
+                .get(sym.lib_id.as_str())
+                .copied()
+                .map(std::borrow::Cow::Borrowed)
+                .or_else(|| sheet.schematic.resolve_lib_symbol(sym));
+            if let Some(lib) = lib {
+                push_symbol_lib_graphics(&mut elements, sym, Some(&lib), &xform, palette);
                 push_symbol_pins(
                     &mut elements,
                     sym,
-                    lib,
+                    &lib,
                     &xform,
                     &symbol_eval_ctx,
                     symbol_pin_nets,
                     palette,
                 );
-            } else if sym.is_power {
-                // A power port placed without a library entry has its
-                // built-in body, the same one the canvas draws.
-                push_symbol_lib_graphics(&mut elements, sym, None, &xform, palette);
             } else {
                 // Fallback if library is missing.
                 elements.push(rect_path(
@@ -362,6 +362,7 @@ impl SvgRenderContext {
                 && let Some(ref_text) = &sym.ref_text
                 && !ref_text.hidden
             {
+                let ref_style = field_effective_style(ref_text, sym);
                 elements.push(SvgElement::Text {
                     x: xform.x(ref_text.position.x),
                     y: xform.px_y(ref_text.position.y),
@@ -371,9 +372,9 @@ impl SvgRenderContext {
                         "F3",
                     ),
                     size_pt: (signex_types::schematic::SCHEMATIC_TEXT_MM * xform.mm_to_unit) as f32,
-                    align: halign_to_svg(field_effective_style(ref_text, sym).1),
-                    v_align: valign_to_svg(field_effective_style(ref_text, sym).2),
-                    rotation_deg: field_effective_style(ref_text, sym).0 as f32,
+                    align: halign_to_svg(ref_style.1),
+                    v_align: valign_to_svg(ref_style.2),
+                    rotation_deg: ref_style.0 as f32,
                     fill_rgb: palette.reference,
                     text: normalize_standard_text_with_ctx(&sym.reference, &symbol_eval_ctx),
                 });
@@ -383,6 +384,7 @@ impl SvgRenderContext {
                 && let Some(val_text) = &sym.val_text
                 && !val_text.hidden
             {
+                let val_style = field_effective_style(val_text, sym);
                 elements.push(SvgElement::Text {
                     x: xform.x(val_text.position.x),
                     y: xform.px_y(val_text.position.y),
@@ -392,24 +394,27 @@ impl SvgRenderContext {
                         "F1",
                     ),
                     size_pt: (signex_types::schematic::SCHEMATIC_TEXT_MM * xform.mm_to_unit) as f32,
-                    align: halign_to_svg(field_effective_style(val_text, sym).1),
-                    v_align: valign_to_svg(field_effective_style(val_text, sym).2),
-                    rotation_deg: field_effective_style(val_text, sym).0 as f32,
+                    align: halign_to_svg(val_style.1),
+                    v_align: valign_to_svg(val_style.2),
+                    rotation_deg: val_style.0 as f32,
                     fill_rgb: palette.value,
                     text: normalize_standard_text_with_ctx(&sym.value, &symbol_eval_ctx),
                 });
             }
         }
 
-        let svg_document = encode_svg_document(width, height, &elements);
-
         Self {
             width,
             height,
             elements,
-            svg_document,
             paper: palette.paper,
         }
+    }
+
+    /// Serialize the elements to an SVG document string. Computed on
+    /// demand: the PDF and raster paths never need it.
+    pub fn svg_document(&self) -> String {
+        encode_svg_document(self.width, self.height, &self.elements)
     }
 
     pub fn rasterize_rgba(&self, width: u32, height: u32) -> Option<Vec<u8>> {

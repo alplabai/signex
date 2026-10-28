@@ -66,6 +66,7 @@ fn library_with_a_measurement_row(dir: &std::path::Path) -> (PathBuf, RowId) {
         class: ComponentClass::new("IC"),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib_id, Uuid::now_v7()),
@@ -133,6 +134,8 @@ fn browser_commits_pn(app: &mut Signex, snxlib: &std::path::Path, row_id: RowId,
         row_id,
         column: "internal_pn".to_string(),
     }));
+    // The re-read the commit started, landing as the runtime would.
+    app.land_pending_refresh(snxlib);
 }
 
 fn save_preview(app: &mut Signex, address: &EditorAddress) {

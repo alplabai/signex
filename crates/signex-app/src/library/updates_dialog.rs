@@ -150,9 +150,7 @@ pub struct LibraryUpdateEntry {
 
 /// Modal state — owned by [`crate::library::LibraryState::library_updates`].
 /// `None` while closed; populated by the schematic-open scan. Sorted
-/// by `ref_des` (lexicographic with natural-numeric tail handling
-/// would be nicer but isn't worth the dep here — `R12` sorts before
-/// `R2` in pure lex; the user can re-sort visually if it bites).
+/// by `ref_des` in natural order (`R2` before `R12`).
 #[derive(Debug, Clone)]
 pub struct LibraryUpdatesState {
     /// Schematic the scan ran against — drift applies into this

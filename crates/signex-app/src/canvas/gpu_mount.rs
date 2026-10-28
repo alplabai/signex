@@ -1,27 +1,7 @@
-//! The schematic on the GPU path (#199).
-//!
-//! Mounted only when [`crate::feature_flags::SCHEMATIC_GPU_RENDER_ENABLED`] is
-//! on, as five layers bottom to top:
-//!
-//! 1. [`SchematicBackdrop`] — paper, grid and sheet frame. No `update`:
-//!    `stack!` hands every event to every child, so a second handler would
-//!    place two symbols per click.
-//! 2. [`SchematicShaderProgram`] — the sheet content on the GPU. Its scene
-//!    is built here, in `draw`, because only `draw` knows the cull bounds.
-//!    During a move-drag it carries the static layer (everything the drag
-//!    leaves alone).
-//! 3. [`gpu_drag::SchematicStaticTextLayer`] — the rotated texts of everything
-//!    not moving, which the GPU glyph atlas cannot draw.
-//! 4. [`gpu_drag::SchematicDragShaderProgram`] — the moving items of a
-//!    move-drag, a second primitive type because iced prepares every primitive
-//!    of one type before rendering any of them. Empty when idle.
-//! 5. The interactive [`SchematicCanvas`] in [`ContentMode::GpuOverlay`] — the
-//!    only layer with `update`. During a drag its content layer draws the
-//!    rotated texts of the moving items; then dim, selection, ghosts, previews
-//!    and the HUD as ever.
-//!
-//! The PCB's order (interactive canvas at the bottom) is not reused: it would
-//! bury selection and ghosts under the content. The drag is in [`gpu_drag`].
+//! The schematic on the GPU path (#199): a five-layer `stack!`, mounted only
+//! when [`crate::feature_flags::SCHEMATIC_GPU_RENDER_ENABLED`] is on. Layer
+//! order, the move-drag split and the reasons are in
+//! `docs/architecture/schematic-gpu-mount.md`.
 
 use std::sync::Arc;
 

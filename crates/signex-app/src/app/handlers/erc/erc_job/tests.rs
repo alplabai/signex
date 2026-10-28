@@ -288,6 +288,10 @@ fn colliding_job() -> (ErcRunInputs, PathBuf, PathBuf, PathBuf) {
         root: Some(root_path.clone()),
         project_dir: Some(dir),
         overrides: HashMap::new(),
+        rule_set: signex_output::ErcReportRuleSet {
+            profile_name: None,
+            sha256: String::new(),
+        },
         config: signex_erc::ErcConfig::default(),
         fold: CaseFold::FOLD,
     };

@@ -43,6 +43,7 @@ fn push_project(app: &mut Signex, dir: &Path) {
         id,
         path: prj,
         data: ProjectData {
+            description: None,
             name: "p".into(),
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: None,
@@ -60,6 +61,7 @@ fn push_project(app: &mut Signex, dir: &Path) {
         pending_libraries: std::collections::HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
 }
 

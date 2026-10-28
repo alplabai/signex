@@ -120,9 +120,9 @@ impl SceneSurface for PcbSurface {
     /// rest of the app rather than unclamped.
     const TEXT_SIZE: TextSizePolicy = TextSizePolicy::new(6.0, 64.0);
     /// Mirrors the PCB CPU replay's own clamps — `pcb_canvas::draw_lines` and
-    /// `draw_circles` both `.max(0.5)`.
-    const MIN_STROKE_PX: f32 = 0.5;
-    const MIN_RADIUS_PX: f32 = 0.5;
+    /// `draw_circles` both floor via `renderer_scene_canvas::MIN_STROKE_PX`.
+    const MIN_STROKE_PX: f32 = crate::renderer_scene_canvas::MIN_STROKE_PX;
+    const MIN_RADIUS_PX: f32 = crate::renderer_scene_canvas::MIN_RADIUS_PX;
 }
 
 /// The schematic editor's scene surface.
