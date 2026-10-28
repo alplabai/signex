@@ -1,8 +1,8 @@
 //! Polygon triangulation via ear-clipping.
 //!
 //! Time complexity: each ear test is O(n) and the search resumes at the
-//! clipped position, so typical polygons clip in O(n²); degenerate
-//! shapes that force long scans per ear remain O(n³) worst case. With holes pre-merged via the bridge-edge
+//! clipped vertex's predecessor instead of the start of the ring, so the
+//! full clip is O(n²) to O(n³). With holes pre-merged via the bridge-edge
 //! technique n becomes the total vertex count including holes.
 //! Typical sketch closed loops have ≤ ~64 vertices (rounded rect = 8 + 4·arc_segments),
 //! where the basic form's constant factors beat the more
@@ -274,8 +274,7 @@ mod tests {
     #[test]
     fn large_crescent_polygon_triangulates_fully() {
         // 2000-vertex crescent. The ring starts with ~1000 reflex vertices
-        // (the concave inner edge, which can never be ears) so a clipper
-        // that rescans from index 0 after each ear pays for them every time.
+        // (the concave inner edge, which can never be ears).
         let half = 1000usize;
         let mut poly: Vec<Point2> = Vec::with_capacity(2 * half);
         // Inner concave chain, x from -99 to 99 (y bulges up, reflex).
@@ -289,9 +288,7 @@ mod tests {
             poly.push(p(100.0 * a.cos(), 100.0 * a.sin() + 1.0));
         }
         let n = poly.len();
-        let start = std::time::Instant::now();
         let tris = ear_clip(&poly);
-        eprintln!("ear_clip {n}-vertex crescent: {:?}", start.elapsed());
         assert_eq!(tris.len(), n - 2);
         let sum: f64 = tris.iter().map(|t| tri_area(&poly, *t)).sum();
         let expected = signed_area(&poly).abs();
