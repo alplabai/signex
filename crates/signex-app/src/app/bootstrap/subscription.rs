@@ -34,6 +34,9 @@ struct OpenOverlays {
     prefs_open: bool,
     annotate_open: bool,
     erc_open: bool,
+    /// The ERC dialog's "Save as profile" form is showing (#1608). Esc
+    /// closes it (or its overwrite question) before the dialog itself.
+    erc_save_profile_open: bool,
     rename_open: bool,
     remove_open: bool,
     enable_vc_open: bool,
@@ -276,7 +279,15 @@ impl OpenOverlays {
             OverlayId::ReprefixConfirm => self
                 .reprefix_confirm_open
                 .then(|| Message::Annotate(AnnotateMsg::ReprefixCancelled)),
-            OverlayId::ErcDialog => self.erc_open.then(|| Message::Erc(ErcMsg::CloseDialog)),
+            // The Save-as form is a child panel of the dialog: Esc closes it
+            // (or steps back from its overwrite question) and never writes.
+            OverlayId::ErcDialog => self.erc_open.then(|| {
+                if self.erc_save_profile_open {
+                    Message::Erc(ErcMsg::ProfileSaveCancelled)
+                } else {
+                    Message::Erc(ErcMsg::CloseDialog)
+                }
+            }),
 
             // ── Library modals ──────────────────────────────────────
             OverlayId::LibraryPicker => self
@@ -467,6 +478,7 @@ impl Signex {
                 && !modal_detached(crate::app::state::ModalId::AnnotateDialog),
             erc_open: self.ui_state.erc_dialog_open
                 && !modal_detached(crate::app::state::ModalId::ErcDialog),
+            erc_save_profile_open: self.ui_state.save_profile_dialog.is_some(),
             rename_open: self.ui_state.rename_dialog.is_some(),
             remove_open: self.ui_state.remove_dialog.is_some(),
             enable_vc_open: self.ui_state.enable_version_control.is_some(),
@@ -1458,6 +1470,7 @@ mod tests {
             prefs_open,
             annotate_open,
             erc_open,
+            erc_save_profile_open,
             rename_open,
             remove_open,
             enable_vc_open,
@@ -1498,6 +1511,10 @@ mod tests {
                 o.autosave_recovery_open = true
             }),
             ("erc_open", |o| o.erc_open = true),
+            ("erc_save_profile_open", |o| {
+                o.erc_open = true;
+                o.erc_save_profile_open = true
+            }),
             ("annotate_open", |o| o.annotate_open = true),
             ("prefs_open", |o| o.prefs_open = true),
             ("rename_open", |o| o.rename_open = true),

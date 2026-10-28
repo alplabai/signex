@@ -81,6 +81,27 @@ impl ContentSceneCache {
         focus_set: Option<&HashSet<uuid::Uuid>>,
         overrides: SceneOverrides<'_>,
     ) -> Option<&Arc<Scene>> {
+        self.scene_for_with(
+            || std::borrow::Cow::Borrowed(sheet),
+            transform,
+            colors,
+            bounds,
+            focus_set,
+            overrides,
+        )
+    }
+
+    /// [`Self::scene_for`] for a sheet that is costly to produce: `sheet` runs
+    /// only when the scene must be built, never on a cache hit.
+    pub fn scene_for_with<'s>(
+        &mut self,
+        sheet: impl FnOnce() -> std::borrow::Cow<'s, SchematicRenderSnapshot>,
+        transform: &ScreenTransform,
+        colors: &CanvasColors,
+        bounds: Rectangle,
+        focus_set: Option<&HashSet<uuid::Uuid>>,
+        overrides: SceneOverrides<'_>,
+    ) -> Option<&Arc<Scene>> {
         let reusable = self.entry.as_ref().is_some_and(|entry| {
             entry
                 .built_for
@@ -92,9 +113,15 @@ impl ContentSceneCache {
                 iced::Point::new(-margin.width, -margin.height),
                 iced::Size::new(margin.width * 3.0, margin.height * 3.0),
             );
-            let scene =
-                build_schematic_scene(sheet, transform, colors, build_bounds, focus_set, overrides)
-                    .map(Arc::new);
+            let scene = build_schematic_scene(
+                &sheet(),
+                transform,
+                colors,
+                build_bounds,
+                focus_set,
+                overrides,
+            )
+            .map(Arc::new);
             self.builds += 1;
             self.entry = Some(Entry {
                 built_for: SceneInputs::capture(

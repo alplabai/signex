@@ -8,6 +8,7 @@ pub mod clipboard_workflows;
 pub mod dock;
 pub mod document_files;
 pub mod document_tabs;
+pub mod drawing_order;
 pub mod editing_commands;
 pub mod erc;
 pub mod find_replace;

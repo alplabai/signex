@@ -495,6 +495,10 @@ pub struct LibraryState {
     /// Mounted path of the bundled stock library; `None` when it was not
     /// found or failed to mount. Set once at bootstrap.
     pub stock_library: Option<PathBuf>,
+    /// Where the bundled stock library was resolved, mounted or not. A
+    /// stock library that fails to open is never mounted, so only this
+    /// field lets the open-failure recovery flows recognise it (#814).
+    pub stock_library_root: Option<PathBuf>,
     /// Components Panel UI state — collapsed sections + substring
     /// filter. Stage 9 ships the simple substring matcher; the full
     /// search syntax (plan §5) is polish work.

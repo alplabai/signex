@@ -9,11 +9,15 @@ use crate::pipeline::arc::ArcPipeline;
 use crate::pipeline::circle::CirclePipeline;
 use crate::pipeline::grid::{GridLodFactors, GridPipeline, lod_fade_factors};
 use crate::pipeline::line::LinePipeline;
+#[cfg(test)]
+use crate::pipeline::ordered::{KindPipelines, OrderedPipeline};
 use crate::pipeline::polygon::PolygonPipeline;
 use crate::pipeline::text::GlyphonTextPipeline;
 use crate::primitive::arc::Arc;
 use crate::primitive::circle::Circle;
 use crate::primitive::line::LineSegment;
+#[cfg(test)]
+use crate::primitive::ordered::OrderedItem;
 use crate::primitive::polygon::GpuPolygon;
 use crate::primitive::text::{TextHAlign, TextItem, TextSizePolicy, TextVAlign};
 
@@ -248,11 +252,41 @@ async fn run_arc_readback_smoke_pass(arc: Arc, samples: &[(u32, u32)]) -> Result
     run_readback_smoke_pass(ReadbackGeometry::Arc(arc), 0.0, samples).await
 }
 
+/// A polygon read back from a square target, at arbitrary pixels, for the
+/// strokes that need a 2-D look (joins, gaps).
+#[cfg(test)]
+async fn run_polygon_square_readback_smoke_pass(
+    polygon: GpuPolygon,
+    samples: &[(u32, u32)],
+) -> Result<Vec<u8>, String> {
+    run_readback_smoke_pass(ReadbackGeometry::PolygonSquare(polygon), 0.0, samples).await
+}
+
+/// Mixed-kind drawings read back, in list order, from the square target of
+/// [`run_polygon_square_readback_smoke_pass`] (#1579).
+#[cfg(test)]
+async fn run_ordered_readback_smoke_pass(
+    items: Vec<OrderedItem>,
+    samples: &[(u32, u32)],
+) -> Result<Vec<u8>, String> {
+    run_readback_smoke_pass(ReadbackGeometry::Ordered(items), 0.0, samples).await
+}
+
+/// Edge length and scale of the target of
+/// [`run_polygon_square_readback_smoke_pass`]: pixel `(x, y)` is world
+/// `(x, y) / POLYGON_SQUARE_SCALE` mm.
+#[cfg(test)]
+pub(super) const POLYGON_SQUARE_PX: u32 = 64;
+#[cfg(test)]
+pub(super) const POLYGON_SQUARE_SCALE: f32 = 4.0;
+
 #[cfg(test)]
 enum ReadbackGeometry {
     Line(LineSegment),
     Polygon(GpuPolygon),
+    PolygonSquare(GpuPolygon),
     Arc(Arc),
+    Ordered(Vec<OrderedItem>),
 }
 
 #[cfg(test)]
@@ -261,6 +295,9 @@ impl ReadbackGeometry {
     fn target(&self) -> (u32, u32, f32) {
         match self {
             Self::Line(_) | Self::Polygon(_) => (128, 8, 4.0),
+            Self::Ordered(_) | Self::PolygonSquare(_) => {
+                (POLYGON_SQUARE_PX, POLYGON_SQUARE_PX, POLYGON_SQUARE_SCALE)
+            }
             Self::Arc(_) => (ARC_READBACK_PX, ARC_READBACK_PX, ARC_READBACK_SCALE),
         }
     }
@@ -306,10 +343,14 @@ async fn run_readback_smoke_pass(
     let mut polygon_pipeline =
         PolygonPipeline::new(&device, target_format, camera_gpu.bind_group_layout());
     let mut arc_pipeline = ArcPipeline::new(&device, target_format, camera_gpu.bind_group_layout());
+    let circle_pipeline =
+        CirclePipeline::new(&device, target_format, camera_gpu.bind_group_layout());
+    let mut ordered_pipeline = OrderedPipeline::new(&device);
 
     match geometry {
+        ReadbackGeometry::Ordered(items) => ordered_pipeline.upload(&device, &queue, &items),
         ReadbackGeometry::Line(line) => line_pipeline.upload(&device, &queue, &[line]),
-        ReadbackGeometry::Polygon(polygon) => {
+        ReadbackGeometry::Polygon(polygon) | ReadbackGeometry::PolygonSquare(polygon) => {
             polygon_pipeline.upload(&device, &queue, &[polygon]);
         }
         ReadbackGeometry::Arc(arc) => arc_pipeline.upload(&device, &queue, &[arc]),
@@ -354,6 +395,16 @@ async fn run_readback_smoke_pass(
         line_pipeline.draw(&mut pass, camera_gpu.bind_group());
         polygon_pipeline.draw(&mut pass, camera_gpu.bind_group());
         arc_pipeline.draw(&mut pass, camera_gpu.bind_group());
+        ordered_pipeline.draw_runs(
+            &mut pass,
+            camera_gpu.bind_group(),
+            &KindPipelines {
+                line: &line_pipeline,
+                circle: &circle_pipeline,
+                arc: &arc_pipeline,
+                polygon: &polygon_pipeline,
+            },
+        );
     }
 
     // Bgra8Unorm is 4 bytes/pixel; every target width keeps `width * 4` a

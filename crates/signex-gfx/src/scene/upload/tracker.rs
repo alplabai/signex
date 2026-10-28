@@ -27,6 +27,7 @@ pub const GEOMETRY_FLAGS: DirtyFlags = DirtyFlags::LINES
     .union(DirtyFlags::CIRCLES)
     .union(DirtyFlags::ARCS)
     .union(DirtyFlags::POLYGONS)
+    .union(DirtyFlags::DRAWINGS)
     .union(DirtyFlags::OVERLAY);
 
 /// How far the cull window extends past the visible rectangle, as a fraction
