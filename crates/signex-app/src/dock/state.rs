@@ -142,6 +142,37 @@ impl DockArea {
         }
     }
 
+    /// Whether `kind` is what the user is looking at right now: the
+    /// active tab of an expanded region, or a floating panel (which
+    /// always paints over the window). A panel docked behind another
+    /// tab, or in a collapsed region, is open but not in front.
+    pub fn is_frontmost(&self, kind: PanelKind) -> bool {
+        match self.locate(kind) {
+            Some(PanelSite::Docked(pos, idx)) => {
+                let region = self.region(pos);
+                !region.collapsed && region.active == idx
+            }
+            Some(PanelSite::Floating(_)) => true,
+            None => false,
+        }
+    }
+
+    /// Close `kind` wherever the dock holds it. `false` when it was not
+    /// in the dock.
+    pub fn close_panel(&mut self, kind: PanelKind) -> bool {
+        match self.locate(kind) {
+            Some(PanelSite::Docked(pos, idx)) => {
+                self.update(DockMessage::ClosePanel(pos, idx));
+                true
+            }
+            Some(PanelSite::Floating(idx)) => {
+                self.floating.remove(idx);
+                true
+            }
+            None => false,
+        }
+    }
+
     fn region(&self, position: PanelPosition) -> &DockRegion {
         match position {
             PanelPosition::Left => &self.left,
