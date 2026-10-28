@@ -24,8 +24,10 @@ pub(crate) struct PolygonVertex {
     pub(crate) half_width: f32,
     /// Where the shader puts this corner when the stroke is thicker than its
     /// edge is long: the miter vector at this end of the edge, signed like
-    /// `extrude`, so neighbouring edges meet exactly with no gap and no
-    /// overlap. Zero for fill vertices. See `polygon.wgsl`.
+    /// `extrude`. Once the stroke is at least as thick as that edge is long
+    /// neighbouring edges meet exactly there, with no gap and no overlap;
+    /// between that and twice the half-width they only move part way (see
+    /// `polygon.wgsl`). Zero for fill vertices.
     pub(crate) miter: [f32; 2],
     /// The shorter of the two edges that meet at this corner, world mm: how
     /// thick a stroke must be, relative to it, before the shader moves to
@@ -231,12 +233,13 @@ fn append_stroke(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
 /// thin stroke has anyway) instead of spiking.
 const MITER_LIMIT: f32 = 4.0;
 
-/// The left normal of edge `a -> b`, or `None` for a zero-length edge.
+/// The left normal of edge `a -> b`, or `None` for a zero-length or non-finite
+/// edge (an infinite one would hand its neighbours a NaN corner).
 fn edge_normal(a: [f32; 2], b: [f32; 2]) -> Option<([f32; 2], f32)> {
     let dx = b[0] - a[0];
     let dy = b[1] - a[1];
     let len = (dx * dx + dy * dy).sqrt();
-    (len > f32::EPSILON).then(|| ([-dy / len, dx / len], len))
+    (len.is_finite() && len > f32::EPSILON).then(|| ([-dy / len, dx / len], len))
 }
 
 /// The miter vector where an edge with normal `own` meets its neighbour with
@@ -286,7 +289,10 @@ fn corner_join(own: ([f32; 2], f32), neighbour: Option<([f32; 2], f32)>) -> ([f3
 /// floored half-width: the edge normal (a plain rectangle, right when the
 /// stroke is thin next to the edge) and the miter vector (right when it is
 /// thick, because neighbouring quads then share their corner exactly, with no
-/// gap and no overlap, so a translucent stroke does not bead).
+/// gap and no overlap, so a translucent stroke does not bead). That holds only
+/// when the stroke is at least as thick as the edge is long; in between the
+/// corner moves part way, which leaves a smaller outer notch and still
+/// overlaps on the inside, no worse than a plain rectangle.
 fn append_ring_stroke(
     vertices: &mut Vec<PolygonVertex>,
     points: &[[f32; 2]],
@@ -627,7 +633,7 @@ mod holes_tests;
 
 #[cfg(test)]
 mod tests {
-    use super::triangulate_polygons;
+    use super::{append_ring_stroke, triangulate_polygons};
     use crate::primitive::polygon::GpuPolygon;
 
     /// Shoelace area of a closed contour — the ground truth a correct
@@ -895,5 +901,26 @@ mod tests {
 
         let vertices = triangulate_polygons(&polygons);
         assert_eq!(vertices.len(), 6);
+    }
+
+    /// A non-finite vertex loses its own two edges and no more: its neighbours'
+    /// corners must not pick up a NaN normal and vanish with it.
+    #[test]
+    fn a_non_finite_vertex_does_not_spread_nan_to_its_neighbours() {
+        let ring = [[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [f32::INFINITY, 4.0]];
+        let mut vertices = Vec::new();
+
+        append_ring_stroke(&mut vertices, &ring, 0.1, [1.0; 4]);
+
+        assert!(!vertices.is_empty(), "the finite edges still draw");
+        for vertex in &vertices {
+            let finite = vertex
+                .position
+                .iter()
+                .chain(&vertex.extrude)
+                .chain(&vertex.miter)
+                .all(|v| v.is_finite());
+            assert!(finite, "a stroke vertex went non-finite: {vertex:?}");
+        }
     }
 }

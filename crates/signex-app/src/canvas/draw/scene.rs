@@ -100,7 +100,7 @@ impl SchematicCanvas<'_> {
 
         let static_layer = {
             let mut layers = self.drag_layers.borrow_mut();
-            layers.static_is_stale(
+            layers.refresh_static_key(
                 &super::super::drag_layers::StaticView {
                     transform: &transform,
                     colors,

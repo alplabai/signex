@@ -667,6 +667,44 @@ fn a_stroke_thicker_than_its_edges_has_no_gap_and_no_double_blend() {
     }
 }
 
+/// Between the two regimes (`0 < w < 1`: the edge is longer than the half-width
+/// but shorter than twice it) a corner only moves part way to the miter point.
+/// That is not the exact join of the test above, and a translucent stroke may
+/// still double-blend on the inside, so this asserts only the weaker promise:
+/// no gap anywhere in the band. 0.75 mm chords under a 1 mm stroke are the
+/// ratio of 0.15 mm chords under a 0.2 mm one (`w` about 0.5), at a size the
+/// 4 px/mm target can resolve.
+#[test]
+fn a_partly_mitered_stroke_leaves_no_gap_in_its_band() {
+    let sides = 50;
+    let radius_mm = 6.0;
+    let width_mm = 1.0;
+    let r_px = radius_mm * POLYGON_SQUARE_SCALE;
+    let h_px = width_mm * POLYGON_SQUARE_SCALE / 2.0;
+    let c = POLYGON_SQUARE_PX as f32 / 2.0;
+    let mut samples = Vec::new();
+    for step in 0..360 {
+        let t = std::f32::consts::TAU * step as f32 / 360.0;
+        // Inside the band by more than a pixel centre can be off the sample.
+        for frac in [-0.6, -0.3, 0.0, 0.3, 0.6] {
+            let rr = r_px + frac * h_px;
+            samples.push(((c + rr * t.cos()) as u32, (c + rr * t.sin()) as u32));
+        }
+    }
+
+    let ring = ring_polygon(radius_mm, sides, width_mm, [1.0, 0.0, 0.0, 1.0]);
+    let reds = on_gpu(run_polygon_square_readback_smoke_pass(ring, &samples))
+        .expect("partial-w ring readback");
+
+    let gaps = reds.iter().filter(|red| **red < 240).count();
+    assert_eq!(
+        gaps,
+        0,
+        "{gaps} of {} band pixels are not covered",
+        reds.len()
+    );
+}
+
 /// Half the stroke of the join-band tests below, in pixels, and the scale they
 /// draw at (`POLYGON_SQUARE_SCALE` px per mm).
 const JOIN_HALF_PX: f32 = 3.2;

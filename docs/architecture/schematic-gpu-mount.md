@@ -39,8 +39,8 @@ The drag is split the way the CPU preview splits it (`drag_layers`, #1335). The
 **static scene** is built once per drag and again on zoom, on a pan past its
 margin (one viewport on every side), on a new document revision or a new skip
 set, and stays resident on the GPU under one generation. The **moving scene**
-is rebuilt each cursor step and uploaded every frame (generation `None`); it is
-small. An idle drag layer carries one constant generation, so the GPU uploads
+is rebuilt each cursor step and takes a new generation then, so a frame with
+nothing moved uploads nothing; it is small. An idle drag layer carries one constant generation, so the GPU uploads
 its empty scene once.
 
 The drag state lives in the overlay's `Program::State`, which the shaders

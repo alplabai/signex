@@ -268,6 +268,19 @@ impl DragLayers {
         self.session.as_ref().map(|s| &s.lifted)
     }
 
+    /// Rekey the retained static geometry for `view`, `revision` and `skip`,
+    /// dropping it when any of them changed. For callers that only want the
+    /// retained geometry current, not the answer [`Self::static_is_stale`]
+    /// gives.
+    pub fn refresh_static_key(
+        &mut self,
+        view: &StaticView<'_>,
+        revision: u64,
+        skip: &HashSet<Uuid>,
+    ) {
+        self.static_is_stale(view, revision, skip);
+    }
+
     /// Whether the static geometry must be drawn again for `view` and this
     /// document `revision` and `skip` set. When it must, the retained
     /// geometry is dropped and the build is counted.

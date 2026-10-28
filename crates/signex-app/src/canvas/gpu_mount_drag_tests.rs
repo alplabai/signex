@@ -100,9 +100,10 @@ fn moving(p: &Programs<'_>) -> ScenePrimitive<SchematicDragSurface> {
     iced::widget::shader::Program::draw(&p.drag, &(), at(0.0, 0.0), BOUNDS)
 }
 
-/// A drag is live when the drag layer carries the moving set, uncached.
+/// A drag is live when the drag layer carries a moving set, not the one idle
+/// generation.
 fn drag_is_live(p: &Programs<'_>) -> bool {
-    moving(p).generation.is_none()
+    moving(p).generation != Some(super::gpu_drag::idle_generation())
 }
 
 fn is_blank(scene: &Scene) -> bool {
@@ -696,10 +697,11 @@ fn a_dragging_slot_and_an_idle_one_do_not_collide_on_the_idle_generation() {
             press(&a.overlay, &mut state);
             drag_to(&a.overlay, &mut state, 150.0);
             let (live, resting) = (moving(a), moving(b));
-            assert_eq!(live.generation, None, "a live drag uploads every frame");
+            let idle_generation = resting.generation.expect("idle generation");
+            let live_generation = live.generation.expect("a live drag has a generation");
+            assert_ne!(live_generation, idle_generation, "and not the idle one");
             assert!(!is_blank(&live.scene));
             assert!(is_blank(&resting.scene));
-            let idle_generation = resting.generation.expect("idle generation");
             assert_ne!(content(a).generation, Some(idle_generation));
             assert_ne!(content(b).generation, Some(idle_generation));
             assert_eq!(moving(b).generation, Some(idle_generation), "and holds");
@@ -770,5 +772,25 @@ fn a_dragged_drawing_moves_from_the_static_bucket_to_the_moving_one() {
             content(p).scene.drawings.len() < all,
             "and no longer on the static one"
         );
+    });
+}
+
+/// The moving scene is keyed by its own generation: a frame with nothing moved
+/// keeps it, so the GPU uploads nothing, and a cursor step takes a new one.
+#[test]
+fn the_moving_generation_holds_when_nothing_moved_and_changes_when_it_does() {
+    let slot = slot_with_wire_selected();
+    let mut state = CanvasState::default();
+    rig(&slot, |p| {
+        press(&p.overlay, &mut state);
+        drag_to(&p.overlay, &mut state, 150.0);
+        let first = moving(p).generation.expect("a live drag has a generation");
+
+        assert_eq!(moving(p).generation, Some(first), "a still frame");
+        assert_eq!(moving(p).generation, Some(first), "and another");
+
+        drag_to(&p.overlay, &mut state, 170.0);
+        let stepped = moving(p).generation.expect("generation");
+        assert_ne!(stepped, first, "a cursor step rebuilds and re-keys");
     });
 }

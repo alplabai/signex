@@ -19,7 +19,22 @@ struct Mark {
     frame: DragFrame,
     /// The scene of `frame.moving` for one set of scene inputs; built once per
     /// frame, read by the drag shader and the overlay's rotated-text pass.
-    moving_scene: Option<(SceneInputs, Option<Arc<Scene>>)>,
+    moving_scene: Option<BuiltMoving>,
+}
+
+/// The moving scene of one frame, and the generation the GPU keys it by: a
+/// rebuild takes a new one, so a frame with nothing moved uploads nothing.
+struct BuiltMoving {
+    inputs: SceneInputs,
+    scene: Option<Arc<Scene>>,
+    generation: u64,
+}
+
+/// The moving scene of a live drag as the drag shader needs it.
+pub(super) struct MovingScene {
+    /// `None` when the moving set draws nothing.
+    pub scene: Option<Arc<Scene>>,
+    pub generation: u64,
 }
 
 /// Everything a published frame was computed from. While it holds, a new event
@@ -90,11 +105,11 @@ impl PublishedDrag {
         &self,
         view: &StaticView<'_>,
         build: impl FnOnce(&DragFrame) -> Option<Scene>,
-    ) -> Option<Arc<Scene>> {
+    ) -> Option<MovingScene> {
         let mut published = self.0.borrow_mut();
         let mark = published.mark.as_mut()?;
-        if let Some((inputs, scene)) = &mark.moving_scene
-            && inputs.fits_in_place(
+        if let Some(built) = &mark.moving_scene
+            && built.inputs.fits_in_place(
                 view.transform,
                 view.colors,
                 view.viewport,
@@ -102,9 +117,13 @@ impl PublishedDrag {
                 view.overrides,
             )
         {
-            return scene.clone();
+            return Some(MovingScene {
+                scene: built.scene.clone(),
+                generation: built.generation,
+            });
         }
         let scene = build(&mark.frame).map(Arc::new);
+        let generation = crate::scene_generation::next_scene_generation();
         let inputs = SceneInputs::capture(
             view.transform,
             view.colors,
@@ -112,8 +131,12 @@ impl PublishedDrag {
             view.focus_set,
             view.overrides,
         );
-        mark.moving_scene = Some((inputs, scene.clone()));
-        scene
+        mark.moving_scene = Some(BuiltMoving {
+            inputs,
+            scene: scene.clone(),
+            generation,
+        });
+        Some(MovingScene { scene, generation })
     }
 }
 
@@ -209,7 +232,7 @@ impl SchematicCanvas<'_> {
         &self,
         transform: &crate::schematic_runtime::ScreenTransform,
         bounds: Rectangle,
-    ) -> Option<Arc<Scene>> {
+    ) -> Option<MovingScene> {
         let focus_set = self.auto_focus_set();
         let view = StaticView {
             transform,
@@ -240,7 +263,10 @@ impl SchematicCanvas<'_> {
         let transform = self.screen_transform();
         let bounds = crate::schematic_runtime::frame_local_bounds(bounds);
         let mut frame = canvas::Frame::new(renderer, bounds.size());
-        if let Some(scene) = self.drag_moving_scene(&transform, bounds) {
+        if let Some(scene) = self
+            .drag_moving_scene(&transform, bounds)
+            .and_then(|moving| moving.scene)
+        {
             crate::schematic_runtime::draw_rotated_text_fallback(&mut frame, &scene, &transform);
         }
         frame.into_geometry()
@@ -294,7 +320,7 @@ impl SchematicCanvas<'_> {
             .active_snapshot()
             .and_then(|snapshot| self.drag_static_scene(snapshot, drag, &transform, local).0);
         let mut layers = self.drag_layers.borrow_mut();
-        layers.static_is_stale(
+        layers.refresh_static_key(
             &StaticView {
                 transform: &transform,
                 colors: &self.prefs.canvas_colors,
@@ -357,7 +383,7 @@ fn with_redraw(action: Option<canvas::Action<Message>>) -> canvas::Action<Messag
 
 /// The generation an idle drag layer carries: constant, so the GPU uploads its
 /// empty scene once and then skips.
-fn idle_generation() -> u64 {
+pub(super) fn idle_generation() -> u64 {
     static IDLE: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
     *IDLE.get_or_init(crate::scene_generation::next_scene_generation)
 }
@@ -389,12 +415,15 @@ impl shader::Program<Message> for SchematicDragShaderProgram<'_> {
         }
         let transform = self.0.screen_transform();
         let local = crate::schematic_runtime::frame_local_bounds(bounds);
-        // `None`: the moving set changes with every cursor step, so it uploads
-        // every frame.
-        let scene = self
-            .0
-            .drag_moving_scene(&transform, local)
-            .unwrap_or_else(empty_scene);
-        ScenePrimitive::new(scene, None, offset, cam.scale)
+        // The scene's own generation: a cursor step rebuilds it and takes a new
+        // one, a frame with nothing moved keeps it and uploads nothing.
+        let (scene, generation) = match self.0.drag_moving_scene(&transform, local) {
+            Some(MovingScene {
+                scene: Some(scene),
+                generation,
+            }) => (scene, generation),
+            _ => (empty_scene(), idle_generation()),
+        };
+        ScenePrimitive::new(scene, Some(generation), offset, cam.scale)
     }
 }
