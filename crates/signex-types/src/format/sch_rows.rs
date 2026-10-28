@@ -24,7 +24,7 @@ use uuid::Uuid;
 /// MPN). Symbol-level fields that don't fit a flat row — `fields`
 /// map, `custom_properties`, `pin_uuids`, `instances`, `ref_text` /
 /// `val_text` text-prop overrides — survive in the
-/// `[sheets.component_extras.<uuid>]` auxiliary TOML tables.
+/// `[extras.symbols.<uuid>]` auxiliary TOML tables.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SchComponentRow {
     pub uuid: Uuid,
@@ -350,9 +350,9 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         fields,
         custom_properties: extras.custom_properties,
         pin_uuids: extras.pin_uuids.into_iter().collect(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
+        library_id: extras.library_id,
+        row_id: extras.row_id,
+        library_version: extras.library_version,
         instances: extras.instances,
         unknown: extras.unknown,
         unknown_columns: row.unknown_columns,

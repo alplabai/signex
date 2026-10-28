@@ -54,14 +54,19 @@ impl Signex {
             Message::CanvasEvent(event) => {
                 if self.ui_state.first_run_tour_open {
                     self.ui_state.first_run_tour_open = false;
-                    crate::fonts::write_first_run_tour_dismissed(true);
+                    let save = overlay::dismiss_first_run_tour_task();
+                    return Task::batch([save, self.handle_canvas_interaction_event(event)]);
                 }
                 self.handle_canvas_interaction_event(event)
             }
             Message::CanvasEventInWindow { window_id, event } => {
                 if self.ui_state.first_run_tour_open {
                     self.ui_state.first_run_tour_open = false;
-                    crate::fonts::write_first_run_tour_dismissed(true);
+                    let save = overlay::dismiss_first_run_tour_task();
+                    return Task::batch([
+                        save,
+                        self.handle_canvas_event_in_window(window_id, event),
+                    ]);
                 }
                 self.handle_canvas_event_in_window(window_id, event)
             }
@@ -425,9 +430,9 @@ impl Signex {
                 } else {
                     self.ui_state.net_colors.remove(&net);
                 }
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_content_cache();
+                for canvas in self.interaction_state.all_schematic_canvases_mut() {
+                    canvas.clear_content_cache();
+                }
                 Task::none()
             }
             NetColorMsg::CustomShow(show) => {

@@ -4,7 +4,10 @@ mod patch;
 
 mod annotation;
 mod history;
+mod history_snapshot;
+mod lock;
 mod net_class_table;
+mod power_port;
 mod selection;
 mod sheet;
 mod sheet_identity;
@@ -20,6 +23,11 @@ pub(crate) mod test_support;
 #[cfg(test)]
 mod annotation_tests;
 
+#[cfg(test)]
+mod lock_tests;
+
+#[cfg(test)]
+mod history_tests;
 #[cfg(test)]
 mod rubber_band_power_tests;
 #[cfg(test)]
@@ -38,6 +46,7 @@ pub use command::{
     SheetPort, SymbolTextField, TextTarget,
 };
 pub use error::EngineError;
+pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
 pub use find::{
     DesignatorScope, FindHit, FindKind, designator_commands, replace_all_ci, replace_commands,
     scan_sheet,
@@ -49,6 +58,7 @@ pub use net_class_table::{
     StepId as NetClassStepId, apply_net_class_command,
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
+pub use power_port::{place_power_port, restyle_power_port};
 pub use selection::{
     ClipboardSelection, SelectionAnchor, SelectionDetails, info_keys, partition_cuttable,
 };
@@ -71,7 +81,7 @@ const JUNCTION_TOLERANCE_MM: f64 = 0.01;
 pub struct Engine {
     document: SchematicSheet,
     path: Option<PathBuf>,
-    history: Vec<HistoryEntry>,
+    history: std::collections::VecDeque<HistoryEntry>,
     redo_stack: Vec<HistoryEntry>,
     /// Entries evicted from the front of `history` by the cap, so
     /// `undo_position` keeps counting up past `MAX_HISTORY_ENTRIES`.
@@ -141,11 +151,16 @@ impl MovePreview {
             return self.sheet.clone();
         };
         engine.preset_before = Some(self.before.clone());
-        let done = engine.execute(Command::MoveEach {
+        // The commit skips locked symbols; the ghost must too, or it shows
+        // nothing moving while the free items jump on release.
+        let (command, _) = engine.without_locked(Command::MoveEach {
             moves: moves.to_vec(),
             keep_wires,
         });
-        if done.is_err() {
+        let Some(command) = command else {
+            return self.sheet.clone();
+        };
+        if engine.execute(command).is_err() {
             return self.sheet.clone();
         }
         engine.document().clone()
@@ -164,7 +179,7 @@ impl Engine {
         Ok(Self {
             document,
             path,
-            history: Vec::new(),
+            history: std::collections::VecDeque::new(),
             redo_stack: Vec::new(),
             history_evicted: 0,
             history_suppressed: false,
@@ -193,7 +208,7 @@ impl Engine {
         Ok(Self {
             document: snx.sheet,
             path: Some(path.to_path_buf()),
-            history: Vec::new(),
+            history: std::collections::VecDeque::new(),
             redo_stack: Vec::new(),
             history_evicted: 0,
             history_suppressed: false,
@@ -342,6 +357,10 @@ impl Engine {
     }
 
     pub fn execute(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
+        // A refusal touches nothing, so it moves no revision.
+        if let Some(refusal) = self.locked_symbol_refusal(&cmd) {
+            return Err(refusal);
+        }
         self.bump_revision();
         let before = self.document.clone();
 

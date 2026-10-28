@@ -207,31 +207,42 @@ impl Signex {
                 self.handle_detach_modal(super::super::super::state::ModalId::ReprefixConfirm),
             ]);
         }
-        crate::diagnostics::log_info(format!(
-            "{LABEL}: PCB references are not updated; the board keeps the old designators \
-             until it is synchronised, the same as Annotate."
-        ));
+        let groups_before = self.document_state.next_undo_group;
         let pass = self.annotate_project(AnnotatePass {
             mode: signex_engine::AnnotateMode::Incremental,
             reprefix: Some(&targets),
             label: LABEL,
         });
-        self.report_split_parts(&plan.changes);
-        self.report_undo_sheets();
+        // A run that was rolled back or changed nothing records no group; its
+        // own message already said so, so the follow-up lines would mislead.
+        if self.document_state.next_undo_group > groups_before
+            && self.last_undo_group_record().is_some()
+        {
+            crate::diagnostics::log_info(format!(
+                "{LABEL}: PCB references are not updated; the board keeps the old designators \
+                 until it is synchronised, the same as Annotate."
+            ));
+            self.report_split_parts(&plan.changes);
+            self.report_undo_sheets();
+        }
         // The pass parked unopened sheets; the preview must re-read them.
         self.invalidate_annotate_preview();
         Task::batch([close, pass, self.refresh_annotate_preview()])
+    }
+
+    /// The sheets of the newest undo group, when its run recorded any.
+    fn last_undo_group_record(&self) -> Option<&crate::app::UndoGroupSheets> {
+        let last = self.document_state.next_undo_group.checked_sub(1)?;
+        self.document_state
+            .undo_groups
+            .get(&signex_engine::UndoGroupId::new(last))
     }
 
     /// Say where Ctrl+Z undoes the run: only on the sheets it changed. When the
     /// active sheet is not one of them (it had nothing to re-prefix), Ctrl+Z
     /// there would undo an unrelated edit, so the user is told to switch first.
     fn report_undo_sheets(&self) {
-        let Some(last) = self.document_state.next_undo_group.checked_sub(1) else {
-            return;
-        };
-        let group = signex_engine::UndoGroupId::new(last);
-        let Some(record) = self.document_state.undo_groups.get(&group) else {
+        let Some(record) = self.last_undo_group_record() else {
             return;
         };
         let names: Vec<String> = record

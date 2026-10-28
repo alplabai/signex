@@ -11,7 +11,8 @@
 //! There is no "edited by the user" flag in the file, so a part is treated as
 //! automatic only when its current alphabetic prefix is one the system could
 //! have issued: the library symbol's own letters, the letters ANY standard
-//! gives the row's class, or the row's valid override. A prefix that none of
+//! gives the row's class (including letters an earlier table issued), or the
+//! row's valid override. A prefix that none of
 //! those would issue is skipped as hand-edited. This detects exactly that and
 //! no more: a hand-typed prefix that happens to equal one of those letters is
 //! indistinguishable from an issued one and IS rewritten (a `V1` typed on a
@@ -21,7 +22,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use signex_types::designator::{
-    DesignatorStandard, alphabetic_prefix, class_prefix, normalize_prefix_override,
+    DesignatorStandard, alphabetic_prefix, class_letters_ever_issued, normalize_prefix_override,
     placement_prefix, resolve_prefix,
 };
 use signex_types::schematic::{AnnotateOrder, LibSymbol, ProjectParts, Symbol};
@@ -103,7 +104,7 @@ pub(super) struct PartChange {
     /// Every unit of the part, on every sheet.
     pub units: Vec<Uuid>,
     /// The row was not on the part: it was matched through the part's library
-    /// symbol (the sheet file stores no row link, #1331).
+    /// symbol (a sheet saved before the file kept the row link, #1417).
     pub by_symbol: bool,
 }
 
@@ -258,12 +259,12 @@ fn decide(input: &PlanInput<'_>, units: &[Member]) -> Decision {
 }
 
 /// The row facts of a part. A part placed in this session carries its row
-/// (`library_id` + `row_id`). The `.snxsch` file does not store that link, so a
-/// reopened part has only its `lib_id` (`"<library>:<symbol>"`): the rows that
-/// bind that symbol stand in for it when they all agree on the class and the
-/// override, and the part is skipped as ambiguous when they do not. Storing
-/// the link in the file would make this heuristic unnecessary (#1331); until
-/// then the confirm marks such parts as matched by symbol.
+/// (`library_id` + `row_id`), and the `.snxsch` file keeps that link (#1417). A
+/// part from a sheet saved before that has only its `lib_id`
+/// (`"<library>:<symbol>"`): the rows that bind that symbol stand in for it
+/// when they all agree on the class and the override, and the part is skipped
+/// as ambiguous when they do not. The confirm marks such parts as matched by
+/// symbol.
 fn linked_row<'a>(
     input: &'a PlanInput<'_>,
     units: &[Member],
@@ -306,12 +307,27 @@ fn row_by_symbol<'a>(input: &'a PlanInput<'_>, lib_id: &str) -> Result<&'a RowFa
     let Some(symbol) = parsed else {
         return Err(SkipReason::NoRowLink);
     };
-    let mut candidates = input
+    let binds = |facts: &&RowFacts| facts.symbol == symbol;
+    // The library the `lib_id` names answers first: a fork of it that binds
+    // the same symbol under another class must not make the part ambiguous.
+    // Only when none of its rows bind the symbol are the other libraries asked.
+    let in_named = input
         .lookup
         .libraries
-        .values()
-        .flat_map(HashMap::values)
-        .filter(|facts| facts.symbol == symbol);
+        .get(&symbol.0)
+        .map_or_else(Vec::new, |rows| rows.values().filter(binds).collect());
+    let rows: Vec<&RowFacts> = if in_named.is_empty() {
+        input
+            .lookup
+            .libraries
+            .values()
+            .flat_map(HashMap::values)
+            .filter(binds)
+            .collect()
+    } else {
+        in_named
+    };
+    let mut candidates = rows.into_iter();
     let Some(first) = candidates.next() else {
         return Err(if input.lookup.libraries.contains_key(&symbol.0) {
             SkipReason::RowMissing
@@ -338,17 +354,14 @@ fn has_per_placement_designator(symbol: &Symbol) -> bool {
 }
 
 /// Could the system itself have issued `current` for this part? The legacy
-/// prefix of the library symbol, any standard's letters for the row's class,
-/// or the row's valid override. Anything else was typed by a user, and is
+/// prefix of the library symbol, any standard's letters for the row's class
+/// (current or retired by a table correction), or the row's valid override. Anything else was typed by a user, and is
 /// never rewritten: there is no flag for it in the file.
 fn is_system_issued(current: &str, symbol_letters: &str, facts: &RowFacts) -> bool {
     if !symbol_letters.is_empty() && placement_prefix(symbol_letters) == current {
         return true;
     }
-    if DesignatorStandard::ALL
-        .iter()
-        .any(|&s| class_prefix(s, &facts.class) == Some(current))
-    {
+    if class_letters_ever_issued(&facts.class, current) {
         return true;
     }
     facts
@@ -601,7 +614,7 @@ mod tests {
 
     #[test]
     fn a_part_without_a_row_link_is_matched_through_its_lib_id() {
-        // What a reopened sheet gives: the file stores no row link.
+        // What a sheet saved before the file kept the row link gives.
         let symbols = [by_lib_id("D1")];
         let p = plan(
             DesignatorStandard::Din40719_2,
@@ -629,6 +642,25 @@ mod tests {
             false,
         );
         assert_eq!(only_skip(&p), SkipReason::RowAmbiguous);
+    }
+
+    #[test]
+    fn a_fork_binding_the_same_symbol_does_not_make_the_named_library_ambiguous() {
+        // `lib_id` names library 3; library 1 (a fork) binds the same symbol
+        // under another class. The named library's own row decides.
+        let symbols = [by_lib_id("D1")];
+        let mut lookup = lookup_of(facts("led", None));
+        lookup.libraries.insert(
+            Uuid::from_u128(3),
+            HashMap::from([(Uuid::from_u128(8), facts("diode", None))]),
+        );
+        let p = plan(
+            DesignatorStandard::Din40719_2,
+            &lookup,
+            &[(&symbols, false)],
+            false,
+        );
+        assert_eq!(only_change(&p).new_prefix, "V");
     }
 
     #[test]

@@ -415,11 +415,7 @@ pub enum PanelMsg {
     FpEditorRestorePadStackDefaults,
     /// #1073 — dismiss the open-time pad-stack offer for this editor tab.
     FpEditorDismissPadStackOffer,
-    /// v0.22 Phase E3+E4 polish — Hover state for the Properties
-    /// panel's "Conflicts (worst first)" list. `true` on row
-    /// `on_enter`, `false` on `on_exit`. The handler flips
-    /// `editor.state.hovered_over_constraint` between
-    /// v0.22 Phase E3+E4 → v0.23 — Per-row hover on a Properties
+    /// Per-row hover on a Properties
     /// panel "Conflicts" list row. `Some(constraint_id)` highlights
     /// the specific constraint at full red and dims everything else
     /// (including other over-constraints) so the user can isolate a
@@ -653,6 +649,9 @@ pub enum PanelMsg {
     /// Replace the sheet's embedded library symbol with the library's
     /// current one (Properties ▸ "Update from library", #912).
     UpdateSymbolFromLibrary(uuid::Uuid),
+    /// Switch a placed symbol to another drawing of its library row: the
+    /// symbol's uuid and the `lib_id` of the drawing (#1230).
+    SwitchSymbolChoice(uuid::Uuid, String),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.
@@ -710,6 +709,11 @@ pub enum PanelMsg {
     TogglePrePlacementItalic,
     TogglePrePlacementUnderline,
     SetPrePlacementShapeWidth(f64),
+    /// A keystroke in a numeric box: the raw text is kept as a draft and,
+    /// when it already parses, applied to the model.
+    NumericFieldTyped(super::NumericFieldKey, String),
+    /// Enter in a numeric box: drop the draft so the box shows the stored value.
+    NumericFieldSubmitted(super::NumericFieldKey),
     SetPrePlacementShapeFill(signex_types::schematic::FillType),
     /// Properties panel — edit a pin's designator (number) on the
     /// active Symbol editor tab. Routed through `handle_dock_sch_library_message`
@@ -753,8 +757,7 @@ pub enum PanelMsg {
         pin_idx: usize,
         value: f64,
     },
-    /// SCH Library panel — click on a row in the Pins sub-list.
-    /// Selects the pin on the canvas (Properties panel switches
+    /// Select a pin on the canvas (Properties panel switches
     /// to pin-mode automatically via the next refresh_panel_ctx).
     SymEditorSelectPin(usize),
     /// Properties panel — edit a pin's free-text Description.

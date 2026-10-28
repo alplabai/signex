@@ -122,10 +122,10 @@ impl Signex {
             || self.ui_state.annotate_undo == crate::annotate_undo::AnnotateUndo::Project)
             .then(|| self.mint_undo_group());
         let mut touched_sheets = crate::app::UndoGroupSheets {
-            label: if reprefix.is_some() {
-                "re-prefix"
+            kind: if reprefix.is_some() {
+                crate::app::UndoGroupKind::Reprefix
             } else {
-                "annotate"
+                crate::app::UndoGroupKind::Annotate
             },
             ..Default::default()
         };
@@ -229,6 +229,15 @@ impl Signex {
             let Some(document) = project_set.sheets.get(path).cloned() else {
                 continue;
             };
+            if self.unopened_write_blocked("Annotate", path) {
+                // A re-prefix is all or nothing: leaving one sheet out would
+                // split a prefix across the project.
+                if reprefix.is_some() {
+                    failed = true;
+                    break;
+                }
+                continue;
+            }
             if reprefix.is_some() {
                 // Re-prefix never writes behind the user's back: the sheet
                 // is loaded into a parked engine, dirty and unsaved, inside
@@ -377,7 +386,7 @@ impl Signex {
         }
         crate::diagnostics::log_warning(format!(
             "{label}: a sheet could not be converted, so the whole run was undone and nothing \
-             was changed."
+             was changed. Any redo history the touched sheets had before the run is gone."
         ));
         self.interaction_state
             .active_canvas_mut()

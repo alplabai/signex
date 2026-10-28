@@ -35,36 +35,47 @@ pub struct UndoGroupSheets {
     /// exactly these, so a sheet the undo skipped (reopened, history trimmed)
     /// cannot block it, while one edited after the undo still does.
     pub undone: Vec<std::path::PathBuf>,
-    /// What the group is: `"annotate"` or `"re-prefix"`, named in its undo and
-    /// redo messages. Empty reads as `"annotate"`.
-    pub label: &'static str,
+    /// What the group is, named in its undo and redo messages.
+    pub kind: UndoGroupKind,
     /// Sheets the run loaded into tabless parked engines (re-prefix of a
     /// sheet that was not open). Back at their loaded state after an undo,
     /// they are clean, not unsaved.
     pub parked: Vec<std::path::PathBuf>,
+    /// Parked sheets an undo took back to disk state and dropped. Their
+    /// history is gone, so the group can no longer be redone as a whole.
+    pub dropped: Vec<std::path::PathBuf>,
+}
+
+/// Which run stamped an undo group.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum UndoGroupKind {
+    #[default]
+    Annotate,
+    Reprefix,
+    Replace,
 }
 
 impl UndoGroupSheets {
     fn noun(&self) -> &'static str {
-        if self.label.is_empty() {
-            "annotate"
-        } else {
-            self.label
+        match self.kind {
+            UndoGroupKind::Annotate => "annotate",
+            UndoGroupKind::Reprefix => "re-prefix",
+            UndoGroupKind::Replace => "replace",
         }
     }
 
     fn title(&self) -> &'static str {
-        match self.noun() {
-            "re-prefix" => "Re-prefix",
-            "replace" => "Replace",
-            _ => "Annotate",
+        match self.kind {
+            UndoGroupKind::Annotate => "Annotate",
+            UndoGroupKind::Reprefix => "Re-prefix",
+            UndoGroupKind::Replace => "Replace",
         }
     }
 
     /// What a sheet the step skipped keeps: "keeps its ...".
     fn kept(&self) -> String {
-        match self.noun() {
-            "replace" => "replaced text".to_string(),
+        match self.kind {
+            UndoGroupKind::Replace => "replaced text".to_string(),
             _ => format!("{} designators", self.participle()),
         }
     }
@@ -72,18 +83,18 @@ impl UndoGroupSheets {
     /// What a sheet closed since the step holds: "its ... are whatever was
     /// last saved".
     fn holds(&self) -> &'static str {
-        match self.noun() {
-            "replace" => "text",
+        match self.kind {
+            UndoGroupKind::Replace => "text",
             _ => "designators",
         }
     }
 
     /// What the run did to the designators, for "keeps its ... designators".
     fn participle(&self) -> &'static str {
-        match self.noun() {
-            "re-prefix" => "re-prefixed",
-            "replace" => "replaced",
-            _ => "annotated",
+        match self.kind {
+            UndoGroupKind::Annotate => "annotated",
+            UndoGroupKind::Reprefix => "re-prefixed",
+            UndoGroupKind::Replace => "replaced",
         }
     }
 }
@@ -155,6 +166,16 @@ impl Signex {
             .unwrap_or_default();
         let (noun, title, done) = (recorded.noun(), recorded.title(), recorded.participle());
         let (kept, holds) = (recorded.kept(), recorded.holds());
+        if direction == StepDirection::Redo && !recorded.dropped.is_empty() {
+            // All or nothing: redoing the other sheets would leave one part
+            // under two designators.
+            crate::diagnostics::log_warning(format!(
+                "Cannot redo the project-wide {noun}: {} went back to its saved state. \
+                 Run {title} again.",
+                file_names(&recorded.dropped),
+            ));
+            return false;
+        }
         let mut sheets = recorded.live.clone();
         if !sheets.contains(&active_path) {
             sheets.push(active_path.clone());
@@ -233,7 +254,7 @@ impl Signex {
         }
 
         let mut active_invalidation = None;
-        let mut background_changed = false;
+        let mut dropped_now = Vec::new();
         for path in &members {
             let Some(engine) = self.document_state.engines.get_mut(path) else {
                 continue;
@@ -248,7 +269,6 @@ impl Signex {
                         Some(Self::render_invalidation_for_patch(patch_pair.document));
                 }
                 Ok(Some(_)) => {
-                    background_changed = true;
                     // A parked sheet undone back to what was loaded from disk
                     // has nothing to save; redo marks it dirty again.
                     let back_at_disk = direction == StepDirection::Undo
@@ -258,9 +278,15 @@ impl Signex {
                         // its `mark_saved` refuses on the revision mismatch, so
                         // clearing the mark now would lose this undo on disk.
                         && !self.document_state.document_saves.is_saving(path)
-                        && !self.document_state.tabs.iter().any(|t| &t.path == path);
+                        && !self.document_is_held_open(path);
                     if back_at_disk {
+                        // A clean tabless engine would own the path and shadow
+                        // the file; drop it so the next use re-reads the disk.
+                        // Redo is then refused whole (`dropped`).
                         self.document_state.dirty_paths.remove(path);
+                        self.forget_net_colors_of(path);
+                        self.document_state.engines.remove(path);
+                        dropped_now.push(path.clone());
                     } else {
                         self.mark_cached_sheet_dirty(path);
                     }
@@ -281,6 +307,7 @@ impl Signex {
             && let Some(record) = self.document_state.undo_groups.get_mut(&group)
         {
             record.undone = members;
+            record.dropped.extend(dropped_now);
         }
         let moved = match active_invalidation {
             Some(invalidation) => {
@@ -288,12 +315,6 @@ impl Signex {
             }
             None => false,
         };
-        // A sheet that is not the active one changed too, and only the active
-        // sheet's own edit refreshes the cached project netlist.
-        if background_changed {
-            self.ui_state.project_netlist = None;
-            self.refresh_project_netlist();
-        }
         moved
     }
 }

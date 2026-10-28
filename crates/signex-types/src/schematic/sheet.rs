@@ -5,7 +5,7 @@ use crate::format::{SheetUnknown, UnknownColumns};
 
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Wire {
     pub uuid: Uuid,
     pub start: Point,
@@ -19,7 +19,7 @@ pub struct Wire {
     pub unknown_columns: UnknownColumns,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Junction {
     pub uuid: Uuid,
     pub position: Point,
@@ -42,7 +42,7 @@ pub struct Junction {
     pub unknown_columns: UnknownColumns,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Label {
     pub uuid: Uuid,
     pub text: String,
@@ -100,13 +100,13 @@ fn default_label_v_align() -> VAlign {
     VAlign::Bottom
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NoConnect {
     pub uuid: Uuid,
     pub position: Point,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TextNote {
     pub uuid: Uuid,
     pub text: String,
@@ -126,14 +126,14 @@ pub struct TextNote {
     pub justify_v: VAlign,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bus {
     pub uuid: Uuid,
     pub start: Point,
     pub end: Point,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BusEntry {
     pub uuid: Uuid,
     pub position: Point,
@@ -144,7 +144,7 @@ pub struct BusEntry {
 // Hierarchical sheets
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SheetPin {
     pub uuid: Uuid,
     pub name: String,
@@ -159,7 +159,7 @@ pub struct SheetPin {
     pub user_moved: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChildSheet {
     pub uuid: Uuid,
     pub name: String,
@@ -202,7 +202,7 @@ pub struct StrokeColor {
     pub a: u8,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SchDrawing {
     Line {
@@ -261,6 +261,48 @@ pub enum SchDrawing {
 }
 
 // ---------------------------------------------------------------------------
+// Library symbol table
+// ---------------------------------------------------------------------------
+
+/// The sheet's embedded library symbols, keyed by lib id.
+///
+/// Reference-counted so a sheet copy (the per-frame drag preview, the engine's
+/// undo snapshot) shares the table instead of deep-copying every `LibSymbol`.
+/// Reads go through [`Deref`](std::ops::Deref); the first mutation of a shared
+/// table copies it ([`std::sync::Arc::make_mut`]), so an edit never shows in
+/// another copy. Serialises exactly like the plain map.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct LibSymbolTable(std::sync::Arc<HashMap<String, LibSymbol>>);
+
+impl LibSymbolTable {
+    /// True when both tables are the same allocation (a copy that has not
+    /// been mutated since).
+    pub fn shares_storage_with(&self, other: &Self) -> bool {
+        std::sync::Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl std::ops::Deref for LibSymbolTable {
+    type Target = HashMap<String, LibSymbol>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for LibSymbolTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        std::sync::Arc::make_mut(&mut self.0)
+    }
+}
+
+impl FromIterator<(String, LibSymbol)> for LibSymbolTable {
+    fn from_iter<I: IntoIterator<Item = (String, LibSymbol)>>(iter: I) -> Self {
+        Self(std::sync::Arc::new(iter.into_iter().collect()))
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Top-level sheet
 // ---------------------------------------------------------------------------
 
@@ -307,7 +349,7 @@ pub struct SchematicSheet {
     #[serde(default)]
     pub title_block: HashMap<String, String>,
     #[serde(default)]
-    pub lib_symbols: HashMap<String, LibSymbol>,
+    pub lib_symbols: LibSymbolTable,
     /// Net colour overrides set with the Active Bar net-colour pen, keyed by
     /// the uuid of the wire or junction they colour. Saved per sheet in
     /// `[extras.sheet.net_colors]`; empty (and not written) when the sheet
@@ -357,7 +399,7 @@ impl Default for SchematicSheet {
             drawings: Vec::new(),
             no_erc_directives: Vec::new(),
             title_block: HashMap::new(),
-            lib_symbols: HashMap::new(),
+            lib_symbols: LibSymbolTable::default(),
             net_colors: HashMap::new(),
             frame: SheetFrameSettings::default(),
             unknown: SheetUnknown::default(),

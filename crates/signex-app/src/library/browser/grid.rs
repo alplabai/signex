@@ -321,21 +321,11 @@ pub(super) fn view_grid<'a>(
                     ..Default::default()
                 });
 
-            // Click selects; double-click opens the Edit Component
-            // Details modal (Deliverable B). The text_inputs above
-            // capture single-clicks for focus, so the row's
-            // on_press/on_double_click only fires on the gaps between
-            // cells — that's fine for selection because the user is
-            // clicking on a row, not a specific cell.
-            // F25 (2026-05-03) — double-click no longer opens an Edit
-            // Component modal. Single-click selects the row and the
-            // Properties panel surfaces the row detail; per-component
-            // custom parameters are gone (every value lives in a
-            // table column). The modal renderer + state field stay
-            // dead-coded for one release in case a regression test
-            // shows the row-edit ergonomics still need a richer
-            // surface; the on_press wiring here is the only user-
-            // facing trigger and removing it removes the feature.
+            // Click selects the row; the Properties panel surfaces its
+            // detail and the action row's "Edit Details" button opens
+            // the full Edit Component Details modal for it. The
+            // text_inputs above capture clicks for focus, so this only
+            // fires on the gaps between cells.
             let row_widget = mouse_area(row_container).on_press(LibraryMessage::BrowserSelectRow {
                 library_path: library_for_msg,
                 table: table_for_msg,

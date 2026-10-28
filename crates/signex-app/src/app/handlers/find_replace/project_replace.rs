@@ -283,11 +283,10 @@ impl Signex {
     ) {
         let active = self.document_state.active_path.clone();
         let mut recorded = crate::app::UndoGroupSheets {
-            label: "replace",
+            kind: crate::app::UndoGroupKind::Replace,
             ..Default::default()
         };
         let mut active_invalidation = None;
-        let mut background_changed = false;
         let mut replaced = 0usize;
         for done in &applied {
             replaced += done.hits;
@@ -300,7 +299,6 @@ impl Signex {
                 self.ui_state.net_color_redo.remove(&done.path);
             } else {
                 self.mark_cached_sheet_dirty(&done.path);
-                background_changed = true;
             }
         }
         let names: Vec<String> = applied
@@ -310,12 +308,6 @@ impl Signex {
         self.set_undo_group_sheets(group, recorded);
         if let Some(invalidation) = active_invalidation {
             self.finish_schematic_mutation(invalidation, true, true);
-        }
-        // A label changed on a sheet that is not the active one, and only the
-        // active sheet's own edit refreshes the cached project netlist.
-        if background_changed {
-            self.ui_state.project_netlist = None;
-            self.refresh_project_netlist();
         }
         self.refresh_panel_ctx();
         crate::diagnostics::log_info(if names.is_empty() {

@@ -200,7 +200,29 @@ pub fn run_blocking(
                         .ignore("rejected peer; the connection is abandoned either way");
                     continue;
                 }
+                // A silent preconnect must not wedge the worker past
+                // cancel/timeout: bound the read, then keep polling.
+                stream
+                    .set_nonblocking(false)
+                    .ignore("best effort; the read timeout below bounds the wait either way");
+                stream
+                    .set_read_timeout(Some(CALLBACK_READ_TIMEOUT))
+                    .ignore("best effort; accept() already returned a live peer");
                 let req_line = read_first_line(&mut stream);
+                if !is_callback_request(&req_line) {
+                    // favicon probe, preconnect, or stray local client:
+                    // not the redirect, so the flow keeps waiting.
+                    std::io::Write::write_all(
+                        &mut stream,
+                        b"HTTP/1.1 404 Not Found
+Content-Length: 0
+Connection: close
+
+",
+                    )
+                    .ignore("courtesy 404; the stray peer may already be gone");
+                    continue;
+                }
                 let response_body = "<html><body><p>Signex: DigiKey connected. You can close this window.</p></body></html>";
                 // Courtesy page only. `req_line` was already read above and
                 // `parse_callback` below works entirely from it, so the OAuth
@@ -246,6 +268,24 @@ pub fn run_blocking(
                 };
             }
         }
+    }
+}
+
+/// How long one accepted connection may stay silent before it is dropped.
+const CALLBACK_READ_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// True when the connection should be treated as the OAuth redirect:
+/// a request line whose path is `/callback`. A read that timed out
+/// (silent preconnect) or a different path is not the redirect; any
+/// other read error stays on the failure path so it is reported.
+fn is_callback_request(req_line: &Result<String, std::io::Error>) -> bool {
+    use std::io::ErrorKind::{TimedOut, WouldBlock};
+    match req_line {
+        Ok(line) => {
+            let target = line.split_whitespace().nth(1).unwrap_or("");
+            target.split('?').next() == Some("/callback")
+        }
+        Err(e) => !matches!(e.kind(), TimedOut | WouldBlock),
     }
 }
 
@@ -424,6 +464,20 @@ mod tests {
         let got = parse_callback(line).expect("parses");
         assert_eq!(got.0, "a+b");
         assert_eq!(got.1, "q w");
+    }
+
+    #[test]
+    fn stray_connections_are_not_the_callback() {
+        let ok = |l: &str| Ok::<String, std::io::Error>(l.to_string());
+        assert!(is_callback_request(&ok(
+            "GET /callback?code=a&state=b HTTP/1.1"
+        )));
+        assert!(!is_callback_request(&ok("GET /favicon.ico HTTP/1.1")));
+        assert!(!is_callback_request(&ok("")));
+        let timed_out = Err(std::io::Error::from(std::io::ErrorKind::TimedOut));
+        assert!(!is_callback_request(&timed_out));
+        let reset = Err(std::io::Error::from(std::io::ErrorKind::ConnectionReset));
+        assert!(is_callback_request(&reset));
     }
 
     #[test]

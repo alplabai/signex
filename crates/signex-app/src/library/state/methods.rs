@@ -15,7 +15,7 @@ use super::*;
 ///
 /// The failure itself reaches the Messages panel at `warn` — the same
 /// treatment `refresh_components` gives a failed `read_table`.
-fn apply_primitive_listing(
+pub(super) fn apply_primitive_listing(
     cache: &mut Vec<PrimitiveSummary>,
     listing: Result<Vec<PrimitiveSummary>, LibraryError>,
     library: &str,
@@ -41,7 +41,7 @@ fn apply_primitive_listing(
 
 /// True when every listing succeeded and the symbol listing is not
 /// missing unreadable containers: only then can absence be reported.
-fn listings_complete(ok: [bool; 3], symbols_partial: bool) -> bool {
+pub(super) fn listings_complete(ok: [bool; 3], symbols_partial: bool) -> bool {
     ok.iter().all(|listed| *listed) && !symbols_partial
 }
 
@@ -53,6 +53,7 @@ impl Default for LibraryState {
         settings.preferred_order = super::super::settings::persistence::load_preferred_order();
         Self {
             drift: Default::default(),
+            symbol_choice_requests: Default::default(),
             set: LibrarySet::new(),
             open_libraries: Vec::new(),
             editors: HashMap::new(),
@@ -69,6 +70,7 @@ impl Default for LibraryState {
             recovery: None,
             create_options: None,
             library_updates: None,
+            queued_library_updates: Vec::new(),
             skipped_updates_for: std::collections::HashSet::new(),
             installed_libraries: Vec::new(),
             global_libraries: Vec::new(),
@@ -81,6 +83,11 @@ impl Default for LibraryState {
             external_poll_failure_reported: false,
             pricing_refresh: None,
             clock: chrono::Utc::now(),
+            refresh_generations: HashMap::new(),
+            refresh_generation_counter: 0,
+            refresh_in_flight: HashMap::new(),
+            pending_follow_ups: HashMap::new(),
+            data_version: 0,
         }
     }
 }
@@ -89,6 +96,22 @@ impl LibraryState {
     /// Look up an open library by its on-disk root path.
     pub fn library_at(&self, path: &Path) -> Option<&OpenLibrary> {
         self.open_libraries.iter().find(|lib| lib.root == path)
+    }
+
+    /// On-disk file of the primitive `r` names, looked up in the open
+    /// library `r.library_id` (`<dir>/<uuid>.<ext>`). `None` when that
+    /// library is not open.
+    pub fn primitive_file(
+        &self,
+        r: &signex_library::PrimitiveRef,
+        dir: &str,
+        ext: &str,
+    ) -> Option<PathBuf> {
+        let lib = self
+            .open_libraries
+            .iter()
+            .find(|lib| lib.library_id == r.library_id)?;
+        Some(lib.root_dir()?.join(dir).join(format!("{}.{ext}", r.uuid)))
     }
 
     pub fn library_at_mut(&mut self, path: &Path) -> Option<&mut OpenLibrary> {
@@ -221,6 +244,7 @@ impl LibraryState {
         }
         self.open_libraries.push(entry);
         self.expanded.push(true);
+        self.touch_data();
         self.sweep_dangling_refs();
         Ok(())
     }
@@ -259,8 +283,13 @@ impl LibraryState {
         // a preparation is in flight, and closing a library that was
         // mounted synchronously simply has nothing to remove.
         self.pending_mounts.remove(root);
+        self.refresh_generations.remove(root);
+        self.refresh_in_flight
+            .retain(|_, in_flight| in_flight.as_path() != root);
+        self.pending_follow_ups.remove(root);
         if let Some(idx) = self.open_libraries.iter().position(|lib| lib.root == root) {
             let entry = self.open_libraries.remove(idx);
+            self.touch_data();
             self.set.unmount(entry.library_id);
             if idx < self.expanded.len() {
                 self.expanded.remove(idx);
@@ -269,104 +298,6 @@ impl LibraryState {
             // Names, drift rows and Update must not use an unmounted library.
             self.drift.check_pending = true;
         }
-    }
-
-    /// Refresh the cached table contents for a library — re-reads every
-    /// TSV via the mounted adapter's `list_tables` + `read_table`.
-    ///
-    /// Returns `LibraryError::NotFound` when the library at `root`
-    /// isn't mounted, otherwise the underlying adapter error. The
-    /// cached `Vec<ComponentSummary>` is rebuilt alongside `tables`
-    /// so the picker (summary tier) and the panel grid (row tier)
-    /// stay coherent.
-    pub fn refresh_components(&mut self, root: &Path) -> Result<(), LibraryError> {
-        let library_id = self
-            .library_at(root)
-            .map(|lib| lib.library_id)
-            .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?;
-        // Snapshot the table data through the adapter, then move it
-        // onto the OpenLibrary entry. Two passes keep the borrow
-        // checker happy — `set.get` and `library_at_mut` both
-        // straddle `&self`/`&mut self`.
-        let adapter = self
-            .set
-            .get(library_id)
-            .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?;
-        let stamp = signex_library::DiskStamp::of(root).ok();
-        let names = adapter.list_tables()?;
-        let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
-        let mut summaries: Vec<ComponentSummary> = Vec::new();
-        let mut pricing: HashMap<Uuid, signex_library::RowPricing> = HashMap::new();
-        for name in names {
-            match adapter.table_pricing(&name) {
-                Ok(cached) => pricing.extend(cached),
-                // To the Messages panel, not only the log: prices silently
-                // missing from the browser look like "never refreshed".
-                Err(e) => crate::diagnostics::log_warning(format!(
-                    "Library {root:?} table {name}: cached prices could not be read ({e}); none are shown.",
-                    root = root.display().to_string()
-                )),
-            }
-            match adapter.read_table(&name) {
-                Ok(rows) => {
-                    for row in &rows {
-                        summaries.push(ComponentSummary {
-                            row_id: row.row_id,
-                            internal_pn: row.internal_pn.clone(),
-                            mpn: row.primary_mpn.mpn.clone(),
-                            state: row.state,
-                            description: String::new(),
-                        });
-                    }
-                    tables.insert(name, rows);
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        table = %name,
-                        error = %e,
-                        "refresh_components: read_table failed; entry left empty"
-                    );
-                    tables.insert(name, Vec::new());
-                }
-            }
-        }
-        // Snapshot primitive listings before the second mut borrow so
-        // we don't have to call adapter methods while `library_at_mut`
-        // holds &mut self.
-        let symbols = adapter.list_symbols();
-        let symbols_partial = adapter.symbol_listing_is_partial();
-        let footprints = adapter.list_footprints();
-        let sims = adapter.list_sims();
-        let classes = adapter.library_classes();
-        self.clock = chrono::Utc::now();
-        if let Some(lib) = self.library_at_mut(root) {
-            lib.tables = tables;
-            lib.pricing = pricing;
-            lib.cached_components = summaries;
-            lib.cached_classes = classes;
-            lib.observed_stamp = stamp;
-            lib.own_edit_stamp = None;
-            // A failed listing keeps the previous cache and warns —
-            // blanking it here would render a mounted library as
-            // empty. See `apply_primitive_listing`.
-            let name = lib.display_name.clone();
-            let ok = [
-                apply_primitive_listing(&mut lib.cached_symbols, symbols, &name, "symbols"),
-                apply_primitive_listing(
-                    &mut lib.cached_footprints,
-                    footprints,
-                    &name,
-                    "footprints",
-                ),
-                apply_primitive_listing(&mut lib.cached_sims, sims, &name, "sims"),
-            ];
-            lib.dangling.listings_complete = listings_complete(ok, symbols_partial);
-        }
-        self.sweep_dangling_refs();
-        // The library's symbols may have changed on disk.
-        self.drift.check_pending = true;
-        Ok(())
     }
 
     /// Each open library with the stamp its caches were filled under — the

@@ -3,6 +3,38 @@
 
 use super::super::*;
 
+/// The "Symbol" pick list of a placed symbol whose library row offers
+/// alternate drawings (#1230). Nothing when there is only the default.
+pub(super) fn push_symbol_choice_row<'a>(
+    c: Column<'a, PanelMsg>,
+    id: uuid::Uuid,
+    choices: &[SymbolChoiceItem],
+    muted: Color,
+) -> Column<'a, PanelMsg> {
+    let Some(current) = choices.iter().find(|i| i.selected) else {
+        return c;
+    };
+    if choices.len() < 2 {
+        return c;
+    }
+    let labels: Vec<String> = choices.iter().map(|i| i.label.clone()).collect();
+    let items = choices.to_vec();
+    c.push(form_pick_row(
+        "Symbol",
+        labels,
+        current.label.clone(),
+        move |label| {
+            let lib_id = items
+                .iter()
+                .find(|i| i.label == label)
+                .map(|i| i.lib_id.clone())
+                .unwrap_or_default();
+            PanelMsg::SwitchSymbolChoice(id, lib_id)
+        },
+        muted,
+    ))
+}
+
 /// Append the readable `Library` row and, when the sheet's embedded copy
 /// differs from the library, the "out of date" row with its Update button.
 /// Update replaces the sheet's shared copy, so it affects every instance of

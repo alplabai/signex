@@ -377,6 +377,22 @@ fn reprefix_and_renumber_record_one_history_entry() {
 }
 
 #[test]
+fn reprefix_numbers_only_the_parts_in_the_map() {
+    let mut sheet = test_sheet();
+    sheet.symbols = vec![at_ref("R1", 0.0), at_ref("R?", 10.0)];
+    let targets = targets_of(&[&sheet.symbols[0]], "V");
+    let mut engine = Engine::new(sheet).unwrap();
+
+    reprefix_pass(&mut engine, &HashSet::new(), &targets).unwrap();
+
+    assert_eq!(
+        refs_of(&engine),
+        ["V1", "R?"],
+        "an unlisted R? stays as it is"
+    );
+}
+
+#[test]
 fn reprefix_keeps_units_of_one_part_together() {
     let mut sheet = test_sheet();
     sheet.symbols = vec![unit("R1", 1, 0.0), unit("R1", 2, 10.0), unit("R2", 1, 20.0)];

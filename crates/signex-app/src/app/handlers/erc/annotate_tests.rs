@@ -310,6 +310,12 @@ fn open_and_check_recovery(app: &mut Signex, path: &std::path::Path) {
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
+    // An open schematic has an engine; the offer follows it.
+    let engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default())
+        .expect("engine");
+    app.document_state
+        .engines
+        .insert(path.to_path_buf(), engine);
     let task = app.autosave_check_recovery(path);
     for message in crate::persist::run_task::outputs(task) {
         let _ = app.update(message);
@@ -378,5 +384,141 @@ fn annotate_drops_a_recovery_copy_this_run_wrote() {
     assert!(
         gone,
         "a copy this run wrote is stale once Annotate rewrote the sheet"
+    );
+}
+
+// ---- #859: an in-flight read or restore owns the sheet's file.
+
+fn child_path(dir: &std::path::Path) -> PathBuf {
+    dir.join("z_child.snxsch")
+}
+
+/// Whether a Messages line containing `needle` was logged after `since`.
+fn logged_since(since: Option<u64>, needle: &str) -> bool {
+    crate::diagnostics::recent_entries()
+        .iter()
+        .any(|e| Some(e.id) > since && e.message.contains(needle))
+}
+
+#[test]
+fn a_read_landing_on_a_dirty_parked_engine_keeps_its_edits() {
+    use crate::app::document_read::{LoadedDocument, ReadRequest};
+    let (mut app, dir) = project(vec![unit("U1", 1, 0.0)], vec![unit("U5", 1, 0.0)]);
+    let child = child_path(&dir);
+    let generation = app
+        .document_state
+        .pending_opens
+        .begin(child.clone())
+        .expect("claim");
+    // A sheet-reference rewrite parked an edited engine, tab-less, while the
+    // tree read of the same file was in flight.
+    let stale = SnxSchematic::parse(&std::fs::read_to_string(&child).unwrap())
+        .unwrap()
+        .sheet;
+    let mut edited = stale.clone();
+    edited.symbols[0].reference = "U9".into();
+    let engine = signex_engine::Engine::new_with_path(edited, Some(child.clone())).unwrap();
+    app.document_state.engines.insert(child.clone(), engine);
+    app.document_state.dirty_paths.insert(child.clone());
+
+    let _ = app.handle_document_read_finished(
+        ReadRequest {
+            path: child.clone(),
+            generation,
+        },
+        Ok(Box::new(LoadedDocument::Schematic {
+            title: "z_child".into(),
+            sheet: Box::new(stale),
+        })),
+    );
+
+    let refs: Vec<String> = app.document_state.engines[&child]
+        .document()
+        .symbols
+        .iter()
+        .map(|s| s.reference.clone())
+        .collect();
+    let tab_attached = app.document_state.tabs.iter().any(|t| t.path == child);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(refs, ["U9"], "the parked edit survived the read");
+    assert!(
+        tab_attached,
+        "the requested tab is attached to the parked engine"
+    );
+}
+
+fn assert_unopened_sheet_untouched_while(
+    claim: impl Fn(&mut Signex, PathBuf),
+    run: impl Fn(&mut Signex),
+    pass: &str,
+    reason: &str,
+    expected: &str,
+) {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, dir) = project(vec![unit("U1", 1, 0.0)], vec![unit(expected, 1, 0.0)]);
+    claim(&mut app, child_path(&dir));
+    let since = crate::diagnostics::newest_entry_id();
+    run(&mut app);
+    let refs = child_refs(&dir);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(refs, [expected], "the sheet file was not rewritten");
+    assert!(
+        logged_since(
+            since,
+            &format!("{pass}: z_child.snxsch was left unchanged, {reason}")
+        ),
+        "the skip is reported"
+    );
+}
+
+fn claim_restore(app: &mut Signex, path: PathBuf) {
+    app.document_state.pending_restores.begin(path.clone());
+    app.document_state.pending_restores.cancel_retaining(&path);
+}
+
+fn claim_read(app: &mut Signex, path: PathBuf) {
+    app.document_state.pending_opens.begin(path);
+}
+
+const RESTORE: &str = "a History restore of it is still running";
+const READ: &str = "a read of it is still in flight";
+
+fn annotate(app: &mut Signex) {
+    let _ = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+}
+
+fn reset(app: &mut Signex) {
+    let _ = app.handle_reset_duplicate_designators();
+}
+
+#[test]
+fn annotate_leaves_an_unopened_sheet_alone_while_its_restore_runs() {
+    assert_unopened_sheet_untouched_while(claim_restore, annotate, "Annotate", RESTORE, "U5");
+}
+
+#[test]
+fn annotate_leaves_an_unopened_sheet_alone_while_its_read_is_in_flight() {
+    assert_unopened_sheet_untouched_while(claim_read, annotate, "Annotate", READ, "U5");
+}
+
+#[test]
+fn reset_duplicates_leaves_an_unopened_sheet_alone_while_its_restore_runs() {
+    assert_unopened_sheet_untouched_while(
+        claim_restore,
+        reset,
+        "Reset Duplicate Designators",
+        RESTORE,
+        "U1",
+    );
+}
+
+#[test]
+fn reset_duplicates_leaves_an_unopened_sheet_alone_while_its_read_is_in_flight() {
+    assert_unopened_sheet_untouched_while(
+        claim_read,
+        reset,
+        "Reset Duplicate Designators",
+        READ,
+        "U1",
     );
 }
