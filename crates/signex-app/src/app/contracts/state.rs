@@ -207,6 +207,9 @@ pub struct SaveAllSettle {
     /// The Component Preview rows the Save All started: those whose write
     /// ran off-thread report a failure into `LibraryState::batch_row_failures`.
     pub rows: Vec<crate::library::state::EditorAddress>,
+    /// This Save All's id, the key of its rows' entries in
+    /// `LibraryState::batch_row_failures`.
+    pub batch: u64,
     /// Files held under several case-variant spellings: the spelling that
     /// was written, and the others it stands for. The others' dirty markers
     /// go once the written one is clean.

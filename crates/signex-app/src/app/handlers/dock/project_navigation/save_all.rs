@@ -192,10 +192,11 @@ impl Signex {
             }
         }
         let mut failed = Vec::new();
+        let batch = self.document_state.document_saves.mint_generation();
         // A row that pins staged PDFs stores them on a worker first; its
         // outcome reaches the settle step through `batch_row_failures`.
         for address in rows {
-            match self.begin_save_row_in_batch(address) {
+            match self.begin_save_row_in_batch(address, batch) {
                 Ok(task) => writes.extend(task),
                 Err(err) => {
                     let label = self.library.editor_label(address);
@@ -212,6 +213,7 @@ impl Signex {
             paths: paths.to_vec(),
             failed,
             rows: rows.to_vec(),
+            batch,
             case_variants,
         })));
         Task::batch(writes).chain(Task::done(settled))
@@ -225,6 +227,7 @@ impl Signex {
             paths,
             failed: rows_failed,
             rows,
+            batch,
             case_variants,
         } = settle;
         self.clear_saved_case_variants(&case_variants);
@@ -249,10 +252,11 @@ impl Signex {
             failed.push((name, reason));
         }
         failed.extend(rows_failed);
-        failed.extend(
-            rows.iter()
-                .filter_map(|address| self.library.batch_row_failures.remove(address)),
-        );
+        failed.extend(rows.iter().filter_map(|address| {
+            self.library
+                .batch_row_failures
+                .remove(&(batch, address.clone()))
+        }));
         if failed.is_empty() {
             // Everything saved, so no recovery copy of it is worth
             // keeping: remove them before the close / quit takes over.
@@ -271,8 +275,16 @@ impl Signex {
                 SaveAllNext::Quit => Task::batch([sweep, self.handle_app_quit_requested()]),
                 // A row edited while its PDFs were written is dirty again:
                 // the close gate prompts for it instead of dropping it.
+                // Only the library this Save All started on: Discard All and
+                // a reopen meanwhile leave the rows' editors gone.
                 SaveAllNext::CloseLibrary { library_path } => {
-                    Task::batch([sweep, self.handle_close_library(library_path)])
+                    let same_mount = self.library.library_at(&library_path).is_some()
+                        && rows.iter().all(|a| self.library.editors.contains_key(a));
+                    if same_mount {
+                        Task::batch([sweep, self.handle_close_library(library_path)])
+                    } else {
+                        sweep
+                    }
                 }
             };
         }
@@ -283,8 +295,7 @@ impl Signex {
                 failed.len()
             ),
             SaveAllNext::CloseLibrary { .. } => format!(
-                "Could not save {} item(s) — library not closed:
-  {listing}",
+                "Could not save {} item(s) — library not closed:\n  {listing}",
                 failed.len()
             ),
             SaveAllNext::Quit => format!(

@@ -129,7 +129,7 @@ impl Signex {
             self.try_save_row(address)?;
             return Ok(Task::none());
         }
-        self.start_staged_store(address, false)
+        self.start_staged_store(address, None)
     }
 
     /// The row's part of a Save All (quit, project close, close library).
@@ -140,8 +140,8 @@ impl Signex {
     pub(crate) fn begin_save_row_in_batch(
         &mut self,
         address: &EditorAddress,
+        batch: u64,
     ) -> anyhow::Result<Option<Task<Message>>> {
-        self.library.batch_row_failures.remove(address);
         let Some(state) = self.library.editors.get(address) else {
             return Ok(None);
         };
@@ -151,7 +151,7 @@ impl Signex {
         if state.staged_assets_in_use().is_empty() {
             return self.try_save_row(address).map(|()| None);
         }
-        self.start_staged_store(address, true).map(Some)
+        self.start_staged_store(address, Some(batch)).map(Some)
     }
 
     /// Check the library can take the staged PDFs, mark the row as saving
@@ -159,7 +159,7 @@ impl Signex {
     fn start_staged_store(
         &mut self,
         address: &EditorAddress,
-        in_batch: bool,
+        batch: Option<u64>,
     ) -> anyhow::Result<Task<Message>> {
         let Some(state) = self.library.editors.get(address) else {
             return Ok(Task::none());
@@ -175,7 +175,7 @@ impl Signex {
         crate::library::component_preview::updates::flush_edit_buffers(state)
             .map_err(anyhow::Error::msg)?;
         state.saving_row = Some(state.row.clone());
-        state.saving_in_batch = in_batch;
+        state.saving_batch = batch;
         let generation = self.document_state.document_saves.mint_generation();
         state.saving_generation = generation;
         let staged = state.staged_assets_in_use();
@@ -235,11 +235,11 @@ impl Signex {
             }
             return;
         }
-        let in_batch = self
+        let batch = self
             .library
             .editors
             .get_mut(address)
-            .is_some_and(|state| std::mem::take(&mut state.saving_in_batch));
+            .and_then(|state| state.saving_batch.take());
         let saved = result
             .inspect_err(|_| {
                 if let Some(state) = self.library.editors.get_mut(address) {
@@ -249,17 +249,17 @@ impl Signex {
             .map_err(anyhow::Error::msg)
             .and_then(|written| self.commit_row(address, &written));
         let Err(e) = saved else { return };
-        if !in_batch {
+        let Some(batch) = batch else {
             self.report_save_row_failure(&e);
             return;
-        }
+        };
         // A Save All is waiting on this row: its settle step reports the
         // failure and keeps the window / library open.
         let label = self.library.editor_label(address);
         crate::diagnostics::log_error(&format!("Save All: could not save {label}"), &e);
         self.library
             .batch_row_failures
-            .insert(address.clone(), (label, format!("{e:#}")));
+            .insert((batch, address.clone()), (label, format!("{e:#}")));
     }
 }
 
