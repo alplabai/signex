@@ -10,21 +10,27 @@
 
 use super::*;
 
-use super::items::{dd_disabled, dd_kb, dd_msg};
+use super::items::{dd_disabled, dd_kb, dd_msg, dd_planned};
 use crate::app::command::active_bar::action_label;
 use crate::icons as ic;
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
 /// Place submenu — wires, buses, ports, power, directives, harness, sheet
-/// symbols, component, and text. Every row is always enabled.
+/// symbols, component, and text. Rows for planned tools are greyed with a
+/// tooltip; every other row is always enabled.
 pub(super) fn place_entries(tid: ThemeId) -> Vec<DropdownEntry<Message>> {
     use crate::active_bar::ActiveBarAction as A;
     // Row text comes from the command table (#271); the literal is the
     // fallback for an action with no id.
     let ab = |icon, label: &'static str, action: A| {
         let text = action_label(&action, label);
-        dd_kb(Some(icon), text, "", ContextAction::ActiveBar(action))
+        if crate::active_bar::is_planned(&action) {
+            // A planned tool is shown but cannot be armed (#1249).
+            dd_planned(Some(icon), text, None)
+        } else {
+            dd_kb(Some(icon), text, "", ContextAction::ActiveBar(action))
+        }
     };
     vec![
         // Wires + buses + entries
@@ -253,7 +259,7 @@ pub(super) fn add_new_entries(
             P::AddProjectSymbolLibrary(target.clone()),
         )),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_part_actions(tid)),
         "PCB",
         Some("v2.0"),
@@ -271,23 +277,23 @@ pub(super) fn add_new_entries(
         ));
     }
     v.push(DropdownEntry::Separator);
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_text_string(tid)),
         "Output Job",
         Some("v1.3"),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_text_frame(tid)),
         "Design Notebook",
         Some("v1.4"),
     ));
     v.push(DropdownEntry::Separator);
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_text_string(tid)),
         "Constraint File",
         Some("v3.x"),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_text_string(tid)),
         "VHDL File",
         Some("v3.x"),

@@ -13,7 +13,7 @@
 
 use super::*;
 
-use super::items::{dd_disabled, dd_kb, dd_msg, submenu_launcher};
+use super::items::{dd_disabled, dd_kb, dd_msg, dd_planned, submenu_launcher};
 use crate::icons as ic;
 use crate::menu_bar::cmd_label;
 use signex_types::theme::{ThemeId, ThemeTokens};
@@ -146,13 +146,22 @@ impl Signex {
             smart_paste: self.keymap_shortcut_label("smart_paste"),
         };
         let tokens = &self.document_state.panel_ctx.tokens;
+        // The project row's tree key, the same one the project tree's own
+        // menu sends, so the action follows the project if rows reorder.
+        let project_key = self
+            .document_state
+            .active_document_project()
+            .map(|p| vec![p.id.to_string()]);
         let entries = canvas_menu_entries(
             tid,
             tokens,
-            has_selection,
-            child_sheet_selected,
-            drawing_selected,
+            CanvasSelection {
+                has_selection,
+                child_sheet_selected,
+                drawing_selected,
+            },
             active_submenu,
+            project_key,
             &sc,
         );
         signex_widgets::active_bar_dropdown::view(entries, tokens, Some(Self::CONTEXT_MENU_WIDTH))
@@ -188,18 +197,30 @@ impl Signex {
     }
 }
 
+/// What the canvas right-click landed on, for [`canvas_menu_entries`].
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct CanvasSelection {
+    pub(super) has_selection: bool,
+    pub(super) child_sheet_selected: bool,
+    pub(super) drawing_selected: bool,
+}
+
 /// Pure canvas-menu data builder. Rows and their enable state are derived
 /// only from the passed selection flags + shortcut hints, so the menu's
 /// shape is unit-testable without a window.
 pub(super) fn canvas_menu_entries(
     tid: ThemeId,
     tokens: &ThemeTokens,
-    has_selection: bool,
-    child_sheet_selected: bool,
-    drawing_selected: bool,
+    selection: CanvasSelection,
     active_submenu: Option<ContextSubmenu>,
+    project_key: Option<signex_widgets::tree_view::TreeKey>,
     sc: &CanvasShortcuts,
 ) -> Vec<DropdownEntry<Message>> {
+    let CanvasSelection {
+        has_selection,
+        child_sheet_selected,
+        drawing_selected,
+    } = selection;
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(24);
 
     v.push(dd_kb(
@@ -214,7 +235,7 @@ pub(super) fn canvas_menu_entries(
         &sc.find,
         Message::Overlay(OverlayMsg::OpenFind),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_clear_filter(tid)),
         "Clear Filter",
         Some("Shift+C"),
@@ -227,19 +248,19 @@ pub(super) fn canvas_menu_entries(
         ContextSubmenu::Place,
         active_submenu == Some(ContextSubmenu::Place),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_part_actions(tid)),
         "Part Actions",
         Some(SUBMENU_ARROW),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_sheet_actions(tid)),
         "Sheet Actions",
         Some(SUBMENU_ARROW),
     ));
 
     if has_selection {
-        v.push(dd_disabled(
+        v.push(dd_planned(
             Some(ic::icon_dd_references(tid)),
             "References",
             Some(SUBMENU_ARROW),
@@ -260,12 +281,12 @@ pub(super) fn canvas_menu_entries(
                 active_submenu == Some(ContextSubmenu::Arrange),
             ));
         }
-        v.push(dd_disabled(
+        v.push(dd_planned(
             Some(ic::icon_dd_unions(tid)),
             "Unions",
             Some(SUBMENU_ARROW),
         ));
-        v.push(dd_disabled(
+        v.push(dd_planned(
             Some(ic::icon_dd_snippets(tid)),
             "Snippets",
             Some(SUBMENU_ARROW),
@@ -294,7 +315,7 @@ pub(super) fn canvas_menu_entries(
         v.push(DropdownEntry::Separator);
     }
 
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_cross_probe(tid)),
         "Cross Probe",
         None,
@@ -354,21 +375,34 @@ pub(super) fn canvas_menu_entries(
         v.push(DropdownEntry::Separator);
     }
 
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_comment(tid)),
         "Comment...",
         None,
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_pin_mapping(tid)),
         "Pin Mapping...",
         None,
     ));
-    v.push(dd_disabled(
-        Some(ic::icon_dd_project_options(tid)),
-        "Project Options...",
-        None,
-    ));
+    // The project that owns the active sheet, addressed by its tree key the
+    // way the project tree's own menu addresses it. No project: greyed, no
+    // tooltip (the feature exists, there is just nothing to open it for).
+    v.push(match project_key {
+        Some(key) => dd_msg(
+            Some(ic::icon_dd_project_options(tid)),
+            "Project Options...",
+            "",
+            Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                crate::app::ProjectTreeAction::OpenProjectOptions(key),
+            )),
+        ),
+        None => dd_disabled(
+            Some(ic::icon_dd_project_options(tid)),
+            "Project Options...",
+            None,
+        ),
+    });
     v.push(dd_msg(
         Some(ic::icon_dd_preferences(tid)),
         &cmd_label("open_preferences", "Preferences..."),
@@ -377,7 +411,7 @@ pub(super) fn canvas_menu_entries(
     ));
 
     if has_selection {
-        v.push(dd_disabled(
+        v.push(dd_planned(
             Some(ic::icon_dd_supplier_links(tid)),
             "Supplier Links...",
             None,

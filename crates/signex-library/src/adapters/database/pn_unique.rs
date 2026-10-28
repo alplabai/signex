@@ -3,11 +3,11 @@
 //! trimmed and case-sensitively, and a blank PN (an unfilled draft) never
 //! conflicts.
 //!
-//! The server stores rows by (library_id, table_name, row_id) only, so the
-//! adapter checks against the rows it reads back before a write. Two writers
-//! racing the same new PN can still both pass; closing that needs a server
-//! side index, which cannot be added while existing libraries may hold
-//! duplicates.
+//! The adapter checks against the rows it reads back before a write, which
+//! gives a clear error early. Two writers racing the same new PN can both
+//! pass that check; the server's unique index on the trimmed PN per library
+//! is what decides the race, and its 409 comes back as the same
+//! `LibraryError::Conflict`.
 
 use uuid::Uuid;
 
@@ -44,8 +44,8 @@ impl DatabaseAdapter {
     }
 
     /// Only checked when the PN differs (trimmed) from the stored row's, so
-    /// a library that already holds duplicate PNs still lets their other
-    /// fields be edited.
+    /// saving a row without changing its PN never trips on the check (a
+    /// local checkout or an older server may still hold duplicates).
     pub(super) fn check_pn_free_for_update(
         &self,
         table: &str,
