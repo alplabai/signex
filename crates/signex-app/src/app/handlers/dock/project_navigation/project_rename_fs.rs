@@ -94,25 +94,52 @@ pub(crate) fn journal_closed_copies(
     new_dir: &Path,
     open: &HashSet<PathBuf>,
     fold: CaseFold,
-) -> Vec<PathBuf> {
+) -> Vec<Journalled> {
     let mut journalled = Vec::new();
     let owed = crate::autosave::pending_move::owed(recovery);
     for (old, new) in closed_documents(old_dir, old_dir, new_dir, open) {
         let Some(spelled) = find_copy(recovery, &old, fold, &owed) else {
             continue;
         };
+        let key = crate::autosave::sidecar::sidecar_path(recovery, &spelled);
+        let previous = owed
+            .iter()
+            .find(|(source, _)| crate::autosave::sidecar::sidecar_path(recovery, source) == key)
+            .map(|(_, target)| target.clone());
         match crate::autosave::pending_move::record(recovery, &spelled, &new) {
-            Ok(()) => journalled.push(spelled),
+            Ok(()) => journalled.push(Journalled {
+                old: spelled,
+                new,
+                previous,
+            }),
             Err(why) => crate::diagnostics::log_warning(why),
         }
     }
     journalled
 }
 
-/// The folder move failed: the copies stay where they are, no move is owed.
-pub(crate) fn unjournal_closed_copies(recovery: &Path, journalled: &[PathBuf]) {
-    for old in journalled {
-        crate::autosave::pending_move::clear(recovery, old);
+/// One move [`journal_closed_copies`] wrote, and the entry it replaced.
+pub(crate) struct Journalled {
+    old: PathBuf,
+    new: PathBuf,
+    /// Where the copy was already owed before this rename, if anywhere.
+    previous: Option<PathBuf>,
+}
+
+/// The folder move failed: the copies stay where they are. Each entry written
+/// for it goes, and the one it replaced comes back, so a move owed by an
+/// earlier rename is not lost.
+pub(crate) fn unjournal_closed_copies(recovery: &Path, journalled: &[Journalled]) {
+    use crate::autosave::pending_move::{clear_if, record};
+    for j in journalled {
+        match &j.previous {
+            Some(previous) => {
+                if let Err(why) = record(recovery, &j.old, previous) {
+                    crate::diagnostics::log_warning(why);
+                }
+            }
+            None => clear_if(recovery, &j.old, std::slice::from_ref(&j.new)),
+        }
     }
 }
 

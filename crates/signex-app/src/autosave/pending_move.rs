@@ -67,6 +67,32 @@ pub fn clear(recovery_dir: &Path, old: &Path) {
     }
 }
 
+/// Drop the entry of the copy leaving `old` only if it still names one of
+/// `targets`. A newer entry for the same copy (a later rename) survives a
+/// clear that was queued for an older one.
+pub fn clear_if(recovery_dir: &Path, old: &Path, targets: &[PathBuf]) {
+    let file = entry_path(recovery_dir, old);
+    let entry = match std::fs::read(&file) {
+        Ok(bytes) => serde_json::from_slice::<Entry>(&bytes).map_err(|e| e.to_string()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+        Err(e) => Err(e.to_string()),
+    };
+    match entry {
+        Ok(entry)
+            if targets.iter().any(|t| {
+                sidecar_path(recovery_dir, t) == sidecar_path(recovery_dir, &entry.new)
+            }) =>
+        {
+            clear(recovery_dir, old);
+        }
+        Ok(_) => {}
+        Err(why) => crate::diagnostics::log_warning(format!(
+            "The pending recovery copy move {} could not be read ({why}); it was left.",
+            file.display()
+        )),
+    }
+}
+
 /// Every journalled move as (old, new) documents, for a folder rename that
 /// finds a document's copy still at the key of an earlier name.
 pub fn owed(recovery_dir: &Path) -> Vec<(PathBuf, PathBuf)> {
@@ -77,8 +103,22 @@ pub fn owed(recovery_dir: &Path) -> Vec<(PathBuf, PathBuf)> {
         .map(|e| e.path())
         .filter(|p| p.extension().and_then(|e| e.to_str()) == Some(ENTRY_EXTENSION))
         .filter_map(|file| {
-            let entry: Entry = serde_json::from_slice(&std::fs::read(file).ok()?).ok()?;
-            Some((entry.old, entry.new))
+            let entry = std::fs::read(&file)
+                .map_err(|e| e.to_string())
+                .and_then(|bytes| {
+                    serde_json::from_slice::<Entry>(&bytes).map_err(|e| e.to_string())
+                });
+            match entry {
+                Ok(entry) => Some((entry.old, entry.new)),
+                Err(why) => {
+                    crate::diagnostics::log_warning(format!(
+                        "The pending recovery copy move {} could not be read ({why}); it was \
+                         left.",
+                        file.display()
+                    ));
+                    None
+                }
+            }
         })
         .collect()
 }

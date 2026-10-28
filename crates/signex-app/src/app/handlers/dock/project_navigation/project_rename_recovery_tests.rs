@@ -386,25 +386,62 @@ fn the_folder_rename_journals_closed_copies_before_the_move() {
     std::fs::remove_dir_all(&m.new_dir).expect("empty target");
     std::fs::rename(&m.old_dir, &m.new_dir).expect("folder moved");
     assert!(offered_after_restart(&m.recovery, &m.new_doc));
-
-    // A failed folder move takes the entries back.
-    let m2 = moved(tempfile::tempdir().expect("tempdir").keep().as_path());
-    sidecar::write(&m2.recovery, &m2.old_doc, b"x").expect("copy");
-    crate::autosave::pending_move::record(&m2.recovery, &m2.old_doc, &m2.new_doc).expect("entry");
-    super::project_rename_fs::unjournal_closed_copies(
-        &m2.recovery,
-        std::slice::from_ref(&m2.old_doc),
-    );
-    assert!(crate::autosave::pending_move::owed(&m2.recovery).is_empty());
 }
 
 #[test]
-fn startup_hands_a_still_failing_move_to_the_live_state_and_it_finishes_later() {
+fn a_failed_folder_move_restores_the_entry_it_replaced() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let m = moved(root.path());
+    // The copy of S (a document at the old Foo path) is owed to Bar.
+    let s_doc = m.old_doc.clone();
+    sidecar::write(&m.recovery, &s_doc, b"crash edits").expect("copy");
+    crate::autosave::pending_move::record(&m.recovery, &s_doc, &m.new_doc).expect("entry");
+    // Bar then starts moving to Baz: S's entry is rewritten to Baz.
+    let baz = root.path().join("Baz");
+    let journalled = super::project_rename_fs::journal_closed_copies(
+        &m.recovery,
+        &m.new_dir,
+        &baz,
+        &Default::default(),
+        CaseFold::PRESERVE,
+    );
+    assert_eq!(journalled.len(), 1);
+    assert_eq!(
+        crate::autosave::pending_move::owed(&m.recovery),
+        vec![(s_doc.clone(), baz.join("sub").join("b.snxsch"))]
+    );
+
+    // The folder move fails: S is owed to Bar again.
+    super::project_rename_fs::unjournal_closed_copies(&m.recovery, &journalled);
+    assert_eq!(
+        crate::autosave::pending_move::owed(&m.recovery),
+        vec![(s_doc, m.new_doc.clone())]
+    );
+}
+
+#[test]
+fn a_journal_clear_for_an_older_target_keeps_a_newer_entry() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let m = moved(root.path());
+    let newer = root.path().join("Baz").join("sub").join("b.snxsch");
+    crate::autosave::pending_move::record(&m.recovery, &m.old_doc, &newer).expect("entry");
+    crate::autosave::pending_move::clear_if(
+        &m.recovery,
+        &m.old_doc,
+        std::slice::from_ref(&m.new_doc),
+    );
+    assert_eq!(crate::autosave::pending_move::owed(&m.recovery).len(), 1);
+    crate::autosave::pending_move::clear_if(&m.recovery, &m.old_doc, std::slice::from_ref(&newer));
+    assert!(crate::autosave::pending_move::owed(&m.recovery).is_empty());
+}
+
+#[test]
+fn a_move_still_failing_at_startup_leaves_the_crash_copy_safe_while_the_new_document_is_edited() {
     let root = tempfile::tempdir().expect("tempdir");
     let m = moved(root.path());
     sidecar::write(&m.recovery, &m.old_doc, b"crash edits").expect("copy");
-    let blocked = sidecar::sidecar_path(&m.recovery, &m.new_doc);
-    std::fs::create_dir_all(blocked.join("blocker")).expect("block");
+    let new_key = sidecar::sidecar_path(&m.recovery, &m.new_doc);
+    std::fs::create_dir_all(new_key.join("blocker")).expect("block");
     crate::autosave::pending_move::record(&m.recovery, &m.old_doc, &m.new_doc).expect("entry");
 
     let (mut app, _boot) = crate::app::Signex::new();
@@ -413,13 +450,31 @@ fn startup_hands_a_still_failing_move_to_the_live_state_and_it_finishes_later() 
         .set_dir(Some(m.recovery.clone()));
     app.autosave_finish_pending_moves();
     assert!(
-        app.document_state.autosave.has_owed_moves(),
-        "the failing move is the live state's now"
+        !app.document_state.autosave.has_owed_moves(),
+        "the live state does not take the move: it would land under a key the session writes"
     );
 
-    std::fs::remove_dir_all(&blocked).expect("unblock");
-    let flush = app.autosave_flush_moves();
-    run_task(&mut app, flush);
-    assert_eq!(std::fs::read(&blocked).expect("moved"), b"crash edits");
-    assert!(crate::autosave::pending_move::owed(&m.recovery).is_empty());
+    // The lock clears; the user opens the document at the new path (nothing
+    // to offer yet), edits it, and autosave writes its own copy.
+    std::fs::remove_dir_all(&new_key).expect("unblock");
+    let old_key = sidecar::sidecar_path(&m.recovery, &m.old_doc);
+    assert!(!offered_without_startup(&m.recovery, &m.new_doc));
+    let tick = app.autosave_flush_moves();
+    run_task(&mut app, tick);
+    sidecar::write(&m.recovery, &m.new_doc, b"new edits").expect("autosave write");
+    assert_eq!(std::fs::read(&old_key).expect("untouched"), b"crash edits");
+
+    // The edit is saved (its copy goes) and the app restarts: the move is
+    // finished and the crash copy is offered.
+    sidecar::remove(&m.recovery, &m.new_doc).expect("saved");
+    assert!(offered_after_restart(&m.recovery, &m.new_doc));
+    assert_eq!(std::fs::read(&new_key).expect("moved"), b"crash edits");
+}
+
+/// `reconcile` alone, as a document opens mid-session.
+fn offered_without_startup(recovery_dir: &Path, document: &Path) -> bool {
+    matches!(
+        recovery::reconcile(recovery_dir, document, SystemTime::now()),
+        Ok(Some(_))
+    )
 }

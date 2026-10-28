@@ -296,9 +296,9 @@ impl Signex {
             let guard = self.document_state.autosave.track_job();
             tasks.push(move_task(dir.clone(), owed, guard));
         }
-        for old in self.document_state.autosave.take_journal_clears() {
+        for (old, targets) in self.document_state.autosave.take_journal_clears() {
             let guard = self.document_state.autosave.track_job();
-            tasks.push(clear_journal_task(dir.clone(), old, guard));
+            tasks.push(clear_journal_task(dir.clone(), old, targets, guard));
         }
         Task::batch(tasks)
     }
@@ -417,13 +417,18 @@ fn move_task(dir: PathBuf, owed: SidecarMove, guard: InFlight) -> Task<Message> 
     )
 }
 
-fn clear_journal_task(dir: PathBuf, old: PathBuf, guard: InFlight) -> Task<Message> {
+fn clear_journal_task(
+    dir: PathBuf,
+    old: PathBuf,
+    targets: Vec<PathBuf>,
+    guard: InFlight,
+) -> Task<Message> {
     Task::perform(
         async move {
             // A failed join leaves the entry; the next start retries it.
             if let Err(e) = tokio::task::spawn_blocking(move || {
                 let _guard = guard;
-                crate::autosave::pending_move::clear(&dir, &old);
+                crate::autosave::pending_move::clear_if(&dir, &old, &targets);
             })
             .await
             {

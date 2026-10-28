@@ -148,7 +148,7 @@ pub fn rename(recovery_dir: &Path, from: &Path, to: &Path) -> Result<(), String>
             ));
         }
     }
-    pending_move::clear(recovery_dir, from);
+    pending_move::clear_if(recovery_dir, from, std::slice::from_ref(&to.to_path_buf()));
     Ok(())
 }
 
