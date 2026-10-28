@@ -43,6 +43,11 @@ impl Signex {
         // used) — #406.
         let (_pages, project_set) =
             crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
+        // Refused up front, before any sheet is touched, so a re-prefix stays
+        // all or nothing and an annotate never half-runs.
+        if self.refuse_annotate_while_project_moves(&project_set, label) {
+            return Task::none();
+        }
 
         // Pass A: seed the shared counter from every sheet's already-
         // annotated symbols. This happens inside annotate_with_seed's
@@ -129,19 +134,6 @@ impl Signex {
             },
             ..Default::default()
         };
-        // A re-prefix touches every sheet or none: refuse the whole run up
-        // front when any sheet sits in a project folder that is being moved,
-        // rather than convert some sheets and skip the rest.
-        if reprefix.is_some() {
-            for path in ordered_paths.iter().filter(|p| !read_only.contains(*p)) {
-                if let Err(error) = self.refuse_while_project_moves(path, "re-prefix") {
-                    crate::diagnostics::log_warning(format!(
-                        "{label}: {error} Nothing was re-prefixed."
-                    ));
-                    return Task::none();
-                }
-            }
-        }
         for (path, why) in &project_set.unreadable {
             crate::diagnostics::log_info(format!("Annotate: sheet '{}' {why}", path.display()));
         }
@@ -264,12 +256,6 @@ impl Signex {
                         break;
                     }
                 }
-                continue;
-            }
-            // A sheet in a project whose folder is moving would be written
-            // into the old folder; leave it for the next run.
-            if let Err(error) = self.refuse_while_project_moves(path, "annotate") {
-                crate::diagnostics::log_warning(format!("Annotate: {error}"));
                 continue;
             }
             if annotate_and_save_unopened(

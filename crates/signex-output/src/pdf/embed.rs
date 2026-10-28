@@ -42,7 +42,7 @@ struct FaceUsage {
 impl FaceUsage {
     fn new(font: PdfFont) -> Self {
         Self {
-            face: font.face(),
+            face: font.face().cloned(),
             cid_by_glyph_char: HashMap::new(),
             orig_gids: vec![0],
             chars: vec!['\0'],

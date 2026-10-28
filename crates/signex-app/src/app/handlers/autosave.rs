@@ -12,8 +12,8 @@ use iced::Task;
 
 use crate::app::{Message, Signex};
 use crate::autosave::{
-    AutosaveDone, AutosaveMsg, AutosaveRemoved, DocStamp, InFlight, QUIT_WAIT_LIMIT, recovery,
-    sidecar,
+    AutosaveDone, AutosaveMoved, AutosaveMsg, AutosaveRemoved, DocStamp, InFlight, QUIT_WAIT_LIMIT,
+    SidecarMove, recovery, sidecar,
 };
 
 impl Signex {
@@ -28,6 +28,7 @@ impl Signex {
                 }
                 Task::none()
             }
+            AutosaveMsg::Moved(moved) => self.autosave_moved(moved),
             AutosaveMsg::RecoveryChecked(checked) => self.recovery_checked(checked),
             AutosaveMsg::Recovery(choice) => self.recovery_answered(choice),
             AutosaveMsg::RestoreLoaded(loaded) => self.restore_loaded(loaded),
@@ -118,8 +119,11 @@ impl Signex {
     /// then run `next`, so the process never exits mid-write and a late
     /// write cannot leave a sidecar of edits the user discarded.
     pub(crate) fn wait_for_autosave_then(&mut self, next: Task<Message>) -> Task<Message> {
+        // A copy still owed its move after a rename would otherwise stay
+        // under a key nothing looks for; the barrier waits for the moves.
+        let moves = self.autosave_flush_moves();
         let barrier = self.document_state.autosave.barrier();
-        Task::perform(
+        let wait = Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
                     if !barrier.wait_timeout(QUIT_WAIT_LIMIT) {
@@ -141,11 +145,12 @@ impl Signex {
                 Err(reason) => Message::File(crate::app::FileMsg::DocumentSaveWaitFailed(reason)),
             },
         )
-        .chain(next)
+        .chain(next);
+        Task::batch([moves, wait])
     }
 
     fn autosave_tick(&mut self) -> Task<Message> {
-        let sweep = self.autosave_sweep();
+        let sweep = Task::batch([self.autosave_flush_moves(), self.autosave_sweep()]);
         // Re-checked here, not only in the subscription: a tick queued
         // just before the toggle went off must not write.
         if !self.ui_state.autosave_enabled {
@@ -219,6 +224,9 @@ impl Signex {
             result,
         } = done;
         let ok = result.is_ok();
+        // Renamed while it ran: the copy moves to the new key, so nothing is
+        // removed under this one.
+        let moved_on = self.document_state.autosave.is_forwarded(&path);
         let superseded = self.document_state.autosave.finish(&path, stamp, ok);
         match result {
             Ok(()) => self.document_state.autosave.clear_error(),
@@ -230,6 +238,9 @@ impl Signex {
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             return Task::none();
         };
+        if moved_on {
+            return self.autosave_flush_moves();
+        }
         if ok && nothing_to_recover {
             return self.start_remove(&dir, path);
         }
@@ -265,6 +276,48 @@ impl Signex {
             return self.start_remove(&dir, path.to_path_buf());
         }
         Task::none()
+    }
+
+    /// Start the sidecar renames owed by a document rename or folder move,
+    /// including failed ones retried each tick. The new path is held as
+    /// "removing" until the rename lands, so no autosave write races it. A
+    /// copy of a document saved or closed since is removed instead.
+    pub(crate) fn autosave_flush_moves(&mut self) -> Task<Message> {
+        let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
+            return Task::none();
+        };
+        let (start, obsolete) = self.document_state.autosave.take_moves();
+        let mut tasks: Vec<Task<Message>> = obsolete
+            .into_iter()
+            .map(|old| self.start_remove(&dir, old))
+            .collect();
+        for owed in start {
+            let guard = self.document_state.autosave.track_job();
+            tasks.push(move_task(dir.clone(), owed, guard));
+        }
+        Task::batch(tasks)
+    }
+
+    fn autosave_moved(&mut self, moved: AutosaveMoved) -> Task<Message> {
+        let autosave = &mut self.document_state.autosave;
+        let Err(reason) = moved.result else {
+            autosave.move_landed(&moved.sidecar);
+            // A move waiting on this one can start now, timer or not.
+            return self.autosave_flush_moves();
+        };
+        let obsolete = autosave.move_failed(moved.sidecar);
+        self.report_autosave_failure(&format!(
+            "{reason}. The copy was kept under its old name and the move is retried."
+        ));
+        // A failed move is retried on the timer, which runs while a move is
+        // owed (not here, or a lasting failure would spin).
+        match (obsolete, self.document_state.autosave.dir()) {
+            (Some(old), Some(dir)) => {
+                let dir = dir.to_path_buf();
+                self.start_remove(&dir, old)
+            }
+            _ => Task::none(),
+        }
     }
 
     fn report_sweep_failures(&mut self, report: &recovery::SweepReport) {
@@ -323,6 +376,32 @@ pub(super) fn write_task(
             Message::Autosave(AutosaveMsg::Written(AutosaveDone {
                 path: path.clone(),
                 stamp,
+                result,
+            }))
+        },
+    )
+}
+
+fn move_task(dir: PathBuf, owed: SidecarMove, guard: InFlight) -> Task<Message> {
+    let sidecar = owed.clone();
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || {
+                let _guard = guard;
+                sidecar::rename(&dir, &owed.old, &owed.new)?;
+                // A discarding quit arrived while this ran.
+                if owed.is_discarded() {
+                    sidecar::remove(&dir, &owed.new)?;
+                }
+                Ok(())
+            })
+            .await
+            .map_err(|e| format!("the autosave move task failed: {e}"))
+            .and_then(|result| result)
+        },
+        move |result| {
+            Message::Autosave(AutosaveMsg::Moved(AutosaveMoved {
+                sidecar: sidecar.clone(),
                 result,
             }))
         },

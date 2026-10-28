@@ -141,7 +141,7 @@ impl SceneDrawOptions {
     }
 }
 
-fn color_from_rgba(rgba: [f32; 4]) -> Color {
+pub(crate) fn color_from_rgba(rgba: [f32; 4]) -> Color {
     Color::from_rgba(rgba[0], rgba[1], rgba[2], rgba[3])
 }
 

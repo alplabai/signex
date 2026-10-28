@@ -6,7 +6,7 @@
 //! returns a `Result`; non-fatal errors surface via `tracing::warn!`
 //! with structured fields, matching the rest of the codebase.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use signex_library::adapters::local_git::LibraryInitOptions;
 use signex_library::{
@@ -79,11 +79,60 @@ pub struct PendingLibrarySpec {
     pub display_name: String,
 }
 
+/// Names Windows refuses as a file stem regardless of extension.
+const RESERVED_STEMS: &[&str] = &[
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+];
+
+/// Shared pre-flight for a new `.snxlib` path: extension, portable
+/// non-empty stem, and the target must not already exist. Rejecting
+/// here beats a confusing adapter-init error later.
+fn validate_new_library_path(lib_path: &Path) -> Result<(), LibraryError> {
+    let ext_ok = lib_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("snxlib"));
+    if !ext_ok {
+        return Err(LibraryError::Conflict(format!(
+            "library path must end with `.snxlib`: {}",
+            lib_path.display()
+        )));
+    }
+    let stem = lib_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default();
+    if stem.is_empty() {
+        return Err(LibraryError::Conflict(
+            "library name (filename stem) is empty".to_string(),
+        ));
+    }
+    if stem.chars().any(|c| {
+        c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
+    }) || stem.ends_with(['.', ' '])
+        || RESERVED_STEMS
+            .iter()
+            .any(|r| r.eq_ignore_ascii_case(stem.split('.').next().unwrap_or(stem)))
+    {
+        return Err(LibraryError::Conflict(format!(
+            "library name {stem:?} is not a portable file name"
+        )));
+    }
+    if lib_path.exists() {
+        return Err(LibraryError::Conflict(format!(
+            "{} already exists",
+            lib_path.display()
+        )));
+    }
+    Ok(())
+}
+
 /// Register a library creation request without touching disk.
 ///
-/// Validates the target path the same way `create_library_at` does
-/// (extension must be `.snxlib`, stem non-empty + portable, target
-/// must not already exist), pre-mints a `library_id`, and stashes a
+/// Validates via `validate_new_library_path` (extension must be
+/// `.snxlib`, stem non-empty and portable, target must not exist),
+/// pre-mints a `library_id`, and stashes a
 /// [`PendingLibrarySpec`] under that id on the caller-provided
 /// pending map. The actual `.snxlib` directory + manifest +
 /// optional `git init` happen at project-save time via
@@ -98,41 +147,12 @@ pub fn register_pending_library(
     enable_git: bool,
     use_lfs: bool,
 ) -> Result<(Uuid, PendingLibrarySpec), LibraryError> {
-    let ext_ok = lib_path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.eq_ignore_ascii_case("snxlib"))
-        .unwrap_or(false);
-    if !ext_ok {
-        return Err(LibraryError::Conflict(format!(
-            "library path must end with `.snxlib`: {}",
-            lib_path.display()
-        )));
-    }
+    validate_new_library_path(&lib_path)?;
     let stem = lib_path
         .file_stem()
         .and_then(|s| s.to_str())
-        .map(|s| s.to_string())
-        .unwrap_or_default();
-    if stem.is_empty() {
-        return Err(LibraryError::Conflict(
-            "library name (filename stem) is empty".to_string(),
-        ));
-    }
-    if stem
-        .chars()
-        .any(|c| matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
-    {
-        return Err(LibraryError::Conflict(format!(
-            "library name {stem:?} contains illegal path characters"
-        )));
-    }
-    if lib_path.exists() {
-        return Err(LibraryError::Conflict(format!(
-            "{} already exists",
-            lib_path.display()
-        )));
-    }
+        .unwrap_or_default()
+        .to_string();
 
     let library_id = Uuid::now_v7();
     let spec = PendingLibrarySpec {
@@ -259,46 +279,12 @@ pub fn create_library_at(
     use_lfs: bool,
     fold: CaseFold,
 ) -> Result<Uuid, LibraryError> {
-    // Library directories must use the `.snxlib` extension so the
-    // library detector elsewhere (ancestor walk, dock open dialog,
-    // adapter resolution) can identify them. Reject anything else
-    // up-front rather than failing later with a confusing
-    // adapter-init error.
-    let ext_ok = lib_path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.eq_ignore_ascii_case("snxlib"))
-        .unwrap_or(false);
-    if !ext_ok {
-        return Err(LibraryError::Conflict(format!(
-            "library path must end with `.snxlib`: {}",
-            lib_path.display()
-        )));
-    }
+    validate_new_library_path(&lib_path)?;
     let stem = lib_path
         .file_stem()
         .and_then(|s| s.to_str())
-        .map(|s| s.to_string())
-        .unwrap_or_default();
-    if stem.is_empty() {
-        return Err(LibraryError::Conflict(
-            "library name (filename stem) is empty".to_string(),
-        ));
-    }
-    if stem
-        .chars()
-        .any(|c| matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
-    {
-        return Err(LibraryError::Conflict(format!(
-            "library name {stem:?} contains illegal path characters"
-        )));
-    }
-    if lib_path.exists() {
-        return Err(LibraryError::Conflict(format!(
-            "{} already exists",
-            lib_path.display()
-        )));
-    }
+        .unwrap_or_default()
+        .to_string();
 
     let library_id = Uuid::now_v7();
     // Seed the per-library class registry from the user's
@@ -387,34 +373,6 @@ pub fn create_library_at(
     Ok(library_id)
 }
 
-/// Convenience wrapper — create a project-local library named
-/// `<name>` under `<project.dir>/<name>.snxlib`. Keeps the legacy
-/// call sites that don't go through the Save-As dialog working
-/// (currently none — all new code goes through `create_library_at`,
-/// which lets the user pick the location).
-pub fn create_library(
-    state: &mut LibraryState,
-    project: &mut ProjectData,
-    name: &str,
-    fold: CaseFold,
-) -> Result<Uuid, LibraryError> {
-    let trimmed = name.trim().to_string();
-    if trimmed.is_empty() {
-        return Err(LibraryError::Conflict("library name is empty".to_string()));
-    }
-    let project_dir = PathBuf::from(&project.dir);
-    if project_dir.as_os_str().is_empty() {
-        return Err(LibraryError::Conflict(
-            "project has no directory on disk yet".to_string(),
-        ));
-    }
-    let lib_path = project_dir.join(format!("{trimmed}.snxlib"));
-    // Legacy convenience wrapper — defaults LFS off so existing
-    // callers don't change behaviour. UI flows go through the
-    // "Library Options" modal which carries `use_lfs` explicitly.
-    create_library_at(state, project, lib_path, false, false, fold)
-}
-
 /// What one `auto_mount_project_libraries` pass decided — issue #99
 /// part 2c.
 ///
@@ -450,7 +408,7 @@ pub struct AutoMountOutcome {
 /// inline before, so re-running it would be the same pure duplicate work
 /// #528 removed: it roughly doubled every project open, costing a
 /// six-medium-library project 795.7 ms of its 1 622.571 ms mount.
-/// `tests/library_open_cache.rs` pins both halves — that the cold path
+/// `tests/integration/library_open_cache.rs` pins both halves — that the cold path
 /// primes everything, and that the warm path still rescans the primitive
 /// directories.
 pub fn auto_mount_project_libraries(
@@ -688,4 +646,26 @@ pub fn jump_to_use_site(site: &signex_library::UseSite) {
         instance = %site.instance_id,
         "jump-to-use-site requested (phase-2 follow-up)"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_library_path_rejects_unportable_names() {
+        for bad in [
+            "CON.snxlib",
+            "nul.snxlib",
+            "con.x.snxlib",
+            "a..snxlib",
+            "x .snxlib",
+            "a?b.snxlib",
+            "lib.txt",
+            ".snxlib",
+        ] {
+            assert!(validate_new_library_path(Path::new(bad)).is_err(), "{bad}");
+        }
+        assert!(validate_new_library_path(Path::new("ok-lib.snxlib")).is_ok());
+    }
 }

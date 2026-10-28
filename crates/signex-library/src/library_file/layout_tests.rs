@@ -53,7 +53,9 @@ note = "hi"
 
 fn edit_row(file: &mut LibraryFile, row: usize, mpn: &str) {
     let t = file.tables.get_mut("res").unwrap();
-    t.rows[row].cells.insert("mpn".into(), mpn.into());
+    std::sync::Arc::make_mut(&mut t.rows[row])
+        .cells
+        .insert("mpn".into(), mpn.into());
 }
 
 fn round(file: &LibraryFile) -> LibraryFile {
@@ -470,7 +472,7 @@ fn save_cost_of_a_kept_layout() {
         text.push_str("'''\n");
     }
     let mut file = LibraryFile::parse(&text).unwrap();
-    file.tables.get_mut("t0").unwrap().rows[0]
+    std::sync::Arc::make_mut(&mut file.tables.get_mut("t0").unwrap().rows[0])
         .cells
         .insert("mpn".into(), "X".into());
     let time = |f: &dyn Fn()| {
@@ -492,7 +494,7 @@ fn save_cost_of_a_kept_layout() {
             "",
         );
     let mut plain = LibraryFile::parse(&plain).unwrap();
-    plain.tables.get_mut("t0").unwrap().rows[0]
+    std::sync::Arc::make_mut(&mut plain.tables.get_mut("t0").unwrap().rows[0])
         .cells
         .insert("mpn".into(), "X".into());
     let canonical = time(&|| drop(plain.write().unwrap()));
