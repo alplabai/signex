@@ -1,8 +1,6 @@
 //! `Signex::boot` finishes the journalled recovery-copy moves before the
 //! startup opens (#1540).
 
-use std::path::Path;
-
 use crate::app::Signex;
 use crate::autosave::{pending_move, sidecar};
 
@@ -33,5 +31,4 @@ fn boot_finishes_the_journalled_moves_before_any_startup_open_can_run() {
         b"crash edits"
     );
     assert!(pending_move::owed(&recovery).is_empty());
-    let _: &Path = &recovery;
 }

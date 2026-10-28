@@ -162,6 +162,11 @@ pub struct Finished {
 /// or clears the entries as it goes. An entry that cannot be read is logged
 /// and left.
 pub fn finish_all(recovery_dir: &Path) -> Finished {
+    finish_all_from(recovery_dir, pass_seed())
+}
+
+/// [`finish_all`] with the capped pass's start chosen by `seed`.
+fn finish_all_from(recovery_dir: &Path, seed: u64) -> Finished {
     let mut report = Finished::default();
     let dir = match std::fs::read_dir(recovery_dir) {
         Ok(dir) => dir,
@@ -174,12 +179,17 @@ pub fn finish_all(recovery_dir: &Path) -> Finished {
             return report;
         }
     };
-    let files: Vec<PathBuf> = dir
+    let mut files: Vec<PathBuf> = dir
         .flatten()
         .map(|e| e.path())
         .filter(|p| p.extension().and_then(|e| e.to_str()) == Some(ENTRY_EXTENSION))
         .collect();
     if files.len() > MAX_ENTRIES_PER_PASS {
+        // Start each pass at a different entry, so moves that keep failing
+        // cannot fill every pass and starve the rest.
+        files.sort();
+        let start = (seed % files.len() as u64) as usize;
+        files.rotate_left(start);
         crate::diagnostics::log_warning(format!(
             "{} pending recovery copy moves are journalled; {} were left for the next start.",
             files.len(),
@@ -199,6 +209,17 @@ pub fn finish_all(recovery_dir: &Path) -> Finished {
         }
     }
     report
+}
+
+/// A per-process random seed for where a capped pass starts in the sorted
+/// entry list (std's `RandomState` is randomly keyed per process, so this
+/// needs no clock and no extra crate). Over several starts every entry is
+/// expected to be reached; nothing about which entries fail can pin it.
+fn pass_seed() -> u64 {
+    use std::hash::{BuildHasher, Hasher};
+    std::collections::hash_map::RandomState::new()
+        .build_hasher()
+        .finish()
 }
 
 /// Whether the document moved from `old` to `new`: a file is at `new` and
@@ -312,5 +333,33 @@ mod tests {
         assert_eq!(finish_all(&rec).moved, MAX_ENTRIES_PER_PASS);
         assert_eq!(owed(&rec).len(), 3);
         assert_eq!(finish_all(&rec).moved, 3);
+    }
+
+    #[test]
+    fn a_capped_pass_starts_where_its_seed_says_so_no_entry_is_pinned_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let total = MAX_ENTRIES_PER_PASS + 3;
+        let journal = |rec: &Path| {
+            for i in 0..total {
+                let new = tmp.path().join(format!("new/{i}.snxsch"));
+                std::fs::create_dir_all(new.parent().unwrap()).unwrap();
+                std::fs::write(&new, b"saved").unwrap();
+                let old = tmp.path().join(format!("old/{i}.snxsch"));
+                super::super::sidecar::write(rec, &old, b"x").unwrap();
+                record(rec, &old, &new).unwrap();
+            }
+        };
+        let left_after = |seed: u64| {
+            let _ = std::fs::remove_dir_all(&rec);
+            journal(&rec);
+            assert_eq!(finish_all_from(&rec, seed).moved, MAX_ENTRIES_PER_PASS);
+            let mut left: Vec<_> = owed(&rec).into_iter().map(|(old, _)| old).collect();
+            left.sort();
+            left
+        };
+        // Two seeds leave different entries behind: the pass does not always
+        // skip the same tail, so entries past the cap are reached in time.
+        assert_ne!(left_after(0), left_after(3));
     }
 }
