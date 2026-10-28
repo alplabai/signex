@@ -407,6 +407,7 @@ impl Signex {
             window_width: self.ui_state.window_size.0,
             wire_color_overrides: &self.ui_state.wire_color_overrides,
             wire_class_styles: self.ui_state.net_class_styles.styles(),
+            wire_class_revision: self.ui_state.net_class_styles.revision(),
             selection_filters: &self.interaction_state.selection_filters,
             placement: None,
         }

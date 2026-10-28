@@ -580,6 +580,7 @@ mod tests {
                 wire_styling: Some(WireStyling {
                     color_overrides: &setup.overrides,
                     class_styles: &setup.classes,
+                    class_revision: 0,
                 }),
                 designators: None,
                 special_strings: None,
