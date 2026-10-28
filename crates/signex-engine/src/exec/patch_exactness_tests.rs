@@ -359,7 +359,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 43] = [
+const ALL_KINDS: [CommandKind; 44] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -382,6 +382,7 @@ const ALL_KINDS: [CommandKind; 43] = [
     CommandKind::RegisterLibSymbol,
     CommandKind::ReplaceLibSymbol,
     CommandKind::PlaceChildSheet,
+    CommandKind::PlaceSheetPin,
     CommandKind::PlaceJunction,
     CommandKind::PlaceNoConnect,
     CommandKind::PlaceNoErcDirective,
@@ -432,6 +433,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::RegisterLibSymbol
         | CommandKind::ReplaceLibSymbol
         | CommandKind::PlaceChildSheet
+        | CommandKind::PlaceSheetPin
         | CommandKind::PlaceJunction
         | CommandKind::PlaceNoConnect
         | CommandKind::PlaceNoErcDirective
@@ -741,6 +743,21 @@ fn samples() -> Vec<(String, Command)> {
         "PlaceChildSheet",
         Command::PlaceChildSheet {
             child_sheet: child_sheet(NEW),
+        },
+    );
+    add(
+        "PlaceSheetPin",
+        Command::PlaceSheetPin {
+            sheet_id: uid(CHILD, 1),
+            pin: SheetPin {
+                uuid: uid(SHEET_PIN, NEW),
+                name: "NEWPIN".into(),
+                direction: "output".into(),
+                position: pt(70.0, 40.0),
+                rotation: 180.0,
+                auto_generated: false,
+                user_moved: false,
+            },
         },
     );
     add(

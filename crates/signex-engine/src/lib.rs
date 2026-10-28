@@ -11,6 +11,7 @@ mod power_port;
 mod project_general;
 mod selection;
 mod sheet;
+mod sheet_entry;
 mod sheet_identity;
 mod sheet_placement;
 mod transform;
@@ -63,6 +64,9 @@ pub use selection::{
 };
 pub use sheet::{
     blank_port_label_count, exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports,
+};
+pub use sheet_entry::{
+    SHEET_SYMBOL_REACH_MM, child_document_for_symbol, new_sheet_entry, sheet_symbol_at,
 };
 pub use sheet_placement::{
     DEFAULT_CHILD_SHEET_STROKE_MM, MIN_CHILD_SHEET_EDGE_MM, child_sheet_from_corners,
@@ -389,6 +393,7 @@ impl Engine {
             | Command::RegisterLibSymbol { .. }
             | Command::ReplaceLibSymbol { .. }
             | Command::PlaceChildSheet { .. }
+            | Command::PlaceSheetPin { .. }
             | Command::PlaceWireSegment { .. }
             | Command::PlaceJunction { .. }
             | Command::PlaceNoConnect { .. }
