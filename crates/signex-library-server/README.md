@@ -51,18 +51,28 @@ stored row's payload and builds the index (migration 0010). If a library
 already holds the same number twice it refuses to start, names each clash
 (`table/row_id`) and changes nothing. Fix it by giving all but one row of each
 clash a new number **in the payload**, which is what readers return, and in the
-`internal_pn` column, then start again:
+`internal_pn` column, bumping `revision` and `updated_at` so copies open in a
+client reload instead of failing on save, then start again. On every start the
+server also compares each row's `pn_key` with its payload and repairs a stale
+one (refusing, with the same report, if the repair would clash).
+
+**Upgrading: stop every library server first.** A replica still running the
+previous version keeps writing rows without a checked key while the new one
+migrates; those rows are only caught at the next start.
+
 
 ```sql
 -- SQLite
 UPDATE component_rows
-   SET payload = json_set(payload, '$.internal_pn', 'NEW-PN'), internal_pn = 'NEW-PN'
+   SET payload = json_set(payload, '$.internal_pn', 'NEW-PN'), internal_pn = 'NEW-PN',
+       revision = revision + 1, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
  WHERE library_id = '...' AND table_name = '...' AND row_id = '...';
 
 -- Postgres
 UPDATE component_rows
    SET payload = jsonb_set(payload::jsonb, '{internal_pn}', to_jsonb('NEW-PN'::text))::text,
-       internal_pn = 'NEW-PN'
+       internal_pn = 'NEW-PN', revision = revision + 1,
+       updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
  WHERE library_id = '...' AND table_name = '...' AND row_id = '...';
 ```
 

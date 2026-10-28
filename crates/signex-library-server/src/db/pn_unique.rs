@@ -15,9 +15,6 @@ pub(super) const PN_INDEX: &str = "idx_component_rows_pn_key";
 /// Migration that adds the `pn_key` column.
 pub(super) const KEY_COLUMN_VERSION: i64 = 9;
 
-/// Migration that builds the unique index.
-const INDEX_VERSION: i64 = 10;
-
 /// The key a part number is unique by: trimmed with Rust's `str::trim`
 /// (all Unicode white space), the same rule the client adapter applies. The
 /// one place that rule lives on the server.
@@ -55,20 +52,20 @@ impl AppState {
         Ok(())
     }
 
-    /// Before the unique index exists: recompute every row's `pn_key` from
-    /// the part number in its payload (what every read returns), and refuse
-    /// if a library holds the same key twice. Nothing is dropped; a refusal
-    /// changes no row.
+    /// On every start, before the unique index is built (and again once it
+    /// exists, because an older server replica writing during an upgrade
+    /// leaves blank or stale keys): recompute every row's `pn_key` from the
+    /// part number in its payload (what every read returns), and refuse if a
+    /// library holds the same key twice. A stale key with no clash is
+    /// repaired. Nothing is dropped; a refusal changes no row.
     pub(super) async fn refuse_duplicate_part_numbers(&self) -> sqlx::Result<()> {
-        if self.index_migration_applied().await? {
-            return Ok(());
-        }
+        tracing::info!(
+            "checking part-number keys; stop every library server before upgrading to a version \
+             with unique part numbers, an older replica writing meanwhile leaves keys unchecked"
+        );
         let stored = self.stored_part_numbers().await?;
         let mut by_key: BTreeMap<(&str, &str), Vec<&StoredRow>> = BTreeMap::new();
-        let keys: Vec<String> = stored
-            .iter()
-            .map(|(.., payload, _)| payload_key(payload))
-            .collect();
+        let keys: Vec<String> = stored.iter().map(payload_key).collect();
         for (row, key) in stored.iter().zip(&keys) {
             if !key.is_empty() {
                 by_key.entry((&row.0, key)).or_default().push(row);
@@ -88,41 +85,40 @@ impl AppState {
                 "part numbers must be unique per library, but these are held by more than one \
                  row (table/row_id, first {}): {}. No row was changed. Give all but one of each \
                  a new part number in the row payload, which is what readers return (also keep \
-                 the internal_pn column in step), then start the server again. SQLite: UPDATE \
-                 component_rows SET payload = json_set(payload, '$.internal_pn', 'NEW-PN'), \
-                 internal_pn = 'NEW-PN' WHERE library_id = '...' AND table_name = '...' AND \
-                 row_id = '...'. Postgres: UPDATE component_rows SET payload = \
-                 jsonb_set(payload::jsonb, '{{internal_pn}}', to_jsonb('NEW-PN'::text))::text, \
-                 internal_pn = 'NEW-PN' WHERE library_id = '...' AND table_name = '...' AND \
-                 row_id = '...'. The key is recomputed from the payload at the next start.",
+                 the internal_pn column in step, and bump revision and updated_at so open \
+                 copies reload), then start the server again. SQLite: UPDATE component_rows \
+                 SET payload = json_set(payload, '$.internal_pn', 'NEW-PN'), \
+                 internal_pn = 'NEW-PN', revision = revision + 1, \
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE library_id = '...' \
+                 AND table_name = '...' AND row_id = '...'. Postgres: UPDATE component_rows SET \
+                 payload = jsonb_set(payload::jsonb, '{{internal_pn}}', \
+                 to_jsonb('NEW-PN'::text))::text, internal_pn = 'NEW-PN', \
+                 revision = revision + 1, updated_at = to_char(now() AT TIME ZONE 'utc', \
+                 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') WHERE library_id = '...' AND \
+                 table_name = '...' AND row_id = '...'. The key is recomputed from the payload \
+                 at the next start.",
                 clashes.len(),
                 clashes.join("; ")
             )));
         }
-        for (row, key) in stored.iter().zip(&keys) {
-            if row.4 != *key {
-                self.set_pn_key(&row.0, &row.1, &row.2, key).await?;
-            }
+        let stale: Vec<_> = stored
+            .iter()
+            .zip(&keys)
+            .filter(|(r, k)| r.4 != **k)
+            .collect();
+        // Blank first (blank keys never clash), so keys that swap places
+        // cannot collide on the way.
+        for (row, _) in &stale {
+            self.set_pn_key(&row.0, &row.1, &row.2, "").await?;
+        }
+        for (row, key) in &stale {
+            tracing::warn!(
+                library_id = %row.0, table = %row.1, row_id = %row.2,
+                "repairing a stale part-number key"
+            );
+            self.set_pn_key(&row.0, &row.1, &row.2, key).await?;
         }
         Ok(())
-    }
-
-    async fn index_migration_applied(&self) -> sqlx::Result<bool> {
-        let n: i64 = match &self.pool {
-            DbPool::Sqlite(p) => {
-                sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations WHERE version = ?")
-                    .bind(INDEX_VERSION)
-                    .fetch_one(p)
-                    .await?
-            }
-            DbPool::Postgres(p) => {
-                sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations WHERE version = $1")
-                    .bind(INDEX_VERSION)
-                    .fetch_one(p)
-                    .await?
-            }
-        };
-        Ok(n > 0)
     }
 
     /// `(library_id, table_name, row_id, payload, pn_key)` of every row.
@@ -172,10 +168,17 @@ impl AppState {
     }
 }
 
-/// The key of the part number in a stored payload; blank when absent.
-fn payload_key(payload: &str) -> String {
-    serde_json::from_str::<serde_json::Value>(payload)
+/// The key of the part number in a stored payload; blank (with a warning
+/// naming the row) when the payload does not parse or has no `internal_pn`.
+fn payload_key(row: &StoredRow) -> String {
+    let key = serde_json::from_str::<serde_json::Value>(&row.3)
         .ok()
-        .and_then(|v| v["internal_pn"].as_str().map(|pn| pn_key(pn).to_string()))
-        .unwrap_or_default()
+        .and_then(|v| v["internal_pn"].as_str().map(|pn| pn_key(pn).to_string()));
+    key.unwrap_or_else(|| {
+        tracing::warn!(
+            library_id = %row.0, table = %row.1, row_id = %row.2,
+            "stored row has no readable internal_pn; its part-number key is blank"
+        );
+        String::new()
+    })
 }

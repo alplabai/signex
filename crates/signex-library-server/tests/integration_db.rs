@@ -935,18 +935,24 @@ async fn assert_migration_refuses_duplicates_then_accepts_the_fix(state: AppStat
 
     // The documented fix: renumber in the payload (and the column).
     for (row, new_pn) in [(&rows[1], "DUP-2"), (&rows[3], "NB-2")] {
-        let set = if pg {
-            format!(
-                "jsonb_set(payload::jsonb, '{{internal_pn}}', to_jsonb('{new_pn}'::text))::text"
+        let (set, updated) = if pg {
+            (
+                format!(
+                    "jsonb_set(payload::jsonb, '{{internal_pn}}', to_jsonb('{new_pn}'::text))::text"
+                ),
+                "to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')",
             )
         } else {
-            format!("json_set(payload, '$.internal_pn', '{new_pn}')")
+            (
+                format!("json_set(payload, '$.internal_pn', '{new_pn}')"),
+                "strftime('%Y-%m-%dT%H:%M:%SZ', 'now')",
+            )
         };
         exec(
             &state,
             &format!(
-                "UPDATE component_rows SET payload = {set}, internal_pn = '{new_pn}' \
-                 WHERE row_id = '{}'",
+                "UPDATE component_rows SET payload = {set}, internal_pn = '{new_pn}', \
+                 revision = revision + 1, updated_at = {updated} WHERE row_id = '{}'",
                 row.row_id
             ),
         )
@@ -959,6 +965,7 @@ async fn assert_migration_refuses_duplicates_then_accepts_the_fix(state: AppStat
         .unwrap()
         .unwrap();
     assert_eq!(renumbered.internal_pn, InternalPn::new("DUP-2"));
+    assert_eq!(renumbered.server_revision, Some(2));
     assert_eq!(stored_pn_key(&state, &rows[1]).await, "DUP-2");
     assert_eq!(stored_pn_key(&state, &rows[5]).await, "PAD");
 
@@ -997,5 +1004,74 @@ async fn postgres_migration_refuses_existing_duplicate_part_numbers_without_losi
     let scoped = format!("{url}{sep}options=-c%20search_path%3D{schema}");
     let state = AppState::connect(&scoped).await.expect("pg connect");
     assert_migration_refuses_duplicates_then_accepts_the_fix(state).await;
+    exec(&admin, &format!("DROP SCHEMA {schema} CASCADE")).await;
+}
+
+/// #1613: with the index in place, a row whose `pn_key` no longer matches its
+/// payload (an older replica wrote it) is repaired at the next start; if the
+/// repair would clash with another row, start-up is refused naming the clash
+/// and changes nothing.
+async fn assert_restart_repairs_or_refuses_a_stale_key(state: AppState) {
+    state.migrate().await.expect("fresh migrate");
+    let library = Uuid::now_v7();
+    let app = router_with_state(state.clone());
+    let (a, b) = (fixture_row("K-1"), fixture_row("K-2"));
+    post_row(&app, library, &a).await;
+    post_row(&app, library, &b).await;
+
+    exec(
+        &state,
+        &format!(
+            "UPDATE component_rows SET pn_key = '' WHERE row_id = '{}'",
+            a.row_id
+        ),
+    )
+    .await;
+    state.migrate().await.expect("restart repairs a stale key");
+    assert_eq!(stored_pn_key(&state, &a).await, "K-1");
+    assert_eq!(stored_pn_key(&state, &b).await, "K-2");
+
+    // b's payload now claims a's number while its key still says K-2.
+    let pg = state.pool().postgres().is_some();
+    let set = if pg {
+        "jsonb_set(payload::jsonb, '{internal_pn}', to_jsonb('K-1'::text))::text"
+    } else {
+        "json_set(payload, '$.internal_pn', 'K-1')"
+    };
+    exec(
+        &state,
+        &format!(
+            "UPDATE component_rows SET payload = {set} WHERE row_id = '{}'",
+            b.row_id
+        ),
+    )
+    .await;
+    let err = state.migrate().await.expect_err("clash is refused");
+    assert!(err.to_string().contains("\"K-1\""), "{err}");
+    assert_eq!(
+        stored_pn_key(&state, &b).await,
+        "K-2",
+        "a refusal changes nothing"
+    );
+}
+
+#[tokio::test]
+async fn restart_repairs_a_stale_part_number_key() {
+    assert_restart_repairs_or_refuses_a_stale_key(fresh_state().await).await;
+}
+
+#[tokio::test]
+#[ignore = "requires SIGNEX_TEST_PG_URL"]
+async fn postgres_restart_repairs_a_stale_part_number_key() {
+    ensure_test_token();
+    let url = std::env::var("SIGNEX_TEST_PG_URL")
+        .expect("SIGNEX_TEST_PG_URL must be set to run the ignored Postgres tests");
+    let schema = format!("pn_key_{}", Uuid::now_v7().simple());
+    let admin = AppState::connect(&url).await.expect("pg connect");
+    exec(&admin, &format!("CREATE SCHEMA {schema}")).await;
+    let sep = if url.contains('?') { '&' } else { '?' };
+    let scoped = format!("{url}{sep}options=-c%20search_path%3D{schema}");
+    let state = AppState::connect(&scoped).await.expect("pg connect");
+    assert_restart_repairs_or_refuses_a_stale_key(state).await;
     exec(&admin, &format!("DROP SCHEMA {schema} CASCADE")).await;
 }
