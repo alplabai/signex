@@ -64,6 +64,52 @@ impl Signex {
         Task::none()
     }
 
+    /// The grid's scrollable reported a new offset / viewport height.
+    pub(in crate::app::dispatch::library) fn handle_browser_grid_scrolled(
+        &mut self,
+        library_path: std::path::PathBuf,
+        offset_y: f32,
+        viewport_h: f32,
+    ) -> Task<Message> {
+        if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+            state.grid_scroll = crate::library::browser::GridScroll {
+                offset_y,
+                viewport_h,
+            };
+        }
+        Task::none()
+    }
+
+    /// Scroll the grid so the selected row is in view; a no-op when it
+    /// already is, or is not in the filtered list. The selection can move
+    /// without a click (a freshly added row), so it may be outside the
+    /// window the grid builds.
+    pub(in crate::app::dispatch::library) fn reveal_selected_browser_row(
+        &mut self,
+        library_path: &std::path::Path,
+    ) -> Task<Message> {
+        // Bring the filtered rows up to date: the row set just changed.
+        self.library.sync_view_caches();
+        let Some(index) = self.library.browser_row_position_of_selection(library_path) else {
+            return Task::none();
+        };
+        let Some(state) = self.library.library_browsers.get_mut(library_path) else {
+            return Task::none();
+        };
+        let Some(offset_y) = crate::library::browser::reveal_row_offset(index, state.grid_scroll)
+        else {
+            return Task::none();
+        };
+        state.grid_scroll.offset_y = offset_y;
+        iced::widget::operation::scroll_to(
+            iced::widget::Id::new(crate::library::browser::GRID_SCROLL_ID),
+            iced::widget::scrollable::AbsoluteOffset {
+                x: None,
+                y: Some(offset_y),
+            },
+        )
+    }
+
     /// User dismissed the delete confirm modal without deleting.
     pub(in crate::app::dispatch::library) fn handle_browser_delete_row_cancel(
         &mut self,

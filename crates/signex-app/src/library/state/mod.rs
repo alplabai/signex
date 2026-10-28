@@ -231,6 +231,9 @@ pub struct LibraryBrowserState {
     /// kept current by `LibraryState::sync_view_caches`; `view` reads it
     /// instead of recomputing every frame.
     pub view_cache: Option<super::browser::BrowserViewCache>,
+    /// Where the grid is scrolled to, as reported by its scrollable. The
+    /// grid builds only the rows in this window (#1355).
+    pub grid_scroll: super::browser::GridScroll,
 }
 
 /// `+ Class` inline form state — separate key + label inputs since
@@ -272,6 +275,7 @@ impl LibraryBrowserState {
             renaming_class: None,
             class_error: None,
             view_cache: None,
+            grid_scroll: super::browser::GridScroll::default(),
         }
     }
 

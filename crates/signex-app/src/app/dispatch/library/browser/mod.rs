@@ -277,6 +277,8 @@ impl Signex {
                     row_id = %row_id,
                     "browser: minted draft row inline"
                 );
+                // The new row may sort outside the built window.
+                return self.reveal_selected_browser_row(&library_path);
             }
             Err(e) => {
                 tracing::warn!(

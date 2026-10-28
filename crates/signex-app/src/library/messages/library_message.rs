@@ -351,6 +351,13 @@ pub enum LibraryMessage {
         table: String,
         row_id: RowId,
     },
+    /// The browser grid's scrollable moved or was resized. Carries the
+    /// scroll offset and visible height the grid windows its rows from.
+    BrowserGridScrolled {
+        library_path: PathBuf,
+        offset_y: f32,
+        viewport_h: f32,
+    },
     /// User clicked the Add Component button (inside the empty-state
     /// CTA, the action row, or the "+" tab). Pre-sets the New
     /// Component modal to the active library + table.

@@ -5,6 +5,9 @@
 //! Extracted verbatim from the former single-file `browser` module.
 
 use super::columns::{ColumnKind, GridColumn, lifecycle_dot_color};
+use super::window::{
+    BROWSER_HEADER_HEIGHT, BROWSER_ROW_HEIGHT, GRID_SCROLL_ID, OVERSCAN_ROWS, visible_range,
+};
 use super::*;
 use crate::library::dangling::DanglingSweep;
 use iced::widget::column;
@@ -77,6 +80,7 @@ pub(super) fn view_grid<'a>(
         }
         container(r)
             .padding([2, 4])
+            .height(Length::Fixed(BROWSER_HEADER_HEIGHT))
             .style(move |_: &Theme| iced::widget::container::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgba(
                     1.0, 1.0, 1.0, 0.04,
@@ -102,7 +106,23 @@ pub(super) fn view_grid<'a>(
             .padding([12, 6]),
         );
     } else {
-        for r in rows {
+        // Window: only the rows near the viewport get widgets; spacers of
+        // the exact skipped height stand in for the rest (#1355).
+        let scroll = browser.grid_scroll;
+        let window = visible_range(
+            scroll.offset_y - BROWSER_HEADER_HEIGHT,
+            scroll.effective_viewport_h(),
+            BROWSER_ROW_HEIGHT,
+            rows.len(),
+            OVERSCAN_ROWS,
+        );
+        if window.start > 0 {
+            col = col
+                .push(Space::new().height(Length::Fixed(window.start as f32 * BROWSER_ROW_HEIGHT)));
+        }
+        for r in &rows[window.clone()] {
+            #[cfg(test)]
+            super::window::counters::ROWS_BUILT.with(|c| c.set(c.get() + 1));
             let row_id = RowId::from_uuid(r.row_id);
             let is_selected = selected == Some(row_id);
             // Lifecycle tinting — deprecated rows render with a faint
@@ -311,6 +331,7 @@ pub(super) fn view_grid<'a>(
             let row_container = container(data_row)
                 .padding([0, 0])
                 .width(Length::Fill)
+                .height(Length::Fixed(BROWSER_ROW_HEIGHT))
                 .style(move |_: &Theme| iced::widget::container::Style {
                     background: bg_color,
                     border: Border {
@@ -334,9 +355,24 @@ pub(super) fn view_grid<'a>(
 
             col = col.push(row_widget);
         }
+        if window.end < rows.len() {
+            col = col.push(Space::new().height(Length::Fixed(
+                (rows.len() - window.end) as f32 * BROWSER_ROW_HEIGHT,
+            )));
+        }
     }
 
-    container(scrollable(col).width(Length::Fill).height(Length::Fill))
+    let library_for_scroll = lib_pb.clone();
+    let scroller = scrollable(col)
+        .id(GRID_SCROLL_ID)
+        .on_scroll(move |viewport| LibraryMessage::BrowserGridScrolled {
+            library_path: library_for_scroll.clone(),
+            offset_y: viewport.absolute_offset().y,
+            viewport_h: viewport.bounds().height,
+        })
+        .width(Length::Fill)
+        .height(Length::Fill);
+    container(scroller)
         .padding([0, 0])
         .width(Length::Fill)
         .height(Length::Fill)

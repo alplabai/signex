@@ -1,0 +1,114 @@
+//! Row windowing for the browser grid (#1355).
+//!
+//! A library table can hold tens of thousands of rows, but only a screenful
+//! is ever visible. Every grid row has the same fixed height, so the rows in
+//! view follow from the scroll offset and viewport height alone; the grid
+//! builds widgets for those rows (plus a little overscan) and stands in for
+//! the rest with two spacers of the exact skipped height, leaving the
+//! scrollbar and the total content height unchanged.
+
+use std::ops::Range;
+
+/// Height of every data row in the grid. Rows are pinned to it so the
+/// window maths does not depend on what a cell happens to contain.
+pub(super) const BROWSER_ROW_HEIGHT: f32 = 24.0;
+/// Height of the header row, which scrolls with the rows and so offsets
+/// them from the top of the scrollable content.
+pub(super) const BROWSER_HEADER_HEIGHT: f32 = 28.0;
+/// Rows built beyond each edge of the viewport, so a fast wheel flick shows
+/// content before the next scroll message arrives.
+pub(super) const OVERSCAN_ROWS: usize = 12;
+/// Viewport height assumed until the scrollable reports its real one (it
+/// only does so once the content overflows). Generous so a tall window is
+/// never left with blank space on the first frame.
+pub(super) const UNMEASURED_VIEWPORT_HEIGHT: f32 = 2400.0;
+
+/// Id of the grid's scrollable, the target of a scroll-to-row task.
+pub const GRID_SCROLL_ID: &str = "library-browser-grid";
+
+/// Scroll position of the grid, as last reported by its scrollable.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct GridScroll {
+    /// Distance the content is scrolled from its top, in pixels.
+    pub offset_y: f32,
+    /// Height of the scrollable's visible area; `0.0` until measured.
+    pub viewport_h: f32,
+}
+
+impl GridScroll {
+    /// The viewport height to window with: the measured one, else the
+    /// assumed one.
+    pub(super) fn effective_viewport_h(&self) -> f32 {
+        if self.viewport_h > 0.0 {
+            self.viewport_h
+        } else {
+            UNMEASURED_VIEWPORT_HEIGHT
+        }
+    }
+}
+
+/// The rows to build, as indices into the `count` visible rows.
+///
+/// `scroll_y` is the offset into the row area (header already removed). It
+/// is clamped to what `count` rows can actually scroll, so an offset left
+/// over from before the list shrank still yields a populated window.
+pub(super) fn visible_range(
+    scroll_y: f32,
+    viewport_h: f32,
+    row_h: f32,
+    count: usize,
+    overscan: usize,
+) -> Range<usize> {
+    if count == 0 || row_h.is_nan() || row_h <= 0.0 {
+        return 0..0;
+    }
+    let viewport_h = viewport_h.max(0.0);
+    let max_scroll = (count as f32 * row_h - viewport_h).max(0.0);
+    let scroll_y = if scroll_y.is_finite() {
+        scroll_y.clamp(0.0, max_scroll)
+    } else {
+        0.0
+    };
+    let first = (scroll_y / row_h).floor() as usize;
+    let last = ((scroll_y + viewport_h) / row_h).ceil() as usize;
+    let start = first.saturating_sub(overscan).min(count);
+    let end = last.saturating_add(overscan).min(count);
+    start..end.max(start)
+}
+
+/// Scroll offset (from the top of the scrollable content) that brings row
+/// `index` fully into view, or `None` when it already is. `viewport_h` of
+/// `0.0` (unmeasured) never scrolls.
+fn offset_to_reveal(index: usize, scroll: GridScroll, row_h: f32, leading_h: f32) -> Option<f32> {
+    if scroll.viewport_h <= 0.0 {
+        return None;
+    }
+    let top = leading_h + index as f32 * row_h;
+    let bottom = top + row_h;
+    if top < scroll.offset_y {
+        Some(top)
+    } else if bottom > scroll.offset_y + scroll.viewport_h {
+        Some(bottom - scroll.viewport_h)
+    } else {
+        None
+    }
+}
+
+/// Scroll offset that brings the grid's `index`-th row into view, or `None`
+/// when it already is.
+pub fn reveal_row_offset(index: usize, scroll: GridScroll) -> Option<f32> {
+    offset_to_reveal(index, scroll, BROWSER_ROW_HEIGHT, BROWSER_HEADER_HEIGHT)
+}
+
+/// Rows built by the grid, so a test can tell "windowed" from "all".
+#[cfg(test)]
+pub(crate) mod counters {
+    use std::cell::Cell;
+
+    thread_local! {
+        pub static ROWS_BUILT: Cell<usize> = const { Cell::new(0) };
+    }
+}
+
+#[cfg(test)]
+mod tests;
