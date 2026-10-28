@@ -13,6 +13,10 @@ use signex_widgets::theme_ext;
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress, PrimitivePickerTarget};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 pub fn view<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
@@ -22,7 +26,7 @@ pub fn view<'a>(
     let warning = theme_ext::warning_color(tokens);
 
     let mut col = column![
-        text("Alternate symbols").size(11).color(muted),
+        text("Alternate symbols").size(TS.body).color(muted),
         Space::new().height(6),
     ]
     .spacing(0)
@@ -31,7 +35,7 @@ pub fn view<'a>(
     if state.row.alternate_symbols.is_empty() {
         col = col.push(
             text("No alternate drawings; the row uses its default symbol only.")
-                .size(11)
+                .size(TS.body)
                 .color(muted),
         );
     }
@@ -55,7 +59,7 @@ pub fn view<'a>(
         .collect();
     let problems = state.alternate_error.iter().chain(issues.iter());
     for problem in problems {
-        col = col.push(text(problem.clone()).size(11).color(warning));
+        col = col.push(text(problem.clone()).size(TS.body).color(warning));
     }
     col.into()
 }
@@ -79,8 +83,8 @@ fn alternate_row<'a>(
     };
     let on_label = event.clone();
     let label = text_input("Label (e.g. IEC)", &alt.label)
-        .padding([4, 8])
-        .size(12)
+        .padding([SP.s, SP.m])
+        .size(TS.label)
         .width(Length::FillPortion(3))
         .on_input(move |label| on_label(EditorMsg::AlternateSymbolRelabeled { idx, label }));
     let short = alt.symbol_ref.uuid.to_string();
@@ -100,7 +104,7 @@ fn alternate_row<'a>(
         label,
         Space::new().width(8),
         text(format!("symbol {}", &short[..8]))
-            .size(11)
+            .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),
         small_btn("↑", up, tokens),
@@ -114,7 +118,7 @@ fn alternate_row<'a>(
         ),
     ]
     .align_y(iced::Alignment::Center)
-    .padding([2, 0])
+    .padding([SP.xs, 0.0])
     .into()
 }
 
@@ -129,7 +133,7 @@ fn small_btn<'a>(
         theme_ext::text_secondary(tokens)
     };
     let border = theme_ext::border_color(tokens);
-    let mut btn = button(container(text(label).size(11).color(text_c)).padding([2, 8]));
+    let mut btn = button(container(text(label).size(TS.body).color(text_c)).padding([SP.xs, SP.m]));
     if let Some(m) = msg {
         btn = btn.on_press(m);
     }

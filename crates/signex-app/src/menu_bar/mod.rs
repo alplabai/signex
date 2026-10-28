@@ -18,6 +18,9 @@ use signex_types::theme::ThemeTokens;
 use crate::keymap::{AppCommandId, CompiledKeymap};
 use crate::styles;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Wordmark PNGs pre-rasterised from `signex-logo-{white,black}.svg` at
 /// 1× / 2× / 3× the on-screen 96×31 logical size. Picked at view-time by
 /// window scale factor so the lockup renders 1:1 with device pixels —
@@ -382,7 +385,7 @@ fn shortcut_for(ctx: &MenuContext<'_>, command_id: &str, fallback: &str) -> Opti
 /// secondary (undocked-tab) windows that keep their OS title bar.
 pub fn wrap_plain<'a, M: 'a>(menu: Element<'a, M>, tokens: &ThemeTokens) -> Element<'a, M> {
     container(menu)
-        .padding([0, 8])
+        .padding([0.0, SP.m])
         .width(Length::Fill)
         .style(styles::toolbar_strip(tokens))
         .into()
@@ -452,12 +455,12 @@ fn submenu_item_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage
             .size(MENU_CHEVRON_SIZE)
             .color(mc.text_muted),
     ]
-    .spacing(8)
+    .spacing(SP.m)
     .align_y(iced::Alignment::Center);
     button(r)
         // Match the padding used by `menu_item_btn` so Export sits on the
         // same left/right grid as the normal leaf rows (Save, Open…).
-        .padding([4, 12])
+        .padding([SP.s, SP.l])
         .width(Length::Fill)
         .on_press(MenuMessage::NoOp)
         .style(move |_: &Theme, status: button::Status| {
@@ -483,7 +486,7 @@ fn separator(mc: MenuColors) -> Item<'static, MenuMessage, Theme, iced::Renderer
         container(iced::widget::Space::new())
             .height(1)
             .width(Length::Fill)
-            .padding([2, 8])
+            .padding([SP.xs, SP.m])
             .style(move |_: &Theme| container::Style {
                 background: Some(Background::Color(mc.border)),
                 ..container::Style::default()
@@ -508,7 +511,7 @@ fn menu_item_btn(
             .color(text_c)
             .wrapping(iced::widget::text::Wrapping::None),
     ]
-    .spacing(8)
+    .spacing(SP.m)
     .align_y(iced::Alignment::Center)
     .width(Length::Fill);
 
@@ -523,7 +526,7 @@ fn menu_item_btn(
     }
 
     let hover_bg = mc.hover;
-    let btn = button(r).padding([4, 12]).width(Length::Fill).style(
+    let btn = button(r).padding([SP.s, SP.l]).width(Length::Fill).style(
         move |_: &Theme, status: button::Status| {
             let bg = if enabled {
                 match status {
