@@ -32,14 +32,18 @@ impl Signex {
             FindReplaceMsg::ReplacementChanged(value) => {
                 self.ui_state.find_replace.replacement = value;
             }
-            FindReplaceMsg::SelectResult(index) => {
-                self.ui_state.find_replace.selected_index = Some(index);
-                if let Some(hit) = self.ui_state.find_replace.matches.get(index) {
-                    self.interaction_state.active_canvas_mut().selected = vec![hit.item];
-                    self.interaction_state
-                        .active_canvas_mut()
-                        .clear_overlay_cache();
-                    self.update_selection_info();
+            FindReplaceMsg::SelectResult(index) => self.select_find_result(index),
+            FindReplaceMsg::NextResult | FindReplaceMsg::PreviousResult => {
+                let count = self.ui_state.find_replace.matches.len();
+                if count > 0 {
+                    let forward = matches!(msg, FindReplaceMsg::NextResult);
+                    let next = match self.ui_state.find_replace.selected_index {
+                        Some(i) if forward => (i + 1) % count,
+                        Some(i) => (i + count - 1) % count,
+                        None if forward => 0,
+                        None => count - 1,
+                    };
+                    self.select_find_result(next);
                 }
             }
             FindReplaceMsg::ReplaceCurrent => {
@@ -93,6 +97,17 @@ impl Signex {
                 self.designator_edit_commands(symbol, value)
             }
             target => vec![signex_engine::Command::UpdateText { target, value }],
+        }
+    }
+
+    fn select_find_result(&mut self, index: usize) {
+        self.ui_state.find_replace.selected_index = Some(index);
+        if let Some(hit) = self.ui_state.find_replace.matches.get(index) {
+            self.interaction_state.active_canvas_mut().selected = vec![hit.item];
+            self.interaction_state
+                .active_canvas_mut()
+                .clear_overlay_cache();
+            self.update_selection_info();
         }
     }
 

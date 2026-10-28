@@ -66,6 +66,13 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "cycle_selection_mode" => {
             Message::Selection(selection_request::SelectionRequest::CycleMode)
         }
+        "previous_grid" | "cycle_snap_grid_backward" => Message::Ui(UiMsg::GridCycleBackward),
+        "next_document_tab" => Message::Menu(MenuMessage::NextDocumentTab),
+        "previous_document_tab" => Message::Menu(MenuMessage::PreviousDocumentTab),
+        "find_next" => Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::NextResult),
+        "find_previous" => {
+            Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::PreviousResult)
+        }
         "next_grid" => Message::Ui(UiMsg::GridCycle),
         "cycle_snap_grid_forward" | "open_grid_picker" => Message::Ui(UiMsg::GridPickerOpen),
         "cycle_unit" => Message::Ui(UiMsg::UnitCycled),
@@ -360,19 +367,18 @@ mod tests {
     const UNMAPPED_CATALOG_IDS: &[&str] = &[
         "autoplace_fields", "break_wire", "center_on_cursor", "clear_net_highlighting",
         "close_active_document", "copy_attributes_or_add_vertex", "cycle_fast_grid",
-        "cycle_snap_grid_backward", "cycle_wiring_mode", "drag_keep_connections",
+        "cycle_wiring_mode", "drag_keep_connections",
         "edit_footprint_field",
         "edit_library_symbol", "edit_reference_designator",
         "edit_selected_symbol_in_symbol_editor",
-        "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2", "find_next",
-        "find_previous", "find_similar_objects", "highlight_net_under_cursor",
+        "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2",
+        "find_similar_objects", "highlight_net_under_cursor",
         "highlight_related_net_objects", "import_graphics", "measure_distance",
-        "next_document_tab",
         "next_highlighted_net_item", "open_datasheet",
         "place_design_block",
         "place_global_label", "place_hierarchical_label", "place_junction",
         "place_power_symbol",
-        "previous_document_tab", "previous_grid", "previous_highlighted_net_item",
+        "previous_highlighted_net_item",
         "refresh_view", "repeat_last_item",
         "reset_local_coordinates", "rubber_stamp_copy", "select_expand_connection",
         "select_node_or_connection_item", "sheet_navigation_back", "sheet_navigation_forward",
