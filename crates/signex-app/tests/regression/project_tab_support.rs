@@ -63,7 +63,7 @@ pub fn fixture() -> Fixture {
 
 pub fn open_tab(app: &mut Signex) {
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::OpenProjectOptions(vec![0]),
+        ProjectTreeAction::OpenProjectOptions(vec![app.document_state.projects[0].id.to_string()]),
     )));
 }
 

@@ -405,8 +405,10 @@ fn open_remove_dialog_for_label(app: &mut Signex, label: &str) {
         &mut Vec::new(),
     )
     .unwrap_or_else(|| panic!("tree row {label} must exist"));
+    let key = signex_widgets::tree_view::key_of(&app.document_state.panel_ctx.project_tree, &path)
+        .expect("row key");
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::OpenRemoveDialog(path),
+        ProjectTreeAction::OpenRemoveDialog(key),
     )));
 }
 
@@ -1580,7 +1582,9 @@ fn rename_dialog_follows_its_project_when_another_is_opened_before_it() {
     let mine = app.document_state.projects[0].id;
     // Opened through the real tree action, so the id capture is exercised.
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::OpenProjectRenameDialog(vec![0]),
+        ProjectTreeAction::OpenProjectRenameDialog(vec![
+            app.document_state.projects[0].id.to_string(),
+        ]),
     )));
     let dialog = app.ui_state.rename_dialog.as_mut().expect("dialog opened");
     assert_eq!(dialog.project_id, Some(mine));
