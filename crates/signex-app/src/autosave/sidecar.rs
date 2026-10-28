@@ -46,7 +46,16 @@ fn legacy_path_hash(path: &Path) -> u64 {
 pub fn adopt_legacy(recovery_dir: &Path, document: &Path) -> Result<(), String> {
     let current = sidecar_path(recovery_dir, document);
     let legacy = key_path(recovery_dir, document, legacy_path_hash(document));
-    if legacy == current || !legacy.is_file() || current.exists() {
+    if legacy == current || !legacy.is_file() {
+        return Ok(());
+    }
+    if current.exists() {
+        crate::diagnostics::log_warning(format!(
+            "The recovery copy {} (an older key of {}) was left on disk: a copy already sits \
+             under the current key.",
+            legacy.display(),
+            document.display()
+        ));
         return Ok(());
     }
     std::fs::rename(&legacy, &current).map_err(|e| {

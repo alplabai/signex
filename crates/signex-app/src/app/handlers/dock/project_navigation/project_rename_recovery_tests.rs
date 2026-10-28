@@ -265,10 +265,10 @@ fn a_copy_under_the_pre_1510_key_is_offered_and_carried() {
     std::fs::write(&legacy, b"crash edits").expect("legacy copy");
 
     // Opened under that spelling it is found and moved to the current key.
-    assert!(matches!(
-        recovery::reconcile(&m.recovery, &spelled, SystemTime::now()),
-        Err(_) | Ok(Some(_)) | Ok(None)
-    ));
+    // The document does not exist, so the copy cannot be judged (`Err`), but
+    // the adoption comes first.
+    assert!(recovery::reconcile(&m.recovery, &spelled, SystemTime::now()).is_err());
+    assert!(sidecar::sidecar_path(&m.recovery, &spelled).is_file());
     assert!(!legacy.exists(), "adopted to the current key");
 
     // And a folder rename, told the old folder by that spelling, carries a
@@ -300,4 +300,126 @@ fn an_unreadable_journal_entry_is_left_and_does_not_stop_the_pass() {
         1
     );
     assert!(junk.is_file(), "left in place, not deleted");
+}
+
+/// A closed sheet whose copy sits at the key of `old_doc`, with the move to
+/// `new_doc` journalled and failed, as a locked copy leaves it.
+fn journalled_failed_move(m: &Moved) {
+    sidecar::write(&m.recovery, &m.old_doc, b"crash edits").expect("copy");
+    crate::autosave::pending_move::record(&m.recovery, &m.old_doc, &m.new_doc).expect("entry");
+}
+
+#[test]
+fn a_closed_copy_is_not_moved_by_a_stale_entry_after_the_folder_came_back() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let m = moved(root.path());
+    journalled_failed_move(&m);
+    // Bar goes back to Foo: the sheet is at its old path again.
+    std::fs::create_dir_all(m.old_doc.parent().expect("sub")).expect("sub");
+    std::fs::rename(&m.new_doc, &m.old_doc).expect("back");
+    let (back_from, back_to) = (m.new_dir.clone(), m.old_dir.clone());
+    carry_closed_copies(
+        &m.recovery,
+        &back_from,
+        &back_to,
+        &Default::default(),
+        CaseFold::PRESERVE,
+    );
+
+    assert!(offered_after_restart(&m.recovery, &m.old_doc));
+    assert!(!sidecar::sidecar_path(&m.recovery, &m.new_doc).exists());
+}
+
+#[test]
+fn a_stale_entry_is_dropped_when_no_document_is_at_the_new_path() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let m = moved(root.path());
+    journalled_failed_move(&m);
+    // Never carried back: the new path has no document (its folder is gone).
+    std::fs::remove_file(&m.new_doc).expect("gone");
+    std::fs::create_dir_all(m.old_doc.parent().expect("sub")).expect("sub");
+    std::fs::write(&m.old_doc, b"saved sheet").expect("sheet at the old path");
+
+    assert!(offered_after_restart(&m.recovery, &m.old_doc));
+    assert!(!sidecar::sidecar_path(&m.recovery, &m.new_doc).exists());
+}
+
+#[test]
+fn a_second_folder_rename_carries_a_copy_whose_first_move_is_still_owed() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let m = moved(root.path());
+    journalled_failed_move(&m);
+    // Bar goes on to Baz.
+    let baz = root.path().join("Baz");
+    std::fs::rename(&m.new_dir, &baz).expect("Bar to Baz");
+    let baz_doc = baz.join("sub").join("b.snxsch");
+    carry_closed_copies(
+        &m.recovery,
+        &m.new_dir,
+        &baz,
+        &Default::default(),
+        CaseFold::PRESERVE,
+    );
+
+    assert!(offered_after_restart(&m.recovery, &baz_doc));
+    assert!(!sidecar::sidecar_path(&m.recovery, &m.new_doc).exists());
+}
+
+#[test]
+fn the_folder_rename_journals_closed_copies_before_the_move() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let m = moved(root.path());
+    // Before the move the sheet is still under Foo.
+    std::fs::create_dir_all(m.old_doc.parent().expect("sub")).expect("sub");
+    std::fs::rename(&m.new_doc, &m.old_doc).expect("sheet back under Foo");
+    sidecar::write(&m.recovery, &m.old_doc, b"crash edits").expect("copy");
+
+    let journalled = super::project_rename_fs::journal_closed_copies(
+        &m.recovery,
+        &m.old_dir,
+        &m.new_dir,
+        &Default::default(),
+        CaseFold::PRESERVE,
+    );
+    assert_eq!(journalled.len(), 1);
+    // Crash after the folder moved but before the carry: startup finishes it.
+    std::fs::remove_dir_all(&m.new_dir).expect("empty target");
+    std::fs::rename(&m.old_dir, &m.new_dir).expect("folder moved");
+    assert!(offered_after_restart(&m.recovery, &m.new_doc));
+
+    // A failed folder move takes the entries back.
+    let m2 = moved(tempfile::tempdir().expect("tempdir").keep().as_path());
+    sidecar::write(&m2.recovery, &m2.old_doc, b"x").expect("copy");
+    crate::autosave::pending_move::record(&m2.recovery, &m2.old_doc, &m2.new_doc).expect("entry");
+    super::project_rename_fs::unjournal_closed_copies(
+        &m2.recovery,
+        std::slice::from_ref(&m2.old_doc),
+    );
+    assert!(crate::autosave::pending_move::owed(&m2.recovery).is_empty());
+}
+
+#[test]
+fn startup_hands_a_still_failing_move_to_the_live_state_and_it_finishes_later() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let m = moved(root.path());
+    sidecar::write(&m.recovery, &m.old_doc, b"crash edits").expect("copy");
+    let blocked = sidecar::sidecar_path(&m.recovery, &m.new_doc);
+    std::fs::create_dir_all(blocked.join("blocker")).expect("block");
+    crate::autosave::pending_move::record(&m.recovery, &m.old_doc, &m.new_doc).expect("entry");
+
+    let (mut app, _boot) = crate::app::Signex::new();
+    app.document_state
+        .autosave
+        .set_dir(Some(m.recovery.clone()));
+    app.autosave_finish_pending_moves();
+    assert!(
+        app.document_state.autosave.has_owed_moves(),
+        "the failing move is the live state's now"
+    );
+
+    std::fs::remove_dir_all(&blocked).expect("unblock");
+    let flush = app.autosave_flush_moves();
+    run_task(&mut app, flush);
+    assert_eq!(std::fs::read(&blocked).expect("moved"), b"crash edits");
+    assert!(crate::autosave::pending_move::owed(&m.recovery).is_empty());
 }

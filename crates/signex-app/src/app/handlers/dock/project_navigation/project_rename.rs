@@ -9,7 +9,8 @@
 use std::path::{Path, PathBuf};
 
 use super::project_rename_fs::{
-    carry_closed_copies, folder_collides, folder_target, rename_project_on_disk, same_path_on_disk,
+    carry_closed_copies, folder_collides, folder_target, journal_closed_copies,
+    rename_project_on_disk, same_path_on_disk, unjournal_closed_copies,
 };
 use super::*;
 
@@ -323,7 +324,15 @@ impl Signex {
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    rename_project_on_disk(&run)?;
+                    let journalled = recovery.as_deref().map(|recovery| {
+                        journal_closed_copies(recovery, &run.old_dir, &run.new_dir, &open, fold)
+                    });
+                    if let Err(why) = rename_project_on_disk(&run) {
+                        if let (Some(recovery), Some(journalled)) = (&recovery, &journalled) {
+                            unjournal_closed_copies(recovery, journalled);
+                        }
+                        return Err(why);
+                    }
                     if let Some(recovery) = recovery {
                         carry_closed_copies(&recovery, &run.old_dir, &run.new_dir, &open, fold);
                     }

@@ -59,10 +59,103 @@ pub(crate) fn carry_closed_copies(
     open: &HashSet<PathBuf>,
     fold: CaseFold,
 ) {
-    use crate::autosave::sidecar::{adopt_legacy, rename, sidecar_path};
+    use crate::autosave::sidecar::{rename, sidecar_path};
+    let owed = crate::autosave::pending_move::owed(recovery);
+    for (old, new) in closed_documents(new_dir, old_dir, new_dir, open) {
+        let dst = sidecar_path(recovery, &new);
+        let Some(spelled) = find_copy(recovery, &old, fold, &owed) else {
+            continue;
+        };
+        let src = sidecar_path(recovery, &spelled);
+        let failure = if dst.exists() {
+            Some("a copy already sits under the new name".to_string())
+        } else {
+            rename(recovery, &spelled, &new).err()
+        };
+        if let Some(why) = failure {
+            crate::diagnostics::log_warning(format!(
+                "The recovery copy of {} was not carried to {}: {why}. It was kept as {}.",
+                old.display(),
+                new.display(),
+                src.display()
+            ));
+        }
+    }
+}
+
+/// Before the folder moves: journal the move of every closed document's copy
+/// to where the document is about to be, so a crash or a failing move cannot
+/// strand it. The startup pass applies an entry only once the document is
+/// really at the new path. Returns the spellings journalled, for
+/// [`unjournal_closed_copies`] when the folder move fails.
+pub(crate) fn journal_closed_copies(
+    recovery: &Path,
+    old_dir: &Path,
+    new_dir: &Path,
+    open: &HashSet<PathBuf>,
+    fold: CaseFold,
+) -> Vec<PathBuf> {
+    let mut journalled = Vec::new();
+    let owed = crate::autosave::pending_move::owed(recovery);
+    for (old, new) in closed_documents(old_dir, old_dir, new_dir, open) {
+        let Some(spelled) = find_copy(recovery, &old, fold, &owed) else {
+            continue;
+        };
+        match crate::autosave::pending_move::record(recovery, &spelled, &new) {
+            Ok(()) => journalled.push(spelled),
+            Err(why) => crate::diagnostics::log_warning(why),
+        }
+    }
+    journalled
+}
+
+/// The folder move failed: the copies stay where they are, no move is owed.
+pub(crate) fn unjournal_closed_copies(recovery: &Path, journalled: &[PathBuf]) {
+    for old in journalled {
+        crate::autosave::pending_move::clear(recovery, old);
+    }
+}
+
+/// The spelling of `old` its recovery copy is keyed by, after adopting a copy
+/// from a build before #1510 that sits under the raw key. A copy whose move
+/// to `old` is still owed (`owed`, from the journal) is found at the key it
+/// still sits under, so a second rename carries it on instead of stranding it.
+fn find_copy(
+    recovery: &Path,
+    old: &Path,
+    fold: CaseFold,
+    owed: &[(PathBuf, PathBuf)],
+) -> Option<PathBuf> {
+    use crate::autosave::sidecar::{adopt_legacy, sidecar_path};
+    let direct = copy_sources(old, fold).into_iter().find(|s| {
+        if let Err(why) = adopt_legacy(recovery, s) {
+            crate::diagnostics::log_warning(why);
+        }
+        sidecar_path(recovery, s).is_file()
+    });
+    direct.or_else(|| {
+        let target = sidecar_path(recovery, old);
+        owed.iter()
+            .find(|(source, next)| {
+                sidecar_path(recovery, next) == target && sidecar_path(recovery, source).is_file()
+            })
+            .map(|(source, _)| source.clone())
+    })
+}
+
+/// The autosaved documents found by walking `root` (the old folder before the
+/// move, the new one after), as (path under `old_dir`, path under `new_dir`),
+/// leaving out the open ones.
+fn closed_documents(
+    root: &Path,
+    old_dir: &Path,
+    new_dir: &Path,
+    open: &HashSet<PathBuf>,
+) -> Vec<(PathBuf, PathBuf)> {
+    let mut found = Vec::new();
     let mut dirs = vec![PathBuf::new()];
     while let Some(rel_dir) = dirs.pop() {
-        let Ok(entries) = std::fs::read_dir(new_dir.join(&rel_dir)) else {
+        let Ok(entries) = std::fs::read_dir(root.join(&rel_dir)) else {
             continue;
         };
         for entry in entries.flatten() {
@@ -78,35 +171,12 @@ pub(crate) fn carry_closed_copies(
                 Err(_) => continue,
             }
             let old = old_dir.join(&rel);
-            if !is_autosaved_document(&rel) || open.contains(&old) {
-                continue;
-            }
-            let dst = sidecar_path(recovery, &new_dir.join(&rel));
-            let Some(spelled) = copy_sources(&old, fold).into_iter().find(|s| {
-                // A copy from a build before #1510 sits under the raw key.
-                if let Err(why) = adopt_legacy(recovery, s) {
-                    crate::diagnostics::log_warning(why);
-                }
-                sidecar_path(recovery, s).is_file()
-            }) else {
-                continue;
-            };
-            let src = sidecar_path(recovery, &spelled);
-            let failure = if dst.exists() {
-                Some("a copy already sits under the new name".to_string())
-            } else {
-                rename(recovery, &spelled, &new_dir.join(&rel)).err()
-            };
-            if let Some(why) = failure {
-                crate::diagnostics::log_warning(format!(
-                    "The recovery copy of {} was not carried to {}: {why}. It was kept as {}.",
-                    old.display(),
-                    new_dir.join(&rel).display(),
-                    src.display()
-                ));
+            if is_autosaved_document(&rel) && !open.contains(&old) {
+                found.push((old, new_dir.join(&rel)));
             }
         }
     }
+    found
 }
 
 /// The spellings of `old` a recovery copy may be keyed by: as given, and the
