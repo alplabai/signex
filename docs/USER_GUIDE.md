@@ -356,6 +356,39 @@ parameter yet, so the key has to be set in the row data directly.
 Parts of the dialog are marked in the dialog itself as not active yet (the
 multi-sheet columns and the parameter-matching checkboxes).
 
+### Find and Replace
+
+**Edit ▸ Find** (`Ctrl+F`) and **Find and Replace** (`Ctrl+H` in the Altium
+profile) search the text of labels, text notes, designators and values. The
+**Scope** row chooses how far the search reaches:
+
+- **Sheet** searches the active sheet only.
+- **Project** searches every sheet of the project, including sheets you have
+  not opened. Results are grouped under the sheet they are on. A sheet that
+  cannot be read, or that was written by a newer Signex and is read-only in
+  this build, is not searched; the dialog says so and the Messages panel names
+  it.
+
+Click a result to open its sheet and zoom to the item. `F3` steps to the next
+result and `Shift+F3` to the previous one (in both profiles), wrapping at the
+ends. A sheet placed more than once shows one designator result per placement,
+labelled "placement 2 of 3".
+
+**Replace Current** and **Replace All** replace only the matched text, not the
+whole field, and match without regard to case. In **Project** scope a Replace
+All is one undo step: `Ctrl+Z` on any of the changed sheets reverts every one of
+them together. If one of those sheets was edited afterwards, the undo is
+refused and the Messages panel names the sheet; undo the newer edit first.
+
+A replace never writes a sheet you have not opened. It loads the sheet, changes
+it in memory and leaves it unsaved, like any other edit, so save it (or discard
+it) when you are ready. The Messages panel logs "Replaced N on M sheets" and
+names them. The text replaced is always read from the sheet as it is when you
+press Replace, never from the search results, so an edit made after the search
+is not overwritten with stale text. If you open, save or close a document, or close the
+project, while a project Replace is still reading the sheets, it is cancelled with a
+Messages line and changes nothing; run it again.
+
 ## 9. Run ERC
 
 ERC (electrical rules check) scans the design for wiring mistakes, such as
@@ -527,6 +560,8 @@ Shortcuts used in this guide, in the default Altium profile:
 | Run ERC | `F8` |
 | Annotate | `T A` |
 | Annotate quietly | `Alt+A` |
+| Find / Find and Replace | `Ctrl+F` / `Ctrl+H` |
+| Next / previous Find result | `F3` / `Shift+F3` |
 | Toggle visible grid | `Ctrl+Shift+G` |
 | Keyboard shortcut reference | `F1` |
 | Preferences | `Ctrl+,` |

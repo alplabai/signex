@@ -1,42 +1,10 @@
+use super::{FindReplaceMsg, FindReplaceState, FindScope};
 use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
 use iced::{Background, Border, Element, Length, Theme};
-use signex_engine::TextTarget;
-use signex_types::schematic::SelectedItem;
 use signex_types::theme::ThemeTokens;
 
-#[derive(Debug, Clone)]
-pub struct FindMatch {
-    pub item: SelectedItem,
-    pub target: TextTarget,
-    pub kind_label: String,
-    pub text: String,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct FindReplaceState {
-    pub open: bool,
-    pub replace_mode: bool,
-    pub query: String,
-    pub replacement: String,
-    pub matches: Vec<FindMatch>,
-    pub selected_index: Option<usize>,
-}
-
-#[derive(Debug, Clone)]
-pub enum FindReplaceMsg {
-    Close,
-    QueryChanged(String),
-    ReplacementChanged(String),
-    SelectResult(usize),
-    /// Step to the next / previous match, wrapping at both ends.
-    NextResult,
-    PreviousResult,
-    ReplaceCurrent,
-    ReplaceAll,
-}
-
 const DIALOG_W: f32 = 440.0;
-const DIALOG_H: f32 = 320.0;
+const DIALOG_H: f32 = 400.0;
 
 pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a, FindReplaceMsg> {
     let text_primary = crate::styles::ti(tokens.text);
@@ -75,7 +43,25 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
     .align_y(iced::Alignment::Center)
     .spacing(10);
 
-    let mut form = column![query_row].spacing(10);
+    let scope_button = |label: &'static str, scope: FindScope| {
+        let chosen = state.scope == scope;
+        button(
+            text(label)
+                .size(11)
+                .color(if chosen { accent } else { text_secondary }),
+        )
+        .on_press(FindReplaceMsg::ScopeChanged(scope))
+        .style(crate::styles::menu_item(tokens))
+    };
+    let scope_row = row![
+        text("Scope").size(11).color(text_secondary).width(80),
+        scope_button("Sheet", FindScope::Sheet),
+        scope_button("Project", FindScope::Project),
+    ]
+    .align_y(iced::Alignment::Center)
+    .spacing(10);
+
+    let mut form = column![query_row, scope_row].spacing(10);
     if state.replace_mode {
         form = form.push(
             row![
@@ -90,14 +76,17 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
             .spacing(10),
         );
     }
-    form = form.push(
-        container(
-            text(format!("{} match(es)", state.matches.len()))
-                .size(10)
-                .color(text_secondary),
-        )
-        .padding([2, 0]),
-    );
+    let count = if state.replace_job.is_some() {
+        "Replacing...".to_string()
+    } else if state.scanning {
+        "Searching...".to_string()
+    } else {
+        format!("{} match(es)", state.matches.len())
+    };
+    form = form.push(container(text(count).size(10).color(text_secondary)).padding([2, 0]));
+    if let Some(note) = &state.skipped_note {
+        form = form.push(text(note.clone()).size(10).color(text_secondary));
+    }
 
     let results: Vec<Element<'a, FindReplaceMsg>> = if state.matches.is_empty() {
         vec![
@@ -107,54 +96,71 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
                 .into(),
         ]
     } else {
-        state
-            .matches
-            .iter()
-            .enumerate()
-            .map(|(idx, hit)| {
-                let is_active = state.selected_index == Some(idx);
-                let row_bg = if is_active {
-                    Some(Background::Color(hover))
-                } else {
-                    None
-                };
-                button(
-                    row![
-                        column![
-                            text(hit.kind_label.clone()).size(11).color(text_primary),
-                            text(hit.text.clone()).size(10).color(text_secondary),
-                        ]
-                        .spacing(2)
-                        .width(Length::Fill),
+        let result_row = |idx: usize, hit: &'a super::FindMatch| -> Element<'a, FindReplaceMsg> {
+            let is_active = state.selected_index == Some(idx);
+            let row_bg = if is_active {
+                Some(Background::Color(hover))
+            } else {
+                None
+            };
+            button(
+                row![
+                    column![
+                        text(hit.hit.kind.label()).size(11).color(text_primary),
+                        text(match &hit.placement_label {
+                            Some(label) => format!("{} · {label}", hit.hit.text),
+                            None => hit.hit.text.clone(),
+                        })
+                        .size(10)
+                        .color(text_secondary),
                     ]
+                    .spacing(2)
                     .width(Length::Fill),
-                )
-                .width(Length::Fill)
-                .padding([8, 10])
-                .on_press(FindReplaceMsg::SelectResult(idx))
-                .style(move |_: &Theme, status: button::Status| {
-                    let bg = match status {
-                        button::Status::Hovered => Some(Background::Color(hover)),
-                        _ => row_bg,
-                    };
-                    button::Style {
-                        background: bg,
-                        border: Border {
-                            width: if is_active { 1.0 } else { 0.0 },
-                            radius: 4.0.into(),
-                            color: if is_active { accent } else { border },
-                        },
-                        text_color: text_primary,
-                        ..button::Style::default()
-                    }
-                })
-                .into()
+                ]
+                .width(Length::Fill),
+            )
+            .width(Length::Fill)
+            .padding([8, 10])
+            .on_press(FindReplaceMsg::SelectResult(idx))
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered => Some(Background::Color(hover)),
+                    _ => row_bg,
+                };
+                button::Style {
+                    background: bg,
+                    border: Border {
+                        width: if is_active { 1.0 } else { 0.0 },
+                        radius: 4.0.into(),
+                        color: if is_active { accent } else { border },
+                    },
+                    text_color: text_primary,
+                    ..button::Style::default()
+                }
             })
-            .collect()
+            .into()
+        };
+        let mut rows: Vec<Element<'a, FindReplaceMsg>> = Vec::new();
+        let mut current_sheet: Option<&std::path::Path> = None;
+        for (idx, hit) in state.matches.iter().enumerate() {
+            if state.scope == FindScope::Project && hit.sheet.as_deref() != current_sheet {
+                current_sheet = hit.sheet.as_deref();
+                let name = current_sheet
+                    .and_then(|p| p.file_name())
+                    .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                rows.push(
+                    container(text(name).size(11).color(accent))
+                        .padding([6, 4])
+                        .into(),
+                );
+            }
+            rows.push(result_row(idx, hit));
+        }
+        rows
     };
 
     let replace_current: Element<'a, FindReplaceMsg> =
-        if state.replace_mode && state.selected_index.is_some() {
+        if state.replace_mode && state.selected_index.is_some() && !state.is_busy() {
             button(text("Replace Current").size(11).color(text_primary))
                 .on_press(FindReplaceMsg::ReplaceCurrent)
                 .style(crate::styles::menu_item(tokens))
@@ -166,7 +172,7 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
         };
 
     let replace_all: Element<'a, FindReplaceMsg> =
-        if state.replace_mode && !state.matches.is_empty() {
+        if state.replace_mode && !state.matches.is_empty() && !state.is_busy() {
             button(text("Replace All").size(11).color(text_primary))
                 .on_press(FindReplaceMsg::ReplaceAll)
                 .style(crate::styles::menu_item(tokens))

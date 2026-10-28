@@ -614,6 +614,11 @@ pub struct DocumentState {
     /// project-wide undo steps (an annotate run under "One step for the whole
     /// project"). Never reused.
     pub next_undo_group: u64,
+    /// Bumped whenever a document is opened, saved or closed (and when a
+    /// project closes). A background job that read sheets from disk records it
+    /// first and applies its result only if it is unchanged, so it never
+    /// installs bytes a later open, save or close has already superseded.
+    pub documents_epoch: u64,
     /// Last board revision handed out; see `state/pcb_revision.rs`. Never reused.
     pub next_pcb_revision: u64,
     /// The current board revision per PCB path; a PCB save completion only
@@ -1115,6 +1120,42 @@ impl DocumentState {
         )
     }
 
+    /// Record that the set of open documents, or what they hold on disk,
+    /// changed. See [`DocumentState::documents_epoch`].
+    pub fn note_documents_changed(&mut self) {
+        self.documents_epoch += 1;
+    }
+
+    /// Install `engine` for `path` and move the epoch. Use this for any engine
+    /// a background read could otherwise miss. The active-session swap in
+    /// `load_gateway` and the bulk `engines.retain` calls bypass it; they act
+    /// only on engines that already existed, which a background read never
+    /// replaces from disk.
+    pub fn insert_engine(
+        &mut self,
+        path: PathBuf,
+        engine: signex_engine::Engine,
+    ) -> Option<signex_engine::Engine> {
+        self.note_documents_changed();
+        self.engines.insert(path, engine)
+    }
+
+    /// Drop the engine for `path`; see [`DocumentState::insert_engine`].
+    pub fn remove_engine(&mut self, path: &std::path::Path) -> Option<signex_engine::Engine> {
+        self.note_documents_changed();
+        self.engines.remove(path)
+    }
+
+    /// A `.snxsch` was written or deleted on disk with no engine behind it
+    /// (the unopened-sheet Annotate and Reset Duplicate Designators writes,
+    /// a deleted project file). The writers reach it through
+    /// `autosave_after_disk_write` or `drop_deleted_documents`; a new
+    /// engine-less writer must call one of those or this, so a background read
+    /// of that file can tell it is out of date.
+    pub fn note_document_written_behind_engines(&mut self) {
+        self.note_documents_changed();
+    }
+
     pub fn active_engine(&self) -> Option<&signex_engine::Engine> {
         self.engines.get(self.active_path.as_ref()?)
     }
@@ -1128,6 +1169,7 @@ impl DocumentState {
     /// active tab — the tab's engine is gone, and `active_path` follows
     /// to whichever tab becomes active next.
     pub fn clear_active_engine(&mut self) {
+        self.note_documents_changed();
         if let Some(path) = self.active_path.as_ref().cloned() {
             self.engines.remove(&path);
         }

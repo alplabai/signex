@@ -283,13 +283,23 @@ mod tests {
         run(&mut app, "find_next");
         assert_eq!(app.ui_state.find_replace.selected_index, None, "no matches");
 
+        // Project scope: Sheet scope re-reads the sheet before stepping, which
+        // would replace the matches injected here.
+        app.ui_state.find_replace.scope = crate::find_replace::FindScope::Project;
         let uuid = uuid::Uuid::new_v4();
         app.ui_state.find_replace.matches = (0..3)
             .map(|_| crate::find_replace::FindMatch {
-                item: SelectedItem::new(uuid, SelectedKind::Label),
-                target: signex_engine::TextTarget::Label(uuid),
-                kind_label: String::new(),
-                text: String::new(),
+                sheet: None,
+                hit: signex_engine::FindHit {
+                    kind: signex_engine::FindKind::NetLabel,
+                    item: SelectedItem::new(uuid, SelectedKind::Label),
+                    target: signex_engine::TextTarget::Label(uuid),
+                    text: String::new(),
+                    placement: None,
+                    single: false,
+                    position: signex_types::schematic::Point::new(0.0, 0.0),
+                },
+                placement_label: None,
             })
             .collect();
         run(&mut app, "find_next");

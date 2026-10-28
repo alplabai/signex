@@ -108,7 +108,7 @@ impl Signex {
                     self.document_state.dirty_paths.remove(&new_path);
                 }
 
-                self.document_state.engines.insert(new_path.clone(), engine);
+                self.document_state.insert_engine(new_path.clone(), engine);
                 self.document_state.active_path = Some(new_path);
                 Some(result)
             }
@@ -204,7 +204,7 @@ impl Signex {
                 // The incoming sheet's saved colours replace those
                 // of the engine it stands in for.
                 self.forget_net_colors_of(&p);
-                self.document_state.engines.insert(p.clone(), engine);
+                self.document_state.insert_engine(p.clone(), engine);
                 self.adopt_net_colors_of(&p);
                 self.clear_net_color_steps(&p);
                 self.document_state.active_path = Some(p);

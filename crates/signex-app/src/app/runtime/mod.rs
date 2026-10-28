@@ -3,7 +3,7 @@ use super::*;
 mod body_style_info;
 mod designators;
 #[cfg(test)]
-mod designators_tests;
+pub(crate) mod designators_tests;
 mod footprint_ctx;
 mod footprint_summaries;
 mod history;
