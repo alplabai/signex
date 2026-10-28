@@ -157,8 +157,10 @@ fn sheet() -> SchematicSheet {
     });
     lib.pins.push(pin(5.08, 90.0, "1"));
     lib.pins.push(pin(-5.08, 270.0, "2"));
-    let mut sheet = SchematicSheet::default();
-    sheet.paper_size = "A4".into();
+    let mut sheet = SchematicSheet {
+        paper_size: "A4".into(),
+        ..Default::default()
+    };
     sheet.lib_symbols.insert(lib.id.clone(), lib);
     sheet.symbols.push(Symbol {
         uuid: uuid::Uuid::nil(),
