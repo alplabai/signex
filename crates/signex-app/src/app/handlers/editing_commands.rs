@@ -364,8 +364,10 @@ fn apply_drawing_edit(
         // Rect position / size — preserved by repositioning start/end.
         (SchDrawing::Rect { start, end, .. }, E::RectStartX(v)) => {
             let w_mm = (start.x.max(end.x)) - (start.x.min(end.x));
-            *start = Point::new(v, start.y.min(end.y));
-            *end = Point::new(v + w_mm, start.y.max(end.y));
+            let y0 = start.y.min(end.y);
+            let y1 = start.y.max(end.y);
+            *start = Point::new(v, y0);
+            *end = Point::new(v + w_mm, y1);
         }
         (SchDrawing::Rect { start, end, .. }, E::RectStartY(v)) => {
             let h_mm = (end.y - start.y).abs();
@@ -466,3 +468,5 @@ mod net_color_persist;
 mod net_color_persist_tests;
 #[cfg(test)]
 mod net_color_undo_order_tests;
+#[cfg(test)]
+mod rect_edit_tests;

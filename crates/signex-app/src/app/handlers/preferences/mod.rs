@@ -1,6 +1,9 @@
 use iced::Task;
 
 mod keymap;
+mod profiles;
+#[cfg(test)]
+mod profiles_tests;
 
 use super::super::*;
 
@@ -48,7 +51,8 @@ impl Signex {
         // Open Preferences as a separate OS window so the user can move
         // it around / drag it onto a second monitor. Same pattern as
         // Print Preview, BOM Preview, Annotate, ERC.
-        self.handle_detach_modal(super::super::state::ModalId::Preferences)
+        let detach = self.handle_detach_modal(super::super::state::ModalId::Preferences);
+        Task::batch([detach, self.profiles_pane_task()])
     }
 
     /// App-level close request (Esc ladder, `PreferencesMsg::Close`). Same
@@ -97,8 +101,6 @@ impl Signex {
         self.ui_state.preferences_draft_symbol_grid_style = self.ui_state.symbol_grid_style;
         self.ui_state.preferences_draft_symbol_pin_selection = self.ui_state.symbol_pin_selection;
         self.ui_state.preferences_draft_zoom_step_percent = self.ui_state.zoom_step_percent;
-        self.ui_state.preferences_draft_erc_severity = self.ui_state.erc_severity_override.clone();
-        self.ui_state.preferences_seed_erc_severity = self.ui_state.erc_severity_override.clone();
         self.ui_state.preferences_draft_ui_scale_percent =
             crate::ui_scale::scale_to_percent(self.ui_state.ui_scale);
         // Fresh working copy of the live profile set for the Keyboard
@@ -110,6 +112,7 @@ impl Signex {
         // The Appearance status line is transient feedback about one
         // export, not a draft — a fresh dialog (or a Discard) must not
         // reopen showing the last session's result.
+        self.ui_state.profile_manager.clear_transient();
         self.ui_state.preferences_theme_status.clear();
         // Same rule for the prefs-file recovery result — one action's
         // outcome, not a draft.
@@ -127,38 +130,6 @@ impl Signex {
         self.refresh_keymap_backup();
         self.ui_state.preferences_dirty = false;
         self.ui_state.preferences_dirty_sticky = false;
-    }
-
-    /// Apply only the rules the user changed in Preferences (draft vs the
-    /// seed snapshot, Reset's clears included) onto the CURRENT live map, so
-    /// an override the ERC dialog wrote while Preferences was open survives.
-    fn commit_erc_severity_draft(&mut self) {
-        let ui = &mut self.ui_state;
-        let mut changed = false;
-        // Walk the maps' own keys, not `RuleKind::ALL`, so a rule missing
-        // from that list can never have its edit dropped.
-        let rules: std::collections::HashSet<signex_erc::RuleKind> = ui
-            .preferences_draft_erc_severity
-            .keys()
-            .chain(ui.preferences_seed_erc_severity.keys())
-            .copied()
-            .collect();
-        for rule in rules {
-            let draft = ui.preferences_draft_erc_severity.get(&rule).copied();
-            if draft == ui.preferences_seed_erc_severity.get(&rule).copied() {
-                continue;
-            }
-            match draft {
-                Some(severity) => ui.erc_severity_override.insert(rule, severity),
-                None => ui.erc_severity_override.remove(&rule),
-            };
-            changed = true;
-        }
-        if changed {
-            crate::fonts::write_erc_severity_overrides(&ui.erc_severity_override);
-        }
-        ui.preferences_draft_erc_severity = ui.erc_severity_override.clone();
-        ui.preferences_seed_erc_severity = ui.erc_severity_override.clone();
     }
 
     /// Re-check whether `keyboard_shortcuts.toml.bak` is on disk (#603).
@@ -201,7 +172,7 @@ impl Signex {
         nav: crate::preferences::PrefNav,
     ) -> Task<Message> {
         self.ui_state.preferences_nav = nav;
-        Task::none()
+        self.profiles_pane_task()
     }
 
     /// Revert every Preferences live-preview draft back to its saved value and
@@ -255,6 +226,7 @@ impl Signex {
             PrefMsg::Noop => {}
             PrefMsg::Nav(nav) => {
                 self.ui_state.preferences_nav = nav;
+                return self.profiles_pane_task();
             }
             PrefMsg::Close => {
                 // One close path for every dismiss route (X button here,
@@ -340,7 +312,6 @@ impl Signex {
                 crate::fonts::write_symbol_pin_selection_pref(self.ui_state.symbol_pin_selection);
                 crate::fonts::write_zoom_step_percent_pref(self.ui_state.zoom_step_percent);
                 crate::fonts::write_ui_scale_pref(self.ui_state.ui_scale);
-                self.commit_erc_severity_draft();
                 // Component classes — keep entries with non-empty keys
                 // and labels, dedupe by key (last write wins) so the
                 // dropdown never shows blanks or duplicates.
@@ -655,19 +626,7 @@ impl Signex {
                     }
                 }
             }
-            PrefMsg::DraftErcSeverity(rule, severity) => {
-                // Verbatim, like the ERC dialog: a rule that grades its own
-                // findings must be flattenable to its default level too.
-                // Draft only: Save commits and persists, Discard drops it.
-                self.ui_state
-                    .preferences_draft_erc_severity
-                    .insert(rule, rule.normalize_override(severity));
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::ResetErcSeverities => {
-                self.ui_state.preferences_draft_erc_severity.clear();
-                self.recompute_preferences_dirty();
-            }
+            PrefMsg::Profiles(msg) => return self.handle_profiles_message(msg),
             PrefMsg::ResetPrefsFile => {
                 // Never move a healthy file aside. The user may have
                 // repaired it by hand between this banner being painted
@@ -751,7 +710,7 @@ impl Signex {
                     },
                 }
                 // No draft was touched, so the dirty flag is not
-                // recomputed — same as `ResetErcSeverities` above.
+                // recomputed.
             }
             PrefMsg::LibrarySettings(settings_msg) => {
                 // Route the Distributor APIs panel's SettingsMsg back
