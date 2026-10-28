@@ -130,6 +130,7 @@ fn confirm_runs_off_the_ui_thread_and_the_result_closes_the_dialog() {
             pending_libraries: Default::default(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         });
 
     let task = app.handle_enable_version_control_confirm();

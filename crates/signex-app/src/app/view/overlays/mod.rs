@@ -257,8 +257,7 @@ impl Signex {
         // lays the input out with, so the dropdown reads as an extension
         // of the input rather than a floating popup that happens to be
         // nearby — including after a resize shrinks the bar.
-        let (ww, _wh) = self.ui_state.window_size;
-        let (card_x, card_w) = super::chrome_search_bar_geometry(ww);
+        let (card_x, card_w) = self.chrome_search_bar_geometry();
         let card = container(column![body, footer])
             .width(card_w)
             .max_height(360.0)

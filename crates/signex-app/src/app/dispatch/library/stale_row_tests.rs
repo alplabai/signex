@@ -30,6 +30,7 @@ fn row_at(revision: u64) -> ComponentRow {
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),

@@ -26,6 +26,7 @@ fn row(pn: &str) -> ComponentRow {
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(Uuid::nil(), Uuid::nil()),

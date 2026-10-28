@@ -79,7 +79,6 @@ impl SnxTable for SchComponentRow {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SchWireRow {
     pub uuid: Uuid,
-    pub net: String,
     pub start_x: i64,
     pub start_y: i64,
     pub end_x: i64,
@@ -92,7 +91,6 @@ impl SnxTable for SchWireRow {
     fn columns() -> &'static [&'static str] {
         &[
             "uuid",
-            "net",
             "start_x",
             "start_y",
             "end_x",
@@ -104,7 +102,6 @@ impl SnxTable for SchWireRow {
     fn to_row(&self) -> Result<Vec<String>, NonFiniteField> {
         Ok(vec![
             self.uuid.to_string(),
-            self.net.clone(),
             self.start_x.to_string(),
             self.start_y.to_string(),
             self.end_x.to_string(),
@@ -118,12 +115,11 @@ impl SnxTable for SchWireRow {
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
         Ok(SchWireRow {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
-            net: values[1].to_string(),
-            start_x: parse_i64(values[2], block, row, "start_x")?,
-            start_y: parse_i64(values[3], block, row, "start_y")?,
-            end_x: parse_i64(values[4], block, row, "end_x")?,
-            end_y: parse_i64(values[5], block, row, "end_y")?,
-            stroke_width: parse_f64(values[6], block, row, "stroke_width")?,
+            start_x: parse_i64(values[1], block, row, "start_x")?,
+            start_y: parse_i64(values[2], block, row, "start_y")?,
+            end_x: parse_i64(values[3], block, row, "end_x")?,
+            end_y: parse_i64(values[4], block, row, "end_y")?,
+            stroke_width: parse_f64(values[5], block, row, "stroke_width")?,
             unknown_columns: UnknownColumns::default(),
         })
     }
@@ -362,7 +358,6 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
 pub(in crate::format) fn wire_to_row(w: &Wire) -> Result<SchWireRow, NonFiniteField> {
     Ok(SchWireRow {
         uuid: w.uuid,
-        net: String::new(),
         start_x: mm_to_nm(w.start.x, "start_x")?,
         start_y: mm_to_nm(w.start.y, "start_y")?,
         end_x: mm_to_nm(w.end.x, "end_x")?,

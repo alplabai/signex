@@ -80,7 +80,7 @@ impl Signex {
         path: std::path::PathBuf,
         from_tree: bool,
     ) -> anyhow::Result<Task<Message>> {
-        let path = self.resolve_held_spelling(path);
+        let path = self.resolve_held_spelling_now(path);
         // Already open? Just activate the existing tab.
         if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
             if idx != self.document_state.active_tab {

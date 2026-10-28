@@ -414,6 +414,7 @@ fn project_with(classes: Vec<NetClass>) -> LoadedProject {
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     }
 }
 
