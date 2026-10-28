@@ -71,13 +71,12 @@ pub fn view_context_menu<'a>(
     };
 
     let mut items: Vec<Element<'a, LibraryMessage>> = Vec::new();
-    // Shortcut hints resolved from the active keymap profile, with the
-    // historic fixed labels as fallbacks.
-    let select_all_shortcut = shortcut_label(keymap, "select_all", "Ctrl+A");
-    let unselect_all_shortcut = shortcut_label(keymap, "unselect_all", "Ctrl+Shift+A");
-    let cut_shortcut = shortcut_label(keymap, "cut", "Ctrl+X");
-    let copy_shortcut = shortcut_label(keymap, "copy", "Ctrl+C");
-    let paste_shortcut = shortcut_label(keymap, "paste", "Ctrl+V");
+    // Shortcut hints resolved from the active keymap profile.
+    let select_all_shortcut = shortcut_label(keymap, "select_all");
+    let unselect_all_shortcut = shortcut_label(keymap, "unselect_all");
+    let cut_shortcut = shortcut_label(keymap, "cut");
+    let copy_shortcut = shortcut_label(keymap, "copy");
+    let paste_shortcut = shortcut_label(keymap, "paste");
 
     match menu_state.target {
         FootprintContextTarget::Empty => {
@@ -344,13 +343,13 @@ pub fn view_context_menu<'a>(
     Some(card.into())
 }
 
-/// Resolve a keymap command id to its label under the active profile,
-/// falling back to `fallback` when the command is unbound.
-fn shortcut_label(keymap: &CompiledKeymap, command_id: &str, fallback: &str) -> String {
+/// A command's label under the active profile; empty (no hint) when the
+/// profile does not bind it or the user unbound it (#1378).
+pub(super) fn shortcut_label(keymap: &CompiledKeymap, command_id: &str) -> String {
     AppCommandId::new(command_id)
         .ok()
         .and_then(|command| keymap.shortcut_label(&command))
-        .unwrap_or_else(|| fallback.to_string())
+        .unwrap_or_default()
 }
 
 // ── helpers ─────────────────────────────────────────────────────────
@@ -506,4 +505,49 @@ fn separator<'a>(tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
             ..container::Style::default()
         })
         .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shortcut_label;
+    use crate::keymap::{
+        AppCommandId, CompiledKeymap, ShortcutBinding, ShortcutBindingAction, ShortcutContext,
+        ShortcutProfile, ShortcutProfileKind, ShortcutTrigger,
+    };
+
+    fn keymap_with(bindings: Vec<(ShortcutBindingAction, &str)>) -> CompiledKeymap {
+        CompiledKeymap::compile(&ShortcutProfile {
+            id: "t".to_string(),
+            name: "T".to_string(),
+            kind: ShortcutProfileKind::Custom,
+            schema_version: 1,
+            description: None,
+            base_profile: None,
+            bindings: bindings
+                .into_iter()
+                .map(|(action, trigger)| ShortcutBinding {
+                    action,
+                    context: ShortcutContext::Global,
+                    triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+                })
+                .collect(),
+        })
+    }
+
+    // #1378: an unbound or unbound-by-profile command advertises no key.
+    #[test]
+    fn a_context_menu_hint_follows_the_keymap_not_a_fixed_fallback() {
+        let copy = AppCommandId::new("copy").unwrap();
+        let keymap = keymap_with(vec![
+            (ShortcutBindingAction::Command(copy.clone()), "Ctrl+C"),
+            (ShortcutBindingAction::Unbind(copy), "Ctrl+C"),
+            (
+                ShortcutBindingAction::Command(AppCommandId::new("paste").unwrap()),
+                "F4",
+            ),
+        ]);
+        assert_eq!(shortcut_label(&keymap, "copy"), "", "unbound by the user");
+        assert_eq!(shortcut_label(&keymap, "cut"), "", "never bound");
+        assert_eq!(shortcut_label(&keymap, "paste"), "F4");
+    }
 }
