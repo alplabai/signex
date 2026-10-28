@@ -191,6 +191,10 @@ pub struct TantivySearchIndex {
     reader: IndexReader,
     /// `None` only after `Drop` has taken the writer to wind it down.
     writer: Mutex<Option<IndexWriter>>,
+    /// Ops staged since the last successful commit, so a commit that fails on a
+    /// transient sharing violation can restart the writer and replay them
+    /// instead of silently losing the rows. Lock order: `writer`, then `pending`.
+    pending: Mutex<Vec<(Term, TantivyDocument)>>,
 }
 
 impl TantivySearchIndex {
@@ -233,6 +237,7 @@ impl TantivySearchIndex {
             fields,
             reader,
             writer: Mutex::new(Some(writer)),
+            pending: Mutex::new(Vec::new()),
         })
     }
 
@@ -273,6 +278,14 @@ impl TantivySearchIndex {
         Self::open(path)
     }
 
+    fn pending_ops(
+        &self,
+    ) -> Result<MutexGuard<'_, Vec<(Term, TantivyDocument)>>, TantivyIndexError> {
+        self.pending
+            .lock()
+            .map_err(|_| TantivyIndexError::Internal("pending-ops mutex poisoned".into()))
+    }
+
     fn writer(&self) -> Result<MutexGuard<'_, Option<IndexWriter>>, TantivyIndexError> {
         // M8: a poisoned mutex is an internal failure, not a malformed query —
         // route it through `Internal` so operator dashboards can distinguish
@@ -301,7 +314,7 @@ impl TantivySearchIndex {
         // Delete any existing doc with this row_id; harmless on first insert.
         let uuid_str = row.row_id.to_string();
         let term = Term::from_field_text(self.fields.uuid, &uuid_str);
-        writer.delete_term(term);
+        writer.delete_term(term.clone());
 
         // The row carries its own `class` (resistor / capacitor / …); we
         // surface that as the `category` facet so existing UI code that
@@ -360,7 +373,8 @@ impl TantivySearchIndex {
             doc.add_object(self.fields.parameters, json_blob);
         }
 
-        writer.add_document(doc)?;
+        writer.add_document(doc.clone())?;
+        self.pending_ops()?.push((term, doc));
         Ok(())
     }
 
@@ -368,10 +382,10 @@ impl TantivySearchIndex {
     pub fn commit(&self) -> Result<(), TantivyIndexError> {
         let mut guard = self.writer()?;
         let writer = guard.as_mut().ok_or_else(writer_closed)?;
-        // A just-closed index on Windows can still have its segment/meta
-        // files held briefly by the previous writer's merge threads, antivirus
-        // or the search indexer; the commit then fails with a transient sharing
-        // violation. Retry a few times with a short backoff, then give up.
+        // On Windows a segment file can fail to open for write with a transient
+        // sharing violation (leftover handles, antivirus). Tantivy surfaces it
+        // at commit and drops that batch with it, so restart the writer, replay
+        // the staged ops, and retry a few times with a short backoff.
         let mut attempt = 0;
         while let Err(e) = writer.commit() {
             attempt += 1;
@@ -379,7 +393,13 @@ impl TantivySearchIndex {
                 return Err(e.into());
             }
             std::thread::sleep(std::time::Duration::from_millis(10 * attempt as u64));
+            writer.rollback()?;
+            for (term, doc) in self.pending_ops()?.iter() {
+                writer.delete_term(term.clone());
+                writer.add_document(doc.clone())?;
+            }
         }
+        self.pending_ops()?.clear();
         // Pick up the new commit immediately.
         self.reader.reload()?;
         Ok(())
@@ -752,16 +772,16 @@ fn writer_closed() -> TantivyIndexError {
 /// Windows `ERROR_ACCESS_DENIED` (5) / `ERROR_SHARING_VIOLATION` (32) surfaced
 /// as an I/O error. Always false off Windows, where these are real errors.
 fn is_transient_sharing_violation(e: &TantivyError) -> bool {
+    use tantivy::directory::error::OpenWriteError;
     if !cfg!(windows) {
         return false;
     }
-    match e {
-        TantivyError::IoError(io) => {
-            io.kind() == std::io::ErrorKind::PermissionDenied
-                || matches!(io.raw_os_error(), Some(5 | 32))
-        }
-        _ => false,
-    }
+    let io = match e {
+        TantivyError::IoError(io) => io,
+        TantivyError::OpenWriteError(OpenWriteError::IoError { io_error, .. }) => io_error,
+        _ => return false,
+    };
+    io.kind() == std::io::ErrorKind::PermissionDenied || matches!(io.raw_os_error(), Some(5 | 32))
 }
 
 /// Re-parse `text` as a quoted phrase over the same default fields, so
