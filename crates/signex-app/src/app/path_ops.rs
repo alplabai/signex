@@ -94,6 +94,16 @@ impl PendingPathOps {
         self.ops.iter().any(|op| op.id == id)
     }
 
+    /// A path being deleted at or under `dir`, if any.
+    pub fn delete_under(&self, dir: &Path) -> Option<PathBuf> {
+        self.ops
+            .iter()
+            .filter(|op| op.kind == PathOpKind::Delete)
+            .flat_map(|op| op.paths.iter().map(move |p| (p, op.fold)))
+            .find(|(p, fold)| path_is_under(p, dir, *fold))
+            .map(|(p, _)| p.clone())
+    }
+
     /// Drop a registration when its operation is completely finished.
     /// Returns whether it was registered.
     pub fn finish(&mut self, id: PathOpId) -> bool {
@@ -201,6 +211,37 @@ impl crate::app::Signex {
     pub(crate) fn refuse_while_path_op(&self, path: &Path, outcome: &str) -> anyhow::Result<()> {
         match self.document_state.pending_path_ops.blocking_write(path) {
             Some(conflict) => anyhow::bail!(refusal(&conflict, path, outcome)),
+            None => Ok(()),
+        }
+    }
+
+    /// Why the project at `project_id` cannot be saved or closed now, when a
+    /// delete under its folder is pending: its entry is pruned when the delete
+    /// finishes, and the project file would meanwhile still list the file.
+    pub(crate) fn refuse_project_while_delete_pending(
+        &self,
+        project_id: crate::app::state::ProjectId,
+        outcome: &str,
+    ) -> anyhow::Result<()> {
+        let Some(project) = self
+            .document_state
+            .projects
+            .iter()
+            .find(|p| p.id == project_id)
+        else {
+            return Ok(());
+        };
+        match self
+            .document_state
+            .pending_path_ops
+            .delete_under(project.dir())
+        {
+            Some(path) => anyhow::bail!(
+                "A delete of {} is still running, so the project {} was not {outcome}. \
+                 Try again once it finishes.",
+                leaf(&path),
+                project.data.name
+            ),
             None => Ok(()),
         }
     }

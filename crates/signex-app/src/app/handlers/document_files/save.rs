@@ -240,6 +240,7 @@ impl Signex {
             None => anyhow::bail!("project {project_id} is no longer loaded"),
         };
         self.refuse_while_path_op(&project_path, "saved")?;
+        self.refuse_project_while_delete_pending(project_id, "saved")?;
         // The write would race the folder move: it can land in the old
         // folder before the re-key and never reach the new one.
         self.refuse_while_project_moves(&project_path, "save")?;

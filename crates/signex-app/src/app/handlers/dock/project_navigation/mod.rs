@@ -18,6 +18,8 @@ mod exclude_dirty_tests;
 #[cfg(test)]
 mod library_row_tests;
 mod open_document;
+#[cfg(test)]
+mod path_op_guard_tests;
 mod project_actions;
 mod project_rename;
 mod project_rename_fs;

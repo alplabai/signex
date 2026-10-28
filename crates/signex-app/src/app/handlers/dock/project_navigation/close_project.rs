@@ -31,6 +31,12 @@ impl Signex {
         let Some(project_id) = self.document_state.projects.get(project_idx).map(|p| p.id) else {
             return Task::none();
         };
+        if let Err(refusal) = self.refuse_project_while_delete_pending(project_id, "closed") {
+            crate::diagnostics::log_warning(refusal.to_string());
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
+            return Task::none();
+        }
         self.spawn_close_refs_resolve(project_id)
     }
 
@@ -181,6 +187,13 @@ impl Signex {
             return Task::none();
         };
         let target_id = project_id;
+        if let Err(refusal) = self.refuse_project_while_delete_pending(project_id, "closed") {
+            crate::diagnostics::log_warning(refusal.to_string());
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
+            self.refresh_panel_ctx();
+            return Task::none();
+        }
 
         // Reads and restores still running for this project's files must not
         // open or rewrite anything once it is gone (#859).
