@@ -24,6 +24,11 @@ pub struct AnnotationSettings {
     pub unknown: UnknownJson,
 }
 
+/// A project's annotation state taken for undo: the readable settings and
+/// any unreadable section kept verbatim. Opaque; compare or restore only.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AnnotationState(Option<AnnotationSettings>, Option<Value>);
+
 /// Interpret an `annotation` section, or keep it verbatim for re-save when
 /// this build cannot: an unknown standard string, or a value of another
 /// shape. The project opens either way; the section is just not applied.
@@ -54,6 +59,28 @@ impl ProjectData {
     /// kept verbatim for re-save, not applied.
     pub fn has_unreadable_annotation(&self) -> bool {
         self.annotation.is_none() && self.unknown.get(ANNOTATION_KEY).is_some()
+    }
+
+    /// The annotation state as one value: the readable settings and any
+    /// unreadable section kept verbatim. For undo snapshots.
+    pub fn annotation_state(&self) -> AnnotationState {
+        AnnotationState(
+            self.annotation.clone(),
+            self.unknown.get(ANNOTATION_KEY).cloned(),
+        )
+    }
+
+    /// Put back a value taken with [`Self::annotation_state`], byte for byte.
+    pub fn restore_annotation_state(&mut self, state: AnnotationState) {
+        self.annotation = state.0;
+        match state.1 {
+            Some(raw) => {
+                self.unknown.insert(ANNOTATION_KEY.into(), raw);
+            }
+            None => {
+                self.unknown.remove(ANNOTATION_KEY);
+            }
+        }
     }
 
     /// Set (or, with `None`, remove) the designator standard. An unreadable

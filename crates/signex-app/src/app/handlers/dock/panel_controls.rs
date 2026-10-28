@@ -153,12 +153,6 @@ impl Signex {
             crate::panels::PanelMsg::PropertiesTab(index) => {
                 self.document_state.panel_ctx.properties_tab = *index;
             }
-            crate::panels::PanelMsg::ComponentFilter(filter) => {
-                self.document_state.panel_ctx.component_filter = filter.clone();
-                // Persisted debounced and off-thread so the next session
-                // opens the panel with the same filter (#859).
-                follow = self.persist_component_filter_soon(filter);
-            }
             crate::panels::PanelMsg::ToggleSection(key) => {
                 let key = key.clone();
                 if !self
@@ -508,12 +502,6 @@ impl Signex {
             crate::panels::PanelMsg::SetSheetColor(color) => {
                 self.document_state.panel_ctx.sheet_color = *color;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
-            }
-            crate::panels::PanelMsg::DragComponentsSplit => {
-                self.interaction_state.dragging = Some(DragTarget::ComponentsSplit);
-                self.interaction_state.drag_start_pos = None;
-                self.interaction_state.drag_start_size =
-                    self.document_state.panel_ctx.components_split;
             }
             crate::panels::PanelMsg::ToggleSelectionFilter(filter) => {
                 follow = self.handle_active_bar_filter_toggle(*filter);

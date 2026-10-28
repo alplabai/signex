@@ -63,19 +63,6 @@ pub struct PanelContext {
     pub properties_tab: usize, // 0=General, 1=Parameters
     /// Net Classes section of the General tab (#1042).
     pub net_classes: NetClassPanel,
-    // Components panel
-    pub standard_libraries: Vec<String>,
-    pub active_library: Option<String>,
-    /// Browser entries from the selected library or aggregated catalog.
-    pub library_symbols: Vec<LibrarySymbolEntry>,
-    /// Selected component lib_id.
-    pub selected_component: Option<String>,
-    /// (pin_number, pin_name, pin_type) for the selected component.
-    pub selected_pins: Vec<(String, String, String)>,
-    /// Full LibSymbol data for canvas preview.
-    pub selected_lib_symbol: Option<signex_types::schematic::LibSymbol>,
-    /// Height in px for the Components list section (details gets the rest).
-    pub components_split: f32,
     /// Persistent project tree — toggle state survives across renders.
     pub project_tree: Vec<TreeNode>,
     /// How many times `project_tree` has been rebuilt; `refresh_panel_ctx`
@@ -119,6 +106,8 @@ pub struct PanelContext {
     /// drawing is selected. Feeds the mini preview canvas in the
     /// Properties panel so the shape renders true-to-life.
     pub selected_drawing: Option<signex_types::schematic::SchDrawing>,
+    /// Where that drawing sits against the circuit (#1583).
+    pub selected_drawing_placement: signex_types::schematic::DrawingPlacement,
     /// The live ChildSheet matching `selected_uuid` when a single
     /// hierarchical sheet is selected. Powers the editable
     /// border/fill colour pickers and stroke-width input.
@@ -162,8 +151,6 @@ pub struct PanelContext {
     pub numeric_draft: Option<super::NumericDraft>,
     /// The sheet `title_block` and the shown drafts belong to.
     pub title_block_sheet: Option<std::path::PathBuf>,
-    /// Component search filter text.
-    pub component_filter: String,
     /// Which sections are collapsed (by section name key).
     pub collapsed_sections: CollapsedSections,
     /// Pre-placement configuration (shown when Tab pressed during placement tool).

@@ -281,6 +281,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         unknown: _,
         // Loaded baseline only; the app owns the live overrides and no command edits them.
         net_colors: _,
+        drawing_placements,
         paper_size,
         font_family,
         root_sheet_page,
@@ -323,7 +324,10 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         differ(bus_entries, &b.bus_entries),
         DocumentPatch::BUS_ENTRIES,
     );
-    flag(differ(drawings, &b.drawings), DocumentPatch::DRAWINGS);
+    flag(
+        differ(drawings, &b.drawings) || differ(drawing_placements, &b.drawing_placements),
+        DocumentPatch::DRAWINGS,
+    );
     flag(
         differ(no_erc_directives, &b.no_erc_directives),
         DocumentPatch::NO_ERC_DIRECTIVES,
@@ -359,7 +363,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 43] = [
+const ALL_KINDS: [CommandKind; 46] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -382,6 +386,7 @@ const ALL_KINDS: [CommandKind; 43] = [
     CommandKind::RegisterLibSymbol,
     CommandKind::ReplaceLibSymbol,
     CommandKind::PlaceChildSheet,
+    CommandKind::PlaceSheetPin,
     CommandKind::PlaceJunction,
     CommandKind::PlaceNoConnect,
     CommandKind::PlaceNoErcDirective,
@@ -402,6 +407,8 @@ const ALL_KINDS: [CommandKind; 43] = [
     CommandKind::SetTextFontFamily,
     CommandKind::SetSymbolDesignatorIn,
     CommandKind::SetDocumentFontFamily,
+    CommandKind::ArrangeDrawings,
+    CommandKind::SetDrawingPlacement,
     CommandKind::MoveEach,
 ];
 
@@ -432,6 +439,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::RegisterLibSymbol
         | CommandKind::ReplaceLibSymbol
         | CommandKind::PlaceChildSheet
+        | CommandKind::PlaceSheetPin
         | CommandKind::PlaceJunction
         | CommandKind::PlaceNoConnect
         | CommandKind::PlaceNoErcDirective
@@ -452,6 +460,8 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetTextFontFamily
         | CommandKind::SetSymbolDesignatorIn
         | CommandKind::SetDocumentFontFamily
+        | CommandKind::ArrangeDrawings
+        | CommandKind::SetDrawingPlacement
         | CommandKind::MoveEach => {}
     }
 }
@@ -744,6 +754,21 @@ fn samples() -> Vec<(String, Command)> {
         },
     );
     add(
+        "PlaceSheetPin",
+        Command::PlaceSheetPin {
+            sheet_id: uid(CHILD, 1),
+            pin: SheetPin {
+                uuid: uid(SHEET_PIN, NEW),
+                name: "NEWPIN".into(),
+                direction: "output".into(),
+                position: pt(70.0, 40.0),
+                rotation: 180.0,
+                auto_generated: false,
+                user_moved: false,
+            },
+        },
+    );
+    add(
         "PlaceJunction",
         Command::PlaceJunction {
             junction: Junction {
@@ -896,6 +921,20 @@ fn samples() -> Vec<(String, Command)> {
         Command::SetTextFontFamily {
             target: crate::TextTarget::Label(uid(LABEL, 1)),
             font_family: Some("Fira Mono".into()),
+        },
+    );
+    add(
+        "ArrangeDrawings",
+        Command::ArrangeDrawings {
+            ids: vec![uid(DRAWING, 1)],
+            arrange: crate::DrawingArrange::ToFront,
+        },
+    );
+    add(
+        "SetDrawingPlacement",
+        Command::SetDrawingPlacement {
+            ids: vec![uid(DRAWING, 1)],
+            placement: signex_types::schematic::DrawingPlacement::Above,
         },
     );
     add(

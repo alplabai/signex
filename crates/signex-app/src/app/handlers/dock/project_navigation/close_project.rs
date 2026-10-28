@@ -237,7 +237,7 @@ impl Signex {
                 .collect();
             for path in sweep {
                 self.forget_net_colors_of(&path);
-                self.document_state.engines.remove(&path);
+                self.document_state.remove_engine(&path);
             }
             self.cancel_placement_session_if_sheet_gone();
         }
@@ -264,6 +264,8 @@ impl Signex {
         // project — the one that now sits in the same slot (was
         // immediately after the closed one), else the previous slot,
         // else None when the workspace is empty.
+        self.document_state.note_documents_changed();
+        self.cancel_replace_job("the project was closed");
         self.document_state.projects.retain(|p| p.id != target_id);
         self.document_state.net_class_history.remove(&target_id);
         self.document_state.project_tabs.remove(&target_id);
@@ -581,7 +583,7 @@ impl Signex {
                     self.document_state
                         .document_saves
                         .forget_where(|p| p == path);
-                    self.document_state.engines.remove(path);
+                    self.document_state.remove_engine(path);
                     self.document_state.dirty_paths.remove(path);
                     if let Some(tab) = self
                         .document_state
@@ -644,7 +646,11 @@ impl Signex {
         // Guard against a second close request stacking a duplicate
         // modal while the first is still up.
         if self.ui_state.app_quit_confirm.is_some() {
-            return Task::none();
+            // A second quit request raises the open confirm; it never stacks
+            // another or exits.
+            return self
+                .detached_window_of(crate::app::state::ModalId::AppQuitConfirm)
+                .map_or_else(Task::none, iced::window::gain_focus);
         }
         let dirty_rows = self.library.dirty_editors();
         if self.document_state.dirty_paths.is_empty() && dirty_rows.is_empty() {
@@ -657,6 +663,7 @@ impl Signex {
             dirty_paths: dirty,
             dirty_rows,
         });
+        self.ui_state.quit_confirm_refreshed = false;
         Task::none()
     }
 
@@ -686,6 +693,29 @@ impl Signex {
         match choice {
             ProjectCloseChoice::Cancel => Task::none(),
             ProjectCloseChoice::DiscardAll => {
+                // Discard only what the user was shown. An edit made since
+                // (a window that was not locked, a route nobody thought of)
+                // is NOT in the list: refresh the confirm, keep it open, and
+                // leave every recovery copy alone.
+                self.sync_editor_dirty_paths();
+                let mut live: Vec<std::path::PathBuf> =
+                    self.document_state.dirty_paths.iter().cloned().collect();
+                live.sort();
+                let live_rows = self.library.dirty_editors();
+                let unseen = live.iter().any(|p| !state.dirty_paths.contains(p))
+                    || live_rows.iter().any(|r| !state.dirty_rows.contains(r));
+                if unseen {
+                    crate::diagnostics::log_warning(
+                        "Exit: unsaved edits changed since the prompt; review the list and \
+                         confirm again. Nothing was discarded",
+                    );
+                    self.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState {
+                        dirty_paths: live,
+                        dirty_rows: live_rows,
+                    });
+                    self.ui_state.quit_confirm_refreshed = true;
+                    return Task::none();
+                }
                 // The user declined to keep these edits, so their
                 // recovery copies go too, and are gone before the exit.
                 let cleanup = self.autosave_discard_all();

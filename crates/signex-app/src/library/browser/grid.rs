@@ -15,6 +15,9 @@ use crate::library::dangling::DanglingSweep;
 use iced::widget::column;
 use signex_library::RefSlot;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// The read-only caches the grid cells draw from.
 pub(super) struct GridCaches<'a> {
     pub(super) dangling: &'a DanglingSweep,
@@ -68,7 +71,7 @@ pub(super) fn view_grid<'a>(
                     .wrapping(iced::widget::text::Wrapping::None)
                     .color(muted),
             )
-            .padding([4, 6])
+            .padding([SP.s, 6.0])
             .on_press(LibraryMessage::BrowserSortColumn {
                 library_path: library_for_sort,
                 column_key,
@@ -86,7 +89,7 @@ pub(super) fn view_grid<'a>(
             r = r.push(container(header_btn).width(Length::Fixed(c.width)));
         }
         container(r)
-            .padding([2, 4])
+            .padding([SP.xs, SP.s])
             .height(Length::Fixed(BROWSER_HEADER_HEIGHT))
             .style(move |_: &Theme| iced::widget::container::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -111,7 +114,7 @@ pub(super) fn view_grid<'a>(
                     .wrapping(iced::widget::text::Wrapping::None)
                     .color(muted),
             )
-            .padding([12, 6]),
+            .padding([SP.l, 6.0]),
         );
     } else {
         // Window: only the rows near the viewport get widgets; spacers of
@@ -160,7 +163,7 @@ pub(super) fn view_grid<'a>(
                 .width(Length::Fixed(LIFECYCLE_DOT_GUTTER))
                 .height(Length::Fill)
                 .center_y(Length::Fill)
-                .padding([0, 4]);
+                .padding([0.0, SP.s]);
 
             let mut data_row = row![lifecycle_cell].spacing(0);
             for c in columns {
@@ -191,7 +194,7 @@ pub(super) fn view_grid<'a>(
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(color),
                         )
-                        .padding([4, 6])
+                        .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width)),
                     );
                     continue;
@@ -207,7 +210,7 @@ pub(super) fn view_grid<'a>(
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
                         )
-                        .padding([4, 6])
+                        .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width)),
                     );
                     continue;
@@ -225,7 +228,7 @@ pub(super) fn view_grid<'a>(
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
                         )
-                        .padding([4, 6])
+                        .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width)),
                     );
                     continue;
@@ -259,7 +262,7 @@ pub(super) fn view_grid<'a>(
                         );
                         data_row = data_row.push(
                             container(unbound_pick_button(label, kind, address, tokens))
-                                .padding([2, 2])
+                                .padding([SP.xs, SP.xs])
                                 .width(Length::Fixed(c.width)),
                         );
                         continue;
@@ -283,7 +286,7 @@ pub(super) fn view_grid<'a>(
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(color),
                         )
-                        .padding([4, 6])
+                        .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width)),
                     );
                     continue;
@@ -300,7 +303,7 @@ pub(super) fn view_grid<'a>(
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
                         )
-                        .padding([4, 6])
+                        .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width)),
                     );
                     continue;
@@ -312,7 +315,7 @@ pub(super) fn view_grid<'a>(
                     .cell_edit
                     .get(&buf_key)
                     .cloned()
-                    .unwrap_or(row_value);
+                    .unwrap_or_else(|| c.kind.edit_seed(r));
 
                 let library_for_input = lib_pb.clone();
                 let column_for_input = column_key.clone();
@@ -332,11 +335,11 @@ pub(super) fn view_grid<'a>(
                         row_id,
                         column: column_for_submit,
                     })
-                    .padding([2, 6])
+                    .padding([SP.xs, 6.0])
                     .size(BROWSER_TEXT_SIZE);
                 data_row = data_row.push(
                     container(input)
-                        .padding([2, 2])
+                        .padding([SP.xs, SP.xs])
                         .width(Length::Fixed(c.width)),
                 );
             }
@@ -426,7 +429,7 @@ fn unbound_pick_button<'a>(
             .wrapping(iced::widget::text::Wrapping::None)
             .color(warning),
     )
-    .padding([2, 4])
+    .padding([SP.xs, SP.s])
     .on_press(LibraryMessage::OpenPrimitivePicker {
         kind,
         target: crate::library::state::PrimitivePickerTarget::BrowserRow(address),

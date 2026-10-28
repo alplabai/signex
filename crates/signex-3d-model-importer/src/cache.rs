@@ -15,9 +15,15 @@ const CHUNK_BIN: u32 = 0x004E_4942;
 const GLB_HEADER_LEN: u64 = 12;
 const CHUNK_HEADER_LEN: u64 = 8;
 
+/// Most GLBs (each with its warnings sidecar) kept in a cache directory.
+pub const MAX_CACHE_ENTRIES: usize = 256;
+
 /// Compute the SHA-256-based cache path for a source file.
 ///
-/// Cache key = sha256(absolute_path_str | mtime_unix_nanos | source_len | converter_version).
+/// Cache key = sha256(canonical_path_str | mtime_unix_nanos | source_len |
+/// converter_version | dependency_stamp). The path is canonicalised so
+/// `a/../m.wrl` and `m.wrl` share one entry, and `dependency_stamp`
+/// fingerprints files a `.gltf` pulls in (empty for self-contained formats).
 /// The mtime keeps full sub-second precision and the byte length is mixed in
 /// so two quick edits inside one filesystem timestamp tick still get distinct
 /// keys whenever the size changes (#147).
@@ -27,7 +33,11 @@ pub fn cache_path(
     source_mtime: SystemTime,
     source_len: u64,
     converter_version: &str,
+    dependency_stamp: &str,
 ) -> Result<PathBuf, ModelImportError> {
+    let source_path = &source_path
+        .canonicalize()
+        .unwrap_or_else(|_| source_path.to_path_buf());
     let mtime_nanos = source_mtime
         .duration_since(SystemTime::UNIX_EPOCH)
         .map_err(|e| ModelImportError::CacheFailed {
@@ -36,11 +46,12 @@ pub fn cache_path(
         .as_nanos();
 
     let key = format!(
-        "{}|{}|{}|{}",
+        "{}|{}|{}|{}|{}",
         source_path.to_string_lossy(),
         mtime_nanos,
         source_len,
-        converter_version
+        converter_version,
+        dependency_stamp
     );
 
     let mut hasher = Sha256::new();
@@ -48,6 +59,41 @@ pub fn cache_path(
     let hash = format!("{:x}", hasher.finalize());
 
     Ok(cache_dir.join(format!("{hash}.glb")))
+}
+
+/// Delete the least recently used cache entries (GLB plus sidecar) until at
+/// most `keep` remain. `protect` (the entry just written) is never removed.
+/// Best-effort: an entry that cannot be listed or deleted is skipped.
+pub fn evict_oldest(cache_dir: &Path, keep: usize, protect: &Path) {
+    let Ok(dir) = std::fs::read_dir(cache_dir) else {
+        return;
+    };
+    let mut entries: Vec<(SystemTime, PathBuf)> = dir
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "glb"))
+        .filter_map(|p| Some((p.metadata().ok()?.modified().ok()?, p)))
+        .collect();
+    if entries.len() <= keep {
+        return;
+    }
+    entries.sort();
+    let excess = entries.len() - keep;
+    for (_, glb) in entries
+        .into_iter()
+        .filter(|(_, p)| p != protect)
+        .take(excess)
+    {
+        let _ = std::fs::remove_file(warnings_path(&glb));
+        let _ = std::fs::remove_file(&glb);
+    }
+}
+
+/// Mark `glb_path` as just used so [`evict_oldest`] keeps it. Best-effort.
+pub fn touch(glb_path: &Path) {
+    if let Ok(file) = std::fs::File::options().write(true).open(glb_path) {
+        let _ = file.set_modified(SystemTime::now());
+    }
 }
 
 /// The sidecar beside a cached GLB that holds the warnings its conversion
@@ -136,8 +182,8 @@ mod tests {
     fn cache_path_is_deterministic() {
         let dir = PathBuf::from("/tmp");
         let src = PathBuf::from("/models/part.wrl");
-        let p1 = cache_path(&dir, &src, mtime(1_000_000), 10, "0.1.0").unwrap();
-        let p2 = cache_path(&dir, &src, mtime(1_000_000), 10, "0.1.0").unwrap();
+        let p1 = cache_path(&dir, &src, mtime(1_000_000), 10, "0.1.0", "").unwrap();
+        let p2 = cache_path(&dir, &src, mtime(1_000_000), 10, "0.1.0", "").unwrap();
         assert_eq!(p1, p2);
     }
 
@@ -145,8 +191,8 @@ mod tests {
     fn cache_path_differs_on_mtime_change() {
         let dir = PathBuf::from("/tmp");
         let src = PathBuf::from("/models/part.wrl");
-        let p1 = cache_path(&dir, &src, mtime(1_000_000), 10, "0.1.0").unwrap();
-        let p2 = cache_path(&dir, &src, mtime(1_000_001), 10, "0.1.0").unwrap();
+        let p1 = cache_path(&dir, &src, mtime(1_000_000), 10, "0.1.0", "").unwrap();
+        let p2 = cache_path(&dir, &src, mtime(1_000_001), 10, "0.1.0", "").unwrap();
         assert_ne!(p1, p2);
     }
 
@@ -154,8 +200,8 @@ mod tests {
     fn cache_path_differs_on_version_change() {
         let dir = PathBuf::from("/tmp");
         let src = PathBuf::from("/models/part.wrl");
-        let p1 = cache_path(&dir, &src, mtime(1_000_000), 10, "0.1.0").unwrap();
-        let p2 = cache_path(&dir, &src, mtime(1_000_000), 10, "0.2.0").unwrap();
+        let p1 = cache_path(&dir, &src, mtime(1_000_000), 10, "0.1.0", "").unwrap();
+        let p2 = cache_path(&dir, &src, mtime(1_000_000), 10, "0.2.0", "").unwrap();
         assert_ne!(p1, p2);
     }
 
@@ -163,7 +209,7 @@ mod tests {
     fn cache_path_has_glb_extension() {
         let dir = PathBuf::from("/tmp");
         let src = PathBuf::from("/models/part.wrl");
-        let p = cache_path(&dir, &src, mtime(1_000_000), 10, "0.1.0").unwrap();
+        let p = cache_path(&dir, &src, mtime(1_000_000), 10, "0.1.0", "").unwrap();
         assert_eq!(p.extension().and_then(|e| e.to_str()), Some("glb"));
     }
 
@@ -173,8 +219,8 @@ mod tests {
         let src = PathBuf::from("/models/part.wrl");
         let t0 = mtime(1_000_000);
         let t1 = t0 + Duration::from_millis(250);
-        let p1 = cache_path(&dir, &src, t0, 10, "0.1.0").unwrap();
-        let p2 = cache_path(&dir, &src, t1, 10, "0.1.0").unwrap();
+        let p1 = cache_path(&dir, &src, t0, 10, "0.1.0", "").unwrap();
+        let p2 = cache_path(&dir, &src, t1, 10, "0.1.0", "").unwrap();
         assert_ne!(p1, p2);
     }
 
@@ -182,8 +228,8 @@ mod tests {
     fn cache_path_differs_on_size_change() {
         let dir = PathBuf::from("/tmp");
         let src = PathBuf::from("/models/part.wrl");
-        let p1 = cache_path(&dir, &src, mtime(1_000_000), 10, "0.1.0").unwrap();
-        let p2 = cache_path(&dir, &src, mtime(1_000_000), 11, "0.1.0").unwrap();
+        let p1 = cache_path(&dir, &src, mtime(1_000_000), 10, "0.1.0", "").unwrap();
+        let p2 = cache_path(&dir, &src, mtime(1_000_000), 11, "0.1.0", "").unwrap();
         assert_ne!(p1, p2);
     }
 
@@ -264,5 +310,48 @@ mod tests {
         nojson[16..20].copy_from_slice(&CHUNK_BIN.to_le_bytes());
         let (_d, p) = write_tmp(&nojson);
         assert!(!is_cache_valid(&p));
+    }
+
+    #[test]
+    fn cache_path_differs_on_dependency_change_and_ignores_path_spelling() {
+        let dir = PathBuf::from("/tmp");
+        let src = PathBuf::from("/models/part.gltf");
+        let a = cache_path(&dir, &src, mtime(1), 10, "0.1.0", "m.bin:1:4;").unwrap();
+        let b = cache_path(&dir, &src, mtime(1), 10, "0.1.0", "m.bin:2:4;").unwrap();
+        assert_ne!(a, b);
+
+        let real = tempfile::tempdir().unwrap();
+        let file = real.path().join("p.wrl");
+        std::fs::write(&file, b"x").unwrap();
+        std::fs::create_dir(real.path().join("sub")).unwrap();
+        let roundabout = real.path().join("sub").join("..").join("p.wrl");
+        let p1 = cache_path(&dir, &file, mtime(1), 1, "v", "").unwrap();
+        let p2 = cache_path(&dir, &roundabout, mtime(1), 1, "v", "").unwrap();
+        assert_eq!(p1, p2);
+    }
+
+    #[test]
+    fn evict_oldest_drops_least_recently_used_with_sidecars_and_spares_protected() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut paths = Vec::new();
+        for i in 0..5u64 {
+            let glb = dir.path().join(format!("{i}.glb"));
+            std::fs::write(&glb, b"g").unwrap();
+            std::fs::write(warnings_path(&glb), b"[]").unwrap();
+            let f = std::fs::File::options().write(true).open(&glb).unwrap();
+            f.set_modified(mtime(1_000 + i)).unwrap();
+            paths.push(glb);
+        }
+        // Entry 0 is the oldest but protected; 1 and 2 are the next oldest.
+        evict_oldest(dir.path(), 3, &paths[0]);
+        assert!(paths[0].exists());
+        assert!(!paths[1].exists() && !warnings_path(&paths[1]).exists());
+        assert!(!paths[2].exists() && !warnings_path(&paths[2]).exists());
+        assert!(paths[3].exists() && paths[4].exists());
+
+        // Touching an entry makes it the newest.
+        touch(&paths[3]);
+        evict_oldest(dir.path(), 2, &paths[4]);
+        assert!(paths[3].exists() && paths[4].exists() && !paths[0].exists());
     }
 }

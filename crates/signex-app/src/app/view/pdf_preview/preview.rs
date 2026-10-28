@@ -4,6 +4,10 @@
 
 use super::super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 impl Signex {
     /// Preview tab — top toolbar (Sheet/Colour/Pages/Output), thumb
     /// rail on the left, pan/zoom viewport on the right.
@@ -28,12 +32,12 @@ impl Signex {
             let selected_text = iced::Color::WHITE;
             let default_bg = panel_bg;
             let default_text = text_c;
-            button(text(label).size(11).color(if selected {
+            button(text(label).size(TS.body).color(if selected {
                 selected_text
             } else {
                 default_text
             }))
-            .padding([4, 10])
+            .padding([SP.s, 10.0])
             .on_press(msg)
             .style(
                 move |_: &iced::Theme, _status| iced::widget::button::Style {
@@ -58,7 +62,7 @@ impl Signex {
         };
 
         let colour_controls = row![
-            text("Colour").size(11).color(text_muted),
+            text("Colour").size(TS.body).color(text_muted),
             mode_button(
                 "Color",
                 matches!(
@@ -90,11 +94,11 @@ impl Signex {
                 )),
             ),
         ]
-        .spacing(8)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center);
 
         let range_controls = row![
-            text("Pages").size(11).color(text_muted),
+            text("Pages").size(TS.body).color(text_muted),
             mode_button(
                 "All",
                 matches!(
@@ -120,7 +124,7 @@ impl Signex {
                 Message::PrintPreview(PrintPreviewMsg::SetPageRangeSpecific),
             ),
         ]
-        .spacing(8)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center);
 
         let specific_page_input: Element<'_, Message> = if matches!(
@@ -128,14 +132,14 @@ impl Signex {
             signex_output::PageRange::Specific(_)
         ) {
             row![
-                text("Page").size(11).color(text_muted),
+                text("Page").size(TS.body).color(text_muted),
                 text_input("1", &preview.specific_page_input)
                     .on_input(|v| Message::PrintPreview(PrintPreviewMsg::SetSpecificPageInput(v)))
-                    .padding([4, 8])
-                    .size(12)
+                    .padding([SP.s, SP.m])
+                    .size(TS.label)
                     .width(80),
             ]
-            .spacing(8)
+            .spacing(SP.m)
             .align_y(iced::Alignment::Center)
             .into()
         } else {
@@ -143,16 +147,16 @@ impl Signex {
         };
 
         let toggles_row = row![
-            text("Output").size(11).color(text_muted),
+            text("Output").size(TS.body).color(text_muted),
             row![
                 checkbox(preview.pdf_options.include_title_block)
                     .on_toggle(|v| Message::PrintPreview(PrintPreviewMsg::SetIncludeTitleBlock(v))),
-                text("Title Block").size(11).color(text_c),
+                text("Title Block").size(TS.body).color(text_c),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),
         ]
-        .spacing(12)
+        .spacing(SP.l)
         .align_y(iced::Alignment::Center);
 
         let toolbar = container(
@@ -171,10 +175,10 @@ impl Signex {
             ]
             .spacing(6),
         )
-        .padding([8, 14]);
+        .padding([SP.m, 14.0]);
 
         // Thumb rail.
-        let mut thumbs: iced::widget::Column<'_, Message> = column![].spacing(4).padding(8);
+        let mut thumbs: iced::widget::Column<'_, Message> = column![].spacing(SP.s).padding(SP.m);
         for (i, page) in preview.pages.iter().enumerate() {
             let selected = i == preview.selected;
             // A page not drawn yet shows an empty frame: it is rasterised when
@@ -200,13 +204,13 @@ impl Signex {
                 column![
                     thumb,
                     text(format!("Page {}", page.page_number))
-                        .size(10)
+                        .size(TS.caption)
                         .color(text_c)
                 ]
-                .spacing(2)
+                .spacing(SP.xs)
                 .align_x(iced::Alignment::Center),
             )
-            .padding(4)
+            .padding(SP.s)
             .width(132)
             .style(move |_: &iced::Theme| container::Style {
                 background: Some(card_bg.into()),
@@ -231,7 +235,7 @@ impl Signex {
                 text(preview.range_note.clone().unwrap_or_else(|| {
                     "No files selected — toggle files in Settings → Files.".to_string()
                 }))
-                .size(12)
+                .size(TS.label)
                 .color(text_muted),
             )
             .center_x(Length::Fill)
@@ -315,7 +319,7 @@ impl Signex {
 
         let zoom = preview.zoom;
         let page_caption = if preview.pages.is_empty() {
-            text("—".to_string()).size(11).color(text_muted)
+            text("—".to_string()).size(TS.body).color(text_muted)
         } else {
             let selected_page = &preview.pages[preview.selected];
             text(format!(
@@ -326,7 +330,7 @@ impl Signex {
                 selected_page.height_px,
                 zoom * 100.0,
             ))
-            .size(11)
+            .size(TS.body)
             .color(text_muted)
         };
 

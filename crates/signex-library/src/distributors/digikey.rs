@@ -236,7 +236,7 @@ impl DigiKeyAuth {
                 "CSRF state mismatch — refusing to exchange OAuth code".into(),
             ));
         }
-        let http = build_http_client();
+        let http = try_build_http_client()?;
         let token = self
             .client
             .exchange_code(AuthorizationCode::new(code.to_string()))
@@ -276,7 +276,7 @@ impl DigiKeyAuth {
                 Err(KeyringError::Backend(m)) => return Err(DigiKeyAuthError::Keyring(m)),
             }
         };
-        let http = build_http_client();
+        let http = try_build_http_client()?;
         let token = self
             .client
             .exchange_refresh_token(&RefreshToken::new(refresh))
@@ -312,8 +312,25 @@ impl DigiKeyAuth {
     }
 }
 
-fn build_http_client() -> reqwest::blocking::Client {
-    super::http::finish(super::http::client_builder().redirect(reqwest::redirect::Policy::none()))
+/// Client for the OAuth token exchanges. A TLS backend that cannot start
+/// comes back as an error the pricing walk reports, not a panic.
+fn try_build_http_client() -> Result<reqwest::blocking::Client, DigiKeyAuthError> {
+    try_build_http_client_with(build_http_client)
+}
+
+fn try_build_http_client_with(
+    build: impl FnOnce() -> Result<reqwest::blocking::Client, String>,
+) -> Result<reqwest::blocking::Client, DigiKeyAuthError> {
+    build().map_err(|e| DigiKeyAuthError::Config(format!("http client: {e}")))
+}
+
+/// DigiKey's client: no redirects, so a token endpoint cannot bounce the
+/// credentials elsewhere.
+fn build_http_client() -> Result<reqwest::blocking::Client, String> {
+    super::http::client_builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| e.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -324,7 +341,7 @@ pub struct DigiKeyAdapter {
     api_base: String,
     cache: Option<DistributorCache>,
     throttle: Mutex<Option<Instant>>,
-    http: reqwest::blocking::Client,
+    http: super::http::LazyClient,
     auth: AuthSource,
     /// ISO 4217 code sent as `X-DIGIKEY-Locale-Currency`; prices come back
     /// in it.
@@ -351,7 +368,7 @@ impl DigiKeyAdapter {
             api_base: DIGIKEY_API_BASE.into(),
             cache,
             throttle: Mutex::new(None),
-            http: build_http_client(),
+            http: super::http::LazyClient::new(build_http_client),
             auth: AuthSource::Oauth(Box::new(auth)),
             currency: DEFAULT_CURRENCY.into(),
             client_id,
@@ -370,7 +387,7 @@ impl DigiKeyAdapter {
             api_base: api_base.into(),
             cache,
             throttle: Mutex::new(None),
-            http: build_http_client(),
+            http: super::http::LazyClient::new(build_http_client),
             auth: AuthSource::InlineAccessToken(access_token.into()),
             currency: DEFAULT_CURRENCY.into(),
             client_id: None,
@@ -390,7 +407,7 @@ impl DigiKeyAdapter {
             api_base: api_base.into(),
             cache,
             throttle: Mutex::new(None),
-            http: build_http_client(),
+            http: super::http::LazyClient::new(build_http_client),
             auth: AuthSource::Oauth(Box::new(auth)),
             currency: DEFAULT_CURRENCY.into(),
             client_id,
@@ -429,7 +446,7 @@ impl DigiKeyAdapter {
             "Limit": 25,
             "Offset": 0,
         });
-        let resp = self.execute(self.http.post(&url).json(&body))?;
+        let resp = self.execute(self.http.get()?.post(&url).json(&body))?;
         let raw: DigiKeyResponse = resp
             .json()
             .map_err(|e| DistributorError::Backend(format!("decode: {e}")))?;
@@ -443,7 +460,7 @@ impl DigiKeyAdapter {
             self.api_base,
             super::price::encode_path_segment(sku)
         );
-        let resp = self.execute(self.http.get(&url))?;
+        let resp = self.execute(self.http.get()?.get(&url))?;
         let raw: DigiKeyDetailsResponse = resp
             .json()
             .map_err(|e| DistributorError::Backend(format!("decode: {e}")))?;
@@ -759,6 +776,16 @@ fn digikey_path_token(path: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn a_failed_http_client_build_is_a_config_error() {
+        let err = try_build_http_client_with(|| Err("tls init failed".into())).unwrap_err();
+        assert!(
+            matches!(&err, DigiKeyAuthError::Config(m) if m == "http client: tls init failed"),
+            "got {err:?}"
+        );
+    }
 
     #[test]
     fn a_product_url_uses_the_mpn_segment_not_the_numeric_id() {
@@ -777,8 +804,6 @@ mod tests {
         );
         assert_eq!(super::digikey_path_token("/"), None);
     }
-
-    use super::*;
 
     #[test]
     fn name_and_source_are_stable() {

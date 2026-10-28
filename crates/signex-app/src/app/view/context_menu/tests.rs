@@ -6,7 +6,7 @@
 use super::*;
 
 use super::items::{dd_disabled, dd_msg};
-use super::menus::{CanvasShortcuts, canvas_menu_entries, tab_menu_entries};
+use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries, tab_menu_entries};
 use super::project_tree::{TreeNodeRole, tree_node_role};
 use super::submenu::{align_entries, align_gate, place_entries};
 use signex_types::theme::{ThemeId, theme_tokens};
@@ -108,8 +108,30 @@ fn dd_msg_row_carries_message_and_optional_shortcut() {
 fn canvas_menu_grows_and_gates_on_selection() {
     let tokens = theme_tokens(TID);
     let sc = shortcuts();
-    let with = canvas_menu_entries(TID, &tokens, true, false, None, None, &sc);
-    let without = canvas_menu_entries(TID, &tokens, false, false, None, None, &sc);
+    let with = canvas_menu_entries(
+        TID,
+        &tokens,
+        CanvasSelection {
+            has_selection: true,
+            child_sheet_selected: false,
+            drawing_selected: false,
+        },
+        None,
+        None,
+        &sc,
+    );
+    let without = canvas_menu_entries(
+        TID,
+        &tokens,
+        CanvasSelection {
+            has_selection: false,
+            child_sheet_selected: false,
+            drawing_selected: false,
+        },
+        None,
+        None,
+        &sc,
+    );
 
     // Clipboard + find rows are always present.
     for row in ["Find Text...", "Cut", "Copy", "Paste", "Paste Special"] {
@@ -138,14 +160,21 @@ fn project_options_row(entries: &[DropdownEntry<Message>]) -> &DropdownItem<Mess
 fn canvas_project_options_opens_the_active_project_options() {
     let tokens = theme_tokens(TID);
     let sc = shortcuts();
-    let live = canvas_menu_entries(TID, &tokens, false, false, None, Some(2), &sc);
+    let live = canvas_menu_entries(
+        TID,
+        &tokens,
+        CanvasSelection::default(),
+        None,
+        Some(vec!["7".to_string()]),
+        &sc,
+    );
     let row = project_options_row(&live);
     assert!(!row.disabled);
     assert!(matches!(
         &row.on_press,
         Some(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
             crate::app::ProjectTreeAction::OpenProjectOptions(path)
-        ))) if path.as_slice() == [2]
+        ))) if path.as_slice() == ["7".to_string()]
     ));
 }
 
@@ -153,7 +182,18 @@ fn canvas_project_options_opens_the_active_project_options() {
 fn canvas_project_options_is_greyed_without_a_project_and_says_nothing_planned() {
     let tokens = theme_tokens(TID);
     let sc = shortcuts();
-    let none = canvas_menu_entries(TID, &tokens, false, false, None, None, &sc);
+    let none = canvas_menu_entries(
+        TID,
+        &tokens,
+        CanvasSelection {
+            has_selection: false,
+            child_sheet_selected: false,
+            drawing_selected: false,
+        },
+        None,
+        None,
+        &sc,
+    );
     let row = project_options_row(&none);
     assert!(row.disabled);
     assert!(row.on_press.is_none());
@@ -164,8 +204,30 @@ fn canvas_project_options_is_greyed_without_a_project_and_says_nothing_planned()
 fn canvas_child_sheet_adds_open_row() {
     let tokens = theme_tokens(TID);
     let sc = shortcuts();
-    let plain = canvas_menu_entries(TID, &tokens, false, false, None, None, &sc);
-    let child = canvas_menu_entries(TID, &tokens, false, true, None, None, &sc);
+    let plain = canvas_menu_entries(
+        TID,
+        &tokens,
+        CanvasSelection {
+            has_selection: false,
+            child_sheet_selected: false,
+            drawing_selected: false,
+        },
+        None,
+        None,
+        &sc,
+    );
+    let child = canvas_menu_entries(
+        TID,
+        &tokens,
+        CanvasSelection {
+            has_selection: false,
+            child_sheet_selected: true,
+            drawing_selected: false,
+        },
+        None,
+        None,
+        &sc,
+    );
     assert!(!has_row(&plain, "Open Child Sheet"));
     assert!(has_row(&child, "Open Child Sheet"));
     assert!(!has_row(&plain, "Sync Sheet Pins"));
@@ -257,7 +319,6 @@ fn place_menu_greys_only_the_planned_tools() {
                     | "Signal Harness"
                     | "Harness Connector"
                     | "Harness Entry"
-                    | "Sheet Entry"
                     | "Device Sheet Symbol"
             );
             assert_eq!(it.disabled, planned, "{}", it.label);
@@ -394,7 +455,18 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
 #[test]
 fn canvas_row_text_is_byte_identical_to_the_old_literals() {
     let tokens = theme_tokens(TID);
-    let rows = canvas_menu_entries(TID, &tokens, true, true, None, None, &shortcuts());
+    let rows = canvas_menu_entries(
+        TID,
+        &tokens,
+        CanvasSelection {
+            has_selection: true,
+            child_sheet_selected: true,
+            drawing_selected: false,
+        },
+        None,
+        None,
+        &shortcuts(),
+    );
     for expected in [
         "Find Text...",
         "Cut",
@@ -424,7 +496,18 @@ fn shared_command_ids_read_the_same_label_on_every_surface() {
     // Context-menu canvas ids: label comes from the catalog, so the menu
     // bar's lookup of the same id must agree with the row.
     let tokens = theme_tokens(TID);
-    let rows = canvas_menu_entries(TID, &tokens, true, true, None, None, &shortcuts());
+    let rows = canvas_menu_entries(
+        TID,
+        &tokens,
+        CanvasSelection {
+            has_selection: true,
+            child_sheet_selected: true,
+            drawing_selected: false,
+        },
+        None,
+        None,
+        &shortcuts(),
+    );
     for (id, row_label) in [
         ("cut", "Cut"),
         ("copy", "Copy"),
@@ -453,5 +536,81 @@ fn shared_command_ids_read_the_same_label_on_every_surface() {
     ] {
         assert!(id_for_action(&action).is_some(), "{action:?} lost its id");
         assert_eq!(action_label(&action, "<missing>"), row_label);
+    }
+}
+
+// #1378 — the hardcoded fallback is for commands the keymap is silent
+// about, not for ones the user unbound.
+#[test]
+fn a_command_the_keymap_does_not_bind_gets_no_shortcut_hint() {
+    use crate::keymap::{
+        AppCommandId, CompiledKeymap, ShortcutBinding, ShortcutBindingAction, ShortcutContext,
+        ShortcutProfile, ShortcutProfileKind, ShortcutTrigger,
+    };
+    let copy = AppCommandId::new("copy").unwrap();
+    let profile = ShortcutProfile {
+        id: "t".to_string(),
+        name: "T".to_string(),
+        kind: ShortcutProfileKind::Custom,
+        schema_version: 1,
+        description: None,
+        base_profile: None,
+        bindings: vec![ShortcutBinding {
+            action: ShortcutBindingAction::Unbind(copy),
+            context: ShortcutContext::Global,
+            triggers: vec![ShortcutTrigger::parse("Ctrl+C").unwrap()],
+        }],
+    };
+    let (mut app, _boot) = crate::app::Signex::new();
+    app.ui_state.active_keymap = std::sync::Arc::new(CompiledKeymap::compile(&profile));
+
+    assert_eq!(app.keymap_shortcut_label("copy"), "");
+    assert_eq!(
+        app.keymap_shortcut_label("cut"),
+        "",
+        "a command the active keymap never binds has no hint either"
+    );
+}
+
+/// The Arrange launcher appears only when the selection holds a drawing, and
+/// its submenu rows reorder drawings (#1583).
+#[test]
+fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
+    let tokens = theme_tokens(TID);
+    let sc = shortcuts();
+    let with = canvas_menu_entries(
+        TID,
+        &tokens,
+        CanvasSelection {
+            has_selection: true,
+            child_sheet_selected: false,
+            drawing_selected: true,
+        },
+        None,
+        None,
+        &sc,
+    );
+    let without = canvas_menu_entries(
+        TID,
+        &tokens,
+        CanvasSelection {
+            has_selection: true,
+            child_sheet_selected: false,
+            drawing_selected: false,
+        },
+        None,
+        None,
+        &sc,
+    );
+    assert_eq!(customs(&with), customs(&without) + 1);
+
+    let rows = super::submenu::arrange_entries();
+    for label in [
+        "Bring to Front",
+        "Send to Back",
+        "Bring Forward",
+        "Send Backward",
+    ] {
+        assert!(has_row(&rows, label), "missing {label}");
     }
 }

@@ -888,6 +888,8 @@ pub enum Tool {
     Polyline,
     /// Two-click corner-to-corner hierarchical sheet symbol.
     Sheet,
+    /// One click on a sheet symbol's border places an entry (pin) there.
+    SheetEntry,
 }
 
 impl std::fmt::Display for Tool {
@@ -908,6 +910,7 @@ impl std::fmt::Display for Tool {
             Tool::Arc => write!(f, "Draw Arc"),
             Tool::Polyline => write!(f, "Draw Polygon"),
             Tool::Sheet => write!(f, "Place Sheet"),
+            Tool::SheetEntry => write!(f, "Place Sheet Entry"),
         }
     }
 }

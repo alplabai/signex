@@ -10,43 +10,64 @@ use signex_types::theme::ThemeTokens;
 use crate::app::{Message, OverlayMsg};
 use crate::styles;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 const CARD_W: f32 = 360.0;
 const CARD_PAD_RIGHT: f32 = 24.0;
 const CARD_PAD_BOTTOM: f32 = 36.0;
 
+/// The tour painted as a card pinned to the main window's corner.
 pub fn view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
+    build(tokens, false)
+}
+
+/// The tour as the content of its own OS window: no header, filling it.
+pub fn window_view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
+    build(tokens, true)
+}
+
+fn build<'a>(tokens: &'a ThemeTokens, windowed: bool) -> Element<'a, Message> {
     let text_primary = styles::ti(tokens.text);
     let text_secondary = styles::ti(tokens.text_secondary);
 
     let header = container(
         row![
-            text("Welcome to Signex").size(13).color(text_primary),
+            text("Welcome to Signex").size(TS.title).color(text_primary),
             Space::new().width(Length::Fill),
-            button(text("✕").size(11).color(text_secondary))
+            button(text("✕").size(TS.body).color(text_secondary))
                 .on_press(Message::Overlay(OverlayMsg::DismissFirstRunTour))
                 .style(styles::menu_item(tokens)),
         ]
         .align_y(iced::Alignment::Center)
-        .spacing(8),
+        .spacing(SP.m),
     )
-    .padding([8, 12])
+    .padding([SP.m, SP.l])
     .style(styles::modal_header_strip(tokens));
 
     let body = container(
         column![
             text("Right-click + drag to pan")
-                .size(11)
+                .size(TS.body)
                 .color(text_primary),
-            text("Scroll to zoom").size(11).color(text_primary),
+            text("Scroll to zoom").size(TS.body).color(text_primary),
             text("F1 for keyboard shortcuts")
-                .size(11)
+                .size(TS.body)
                 .color(text_primary),
         ]
-        .spacing(4),
+        .spacing(SP.s),
     )
-    .padding([10, 12])
+    .padding([10.0, SP.l])
     .width(Length::Fill);
 
+    if windowed {
+        return container(body)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(styles::modal_card(tokens))
+            .into();
+    }
     let card = container(column![header, body].spacing(0))
         .width(Length::Fixed(CARD_W))
         .clip(true)

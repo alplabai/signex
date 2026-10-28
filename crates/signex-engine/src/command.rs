@@ -1,6 +1,6 @@
 use signex_types::schematic::{
     AnnotateOrder, Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LibSymbol, NoConnect,
-    SchematicSheet, SelectedItem, StrokeColor, Symbol, TextNote, Wire,
+    SchematicSheet, SelectedItem, SheetPin, StrokeColor, Symbol, TextNote, Wire,
 };
 use uuid::Uuid;
 
@@ -66,6 +66,7 @@ pub enum CommandKind {
     RegisterLibSymbol,
     ReplaceLibSymbol,
     PlaceChildSheet,
+    PlaceSheetPin,
     PlaceJunction,
     PlaceNoConnect,
     PlaceNoErcDirective,
@@ -86,6 +87,8 @@ pub enum CommandKind {
     SetTextFontFamily,
     SetSymbolDesignatorIn,
     SetDocumentFontFamily,
+    ArrangeDrawings,
+    SetDrawingPlacement,
 }
 
 #[derive(Debug, Clone)]
@@ -238,6 +241,13 @@ pub enum Command {
     PlaceChildSheet {
         child_sheet: ChildSheet,
     },
+    /// Add a hand-placed entry (pin) to the sheet symbol `sheet_id`. Refused
+    /// with a name error when the name is blank or the symbol already has an
+    /// entry of that name; an unknown `sheet_id` changes nothing. Undoable.
+    PlaceSheetPin {
+        sheet_id: Uuid,
+        pin: SheetPin,
+    },
     PlaceJunction {
         junction: Junction,
     },
@@ -365,6 +375,33 @@ pub enum Command {
     SetDocumentFontFamily {
         font_family: Option<String>,
     },
+    /// Move the drawings `ids` within the sheet's drawing list, as one undo
+    /// step: the selected drawings keep their order among themselves, and an
+    /// id that names no drawing is ignored. Unchanged when nothing moves (the
+    /// selection is already at that end). See [`DrawingArrange`].
+    ArrangeDrawings {
+        ids: Vec<Uuid>,
+        arrange: DrawingArrange,
+    },
+    /// Put the drawings `ids` behind or above the circuit (#1583).
+    SetDrawingPlacement {
+        ids: Vec<Uuid>,
+        placement: signex_types::schematic::DrawingPlacement,
+    },
+}
+
+/// How [`Command::ArrangeDrawings`] moves the selected drawings. The list is
+/// painted first to last, so the end of the list is the front.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DrawingArrange {
+    /// Bring to Front: to the end of the list.
+    ToFront,
+    /// Send to Back: to the start of the list.
+    ToBack,
+    /// Bring Forward: past the next unselected drawing toward the front.
+    Forward,
+    /// Send Backward: past the previous unselected drawing toward the back.
+    Backward,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -392,6 +429,20 @@ pub enum AnnotateMode {
 }
 
 impl Command {
+    /// Whether executing this command reads the pre-edit sheet beyond
+    /// recording it: the move/turn commands check their rubber-banded result
+    /// against the nets as they were.
+    pub(crate) fn reads_pre_image(&self) -> bool {
+        matches!(
+            self,
+            Self::MoveSelection { .. }
+                | Self::MoveEach { .. }
+                | Self::RotateSelection { .. }
+                | Self::MirrorSelection { .. }
+                | Self::TransformSelection { .. }
+        )
+    }
+
     pub fn kind(&self) -> CommandKind {
         match self {
             Command::ReplaceDocument { .. } => CommandKind::ReplaceDocument,
@@ -418,6 +469,7 @@ impl Command {
             Command::RegisterLibSymbol { .. } => CommandKind::RegisterLibSymbol,
             Command::ReplaceLibSymbol { .. } => CommandKind::ReplaceLibSymbol,
             Command::PlaceChildSheet { .. } => CommandKind::PlaceChildSheet,
+            Command::PlaceSheetPin { .. } => CommandKind::PlaceSheetPin,
             Command::PlaceJunction { .. } => CommandKind::PlaceJunction,
             Command::PlaceNoConnect { .. } => CommandKind::PlaceNoConnect,
             Command::PlaceNoErcDirective { .. } => CommandKind::PlaceNoErcDirective,
@@ -438,6 +490,8 @@ impl Command {
             Command::SetTextFontFamily { .. } => CommandKind::SetTextFontFamily,
             Command::SetSymbolDesignatorIn { .. } => CommandKind::SetSymbolDesignatorIn,
             Command::SetDocumentFontFamily { .. } => CommandKind::SetDocumentFontFamily,
+            Command::ArrangeDrawings { .. } => CommandKind::ArrangeDrawings,
+            Command::SetDrawingPlacement { .. } => CommandKind::SetDrawingPlacement,
         }
     }
 }

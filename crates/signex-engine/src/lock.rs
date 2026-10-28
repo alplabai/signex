@@ -111,6 +111,7 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         | Command::PlaceSymbol { .. }
         | Command::RegisterLibSymbol { .. }
         | Command::PlaceChildSheet { .. }
+        | Command::PlaceSheetPin { .. }
         | Command::PlaceJunction { .. }
         | Command::PlaceNoConnect { .. }
         | Command::PlaceNoErcDirective { .. }
@@ -126,6 +127,8 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         | Command::SetPaperSize { .. }
         | Command::SetSheetFrame { .. }
         | Command::SetTitleBlockField { .. }
+        | Command::ArrangeDrawings { .. }
+        | Command::SetDrawingPlacement { .. }
         | Command::SetDocumentFontFamily { .. } => return None,
     };
     Some(target)

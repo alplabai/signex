@@ -4,6 +4,7 @@
 //! serialisation is deterministic — important for content-hashing and diffing.
 
 use serde::{Deserialize, Serialize};
+use signex_types::quantity::{Quantity, ValueStyle, format_quantity, quantity_from_stored};
 use std::collections::BTreeMap;
 
 /// One parameter cell. String / number / bool / measurement (value + unit).
@@ -24,7 +25,25 @@ impl ParamValue {
             ParamValue::Text(s) => s.clone(),
             ParamValue::Number(n) => n.to_string(),
             ParamValue::Bool(b) => b.to_string(),
-            ParamValue::Measurement { value, unit } => format!("{value} {unit}"),
+            ParamValue::Measurement { value, unit } => match self.as_quantity() {
+                Some(q) => format_quantity(&q, ValueStyle::Engineering, false),
+                None => format!("{value} {unit}"),
+            },
+        }
+    }
+
+    /// A measurement as a base-unit [`Quantity`]. Reads the canonical
+    /// `{4700, "ohm"}` and the legacy prefixed `{4.7, "kΩ"}` as the same
+    /// 4700 Ω; an unknown unit string is kept as written. `None` for other
+    /// variants and for a non-finite value. New sort, filter, diff and
+    /// grouping code should read the value through this, never the raw
+    /// `value`. The browser sort reads it; the search index
+    /// (`search_index.rs`) and the filter paths still read the raw `value`
+    /// until the range-filter phase.
+    pub fn as_quantity(&self) -> Option<Quantity> {
+        match self {
+            ParamValue::Measurement { value, unit } => quantity_from_stored(*value, unit),
+            _ => None,
         }
     }
 }
@@ -53,6 +72,28 @@ mod tests {
             let back: ParamValue = serde_json::from_str(&json).unwrap();
             assert_eq!(v, back);
         }
+    }
+
+    #[test]
+    fn legacy_and_canonical_measurements_are_one_quantity() {
+        let legacy = ParamValue::Measurement {
+            value: 4.7,
+            unit: "kΩ".into(),
+        };
+        let canonical = ParamValue::Measurement {
+            value: 4700.0,
+            unit: "ohm".into(),
+        };
+        assert_eq!(legacy.as_quantity().unwrap().base(), 4700.0);
+        assert_eq!(legacy.as_quantity(), canonical.as_quantity());
+        assert_eq!(legacy.display(), "4.7 kΩ");
+        assert_eq!(canonical.display(), "4.7 kΩ");
+        assert_eq!(ParamValue::Text("x".into()).as_quantity(), None);
+        let unknown = ParamValue::Measurement {
+            value: 1.5,
+            unit: "furlong".into(),
+        };
+        assert_eq!(unknown.display(), "1.5 furlong");
     }
 
     #[test]

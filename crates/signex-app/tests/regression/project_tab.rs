@@ -247,6 +247,54 @@ fn picking_a_designator_standard_ends_the_description_typing_run() {
     );
 }
 
+fn pick_standard(
+    f: &mut crate::project_tab_support::Fixture,
+    standard: Option<signex_types::designator::DesignatorStandard>,
+) {
+    let project_id = project_id(&f.app);
+    let _ = f.app.update(Message::Project(ProjectMsg::Tab(
+        signex_app::app::ProjectTabMsg::DesignatorStandardPicked {
+            project_id,
+            standard,
+        },
+    )));
+}
+
+#[test]
+fn a_standard_pick_is_an_undo_step_in_order_with_description_edits() {
+    use signex_types::designator::DesignatorStandard::Iec81346_2;
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "Motor");
+    pick_standard(&mut f, Some(Iec81346_2));
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    let data = &f.app.document_state.projects[0].data;
+    assert_eq!(data.designator_standard(), None);
+    assert_eq!(data.description.as_deref(), Some("Motor"));
+    assert!(is_dirty(&f));
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(f.app.document_state.projects[0].data.description, None);
+    let _ = f.app.update(Message::Edit(EditMsg::Redo));
+    let _ = f.app.update(Message::Edit(EditMsg::Redo));
+    let data = &f.app.document_state.projects[0].data;
+    assert_eq!(data.description.as_deref(), Some("Motor"));
+    assert_eq!(data.designator_standard(), Some(Iec81346_2));
+}
+
+#[test]
+fn a_save_between_a_pick_and_an_edit_keeps_them_separate_steps() {
+    use signex_types::designator::DesignatorStandard::Ieee315;
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    pick_standard(&mut f, Some(Ieee315));
+    save(&mut f.app);
+    edit_description(&mut f.app, "after");
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    let data = &f.app.document_state.projects[0].data;
+    assert_eq!(data.description, None);
+    assert_eq!(data.designator_standard(), Some(Ieee315));
+}
+
 #[test]
 fn the_project_tab_stays_docked() {
     let mut f = fixture();

@@ -144,6 +144,39 @@ pub struct HistoryEntry {
     pub deletions: u32,
 }
 
+#[cfg(feature = "local-git")]
+impl HistoryEntry {
+    /// Project a `git2::Commit` onto an entry with no diff stats. The
+    /// author timestamp is preferred over the committer's so rebases and
+    /// cherry-picks do not skew the "12 minutes ago" labels; the subject
+    /// is the first line and the body the rest, minus the blank separator.
+    pub(crate) fn from_commit(commit: &git2::Commit<'_>) -> Self {
+        let author = commit.author();
+        let time =
+            DateTime::<Utc>::from_timestamp(author.when().seconds(), 0).unwrap_or_else(Utc::now);
+        let full = commit.message().unwrap_or_default();
+        let (subject, body) = match full.split_once('\n') {
+            Some((s, rest)) => (
+                s.trim_end().to_string(),
+                rest.trim_start_matches(['\r', '\n']).to_string(),
+            ),
+            None => (full.trim_end().to_string(), String::new()),
+        };
+        Self {
+            sha: commit.id().to_string(),
+            author_name: author.name().unwrap_or_default().to_string(),
+            author_email: author.email().unwrap_or_default().to_string(),
+            time,
+            subject,
+            body,
+            parent_shas: commit.parent_ids().map(|id| id.to_string()).collect(),
+            files_changed: Vec::new(),
+            additions: 0,
+            deletions: 0,
+        }
+    }
+}
+
 /// A primitive together with the revision this copy was read at — the
 /// primitive tier's counterpart of `ComponentRow::server_revision`. The
 /// caller that holds the copy keeps the revision with it and hands it back
@@ -437,6 +470,55 @@ pub trait LibraryAdapter: Send + Sync {
         crate::cascade::apply_cascade_bump(&mut row, save);
         self.update_row(table, row, message)?;
         Ok(true)
+    }
+
+    /// Apply `edit` to every row in `targets` (`(table, row)` pairs) as one
+    /// batch, returning one outcome per target in order: `Ok(true)` when
+    /// the edit changed the row, `Ok(false)` when it left it alone, `Err`
+    /// when that row could not be read or written.
+    ///
+    /// Each row is re-read at write time, so the edit keeps any other
+    /// field changed since a caller's snapshot. The edit must not change a
+    /// row's identity or part number: a batch is for re-pinning versions,
+    /// so it skips the part-number uniqueness check `update_row` runs on a
+    /// changed part number. An `Err` for the whole call means nothing was
+    /// written.
+    ///
+    /// The default is `read_row` + `update_row` per target, in order,
+    /// stopping at the first failure: the targets after it are reported as
+    /// not attempted. An adapter that can write the whole batch at once
+    /// (one file write and one commit, one transaction) overrides it.
+    fn update_rows(
+        &self,
+        targets: &[(String, RowId)],
+        edit: &mut RowEdit<'_>,
+        message: &str,
+    ) -> Result<Vec<RowEditOutcome>, LibraryError> {
+        let mut outcomes: Vec<RowEditOutcome> = Vec::with_capacity(targets.len());
+        let mut failed: Option<String> = None;
+        for (table, row_id) in targets {
+            if let Some(first) = &failed {
+                outcomes.push((
+                    *row_id,
+                    Err(LibraryError::Backend(format!(
+                        "not attempted: an earlier row failed ({first})"
+                    ))),
+                ));
+                continue;
+            }
+            let outcome = self.read_row(table, *row_id).and_then(|mut row| {
+                if !edit(&mut row) {
+                    return Ok(false);
+                }
+                self.update_row(table, row, message)?;
+                Ok(true)
+            });
+            if let Err(e) = &outcome {
+                failed = Some(e.to_string());
+            }
+            outcomes.push((*row_id, outcome));
+        }
+        Ok(outcomes)
     }
 
     // ── Row CRUD ────────────────────────────────────────────────────────
@@ -742,6 +824,13 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 }
+
+/// The edit of [`LibraryAdapter::update_rows`]: changes the row it is given
+/// and returns whether it did.
+pub type RowEdit<'a> = dyn FnMut(&mut ComponentRow) -> bool + 'a;
+
+/// One target's outcome from [`LibraryAdapter::update_rows`].
+pub type RowEditOutcome = (RowId, Result<bool, LibraryError>);
 
 /// The rewrite step of [`LibraryAdapter::rewrite_file_locked`]: given the
 /// file's current bytes (`None` when it does not exist), the bytes to write,

@@ -106,6 +106,11 @@ impl Signex {
             ActiveBarAction::PlaceSheetSymbol => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Sheet)));
             }
+            // Sheet entry has its own tool: one click on a sheet symbol's
+            // border places an entry.
+            ActiveBarAction::PlaceSheetEntry => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::SheetEntry)));
+            }
             // Arc — dedicated 3-click tool.
             ActiveBarAction::DrawArc => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Arc)));

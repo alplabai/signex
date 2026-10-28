@@ -262,10 +262,7 @@ fn model_shortcuts_follow_the_active_keymap() {
     for menu in &menu_bar_model(&ctx).menus {
         check_shortcuts(menu, &ctx, &mut checked);
     }
-    assert!(
-        checked > 30,
-        "expected the keymap-backed rows, saw {checked}"
-    );
+    assert_eq!(checked, 26, "the Altium profile labels 26 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
@@ -276,21 +273,14 @@ fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
                 let Some(sc) = &item.shortcut else { continue };
                 let keymap = ctx.active_keymap.as_ref().expect("keymap");
                 let command = sc.command_id.clone();
-                match keymap.shortcut_label(&command) {
-                    Some(label) => assert_eq!(sc.text, label, "shortcut of {}", sc.command_id),
-                    None => {
-                        let fixture = rows()
-                            .into_iter()
-                            .find(|r| r[3] == sc.command_id.as_str())
-                            .map(|r| r[4]);
-                        assert_eq!(
-                            Some(sc.text.as_str()),
-                            fixture,
-                            "fallback of {}",
-                            sc.command_id
-                        );
-                    }
-                }
+                // With an active keymap a row shows the keymap's label or
+                // no shortcut at all, never the catalog fallback (#1378).
+                assert_eq!(
+                    keymap.shortcut_label(&command).as_deref(),
+                    Some(sc.text.as_str()),
+                    "shortcut of {}",
+                    sc.command_id
+                );
                 *checked += 1;
             }
             MenuEntry::Separator => {}

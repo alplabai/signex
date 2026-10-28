@@ -19,8 +19,12 @@ use crate::menu_bar::cmd_label;
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Keyboard-shortcut hints for the canvas menu, resolved from the active
-/// keymap profile (with the historic Altium defaults as fallbacks) before
+/// keymap profile (empty when the profile does not bind the command) before
 /// the pure builder runs.
 pub(super) struct CanvasShortcuts {
     pub find: String,
@@ -80,8 +84,8 @@ impl Signex {
             let row_label = *label;
             let row_step = *step_mm;
             let btn = button(
-                container(text(row_label).size(11).color(lbl_color))
-                    .padding([4, 12])
+                container(text(row_label).size(TS.body).color(lbl_color))
+                    .padding([SP.s, SP.l])
                     .width(iced::Length::Fill),
             )
             .padding(0)
@@ -105,7 +109,7 @@ impl Signex {
         }
 
         container(col)
-            .padding(4)
+            .padding(SP.s)
             .style(move |_: &iced::Theme| iced::widget::container::Style {
                 background: Some(iced::Background::Color(panel_bg)),
                 border: iced::Border {
@@ -128,30 +132,34 @@ impl Signex {
             .selected
             .iter()
             .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet);
+        let drawing_selected = !self.selected_drawing_ids().is_empty();
         let active_submenu = self.interaction_state.context_submenu;
-        // Shortcut hints read from the active keymap profile, falling
-        // back to the historic Altium defaults when a command is unbound.
+        // Shortcut hints read from the active keymap profile; a command
+        // it does not bind has none.
         let sc = CanvasShortcuts {
-            find: self.keymap_shortcut_label("find", "Ctrl+F"),
-            cut: self.keymap_shortcut_label("cut", "Ctrl+X"),
-            copy: self.keymap_shortcut_label("copy", "Ctrl+C"),
-            paste: self.keymap_shortcut_label("paste", "Ctrl+V"),
-            smart_paste: self.keymap_shortcut_label("smart_paste", "Shift+Ctrl+V"),
+            find: self.keymap_shortcut_label("find"),
+            cut: self.keymap_shortcut_label("cut"),
+            copy: self.keymap_shortcut_label("copy"),
+            paste: self.keymap_shortcut_label("paste"),
+            smart_paste: self.keymap_shortcut_label("smart_paste"),
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let project_index = self.document_state.active_document_project().and_then(|p| {
-            self.document_state
-                .projects
-                .iter()
-                .position(|candidate| candidate.id == p.id)
-        });
+        // The project row's tree key, the same one the project tree's own
+        // menu sends, so the action follows the project if rows reorder.
+        let project_key = self
+            .document_state
+            .active_document_project()
+            .map(|p| vec![p.id.to_string()]);
         let entries = canvas_menu_entries(
             tid,
             tokens,
-            has_selection,
-            child_sheet_selected,
+            CanvasSelection {
+                has_selection,
+                child_sheet_selected,
+                drawing_selected,
+            },
             active_submenu,
-            project_index,
+            project_key,
             &sc,
         );
         signex_widgets::active_bar_dropdown::view(entries, tokens, Some(Self::CONTEXT_MENU_WIDTH))
@@ -187,18 +195,30 @@ impl Signex {
     }
 }
 
+/// What the canvas right-click landed on, for [`canvas_menu_entries`].
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct CanvasSelection {
+    pub(super) has_selection: bool,
+    pub(super) child_sheet_selected: bool,
+    pub(super) drawing_selected: bool,
+}
+
 /// Pure canvas-menu data builder. Rows and their enable state are derived
 /// only from the passed selection flags + shortcut hints, so the menu's
 /// shape is unit-testable without a window.
 pub(super) fn canvas_menu_entries(
     tid: ThemeId,
     tokens: &ThemeTokens,
-    has_selection: bool,
-    child_sheet_selected: bool,
+    selection: CanvasSelection,
     active_submenu: Option<ContextSubmenu>,
-    project_index: Option<usize>,
+    project_key: Option<signex_widgets::tree_view::TreeKey>,
     sc: &CanvasShortcuts,
 ) -> Vec<DropdownEntry<Message>> {
+    let CanvasSelection {
+        has_selection,
+        child_sheet_selected,
+        drawing_selected,
+    } = selection;
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(24);
 
     v.push(dd_planned(
@@ -249,6 +269,15 @@ pub(super) fn canvas_menu_entries(
             ContextSubmenu::Align,
             active_submenu == Some(ContextSubmenu::Align),
         ));
+        if drawing_selected {
+            v.push(submenu_launcher(
+                tokens,
+                Some(ic::icon_dd_align_menu(tid)),
+                "Arrange",
+                ContextSubmenu::Arrange,
+                active_submenu == Some(ContextSubmenu::Arrange),
+            ));
+        }
         v.push(dd_planned(
             Some(ic::icon_dd_unions(tid)),
             "Unions",
@@ -267,6 +296,12 @@ pub(super) fn canvas_menu_entries(
             "Open Child Sheet",
             "Enter",
             ContextAction::OpenChildSheet,
+        ));
+        v.push(dd_kb(
+            None,
+            "Create Sheet From Sheet Symbol",
+            "",
+            ContextAction::CreateChildSheet,
         ));
         v.push(dd_kb(
             None,
@@ -347,16 +382,16 @@ pub(super) fn canvas_menu_entries(
         "Pin Mapping...",
         None,
     ));
-    // The project that owns the active sheet, resolved to its index the way
-    // the project tree's own menu addresses it. No project: greyed, no
+    // The project that owns the active sheet, addressed by its tree key the
+    // way the project tree's own menu addresses it. No project: greyed, no
     // tooltip (the feature exists, there is just nothing to open it for).
-    v.push(match project_index {
-        Some(index) => dd_msg(
+    v.push(match project_key {
+        Some(key) => dd_msg(
             Some(ic::icon_dd_project_options(tid)),
             "Project Options...",
             "",
             Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                crate::app::ProjectTreeAction::OpenProjectOptions(vec![index]),
+                crate::app::ProjectTreeAction::OpenProjectOptions(key),
             )),
         ),
         None => dd_disabled(

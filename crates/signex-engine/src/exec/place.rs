@@ -340,6 +340,25 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::PlaceSheetPin { sheet_id, pin } => {
+                let Some(symbol) = self
+                    .document
+                    .child_sheets
+                    .iter_mut()
+                    .find(|symbol| symbol.uuid == sheet_id)
+                else {
+                    return Ok(CommandResult::unchanged());
+                };
+                crate::sheet_entry::validated_new_pin(symbol, &pin)?;
+                symbol.pins.push(pin);
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::ObjectPlaced,
+                    document: DocumentPatch::CHILD_SHEETS,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::PlaceWireSegment { wire } => {
                 let wire_item = SelectedItem::new(wire.uuid, SelectedKind::Wire);
                 self.document.wires.push(wire);

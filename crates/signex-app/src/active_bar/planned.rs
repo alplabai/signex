@@ -19,7 +19,6 @@ pub const PLANNED_TOOLTIP: &str = "Planned — not available yet";
 /// Every tool that is still a placeholder, with the name the Messages line
 /// uses when it refuses the click.
 pub const PLANNED_TOOLS: &[(ActiveBarAction, &str)] = &[
-    (ActiveBarAction::PlaceSheetEntry, "Sheet Entry"),
     (
         ActiveBarAction::PlaceDeviceSheetSymbol,
         "Device Sheet Symbol",
@@ -70,7 +69,6 @@ mod tests {
     /// must ship — add its name to this list in the same change and say
     /// why in the PR.
     const EXPECTED: &[&str] = &[
-        "Sheet Entry",
         "Device Sheet Symbol",
         "Reuse Block",
         "Round Rectangle",

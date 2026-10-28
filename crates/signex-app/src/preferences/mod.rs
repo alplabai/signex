@@ -13,15 +13,18 @@ use crate::app::view::dialogs::{
     MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_CLOSE_X_ICON,
     MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
 };
-use crate::styles::MODAL_CORNER_RADIUS;
+use crate::styles::{MODAL_CORNER_RADIUS, Spacing, TypeScale};
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 mod annotation;
 mod appearance;
 mod component_classes;
 mod distributors;
 mod editing;
-mod erc;
 mod keymap;
+mod profiles;
 mod widgets;
 
 use annotation::content_annotation;
@@ -29,8 +32,9 @@ use appearance::content_appearance;
 use component_classes::content_component_classes;
 use distributors::content_library_distributors;
 use editing::content_editing;
-use erc::content_erc;
 use keymap::content_keyboard_shortcuts;
+use profiles::content_profiles;
+pub use profiles::{ProfileAction, ProfilesMsg};
 
 // Shared style / text / button helpers live in `widgets`; re-export them
 // at their original module-local visibility so the shell here and every
@@ -53,8 +57,9 @@ pub enum PrefNav {
     /// import / export a profile and rebind individual commands via the
     /// chord recorder. Backed by `UiState::preferences_keymap_editor`.
     Keyboard,
-    /// Electrical Rule Check — per-rule severity override.
-    Erc,
+    /// Rule profiles: the library of named ERC rule sets, the default for
+    /// new projects, and the editor for each profile (#1608).
+    RuleProfiles,
     /// v0.9 Library settings — Distributor APIs, lifecycle defaults.
     LibraryDistributors,
     /// User-editable component-class registry — surfaces in the New
@@ -71,7 +76,7 @@ impl PrefNav {
         PrefNav::Annotation,
         PrefNav::Editing,
         PrefNav::Keyboard,
-        PrefNav::Erc,
+        PrefNav::RuleProfiles,
         PrefNav::LibraryDistributors,
         PrefNav::ComponentClasses,
     ];
@@ -82,7 +87,7 @@ impl PrefNav {
             PrefNav::Annotation => "Annotation",
             PrefNav::Editing => "Editing",
             PrefNav::Keyboard => "Keyboard Shortcuts",
-            PrefNav::Erc => "Electrical Rules",
+            PrefNav::RuleProfiles => "Rule Profiles",
             PrefNav::LibraryDistributors => "Distributor APIs",
             // Now a *seed* pane — the actual class registry is
             // per-library inside each `.snxlib`'s manifest. This
@@ -99,7 +104,7 @@ impl PrefNav {
             PrefNav::Annotation => "Schematic",
             PrefNav::Editing => "Schematic",
             PrefNav::Keyboard => "System",
-            PrefNav::Erc => "Validation",
+            PrefNav::RuleProfiles => "Validation",
             PrefNav::LibraryDistributors => "Library",
             PrefNav::ComponentClasses => "Library",
         }
@@ -162,11 +167,9 @@ pub enum PrefMsg {
     ThemeExportFinished(Result<std::path::PathBuf, String>),
     /// Loaded JSON content from an import pick dialog.
     ThemeFileLoaded(String),
-    /// Set the severity override for an ERC rule. Setting the override
-    /// to the default value clears the entry instead.
-    DraftErcSeverity(signex_erc::RuleKind, signex_erc::Severity),
-    /// Clear every ERC severity override — reset to defaults.
-    ResetErcSeverities,
+    /// Rule Profiles pane (#1608). Its edits are written to the profile
+    /// files at once, so they are not drafts and never mark the dialog dirty.
+    Profiles(ProfilesMsg),
     /// Move an unloadable `prefs.json` aside so writes can resume from a
     /// fresh file, keeping the original on disk beside it (#602). Offered
     /// only from the banner, and the handler re-checks the file before
@@ -233,6 +236,7 @@ pub enum PrefMsg {
     KeymapExportFinished(Result<std::path::PathBuf, String>),
     /// Open the chord recorder for a specific binding.
     KeymapRecorderOpen {
+        slot: crate::keymap::BindingSlot,
         command: crate::keymap::AppCommandId,
         label: String,
         context: crate::keymap::ShortcutContext,
@@ -300,7 +304,9 @@ pub struct PrefsView<'a> {
     /// Appearance ▸ theme import/export status line. Empty renders nothing.
     pub theme_status: &'a str,
     pub dirty: bool,
-    pub erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    pub profiles: &'a crate::app::rule_profile_ui::ProfileManager,
+    /// The profile new projects start from; `None` is automatic.
+    pub default_profile: Option<&'a str>,
     pub distributor_settings: &'a crate::library::state::DistributorSettings,
     pub panel_tokens: &'a signex_types::theme::ThemeTokens,
     pub draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
@@ -548,7 +554,7 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
         container(
             row![
                 text(item.label())
-                    .size(12)
+                    .size(TS.label)
                     .style(move |theme: &Theme| text::Style {
                         color: Some(if is_active {
                             theme.extended_palette().primary.base.text
@@ -559,7 +565,7 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
             ]
             .align_y(iced::Alignment::Center),
         )
-        .padding([6, 12])
+        .padding([6.0, SP.l])
         .width(Length::Fill),
     )
     .padding(0)
@@ -596,7 +602,8 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_annotate_undo,
         draft_move_keeps_wires,
         draft_autosave_enabled,
-        erc_overrides,
+        profiles,
+        default_profile,
         distributor_settings,
         panel_tokens,
         draft_component_classes,
@@ -613,7 +620,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         PrefNav::Appearance => content_appearance(v),
         PrefNav::Annotation => content_annotation(draft_annotate_undo),
         PrefNav::Editing => content_editing(draft_move_keeps_wires, draft_autosave_enabled),
-        PrefNav::Erc => content_erc(erc_overrides),
+        PrefNav::RuleProfiles => content_profiles(profiles, default_profile, panel_tokens),
         // Library → Distributor APIs — the library subsystem owns
         // the actual form
         // (`crate::library::settings::distributor_apis::view`); we
@@ -709,10 +716,10 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
         return None;
     }
     let footer_row: Element<'a, PrefMsg> = row![
-        text("● Unsaved changes").size(11).style(text_warning),
+        text("● Unsaved changes").size(TS.body).style(text_warning),
         Space::new().width(Length::Fill),
         discard_btn(),
-        Space::new().width(12),
+        Space::new().width(SP.l),
         save_btn(),
     ]
     .align_y(iced::Alignment::Center)
@@ -788,7 +795,7 @@ fn build_prefs_file_banner<'a>(
     // Making the text the fluid child inverts that: the button is the
     // only `Shrink` child in the first pass, takes its natural width, and
     // the text wraps into what remains.
-    let mut lines = column![].spacing(4).width(Length::Fill);
+    let mut lines = column![].spacing(SP.s).width(Length::Fill);
     if let Some(error) = load_error {
         // Name the real file, resolved through the same accessor the
         // probe and the recovery use, so the path the user is told to
@@ -796,7 +803,7 @@ fn build_prefs_file_banner<'a>(
         let path = crate::fonts::prefs_file_path().display().to_string();
         lines = lines.push(
             text(format!("Your preferences file at {path} {error}."))
-                .size(11)
+                .size(TS.body)
                 .style(text_warning),
         );
         // Scoped to what `prefs.json` actually backs. The banner spans
@@ -813,20 +820,20 @@ fn build_prefs_file_banner<'a>(
                  has not been altered — repair it by hand, or start a fresh one and keep \
                  the old file beside it.",
             )
-            .size(10)
+            .size(TS.caption)
             .style(text_muted),
         );
     }
     if !status.is_empty() {
-        lines = lines.push(text(status).size(10).style(text_muted));
+        lines = lines.push(text(status).size(TS.caption).style(text_muted));
     }
 
-    let mut strip = row![lines].spacing(16).align_y(iced::Alignment::Center);
+    let mut strip = row![lines].spacing(SP.xl).align_y(iced::Alignment::Center);
     // Offered only while the file is actually broken: once it loads, the
     // banner is a result line and there is nothing left to reset.
     if load_error.is_some() {
         strip = strip.push(
-            button(text("Start a fresh preferences file").size(11))
+            button(text("Start a fresh preferences file").size(TS.body))
                 .padding([7, 14])
                 .on_press(PrefMsg::ResetPrefsFile)
                 // NOT `secondary_button_style` — that fills with
@@ -848,7 +855,7 @@ fn build_prefs_file_banner<'a>(
             // strip is one line inside a fixed `FOOTER_H`, this one grows
             // to two or three wrapped lines and would otherwise sit flush
             // against the divider above and the nav column below.
-            .padding([12, 16])
+            .padding([SP.l, SP.xl])
             .style(move |theme: &Theme| {
                 let palette = theme.extended_palette();
                 container::Style {
@@ -866,16 +873,16 @@ fn build_prefs_file_banner<'a>(
 }
 
 fn save_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("Save").size(12))
-        .padding([8, 20])
+    button(text("Save").size(TS.label))
+        .padding([SP.m, 20.0])
         .on_press(PrefMsg::Save)
         .style(success_button_style)
         .into()
 }
 
 fn discard_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("Discard & Close").size(12))
-        .padding([8, 16])
+    button(text("Discard & Close").size(TS.label))
+        .padding([SP.m, SP.xl])
         .on_press(PrefMsg::DiscardAndClose)
         .style(danger_button_style)
         .into()

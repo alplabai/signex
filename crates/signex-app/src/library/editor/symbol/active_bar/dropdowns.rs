@@ -24,6 +24,9 @@ use crate::library::editor::symbol::state::{
 };
 use crate::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg, SymbolToolMsg};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Convenience: route a `SymbolEditorMsg` to the editor at `path`.
 fn sym(path: PathBuf, msg: SymbolEditorMsg) -> LibraryMessage {
     LibraryMessage::PrimitiveEditorEvent {
@@ -102,7 +105,8 @@ fn filter_entries(f: SymbolSelectionFilter, path: PathBuf) -> Vec<DropdownEntry<
     );
 
     let layout = column![
-        container(row![all_btn].spacing(4).align_y(iced::Alignment::Center)).padding([4, 8]),
+        container(row![all_btn].spacing(SP.s).align_y(iced::Alignment::Center))
+            .padding([SP.s, SP.m]),
         container(
             row![
                 make_chip("Pins", K::Pins),
@@ -110,20 +114,20 @@ fn filter_entries(f: SymbolSelectionFilter, path: PathBuf) -> Vec<DropdownEntry<
                 make_chip("Texts", K::Texts),
                 make_chip("Designators", K::Designators),
             ]
-            .spacing(4)
+            .spacing(SP.s)
             .align_y(iced::Alignment::Center),
         )
-        .padding([4, 8]),
+        .padding([SP.s, SP.m]),
         container(
             row![
                 make_chip("Values", K::Values),
                 make_chip("Parameters", K::Parameters),
                 make_chip("Other", K::Other),
             ]
-            .spacing(4)
+            .spacing(SP.s)
             .align_y(iced::Alignment::Center),
         )
-        .padding([4, 8]),
+        .padding([SP.s, SP.m]),
     ]
     .spacing(0)
     .width(Length::Shrink);

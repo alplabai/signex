@@ -9,10 +9,12 @@ use super::*;
 use iced::widget::{Space, column, container, row, text};
 use iced::{Color, Element, Length};
 
-use super::widgets::{
-    close_x_button, draggable_header, primary_button, secondary_button, wrap_modal,
-};
+use super::widgets::{close_x_button, primary_button, secondary_button, wrap_modal};
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 impl Signex {
     // ────────────────────────────────────────────────────────────────
@@ -34,7 +36,7 @@ impl Signex {
         wrap_modal(dialog, offset, self.ui_state.window_size, (420.0, 200.0))
     }
 
-    fn view_rename_dialog_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_rename_dialog_body(&self) -> Element<'_, Message> {
         use iced::widget::text_input;
 
         let Some(ref st) = self.ui_state.rename_dialog else {
@@ -65,10 +67,9 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let header = draggable_header(
+        let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::RenameDialog,
-            self.interaction_state.last_mouse_pos,
         );
 
         let current_label = if st.is_project_rename {
@@ -96,18 +97,18 @@ impl Signex {
         };
 
         let mut body: iced::widget::Column<'_, Message> = column![
-            text(prompt).size(11).color(text_muted),
+            text(prompt).size(TS.body).color(text_muted),
             text_input(placeholder, &st.buffer)
                 .on_input(|s| Message::Rename(RenameMsg::BufferChanged(s)))
                 .on_submit(Message::Rename(RenameMsg::Submit))
-                .size(12)
+                .size(TS.label)
                 .padding(6)
                 .width(Length::Fill),
         ]
-        .spacing(8);
+        .spacing(SP.m);
 
         if let Some(ref err) = st.error {
-            body = body.push(text(err.clone()).size(11).color(error_c));
+            body = body.push(text(err.clone()).size(TS.body).color(error_c));
         }
 
         let dialog = container(
@@ -134,7 +135,7 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(420),
+            .width(self.dialog_width(super::super::super::state::ModalId::RenameDialog, 420.0)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -152,7 +153,9 @@ impl Signex {
         wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 320.0))
     }
 
-    fn view_enable_version_control_dialog_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_enable_version_control_dialog_body(
+        &self,
+    ) -> Element<'_, Message> {
         use iced::widget::checkbox;
         let Some(ref st) = self.ui_state.enable_version_control else {
             return container(Space::new()).into();
@@ -181,20 +184,19 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let header = draggable_header(
+        let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::EnableVersionControl,
-            self.interaction_state.last_mouse_pos,
         );
 
         let scope = st.scope;
-        let intro = text(st.intro_text.as_str()).size(11).color(text_muted);
+        let intro = text(st.intro_text.as_str()).size(TS.body).color(text_muted);
         let summary_label = match scope {
             crate::app::VersionControlScope::Project => "Project",
             crate::app::VersionControlScope::Library => "Library",
         };
         let summary = text(format!("{summary_label}: {}", st.project_name))
-            .size(12)
+            .size(TS.label)
             .color(text_c);
 
         // Per-row track toggles. Surfaced as a column (no scrollable
@@ -202,13 +204,16 @@ impl Signex {
         // the modal sizing stays predictable.
         let items_text_c = text_c;
         let items_text_muted = text_muted;
-        let mut items_col = column![].spacing(4);
+        let mut items_col = column![].spacing(SP.s);
         if !st.items.is_empty() {
-            items_col =
-                items_col.push(text("Track in repository").size(11).color(items_text_muted));
+            items_col = items_col.push(
+                text("Track in repository")
+                    .size(TS.body)
+                    .color(items_text_muted),
+            );
             for (idx, item) in st.items.iter().enumerate() {
                 let cb: Element<'_, Message> = checkbox(item.tracked)
-                    .size(13)
+                    .size(TS.title)
                     .on_toggle(move |_| {
                         Message::EnableVersionControl(EnableVersionControlMsg::ToggleItem(idx))
                     })
@@ -216,9 +221,13 @@ impl Signex {
                 let row_widget = row![
                     cb,
                     Space::new().width(8),
-                    text(item.relative.clone()).size(11).color(items_text_c),
+                    text(item.relative.clone())
+                        .size(TS.body)
+                        .color(items_text_c),
                     Space::new().width(Length::Fill),
-                    text(item.label.clone()).size(10).color(items_text_muted),
+                    text(item.label.clone())
+                        .size(TS.caption)
+                        .color(items_text_muted),
                 ]
                 .align_y(iced::Alignment::Center);
                 items_col = items_col.push(row_widget);
@@ -226,7 +235,7 @@ impl Signex {
         }
 
         let lfs_check: Element<'_, Message> = checkbox(st.use_lfs)
-            .size(14)
+            .size(TS.heading)
             .on_toggle(|_| Message::EnableVersionControl(EnableVersionControlMsg::ToggleLfs))
             .into();
         let lfs_row = row![
@@ -234,13 +243,13 @@ impl Signex {
             Space::new().width(8),
             column![
                 text("Track binary 3D models via Git LFS")
-                    .size(12)
+                    .size(TS.label)
                     .color(text_c),
                 text("Routes `*.step / *.stp / *.wrl / *.iges` through Git LFS. Requires `git lfs` locally.")
-                    .size(10)
+                    .size(TS.caption)
                     .color(text_muted),
             ]
-            .spacing(2),
+            .spacing(SP.xs),
         ]
         .align_y(iced::Alignment::Start);
 
@@ -254,7 +263,7 @@ impl Signex {
         if let Some(err) = st.error.as_ref() {
             body_col = body_col.push(
                 text(err.clone())
-                    .size(11)
+                    .size(TS.body)
                     .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
             );
         }
@@ -262,7 +271,7 @@ impl Signex {
         let dialog = container(
             column![
                 header,
-                container(body_col).padding([14, 16]),
+                container(body_col).padding([14.0, SP.xl]),
                 container(
                     row![
                         Space::new().width(Length::Fill),
@@ -285,7 +294,10 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(520),
+            .width(self.dialog_width(
+                super::super::super::state::ModalId::EnableVersionControl,
+                520.0,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -308,7 +320,7 @@ impl Signex {
         wrap_modal(dialog, offset, self.ui_state.window_size, (480.0, 280.0))
     }
 
-    fn view_grid_properties_dialog_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_grid_properties_dialog_body(&self) -> Element<'_, Message> {
         use iced::widget::text_input;
 
         let Some(ref st) = self.ui_state.grid_properties else {
@@ -338,10 +350,9 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let header = draggable_header(
+        let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::GridProperties,
-            self.interaction_state.last_mouse_pos,
         );
 
         let mk_input = |placeholder: &'static str,
@@ -350,7 +361,7 @@ impl Signex {
                         enabled: bool|
          -> Element<'_, Message> {
             let mut input = text_input(placeholder, value)
-                .size(12)
+                .size(TS.label)
                 .padding(6)
                 .width(Length::Fixed(140.0));
             if enabled {
@@ -382,7 +393,7 @@ impl Signex {
                         } else {
                             iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
                         };
-                        iced::widget::button(text(label).size(10).color(text_c))
+                        iced::widget::button(text(label).size(TS.caption).color(text_c))
                             .padding([3, 10])
                             .on_press(setter(target))
                             .style(move |_: &iced::Theme, _| iced::widget::button::Style {
@@ -397,12 +408,13 @@ impl Signex {
                             .into()
                     };
                 row![
-                    container(text(label).size(11).color(text_muted)).width(Length::Fixed(80.0)),
+                    container(text(label).size(TS.body).color(text_muted))
+                        .width(Length::Fixed(80.0)),
                     seg("Lines", Gd::Lines, current == Gd::Lines),
                     seg("Dots", Gd::Dots, current == Gd::Dots),
                     seg("Hidden", Gd::Hidden, current == Gd::Hidden),
                 ]
-                .spacing(4)
+                .spacing(SP.s)
                 .align_y(iced::Alignment::Center)
                 .into()
             };
@@ -414,7 +426,7 @@ impl Signex {
                     } else {
                         iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
                     };
-                    iced::widget::button(text(label).size(10).color(text_c))
+                    iced::widget::button(text(label).size(TS.caption).color(text_c))
                         .padding([3, 10])
                         .on_press(Message::GridProperties(GridPropertiesMsg::SetMultiplier(
                             target,
@@ -431,20 +443,21 @@ impl Signex {
                         .into()
                 };
             row![
-                container(text("Multiplier").size(11).color(text_muted)).width(Length::Fixed(80.0)),
+                container(text("Multiplier").size(TS.body).color(text_muted))
+                    .width(Length::Fixed(80.0)),
                 seg("1×", 1, current == 1),
                 seg("2×", 2, current == 2),
                 seg("5×", 5, current == 5),
                 seg("10×", 10, current == 10),
             ]
-            .spacing(4)
+            .spacing(SP.s)
             .align_y(iced::Alignment::Center)
             .into()
         };
 
         let body = column![
             row![
-                container(text("Step X").size(11).color(text_muted))
+                container(text("Step X").size(TS.body).color(text_muted))
                     .width(Length::Fixed(80.0)),
                 mk_input(
                     "0.127",
@@ -453,14 +466,14 @@ impl Signex {
                     true,
                 ),
                 Space::new().width(8),
-                iced::widget::button(text(link_label).size(11).color(text_c))
-                    .padding([4, 10])
+                iced::widget::button(text(link_label).size(TS.body).color(text_c))
+                    .padding([SP.s, 10.0])
                     .on_press(Message::GridProperties(GridPropertiesMsg::ToggleLink)),
             ]
-            .spacing(8)
+            .spacing(SP.m)
             .align_y(iced::Alignment::Center),
             row![
-                container(text("Step Y").size(11).color(text_muted))
+                container(text("Step Y").size(TS.body).color(text_muted))
                     .width(Length::Fixed(80.0)),
                 mk_input(
                     "0.127",
@@ -469,7 +482,7 @@ impl Signex {
                     !st.link_xy,
                 ),
             ]
-            .spacing(8)
+            .spacing(SP.m)
             .align_y(iced::Alignment::Center),
             mk_display_row("Fine", st.fine_display, |d| {
                 Message::GridProperties(GridPropertiesMsg::SetFineDisplay(d))
@@ -483,7 +496,7 @@ impl Signex {
                  Display: Lines / Dots / Hidden — Lines is the v0.18.16 behaviour; Dots and Hidden land here. \
                  Multiplier sets the coarse-grid stride (5× / 10× are typical Altium defaults)."
             )
-            .size(10)
+            .size(TS.caption)
             .color(text_muted),
         ]
         .spacing(10);
@@ -491,7 +504,7 @@ impl Signex {
         let dialog = container(
             column![
                 header,
-                container(body).padding([14, 16]),
+                container(body).padding([14.0, SP.xl]),
                 container(
                     row![
                         Space::new().width(Length::Fill),
@@ -512,7 +525,7 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(480),
+            .width(self.dialog_width(super::super::super::state::ModalId::GridProperties, 480.0)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -534,7 +547,7 @@ impl Signex {
         wrap_modal(dialog, offset, self.ui_state.window_size, (440.0, 380.0))
     }
 
-    fn view_selection_filter_custom_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_selection_filter_custom_body(&self) -> Element<'_, Message> {
         use crate::library::editor::footprint::state::SelectionFilterKind as K;
 
         let Some(ref st) = self.ui_state.selection_filter_custom else {
@@ -564,10 +577,9 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let header = draggable_header(
+        let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::SelectionFilterCustom,
-            self.interaction_state.last_mouse_pos,
         );
 
         let mk_row = |label: &'static str, kind: K, on: bool| -> Element<'_, Message> {
@@ -575,13 +587,13 @@ impl Signex {
             iced::widget::button(
                 row![
                     text(format!("{glyph}  {label}"))
-                        .size(11)
+                        .size(TS.body)
                         .color(text_c)
                         .width(Length::Fill),
                 ]
                 .align_y(iced::Alignment::Center),
             )
-            .padding([4, 8])
+            .padding([SP.s, SP.m])
             .width(Length::Fill)
             .on_press(Message::SelectionFilter(
                 SelectionFilterMsg::ToggleCustomKind(kind),
@@ -609,7 +621,7 @@ impl Signex {
                  Pads is the only kind functionally wired today; the \
                  rest store flags for forward compatibility."
             )
-            .size(10)
+            .size(TS.caption)
             .color(text_muted),
             mk_row("Pads", K::Pads, st.pads),
             mk_row("Tracks", K::Tracks, st.tracks),
@@ -620,12 +632,12 @@ impl Signex {
             mk_row("Cutouts", K::Cutouts, st.cutouts),
             mk_row("Texts", K::Texts, st.texts),
         ]
-        .spacing(4);
+        .spacing(SP.s);
 
         let dialog = container(
             column![
                 header,
-                container(body).padding([12, 14]),
+                container(body).padding([SP.l, 14.0]),
                 container(
                     row![
                         Space::new().width(Length::Fill),
@@ -646,7 +658,10 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(440),
+            .width(self.dialog_width(
+                super::super::super::state::ModalId::SelectionFilterCustom,
+                440.0,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

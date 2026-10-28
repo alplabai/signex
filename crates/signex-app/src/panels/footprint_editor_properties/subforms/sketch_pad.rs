@@ -6,6 +6,11 @@ use iced::{Color, Length};
 use super::super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg};
 use super::super::pad::{pad_check_row, pad_input_row, pad_pick_row};
 use super::super::{fp_is_collapsed, props_section_header};
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// v0.21 — Sketch-mode Pad Attributes sub-form. Renders when the
 /// selected sketch entity carries a `PadAttr`. Mirrors the
@@ -87,7 +92,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
     // Pad Features.
     col = col.push(
         container(text("Pad Features").size(9).color(muted))
-            .padding([6, 8])
+            .padding([6.0, SP.m])
             .width(Length::Fill),
     );
     col = col.push(pad_pick_row(
@@ -114,7 +119,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
     // Testpoint flags.
     col = col.push(
         container(text("Testpoint").size(9).color(muted))
-            .padding([6, 8])
+            .padding([6.0, SP.m])
             .width(Length::Fill),
     );
     col = col.push(pad_check_row(
@@ -150,7 +155,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
     // mask/paste margins stay sketch-parameterised).
     col = col.push(
         container(text("Pad Stack").size(9).color(muted))
-            .padding([6, 8])
+            .padding([6.0, SP.m])
             .width(Length::Fill),
     );
     col = col.push(pad_check_row(
@@ -206,7 +211,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
     if p.has_drill {
         col = col.push(
             container(text("Hole Details").size(9).color(muted))
-                .padding([6, 8])
+                .padding([6.0, SP.m])
                 .width(Length::Fill),
         );
         let tol_p_buf = p
@@ -283,12 +288,12 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
     // the EditorPad index from the entity ID.
     col = col.push(
         container(
-            iced::widget::button(text("Edit in Pads ▸").size(10).color(primary))
-                .padding([4, 10])
+            iced::widget::button(text("Edit in Pads ▸").size(TS.caption).color(primary))
+                .padding([SP.s, 10.0])
                 .on_press(PanelMsg::FpEditorEditSketchPadInPads { id })
                 .style(iced::widget::button::primary),
         )
-        .padding([6, 8])
+        .padding([6.0, SP.m])
         .width(Length::Fill),
     );
 

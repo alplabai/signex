@@ -31,6 +31,11 @@ Edit/Paste	item	Paste	paste	Ctrl+V	Paste	01000000	cmd:paste
 Edit/Paste Special	item	Paste Special	smart_paste	Shift+Ctrl+V	SmartPaste	01000000	cmd:smart_paste
 Edit/Duplicate	item	Duplicate	duplicate	Ctrl+D	Duplicate	01000000	cmd:duplicate
 Edit/Delete	item	Delete	delete_selection	Del	Delete	01000010	cmd:delete_selection
+Edit/Arrange	submenu	Arrange	-	-	-	-	-
+Edit/Arrange/Bring to Front	item	Bring to Front	-	-	BringDrawingsToFront	00000000	cmd:bring_drawings_to_front
+Edit/Arrange/Send to Back	item	Send to Back	-	-	SendDrawingsToBack	00000000	cmd:send_drawings_to_back
+Edit/Arrange/Bring Forward	item	Bring Forward	-	-	BringDrawingsForward	00000000	cmd:bring_drawings_forward
+Edit/Arrange/Send Backward	item	Send Backward	-	-	SendDrawingsBackward	00000000	cmd:send_drawings_backward
 Edit/---	separator	-	-	-	-	-	-
 Edit/Select All	item	Select All	select_all	Ctrl+A	SelectAll	01000000	cmd:select_all
 Edit/---	separator	-	-	-	-	-	-

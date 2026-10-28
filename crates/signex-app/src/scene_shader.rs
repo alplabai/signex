@@ -35,6 +35,7 @@ use signex_gfx::camera::{CameraGpu, CameraUniform};
 use signex_gfx::pipeline::arc::ArcPipeline;
 use signex_gfx::pipeline::circle::CirclePipeline;
 use signex_gfx::pipeline::line::LinePipeline;
+use signex_gfx::pipeline::ordered::{KindPipelines, OrderedPipeline};
 use signex_gfx::pipeline::polygon::PolygonPipeline;
 use signex_gfx::pipeline::text::GlyphonTextPipeline;
 use signex_gfx::primitive::text::TextSizePolicy;
@@ -143,6 +144,22 @@ impl SceneSurface for SchematicSurface {
     const MIN_RADIUS_PX: f32 = crate::renderer_scene_canvas::MIN_RADIUS_PX;
 }
 
+/// The moving items of a schematic move-drag (#199).
+///
+/// A separate type from [`SchematicSurface`] because iced prepares every
+/// primitive of one `TypeId` in a window before rendering any of them, so two
+/// of the same type in one frame would overwrite each other's buffers. It
+/// carries the same constants, so a moved item is drawn exactly as it was.
+#[derive(Debug, Clone, Copy)]
+pub struct SchematicDragSurface;
+
+impl SceneSurface for SchematicDragSurface {
+    const LABEL: &'static str = "schematic drag";
+    const TEXT_SIZE: TextSizePolicy = SchematicSurface::TEXT_SIZE;
+    const MIN_STROKE_PX: f32 = SchematicSurface::MIN_STROKE_PX;
+    const MIN_RADIUS_PX: f32 = SchematicSurface::MIN_RADIUS_PX;
+}
+
 /// World coordinate (mm) at the render pass origin (top-left).
 ///
 /// The screen mapping is `screen_px = world_mm * scale + offset_px` — the same
@@ -191,6 +208,10 @@ pub struct ScenePipeline {
     circle: CirclePipeline,
     arc: ArcPipeline,
     polygon: PolygonPipeline,
+    /// Drawings in file paint order; reuses the four pipelines above (#1579).
+    ordered: OrderedPipeline,
+    /// Drawings placed above the circuit (#1583).
+    ordered_front: OrderedPipeline,
     text: GlyphonTextPipeline,
     /// What is resident in the instance buffers and the window it was culled
     /// to. Decides, per frame, which categories re-upload: only those that
@@ -214,6 +235,8 @@ impl shader::Pipeline for ScenePipeline {
             circle: CirclePipeline::new(device, format, layout),
             arc: ArcPipeline::new(device, format, layout),
             polygon: PolygonPipeline::new(device, format, layout),
+            ordered: OrderedPipeline::new(device),
+            ordered_front: OrderedPipeline::new(device),
             text: GlyphonTextPipeline::new(device, queue, format),
             camera,
             tracker: UploadTracker::default(),
@@ -360,6 +383,8 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
             circle,
             arc,
             polygon,
+            ordered,
+            ordered_front,
             text,
             text_upload_warned,
             ..
@@ -371,6 +396,8 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
             circle,
             arc,
             polygon,
+            ordered,
+            ordered_front,
             text,
             text_frame: TextFrame {
                 size_policy: text_size,
@@ -395,8 +422,8 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
 
     fn draw(&self, pipeline: &Self::Pipeline, render_pass: &mut wgpu::RenderPass<'_>) -> bool {
         let camera = pipeline.camera.bind_group();
-        // Composite in the shared `GPU_SCENE_DRAW_ORDER` (fills, then strokes,
-        // then pads, then text on top). The order lives in one const so it can be diffed
+        // Composite in the shared `GPU_SCENE_DRAW_ORDER` (drawings at the very
+        // back, then fills, then strokes, then pads, then text on top). The order lives in one const so it can be diffed
         // against the CPU replays: both `pcb_canvas::draw_scene` and the
         // schematic replay now draw their base buckets in this order (#645,
         // #653), pinned by the `scene::order` parity tests. GPU parity stays
@@ -404,6 +431,26 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         for &bucket in GPU_SCENE_DRAW_ORDER {
             match bucket {
                 SceneBucket::Polygons => pipeline.polygon.draw(render_pass, camera),
+                SceneBucket::Drawings => pipeline.ordered.draw_runs(
+                    render_pass,
+                    camera,
+                    &KindPipelines {
+                        line: &pipeline.line,
+                        circle: &pipeline.circle,
+                        arc: &pipeline.arc,
+                        polygon: &pipeline.polygon,
+                    },
+                ),
+                SceneBucket::DrawingsFront => pipeline.ordered_front.draw_runs(
+                    render_pass,
+                    camera,
+                    &KindPipelines {
+                        line: &pipeline.line,
+                        circle: &pipeline.circle,
+                        arc: &pipeline.arc,
+                        polygon: &pipeline.polygon,
+                    },
+                ),
                 SceneBucket::Lines => pipeline.line.draw(render_pass, camera),
                 SceneBucket::Arcs => pipeline.arc.draw(render_pass, camera),
                 SceneBucket::Circles => pipeline.circle.draw(render_pass, camera),
@@ -636,6 +683,7 @@ mod tests {
         let ids = [
             std::any::TypeId::of::<ScenePrimitive<PcbSurface>>(),
             std::any::TypeId::of::<ScenePrimitive<SchematicSurface>>(),
+            std::any::TypeId::of::<ScenePrimitive<SchematicDragSurface>>(),
             std::any::TypeId::of::<ScenePrimitive<OtherSurface>>(),
         ];
         for (i, a) in ids.iter().enumerate() {
@@ -651,6 +699,19 @@ mod tests {
 
     /// The schematic surface must clamp exactly as the schematic CPU replay
     /// does; both read the same constants, and this pins that they still do.
+    #[test]
+    fn the_drag_surface_carries_the_schematic_constants() {
+        assert_eq!(SchematicDragSurface::TEXT_SIZE, SchematicSurface::TEXT_SIZE);
+        assert_eq!(
+            SchematicDragSurface::MIN_STROKE_PX,
+            SchematicSurface::MIN_STROKE_PX
+        );
+        assert_eq!(
+            SchematicDragSurface::MIN_RADIUS_PX,
+            SchematicSurface::MIN_RADIUS_PX
+        );
+    }
+
     #[test]
     fn schematic_surface_matches_the_cpu_replay_constants() {
         assert_eq!(

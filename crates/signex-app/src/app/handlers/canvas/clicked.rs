@@ -189,11 +189,12 @@ impl Signex {
         // Altium's "click the object to reference" convention.
         if let Some(picker) = self.ui_state.reorder_picker {
             if let Some(snapshot) = self.active_render_snapshot() {
-                let hit = crate::schematic_runtime::hit_test::hit_test(
+                let hit = crate::schematic_runtime::hit_test::hit_test_styled(
                     snapshot,
                     &self.interaction_state.active_canvas().designators,
                     world_x,
                     world_y,
+                    self.ui_state.net_class_styles.styles(),
                 );
                 if let Some(reference) = hit {
                     let direction = match picker {
@@ -375,9 +376,6 @@ impl Signex {
                     self.apply_engine_commands(signex_engine::place_power_port(sym), false, false);
                 }
             }
-            Tool::Component => {
-                let _ = self.place_selected_component(wx, wy);
-            }
             Tool::NoConnect => {
                 let nc = signex_types::schematic::NoConnect {
                     uuid: uuid::Uuid::new_v4(),
@@ -468,6 +466,7 @@ impl Signex {
                 }
             }
             Tool::Sheet => self.place_sheet_click(wx, wy),
+            Tool::SheetEntry => self.place_sheet_entry_click(wx, wy),
             Tool::Rectangle => {
                 // Two-click: corner → opposite-corner →
                 // SchDrawing::Rect. Rearms blank for the

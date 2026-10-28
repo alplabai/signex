@@ -10,6 +10,10 @@ use signex_output::{BomIssueSeverity, BomRule};
 
 use super::super::widgets::section_header;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 impl Signex {
     /// Build the Rules tab pane for the active preview.
     pub(super) fn bom_rules_pane(&self) -> Element<'_, Message> {
@@ -28,10 +32,10 @@ impl Signex {
             rule_list = rule_list.push(rule_row(rule, on, text_c, border_c, accent_c));
         }
 
-        let mut issues: Column<'_, Message> = Column::new().spacing(2);
+        let mut issues: Column<'_, Message> = Column::new().spacing(SP.xs);
         let report = &preview.validation_report;
         if report.issues.is_empty() {
-            issues = issues.push(text("No issues found.").size(11).color(text_muted));
+            issues = issues.push(text("No issues found.").size(TS.body).color(text_muted));
         }
         for (severity, heading) in [
             (BomIssueSeverity::Error, "Errors"),
@@ -48,17 +52,19 @@ impl Signex {
             }
             issues = issues.push(
                 text(format!("{heading} ({})", of_severity.len()))
-                    .size(11)
+                    .size(TS.body)
                     .color(severity_color(severity, text_c)),
             );
             for issue in of_severity {
                 issues = issues.push(
                     column![
-                        text(issue.message.clone()).size(11).color(text_c),
-                        text(issue.references.join(", ")).size(10).color(text_muted),
+                        text(issue.message.clone()).size(TS.body).color(text_c),
+                        text(issue.references.join(", "))
+                            .size(TS.caption)
+                            .color(text_muted),
                     ]
                     .spacing(1)
-                    .padding([2, 8]),
+                    .padding([SP.xs, SP.m]),
                 );
             }
             issues = issues.push(Space::new().height(6));
@@ -66,10 +72,10 @@ impl Signex {
 
         column![
             section_header("Validation Rules", text_muted),
-            container(rule_list).padding([4, 0]),
+            container(rule_list).padding([SP.s, 0.0]),
             Space::new().height(8),
             section_header("Issues", text_muted),
-            container(issues).padding([8, 12]),
+            container(issues).padding([SP.m, SP.l]),
         ]
         .spacing(0)
         .into()
@@ -125,13 +131,13 @@ fn rule_row<'a>(
         row![
             pip,
             Space::new().width(8),
-            text(rule.label()).size(11).color(text_c),
+            text(rule.label()).size(TS.body).color(text_c),
             Space::new().width(Length::Fill),
         ]
         .align_y(iced::Alignment::Center),
     )
     .on_press(Message::BomPreview(BomPreviewMsg::SetRule(rule, !on)))
-    .padding([3, 12])
+    .padding([3.0, SP.l])
     .width(Length::Fill)
     .style(move |_: &Theme, status: button::Status| {
         let bg = match status {

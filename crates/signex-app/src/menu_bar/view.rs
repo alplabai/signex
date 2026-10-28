@@ -6,6 +6,9 @@ use super::model::{
 };
 use super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 type MenuItemView = Item<'static, MenuMessage, Theme, iced::Renderer>;
 
 // ─── View: Menu Bar ──────────────────────────────────────────
@@ -57,7 +60,7 @@ fn render_menu_bar(
             .collect(),
     )
     .spacing(1.0)
-    .padding([1, 4])
+    .padding([1.0, SP.s])
     .close_on_item_click_global(true)
     .close_on_background_click_global(true)
     // `Backdrop` paints `styling.path` behind the active root while its

@@ -207,11 +207,29 @@ pub(super) fn align_entries(tid: ThemeId, selected: usize) -> Vec<DropdownEntry<
     ]
 }
 
+/// Arrange submenu — order the selected drawings (#1583). Offered only while
+/// the selection holds a drawing, so every row is live.
+pub(super) fn arrange_entries() -> Vec<DropdownEntry<Message>> {
+    use signex_engine::DrawingArrange as D;
+    [
+        ("Bring to Front", D::ToFront),
+        ("Send to Back", D::ToBack),
+        ("Bring Forward", D::Forward),
+        ("Send Backward", D::Backward),
+    ]
+    .into_iter()
+    .map(|(label, arrange)| dd_kb(None, label, "", ContextAction::ArrangeDrawings(arrange)))
+    .collect()
+}
+
 /// Add New to Project submenu — the master "Add New" picker for the
 /// right-clicked project (resolved as `target`). Schematic / Component
 /// Library / Symbol Library are wired; the rest stay version-badged stubs
 /// until their editors land.
-pub(super) fn add_new_entries(tid: ThemeId, target: Vec<usize>) -> Vec<DropdownEntry<Message>> {
+pub(super) fn add_new_entries(
+    tid: ThemeId,
+    target: signex_widgets::tree_view::TreeKey,
+) -> Vec<DropdownEntry<Message>> {
     use crate::app::ProjectTreeAction as P;
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(12);
 
@@ -300,6 +318,7 @@ impl Signex {
             ContextSubmenu::Align => {
                 align_entries(tid, self.interaction_state.canvas.selected.len())
             }
+            ContextSubmenu::Arrange => arrange_entries(),
             ContextSubmenu::AddNewToProject => {
                 // The right-clicked project lives at `tree_path[0]` —
                 // resolve it off the captured menu state so the action
@@ -308,13 +327,7 @@ impl Signex {
                     .interaction_state
                     .project_tree_context_menu
                     .as_ref()
-                    .and_then(|m| m.key.as_deref())
-                    .and_then(|key| {
-                        signex_widgets::tree_view::resolve_path(
-                            self.document_state.panel_ctx.project_tree.as_slice(),
-                            key,
-                        )
-                    })
+                    .and_then(|m| m.key.clone())
                     .unwrap_or_default();
                 add_new_entries(tid, target)
             }

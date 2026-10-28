@@ -48,22 +48,38 @@ impl Signex {
             .hierarchy
             .as_ref()
             .and_then(|hierarchy| hierarchy.placement_at(path));
-        let (sheet_path, kind, label, detail) = (
+        let (sheet_path, kind, label, detail, symbol) = (
             node.path.clone(),
             node.kind,
             node.name.clone(),
             node.detail.clone(),
+            node.placed_as,
         );
+        // The sheet that carries this row's symbol: one level up the tree.
+        let parent_path = path
+            .split_last()
+            .filter(|(_, up)| !up.is_empty())
+            .and_then(|(_, up)| navigator.node_at(up))
+            .map(|parent| parent.path.clone());
         navigator.selected = Some(path.to_vec());
         if !navigator.register_click(path, std::time::Instant::now()) {
             return;
         }
         match kind {
             SheetNodeKind::Present => self.open_sheet_with_placement(sheet_path, placement),
-            SheetNodeKind::Missing => crate::diagnostics::log_warning(format!(
-                "Sheet '{label}' cannot be opened: {} is missing",
-                sheet_path.display()
-            )),
+            SheetNodeKind::Missing => {
+                crate::diagnostics::log_warning(format!(
+                    "Sheet '{label}' cannot be opened: {} is missing",
+                    sheet_path.display()
+                ));
+                // Offer to create it, as the canvas does.
+                if let (Some(symbol), Some(parent)) = (symbol, parent_path)
+                    && (self.active_tab_path().as_deref() == Some(parent.as_path())
+                        || self.open_or_focus_sheet_path(parent))
+                {
+                    self.open_create_child_sheet_dialog(symbol, true);
+                }
+            }
             SheetNodeKind::Unreadable => crate::diagnostics::log_warning(format!(
                 "Sheet '{label}' cannot be opened: {} is unreadable ({})",
                 sheet_path.display(),
@@ -192,6 +208,7 @@ mod tests {
 
         app.open_or_focus_sheet_path(leaf.clone());
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         assert_eq!(active_tab(&app), Some(leaf));
         assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Leaf"]);
@@ -206,6 +223,7 @@ mod tests {
         let (mut app, _) = three_level_project(&dir, &[("Back", "root.snxsch")]);
 
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         assert_eq!(
             labels(&app, &[0, 0, 0, 0]),
@@ -218,6 +236,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let (mut app, [_, mid, _]) = three_level_project(&dir, &[]);
         app.refresh_panel_ctx();
+        app.settle_navigator();
         let select = PanelMsg::Navigator(TreeMsg::Select(key_at(&app, &[0, 0])));
 
         let _ = app.handle_dock_navigator_panel_message(&select);
@@ -272,6 +291,7 @@ mod tests {
         let mut app = app_workspace(&dir.path().to_string_lossy(), &["root.snxsch"]);
         app.open_or_focus_sheet_path(mid.clone());
         app.refresh_panel_ctx();
+        app.settle_navigator();
         assert!(root.exists());
 
         double_click(&mut app, &[0, 0]);
@@ -296,6 +316,7 @@ mod tests {
         );
         let mut app = app_workspace(&dir.to_string_lossy(), &["root.snxsch"]);
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         assert_eq!(labels(&app, &[0, 0]), ["root", "Up (rejected)"]);
         assert_eq!(labels(&app, &[0, 1]), ["root", "Abs (rejected)"]);
@@ -315,6 +336,7 @@ mod tests {
         let mut app = app_workspace(&dir.path().to_string_lossy(), &["root.snxsch"]);
 
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Again (cycle)"]);
     }
@@ -327,6 +349,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let (mut app, _top, child) = placed_twice_on_disk(&dir);
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         double_click(&mut app, &[0, 1]);
 
@@ -342,6 +365,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let (mut app, top, child) = placed_twice_on_disk(&dir);
         app.refresh_panel_ctx();
+        app.settle_navigator();
         let engine = app
             .document_state
             .engines
@@ -352,6 +376,7 @@ mod tests {
         document.child_sheets[1].uuid = replacement;
         *engine = signex_engine::Engine::new(document).expect("engine");
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         double_click(&mut app, &[0, 1]);
 

@@ -88,6 +88,8 @@ mod preferences_export_status;
 
 #[path = "regression/preferences_prefs_recovery.rs"]
 mod preferences_prefs_recovery;
+#[path = "regression/rule_profiles_ui.rs"]
+mod rule_profiles_ui;
 
 #[path = "regression/preferences_symbol_drafts.rs"]
 mod preferences_symbol_drafts;
@@ -366,3 +368,6 @@ mod project_tab_rename;
 mod project_tab_saves;
 #[path = "regression/project_tab_support.rs"]
 mod project_tab_support;
+
+#[path = "regression/navigator_async.rs"]
+mod navigator_async;

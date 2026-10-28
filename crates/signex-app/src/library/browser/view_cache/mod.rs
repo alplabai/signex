@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 
 use super::columns::{ColumnKind, GridColumn, derive_columns, row_matches_filter};
 use super::price::PriceView;
-use super::sort::sort_by_cell_key;
+use super::sort::{CellSortKey, sort_by_cell_key};
 use super::*;
 use crate::library::state::{BrowserSort, OpenLibrary};
 
@@ -102,8 +102,8 @@ impl BrowserViewCache {
             sort_by_cell_key(
                 &mut visible,
                 |&i| match column.kind {
-                    ColumnKind::Price => prices.sort_value(&rows[i]),
-                    _ => column.kind.cell_value(&rows[i]),
+                    ColumnKind::Price => CellSortKey::from_cell(&prices.sort_value(&rows[i])),
+                    _ => column.kind.sort_key_for(&rows[i]),
                 },
                 sort.descending,
             );

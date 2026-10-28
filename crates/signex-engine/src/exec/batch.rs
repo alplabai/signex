@@ -57,6 +57,19 @@ impl Engine {
         &mut self,
         commands: impl IntoIterator<Item = Command>,
     ) -> Result<CommandResult, EngineError> {
+        self.execute_batch_grouped(commands, None)
+    }
+
+    /// [`Engine::execute_batch`] whose history entry is stamped with
+    /// `group`, so an app-level step that spans several sheets (a
+    /// project-wide replace) can undo and redo every sheet together. `None`
+    /// is the ungrouped batch. Everything else — transactional abort, no
+    /// entry for an unchanged batch, no nesting — is `execute_batch`'s.
+    pub fn execute_batch_grouped(
+        &mut self,
+        commands: impl IntoIterator<Item = Command>,
+        group: Option<UndoGroupId>,
+    ) -> Result<CommandResult, EngineError> {
         debug_assert!(
             !self.history_suppressed,
             "execute_batch does not nest: the inner batch would consume the outer batch's history entry"
@@ -86,7 +99,7 @@ impl Engine {
             }
         };
 
-        self.record_history(before, patch_pair);
+        self.record_grouped_history(before, patch_pair, group);
 
         Ok(CommandResult::changed(patch_pair))
     }
@@ -207,6 +220,19 @@ mod tests {
     /// `changed == false`.
     fn no_op() -> Command {
         Command::DeleteSelection { items: Vec::new() }
+    }
+
+    #[test]
+    fn a_grouped_batch_stamps_its_entry_and_survives_undo_and_redo() {
+        let mut engine = engine();
+        engine
+            .execute_batch_grouped([place_label(), place_label()], Some(UndoGroupId::new(9)))
+            .unwrap();
+        assert_eq!(engine.next_undo_group(), Some(UndoGroupId::new(9)));
+        engine.undo().unwrap();
+        assert_eq!(engine.next_redo_group(), Some(UndoGroupId::new(9)));
+        engine.redo().unwrap();
+        assert_eq!(engine.next_undo_group(), Some(UndoGroupId::new(9)));
     }
 
     #[test]
@@ -490,5 +516,51 @@ mod tests {
 
         assert!(!engine.history_suppressed);
         assert_eq!(engine.history.len(), 2);
+    }
+}
+
+#[cfg(test)]
+mod snapshot_cost_tests {
+    use super::*;
+    use crate::test_support::test_sheet;
+    use signex_types::schematic::{NoConnect, Point};
+
+    fn place() -> Command {
+        Command::PlaceNoConnect {
+            no_connect: NoConnect {
+                uuid: uuid::Uuid::new_v4(),
+                position: Point::new(0.0, 0.0),
+            },
+        }
+    }
+
+    #[test]
+    fn a_batch_of_n_takes_one_sheet_snapshot_not_n_plus_one() {
+        let mut engine = Engine::new(test_sheet()).unwrap();
+        engine
+            .execute_batch(std::iter::repeat_with(place).take(8))
+            .unwrap();
+        assert_eq!(engine.history.len(), 1);
+        assert_eq!(engine.pre_image_clones, 0, "inner commands must not clone");
+    }
+
+    #[test]
+    fn a_single_command_takes_one_snapshot() {
+        let mut engine = Engine::new(test_sheet()).unwrap();
+        engine.execute(place()).unwrap();
+        assert_eq!(engine.pre_image_clones, 1);
+    }
+
+    #[test]
+    fn a_command_that_changes_nothing_adds_no_undo_entry() {
+        let mut engine = Engine::new(test_sheet()).unwrap();
+        engine.execute(place()).unwrap();
+        engine.undo().unwrap();
+        let result = engine
+            .execute(Command::DeleteSelection { items: Vec::new() })
+            .unwrap();
+        assert!(!result.changed);
+        assert!(!engine.can_undo());
+        assert!(engine.can_redo(), "redo survives an unchanged command");
     }
 }
