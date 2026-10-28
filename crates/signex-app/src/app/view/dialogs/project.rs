@@ -9,9 +9,7 @@ use super::*;
 use iced::widget::{Space, column, container, row, text};
 use iced::{Color, Element, Length};
 
-use super::widgets::{
-    close_x_button, draggable_header, primary_button, secondary_button, wrap_modal,
-};
+use super::widgets::{close_x_button, primary_button, secondary_button, wrap_modal};
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -38,7 +36,7 @@ impl Signex {
         wrap_modal(dialog, offset, self.ui_state.window_size, (420.0, 200.0))
     }
 
-    fn view_rename_dialog_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_rename_dialog_body(&self) -> Element<'_, Message> {
         use iced::widget::text_input;
 
         let Some(ref st) = self.ui_state.rename_dialog else {
@@ -69,10 +67,9 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let header = draggable_header(
+        let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::RenameDialog,
-            self.interaction_state.last_mouse_pos,
         );
 
         let current_label = if st.is_project_rename {
@@ -138,7 +135,7 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(420),
+            .width(self.dialog_width(super::super::super::state::ModalId::RenameDialog, 420.0)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -156,7 +153,9 @@ impl Signex {
         wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 320.0))
     }
 
-    fn view_enable_version_control_dialog_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_enable_version_control_dialog_body(
+        &self,
+    ) -> Element<'_, Message> {
         use iced::widget::checkbox;
         let Some(ref st) = self.ui_state.enable_version_control else {
             return container(Space::new()).into();
@@ -185,10 +184,9 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let header = draggable_header(
+        let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::EnableVersionControl,
-            self.interaction_state.last_mouse_pos,
         );
 
         let scope = st.scope;
@@ -296,7 +294,10 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(520),
+            .width(self.dialog_width(
+                super::super::super::state::ModalId::EnableVersionControl,
+                520.0,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -319,7 +320,7 @@ impl Signex {
         wrap_modal(dialog, offset, self.ui_state.window_size, (480.0, 280.0))
     }
 
-    fn view_grid_properties_dialog_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_grid_properties_dialog_body(&self) -> Element<'_, Message> {
         use iced::widget::text_input;
 
         let Some(ref st) = self.ui_state.grid_properties else {
@@ -349,10 +350,9 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let header = draggable_header(
+        let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::GridProperties,
-            self.interaction_state.last_mouse_pos,
         );
 
         let mk_input = |placeholder: &'static str,
@@ -525,7 +525,7 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(480),
+            .width(self.dialog_width(super::super::super::state::ModalId::GridProperties, 480.0)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -547,7 +547,7 @@ impl Signex {
         wrap_modal(dialog, offset, self.ui_state.window_size, (440.0, 380.0))
     }
 
-    fn view_selection_filter_custom_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_selection_filter_custom_body(&self) -> Element<'_, Message> {
         use crate::library::editor::footprint::state::SelectionFilterKind as K;
 
         let Some(ref st) = self.ui_state.selection_filter_custom else {
@@ -577,10 +577,9 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let header = draggable_header(
+        let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::SelectionFilterCustom,
-            self.interaction_state.last_mouse_pos,
         );
 
         let mk_row = |label: &'static str, kind: K, on: bool| -> Element<'_, Message> {
@@ -659,7 +658,10 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(440),
+            .width(self.dialog_width(
+                super::super::super::state::ModalId::SelectionFilterCustom,
+                440.0,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

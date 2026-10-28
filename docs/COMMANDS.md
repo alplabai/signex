@@ -55,19 +55,19 @@ shrink.
 | `edit_value` | Edit value | edit | — | `V` |
 | `fast_grid_1` | Fast grid 1 | view | — | `Alt+1` |
 | `fast_grid_2` | Fast grid 2 | view | — | `Alt+2` |
-| `find` | Find | search | — | `Ctrl+F` |
+| `find` | Find | search | `Ctrl+F` | `Ctrl+F` |
 | `find_and_replace` | Find and replace | search | `Ctrl+H` | — |
 | `find_next` | Find next | search | `F3` | `F3` |
 | `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
 | `find_similar_objects` | Find Similar Objects | select | `Shift+F` | — |
-| `find_text` | Find text | search | `Ctrl+F` | — |
+| `find_text` | Find text | search | — | — |
 | `import_graphics` | Import graphics | library | — | `Ctrl+Shift+F` |
 | `measure_distance` | Measure distance | view | `Ctrl+M` | — |
 | `mirror_x` | Mirror along X-axis | modify | `X` | `X` |
 | `mirror_y` | Mirror along Y-axis | modify | `Y` | `Y` |
 | `move_object` | Move object | modify | `M M` | — |
 | `move_selection` | Move selection | modify | — | `M` |
-| `new_document` | New | file | — | `Ctrl+N` |
+| `new_document` | New | file | `Ctrl+N` | `Ctrl+N` |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |
 | `open_command_palette` | Open command palette | commands | `Ctrl+Shift+P` | `Ctrl+Shift+P` |
@@ -94,13 +94,13 @@ shrink.
 | `rotate_counterclockwise` | Rotate counterclockwise by 90 degrees | modify | `Space` | `R` |
 | `rubber_stamp_copy` | Rubber-stamp copy / repeated paste | edit | `Ctrl+R` | — |
 | `save_document` | Save document | file | `Ctrl+S` | `Ctrl+S` |
-| `save_document_as` | Save as | file | — | `Ctrl+Shift+S` |
+| `save_document_as` | Save as | file | `Ctrl+Shift+S` | `Ctrl+Shift+S` |
 | `select_all` | Select all | select | `Ctrl+A` | `Ctrl+A` |
 | `select_expand_connection` | Select / expand connection | select | — | `Ctrl+4` |
 | `select_node_or_connection_item` | Select node / connection item under cursor | select | — | `Alt+3` |
 | `send_drawings_backward` | Send drawings backward | edit | — | — |
 | `send_drawings_to_back` | Send drawings to back | edit | — | — |
-| `show_all_design_objects` | Show all design objects | view | `Ctrl+PageDown` | — |
+| `show_all_design_objects` | Show all design objects | view | — | — |
 | `show_current_command_hotkeys` | Show graphical editing hotkey list for current command | help | `F1` | — |
 | `show_current_command_shortcuts` | Show valid shortcuts for the current interactive command | help | `Shift+F1` | — |
 | `smart_paste` | Smart Paste | edit | `Ctrl+Shift+V` | — |
@@ -121,7 +121,7 @@ shrink.
 | `zoom_in_at_cursor` | Zoom in at cursor | view | `PageUp` | `F1` |
 | `zoom_out_at_cursor` | Zoom out at cursor | view | `PageDown` | `F2` |
 | `zoom_to_all_objects` | Zoom to all objects | view | — | `Ctrl+Home` |
-| `zoom_to_fit` | Zoom to fit | view | — | `Home` |
+| `zoom_to_fit` | Zoom to fit | view | `Ctrl+PageDown` | `Home` |
 | `zoom_to_selection_area` | Zoom to selection area | view | — | `Ctrl+F5` |
 
 ## Schematic
@@ -174,7 +174,7 @@ shrink.
 | `open_components_panel` | Open Components panel / place components | panels | `P P` | — |
 | `open_net_color_palette` | Open net color palette | view | `F5` | — |
 | `place_blanket` | Place blanket | place | — | — |
-| `place_bus` | Draw bus | place | — | `B` |
+| `place_bus` | Draw bus | place | `P B` | `B` |
 | `place_bus_entry` | Place bus entry | place | — | — |
 | `place_compile_mask` | Place Compile Mask directive | place | `P V K` | — |
 | `place_component` | Place component | place | — | — |

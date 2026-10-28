@@ -157,6 +157,26 @@ pub struct SymbolPin {
     /// on the selected part show.
     #[serde(default = "default_part_number")]
     pub part_number: u8,
+    /// Which body of a De Morgan symbol this pin belongs to: `0` common to
+    /// both bodies, `1` normal (default), `2` alternate. Maps onto
+    /// `LibPin::body_style` unchanged.
+    #[serde(default = "default_body_style", skip_serializing_if = "is_normal_body")]
+    pub body_style: u8,
+}
+
+/// Body-style tag shared by items drawn on both bodies.
+pub const BODY_COMMON: u8 = 0;
+/// Body-style tag of the normal body (the default).
+pub const BODY_NORMAL: u8 = 1;
+/// Body-style tag of the alternate (De Morgan) body.
+pub const BODY_ALTERNATE: u8 = 2;
+
+fn default_body_style() -> u8 {
+    BODY_NORMAL
+}
+
+fn is_normal_body(body_style: &u8) -> bool {
+    *body_style == BODY_NORMAL
 }
 
 fn default_visibility_true() -> bool {
@@ -190,6 +210,7 @@ impl SymbolPin {
             hidden: false,
             locked: false,
             part_number: 1,
+            body_style: BODY_NORMAL,
         }
     }
 }
@@ -291,6 +312,14 @@ pub struct SymbolGraphic {
     /// as before, so no `.snxsym` format-token bump is required.
     #[serde(default)]
     pub part_number: u8,
+    /// Which body this graphic belongs to: `0` common to both bodies, `1`
+    /// normal (default), `2` alternate (De Morgan). Written only when not 1,
+    /// and a file that holds any non-normal item is written as
+    /// [`SYMBOL_FILE_FORMAT_TOKEN_V3`], a token builds that predate body
+    /// styles do not accept, so they cannot open the file, draw both bodies
+    /// and drop these tags on their next save.
+    #[serde(default = "default_body_style", skip_serializing_if = "is_normal_body")]
+    pub body_style: u8,
 }
 
 /// Altium "Component Type" — drives BOM rules and schematic
@@ -509,9 +538,19 @@ const SYMBOL_FILE_FORMAT_TOKEN: &str = "snxsym/v1";
 /// token per actually-incompatible addition, not one per PR.
 const SYMBOL_FILE_FORMAT_TOKEN_V2: &str = "snxsym/v2";
 
+/// Written when any pin or graphic is off the normal body (`body_style` 0 or
+/// 2, #1233). Unlike a field addition this must not be readable by a build
+/// that predates it: such a build accepts v1 and v2, ignores the unknown
+/// graphic key, hard-codes body 1 and would drop every tag on its next save.
+/// A v3 file is refused there with `UnsupportedFormat`. This build reads v1,
+/// v2 and v3.
+const SYMBOL_FILE_FORMAT_TOKEN_V3: &str = "snxsym/v3";
+
 /// Stable column layout for the per-symbol `pins_tsv` block. Adding
 /// or reordering columns is a wire-format break — bump
-/// [`SYMBOL_FILE_FORMAT_TOKEN`].
+/// [`SYMBOL_FILE_FORMAT_TOKEN`]. This is the legacy 20-column layout,
+/// still written when every pin is on the normal body so such files stay
+/// byte-identical and readable by older builds; see [`PIN_TSV_BODY_COLUMN`].
 const PIN_TSV_COLUMNS: &[&str] = &[
     "number",
     "name",
@@ -534,6 +573,12 @@ const PIN_TSV_COLUMNS: &[&str] = &[
     "locked",
     "part_number",
 ];
+
+/// Trailing column appended to [`PIN_TSV_COLUMNS`] (21 columns in all) when
+/// any pin of the symbol is not on the normal body. The reader takes either
+/// layout (a missing column means body 1); the file's token is then
+/// [`SYMBOL_FILE_FORMAT_TOKEN_V3`].
+const PIN_TSV_BODY_COLUMN: &str = "body_style";
 
 /// Sentinel string substituted for each symbol's `pins_tsv` field
 /// before TOML serialise; replaced post-emit with the literal multi-
@@ -716,7 +761,7 @@ impl SymbolFile {
 
     /// Parse the TOML+TSV wire format. The format-token check accepts
     /// either [`SYMBOL_FILE_FORMAT_TOKEN`] or
-    /// [`SYMBOL_FILE_FORMAT_TOKEN_V2`]; any other token surfaces
+    /// [`SYMBOL_FILE_FORMAT_TOKEN_V2`] or [`SYMBOL_FILE_FORMAT_TOKEN_V3`]; any other token surfaces
     /// [`SymbolFileError::UnsupportedFormat`].
     ///
     /// Every loaded `Arc` graphic passes through
@@ -728,7 +773,13 @@ impl SymbolFile {
     /// corrected values, healing the file on disk too.
     pub fn from_toml_str(text: &str) -> Result<Self, SymbolFileError> {
         let wire: SymbolFileWire = signex_types::numeric::parse_toml_finite(text)?;
-        if wire.format != SYMBOL_FILE_FORMAT_TOKEN && wire.format != SYMBOL_FILE_FORMAT_TOKEN_V2 {
+        if ![
+            SYMBOL_FILE_FORMAT_TOKEN,
+            SYMBOL_FILE_FORMAT_TOKEN_V2,
+            SYMBOL_FILE_FORMAT_TOKEN_V3,
+        ]
+        .contains(&wire.format.as_str())
+        {
             return Err(SymbolFileError::UnsupportedFormat { got: wire.format });
         }
         let mut symbols = Vec::with_capacity(wire.symbols.len());
@@ -739,6 +790,18 @@ impl SymbolFile {
             // before `part_count` existed, defaulting to 1) keep all
             // their units instead of collapsing to one.
             let pin_max = pins.iter().map(|p| p.part_number).max().unwrap_or(1).max(1);
+            // Same handling as a pin's `body_style` cell: a tag that names no
+            // body would load as an item nothing shows or selects.
+            if let Some(bad) = sw
+                .graphics
+                .iter()
+                .find(|g| !matches!(g.body_style, BODY_COMMON | BODY_NORMAL | BODY_ALTERNATE))
+            {
+                return Err(SymbolFileError::InvalidNumericCell {
+                    column: "graphic body_style",
+                    value: bad.body_style.to_string(),
+                });
+            }
             let graphics = sw
                 .graphics
                 .into_iter()
@@ -786,8 +849,9 @@ impl SymbolFile {
     /// strings so the bulk data is line-diffable in git output.
     ///
     /// The written `format` token is computed fresh from content —
-    /// [`SYMBOL_FILE_FORMAT_TOKEN_V2`] iff any symbol contains a
-    /// [`SymbolGraphicKind::Polygon`] graphic, else
+    /// [`SYMBOL_FILE_FORMAT_TOKEN_V3`] iff any pin / graphic is off the normal
+    /// body (De Morgan, #1233), else [`SYMBOL_FILE_FORMAT_TOKEN_V2`] iff any
+    /// symbol contains a [`SymbolGraphicKind::Polygon`] graphic, else
     /// [`SYMBOL_FILE_FORMAT_TOKEN`] — not copied from `self.format`
     /// (which may be stale, e.g. right after loading a v1 file that
     /// has since gained a `Polygon` in this session, or a v2 file
@@ -795,12 +859,20 @@ impl SymbolFile {
     /// [`SYMBOL_FILE_FORMAT_TOKEN_V2`]'s doc comment for why this
     /// stays maximally backward-compatible.
     pub fn to_toml_string(&self) -> Result<String, SymbolFileError> {
-        let format = if self
+        let has_polygon = self
             .symbols
             .iter()
             .flat_map(|s| &s.graphics)
-            .any(|g| matches!(g.kind, SymbolGraphicKind::Polygon { .. }))
-        {
+            .any(|g| matches!(g.kind, SymbolGraphicKind::Polygon { .. }));
+        // Body 0 alone counts too: a v3 token is the cheap conservative gate,
+        // and an older build would drop the tag on its next save.
+        let has_body_styles = self.symbols.iter().any(|s| {
+            s.pins.iter().any(|p| p.body_style != BODY_NORMAL)
+                || s.graphics.iter().any(|g| g.body_style != BODY_NORMAL)
+        });
+        let format = if has_body_styles {
+            SYMBOL_FILE_FORMAT_TOKEN_V3.to_string()
+        } else if has_polygon {
             SYMBOL_FILE_FORMAT_TOKEN_V2.to_string()
         } else {
             SYMBOL_FILE_FORMAT_TOKEN.to_string()
@@ -881,7 +953,7 @@ pub enum SymbolFileError {
     #[error("TOML serialise failed: {0}")]
     TomlSerialize(toml::ser::Error),
     #[error(
-        "unsupported .snxsym format token {got:?}; this build supports \"snxsym/v1\" or \"snxsym/v2\""
+        "unsupported .snxsym format token {got:?}; this build supports \"snxsym/v1\", \"snxsym/v2\" or \"snxsym/v3\""
     )]
     UnsupportedFormat { got: String },
     #[error(
@@ -933,6 +1005,8 @@ impl From<signex_types::numeric::TomlFiniteError> for SymbolFileError {
     }
 }
 
+#[cfg(test)]
+mod body_style_tests;
 mod chain;
 #[cfg(test)]
 mod chain_tests;

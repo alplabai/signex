@@ -14,6 +14,7 @@ pub(crate) mod pin_changes;
 mod place;
 mod replace_lib_symbol;
 mod structure;
+mod symbol_body;
 
 #[cfg(test)]
 mod designator_in_tests;
@@ -27,3 +28,5 @@ mod patch_exactness_tests;
 mod register_lib_symbol_tests;
 #[cfg(test)]
 mod replace_lib_symbol_tests;
+#[cfg(test)]
+mod symbol_body_tests;

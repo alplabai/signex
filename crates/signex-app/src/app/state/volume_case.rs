@@ -49,6 +49,16 @@ trait CaseFs {
 /// How many entry names the probe looks at before giving up on a directory.
 const MAX_ENTRIES_SAMPLED: usize = 256;
 
+/// `Ok` when `entry` still exists. A flipped spelling that fails to resolve
+/// only means "case-sensitive" if the original is still there: an entry that
+/// vanished between the two lookups (another process cleaning its temp dir)
+/// would otherwise read as a case-sensitive volume.
+fn entry_still_there(entry: &Path) -> Result<(), String> {
+    std::fs::symlink_metadata(entry)
+        .map(|_| ())
+        .map_err(|e| format!("entry vanished during the probe: {e}"))
+}
+
 struct RealFs;
 
 impl CaseFs for RealFs {
@@ -71,11 +81,11 @@ impl CaseFs for RealFs {
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
-            let a = std::fs::symlink_metadata(a).map_err(|e| format!("stat failed: {e}"))?;
-            Ok(
-                std::fs::symlink_metadata(b)
-                    .is_ok_and(|b| a.dev() == b.dev() && a.ino() == b.ino()),
-            )
+            let a_meta = std::fs::symlink_metadata(a).map_err(|e| format!("stat failed: {e}"))?;
+            match std::fs::symlink_metadata(b) {
+                Ok(b) => Ok(a_meta.dev() == b.dev() && a_meta.ino() == b.ino()),
+                Err(_) => entry_still_there(a).map(|()| false),
+            }
         }
         #[cfg(not(unix))]
         {
@@ -83,8 +93,11 @@ impl CaseFs for RealFs {
             if is_link(a) || is_link(b) {
                 return Err("is a link, not followed".to_string());
             }
-            let a = std::fs::canonicalize(a).map_err(|e| format!("stat failed: {e}"))?;
-            Ok(std::fs::canonicalize(b).is_ok_and(|b| a == b))
+            let a_real = std::fs::canonicalize(a).map_err(|e| format!("stat failed: {e}"))?;
+            match std::fs::canonicalize(b) {
+                Ok(b) => Ok(a_real == b),
+                Err(_) => entry_still_there(a).map(|()| false),
+            }
         }
     }
 
