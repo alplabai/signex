@@ -88,12 +88,11 @@ pub(crate) fn write_csv_row(
         if neutralised || s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r')
         {
             output.push(b'"');
-            for ch in s.chars() {
-                if ch == '"' {
+            for (n, part) in s.split('"').enumerate() {
+                if n > 0 {
                     output.extend_from_slice(b"\"\"");
-                } else {
-                    output.extend_from_slice(ch.to_string().as_bytes());
                 }
+                output.extend_from_slice(part.as_bytes());
             }
             output.push(b'"');
         } else {
@@ -112,6 +111,16 @@ pub(crate) fn write_csv_row(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn row_escapes_quotes_and_multibyte_text_byte_for_byte() {
+        let mut out = Vec::new();
+        write_csv_row(&mut out, &["a\"b\"\"", "é,\"日本\"", "plain", "\"", ""]).unwrap();
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "\"a\"\"b\"\"\"\"\",\"é,\"\"日本\"\"\",plain,\"\"\"\","
+        );
+    }
 
     fn row(fields: &[&str]) -> String {
         let mut out = Vec::new();
