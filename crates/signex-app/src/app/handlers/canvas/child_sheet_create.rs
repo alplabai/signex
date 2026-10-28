@@ -11,7 +11,9 @@ use uuid::Uuid;
 
 use super::super::super::*;
 use super::super::dock::project_navigation::add_io;
-use super::child_sheet_path::{escapes_through_symlink, reference_from, resolve_new_sheet_path};
+use super::child_sheet_path::{
+    escapes_through_symlink, reference_from, relative_within, resolve_new_sheet_path,
+};
 use crate::app::contracts::CreateChildSheetConfirmState;
 use crate::app::state::ProjectId;
 use add_io::ChildSheetWriteError;
@@ -133,6 +135,15 @@ impl Signex {
         &mut self,
         picked: Option<std::path::PathBuf>,
     ) -> Task<Message> {
+        let fold = self
+            .ui_state
+            .create_child_sheet_confirm
+            .as_ref()
+            .map_or_else(crate::app::state::CaseFold::default, |c| {
+                crate::app::state::project_case::fold_of(
+                    self.document_state.document_project(&c.parent),
+                )
+            });
         let (Some(confirm), Some(picked)) =
             (self.ui_state.create_child_sheet_confirm.as_mut(), picked)
         else {
@@ -142,9 +153,9 @@ impl Signex {
             .parent
             .parent()
             .unwrap_or_else(|| std::path::Path::new(""));
-        confirm.path_text = match picked.strip_prefix(dir) {
-            Ok(relative) => relative.to_string_lossy().replace('\\', "/"),
-            Err(_) => picked.to_string_lossy().into_owned(),
+        confirm.path_text = match relative_within(dir, &picked, fold) {
+            Some(relative) => relative.to_string_lossy().replace('\\', "/"),
+            None => picked.to_string_lossy().into_owned(),
         };
         confirm.error = None;
         confirm.exists = false;
@@ -378,7 +389,9 @@ impl Signex {
         let Some(dir) = parent.parent() else {
             return Ok(());
         };
-        let reference = reference_from(dir, path);
+        let fold =
+            crate::app::state::project_case::fold_of(self.document_state.document_project(parent));
+        let reference = reference_from(dir, path, fold);
         let current = self
             .document_state
             .engines
@@ -440,10 +453,11 @@ impl Signex {
             ));
             return;
         };
+        let fold = crate::app::state::project_case::fold_of(Some(&*project));
         let Some(relative) = project
             .path
             .parent()
-            .and_then(|dir| path.strip_prefix(dir).ok())
+            .and_then(|dir| relative_within(dir, path, fold))
         else {
             crate::diagnostics::log_warning(format!(
                 "Child sheet {} is outside the project folder, so it is not listed in the project",

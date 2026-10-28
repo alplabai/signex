@@ -59,10 +59,17 @@ impl Signex {
         // down; the full path is the tooltip.
         let parent_dir = confirm.parent.parent().unwrap_or(std::path::Path::new(""));
         let full_folder = parent_dir.display().to_string();
-        let folder = match parent_dir.strip_prefix(&confirm.project_dir) {
-            Ok(rel) if rel.as_os_str().is_empty() => "the project folder".to_owned(),
-            Ok(rel) => format!("{}/", rel.display()),
-            Err(_) => full_folder.clone(),
+        let fold = crate::app::state::project_case::fold_of(
+            self.document_state.document_project(&confirm.parent),
+        );
+        let folder = match crate::app::handlers::canvas::relative_within(
+            &confirm.project_dir,
+            parent_dir,
+            fold,
+        ) {
+            Some(rel) if rel.as_os_str().is_empty() => "the project folder".to_owned(),
+            Some(rel) => format!("{}/", rel.display()),
+            None => full_folder.clone(),
         };
         let field = text_input("sheet.snxsch", &confirm.path_text)
             .on_input(|t| msg(ProjectMsg::CreateChildSheetPathChanged(t)))

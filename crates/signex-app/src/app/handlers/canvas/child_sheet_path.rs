@@ -5,7 +5,7 @@
 use std::path::{Component, Path, PathBuf};
 
 use crate::app::state::CaseFold;
-use crate::app::state::scope::path_key_with;
+use crate::app::state::scope::{path_is_under, path_key_with};
 
 /// Extension every sheet file keeps.
 const SHEET_EXTENSION: &str = "snxsch";
@@ -63,13 +63,24 @@ pub(crate) fn resolve_new_sheet_path(
     Ok(resolved)
 }
 
-/// Whether `path` is `dir` or below it, compared under the project's case
-/// rules (so a pick that differs only in case still counts as inside).
+/// Whether `path` is `dir` or below it, compared component by component under
+/// the project's case rules: separator-agnostic, so `\` and `/` spellings (and
+/// a rooted path with or without a drive) cannot tell apart two spellings of
+/// one place, and a sibling that only shares a name prefix is outside.
 fn is_inside(path: &Path, dir: &Path, fold: CaseFold) -> bool {
-    let key = path_key_with(&fold_dots(path), fold);
-    let dir_key = path_key_with(&fold_dots(dir), fold);
-    let dir_key = dir_key.trim_end_matches('/');
-    key == dir_key || key.starts_with(&format!("{dir_key}/"))
+    path_is_under(&fold_dots(path), &fold_dots(dir), fold)
+}
+
+/// `path` as a relative path below `dir` (components after `dir`), or `None`
+/// when it is not inside. Same comparison as [`is_inside`], never a string
+/// prefix.
+pub(crate) fn relative_within(dir: &Path, path: &Path, fold: CaseFold) -> Option<PathBuf> {
+    let (dir, path) = (fold_dots(dir), fold_dots(path));
+    if !path_is_under(&path, &dir, fold) {
+        return None;
+    }
+    let depth = dir.components().count();
+    Some(path.components().skip(depth).collect())
 }
 
 /// Whether writing `path` would land outside `project_dir` through a symlink:
@@ -87,12 +98,16 @@ pub(crate) fn escapes_through_symlink(project_dir: &Path, path: &Path) -> bool {
 
 /// `to` as a reference from the folder `from_dir`, with `/` separators:
 /// `sheet1.snxsch`, `power/reg.snxsch`, `../shared/reg.snxsch`.
-pub(crate) fn reference_from(from_dir: &Path, to: &Path) -> String {
+pub(crate) fn reference_from(from_dir: &Path, to: &Path, fold: CaseFold) -> String {
     let from = fold_dots(from_dir);
     let to = fold_dots(to);
     let from: Vec<_> = from.components().collect();
     let to: Vec<_> = to.components().collect();
-    let common = from.iter().zip(&to).take_while(|(a, b)| a == b).count();
+    let common = from
+        .iter()
+        .zip(&to)
+        .take_while(|(a, b)| same_component(a, b, fold))
+        .count();
     let mut parts: Vec<String> = from[common..].iter().map(|_| "..".to_owned()).collect();
     parts.extend(
         to[common..]
@@ -102,12 +117,23 @@ pub(crate) fn reference_from(from_dir: &Path, to: &Path) -> String {
     parts.join("/")
 }
 
+/// Whether two path components name the same entry under `fold`.
+fn same_component(a: &Component<'_>, b: &Component<'_>, fold: CaseFold) -> bool {
+    path_key_with(Path::new(a.as_os_str()), fold) == path_key_with(Path::new(b.as_os_str()), fold)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// `/proj/..` as a path of this OS: a rooted path has no drive on
+    /// Windows, so it gets one there (the code under test sees real paths).
     fn p(s: &str) -> PathBuf {
-        PathBuf::from(s)
+        if cfg!(windows) && s.starts_with('/') {
+            PathBuf::from(format!("C:{s}"))
+        } else {
+            PathBuf::from(s)
+        }
     }
 
     #[test]
@@ -201,16 +227,68 @@ mod tests {
     #[test]
     fn the_reference_is_relative_to_the_parent_folder() {
         assert_eq!(
-            reference_from(&p("/proj"), &p("/proj/a.snxsch")),
+            reference_from(&p("/proj"), &p("/proj/a.snxsch"), CaseFold::PRESERVE),
             "a.snxsch"
         );
         assert_eq!(
-            reference_from(&p("/proj"), &p("/proj/power/r.snxsch")),
+            reference_from(&p("/proj"), &p("/proj/power/r.snxsch"), CaseFold::PRESERVE),
             "power/r.snxsch"
         );
         assert_eq!(
-            reference_from(&p("/proj/top"), &p("/proj/shared/r.snxsch")),
+            reference_from(
+                &p("/proj/top"),
+                &p("/proj/shared/r.snxsch"),
+                CaseFold::PRESERVE
+            ),
             "../shared/r.snxsch"
         );
+    }
+
+    #[test]
+    fn mixed_separators_do_not_hide_a_path_inside_the_project() {
+        // `\` counts as a separator only on a Windows host; the key folds it
+        // there, and Windows `Path` reads both. Either way: inside.
+        let inside = Path::new(r"/proj\top/sub\x.snxsch");
+        assert!(is_inside(inside, &p("/proj"), CaseFold::FOLD));
+        assert!(!is_inside(
+            Path::new(r"/proj2\x.snxsch"),
+            &p("/proj"),
+            CaseFold::FOLD
+        ));
+        // Splitting at `\` is the Windows host's `Path`, so the relative part
+        // is only checked with a spelling this OS reads as separators.
+        let spelled = if cfg!(windows) {
+            inside.to_path_buf()
+        } else {
+            p("/proj/top/sub/x.snxsch")
+        };
+        assert_eq!(
+            relative_within(&p("/proj"), &spelled, CaseFold::FOLD),
+            Some(PathBuf::from("top").join("sub").join("x.snxsch"))
+        );
+        assert_eq!(
+            relative_within(&p("/proj"), &p("/other/x"), CaseFold::FOLD),
+            None
+        );
+    }
+
+    #[test]
+    fn a_folding_project_reference_ignores_case_in_the_shared_folders() {
+        assert_eq!(
+            reference_from(&p("/Proj/Top"), &p("/proj/top/a.snxsch"), CaseFold::FOLD),
+            "a.snxsch"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_drive_letter_case_difference_and_slash_spelling_is_still_inside() {
+        let got = resolve_new_sheet_path(
+            Path::new(r"C:\Proj\Top"),
+            Path::new("c:/proj"),
+            "sub/x.snxsch",
+            CaseFold::FOLD,
+        );
+        assert!(got.is_ok(), "{got:?}");
     }
 }
