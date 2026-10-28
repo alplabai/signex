@@ -173,11 +173,8 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "placement_properties" => Message::Tool(ToolMessage::PrePlacementTab),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
-        // `ExportBom`, NOT `GenerateBom`. The latter is the stub behind
-        // the greyed-out "Generate BOM" menu row — it logs "Generate BOM
-        // is v0.8 scope" and returns `Task::none()`. `ExportBom` reaches
-        // `handle_bom_preview_open`, which is the BOM this app actually
-        // has.
+        // `ExportBom` reaches `handle_bom_preview_open`, the BOM dialog;
+        // Design > Generate BOM opens the same one.
         "report_manager_bom" => Message::Menu(MenuMessage::ExportBom),
         "reset_schematic_designators" => Message::Annotate(AnnotateMsg::OpenResetConfirm),
         "rotate_clockwise" => Message::Edit(EditMsg::RotateSelectedClockwise),
@@ -494,8 +491,7 @@ mod tests {
             resolve("place_wire_to_bus_entry"),
             Message::Tool(ToolMessage::SelectTool(Tool::BusEntry))
         ));
-        // `ExportBom`, not the `GenerateBom` stub — pinned because the
-        // two are one variant apart and the wrong one is silent.
+        // The BOM command opens the BOM dialog (`ExportBom`).
         assert!(matches!(
             resolve("report_manager_bom"),
             Message::Menu(MenuMessage::ExportBom)

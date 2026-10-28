@@ -22,7 +22,7 @@ fn symbol(reference: &str, footprint: &str) -> Symbol {
 
 /// Two `R1`s, one without a footprint: missing-footprint + duplicate
 /// designator (plus missing-MPN, which each test switches off).
-fn app_with_faulty_bom() -> Signex {
+pub(crate) fn app_with_faulty_bom() -> Signex {
     let sheet = SchematicSheet {
         uuid: uuid::Uuid::new_v4(),
         paper_size: "A4".to_string(),

@@ -159,7 +159,7 @@ fn flatten(menu: &Menu, parent: Option<&str>, out: &mut Vec<(String, char)>) {
             MenuEntry::Submenu(sub) => flatten(sub, Some(&path), out),
             MenuEntry::Item(item) => {
                 let (kind, action) = match &item.state {
-                    ItemState::Placeholder => ("stub", "-".to_string()),
+                    ItemState::Placeholder | ItemState::Unavailable => ("stub", "-".to_string()),
                     ItemState::Live { action, .. } => ("item", format!("{action:?}")),
                 };
                 let (id, text) = item

@@ -13,6 +13,7 @@ const TS: TypeScale = TypeScale::DEFAULT;
 
 mod dropdown;
 mod layout;
+mod planned;
 
 // Re-exported so `crate::active_bar::view_dropdown` / `dropdown_x_offset`
 // paths (overlays/mod.rs) resolve unchanged after the folder split.
@@ -22,6 +23,7 @@ pub(crate) use layout::{
     BAR_DROPDOWN_GAP_PX, BAR_HEIGHT_PX, BAR_TOP_MARGIN_PX, BAR_ZONE_HEIGHT_PX, bar_left_in_window,
     bar_width_for, menu_at,
 };
+pub use planned::{PLANNED_TOOLS, PLANNED_TOOLTIP, is_planned, planned_name, refusal_line};
 
 /// Whether `action` needs at least one selected item to make sense.
 /// Transform / align / distribute family — Altium greys these out when
@@ -62,14 +64,6 @@ pub fn requires_selection(action: &ActiveBarAction) -> bool {
 pub fn requires_net_color(action: &ActiveBarAction) -> bool {
     use ActiveBarAction::*;
     matches!(action, ClearNetColor | ClearAllNetColors)
-}
-
-/// Whether `action` is a placeholder for a feature that has not landed.
-/// #1248 — Parameter Set used to arm a `LabelType::Net` label, which joins
-/// connectivity; a rule directive must never do that, so the tool stays
-/// greyed out until a non-electrical directive object exists.
-pub fn is_planned(action: &ActiveBarAction) -> bool {
-    matches!(action, ActiveBarAction::PlaceParameterSet)
 }
 
 /// What the Directives group button does on a left click before any
@@ -496,6 +490,18 @@ fn action_icon(action: &ActiveBarAction, tid: ThemeId) -> svg::Handle {
 
 // ─── View: Active Bar ────────────────────────────────────────
 
+/// Hover text for a bar button: its name, plus the shared "planned" note
+/// when the button's left-click action is a placeholder tool (#1249), so a
+/// greyed Harness button explains itself like the rows in its dropdown.
+fn button_tooltip(left: &ActiveBarMsg, name: &str) -> String {
+    match left {
+        ActiveBarMsg::Action(action) if is_planned(action) => {
+            format!("{name} — {PLANNED_TOOLTIP}")
+        }
+        _ => name.to_string(),
+    }
+}
+
 /// Action behind the draw-mode pill: re-select the tool that is
 /// already active, so a click never flips Bus drawing over to Wire.
 fn draw_mode_pill_action(current_tool: crate::app::Tool) -> ActiveBarAction {
@@ -584,7 +590,7 @@ fn bar_items(
         };
         ActiveBarItem::Button(ActiveBarButton {
             icon: ActiveBarIcon::Svg(icon),
-            tooltip: tooltip.to_string(),
+            tooltip: button_tooltip(&left, tooltip),
             enabled,
             selected,
             on_press: Some(left),
