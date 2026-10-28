@@ -110,10 +110,11 @@ pub struct ResolvedStyles {
 }
 
 /// A background resolution that never produced an answer (its task panicked),
-/// and the projects it was asked about, so only their requests are forgotten.
+/// and each project with the key it was asked to resolve, so only a request
+/// for that very key is forgotten.
 #[derive(Debug)]
 pub struct ResolveFailed {
-    pub projects: Vec<ProjectId>,
+    pub projects: Vec<(ProjectId, ProjectKey)>,
     pub reason: String,
 }
 
@@ -159,6 +160,12 @@ impl NetClassStyleCache {
     #[must_use]
     pub fn revision(&self) -> u64 {
         self.revision
+    }
+
+    /// The key `project` was last asked to resolve for, if any.
+    #[must_use]
+    pub fn wanted_key(&self, project: ProjectId) -> Option<&ProjectKey> {
+        self.wanted.get(&project)
     }
 
     /// `true` when no element carries a class style, so a caller with no
@@ -244,20 +251,21 @@ impl NetClassStyleCache {
         dropped
     }
 
-    /// A background resolution failed, so no answer is coming for `failed`'s
-    /// projects: forget their requests still in flight and remember the key
-    /// that failed, so it is not retried (and not reported again) until the
-    /// project's key moves. Other projects' requests are left alone.
-    pub fn give_up(&mut self, failed: &[ProjectId]) {
-        for id in failed {
-            let Some(key) = self.wanted.get(id) else {
+    /// A background resolution failed, so no answer is coming for the keys it
+    /// ran: forget a request still in flight for such a key and remember it as
+    /// failed, so it is not retried (and not reported again) until the
+    /// project's key moves. A project whose wanted key has moved on since, and
+    /// other projects, are left alone.
+    pub fn give_up(&mut self, failed: &[(ProjectId, ProjectKey)]) {
+        for (id, key) in failed {
+            if self.wanted.get(id) != Some(key) {
                 continue;
-            };
+            }
             if self.projects.get(id).is_none_or(|entry| entry.key != *key) {
                 self.failed.insert(*id, key.clone());
+                self.wanted.remove(id);
             }
         }
-        self.forget_pending(|id| failed.contains(id));
     }
 
     /// Forget every request in flight and every recorded failure, and reopen

@@ -211,6 +211,7 @@ fn late_and_failed_resolutions_delivered_through_update_leave_the_canvas_alone()
     dotted.style.line = NetLineStyle::Dotted;
     app.document_state.projects[0].data.net_classes = vec![dotted.clone()];
     let stale = app.plan_net_class_refresh().expect("first plan").run();
+    let stale_key = stale.projects[0].key.clone();
     dotted.style.line = NetLineStyle::Solid;
     dotted.style.wire_width_mm = Some(0.6);
     app.document_state.projects[0].data.net_classes = vec![dotted];
@@ -227,7 +228,7 @@ fn late_and_failed_resolutions_delivered_through_update_leave_the_canvas_alone()
     deliver(
         &mut app,
         Err(ResolveFailed {
-            projects: vec![unrelated],
+            projects: vec![(unrelated, stale_key.clone())],
             reason: "the net-class style task failed".to_string(),
         }),
     );
@@ -241,6 +242,41 @@ fn late_and_failed_resolutions_delivered_through_update_leave_the_canvas_alone()
 }
 
 #[test]
+fn a_failure_for_a_superseded_key_does_not_block_the_current_answer() {
+    let (mut app, _, wire) = child_label_selected("/w/pick-superseded");
+    let project = app.document_state.active_project.expect("project");
+    assign(&mut app, project, "/LOCAL", "Power");
+    let drawn = |app: &Signex| app.ui_state.net_class_styles.styles().get(&wire).copied();
+    let settled = drawn(&app);
+
+    let mut class = power_class();
+    class.nets = vec!["/LOCAL".to_string()];
+    class.style.line = NetLineStyle::Dotted;
+    app.document_state.projects[0].data.net_classes = vec![class.clone()];
+    let stale = app.plan_net_class_refresh().expect("first plan").run();
+    let stale_key = stale.projects[0].key.clone();
+    class.style.line = NetLineStyle::Solid;
+    class.style.wire_width_mm = Some(0.6);
+    app.document_state.projects[0].data.net_classes = vec![class];
+    let current = app.plan_net_class_refresh().expect("second plan").run();
+
+    let deliver = |app: &mut Signex, result: Result<_, ResolveFailed>| {
+        let _ = app.update(Message::Ui(UiMsg::NetClassStylesResolved(Arc::new(result))));
+    };
+    deliver(
+        &mut app,
+        Err(ResolveFailed {
+            projects: vec![(project, stale_key)],
+            reason: "the net-class style task failed".to_string(),
+        }),
+    );
+    deliver(&mut app, Ok(current));
+
+    assert_ne!(drawn(&app), settled, "the current answer must land");
+    assert_eq!(drawn(&app).and_then(|s| s.wire_width_mm), Some(0.6));
+}
+
+#[test]
 fn a_failed_resolution_is_not_retried_until_the_project_changes() {
     let (mut app, ..) = child_label_selected("/w/pick-retry");
     let project = app.document_state.active_project.expect("project");
@@ -248,11 +284,11 @@ fn a_failed_resolution_is_not_retried_until_the_project_changes() {
     // dies. Nothing edits after that.
     app.document_state.projects[0].data.net_classes = vec![NetClass::named("Other")];
     let lost = app.plan_net_class_refresh().expect("planned");
-    drop(lost);
+    let lost_key = lost.run().projects[0].key.clone();
     assert!(app.plan_net_class_refresh().is_none(), "in flight");
 
     app.apply_net_class_styles(&Err(ResolveFailed {
-        projects: vec![project],
+        projects: vec![(project, lost_key)],
         reason: "the net-class style task failed".to_string(),
     }));
 
