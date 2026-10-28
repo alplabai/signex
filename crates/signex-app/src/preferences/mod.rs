@@ -138,6 +138,8 @@ pub enum PrefMsg {
     DraftAnnotateUndo(crate::annotate_undo::AnnotateUndo),
     /// Toggle "Keep wires connected when moving". Persisted on Save.
     DraftMoveKeepsWires(bool),
+    /// Toggle "Select by drag direction". Persisted on Save.
+    DraftDragDirectionSelect(bool),
     /// Choose where the window's minimize / maximize / close buttons go.
     /// Persisted on Save.
     DraftWindowControlsPlacement(crate::chrome::controls::WindowControlsPlacement),
@@ -291,6 +293,7 @@ pub struct PrefsView<'a> {
     pub draft_pcb_gpu_render: bool,
     pub draft_annotate_undo: crate::annotate_undo::AnnotateUndo,
     pub draft_move_keeps_wires: bool,
+    pub draft_drag_direction_select: bool,
     pub draft_window_controls_placement: crate::chrome::controls::WindowControlsPlacement,
     /// Whether the drafted placement only applies after a restart (macOS).
     pub window_controls_restart_note: bool,
@@ -601,6 +604,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         nav,
         draft_annotate_undo,
         draft_move_keeps_wires,
+        draft_drag_direction_select,
         draft_autosave_enabled,
         profiles,
         default_profile,
@@ -619,7 +623,11 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     let inner = match nav {
         PrefNav::Appearance => content_appearance(v),
         PrefNav::Annotation => content_annotation(draft_annotate_undo),
-        PrefNav::Editing => content_editing(draft_move_keeps_wires, draft_autosave_enabled),
+        PrefNav::Editing => content_editing(
+            draft_move_keeps_wires,
+            draft_drag_direction_select,
+            draft_autosave_enabled,
+        ),
         PrefNav::RuleProfiles => content_profiles(profiles, default_profile, panel_tokens),
         // Library → Distributor APIs — the library subsystem owns
         // the actual form

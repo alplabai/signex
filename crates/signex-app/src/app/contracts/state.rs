@@ -34,6 +34,8 @@ pub enum ContextAction {
     ActiveBar(crate::active_bar::ActiveBarAction),
     /// Reorder the selected drawings from the Arrange submenu (#1583).
     ArrangeDrawings(signex_engine::DrawingArrange),
+    /// Find Similar Objects for the object the menu was opened over (#1257).
+    FindSimilar,
 }
 
 /// Which click-to-open submenu is currently expanded inside the right-
@@ -67,6 +69,9 @@ pub struct TextEditState {
 pub struct ContextMenuState {
     pub x: f32,
     pub y: f32,
+    /// Where on the sheet the menu was opened, in world mm; `None` when the
+    /// cursor position was not known to belong to this document.
+    pub world: Option<(f64, f64)>,
 }
 
 /// v0.18.10 — Altium-style grid picker popup state. Anchors the
