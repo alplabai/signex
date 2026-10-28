@@ -31,6 +31,7 @@ impl Signex {
             Message::Menu(msg) => self.handle_menu_message(msg),
             Message::Tab { window_id, msg } => {
                 let task = self.handle_document_tab_message(window_id, msg);
+                self.close_find_similar_if_sheet_changed();
                 Task::batch([self.finish_update(), task])
             }
             Message::Dock(msg) => self.handle_dock_message(msg),

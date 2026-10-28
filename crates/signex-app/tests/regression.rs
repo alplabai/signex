@@ -334,6 +334,12 @@ mod bus_entry;
 
 // #1404 — the X / Y keys, context-menu Mirror X / Y and the active bar's
 // Flip Along X / Y all flip a symbol the same way.
+#[path = "regression/drag_direction_select.rs"]
+mod drag_direction_select;
+
+#[path = "regression/measure_and_zoom_selection.rs"]
+mod measure_and_zoom_selection;
+
 #[path = "regression/mirror_axis_entry_points.rs"]
 mod mirror_axis_entry_points;
 

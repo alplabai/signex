@@ -93,6 +93,7 @@ impl Signex {
         self.ui_state.preferences_draft_pcb_gpu_render = self.ui_state.pcb_gpu_render;
         self.ui_state.preferences_draft_annotate_undo = self.ui_state.annotate_undo;
         self.ui_state.preferences_draft_move_keeps_wires = self.ui_state.move_keeps_wires;
+        self.ui_state.preferences_draft_drag_direction_select = self.ui_state.drag_direction_select;
         self.ui_state.preferences_draft_window_controls_placement =
             self.ui_state.window_controls_placement;
         self.ui_state.preferences_draft_autosave_enabled = self.ui_state.autosave_enabled;
@@ -294,6 +295,8 @@ impl Signex {
                 self.ui_state.pcb_gpu_render = self.ui_state.preferences_draft_pcb_gpu_render;
                 self.ui_state.annotate_undo = self.ui_state.preferences_draft_annotate_undo;
                 self.ui_state.move_keeps_wires = self.ui_state.preferences_draft_move_keeps_wires;
+                self.ui_state.drag_direction_select =
+                    self.ui_state.preferences_draft_drag_direction_select;
                 self.ui_state.window_controls_placement =
                     self.ui_state.preferences_draft_window_controls_placement;
                 self.ui_state.autosave_enabled = self.ui_state.preferences_draft_autosave_enabled;
@@ -328,6 +331,7 @@ impl Signex {
                 crate::fonts::write_grid_style_pref(self.ui_state.grid_style);
                 crate::fonts::write_annotate_undo_pref(self.ui_state.annotate_undo);
                 crate::fonts::write_move_keeps_wires_pref(self.ui_state.move_keeps_wires);
+                crate::fonts::write_drag_direction_select_pref(self.ui_state.drag_direction_select);
                 crate::fonts::write_window_controls_placement_pref(
                     self.ui_state.window_controls_placement,
                 );
@@ -500,6 +504,10 @@ impl Signex {
             }
             PrefMsg::DraftAutosaveEnabled(enabled) => {
                 self.ui_state.preferences_draft_autosave_enabled = enabled;
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftDragDirectionSelect(enabled) => {
+                self.ui_state.preferences_draft_drag_direction_select = enabled;
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftMoveKeepsWires(enabled) => {

@@ -99,7 +99,8 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         | "place_net_label"
         | "place_local_net_label"
         | "open_components_panel"
-        | "place_symbol" => ctx.has_schematic,
+        | "place_symbol"
+        | "measure_distance" => ctx.has_schematic,
         // These assemble the project's sheets, not only the active tab's.
         "annotate_schematic_quietly" | "force_annotate_all_schematics" | "run_erc" => {
             ctx.has_schematic || ctx.has_sheets
@@ -486,6 +487,21 @@ mod tests {
         let mut app = with_schematic();
         let _ = app.dispatch_command(&id("place_wire"), CommandArgs::none(), None);
         assert_eq!(app.interaction_state.current_tool, Tool::Wire);
+    }
+
+    /// #1256 - Ctrl+M in a PCB, footprint or empty window does not arm a tool
+    /// the schematic canvas it belongs to is not there to show.
+    #[test]
+    fn measure_distance_needs_a_schematic() {
+        let (mut app, _task) = Signex::new();
+        assert!(!enabled(&app, "measure_distance"));
+        let _ = app.dispatch_command(&id("measure_distance"), CommandArgs::none(), None);
+        assert_eq!(app.interaction_state.current_tool, Tool::Select);
+
+        let mut app = with_schematic();
+        assert!(enabled(&app, "measure_distance"));
+        let _ = app.dispatch_command(&id("measure_distance"), CommandArgs::none(), None);
+        assert_eq!(app.interaction_state.current_tool, Tool::Measure);
     }
 
     /// Find, the grid toggle and AutoFocus act from any tab, so they stay
