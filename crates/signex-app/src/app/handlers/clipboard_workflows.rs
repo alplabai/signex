@@ -143,7 +143,24 @@ impl Signex {
     /// scope; Cut just can't silently eat what Copy drops).
     pub(crate) fn handle_selection_cut_requested(&mut self) -> Task<Message> {
         let selected = self.interaction_state.active_canvas().selected.clone();
-        let (cuttable, kept) = signex_engine::partition_cuttable(&selected);
+        let (carriable, mut kept) = signex_engine::partition_cuttable(&selected);
+        // Delete skips locked symbols; Cut must too, or Copy would overwrite
+        // the clipboard with a symbol that then stays on the sheet (#1250).
+        let (cuttable, skipped) = match self.document_state.active_engine() {
+            Some(engine) => {
+                let (command, skipped) =
+                    engine.without_locked(signex_engine::Command::DeleteSelection {
+                        items: carriable.clone(),
+                    });
+                match command {
+                    Some(signex_engine::Command::DeleteSelection { items }) => (items, skipped),
+                    _ => (Vec::new(), skipped),
+                }
+            }
+            None => (carriable.clone(), Vec::new()),
+        };
+        Self::report_locked_skips(&skipped);
+        kept.extend(carriable.into_iter().filter(|i| !cuttable.contains(i)));
         if cuttable.is_empty() {
             return Task::none();
         }
