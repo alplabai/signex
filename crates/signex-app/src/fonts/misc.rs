@@ -209,6 +209,34 @@ pub fn write_move_keeps_wires_pref_at(path: &Path, enabled: bool) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Select by drag direction
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read "Select by drag direction" (#1257). Defaults to on when the key is
+/// missing or not a boolean.
+pub fn read_drag_direction_select_pref_at(path: &Path) -> bool {
+    read_drag_direction_select_pref_from(read_prefs_json(path).as_ref())
+}
+
+pub fn read_drag_direction_select_pref_from(json: Option<&serde_json::Value>) -> bool {
+    json.and_then(|json| json["drag_direction_select"].as_bool())
+        .unwrap_or(true)
+}
+
+pub fn write_drag_direction_select_pref(enabled: bool) {
+    write_drag_direction_select_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_drag_direction_select_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, "drag_direction_select", |prefs| {
+        prefs.insert(
+            "drag_direction_select".to_string(),
+            serde_json::json!(enabled),
+        );
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Window controls placement
 // ──────────────────────────────────────────────────────────────────────────
 

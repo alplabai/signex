@@ -15,6 +15,7 @@ impl Signex {
         self.ui_state.move_pick = None;
         let cancel = |canvas: &mut crate::canvas::CanvasSlot| {
             canvas.move_pick = None;
+            canvas.keep_connections_next = false;
             canvas.move_epoch += 1;
         };
         cancel(&mut self.interaction_state.canvas);
@@ -46,11 +47,30 @@ impl Signex {
         });
     }
 
+    /// `drag_keep_connections` (#1266): arm a click-click Move whose float keeps
+    /// the wires attached. With no schematic open it says so.
+    pub(crate) fn arm_drag_keeping_connections(&mut self) {
+        if !self.has_active_schematic() {
+            crate::diagnostics::log_info("Drag with connections works on schematic sheets");
+            return;
+        }
+        self.arm_move_pick(MovePick::Object);
+        self.interaction_state
+            .active_canvas_mut()
+            .keep_connections_next = true;
+        crate::diagnostics::log_info(
+            "Click an object to drag it with its wires attached (Esc to cancel)",
+        );
+    }
+
     /// The canvas picked up the move at `(world_x, world_y)`: consume the arm
     /// and, for Move, make the object under the cursor the only selection.
     pub(crate) fn handle_canvas_move_picked(&mut self, world_x: f64, world_y: f64) {
         let pick = self.ui_state.move_pick.take();
-        self.interaction_state.active_canvas_mut().move_pick = None;
+        let canvas = self.interaction_state.active_canvas_mut();
+        canvas.move_pick = None;
+        // The float the canvas just started carries the keep-wires intent.
+        canvas.keep_connections_next = false;
         if pick == Some(MovePick::Object) {
             let filters = &self.interaction_state.selection_filters;
             let hit = self.active_render_snapshot().and_then(|snapshot| {
