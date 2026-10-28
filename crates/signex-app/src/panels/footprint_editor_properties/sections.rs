@@ -1,10 +1,11 @@
-use iced::widget::{Column, button, container, row, text, text_input};
+use iced::widget::{Column, container, row, text, text_input};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
     SnapOptionFlag,
 };
+use super::conflicts;
 use super::managers::{render_grid_manager, render_other_section};
 use super::snap_options::render_snapping_mode_row;
 use super::{fp_is_collapsed, props_kv_row, props_section_header};
@@ -411,93 +412,46 @@ pub(super) fn view_sections<'a>(
                     "Over-constrained",
                     s.over_constraint_count.to_string(),
                 );
-
-                // v0.22 Phase E3+E4 — list of over-constrained
-                // constraints. Each row shows the kind label + residual
-                // magnitude, sorted descending so the worst offender is
-                // first. Click → select the focus entity (first Point /
-                // Line referenced by the constraint) so the canvas pans
-                // and the red constraint icon sits in view. Hidden when
-                // count == 0; the user reads "Over-constrained: 0" and
-                // moves on.
-                if !s.over_constraints.is_empty() {
-                    col = col.push(
-                        container(
-                            text("Conflicts (worst first)")
-                                .size(TS.caption)
-                                .color(muted),
-                        )
-                        .padding([SP.s, SP.m])
-                        .width(Length::Fill),
-                    );
-                    for oc in s.over_constraints.iter().take(8) {
-                        // GH #599 — an unevaluable residual says so.
-                        // It used to render as "residual 0.000e0",
-                        // identical to a satisfied constraint.
-                        let label = match oc.residual_magnitude {
-                            Some(mag) => format!("{} — residual {:.3e}", oc.kind_label, mag),
-                            None => format!(
-                                "{} — residual unavailable (target expression did not evaluate)",
-                                oc.kind_label
-                            ),
-                        };
-                        let inner: Element<'_, _> = if let Some(focus_id) = oc.focus_entity_id {
-                            button(
-                                text(label)
-                                    .size(TS.caption)
-                                    .color(Color::from_rgba(1.00, 0.55, 0.55, 1.00)),
-                            )
-                            .padding([SP.xs, SP.m])
-                            .width(Length::Fill)
-                            .on_press(PanelMsg::FpEditorSelectSketchEntity { id: focus_id })
-                            .style(move |_t: &Theme, _| iced::widget::button::Style {
-                                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                                    1.0, 0.30, 0.30, 0.06,
-                                ))),
-                                ..iced::widget::button::Style::default()
-                            })
-                            .into()
-                        } else {
-                            container(
-                                text(label)
-                                    .size(TS.caption)
-                                    .color(Color::from_rgba(1.00, 0.55, 0.55, 1.00)),
-                            )
-                            .padding([SP.xs, SP.m])
-                            .width(Length::Fill)
-                            .into()
-                        };
-                        // v0.23 — per-row precision. Each row passes its
-                        // own ConstraintId so the canvas isolates that
-                        // single constraint at full red and dims the
-                        // rest (including other over-constraints).
-                        let cid = oc.constraint_id;
-                        let oc_row: Element<'_, _> = iced::widget::mouse_area(inner)
-                            .on_enter(PanelMsg::FpEditorHoverOverConstraint {
-                                constraint: Some(cid),
-                            })
-                            .on_exit(PanelMsg::FpEditorHoverOverConstraint { constraint: None })
-                            .into();
-                        col = col.push(oc_row);
-                    }
-                    if s.over_constraints.len() > 8 {
-                        col = col.push(
-                            container(
-                                text(format!("… +{} more", s.over_constraints.len() - 8))
-                                    .size(9)
-                                    .color(muted),
-                            )
-                            .padding([SP.xs, SP.m])
-                            .width(Length::Fill),
-                        );
-                    }
-                }
             } else {
                 col = col.push(
                     container(text("(no solve yet)").size(TS.caption).color(muted))
                         .padding([SP.xs, SP.m])
                         .width(Length::Fill),
                 );
+            }
+
+            // Conflicting constraints, worst first: the last solve's, then
+            // the last rejected edit's. Click selects the row's entity.
+            let conflicts = conflicts::conflict_rows(
+                fp.last_solve
+                    .as_ref()
+                    .map_or(&[], |s| s.over_constraints.as_slice()),
+                &fp.rejected_conflicts,
+            );
+            if !conflicts.is_empty() {
+                col = col.push(
+                    container(
+                        text("Conflicts (worst first)")
+                            .size(TS.caption)
+                            .color(muted),
+                    )
+                    .padding([SP.s, SP.m])
+                    .width(Length::Fill),
+                );
+                for row in conflicts.iter().take(conflicts::MAX_ROWS) {
+                    col = col.push(conflicts::conflict_row(row));
+                }
+                if conflicts.len() > conflicts::MAX_ROWS {
+                    col = col.push(
+                        container(
+                            text(format!("… +{} more", conflicts.len() - conflicts::MAX_ROWS))
+                                .size(9)
+                                .color(muted),
+                        )
+                        .padding([SP.xs, SP.m])
+                        .width(Length::Fill),
+                    );
+                }
             }
         } // end if !fp_dof collapsed
 
