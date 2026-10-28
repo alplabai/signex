@@ -55,6 +55,7 @@ fn fresh_row(
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::url(""),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Released,
         symbol_ref: PrimitiveRef::new(lib, Uuid::nil()),

@@ -587,6 +587,7 @@ pub enum BrowserEditMsg {
     SetDatasheetUrl(String),
     SetManufacturer(String),
     SetMpn(String),
+    SetDescription(String),
     /// Live edit of a parameter row's value or unit. The dispatcher
     /// keeps the buffer keyed by `key`; commit happens on
     /// `BrowserEditMsg::CommitParam`.
