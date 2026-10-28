@@ -7,6 +7,8 @@ pub(crate) mod add_io;
 #[cfg(test)]
 mod add_library_tests;
 #[cfg(test)]
+mod add_subdir_tests;
+#[cfg(test)]
 mod add_tests;
 mod close_project;
 #[cfg(test)]
@@ -39,6 +41,8 @@ mod save_all_gate_tests;
 #[cfg(test)]
 mod save_all_tests;
 mod sheet_references;
+#[cfg(test)]
+mod subdir_entry_tests;
 mod version_control;
 
 impl Signex {
