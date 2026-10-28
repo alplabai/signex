@@ -47,6 +47,10 @@ use crate::library::messages::{
     FootprintEditorMsg, LibraryMessage, PrimitiveEdit, SketchConstraintTag,
 };
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Build the Active Bar items for the given editor state. Theme is
 /// pulled from `editor.path` → `themes::current_id()` lookup at the
 /// caller's site (same pattern as the SchLib editor).
@@ -540,8 +544,8 @@ fn build_dimension_input<'a>(
     let value: String = editor.state.dimension_input.clone();
 
     let input = text_input("0.0", &value)
-        .size(11)
-        .padding(2)
+        .size(TS.body)
+        .padding(SP.xs)
         .width(Length::Fixed(58.0))
         .style(move |_: &Theme, _| iced::widget::text_input::Style {
             background: iced::Background::Color(input_bg),
@@ -562,13 +566,13 @@ fn build_dimension_input<'a>(
 
     container(
         iced::widget::row![
-            text("mm").size(10).color(muted),
+            text("mm").size(TS.caption).color(muted),
             Space::new().width(Length::Fixed(4.0)),
             input,
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 4])
+    .padding([SP.xs, SP.s])
     .width(Length::Fixed(DIM_INPUT_W))
     .style(move |_: &Theme| iced::widget::container::Style {
         background: None,

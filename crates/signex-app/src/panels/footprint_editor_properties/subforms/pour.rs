@@ -4,6 +4,11 @@ use iced::widget::{Column, container, pick_list, row, text, text_input};
 use iced::{Color, Length, Theme};
 
 use super::super::super::{FootprintEditorPanelContext, PanelMsg};
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// v0.16.4 — Pour role sub-form. Renders when the entity's `pour`
 /// attr is set; otherwise the column passes through unchanged.
@@ -19,8 +24,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
         return col;
     };
     col = col.push(
-        container(text("Pour properties").size(10).color(primary))
-            .padding([4, 8])
+        container(text("Pour properties").size(TS.caption).color(primary))
+            .padding([SP.s, SP.m])
             .width(Length::Fill),
     );
 
@@ -29,10 +34,13 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
     col = col.push(
         container(
             row![
-                text("Net").size(10).color(muted).width(Length::Fixed(80.0)),
+                text("Net")
+                    .size(TS.caption)
+                    .color(muted)
+                    .width(Length::Fixed(80.0)),
                 text_input("(none)", &net_buf)
-                    .size(10)
-                    .padding(2)
+                    .size(TS.caption)
+                    .padding(SP.xs)
                     .style(move |_: &Theme, _| iced::widget::text_input::Style {
                         background: iced::Background::Color(iced::Color::from_rgba(
                             1.0, 1.0, 1.0, 0.04,
@@ -52,7 +60,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
             .spacing(6)
             .align_y(iced::Alignment::Center),
         )
-        .padding([2, 8])
+        .padding([SP.xs, SP.m])
         .width(Length::Fill),
     );
 
@@ -63,12 +71,12 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
         move |v| PanelMsg::FpEditorSetPourFillType { id, value: v },
     )
     .text_size(10)
-    .padding([3, 8]);
+    .padding([3.0, SP.m]);
     col = col.push(
         container(
             row![
                 text("Fill")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(80.0)),
                 fill_picker,
@@ -76,7 +84,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
             .spacing(6)
             .align_y(iced::Alignment::Center),
         )
-        .padding([2, 8])
+        .padding([SP.xs, SP.m])
         .width(Length::Fill),
     );
 
@@ -85,12 +93,12 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
         container(
             row![
                 text("Priority")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(80.0)),
                 text_input("0", &pour.priority.to_string())
-                    .size(10)
-                    .padding(2)
+                    .size(TS.caption)
+                    .padding(SP.xs)
                     .style(move |_: &Theme, _| iced::widget::text_input::Style {
                         background: iced::Background::Color(iced::Color::from_rgba(
                             1.0, 1.0, 1.0, 0.04,
@@ -110,7 +118,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
             .spacing(6)
             .align_y(iced::Alignment::Center),
         )
-        .padding([2, 8])
+        .padding([SP.xs, SP.m])
         .width(Length::Fill),
     );
 

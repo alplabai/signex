@@ -155,6 +155,8 @@ mod tests {
             revision: 0,
             net_color_revision: 0,
             save_as_from: None,
+            bytes: std::sync::Arc::new(b"".to_vec()),
+            sequence: 0,
             result: Ok(crate::persist::SaveOutcome::Written),
             recovery_hold: None,
         };

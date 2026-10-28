@@ -1,6 +1,11 @@
 //! Diagnostic panels -- ERC and Messages.
 
 use super::*;
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// Flattened ERC diagnostic row for the ERC panel.
 ///
@@ -50,14 +55,14 @@ pub enum ErcSeverityLite {
 }
 
 pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(2).padding(6).width(Length::Fill);
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
     col = col.push(
         row![
             section_title("ERC", &ctx.tokens),
             Space::new().width(Length::Fill).height(Length::Shrink),
             iced::widget::button(
                 text("Run ERC (F8)")
-                    .size(11)
+                    .size(TS.body)
                     .color(theme_ext::text_primary(&ctx.tokens)),
             )
             .padding([3, 10])
@@ -66,7 +71,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             Space::new().width(6).height(Length::Shrink),
             iced::widget::button(
                 text("Clear")
-                    .size(11)
+                    .size(TS.body)
                     .color(theme_ext::text_secondary(&ctx.tokens)),
             )
             .padding([3, 10])
@@ -80,14 +85,14 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if ctx.erc_running {
         col = col.push(
             text("Running…")
-                .size(10)
+                .size(TS.caption)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         );
     }
     if ctx.erc_diagnostics.is_empty() && !ctx.erc_running {
         col = col.push(
             text("No ERC diagnostics yet")
-                .size(10)
+                .size(TS.caption)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         );
         col = col.push(
@@ -122,22 +127,22 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(
         row![
             text("ERC Diagnostic Results")
-                .size(10)
+                .size(TS.caption)
                 .color(theme_ext::text_primary(&ctx.tokens)),
             Space::new().width(8).height(Length::Shrink),
             text(format!("{errors} errors"))
-                .size(10)
+                .size(TS.caption)
                 .color(theme_ext::error_color(&ctx.tokens)),
             Space::new().width(8).height(Length::Shrink),
             text(format!("{warnings} warnings"))
-                .size(10)
+                .size(TS.caption)
                 .color(theme_ext::warning_color(&ctx.tokens)),
             Space::new().width(8).height(Length::Shrink),
             text(format!("{infos} info"))
-                .size(10)
+                .size(TS.caption)
                 .color(theme_ext::accent(&ctx.tokens)),
             Space::new().width(Length::Fill).height(Length::Shrink),
-            iced::widget::button(text("<").size(11))
+            iced::widget::button(text("<").size(TS.body))
                 .padding([1, 6])
                 .on_press(PanelMsg::FocusPrevErcDiagnostic)
                 .style(crate::styles::menu_item(&ctx.tokens)),
@@ -146,7 +151,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .size(9)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
             Space::new().width(4).height(Length::Shrink),
-            iced::widget::button(text(">").size(11))
+            iced::widget::button(text(">").size(TS.body))
                 .padding([1, 6])
                 .on_press(PanelMsg::FocusNextErcDiagnostic)
                 .style(crate::styles::menu_item(&ctx.tokens)),
@@ -210,7 +215,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     .width(Length::Fill),
                 )
                 .width(Length::Fill)
-                .padding([2, 6])
+                .padding([SP.xs, 6.0])
                 .on_press(PanelMsg::FocusErcViolation(v.global_index))
                 .style(
                     move |_theme: &Theme, status: iced::widget::button::Status| {
@@ -227,7 +232,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                         .size(9)
                         .color(theme_ext::text_primary(&ctx.tokens)),
                 )
-                .padding([2, 8])
+                .padding([SP.xs, SP.m])
                 .on_press(PanelMsg::ErcQuickFix(v.global_index))
                 .style(crate::styles::menu_item(&ctx.tokens)),
                 waive_chip(v, &ctx.tokens),
@@ -256,7 +261,7 @@ fn waive_chip<'a>(
                 .size(9)
                 .color(theme_ext::text_primary(tokens))
         )
-        .padding([2, 8])
+        .padding([SP.xs, SP.m])
         .on_press(PanelMsg::ErcNetWaiverSet {
             rule_id: v.rule_id.clone(),
             net: net.name.clone(),
@@ -271,14 +276,14 @@ fn waive_chip<'a>(
 /// when every finding is waived, so a waiver is never invisible.
 fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = theme_ext::text_secondary(&ctx.tokens);
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(2).width(Length::Fill);
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(SP.xs).width(Length::Fill);
     if ctx.erc_waivers.is_empty() {
         return col.into();
     }
     col = col.push(separator(&ctx.tokens));
     col = col.push(
         text(format!("{} waived", ctx.erc_waivers.len()))
-            .size(10)
+            .size(TS.caption)
             .color(muted),
     );
     for w in &ctx.erc_waivers {
@@ -298,7 +303,7 @@ fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                         .size(9)
                         .color(theme_ext::text_primary(&ctx.tokens)),
                 )
-                .padding([2, 8])
+                .padding([SP.xs, SP.m])
                 .on_press(PanelMsg::ErcNetWaiverSet {
                     rule_id: w.rule_id.clone(),
                     net: w.net.clone(),
@@ -316,13 +321,13 @@ fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 // ─── Messages Panel ───────────────────────────────────────────
 
 pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(2).padding(6).width(Length::Fill);
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
     col = col.push(
         row![
             section_title("Messages", &ctx.tokens),
             Space::new().width(Length::Fill).height(Length::Shrink),
             text(format!("level {}", ctx.diagnostics_level))
-                .size(10)
+                .size(TS.caption)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         ]
         .align_y(iced::Alignment::Center),
@@ -332,7 +337,7 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if ctx.diagnostics.is_empty() {
         col = col.push(
             text("No runtime messages yet")
-                .size(10)
+                .size(TS.caption)
                 .color(theme_ext::success_color(&ctx.tokens)),
         );
         col = col.push(
@@ -358,8 +363,8 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         };
 
         let th = |label: &str| -> Element<'a, PanelMsg> {
-            container(text(label.to_string()).size(11).color(muted))
-                .padding([4, 8])
+            container(text(label.to_string()).size(TS.body).color(muted))
+                .padding([SP.s, SP.m])
                 .into()
         };
         // Header row — background fill, no border (separator line
@@ -406,7 +411,7 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             let bg = if i % 2 == 0 { row_bg } else { alt_bg };
             let cell = |label: String, color: Color, size: f32| -> Element<'a, PanelMsg> {
                 container(text(label).size(size).color(color))
-                    .padding([4, 8])
+                    .padding([SP.s, SP.m])
                     .into()
             };
             col = col.push(
