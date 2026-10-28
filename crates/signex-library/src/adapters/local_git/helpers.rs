@@ -289,7 +289,27 @@ pub(super) fn check_insert_unique(
                     "row {row_id} already exists in table {name:?}"
                 )));
             }
-            if stored.cells.get("internal_pn").map(String::as_str) == Some(internal_pn) {
+        }
+    }
+    check_pn_unique(lf, internal_pn, None)
+}
+
+/// Refuse a part number another row already holds. A blank PN is a draft
+/// the user has not filled in yet, so it never conflicts. `except_row_id`
+/// names the row being edited, which may keep its own PN.
+pub(super) fn check_pn_unique(
+    lf: &LibraryFile,
+    internal_pn: &str,
+    except_row_id: Option<&str>,
+) -> Result<(), LibraryError> {
+    if internal_pn.trim().is_empty() {
+        return Ok(());
+    }
+    for (name, table) in &lf.tables {
+        for stored in &table.rows {
+            let own = except_row_id.is_some()
+                && stored.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == except_row_id;
+            if !own && stored.cells.get("internal_pn").map(String::as_str) == Some(internal_pn) {
                 return Err(LibraryError::Conflict(format!(
                     "internal_pn {internal_pn:?} already exists in table {name:?}"
                 )));

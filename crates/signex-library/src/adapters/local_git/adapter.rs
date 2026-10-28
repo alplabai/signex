@@ -66,16 +66,7 @@ impl LibraryAdapter for LocalGitAdapter {
         if new_trimmed.is_empty() {
             return Err(LibraryError::Backend("table name cannot be empty".into()));
         }
-        if new_trimmed.chars().any(|c| {
-            matches!(
-                c,
-                '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
-            )
-        }) {
-            return Err(LibraryError::Backend(format!(
-                "table name {new_trimmed:?} contains illegal characters"
-            )));
-        }
+        check_table_name(&new_trimmed)?;
         if old_owned == new_trimmed {
             return Ok(());
         }
@@ -231,19 +222,7 @@ impl LibraryAdapter for LocalGitAdapter {
         if trimmed.is_empty() {
             return Err(LibraryError::Backend("table name cannot be empty".into()));
         }
-        // Reject the same characters we reject elsewhere for filenames /
-        // identifiers — avoids surprising the user with a name they can't
-        // see in their file browser.
-        if trimmed.chars().any(|c| {
-            matches!(
-                c,
-                '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
-            )
-        }) {
-            return Err(LibraryError::Backend(format!(
-                "table name {trimmed:?} contains illegal characters"
-            )));
-        }
+        check_table_name(trimmed)?;
         let owned = trimmed.to_string();
         let fallback = format!("create empty table {owned}");
         self.mutate_library_file(
@@ -304,7 +283,6 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn insert_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
-        check_table_name(table)?;
         let table_owned = table.to_string();
         let row_id = row.row_id;
         let lib_row = component_to_library_row(&row)?;
@@ -314,6 +292,9 @@ impl LibraryAdapter for LocalGitAdapter {
         self.save_row_edit(
             table,
             |lf| {
+                if !lf.tables.contains_key(&table_owned) {
+                    check_table_name(&table_owned)?;
+                }
                 check_insert_unique(lf, &new_row_id, &new_pn)?;
                 let entry = lf
                     .tables
@@ -357,10 +338,12 @@ impl LibraryAdapter for LocalGitAdapter {
         let base = row.server_revision;
         let lib_row = component_to_library_row(&row)?;
         let new_base = row_base(&lib_row);
+        let new_pn = row.internal_pn.to_string();
         let fallback = format!("update row {row_id} in {table_owned}");
         self.save_row_edit(
             table,
             |lf| {
+                check_pn_unique(lf, &new_pn, Some(&row_id.to_string()))?;
                 let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
                     LibraryError::NotFound(format!("table {table_owned} not in library"))
                 })?;

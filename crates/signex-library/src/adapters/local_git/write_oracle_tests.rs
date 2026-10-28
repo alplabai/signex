@@ -162,9 +162,10 @@ fn model_apply(lf: &mut LibraryFile, edit: &Edit) -> Result<bool, LibraryError> 
         }
         Edit::Update(table, row) => {
             let lib_row = component_to_library_row(row)?;
+            let id = row.row_id.to_string();
+            check_pn_unique(lf, &row.internal_pn.to_string(), Some(&id))?;
             let entry = table_of(lf, table)?;
             validate_legacy_header(table, &entry.columns)?;
-            let id = row.row_id.to_string();
             let slot = find(entry, &id)
                 .ok_or_else(|| LibraryError::NotFound(format!("row {id} in table {table}")))?;
             check_row_base(slot, row.server_revision)?;

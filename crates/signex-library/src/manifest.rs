@@ -41,28 +41,31 @@ pub enum LibraryMode {
     LocalGit,
     Database {
         url: String,
-        /// Empty (no auth) or a `@signex-keychain:` reference. A raw
-        /// token read from a hand-authored manifest is never written
-        /// back or printed.
+        /// Empty (no auth), a `@signex-keychain:` reference, or a raw
+        /// token. The database adapter cannot resolve keychain
+        /// references yet (#976), so a raw token is the only value that
+        /// works today and is still written back, with a warning, so the
+        /// manifest stays saveable. `Debug` never prints a raw token.
         #[serde(serialize_with = "serialize_auth_reference")]
         auth: String,
     },
 }
 
-/// Refuse to write a raw secret into a `.snxlib`; only an empty value or a
-/// keychain reference is stored.
+/// Write the `auth` value as is. A raw token is written back because the
+/// keychain alternative does not work yet (#976); refusing would leave a
+/// working manifest unsaveable. Move it to a `@signex-keychain:` reference
+/// once #976 lands.
 fn serialize_auth_reference<S: serde::Serializer>(
     auth: &str,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
-    if auth.is_empty() || auth.starts_with(KEYCHAIN_SIGIL) {
-        serializer.serialize_str(auth)
-    } else {
-        Err(serde::ser::Error::custom(format!(
-            "refusing to write a raw auth token into the library manifest; use a \
-             `{KEYCHAIN_SIGIL}<name>` reference"
-        )))
+    if !auth.is_empty() && !auth.starts_with(KEYCHAIN_SIGIL) {
+        tracing::warn!(
+            "writing a raw auth token into the library manifest; keychain references are not \
+             usable until #976"
+        );
     }
+    serializer.serialize_str(auth)
 }
 
 impl std::fmt::Debug for LibraryMode {
@@ -332,14 +335,15 @@ auth = "@signex-keychain:alplab-libserver"
     }
 
     #[test]
-    fn raw_auth_token_is_never_serialized_or_printed() {
+    fn raw_auth_token_is_written_back_but_never_printed() {
         let mode = LibraryMode::Database {
             url: "https://lib.example/api".into(),
             auth: "s3cr3t-token".into(),
         };
         assert!(!format!("{mode:?}").contains("s3cr3t-token"));
         assert!(!format!("{mode:#?}").contains("s3cr3t-token"));
-        assert!(toml::to_string(&mode).is_err());
+        // Kept saveable until keychain references work (#976).
+        assert!(toml::to_string(&mode).unwrap().contains("s3cr3t-token"));
         let keychain = LibraryMode::Database {
             url: "https://lib.example/api".into(),
             auth: "@signex-keychain:lab".into(),

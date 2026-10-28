@@ -61,3 +61,92 @@ fn insert_row_refuses_duplicates_and_bad_table_names() {
             .contains(&"other".to_string())
     );
 }
+
+fn world_and_adapter(seed: u64) -> (Rng, World, tempfile::TempDir, LocalGitAdapter) {
+    let mut rng = Rng(seed);
+    let w = World {
+        lib: rng.uuid(),
+        symbols: (0..3).map(|_| rng.uuid()).collect(),
+        footprints: (0..3).map(|_| rng.uuid()).collect(),
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let file = seeded(dir.path(), &mut rng, &w, 0, false);
+    let adapter = LocalGitAdapter::open(&file).unwrap();
+    (rng, w, dir, adapter)
+}
+
+#[test]
+fn blank_part_numbers_never_conflict() {
+    let (mut rng, w, _dir, adapter) = world_and_adapter(5);
+    for pn in ["", "  "] {
+        let id = rng.uuid();
+        let mut row = random_row(&mut rng, &w, id);
+        row.internal_pn = InternalPn::new(pn);
+        adapter.insert_row("t", row, "draft").unwrap();
+    }
+    assert_eq!(adapter.read_table("t").unwrap().len(), 2);
+}
+
+#[test]
+fn update_row_refuses_another_rows_part_number() {
+    let (mut rng, w, _dir, adapter) = world_and_adapter(6);
+    let mut a = {
+        let id = rng.uuid();
+        random_row(&mut rng, &w, id)
+    };
+    a.internal_pn = InternalPn::new("PN-A");
+    let mut b = {
+        let id = rng.uuid();
+        random_row(&mut rng, &w, id)
+    };
+    b.internal_pn = InternalPn::new("PN-B");
+    adapter.insert_row("t", a.clone(), "a").unwrap();
+    adapter.insert_row("t", b.clone(), "b").unwrap();
+
+    // B takes A's PN: refused. Keeping its own PN is fine.
+    let mut clash = b.clone();
+    clash.internal_pn = InternalPn::new("PN-A");
+    assert!(matches!(
+        adapter.update_row("t", clash.clone(), "c"),
+        Err(LibraryError::Conflict(_))
+    ));
+    assert!(matches!(
+        adapter.update_row_with_assets("t", clash, "c", &[]),
+        Err(LibraryError::Conflict(_))
+    ));
+    adapter.update_row("t", b, "same").unwrap();
+    // Blanking a PN is allowed (draft).
+    let mut blank = a;
+    blank.internal_pn = InternalPn::new("");
+    adapter.update_row("t", blank, "blank").unwrap();
+}
+
+#[test]
+fn existing_table_with_refused_name_still_takes_rows() {
+    let (mut rng, w, _dir, adapter) = world_and_adapter(7);
+    let seed = {
+        let id = rng.uuid();
+        let mut r = random_row(&mut rng, &w, id);
+        r.internal_pn = InternalPn::new("PN-SEED");
+        r
+    };
+    adapter.insert_row("t", seed, "seed").unwrap();
+    // Hand-edited file: a table whose name the create path now refuses.
+    adapter
+        .mutate_library_file(
+            |lf| {
+                let t = lf.tables["t"].clone();
+                lf.tables.insert("a.b".to_string(), t);
+                Ok(())
+            },
+            "legacy",
+            "legacy",
+        )
+        .unwrap();
+    let mut row = {
+        let id = rng.uuid();
+        random_row(&mut rng, &w, id)
+    };
+    row.internal_pn = InternalPn::new("PN-LEGACY");
+    adapter.insert_row("a.b", row, "x").unwrap();
+}
