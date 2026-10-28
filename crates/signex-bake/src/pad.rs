@@ -68,9 +68,8 @@ pub fn bake_pads(
     out: &mut Vec<LibPad>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
-    // Build the params AST once; per-entity calls share it. Each entity
-    // re-wraps it into an EvalContext to slot in the optional
-    // array_index for that bake (None for direct, non-array bakes).
+    // Build the params AST and its EvalContext once; every direct
+    // (non-array) pad bake shares it, with no array_index.
     let params_ast = crate::params::params_ast(sketch, params_canonical);
     let ctx = EvalContext {
         params: params_ast.clone(),
