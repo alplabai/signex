@@ -8,6 +8,9 @@ use super::super::*;
 use iced::widget::{Row, Space, column, container, row, scrollable, text};
 use iced::{Background, Color, Element, Length, Theme};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+
 /// First designator of a BOM row — the key the export pipeline orders rows by,
 /// so the preview's Designator sort matches the exported file exactly.
 fn first_reference(row: &signex_output::BomRow) -> &str {
@@ -233,9 +236,9 @@ impl Signex {
             // to the right via Space::Fill. Spreadsheet convention.
             let arrow = sort_arrow(idx).trim();
             let cell_content = row![
-                text(c.header().to_string()).size(11).color(text_c),
+                text(c.header().to_string()).size(TS.body).color(text_c),
                 Space::new().width(Length::Fill),
-                text(arrow.to_string()).size(11).color(text_c),
+                text(arrow.to_string()).size(TS.body).color(text_c),
             ]
             .align_y(iced::Alignment::Center);
             // All headers use Fixed widths — needed for the

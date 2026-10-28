@@ -8,6 +8,10 @@
 
 use super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 mod buttons;
 
 impl Signex {
@@ -86,7 +90,7 @@ impl Signex {
         .on_input(|q| Message::CommandPalette(CommandPaletteMsg::QueryChanged(q)))
         .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
         .padding(iced::Padding::ZERO)
-        .size(11)
+        .size(TS.body)
         .width(Length::Fill)
         .style(
             move |_: &iced::Theme, _status: text_input::Status| text_input::Style {
@@ -108,7 +112,7 @@ impl Signex {
         );
         let search_bar: Element<'_, Message> = container(
             row![search_icon, palette_input]
-                .spacing(8)
+                .spacing(SP.m)
                 .align_y(Alignment::Center),
         )
         .padding(iced::Padding {

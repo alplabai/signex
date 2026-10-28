@@ -14,6 +14,10 @@ use super::widgets::{
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 impl Signex {
     pub(in crate::app::view) fn view_remove_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_remove_dialog_body();
@@ -73,12 +77,12 @@ impl Signex {
                 button(
                     column![
                         text(format!("\u{2192} {}", title_owned))
-                            .size(12)
+                            .size(TS.label)
                             .color(text_c),
-                        text(subtitle_owned).size(10).color(text_muted),
+                        text(subtitle_owned).size(TS.caption).color(text_muted),
                     ]
-                    .spacing(4)
-                    .padding([2, 0]),
+                    .spacing(SP.s)
+                    .padding([SP.xs, 0.0]),
                 )
                 .on_press(msg)
                 .padding([10, 14])
@@ -118,7 +122,7 @@ impl Signex {
         // Shared / Global libraries are owned by other projects too:
         // never offer to delete them from disk (#139).
         let remove_options: Element<'_, Message> = if st.is_outside_project {
-            column![exclude_card].spacing(8).into()
+            column![exclude_card].spacing(SP.m).into()
         } else {
             column![
                 option_card(
@@ -128,7 +132,7 @@ impl Signex {
                 ),
                 exclude_card,
             ]
-            .spacing(8)
+            .spacing(SP.m)
             .into()
         };
 
@@ -137,16 +141,16 @@ impl Signex {
                 "Please choose how to remove file \"{}\"",
                 st.display_name
             ))
-            .size(11)
+            .size(TS.body)
             .color(text_muted),
         ]
-        .spacing(4);
+        .spacing(SP.s);
         // Library names can repeat across folders; the full path says which
         // one is affected. Sheets and PCBs get no extra line.
         if st.display_name.ends_with(".snxlib") {
             prompt = prompt.push(
                 text(st.target_path.display().to_string())
-                    .size(10)
+                    .size(TS.caption)
                     .color(text_muted),
             );
         }
@@ -216,7 +220,7 @@ impl Signex {
         container(
             column![
                 header,
-                container(text(body).size(11).color(text_muted)).padding([14, 14]),
+                container(text(body).size(TS.body).color(text_muted)).padding([14, 14]),
                 container(buttons).padding([14, 14]),
             ]
             .width(560),
@@ -284,7 +288,7 @@ impl Signex {
         // An unreadable sheet hides its children: no Discard All, and why.
         let discard_blocked = st.sheet_refs.discard_blocked_reason();
         let discard_note: Element<'_, Message> = match &discard_blocked {
-            Some(reason) => container(text(reason.clone()).size(11).color(text_muted))
+            Some(reason) => container(text(reason.clone()).size(TS.body).color(text_muted))
                 .padding([10, 14])
                 .into(),
             None => Space::new().height(0).into(),
@@ -319,7 +323,7 @@ impl Signex {
                     "Kept open, not provably this project's alone: {}",
                     crate::app::state::sheet_refs::bounded_names(&names)
                 ))
-                .size(11)
+                .size(TS.body)
                 .color(text_muted),
             )
             .padding([10, 14])
@@ -335,7 +339,7 @@ impl Signex {
                         st.project_name,
                         st.dirty_paths.len() + st.dirty_rows.len()
                     ))
-                    .size(11)
+                    .size(TS.body)
                     .color(text_muted)
                 )
                 .padding([14, 14]),
@@ -401,8 +405,8 @@ impl Signex {
         path_labels
             .chain(row_labels)
             .map(|name| {
-                container(text(name).size(11).color(text_c))
-                    .padding([4, 8])
+                container(text(name).size(TS.body).color(text_c))
+                    .padding([SP.s, SP.m])
                     .into()
             })
             .collect()
@@ -460,7 +464,7 @@ impl Signex {
                         "You have {} unsaved item(s). Save before exiting?",
                         st.dirty_paths.len() + st.dirty_rows.len()
                     ))
-                    .size(11)
+                    .size(TS.body)
                     .color(text_muted)
                 )
                 .padding([14, 14]),

@@ -6,6 +6,10 @@ use super::*;
 use iced::widget::{Column, Space, button, column, container, row, text, text_input};
 use iced::{Element, Length};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 pub(super) fn content_component_classes<'a>(
     classes: &'a [crate::fonts::ComponentClassEntry],
 ) -> Element<'a, PrefMsg> {
@@ -19,25 +23,25 @@ pub(super) fn content_component_classes<'a>(
               (forthcoming Library Properties pane); this list \
               controls only what new libraries inherit."
         )
-        .size(11)
+        .size(TS.body)
         .style(text_muted),
     ]
     .spacing(6);
 
     let column_header = row![
-        container(text("Key").size(11).style(text_muted)).width(Length::FillPortion(2)),
-        container(text("Label").size(11).style(text_muted)).width(Length::FillPortion(3)),
+        container(text("Key").size(TS.body).style(text_muted)).width(Length::FillPortion(2)),
+        container(text("Label").size(TS.body).style(text_muted)).width(Length::FillPortion(3)),
         container(Space::new()).width(80),
     ]
-    .spacing(8)
-    .padding([4, 0]);
+    .spacing(SP.m)
+    .padding([SP.s, 0.0]);
 
     let mut rows: Vec<Element<'a, PrefMsg>> = Vec::with_capacity(classes.len());
     for (idx, entry) in classes.iter().enumerate() {
         let key_input = text_input("class_key", entry.key.as_str())
             .on_input(move |s| PrefMsg::ComponentClassEditKey { index: idx, key: s })
             .padding(5)
-            .size(12)
+            .size(TS.label)
             .width(Length::FillPortion(2));
         let label_input = text_input("Label", entry.label.as_str())
             .on_input(move |s| PrefMsg::ComponentClassEditLabel {
@@ -45,11 +49,11 @@ pub(super) fn content_component_classes<'a>(
                 label: s,
             })
             .padding(5)
-            .size(12)
+            .size(TS.label)
             .width(Length::FillPortion(3));
         let remove_btn = button(
-            container(text("Remove").size(11))
-                .padding([4, 10])
+            container(text("Remove").size(TS.body))
+                .padding([SP.s, 10.0])
                 .center_x(Length::Fill),
         )
         .on_press(PrefMsg::ComponentClassRemove { index: idx })
@@ -58,7 +62,7 @@ pub(super) fn content_component_classes<'a>(
 
         rows.push(
             row![key_input, label_input, remove_btn]
-                .spacing(8)
+                .spacing(SP.m)
                 .align_y(iced::Alignment::Center)
                 .into(),
         );
@@ -66,18 +70,18 @@ pub(super) fn content_component_classes<'a>(
 
     let body: Element<'a, PrefMsg> = if rows.is_empty() {
         text("No classes defined. Click \"+ Add Class\" to add one or \"Reset to Defaults\" to restore the seed list.")
-            .size(11)
+            .size(TS.body)
             .style(text_muted)
             .into()
     } else {
         Column::with_children(rows).spacing(6).into()
     };
 
-    let add_btn = button(container(text("+ Add Class").size(11)).padding([5, 12]))
+    let add_btn = button(container(text("+ Add Class").size(TS.body)).padding([5.0, SP.l]))
         .on_press(PrefMsg::ComponentClassAdd)
         .style(primary_button_style);
 
-    let reset_btn = button(container(text("Reset to Defaults").size(11)).padding([5, 12]))
+    let reset_btn = button(container(text("Reset to Defaults").size(TS.body)).padding([5.0, SP.l]))
         .on_press(PrefMsg::ComponentClassResetDefaults)
         .style(secondary_button_style);
 
