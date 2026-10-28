@@ -23,6 +23,15 @@ fn cell_of(v: f64) -> i64 {
     (v / CELL_MM).floor() as i64
 }
 
+/// True when the cell box spans more than [`MAX_WIRE_CELLS`] cells. Saturating
+/// math: a huge or non-finite coordinate (a crafted file) saturates the cell
+/// index and must read as oversized, never overflow.
+fn too_many_cells((x0, y0, x1, y1): (i64, i64, i64, i64)) -> bool {
+    let w = x1.saturating_sub(x0).saturating_add(1);
+    let h = y1.saturating_sub(y0).saturating_add(1);
+    w.checked_mul(h).is_none_or(|n| n > MAX_WIRE_CELLS)
+}
+
 pub(crate) struct WireIndex<'a> {
     wires: &'a [Wire],
     tolerance: f64,
@@ -53,7 +62,7 @@ impl<'a> WireIndex<'a> {
                 }
             }
             let (x0, y0, x1, y1) = index.wire_cell_box(wire);
-            if (x1 - x0 + 1) * (y1 - y0 + 1) > MAX_WIRE_CELLS {
+            if too_many_cells((x0, y0, x1, y1)) {
                 index.oversized.push(i);
                 continue;
             }
@@ -112,7 +121,7 @@ impl<'a> WireIndex<'a> {
     /// `wire`'s tolerance-expanded bounding box.
     pub(crate) fn endpoint_candidates_near_wire(&self, wire: &Wire) -> Vec<usize> {
         let b = self.wire_cell_box(wire);
-        if (b.2 - b.0 + 1) * (b.3 - b.1 + 1) > MAX_WIRE_CELLS {
+        if too_many_cells(b) {
             return (0..self.wires.len()).collect();
         }
         self.collect(&self.endpoints, b, &[])
