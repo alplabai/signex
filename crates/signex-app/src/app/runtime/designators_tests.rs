@@ -433,3 +433,49 @@ fn unchanged_inputs_skip_the_recompute_and_a_placement_or_edit_change_redoes_it(
     )));
     assert_eq!(shown(&app).as_deref(), Some("R205"));
 }
+
+/// While a Navigator build is in flight the previous hierarchy is only on
+/// show: an edit must not read "placed once" from it. Here the child gains a
+/// second placement and the build has not landed; the edit writes the
+/// placement's entry and leaves the shared `reference` alone.
+#[test]
+fn a_designator_edit_while_the_hierarchy_is_rebuilding_never_writes_the_shared_reference() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, child) = placed_once_with_an_entry(&dir);
+    app.open_or_focus_sheet_path(child.clone());
+    let a = InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_A)]);
+    app.document_state
+        .tab_placements
+        .record(&child, Some(a.clone()));
+    app.refresh_panel_ctx();
+    app.settle_navigator();
+    assert!(
+        app.known_single_placement(&child),
+        "precondition: placed once"
+    );
+
+    // A second sheet symbol for the same child is pasted into `top`.
+    let engine = app.document_state.engines.get_mut(&top).expect("top open");
+    let mut document = engine.document().clone();
+    let mut second = document.child_sheets[0].clone();
+    second.uuid = Uuid::from_u128(PLACEMENT_B);
+    second.name = "B".into();
+    document.child_sheets.push(second);
+    engine
+        .execute(signex_engine::Command::ReplaceDocument { document })
+        .expect("replace");
+    app.refresh_panel_ctx();
+    assert!(
+        app.document_state.panel_ctx.navigator.wanted.is_some(),
+        "precondition: a rebuild is pending and has not landed"
+    );
+
+    let id = child_symbol(&app);
+    let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
+        PanelMsg::EditSymbolDesignator(id, "R9".into()),
+    )));
+
+    let symbol = app.active_render_snapshot().unwrap().symbols[0].clone();
+    assert_eq!(symbol.reference, "R1", "placement B still reads R1");
+    assert_eq!(symbol.designator_in(&a), "R9");
+}

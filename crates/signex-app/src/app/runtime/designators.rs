@@ -62,8 +62,7 @@ impl Signex {
         let hierarchy = document_state
             .panel_ctx
             .navigator
-            .hierarchy
-            .as_ref()
+            .current_hierarchy()
             .filter(|_| document_state.active_path.as_deref() == Some(path));
         let Some(hierarchy) = hierarchy else {
             return recorded.cloned();
@@ -107,8 +106,7 @@ impl Signex {
                 .document_state
                 .panel_ctx
                 .navigator
-                .hierarchy
-                .as_ref()
+                .current_hierarchy()
                 .is_some_and(|h| h.is_complete() && h.placements_of(path).len() <= 1)
     }
 

@@ -148,7 +148,7 @@ impl Signex {
             root: project_sheets::resolve_netlist_root(ds)?,
             active: ds.active_path.clone(),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
-            hierarchy: ds.panel_ctx.navigator.hierarchy.clone(),
+            hierarchy: ds.panel_ctx.navigator.current_hierarchy().cloned(),
         })
     }
 

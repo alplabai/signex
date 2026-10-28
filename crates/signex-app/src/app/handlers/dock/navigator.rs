@@ -212,8 +212,79 @@ mod tests {
             "the request is claimed once"
         );
 
-        let open = crate::app::project_sheets::open_sheets_snapshot(&app.document_state);
-        let built = crate::app::runtime::navigator_ctx::build_navigator_hierarchy(&open, &request);
+        let open = app.navigator_open_snapshot(&request);
+        let built = crate::app::runtime::navigator_ctx::build_navigator_hierarchy(open, &request);
+        app.handle_navigator_built(request.generation, Ok(Box::new(built)));
+        assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Leaf"]);
+    }
+
+    #[test]
+    fn a_failed_build_is_asked_for_again_rather_than_leaving_the_panel_empty() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (mut app, _) = three_level_project(&dir, &[]);
+        app.refresh_panel_ctx();
+        let failed = app
+            .document_state
+            .panel_ctx
+            .navigator
+            .wanted
+            .take()
+            .expect("first request");
+
+        app.handle_navigator_built(failed.generation, Err("worker panicked".into()));
+        app.refresh_panel_ctx();
+        assert!(
+            app.document_state.panel_ctx.navigator.wanted.is_some(),
+            "the next refresh asks for the hierarchy again"
+        );
+
+        app.settle_navigator();
+        assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Leaf"]);
+    }
+
+    #[test]
+    fn a_build_that_keeps_failing_is_not_retried_forever() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (mut app, _) = three_level_project(&dir, &[]);
+        let mut attempts = 0;
+        loop {
+            app.refresh_panel_ctx();
+            let Some(request) = app.document_state.panel_ctx.navigator.wanted.take() else {
+                break;
+            };
+            attempts += 1;
+            assert!(attempts < 20, "the retry never stops");
+            app.handle_navigator_built(request.generation, Err("boom".into()));
+        }
+        assert!(attempts > 1, "a failure is retried at least once");
+    }
+
+    #[test]
+    fn the_build_snapshot_leaves_out_open_sheets_the_project_cannot_reach() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (mut app, [root, mid, _leaf]) = three_level_project(&dir, &[]);
+        let unrelated = write_sheet(dir.path(), "unrelated.snxsch", &[]);
+        app.open_or_focus_sheet_path(root.clone());
+        app.open_or_focus_sheet_path(mid.clone());
+        app.open_or_focus_sheet_path(unrelated.clone());
+        app.refresh_panel_ctx();
+        let request = app
+            .document_state
+            .panel_ctx
+            .navigator
+            .wanted
+            .clone()
+            .expect("a build is asked for");
+
+        let snapshot = app.navigator_open_snapshot(&request);
+
+        assert!(snapshot.contains_key(&root) && snapshot.contains_key(&mid));
+        assert!(
+            !snapshot.contains_key(&unrelated),
+            "a sheet outside the project is not cloned for its build"
+        );
+        let built =
+            crate::app::runtime::navigator_ctx::build_navigator_hierarchy(snapshot, &request);
         app.handle_navigator_built(request.generation, Ok(Box::new(built)));
         assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Leaf"]);
     }
@@ -230,9 +301,9 @@ mod tests {
             .wanted
             .clone()
             .expect("first request");
-        let open = crate::app::project_sheets::open_sheets_snapshot(&app.document_state);
+        let open = app.navigator_open_snapshot(&stale);
         let stale_built =
-            crate::app::runtime::navigator_ctx::build_navigator_hierarchy(&open, &stale);
+            crate::app::runtime::navigator_ctx::build_navigator_hierarchy(open, &stale);
 
         // Opening a sheet changes the fingerprint before the first build lands.
         app.open_or_focus_sheet_path(leaf);

@@ -14,6 +14,9 @@ fn send(app: &mut Signex, msg: FindReplaceMsg) {
 }
 
 fn project_search(app: &mut Signex, query: &str) {
+    // The scan reads the Navigator's hierarchy only once it is current.
+    app.refresh_panel_ctx();
+    app.settle_navigator();
     send(app, FindReplaceMsg::ScopeChanged(FindScope::Project));
     send(app, FindReplaceMsg::QueryChanged(query.into()));
     app.run_project_scan_blocking();

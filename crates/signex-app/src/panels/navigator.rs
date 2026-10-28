@@ -61,6 +61,8 @@ pub struct NavigatorModel {
     /// Generation of the newest build asked for. A build result carrying any
     /// other generation was overtaken by a later request and is dropped.
     pub generation: u64,
+    /// Builds that failed in a row for the state in view; bounds the retry.
+    pub failed_builds: u8,
     /// A build asked for by a refresh and not yet started; `update` takes it
     /// and runs it off the UI thread.
     pub wanted: Option<NavigatorBuildRequest>,
@@ -76,6 +78,17 @@ pub struct NavigatorModel {
 }
 
 impl NavigatorModel {
+    /// The hierarchy, only while it describes the state in view: `None` while
+    /// a build for a different state is asked for or running. Readers that
+    /// *decide* something from it (which designator an edit writes, which
+    /// placement a descent starts from) must use this, not `hierarchy`, which
+    /// stays on show for display until the new one lands.
+    pub fn current_hierarchy(&self) -> Option<&SheetHierarchy> {
+        self.hierarchy
+            .as_ref()
+            .filter(|_| self.wanted.is_none() && self.requested == self.fingerprint)
+    }
+
     /// The hierarchy node a tree row path stands for.
     pub fn node_at(&self, tree_path: &[usize]) -> Option<&SheetNode> {
         self.hierarchy.as_ref()?.node_at(tree_path)

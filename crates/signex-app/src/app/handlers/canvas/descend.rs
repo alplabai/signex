@@ -51,7 +51,11 @@ impl Signex {
         if let Some(recorded) = self.document_state.tab_placements.get(&active) {
             return Some(recorded.clone());
         }
-        let hierarchy = self.document_state.panel_ctx.navigator.hierarchy.as_ref()?;
+        let hierarchy = self
+            .document_state
+            .panel_ctx
+            .navigator
+            .current_hierarchy()?;
         hierarchy.starts_a_walk(&active).then(InstancePath::root)
     }
 }

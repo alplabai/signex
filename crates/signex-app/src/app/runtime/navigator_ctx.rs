@@ -22,19 +22,25 @@ use iced::Task;
 
 use super::super::*;
 use crate::app::project_sheets::{
-    assemble_project_sheets_from, open_sheets_snapshot, project_root_sheet_path,
+    OpenSheets, assemble_project_sheets_taking, open_sheets_snapshot_reachable,
+    project_root_sheet_path,
 };
 use crate::app::sheet_hierarchy::build_sheet_hierarchy;
 use crate::app::state::scope::CaseFold;
 use crate::panels::{NavigatorBuildRequest, NavigatorBuilt, NavigatorModel};
 
+/// How many times in a row a failing build is retried before the Navigator
+/// stops asking (a refresh runs after every update, so an unbounded retry of a
+/// build that always fails would spin).
+const MAX_BUILD_ATTEMPTS: u8 = 3;
+
 /// The disk-reading half of a Navigator rebuild, over a snapshot of the open
 /// sheets so it can run on a blocking thread.
 pub(crate) fn build_navigator_hierarchy(
-    open: &crate::app::project_sheets::OpenSheets,
+    open: OpenSheets,
     request: &NavigatorBuildRequest,
 ) -> NavigatorBuilt {
-    let set = assemble_project_sheets_from(open, &request.pages, &request.root, request.fold);
+    let set = assemble_project_sheets_taking(open, &request.pages, &request.root, request.fold);
     let hierarchy = build_sheet_hierarchy(
         &set.sheets,
         &set.unreadable,
@@ -85,6 +91,10 @@ impl Signex {
         } else if previous.requested != fingerprint {
             // The sheets are read from disk, so the build runs from `update`
             // as a Task; until it lands the previous hierarchy stays on show.
+            if !previous.requested.is_empty() {
+                // A different state, not the retry of a failed build.
+                previous.failed_builds = 0;
+            }
             previous.generation += 1;
             previous.requested = fingerprint.clone();
             previous.wanted = Some(NavigatorBuildRequest {
@@ -102,11 +112,11 @@ impl Signex {
     /// Start the hierarchy build a refresh asked for, if any.
     pub(crate) fn start_navigator_build(&mut self) -> Option<Task<Message>> {
         let request = self.document_state.panel_ctx.navigator.wanted.take()?;
-        let open = open_sheets_snapshot(&self.document_state);
+        let open = self.navigator_open_snapshot(&request);
         let generation = request.generation;
         Some(Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || build_navigator_hierarchy(&open, &request))
+                tokio::task::spawn_blocking(move || build_navigator_hierarchy(open, &request))
                     .await
                     .map_err(|error| error.to_string())
             },
@@ -114,6 +124,13 @@ impl Signex {
                 Message::Project(ProjectMsg::NavigatorBuilt(generation, built.map(Box::new)))
             },
         ))
+    }
+
+    /// The open sheets the build for `request` can read, and no others.
+    pub(crate) fn navigator_open_snapshot(&self, request: &NavigatorBuildRequest) -> OpenSheets {
+        let mut seeds = request.pages.clone();
+        seeds.push(request.root.clone());
+        open_sheets_snapshot_reachable(&self.document_state, &seeds)
     }
 
     /// A build landed: swap the hierarchy in unless a newer request overtook it.
@@ -128,8 +145,21 @@ impl Signex {
         let built = match built {
             Ok(built) => *built,
             Err(reason) => {
+                let navigator = &mut self.document_state.panel_ctx.navigator;
+                navigator.failed_builds = navigator.failed_builds.saturating_add(1);
+                let retrying = navigator.failed_builds < MAX_BUILD_ATTEMPTS;
+                if retrying {
+                    // Forget the request so the next refresh asks again,
+                    // rather than leaving the panel on the old hierarchy.
+                    navigator.requested.clear();
+                }
                 crate::diagnostics::log_warning(format!(
-                    "Navigator: the sheet hierarchy could not be built ({reason})"
+                    "Navigator: the sheet hierarchy could not be built ({reason}){}",
+                    if retrying {
+                        "; retrying"
+                    } else {
+                        "; giving up until the project changes"
+                    }
                 ));
                 return;
             }
@@ -152,6 +182,7 @@ impl Signex {
         let navigator = &mut self.document_state.panel_ctx.navigator;
         navigator.replace_hierarchy(built.hierarchy, active.as_deref(), &open);
         navigator.fingerprint = navigator.requested.clone();
+        navigator.failed_builds = 0;
         self.refresh_panel_ctx();
     }
 
@@ -215,8 +246,8 @@ impl Signex {
     /// `update` would have spawned, and deliver its result.
     pub(crate) fn settle_navigator(&mut self) {
         while let Some(request) = self.document_state.panel_ctx.navigator.wanted.take() {
-            let open = open_sheets_snapshot(&self.document_state);
-            let built = build_navigator_hierarchy(&open, &request);
+            let open = self.navigator_open_snapshot(&request);
+            let built = build_navigator_hierarchy(open, &request);
             self.handle_navigator_built(request.generation, Ok(Box::new(built)));
         }
     }

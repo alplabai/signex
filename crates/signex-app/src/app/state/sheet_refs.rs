@@ -128,7 +128,7 @@ impl SheetRefs {
 pub(crate) struct SheetRefInputs {
     /// Child references of every loaded engine, followed IN ADDITION to the
     /// saved file's, so unsaved edits never hide a reference the file keeps.
-    loaded: HashMap<PathBuf, Vec<String>>,
+    loaded: std::sync::Arc<HashMap<PathBuf, Vec<String>>>,
     /// Every sheet each open project lists.
     roots: Vec<PathBuf>,
     /// The projects the roots came from.
@@ -328,7 +328,7 @@ impl SheetRefInputs {
         let mut keys = KeyMap::lexical(CaseFold::from_probe(false));
         let mut volume = VolumeCase::new(ignores_case);
         let mut loaded_by_key: HashMap<String, Vec<String>> = HashMap::new();
-        for (path, refs) in &loaded {
+        for (path, refs) in loaded.iter() {
             let key = identity_key(&mut keys, &mut volume, &trusted, path);
             push_unique(loaded_by_key.entry(key).or_default(), refs.iter().cloned());
         }
@@ -493,7 +493,7 @@ impl DocumentState {
             );
         }
         SheetRefInputs {
-            loaded: (*self.child_sheet_refs()).clone(),
+            loaded: self.child_sheet_refs(),
             roots: self
                 .projects
                 .iter()
@@ -768,7 +768,7 @@ mod tests {
         let root = dir.join("x.snxsch");
         write_sheet(&root, &["../d/x.snxsch"]);
         let inputs = SheetRefInputs {
-            loaded: HashMap::new(),
+            loaded: HashMap::new().into(),
             roots: vec![root.clone()],
             projects: Vec::new(),
             extra: Vec::new(),
@@ -794,7 +794,8 @@ mod tests {
         // never saw (no such file exists).
         let loaded_child = base.join("child.snxsch");
         let inputs = SheetRefInputs {
-            loaded: HashMap::from([(loaded_child.clone(), vec!["grand.snxsch".to_string()])]),
+            loaded: HashMap::from([(loaded_child.clone(), vec!["grand.snxsch".to_string()])])
+                .into(),
             roots: vec![root],
             projects: Vec::new(),
             extra: Vec::new(),
@@ -827,7 +828,7 @@ mod tests {
         let root = dir.join("x.snxsch");
         write_sheet(&root, &["../outside.snxsch"]);
         let inputs = SheetRefInputs {
-            loaded: HashMap::new(),
+            loaded: HashMap::new().into(),
             roots: vec![root],
             projects: Vec::new(),
             extra: Vec::new(),
@@ -859,7 +860,7 @@ mod tests {
         let root = dir.join("x.snxsch");
         write_sheet(&root, &[outside.to_str().expect("utf8 path")]);
         let inputs = SheetRefInputs {
-            loaded: HashMap::new(),
+            loaded: HashMap::new().into(),
             roots: vec![root],
             projects: Vec::new(),
             extra: Vec::new(),
@@ -888,7 +889,7 @@ mod tests {
         let chained = format!("/../../../..{}", root.display());
         write_sheet(&root, &[chained.as_str(), "../../../../../../../x.snxsch"]);
         let inputs = SheetRefInputs {
-            loaded: HashMap::new(),
+            loaded: HashMap::new().into(),
             roots: vec![root.clone()],
             projects: Vec::new(),
             extra: Vec::new(),
@@ -936,6 +937,19 @@ mod tests {
             case_probed: false,
             case_decided: false,
         }
+    }
+
+    #[test]
+    fn the_inputs_share_the_cached_child_refs_instead_of_copying_them() {
+        let (app, _task) = crate::app::Signex::new();
+        let docs = &app.document_state;
+
+        let inputs = docs.sheet_ref_inputs();
+
+        assert!(
+            std::sync::Arc::ptr_eq(&inputs.loaded, &docs.child_sheet_refs()),
+            "the snapshot must reuse the memoised map"
+        );
     }
 
     #[test]
@@ -1111,7 +1125,7 @@ mod tests {
     /// Resolve a walk whose only root is `root`.
     fn resolve_root(root: &Path, limits: WalkLimits) -> SheetRefs {
         SheetRefInputs {
-            loaded: HashMap::new(),
+            loaded: HashMap::new().into(),
             roots: vec![root.to_path_buf()],
             projects: Vec::new(),
             extra: Vec::new(),
@@ -1254,7 +1268,7 @@ mod tests {
         assert_eq!(trusted.len(), 1, "{root:?} names a share");
 
         let resolved = SheetRefInputs {
-            loaded: HashMap::new(),
+            loaded: HashMap::new().into(),
             roots: vec![root],
             projects: Vec::new(),
             extra: Vec::new(),
@@ -1288,7 +1302,7 @@ mod tests {
         let trusted: Vec<Share> = share_of(&root).into_iter().collect();
 
         let resolved = SheetRefInputs {
-            loaded: HashMap::new(),
+            loaded: HashMap::new().into(),
             roots: vec![root],
             projects: Vec::new(),
             extra: Vec::new(),
@@ -1325,7 +1339,7 @@ mod tests {
         }
         let root = unc_dir.join("x.snxsch");
         let inputs = |project_dirs: Vec<PathBuf>| SheetRefInputs {
-            loaded: HashMap::new(),
+            loaded: HashMap::new().into(),
             roots: vec![root.clone()],
             projects: Vec::new(),
             extra: Vec::new(),
@@ -1362,7 +1376,7 @@ mod tests {
         let trusted: Vec<Share> = share_of(&root).into_iter().collect();
 
         let resolved = SheetRefInputs {
-            loaded: HashMap::new(),
+            loaded: HashMap::new().into(),
             roots: vec![root],
             projects: Vec::new(),
             extra: Vec::new(),
@@ -1396,7 +1410,7 @@ mod tests {
         // would touch the network never ran).
         let lib = PathBuf::from(r"\\attacker\share\lib.snxlib");
         let resolved = SheetRefInputs {
-            loaded: HashMap::new(),
+            loaded: HashMap::new().into(),
             roots: Vec::new(),
             projects: Vec::new(),
             extra: vec![lib.clone()],
@@ -1435,7 +1449,7 @@ mod tests {
             ],
         );
         let inputs = SheetRefInputs {
-            loaded: HashMap::new(),
+            loaded: HashMap::new().into(),
             roots: vec![root.clone(), tmp.path().join("NUL")],
             projects: Vec::new(),
             extra: vec![tmp.path().join("PRN")],
@@ -1492,7 +1506,7 @@ mod tests {
         let root = tmp.path().join("x.snxsch");
         write_sheet(&root, &[r"NUL\x.snxsch"]);
         let inputs = SheetRefInputs {
-            loaded: HashMap::new(),
+            loaded: HashMap::new().into(),
             roots: vec![root.clone()],
             projects: Vec::new(),
             extra: vec![tmp.path().join("NUL").join("lib.snxlib")],
@@ -1619,7 +1633,7 @@ mod tests {
         write_sheet(&base.join("edited.snxsch"), &[]);
         // The open copy dropped `saved` and added `edited`.
         let inputs = SheetRefInputs {
-            loaded: HashMap::from([(root.clone(), vec!["edited.snxsch".to_string()])]),
+            loaded: HashMap::from([(root.clone(), vec!["edited.snxsch".to_string()])]).into(),
             roots: vec![root.clone()],
             projects: Vec::new(),
             extra: Vec::new(),

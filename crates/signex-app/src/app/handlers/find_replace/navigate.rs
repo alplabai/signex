@@ -42,7 +42,11 @@ impl Signex {
             let held = self.resolve_held_spelling(sheet.clone());
             if self.document_state.active_path.as_deref() != Some(held.as_path()) {
                 let placement = found.hit.placement.clone().or_else(|| {
-                    let hierarchy = self.document_state.panel_ctx.navigator.hierarchy.as_ref()?;
+                    let hierarchy = self
+                        .document_state
+                        .panel_ctx
+                        .navigator
+                        .current_hierarchy()?;
                     crate::app::state::default_placement(hierarchy.placements_of(&held))
                 });
                 self.open_sheet_with_placement(sheet.clone(), placement);
