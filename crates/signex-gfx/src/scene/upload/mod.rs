@@ -68,6 +68,11 @@ impl ViewportAabbMm {
         }
     }
 
+    /// Width times height.
+    pub fn area(&self) -> f32 {
+        (self.max[0] - self.min[0]) * (self.max[1] - self.min[1])
+    }
+
     /// Whether `other` lies entirely inside this rectangle.
     pub fn contains(&self, other: &Self) -> bool {
         self.min[0] <= other.min[0]

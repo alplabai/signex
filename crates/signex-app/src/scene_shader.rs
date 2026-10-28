@@ -63,11 +63,11 @@ use crate::scene_gpu_upload::{GpuUploadTarget, TextFrame, visible_world_rect};
 /// encoder (`iced_wgpu::lib.rs`), so windows do not interleave — each uploads
 /// its own geometry immediately before drawing it.
 ///
-/// What sharing *does* break is the generation cache. `prepare` skips the
-/// upload when this frame's generation equals the resident one, and two
-/// sources counting independently collide trivially — two freshly-opened
-/// documents are both at generation 0. The second source then skips its upload
-/// and draws the first's geometry.
+/// What sharing *does* break is the generation cache. The resident-scene
+/// tracker skips an upload when this frame's generation equals the resident
+/// one, and two sources counting independently collide trivially — two
+/// freshly-opened documents are both at generation 0. The second source then
+/// skips its upload and draws the first's geometry.
 ///
 /// Making [`ScenePrimitive`] generic over this trait means
 /// `ScenePrimitive<PcbSurface>` and a future `ScenePrimitive<SchematicSurface>`
@@ -252,9 +252,8 @@ pub struct ScenePrimitive<S: SceneSurface> {
     /// `Some(g)` comes from a cached source (the PCB `gpu_scene` cache) that
     /// bumps `g` only when the geometry actually changes, so equal generations
     /// across frames mean "same geometry, don't re-upload". `None` marks an
-    /// uncached source that must upload every frame — which is the honest
-    /// answer for any surface whose scene depends on the camera (viewport
-    /// culling or zoom-derived stroke widths), not a missing optimisation.
+    /// uncached source: the tracker compares its scene by value against the
+    /// resident one, so only categories that differ re-upload.
     pub generation: Option<u64>,
     /// Screen-space pan offset in logical pixels.
     pub offset_px: [f32; 2],
@@ -453,7 +452,7 @@ impl<S: SceneSurface> SceneShaderProgram<S> {
     /// zoom in logical pixels per millimetre). `generation` identifies the
     /// geometry so the pipeline can skip redundant GPU uploads on pan/zoom:
     /// `Some(g)` from a cached source that bumps `g` only on real geometry
-    /// changes, or `None` for an uncached source that uploads every frame.
+    /// changes, or `None` for an uncached source, compared by value against the resident scene.
     pub fn new(
         scene: Arc<Scene>,
         generation: Option<u64>,

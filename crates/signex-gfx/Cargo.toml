@@ -28,7 +28,7 @@ test-support = []
 debug-pass = ["test-support"]
 
 [dev-dependencies]
-signex-gfx = { path = ".", features = ["debug-pass"] }
+signex-gfx = { workspace = true, features = ["debug-pass"] }
 pollster = "0.4"
 serde.workspace = true
 serde_json.workspace = true

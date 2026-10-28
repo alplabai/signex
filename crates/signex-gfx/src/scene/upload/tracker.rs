@@ -33,6 +33,11 @@ pub const GEOMETRY_FLAGS: DirtyFlags = DirtyFlags::LINES
 /// of its width/height on each side.
 pub const CULL_MARGIN_FRACTION: f32 = 0.5;
 
+/// Re-cull once the resident window is more than this many times the visible
+/// area. A fresh window is `(1 + 2 * CULL_MARGIN_FRACTION)^2` = 4x, so this
+/// triggers after zooming in by about 2x.
+pub const MAX_WINDOW_AREA_RATIO: f32 = 16.0;
+
 /// What to upload this frame.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UploadPlan {
@@ -68,21 +73,22 @@ impl UploadTracker {
             None => GEOMETRY_FLAGS,
             Some(prev) if Arc::ptr_eq(prev, scene) => DirtyFlags::empty(),
             Some(_) if generation.is_some() && generation == self.generation => DirtyFlags::empty(),
-            Some(prev) => {
-                let hint = if scene.dirty.is_empty() {
-                    DirtyFlags::ALL
-                } else {
-                    scene.dirty
-                };
-                scene.changed_geometry_since(prev) & hint
-            }
+            // `Scene::dirty` is the producer's "categories this build filled",
+            // not "changed since what is resident" (that may be another tab's
+            // scene), so only the comparison decides.
+            Some(prev) => scene.changed_geometry_since(prev),
         };
 
         let window_valid = match (self.culled_for, visible) {
-            // Resident geometry is complete; anything fits inside it.
-            (None, _) => self.resident.is_some(),
-            (Some(_), None) => false,
-            (Some(window), Some(visible)) => window.contains(&visible),
+            // Resident geometry is complete: nothing to re-cull while the view
+            // stays degenerate. A real view re-establishes culling.
+            (None, None) => self.resident.is_some(),
+            (None, Some(_)) | (Some(_), None) => false,
+            // Also re-cull once a deep zoom-in leaves the window far larger
+            // than the view, so the margin (and the culling) comes back.
+            (Some(window), Some(visible)) => {
+                window.contains(&visible) && window.area() <= MAX_WINDOW_AREA_RATIO * visible.area()
+            }
         };
         if !window_valid {
             self.culled_for = visible.map(|v| v.expanded(CULL_MARGIN_FRACTION));

@@ -139,7 +139,8 @@ pub fn visible_world_rect(
     offset_px: [f32; 2],
     scale_px_per_mm: f32,
 ) -> Option<ViewportAabbMm> {
-    if !(scale_px_per_mm > 0.0 && bounds.width > 0.0 && bounds.height > 0.0) {
+    let finite = scale_px_per_mm.is_finite() && offset_px.iter().all(|v| v.is_finite());
+    if !(finite && scale_px_per_mm > 0.0 && bounds.width > 0.0 && bounds.height > 0.0) {
         return None;
     }
     let origin = world_origin_mm(offset_px, scale_px_per_mm);
@@ -170,5 +171,7 @@ mod tests {
         let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(400.0, 200.0));
         assert!(visible_world_rect(&bounds, [0.0, 0.0], 0.0).is_none());
         assert!(visible_world_rect(&Rectangle::default(), [0.0, 0.0], 4.0).is_none());
+        assert!(visible_world_rect(&bounds, [0.0, 0.0], f32::NAN).is_none());
+        assert!(visible_world_rect(&bounds, [f32::INFINITY, 0.0], 4.0).is_none());
     }
 }

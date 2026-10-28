@@ -56,8 +56,10 @@ fn line_at(x: f32, color: [f32; 4]) -> LineSegment {
 const WHITE: [f32; 4] = [1.0; 4];
 
 fn scene_with_lines(xs: &[f32]) -> Scene {
-    let mut scene = Scene::default();
-    scene.lines = xs.iter().map(|&x| line_at(x, WHITE)).collect();
+    let mut scene = Scene {
+        lines: xs.iter().map(|&x| line_at(x, WHITE)).collect(),
+        ..Default::default()
+    };
     scene.circles.push(Circle {
         center: [0.0, 0.0],
         radius: 1.0,
@@ -145,19 +147,38 @@ fn theme_change_reuploads_the_recoloured_category() {
 }
 
 #[test]
-fn producer_dirty_hint_narrows_the_comparison() {
+fn emptied_category_is_cleared_whatever_the_producer_dirty_flag_says() {
     let mut tracker = UploadTracker::default();
-    frame(
-        &mut tracker,
-        &Arc::new(scene_with_lines(&[0.0])),
-        1,
-        view(-5.0, 5.0),
-    );
-    // Lines differ, but the producer says only circles were touched.
-    let mut next = scene_with_lines(&[0.0, 1.0]);
-    next.dirty = DirtyFlags::CIRCLES;
+    let mut with_overlay = scene_with_lines(&[0.0]);
+    with_overlay.overlay_lines.push(line_at(0.0, WHITE));
+    frame(&mut tracker, &Arc::new(with_overlay), 1, view(-5.0, 5.0));
+    // The next build no longer has the overlay and its `dirty` omits OVERLAY.
+    let mut next = scene_with_lines(&[0.0]);
+    next.dirty = DirtyFlags::LINES;
     let plan = tracker.plan(&Arc::new(next), Some(2), view(-5.0, 5.0));
-    assert!(!plan.dirty.contains(DirtyFlags::LINES));
+    assert!(plan.dirty.contains(DirtyFlags::OVERLAY));
+}
+
+#[test]
+fn culling_returns_after_a_degenerate_frame() {
+    let mut tracker = UploadTracker::default();
+    let scene = Arc::new(scene_with_lines(&[0.0, 1000.0]));
+    let (_, full) = frame(&mut tracker, &scene, 1, None);
+    assert_eq!(full.lines, 2);
+    let (counters, culled) = frame(&mut tracker, &scene, 1, view(-5.0, 5.0));
+    assert_eq!(counters.line_uploads, 1);
+    assert_eq!(culled.lines, 1, "far line culled again");
+}
+
+#[test]
+fn deep_zoom_in_restores_the_margin() {
+    let mut tracker = UploadTracker::default();
+    let scene = Arc::new(scene_with_lines(&[0.0, 8.0]));
+    frame(&mut tracker, &scene, 1, view(-5.0, 5.0));
+    // Window is -10..10; zooming to -1..1 is still inside it but 100x smaller.
+    let (counters, target) = frame(&mut tracker, &scene, 1, view(-1.0, 1.0));
+    assert_eq!(counters.line_uploads, 1, "window far larger than the view");
+    assert_eq!(target.lines, 1, "x=8 now outside the tightened window");
 }
 
 #[test]
