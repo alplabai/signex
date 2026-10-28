@@ -16,7 +16,7 @@ const GOLDEN: &str = include_str!("testdata/menu_bar.golden.tsv");
 const RECENT_GOLDEN: &str = include_str!("testdata/menu_bar_recent.golden.tsv");
 
 /// Context variants, in the order of the `enabled[...]` column.
-pub(super) fn variants() -> Vec<MenuContext> {
+pub(super) fn variants() -> Vec<MenuContext<'static>> {
     let with = |commands: CommandContext| MenuContext {
         commands,
         ..MenuContext::default()
@@ -237,7 +237,7 @@ fn model_reproduces_golden_recent_projects() {
             .map(|p| p.split(',').map(Into::into).collect())
             .unwrap_or_default();
         let ctx = MenuContext {
-            recent_projects: recent,
+            recent_projects: &recent,
             ..MenuContext::default()
         };
         let got: Vec<String> = flat_rows(&ctx)
