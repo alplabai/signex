@@ -223,6 +223,124 @@ fn restore_at_round_trips_a_prior_version() {
 }
 
 #[test]
+fn commit_path_with_bytes_records_those_bytes_even_when_the_file_changed_after() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    write_file(&root, "sheet.snxsch", "base");
+    adapter
+        .commit_path(Path::new("sheet.snxsch"), "base")
+        .unwrap();
+
+    // The save wrote "saved"; an external edit then replaced the file.
+    write_file(&root, "sheet.snxsch", "external edit");
+    let oid = adapter
+        .commit_path_with_bytes(Path::new("sheet.snxsch"), b"saved", "Save sheet.snxsch")
+        .unwrap()
+        .expect("the bytes differ from HEAD, so a commit is made");
+
+    let repo = git2::Repository::open(&root).unwrap();
+    let tree = repo.find_commit(oid).unwrap().tree().unwrap();
+    let blob = repo
+        .find_blob(tree.get_path(Path::new("sheet.snxsch")).unwrap().id())
+        .unwrap();
+    assert_eq!(blob.content(), b"saved");
+    assert_eq!(read_file(&root, "sheet.snxsch"), "external edit");
+    // Same bytes again: nothing to commit.
+    assert!(
+        adapter
+            .commit_path_with_bytes(Path::new("sheet.snxsch"), b"saved", "again")
+            .unwrap()
+            .is_none()
+    );
+}
+
+/// Make the file look old, as one written long before the commit: git trusts
+/// a stat cache entry only once its mtime is older than the index (otherwise
+/// it re-hashes the "racily clean" file and would hide the bug under test).
+fn age_file(root: &Path, rel: &str) {
+    let file = fs::File::options()
+        .write(true)
+        .open(root.join(rel))
+        .unwrap();
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    file.set_modified(old).unwrap();
+}
+
+/// Status of `rel` against HEAD and the index.
+fn status_of(root: &Path, rel: &str) -> git2::Status {
+    git2::Repository::open(root)
+        .unwrap()
+        .status_file(Path::new(rel))
+        .unwrap()
+}
+
+#[test]
+fn a_byte_commit_whose_file_changed_afterwards_leaves_the_file_reported_modified() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    write_file(&root, "sheet.snxsch", "base");
+    adapter
+        .commit_path(Path::new("sheet.snxsch"), "base")
+        .unwrap();
+
+    // A later write replaced the saved bytes before the commit ran.
+    write_file(&root, "sheet.snxsch", "restored revision!");
+    age_file(&root, "sheet.snxsch");
+    adapter
+        .commit_path_with_bytes(Path::new("sheet.snxsch"), b"saved", "Save")
+        .unwrap()
+        .expect("a commit");
+
+    let status = status_of(&root, "sheet.snxsch");
+    assert!(
+        status.contains(git2::Status::WT_MODIFIED),
+        "git must see the file differs from the commit, got {status:?}"
+    );
+    assert!(!status.intersects(git2::Status::INDEX_MODIFIED | git2::Status::INDEX_NEW));
+}
+
+#[test]
+fn a_byte_commit_whose_file_still_matches_leaves_the_file_clean() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    write_file(&root, "sheet.snxsch", "base");
+    adapter
+        .commit_path(Path::new("sheet.snxsch"), "base")
+        .unwrap();
+
+    write_file(&root, "sheet.snxsch", "saved");
+    adapter
+        .commit_path_with_bytes(Path::new("sheet.snxsch"), b"saved", "Save")
+        .unwrap()
+        .expect("a commit");
+
+    assert_eq!(status_of(&root, "sheet.snxsch"), git2::Status::CURRENT);
+}
+
+#[test]
+fn restore_at_returns_the_bytes_it_wrote() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    write_file(&root, "sheet.snxsch", "version-A content");
+    let oid_a = adapter
+        .commit_path(Path::new("sheet.snxsch"), "A")
+        .unwrap()
+        .expect("commit A");
+    write_file(&root, "sheet.snxsch", "version-B content");
+    adapter.commit_path(Path::new("sheet.snxsch"), "B").unwrap();
+
+    let restored = adapter
+        .restore_at(Path::new("sheet.snxsch"), oid_a)
+        .unwrap();
+
+    assert_eq!(restored, b"version-A content");
+}
+
+#[test]
 fn write_gitattributes_writes_the_v022_spec_with_lfs_off() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path().to_path_buf();

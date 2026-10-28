@@ -28,6 +28,10 @@ use crate::app::FootprintDocument;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::tokens::{self, Overlay};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Render the inspector strip. Returns an empty `Space` when not in
 /// Sketch mode so the caller can unconditionally add it to the body
 /// column without `if`-branching.
@@ -74,9 +78,9 @@ pub fn view<'a>(
                 .padding([6, 10])
                 .width(Length::FillPortion(2)),
         ]
-        .spacing(8),
+        .spacing(SP.m),
     )
-    .padding([4, 8])
+    .padding([SP.s, SP.m])
     .style(move |_: &Theme| iced::widget::container::Style {
         background: Some(iced::Background::Color(strip_bg)),
         border: Border {
@@ -104,17 +108,17 @@ fn view_dof<'a>(
     let iters = last.map(|o| o.result.iterations).unwrap_or(0);
 
     column![
-        text("DOF").size(11).color(text_c),
+        text("DOF").size(TS.body).color(text_c),
         text(format!(
             "state={n_state}  residual={m_residual}  over={n_over}"
         ))
-        .size(10)
+        .size(TS.caption)
         .color(muted),
         text(format!("iters={iters}  elapsed={elapsed}ms"))
-            .size(10)
+            .size(TS.caption)
             .color(muted),
     ]
-    .spacing(2)
+    .spacing(SP.xs)
     .into()
 }
 
@@ -127,13 +131,13 @@ fn view_params<'a>(
 ) -> Element<'a, LibraryMessage> {
     let input_bg = tokens::input_bg(tokens);
     let selection = tokens::selection_tint(tokens);
-    let mut col = column![text("Parameters").size(11).color(text_c)].spacing(2);
+    let mut col = column![text("Parameters").size(TS.body).color(text_c)].spacing(SP.xs);
 
     if let Some(sketch) = editor.primitive().sketch.as_ref() {
         if sketch.parameters.is_empty() {
             col = col.push(
                 text("(no parameters yet — add via Inspector v0.13.2)")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted),
             );
         } else {
@@ -142,12 +146,12 @@ fn view_params<'a>(
                 let path = editor.path.clone();
                 let row = row![
                     text(name)
-                        .size(10)
+                        .size(TS.caption)
                         .color(text_c)
                         .width(Length::Fixed(110.0)),
                     text_input("expression…", src)
-                        .size(10)
-                        .padding(2)
+                        .size(TS.caption)
+                        .padding(SP.xs)
                         .style(move |_: &Theme, _| iced::widget::text_input::Style {
                             background: iced::Background::Color(input_bg),
                             border: Border {
@@ -178,7 +182,7 @@ fn view_params<'a>(
     } else {
         col = col.push(
             text("(no sketch — switch to Sketch mode)")
-                .size(10)
+                .size(TS.caption)
                 .color(muted),
         );
     }
@@ -191,9 +195,9 @@ fn view_warnings<'a>(
     text_c: Color,
     muted: Color,
 ) -> Element<'a, LibraryMessage> {
-    let mut col = column![text("Solve warnings").size(11).color(text_c)].spacing(2);
+    let mut col = column![text("Solve warnings").size(TS.body).color(text_c)].spacing(SP.xs);
     if editor.state.solve_warnings.is_empty() {
-        col = col.push(text("(none)").size(10).color(muted));
+        col = col.push(text("(none)").size(TS.caption).color(muted));
     } else {
         for w in editor.state.solve_warnings.iter().take(8) {
             col = col.push(text(w).size(9).color(muted));
@@ -236,14 +240,14 @@ fn view_role<'a>(
             .find(|e| e.id == id)
     });
 
-    let mut col = column![text("Role").size(11).color(text_c)].spacing(4);
+    let mut col = column![text("Role").size(TS.body).color(text_c)].spacing(SP.s);
 
     let entity = match selected_entity {
         Some(e) => e,
         None => {
             col = col.push(
                 text("(select a sketch entity in Sketch mode)")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted),
             );
             return col.into();
@@ -262,7 +266,7 @@ fn view_role<'a>(
     };
     col = col.push(
         text(format!("Selection: {kind_label}"))
-            .size(10)
+            .size(TS.caption)
             .color(muted),
     );
 
@@ -273,7 +277,7 @@ fn view_role<'a>(
         }
     })
     .text_size(11)
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .width(Length::Fill);
 
     col = col.push(dropdown);

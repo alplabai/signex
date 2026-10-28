@@ -12,8 +12,10 @@ mod interaction;
 mod keymap_recorder;
 pub(crate) mod library_entry;
 mod link_policy;
+pub(crate) mod navigator_job;
 pub(crate) mod net_class_picks;
 pub(crate) mod net_class_styles;
+pub(crate) mod ownership_index;
 mod path_key;
 mod pcb_revision;
 mod pdf_page_setup;
@@ -467,6 +469,11 @@ pub struct DocumentState {
     pub autosave: crate::autosave::AutosaveState,
     /// Disk facts behind the project tree's `(missing)` marks (#111).
     pub project_fs: project_fs::ProjectFsCache,
+    /// Off-thread Navigator hierarchy assembly (#1470).
+    pub navigator_job: navigator_job::NavigatorJob,
+    /// Cached sheet-path -> owning-project index, rebuilt when its inputs
+    /// change (#1470); see `state/ownership_index.rs`.
+    pub(crate) ownership: std::cell::RefCell<Option<ownership_index::OwnershipIndex>>,
     /// Projects already told (once per open) that an ERC run fell back to this
     /// machine's preferences because they store no rule set (#1085).
     pub erc_fallback_noted: std::collections::HashSet<ProjectId>,
@@ -576,8 +583,6 @@ pub struct DocumentState {
     pub undo_groups:
         std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
     pub panel_ctx: crate::panels::PanelContext,
-    pub standard_lib_dir: Option<PathBuf>,
-    pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
     /// Print-preview overlay state. `Some` while the preview dialog is
     /// open. Doubles as the unified PDF Export modal — `File → Export
     /// PDF` and `File → Print Preview` both populate this field.
@@ -624,9 +629,15 @@ pub struct DocumentState {
     /// [`Signex::commit_save_to_project_git`] enqueues the work and
     /// clears on `Message::Project(ProjectMsg::GitCommitDone)`.
     pub inflight_git_commits: std::collections::HashSet<(PathBuf, PathBuf)>,
-    /// Files enqueued again while their commit was inflight, with the
-    /// newest message; one more commit is queued when the running one ends.
-    pub requeued_git_commits: std::collections::HashMap<(PathBuf, PathBuf), String>,
+    /// The subset of `inflight_git_commits` whose commit reads the working
+    /// file when its worker starts instead of holding the bytes it records
+    /// (primitive-editor saves, project-file saves, renames). A History
+    /// restore of such a file waits, or the commit would record the restored
+    /// bytes under its own label; commits that carry their bytes never block it.
+    pub unbound_git_commits: std::collections::HashSet<(PathBuf, PathBuf)>,
+    /// The newest save sequence queued for a commit, per `(project_root,
+    /// rel_path)`; a commit of an older write is dropped.
+    pub git_commit_sequences: std::collections::HashMap<(PathBuf, PathBuf), u64>,
     /// #833 — repo roots with a commit currently running. At most one
     /// commit per repo is in flight; the rest wait in
     /// `pending_git_commits` so concurrent tasks never race on the
@@ -719,6 +730,30 @@ pub struct PendingGitCommit {
     /// a rename in the history (#1219).
     pub removed_rel_path: Option<PathBuf>,
     pub message: String,
+    /// The exact bytes to commit for `rel_path`: what a save wrote or a
+    /// restore read back. `None` commits the working file as it is when the
+    /// worker runs (callers that hold no copy of what they wrote).
+    pub content: Option<crate::persist::SharedBytes>,
+}
+
+impl PendingGitCommit {
+    /// Whether the worker reads the working file when it runs: it holds no
+    /// bytes, or it is a rename commit, which stages the file from disk and
+    /// ignores any bytes.
+    pub fn reads_working_file(&self) -> bool {
+        self.content.is_none() || self.removed_rel_path.is_some()
+    }
+}
+
+/// The bytes a commit records and the order of the write they came from.
+/// Saves of one file can report completion out of order; a commit of an
+/// older write must never replace, or queue behind, a newer one's.
+#[derive(Debug, Clone)]
+pub struct CommitBytes {
+    pub bytes: crate::persist::SharedBytes,
+    /// The write's position in its document-save ledger; `0` is exempt from
+    /// ordering (a restore).
+    pub sequence: u64,
 }
 
 /// Which sidebar tab is currently shown inside the BOM preview's
@@ -982,53 +1017,6 @@ impl DocumentState {
         };
         self.document_project(path)
     }
-
-    /// Project that owns the document at `path` (the explicit-path form of
-    /// [`active_document_project`](Self::active_document_project), for async
-    /// completions that resolve against the document they started from).
-    pub fn document_project(&self, path: &std::path::Path) -> Option<&LoadedProject> {
-        scope::project_owning_sheet(&self.projects, &self.child_sheet_refs(), path)
-    }
-
-    /// Open engine paths that belong to no loaded project — the page set of a
-    /// loose-document export. An open tab belonging to some *other* loaded
-    /// project would otherwise ride along as an extra page.
-    ///
-    /// Sorted by path: `engines` is a `HashMap`, so an unsorted result orders
-    /// the loose export's pages (and the print-preview file-picker rows, which
-    /// are re-seeded from this set on every rerasterize) by hash iteration
-    /// order — visibly reshuffling between rerasterizes with two or more loose
-    /// schematics open. Callers that want a specific page first re-order after.
-    pub fn unowned_engine_paths(&self) -> Vec<PathBuf> {
-        let refs = self.child_sheet_refs();
-        let mut paths: Vec<PathBuf> = self
-            .engines
-            .keys()
-            .filter(|p| scope::project_owning_sheet(&self.projects, &refs, p).is_none())
-            .cloned()
-            .collect();
-        paths.sort();
-        paths
-    }
-
-    /// `sheet path → the `filename` strings it references as child sheets`,
-    /// over every loaded engine. Input to the hierarchy walk in
-    /// [`active_document_project`](Self::active_document_project).
-    pub(crate) fn child_sheet_refs(&self) -> std::collections::HashMap<PathBuf, Vec<String>> {
-        self.engines
-            .iter()
-            .map(|(path, engine)| {
-                let refs = engine
-                    .document()
-                    .child_sheets
-                    .iter()
-                    .map(|cs| cs.filename.clone())
-                    .collect();
-                (path.clone(), refs)
-            })
-            .collect()
-    }
-
     /// Every open engine that belongs to the same project as the active
     /// document, the active one included. A loose active document yields only
     /// itself. Used where a name must be unique across the whole hierarchy
@@ -1039,7 +1027,7 @@ impl DocumentState {
         };
         scope::engines_in_project(
             &self.projects,
-            &self.child_sheet_refs(),
+            &self.ownership_index(),
             &self.engines,
             project.id,
         )
@@ -1061,7 +1049,7 @@ impl DocumentState {
         };
         scope::engine_entries_in_project(
             &self.projects,
-            &self.child_sheet_refs(),
+            &self.ownership_index(),
             &self.engines,
             project.id,
         )

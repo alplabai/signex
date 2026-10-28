@@ -29,6 +29,10 @@ use crate::library::editor::footprint::state::{
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::ti;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// v0.26-C — surface the silk graphic''s kind in the menu header so
 /// the user can tell at a glance what they''re about to delete /
 /// inspect. Mirrors Altium''s naming.
@@ -364,9 +368,9 @@ fn item_msg<'a>(
         row![
             text(label.to_string()).size(FONT_SIZE).color(text_c),
             iced::widget::Space::new().width(Length::Fill),
-            text(shortcut.to_string()).size(10).color(secondary),
+            text(shortcut.to_string()).size(TS.caption).color(secondary),
         ]
-        .spacing(8)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center)
         .width(Length::Fill),
     )
@@ -404,9 +408,9 @@ fn item_indented<'a>(
             iced::widget::Space::new().width(16),
             text(label.to_string()).size(FONT_SIZE).color(text_c),
             iced::widget::Space::new().width(Length::Fill),
-            text(shortcut.to_string()).size(10).color(secondary),
+            text(shortcut.to_string()).size(TS.caption).color(secondary),
         ]
-        .spacing(8)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center)
         .width(Length::Fill),
     )
@@ -440,9 +444,9 @@ fn item_disabled<'a>(
         row![
             text(label.to_string()).size(FONT_SIZE).color(muted),
             iced::widget::Space::new().width(Length::Fill),
-            text(shortcut.to_string()).size(10).color(muted),
+            text(shortcut.to_string()).size(TS.caption).color(muted),
         ]
-        .spacing(8)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center)
         .width(Length::Fill),
     )
@@ -464,9 +468,9 @@ fn item_submenu_header<'a>(
         row![
             text(label.to_string()).size(FONT_SIZE).color(text_c),
             iced::widget::Space::new().width(Length::Fill),
-            text(chev.to_string()).size(11).color(text_c),
+            text(chev.to_string()).size(TS.body).color(text_c),
         ]
-        .spacing(8)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center)
         .width(Length::Fill),
     )
