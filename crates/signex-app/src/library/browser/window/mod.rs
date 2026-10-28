@@ -20,7 +20,7 @@ pub(super) const BROWSER_ROW_HEIGHT: f32 = 24.0;
 pub(super) const BROWSER_HEADER_HEIGHT: f32 = 28.0;
 /// Rows built beyond each edge of the viewport, so a fast wheel flick shows
 /// content before the next scroll message arrives.
-pub(super) const OVERSCAN_ROWS: usize = 12;
+pub(crate) const OVERSCAN_ROWS: usize = 12;
 /// Id of a library's grid scrollable, the target of a scroll-to-row task.
 /// Per library, so a scroll aimed at one tab never moves another's.
 pub fn grid_scroll_id(library_path: &Path) -> iced::widget::Id {
@@ -49,7 +49,7 @@ pub struct GridScroll {
 /// `scroll_y` is the offset into the row area (header already removed). It
 /// is clamped to what `count` rows can actually scroll, so an offset left
 /// over from before the list shrank still yields a populated window.
-pub(super) fn visible_range(
+pub(crate) fn visible_range(
     scroll_y: f32,
     viewport_h: f32,
     row_h: f32,

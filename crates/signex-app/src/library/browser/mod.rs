@@ -42,6 +42,7 @@ use sidebar::view_table_sidebar;
 pub use view_cache::BrowserViewCache;
 use view_cache::active_table;
 pub use window::{GridScroll, grid_scroll_id, reveal_row_offset, visible_rows};
+pub(crate) use window::{OVERSCAN_ROWS, visible_range};
 
 const BROWSER_TEXT_SIZE: f32 = 11.0;
 const BROWSER_HEADER_SIZE: f32 = 10.0;

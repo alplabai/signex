@@ -27,12 +27,131 @@ use signex_library::{PrimitiveKind, PrimitiveRef, PrimitiveSummary};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
+use super::browser::{OVERSCAN_ROWS, visible_range};
 use super::messages::{LibraryMessage, PrimitivePickerMsg};
 use super::modal_chrome::close_x;
 use super::state::{LibraryState, PrimitivePickerState};
 
 const PICKER_W: f32 = 640.0;
 const PICKER_H: f32 = 520.0;
+/// Height every list entry (library header or primitive row) is pinned to,
+/// so the window maths needs only the scroll offset.
+const ROW_H: f32 = 24.0;
+
+/// One entry of the flattened list: a library header or a primitive.
+enum ListItem {
+    Header { text: String },
+    Row(String, uuid::Uuid, PrimitiveRef),
+}
+
+/// Flatten the filtered per-library cache into header + row entries. Cheap
+/// (no widgets), so it can run on every view.
+fn list_items(state: &LibraryState, kind: PrimitiveKind, needle: &str) -> Vec<ListItem> {
+    let mut items = Vec::new();
+    for lib in &state.open_libraries {
+        // Read the per-library cache instead of calling `adapter.list_*`
+        // every view tick; it is refreshed on open, post-save and after row
+        // mutations, so the picker does no per-frame disk IO.
+        let summaries: &[PrimitiveSummary] = match kind {
+            PrimitiveKind::Symbol => &lib.cached_symbols,
+            PrimitiveKind::Footprint => &lib.cached_footprints,
+            PrimitiveKind::Sim => &lib.cached_sims,
+            _ => &[],
+        };
+        let start = items.len();
+        items.push(ListItem::Header {
+            text: String::new(),
+        });
+        for s in summaries {
+            let hit = needle.is_empty()
+                || contains_ci(&s.name, needle)
+                || s.uuid
+                    .simple()
+                    .encode_lower(&mut uuid::Uuid::encode_buffer())
+                    .contains(needle);
+            if hit {
+                items.push(ListItem::Row(
+                    s.name.clone(),
+                    s.uuid,
+                    PrimitiveRef::new(lib.library_id, s.uuid),
+                ));
+            }
+        }
+        let count = items.len() - start - 1;
+        if count == 0 {
+            items.truncate(start);
+        } else {
+            items[start] = ListItem::Header {
+                text: format!("▼ {}.snxlib  ({})", lib.display_name, count),
+            };
+        }
+    }
+    items
+}
+
+/// Entries to build for `count` list entries at `scroll_y`. The viewport is
+/// taken as the whole picker height, which only ever over-builds.
+fn list_window(scroll_y: f32, count: usize) -> std::ops::Range<usize> {
+    visible_range(scroll_y, PICKER_H, ROW_H, count, OVERSCAN_ROWS)
+}
+
+fn row_button<'a>(
+    name: &str,
+    uuid: uuid::Uuid,
+    primitive_ref: PrimitiveRef,
+    kind: PrimitiveKind,
+    text_c: iced::Color,
+    muted: iced::Color,
+) -> Element<'a, LibraryMessage> {
+    let short_uuid = {
+        let s = uuid.simple().to_string();
+        if s.len() >= 8 { s[..8].to_string() } else { s }
+    };
+    let ext = match kind {
+        PrimitiveKind::Symbol => "snxsym",
+        PrimitiveKind::Footprint => "snxfpt",
+        PrimitiveKind::Sim => "snxsim",
+        _ => "snx",
+    };
+    button(
+        row![
+            Space::new().width(20),
+            text(format!("{name}.{ext}"))
+                .size(11)
+                .color(text_c)
+                .width(Length::FillPortion(3)),
+            text(format!("(uuid {}…)", short_uuid))
+                .size(10)
+                .color(muted)
+                .width(Length::FillPortion(2)),
+        ]
+        .spacing(0)
+        .padding([3, 8])
+        .height(Length::Fill)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding(0)
+    .width(Length::Fill)
+    .height(ROW_H)
+    .on_press(LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Pick(
+        primitive_ref,
+    )))
+    .style(move |_: &Theme, status: iced::widget::button::Status| {
+        let bg = match status {
+            iced::widget::button::Status::Hovered => Some(iced::Background::Color(
+                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06),
+            )),
+            _ => None,
+        };
+        iced::widget::button::Style {
+            background: bg,
+            border: Border::default(),
+            text_color: text_c,
+            ..iced::widget::button::Style::default()
+        }
+    })
+    .into()
+}
 
 pub fn view<'a>(
     state: &'a LibraryState,
@@ -71,99 +190,39 @@ pub fn view<'a>(
 
     let needle = picker.filter.trim().to_lowercase();
 
+    let items = list_items(state, picker.kind, &needle);
+    let total_visible = items
+        .iter()
+        .filter(|i| matches!(i, ListItem::Row(..)))
+        .count();
+    let window = list_window(picker.scroll_y, items.len());
+
+    // Only the rows in view (plus overscan) become widgets; two spacers of
+    // the skipped height keep the scrollbar and total height unchanged.
     let mut list_col = column![].spacing(0);
-    let mut total_visible = 0usize;
-    for lib in &state.open_libraries {
-        // Read the per-library cache instead of calling `adapter.list_*`
-        // every view tick. The cache is refreshed by
-        // `OpenLibrary::reload_tables` on open + post-save and by
-        // `LibraryState::refresh_components` after row mutations, so
-        // the picker stays accurate without per-frame disk IO.
-        let summaries: &[PrimitiveSummary] = match picker.kind {
-            PrimitiveKind::Symbol => &lib.cached_symbols,
-            PrimitiveKind::Footprint => &lib.cached_footprints,
-            PrimitiveKind::Sim => &lib.cached_sims,
-            _ => &[],
-        };
-        let filtered: Vec<&PrimitiveSummary> = summaries
-            .iter()
-            .filter(|s| {
-                if needle.is_empty() {
-                    return true;
-                }
-                contains_ci(&s.name, &needle)
-                    || s.uuid
-                        .simple()
-                        .encode_lower(&mut uuid::Uuid::encode_buffer())
-                        .contains(needle.as_str())
-            })
-            .collect();
-        if filtered.is_empty() {
-            continue;
-        }
-        // Library section header.
-        list_col = list_col.push(
-            container(
-                text(format!(
-                    "▼ {}.snxlib  ({})",
-                    lib.display_name,
-                    filtered.len()
-                ))
-                .size(11)
-                .color(muted),
-            )
-            .padding([6, 8]),
-        );
-        for summary in filtered {
-            total_visible += 1;
-            let primitive_ref = PrimitiveRef::new(lib.library_id, summary.uuid);
-            let short_uuid = {
-                let s = summary.uuid.simple().to_string();
-                if s.len() >= 8 { s[..8].to_string() } else { s }
-            };
-            let ext = match picker.kind {
-                PrimitiveKind::Symbol => "snxsym",
-                PrimitiveKind::Footprint => "snxfpt",
-                PrimitiveKind::Sim => "snxsim",
-                _ => "snx",
-            };
-            let label = format!("{}.{}", summary.name, ext);
-            let row_widget = button(
-                row![
-                    Space::new().width(20),
-                    text(label)
-                        .size(11)
-                        .color(text_c)
-                        .width(Length::FillPortion(3)),
-                    text(format!("(uuid {}…)", short_uuid))
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                ]
-                .spacing(0)
-                .padding([3, 8]),
-            )
-            .padding(0)
-            .width(Length::Fill)
-            .on_press(LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Pick(
-                primitive_ref,
-            )))
-            .style(move |_: &Theme, status: iced::widget::button::Status| {
-                let bg = match status {
-                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06),
-                    )),
-                    _ => None,
-                };
-                iced::widget::button::Style {
-                    background: bg,
-                    border: Border::default(),
-                    text_color: text_c,
-                    ..iced::widget::button::Style::default()
-                }
-            });
-            list_col = list_col.push(row_widget);
-        }
+    if window.start > 0 {
+        list_col = list_col.push(Space::new().height(window.start as f32 * ROW_H));
+    }
+    for item in &items[window.clone()] {
+        list_col = list_col.push(match item {
+            ListItem::Header { text: label } => {
+                container(text(label.clone()).size(11).color(muted))
+                    .padding([6, 8])
+                    .height(ROW_H)
+                    .into()
+            }
+            ListItem::Row(summary_name, uuid, primitive_ref) => row_button(
+                summary_name,
+                *uuid,
+                *primitive_ref,
+                picker.kind,
+                text_c,
+                muted,
+            ),
+        });
+    }
+    if window.end < items.len() {
+        list_col = list_col.push(Space::new().height((items.len() - window.end) as f32 * ROW_H));
     }
 
     if total_visible == 0 {
@@ -183,6 +242,11 @@ pub fn view<'a>(
 
     let body = container(
         scrollable(list_col)
+            .on_scroll(|viewport| {
+                LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Scrolled(
+                    viewport.absolute_offset().y,
+                ))
+            })
             .height(Length::Fill)
             .width(Length::Fill),
     )
@@ -275,7 +339,7 @@ fn contains_ci(hay: &str, needle: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::contains_ci;
+    use super::{OVERSCAN_ROWS, PICKER_H, ROW_H, contains_ci, list_window};
 
     #[test]
     fn contains_ci_matches_case_insensitively() {
@@ -284,5 +348,31 @@ mod tests {
         assert!(contains_ci("anything", ""));
         assert!(!contains_ci("LM317", "lm7"));
         assert!(!contains_ci("ab", "abc"));
+    }
+
+    fn max_built() -> usize {
+        (PICKER_H / ROW_H).ceil() as usize + 1 + 2 * OVERSCAN_ROWS
+    }
+
+    #[test]
+    fn huge_list_builds_only_visible_plus_overscan() {
+        let w = list_window(0.0, 10_000);
+        assert_eq!(w.start, 0);
+        assert!(w.len() <= max_built(), "built {}", w.len());
+        let mid = list_window(5_000.0 * ROW_H, 10_000);
+        assert!(mid.len() <= max_built() && mid.start > 0 && mid.end < 10_000);
+    }
+
+    #[test]
+    fn stale_offset_after_filter_shrink_is_clamped() {
+        // Scrolled deep into a 10k list, then a filter leaves 100 entries.
+        let w = list_window(9_000.0 * ROW_H, 100);
+        assert!(!w.is_empty() && w.end == 100);
+        assert!(list_window(1.0e9, 0).is_empty());
+    }
+
+    #[test]
+    fn short_list_is_built_whole() {
+        assert_eq!(list_window(0.0, 5), 0..5);
     }
 }
