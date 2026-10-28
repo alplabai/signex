@@ -153,12 +153,6 @@ impl Signex {
             crate::panels::PanelMsg::PropertiesTab(index) => {
                 self.document_state.panel_ctx.properties_tab = *index;
             }
-            crate::panels::PanelMsg::ComponentFilter(filter) => {
-                self.document_state.panel_ctx.component_filter = filter.clone();
-                // Persisted debounced and off-thread so the next session
-                // opens the panel with the same filter (#859).
-                follow = self.persist_component_filter_soon(filter);
-            }
             crate::panels::PanelMsg::ToggleSection(key) => {
                 let key = key.clone();
                 if !self

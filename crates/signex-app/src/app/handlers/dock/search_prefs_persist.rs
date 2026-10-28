@@ -10,15 +10,6 @@ use crate::app::{Message, Signex};
 use crate::persist::{SEARCH_PREFS_SAVE_DEBOUNCE, SearchPrefsMsg, SearchPrefsWrite};
 
 impl Signex {
-    /// The Components-panel filter changed: record it and arm the debounce.
-    pub(crate) fn persist_component_filter_soon(&mut self, filter: &str) -> Task<Message> {
-        let armed = self
-            .document_state
-            .search_prefs
-            .set_component_filter(filter);
-        search_prefs_timer(armed)
-    }
-
     /// A Library Browser search box changed: record it and arm the debounce.
     pub(crate) fn persist_library_search_soon(
         &mut self,
