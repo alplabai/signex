@@ -150,6 +150,14 @@ pub(super) fn derive_pad_number_2d(
             start_row,
             start_col,
         } => {
+            if !signex_sketch::array::is_valid_bga_start_row(*skip_letters, *start_row) {
+                record_numbering_warning(
+                    warnings,
+                    format!(
+                        "grid array source {source}: BGA start_row '{start_row}' is not in the row alphabet; rows start at 'A' instead",
+                    ),
+                );
+            }
             let row = bga_row_letter(j as u32, *skip_letters, *start_row);
             let col = (i as u32) + *start_col;
             format!("{row}{col}")
@@ -187,6 +195,30 @@ mod tests {
             start_expr: "1 +".to_string(),
             step_expr: "1".to_string(),
         }
+    }
+
+    #[test]
+    fn invalid_bga_start_row_is_reported() {
+        let mut warnings = Vec::new();
+        let source = SketchEntityId::new();
+        let mut ctx = test_ctx();
+        let scheme = NumberingScheme::BgaRowCol {
+            skip_letters: true,
+            start_row: 'I',
+            start_col: 1,
+        };
+        let n = derive_pad_number_2d(&scheme, 0, 0, 2, &mut ctx, &mut warnings, source);
+        assert_eq!(n, "A1");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].contains("start_row 'I'"), "{warnings:?}");
+        let ok = NumberingScheme::BgaRowCol {
+            skip_letters: true,
+            start_row: 'B',
+            start_col: 1,
+        };
+        let mut w2 = Vec::new();
+        derive_pad_number_2d(&ok, 0, 0, 2, &mut ctx, &mut w2, source);
+        assert!(w2.is_empty());
     }
 
     #[test]
