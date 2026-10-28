@@ -17,7 +17,7 @@ pub(crate) fn pick_seed(
     under_cursor: Option<SelectedItem>,
     selected: &[SelectedItem],
 ) -> Option<SelectedItem> {
-    under_cursor.or_else(|| match selected {
+    under_cursor.or(match selected {
         [only] => Some(*only),
         _ => None,
     })
@@ -48,12 +48,10 @@ impl Signex {
         Task::none()
     }
 
-    /// Dismiss the dialog; a search still running is superseded.
+    /// Dismiss the dialog. Its generation goes with it, so a search still
+    /// running finds nothing to apply to.
     pub(crate) fn close_find_similar(&mut self) {
-        if let Some(state) = self.ui_state.find_similar.take() {
-            // The generation dies with the state, so a late result finds none.
-            drop(state);
-        }
+        self.ui_state.find_similar = None;
     }
 
     fn open_find_similar(&mut self, at: Option<(f64, f64)>) {
