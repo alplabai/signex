@@ -248,10 +248,12 @@ mod tests {
     fn mixed_separators_do_not_hide_a_path_inside_the_project() {
         // `\` counts as a separator only on a Windows host; the key folds it
         // there, and Windows `Path` reads both. Either way: inside.
-        let inside = Path::new(r"/proj\top/sub\x.snxsch");
+        // Built with `p` so a Windows host gets the same drive as `/proj`.
+        let inside_buf = p(r"/proj\top/sub\x.snxsch");
+        let inside = inside_buf.as_path();
         assert!(is_inside(inside, &p("/proj"), CaseFold::FOLD));
         assert!(!is_inside(
-            Path::new(r"/proj2\x.snxsch"),
+            &p(r"/proj2\x.snxsch"),
             &p("/proj"),
             CaseFold::FOLD
         ));
