@@ -14,7 +14,18 @@ use crate::styles;
 
 const MODAL_W: f32 = 380.0;
 
+/// The dialog painted as a card in the main window.
 pub fn view<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId) -> Element<'a, Message> {
+    build(tokens, theme_id, false)
+}
+
+/// The dialog as the content of its own OS window: no header (the native
+/// title bar has the title and the close) and filling the window.
+pub fn window_view<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId) -> Element<'a, Message> {
+    build(tokens, theme_id, true)
+}
+
+fn build<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId, windowed: bool) -> Element<'a, Message> {
     let text_primary = styles::ti(tokens.text);
     let text_secondary = styles::ti(tokens.text_secondary);
 
@@ -69,6 +80,13 @@ pub fn view<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId) -> Element<'a, Messa
     .padding([12, 16])
     .width(Length::Fill);
 
+    if windowed {
+        return container(body)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(styles::modal_card(tokens))
+            .into();
+    }
     let card = container(column![header, body].spacing(0))
         .width(Length::Fixed(MODAL_W))
         .clip(true)

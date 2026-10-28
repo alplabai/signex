@@ -398,6 +398,10 @@ fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
         ModalId::EnableVersionControl => Some(OverlayId::EnableVersionControl),
         ModalId::GridProperties => Some(OverlayId::GridProperties),
         ModalId::SelectionFilterCustom => Some(OverlayId::SelectionFilterCustom),
+        ModalId::About => Some(OverlayId::About),
+        ModalId::KeyboardShortcuts => Some(OverlayId::KeyboardShortcuts),
+        ModalId::PassiveCalculator => Some(OverlayId::PassiveCalculator),
+        ModalId::FirstRunTour => Some(OverlayId::FirstRunTour),
         ModalId::MoveSelection | ModalId::NetColorPalette | ModalId::ParameterManager => None,
     }
 }
@@ -483,10 +487,14 @@ impl Signex {
         };
 
         OpenOverlays {
-            find_replace_open: self.ui_state.find_replace.open,
-            kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open,
-            about_open: self.ui_state.about_open,
-            first_run_tour_open: self.ui_state.first_run_tour_open,
+            find_replace_open: self.ui_state.find_replace.open
+                && !modal_detached(crate::app::state::ModalId::FindReplace),
+            kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open
+                && !modal_detached(crate::app::state::ModalId::KeyboardShortcuts),
+            about_open: self.ui_state.about_open
+                && !modal_detached(crate::app::state::ModalId::About),
+            first_run_tour_open: self.ui_state.first_run_tour_open
+                && !modal_detached(crate::app::state::ModalId::FirstRunTour),
             autosave_recovery_open: self.document_state.autosave.current_offer().is_some(),
             prefs_open: self.ui_state.preferences_open
                 && !modal_detached(crate::app::state::ModalId::Preferences),
@@ -496,16 +504,20 @@ impl Signex {
                 && !modal_detached(crate::app::state::ModalId::ErcDialog),
             rename_open: self.ui_state.rename_dialog.is_some(),
             remove_open: self.ui_state.remove_dialog.is_some(),
-            enable_vc_open: self.ui_state.enable_version_control.is_some(),
+            enable_vc_open: self.ui_state.enable_version_control.is_some()
+                && !modal_detached(crate::app::state::ModalId::EnableVersionControl),
             library_create_options_open: self.library.create_options.is_some(),
-            passive_calculator_open: self.ui_state.passive_calculator_open,
+            passive_calculator_open: self.ui_state.passive_calculator_open
+                && !modal_detached(crate::app::state::ModalId::PassiveCalculator),
             annotate_reset_confirm_open: self.ui_state.annotate_reset_confirm
                 && !modal_detached(crate::app::state::ModalId::AnnotateResetConfirm),
             app_quit_confirm_open: self.ui_state.app_quit_confirm.is_some(),
             project_close_confirm_open: self.ui_state.project_close_confirm.is_some(),
             create_child_sheet_confirm_open: self.ui_state.create_child_sheet_confirm.is_some(),
-            grid_properties_open: self.ui_state.grid_properties.is_some(),
-            selection_filter_custom_open: self.ui_state.selection_filter_custom.is_some(),
+            grid_properties_open: self.ui_state.grid_properties.is_some()
+                && !modal_detached(crate::app::state::ModalId::GridProperties),
+            selection_filter_custom_open: self.ui_state.selection_filter_custom.is_some()
+                && !modal_detached(crate::app::state::ModalId::SelectionFilterCustom),
             library_picker_open: self.library.picker.is_some(),
             library_document_options_open: self.library.document_options.is_some(),
             library_updates_open: self.library.library_updates.is_some(),

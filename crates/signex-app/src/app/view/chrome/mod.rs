@@ -255,24 +255,34 @@ impl Signex {
             ModalId::AnnotateDialog => self.view_annotate_dialog_body(),
             ModalId::ErcDialog => self.view_erc_dialog_body(),
             ModalId::AnnotateResetConfirm => self.view_annotate_reset_confirm_body(),
-            // Stubs — these modals don't yet have extractable bodies; fall
-            // back to a placeholder so the window is non-empty until their
-            // body helpers land.
             ModalId::MoveSelection => self.view_move_selection_body(),
             ModalId::NetColorPalette => self.view_net_color_palette_body(),
             ModalId::ParameterManager => self.view_parameter_manager_body(),
             ModalId::PrintPreview => self.view_print_preview_body(),
             ModalId::BomPreview => self.view_bom_preview_body(),
             ModalId::Preferences => self.view_preferences_body(),
-            ModalId::FindReplace
-            | ModalId::RenameDialog
-            | ModalId::RemoveDialog
-            | ModalId::EnableVersionControl
-            | ModalId::GridProperties
-            | ModalId::SelectionFilterCustom => {
-                iced::widget::container(iced::widget::text("Detached modal"))
-                    .padding(20)
-                    .into()
+            ModalId::FindReplace => crate::find_replace::window_view(
+                &self.ui_state.find_replace,
+                &self.document_state.panel_ctx.tokens,
+            )
+            .map(Message::FindReplaceMsg),
+            ModalId::RenameDialog => self.view_rename_dialog_body(),
+            ModalId::RemoveDialog => self.view_remove_dialog_body(),
+            ModalId::EnableVersionControl => self.view_enable_version_control_dialog_body(),
+            ModalId::GridProperties => self.view_grid_properties_dialog_body(),
+            ModalId::SelectionFilterCustom => self.view_selection_filter_custom_body(),
+            ModalId::About => crate::about_modal::window_view(
+                &self.document_state.panel_ctx.tokens,
+                self.ui_state.theme_id,
+            ),
+            ModalId::KeyboardShortcuts => self.view_keyboard_shortcuts_window(),
+            ModalId::PassiveCalculator => crate::passive_calculator_modal::window_view(
+                &self.document_state.panel_ctx.tokens,
+                self.ui_state.theme_id,
+                &self.ui_state.passive_calculator,
+            ),
+            ModalId::FirstRunTour => {
+                crate::first_run_tour::window_view(&self.document_state.panel_ctx.tokens)
             }
         }
     }

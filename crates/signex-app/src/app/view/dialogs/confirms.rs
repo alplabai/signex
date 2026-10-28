@@ -26,7 +26,7 @@ impl Signex {
         wrap_modal(dialog, offset, self.ui_state.window_size, (560.0, 260.0))
     }
 
-    fn view_remove_dialog_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_remove_dialog_body(&self) -> Element<'_, Message> {
         let Some(ref st) = self.ui_state.remove_dialog else {
             return container(Space::new()).into();
         };
@@ -55,10 +55,9 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let header = draggable_header(
+        let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::RemoveDialog,
-            self.interaction_state.last_mouse_pos,
         );
 
         if st.unsaved_prompt {

@@ -236,12 +236,26 @@ impl Signex {
             ModalId::Preferences => Some(Message::Preferences(PreferencesMsg::Close)),
             ModalId::PrintPreview => Some(Message::PrintPreview(PrintPreviewMsg::Close)),
             ModalId::BomPreview => Some(Message::BomPreview(BomPreviewMsg::Close)),
-            ModalId::FindReplace
-            | ModalId::RenameDialog
-            | ModalId::RemoveDialog
-            | ModalId::EnableVersionControl
-            | ModalId::GridProperties
-            | ModalId::SelectionFilterCustom => None,
+            ModalId::FindReplace => Some(Message::FindReplaceMsg(
+                crate::find_replace::FindReplaceMsg::Close,
+            )),
+            ModalId::RenameDialog => Some(Message::Rename(RenameMsg::Close)),
+            ModalId::RemoveDialog => Some(Message::Remove(RemoveMsg::Close)),
+            ModalId::EnableVersionControl => Some(Message::EnableVersionControl(
+                EnableVersionControlMsg::Close,
+            )),
+            ModalId::GridProperties => Some(Message::GridProperties(GridPropertiesMsg::Close)),
+            ModalId::SelectionFilterCustom => {
+                Some(Message::SelectionFilter(SelectionFilterMsg::CloseCustom))
+            }
+            ModalId::About => Some(Message::Overlay(OverlayMsg::CloseAbout)),
+            ModalId::KeyboardShortcuts => {
+                Some(Message::Overlay(OverlayMsg::CloseKeyboardShortcuts))
+            }
+            ModalId::PassiveCalculator => {
+                Some(Message::Overlay(OverlayMsg::ClosePassiveCalculator))
+            }
+            ModalId::FirstRunTour => Some(Message::Overlay(OverlayMsg::DismissFirstRunTour)),
         }
     }
 
@@ -303,6 +317,10 @@ impl Signex {
             ModalId::EnableVersionControl => iced::Size::new(560.0, 480.0),
             ModalId::GridProperties => iced::Size::new(480.0, 280.0),
             ModalId::SelectionFilterCustom => iced::Size::new(440.0, 380.0),
+            ModalId::About => iced::Size::new(380.0, 260.0),
+            ModalId::KeyboardShortcuts => iced::Size::new(520.0, 600.0),
+            ModalId::PassiveCalculator => iced::Size::new(640.0, 520.0),
+            ModalId::FirstRunTour => iced::Size::new(360.0, 170.0),
         };
 
         let (id, open_task) = iced::window::open(detached_modal_settings(size));
@@ -439,6 +457,9 @@ pub(crate) fn detached_modal_settings(size: iced::Size) -> iced::window::Setting
         // the modal's own close message (the Preferences dirty guard).
         exit_on_close_request: false,
         level: iced::window::Level::Normal,
+        // iced 0.14 can centre on the screen, not on the owner window (the
+        // main window's position is not tracked); see docs/DETACHED_MODALS.md.
+        position: iced::window::Position::Centered,
         ..Default::default()
     }
 }

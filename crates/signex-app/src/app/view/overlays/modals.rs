@@ -65,7 +65,7 @@ impl Signex {
     /// Find & Replace dialog.
     pub(in crate::app::view) fn find_replace_overlay(&self) -> Option<Element<'_, Message>> {
         let ui = &self.ui_state;
-        if !ui.find_replace.open {
+        if !ui.find_replace.open || self.modal_detached(crate::app::state::ModalId::FindReplace) {
             return None;
         }
         Some(
@@ -77,13 +77,13 @@ impl Signex {
     /// Keyboard-shortcuts reference modal.
     pub(in crate::app::view) fn keyboard_shortcuts_overlay(&self) -> Option<Element<'_, Message>> {
         let ui = &self.ui_state;
-        if !ui.keyboard_shortcuts_open {
+        if !ui.keyboard_shortcuts_open
+            || self.modal_detached(crate::app::state::ModalId::KeyboardShortcuts)
+        {
             return None;
         }
-        // #618 experiment — `opaque` captures mouse presses inside the
-        // layer so they cannot pass through to the layers below it in the
-        // `Stack`. Testing whether event leakage is what makes this modal
-        // inert.
+        // `opaque` captures mouse presses inside the layer so they cannot
+        // pass through to the layers below it in the `Stack` (#618).
         let built;
         let sections = match &ui.shortcut_sections {
             Some(cached) => cached.as_slice(),
@@ -99,10 +99,28 @@ impl Signex {
         )))
     }
 
+    /// The shortcuts sheet as the content of its own OS window.
+    pub(in crate::app::view) fn view_keyboard_shortcuts_window(&self) -> Element<'_, Message> {
+        let ui = &self.ui_state;
+        let built;
+        let sections = match &ui.shortcut_sections {
+            Some(cached) => cached.as_slice(),
+            None => {
+                built = crate::keyboard_shortcuts_modal::build_sections(&ui.keymap_profiles);
+                built.as_slice()
+            }
+        };
+        crate::keyboard_shortcuts_modal::window_view(
+            &self.document_state.panel_ctx.tokens,
+            ui.theme_id,
+            sections,
+        )
+    }
+
     /// Help ▸ About Signex dialog.
     pub(in crate::app::view) fn about_overlay(&self) -> Option<Element<'_, Message>> {
         let ui = &self.ui_state;
-        if !ui.about_open {
+        if !ui.about_open || self.modal_detached(crate::app::state::ModalId::About) {
             return None;
         }
         Some(iced::widget::opaque(crate::about_modal::view(
@@ -114,7 +132,9 @@ impl Signex {
     /// Tools > Passive Network Calculator modal.
     pub(in crate::app::view) fn passive_calculator_overlay(&self) -> Option<Element<'_, Message>> {
         let ui = &self.ui_state;
-        if !ui.passive_calculator_open {
+        if !ui.passive_calculator_open
+            || self.modal_detached(crate::app::state::ModalId::PassiveCalculator)
+        {
             return None;
         }
         Some(crate::passive_calculator_modal::view(
@@ -126,7 +146,9 @@ impl Signex {
 
     /// First-run onboarding tour overlay.
     pub(in crate::app::view) fn first_run_tour_overlay(&self) -> Option<Element<'_, Message>> {
-        if !self.ui_state.first_run_tour_open {
+        if !self.ui_state.first_run_tour_open
+            || self.modal_detached(crate::app::state::ModalId::FirstRunTour)
+        {
             return None;
         }
         Some(crate::first_run_tour::view(
@@ -175,17 +197,15 @@ impl Signex {
     }
 
     pub(in crate::app::view) fn rename_dialog_overlay(&self) -> Option<Element<'_, Message>> {
-        self.ui_state
-            .rename_dialog
-            .is_some()
-            .then(|| self.view_rename_dialog())
+        (self.ui_state.rename_dialog.is_some()
+            && !self.modal_detached(crate::app::state::ModalId::RenameDialog))
+        .then(|| self.view_rename_dialog())
     }
 
     pub(in crate::app::view) fn remove_dialog_overlay(&self) -> Option<Element<'_, Message>> {
-        self.ui_state
-            .remove_dialog
-            .is_some()
-            .then(|| self.view_remove_dialog())
+        (self.ui_state.remove_dialog.is_some()
+            && !self.modal_detached(crate::app::state::ModalId::RemoveDialog))
+        .then(|| self.view_remove_dialog())
     }
 
     pub(in crate::app::view) fn project_close_confirm_overlay(
@@ -216,26 +236,23 @@ impl Signex {
     pub(in crate::app::view) fn enable_version_control_overlay(
         &self,
     ) -> Option<Element<'_, Message>> {
-        self.ui_state
-            .enable_version_control
-            .is_some()
-            .then(|| self.view_enable_version_control_dialog())
+        (self.ui_state.enable_version_control.is_some()
+            && !self.modal_detached(crate::app::state::ModalId::EnableVersionControl))
+        .then(|| self.view_enable_version_control_dialog())
     }
 
     pub(in crate::app::view) fn grid_properties_overlay(&self) -> Option<Element<'_, Message>> {
-        self.ui_state
-            .grid_properties
-            .is_some()
-            .then(|| self.view_grid_properties_dialog())
+        (self.ui_state.grid_properties.is_some()
+            && !self.modal_detached(crate::app::state::ModalId::GridProperties))
+        .then(|| self.view_grid_properties_dialog())
     }
 
     pub(in crate::app::view) fn selection_filter_custom_overlay(
         &self,
     ) -> Option<Element<'_, Message>> {
-        self.ui_state
-            .selection_filter_custom
-            .is_some()
-            .then(|| self.view_selection_filter_custom_dialog())
+        (self.ui_state.selection_filter_custom.is_some()
+            && !self.modal_detached(crate::app::state::ModalId::SelectionFilterCustom))
+        .then(|| self.view_selection_filter_custom_dialog())
     }
 
     // ── Detachable dialogs ───────────────────────────────────────────

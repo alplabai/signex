@@ -377,6 +377,14 @@ pub enum ModalId {
     /// v0.18.14.1 — Custom Selection Filter modal (8-row checkbox
     /// table; opens from the Properties `Custom…` button).
     SelectionFilterCustom,
+    /// Help ▸ About Signex.
+    About,
+    /// The keyboard-shortcuts reference sheet (F1).
+    KeyboardShortcuts,
+    /// Tools ▸ Passive Network Calculator.
+    PassiveCalculator,
+    /// The first-run onboarding tour.
+    FirstRunTour,
 }
 
 pub use signex_types::schematic::AnnotateOrder;

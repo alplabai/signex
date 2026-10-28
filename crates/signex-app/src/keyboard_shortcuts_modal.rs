@@ -52,10 +52,29 @@ pub fn build_sections(profiles: &ShortcutProfileSet) -> Vec<ShortcutSection> {
     sections
 }
 
+/// The sheet painted as a card in the main window.
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
     theme_id: ThemeId,
     sections: &[ShortcutSection],
+) -> Element<'a, Message> {
+    build(tokens, theme_id, sections, false)
+}
+
+/// The sheet as the content of its own OS window: no header, filling it.
+pub fn window_view<'a>(
+    tokens: &'a ThemeTokens,
+    theme_id: ThemeId,
+    sections: &[ShortcutSection],
+) -> Element<'a, Message> {
+    build(tokens, theme_id, sections, true)
+}
+
+fn build<'a>(
+    tokens: &'a ThemeTokens,
+    theme_id: ThemeId,
+    sections: &[ShortcutSection],
+    windowed: bool,
 ) -> Element<'a, Message> {
     let text_primary = styles::ti(tokens.text);
     let text_secondary = styles::ti(tokens.text_secondary);
@@ -164,6 +183,13 @@ pub fn view<'a>(
         .height(Length::Fill);
 
     // ── Card ────────────────────────────────────────────────────
+    if windowed {
+        return container(body_container)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(styles::modal_card(tokens))
+            .into();
+    }
     let card = container(column![header, body_container].spacing(0))
         .width(Length::Fixed(MODAL_W))
         .height(Length::Fixed(MODAL_H))

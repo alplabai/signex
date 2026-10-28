@@ -401,6 +401,11 @@ impl Signex {
                 overlays.push(self.view_tab_drag_ghost(&tab.title));
             }
         }
+        // A confirm dialog in its own window locks this one: the topmost
+        // layer eats the pointer and a click raises that dialog.
+        if self.locking_confirm_window().is_some() {
+            overlays.push(Self::locked_window_layer());
+        }
         if !overlays.is_empty() {
             let mut stack = iced::widget::Stack::new().push(main);
             // Resize edges sit above the content but below functional
@@ -421,6 +426,19 @@ impl Signex {
         } else {
             main
         }
+    }
+
+    /// Full-window layer that takes every pointer event while a detached
+    /// confirm dialog locks the window; pressing it raises that dialog.
+    fn locked_window_layer<'a>() -> Element<'a, Message> {
+        iced::widget::opaque(
+            iced::widget::mouse_area(
+                iced::widget::Space::new()
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+            )
+            .on_press(Message::Window(WindowMsg::LockedWindowClicked)),
+        )
     }
 
     fn view_center(&self, window_id: iced::window::Id) -> Element<'_, Message> {

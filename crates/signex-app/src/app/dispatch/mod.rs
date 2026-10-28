@@ -222,6 +222,14 @@ impl Signex {
                             ModalId::SelectionFilterCustom => {
                                 self.ui_state.selection_filter_custom = None;
                             }
+                            ModalId::About => self.ui_state.about_open = false,
+                            ModalId::KeyboardShortcuts => {
+                                self.ui_state.keyboard_shortcuts_open = false
+                            }
+                            ModalId::PassiveCalculator => {
+                                self.ui_state.passive_calculator_open = false
+                            }
+                            ModalId::FirstRunTour => self.ui_state.first_run_tour_open = false,
                         },
                         // Closing an undocked-tab window is the reattach
                         // gesture — the tab itself stays in
@@ -408,6 +416,10 @@ impl Signex {
                 None => Task::none(),
             },
             WindowMsg::CloseMainWindow => self.handle_app_quit_requested(),
+            WindowMsg::LockedWindowClicked => match self.locking_confirm_window() {
+                Some(id) => iced::window::gain_focus(id),
+                None => Task::none(),
+            },
             WindowMsg::WindowFocused(id) => {
                 self.ui_state.focused_window = Some(id);
                 Task::none()

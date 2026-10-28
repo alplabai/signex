@@ -81,6 +81,9 @@ pub enum WindowMsg {
     MinimizeMainWindow,
     ToggleMaximizeMainWindow,
     CloseMainWindow,
+    /// The locked main window (or an undocked tab) was clicked while a
+    /// confirm dialog in its own window is open: raise that dialog.
+    LockedWindowClicked,
     /// A window gained keyboard focus.
     WindowFocused(iced::window::Id),
     /// A window lost keyboard focus.

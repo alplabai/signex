@@ -252,6 +252,16 @@ impl Signex {
         }
     }
 
+    /// `route_key` for the lock tests in `handlers/detached_modals.rs`.
+    #[cfg(test)]
+    pub(crate) fn route_key_for_test(
+        &self,
+        window: iced::window::Id,
+        event: &keyboard::Event,
+    ) -> Option<Message> {
+        self.route_key(window, event)
+    }
+
     /// Walk [`CLAIM_ORDER`] and return the one message this event earns,
     /// or `None` when it was swallowed or nobody wanted it.
     ///
@@ -260,6 +270,15 @@ impl Signex {
     /// possible while these branches lived in a subscription closure.
     fn route_key(&self, window: iced::window::Id, event: &keyboard::Event) -> Option<Message> {
         let target = self.input_target(Some(window));
+        // A confirm dialog in its own window locks the main window and the
+        // undocked tabs: no stroke reaches the keymap or a tool there.
+        // Esc still resolves, so the lock can always be dismissed.
+        if matches!(target, InputTarget::Main | InputTarget::UndockedTab)
+            && self.locking_confirm_window().is_some()
+            && !matches!(event, keyboard::Event::KeyPressed { key, .. } if ESCAPE_KEY.matches(key))
+        {
+            return None;
+        }
         for consumer in CLAIM_ORDER {
             match self.claim(consumer, target, window, event) {
                 Claim::Consume(message) => return Some(message),
@@ -427,7 +446,9 @@ impl Signex {
         // this consumer claims it in every window. Falling through would
         // make a profile binding for F1 suddenly reachable here, which is
         // more than the decision asked for.
-        if !target.paints_overlay_stack() {
+        let in_own_window =
+            target == InputTarget::DetachedModal(crate::app::state::ModalId::KeyboardShortcuts);
+        if !target.paints_overlay_stack() && !in_own_window {
             return Claim::Swallow;
         }
         Claim::Consume(if self.ui_state.keyboard_shortcuts_open {

@@ -22,6 +22,10 @@ pub(crate) fn detached_modal_title(modal: ModalId) -> &'static str {
         ModalId::EnableVersionControl => "Enable Version Control",
         ModalId::GridProperties => "Grid Properties",
         ModalId::SelectionFilterCustom => "Custom Selection Filter",
+        ModalId::About => "About Signex",
+        ModalId::KeyboardShortcuts => "Keyboard Shortcuts",
+        ModalId::PassiveCalculator => "Passive Network Calculator",
+        ModalId::FirstRunTour => "Welcome to Signex",
     }
 }
 
