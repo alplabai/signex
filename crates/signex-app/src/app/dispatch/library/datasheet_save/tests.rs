@@ -818,6 +818,7 @@ fn a_batch_across_two_libraries_commits_one_and_lists_the_other() {
         rows: vec![good.clone(), bad.clone()],
         next: SaveAllNext::Quit,
         probes: Default::default(),
+        undecided: Vec::new(),
     });
     run_save_all(&mut app, task);
 
@@ -850,6 +851,7 @@ fn close_project_save_all_waits_for_a_staged_row() {
             kept_paths: Vec::new(),
         },
         probes: Default::default(),
+        undecided: Vec::new(),
     });
     assert!(!datasheet_asset_path(&file, &hash).unwrap().exists());
     run_save_all(&mut app, task);
