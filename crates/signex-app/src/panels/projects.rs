@@ -33,6 +33,17 @@ pub struct SheetInfo {
     /// user sees the broken state at a glance instead of having to
     /// double-click and read an error.
     pub missing: bool,
+    /// True for a row that is not a `.snxprj` page but a sheet a symbol on
+    /// its parent references (#1618). With `missing` it is a symbol whose
+    /// file does not exist: activating it offers to create the sheet.
+    pub is_child_reference: bool,
+    /// True when the sheet is one of the `.snxprj` pages. A nested row that is
+    /// not has no project entry to exclude or rename.
+    pub in_project_list: bool,
+    /// The file exists but could not be read or parsed.
+    pub unreadable: bool,
+    /// The sheets this sheet's symbols reference, nested under it.
+    pub children: Vec<SheetInfo>,
 }
 
 /// Per-project bundle surfaced to the Projects panel. One entry per
@@ -132,6 +143,54 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
     ctx.projects.iter().map(project_root_node).collect()
 }
 
+/// F24 — surface a `(missing)` suffix on every leaf whose backing
+/// file is registered on the project but absent from disk. Catches
+/// orphan references (e.g. user moved/deleted a file outside Signex,
+/// or a previous library-create attempt left an entry behind without
+/// the file). User sees the broken state at a glance instead of
+/// having to double-click and read an error.
+fn missing_label(filename: &str, is_missing: bool) -> String {
+    if is_missing {
+        format!("{filename}  (missing)")
+    } else {
+        filename.to_string()
+    }
+}
+
+/// [`missing_label`], plus the `(unreadable)` mark of a sheet the walk could
+/// not read.
+fn sheet_label(sheet: &SheetInfo) -> String {
+    if sheet.unreadable {
+        format!("{}  (unreadable)", sheet.filename)
+    } else {
+        missing_label(&sheet.filename, sheet.missing)
+    }
+}
+
+/// The row for a sheet and, nested under it, the sheets its symbols place
+/// (#1618). A page keeps its file name as key; a nested row is keyed by its
+/// file too, which is unique among siblings because a file is shown once.
+fn sheet_node(sheet: &SheetInfo) -> TreeNode {
+    // A symbol's file is a sheet whatever its extension says, so the row can
+    // be activated.
+    let icon = if sheet.is_child_reference {
+        TreeIcon::SnxSchematic
+    } else {
+        TreeIcon::for_path(&sheet.filename)
+    };
+    let label = sheet_label(sheet);
+    let node = if sheet.children.is_empty() {
+        TreeNode::leaf(label, icon)
+    } else {
+        let children = sheet.children.iter().map(sheet_node);
+        TreeNode::branch(label, icon, children.collect())
+    };
+    node.with_key(sheet.filename.clone())
+        .with_open(sheet.is_open)
+        .with_dirty(sheet.is_dirty)
+        .with_active(sheet.is_active)
+}
+
 /// One project root — "Source Documents" / "Libraries" / "Settings".
 /// The Libraries branch lists this project's mounted `*.snxlib`
 /// entries (right-click → Add New ▸ Component Library to add one);
@@ -140,31 +199,8 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
 fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     let mut source_docs: Vec<TreeNode> = Vec::new();
 
-    // F24 — surface a `(missing)` suffix on every leaf whose backing
-    // file is registered on the project but absent from disk. Catches
-    // orphan references (e.g. user moved/deleted a file outside Signex,
-    // or a previous library-create attempt left an entry behind without
-    // the file). User sees the broken state at a glance instead of
-    // having to double-click and read an error.
-    fn missing_label(filename: &str, is_missing: bool) -> String {
-        if is_missing {
-            format!("{filename}  (missing)")
-        } else {
-            filename.to_string()
-        }
-    }
-
     if !project.sheets.is_empty() {
-        for sheet in &project.sheets {
-            let icon = TreeIcon::for_path(&sheet.filename);
-            source_docs.push(
-                TreeNode::leaf(missing_label(&sheet.filename, sheet.missing), icon)
-                    .with_key(sheet.filename.clone())
-                    .with_open(sheet.is_open)
-                    .with_dirty(sheet.is_dirty)
-                    .with_active(sheet.is_active),
-            );
-        }
+        source_docs.extend(project.sheets.iter().map(sheet_node));
     } else if let Some(file) = &project.project_file {
         let icon = TreeIcon::for_path(file);
         source_docs.push(

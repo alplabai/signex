@@ -5,6 +5,9 @@ use crate::app::state::library_entry::{entry_resolves_to, with_new_leaf};
 
 impl Signex {
     pub(super) fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {
+        if self.refuse_on_missing_child(&tree_path, "Rename", false) {
+            return;
+        }
         let Some(target_path) = self.tree_path_to_file_path(&tree_path) else {
             crate::diagnostics::log_warning(
                 "Rename cancelled: the selected project-tree row no longer resolves to a file.",
@@ -162,6 +165,43 @@ impl Signex {
             .filter(|_| is_sheet)
             .map(|&idx| self.plan_reference_rewrites(idx, &state.target_path, new_name))
             .unwrap_or_default();
+
+        // Another open project's sheets that place this file are not re-pointed
+        // by this rename: refuse rather than leave their symbols dangling.
+        {
+            let owner = state.project_id.or_else(|| {
+                let idx = *state.tree_path.first()?;
+                self.document_state.projects.get(idx).map(|p| p.id)
+            });
+            let users = self.sheet_users(&state.target_path, owner);
+            let refusal = if !users.parents.is_empty() {
+                let names: Vec<String> = users
+                    .parents
+                    .iter()
+                    .map(|p| p.display().to_string())
+                    .collect();
+                Some(format!(
+                    "Another open project or an open sheet places this sheet and would be left \
+                     pointing at the old name: {}",
+                    names.join(", ")
+                ))
+            } else {
+                users.unknown.map(|why| {
+                    format!(
+                        "Whether another project or open sheet places this sheet cannot be ruled \
+                         out ({why}). Try again once the project has been read."
+                    )
+                })
+            };
+            if let Some(refusal) = refusal {
+                crate::diagnostics::log_warning(format!(
+                    "Rename of {} refused: {refusal}",
+                    state.target_path.display()
+                ));
+                self.set_rename_error(&refusal);
+                return iced::Task::none();
+            }
+        }
 
         // A read-only parent (newer Signex) would refuse the re-point after
         // the file moved, breaking the hierarchy: refuse the whole rename
