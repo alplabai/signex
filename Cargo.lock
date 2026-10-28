@@ -5577,6 +5577,7 @@ dependencies = [
  "rstar",
  "serde",
  "serde_json",
+ "signex-gfx",
  "signex-sketch",
  "wgpu",
 ]

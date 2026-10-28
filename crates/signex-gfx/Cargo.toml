@@ -22,8 +22,13 @@ signex-sketch = { workspace = true }
 [features]
 # Test-only helpers for the crates above this one (`polygon_fill_triangles`).
 test-support = []
+# Offscreen debug/golden render passes (`debug_pass`). Dev toggle: off in every
+# shipped build; the integration tests switch it on through the dev-dependency
+# below.
+debug-pass = ["test-support"]
 
 [dev-dependencies]
+signex-gfx = { path = ".", features = ["debug-pass"] }
 pollster = "0.4"
 serde.workspace = true
 serde_json.workspace = true
