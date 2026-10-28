@@ -26,7 +26,6 @@ use crate::app::state::net_class_styles::{
     ProjectKey, ResolveFailed, ResolvedProject, ResolvedStyles,
 };
 use crate::app::state::project_case::fold_of;
-use crate::app::state::scope;
 use crate::app::state::{DocumentState, ProjectId};
 
 use super::Signex;
@@ -120,10 +119,9 @@ fn plan_projects(document: &DocumentState) -> Vec<PlannedProject> {
         stamp: u64,
         paths: Vec<PathBuf>,
     }
-    let refs = document.child_sheet_refs();
     let mut open: std::collections::HashMap<ProjectId, Open> = Default::default();
     for (path, engine) in &document.engines {
-        let Some(project) = scope::project_owning_sheet(&document.projects, &refs, path) else {
+        let Some(project) = document.document_project(path) else {
             continue;
         };
         let mut hasher = DefaultHasher::new();

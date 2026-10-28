@@ -76,6 +76,7 @@ pub(super) fn parent_of(
 ///
 /// Builds a throwaway [`OwnershipIndex`]; callers that ask repeatedly use the
 /// one `DocumentState` keeps (`DocumentState::document_project`).
+#[cfg(test)]
 pub(crate) fn project_owning_sheet<'a>(
     projects: &'a [LoadedProject],
     loaded: &HashMap<PathBuf, Vec<String>>,

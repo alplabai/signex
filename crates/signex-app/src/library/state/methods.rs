@@ -203,6 +203,13 @@ impl LibraryState {
             .is_some_and(|root| resolved_path(root) == resolved_path(path))
     }
 
+    /// Whether `path` is the bundled stock library's file.
+    pub(crate) fn is_stock_root(&self, path: &Path) -> bool {
+        self.stock_library_root
+            .as_deref()
+            .is_some_and(|root| resolved_path(root) == resolved_path(path))
+    }
+
     fn open_library_marked(&mut self, root: PathBuf, read_only: bool) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
             return Ok(());
@@ -227,6 +234,7 @@ impl LibraryState {
         // can still resolve to whichever copy wins. Detecting and
         // surfacing that collision is the Components Panel's job at
         // presentation time.
+        let read_only = read_only || self.is_stock_root(&root);
         if read_only {
             self.set.mount_read_only(Box::new(adapter))?;
         } else {
@@ -257,6 +265,9 @@ impl LibraryState {
                 error = %e,
                 "open_library: reload_tables failed; library opens with empty cache"
             );
+        }
+        if self.is_stock_root(&entry.root) {
+            self.stock_library = Some(entry.root.clone());
         }
         self.open_libraries.push(entry);
         self.touch_data();

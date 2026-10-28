@@ -6,10 +6,6 @@ impl Signex {
         panel_msg: &crate::panels::PanelMsg,
     ) -> bool {
         match panel_msg {
-            crate::panels::PanelMsg::SelectComponent(lib_id) => {
-                self.select_library_component(lib_id.clone());
-                true
-            }
             // F15 — Properties-panel Pick buttons. Same effect as
             // dispatching `LibraryMessage::OpenPrimitivePicker` with a
             // BrowserRow target — but inlined here because the panel
@@ -50,27 +46,5 @@ impl Signex {
             error: None,
             scroll_y: 0.0,
         });
-    }
-
-    fn select_library_component(&mut self, lib_id: String) {
-        if let Some(symbol) = self.document_state.loaded_lib.get(&lib_id) {
-            let library_name = lib_id.split(':').next().unwrap_or_default().to_string();
-            self.document_state.panel_ctx.selected_component = Some(lib_id);
-            self.document_state.panel_ctx.selected_pins = symbol
-                .pins
-                .iter()
-                .map(|pin| {
-                    (
-                        pin.pin.number.clone(),
-                        pin.pin.name.clone(),
-                        format!("{:?}", pin.pin.direction),
-                    )
-                })
-                .collect();
-            self.document_state.panel_ctx.selected_lib_symbol = Some(symbol.clone());
-            if self.document_state.panel_ctx.active_library.is_none() {
-                self.document_state.panel_ctx.active_library = Some(library_name);
-            }
-        }
     }
 }

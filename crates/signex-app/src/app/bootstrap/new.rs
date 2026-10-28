@@ -446,12 +446,7 @@ impl Signex {
 
                     properties_tab: 0,
                     net_classes: Default::default(),
-                    active_library: None,
-                    library_symbols: vec![],
                     selected_component: None,
-                    selected_pins: vec![],
-                    selected_lib_symbol: None,
-                    components_split: 250.0,
                     project_tree: vec![],
                     project_tree_builds: 0,
                     project_tree_selected: None,
@@ -508,7 +503,6 @@ impl Signex {
                     document_font_family: None,
                 },
                 history: crate::panels::history::HistoryPanelState::default(),
-                loaded_lib: std::collections::HashMap::new(),
                 preview: None,
                 page_setup_memory: Default::default(),
                 tab_placements: Default::default(),
@@ -588,10 +582,10 @@ impl Signex {
         );
         // v0.9 Stage 9: the globally-configured libraries and the bundled
         // stock library (#328) are mounted off the UI thread (#1470): the
-        // config list is read here (one small TOML), but every manifest and
-        // table read runs in a Task, so the first frame is not blocked.
-        // Each lands as `LibraryMessage::MountFinished` /
-        // `StockMountFinished`; a missing library warns and stays empty.
+        // config list and the stock path probe are cheap, but every manifest
+        // and table read runs in a Task, so the first frame is not blocked.
+        // Each lands as `LibraryMessage::MountFinished`; a missing library
+        // warns and stays empty.
         app.library.global_libraries = crate::panels::components_panel::global_prefs::load();
         let configured: Vec<std::path::PathBuf> = app
             .library
@@ -599,6 +593,9 @@ impl Signex {
             .iter()
             .map(|entry| entry.path.clone())
             .collect();
+        // The stock library registers first, so a global entry or project
+        // library naming the same file finds it already pending and read-only.
+        let stock_path = crate::panels::components_panel::stock::register_stock(&mut app.library);
         let global_paths: Vec<std::path::PathBuf> = configured
             .into_iter()
             .filter(|path| {
@@ -607,10 +604,9 @@ impl Signex {
                     == crate::library::mount::MountRequest::Spawn
             })
             .collect();
-        let mount_task = iced::Task::batch([
-            crate::library::mount::spawn_pending_mounts(global_paths),
-            crate::panels::components_panel::stock::spawn_stock_mount(),
-        ]);
+        let mount_task = iced::Task::batch([crate::library::mount::spawn_pending_mounts(
+            stock_path.into_iter().chain(global_paths).collect(),
+        )]);
         // #630 — seed the two render surfaces that consume a grid style
         // from the saved preferences. Everything else the old
         // `render_config` global carried (canvas font/size/style) had no

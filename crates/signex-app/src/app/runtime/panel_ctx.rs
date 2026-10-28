@@ -465,12 +465,7 @@ impl Signex {
 
         let canvas_font_popup_open = self.document_state.panel_ctx.canvas_font_popup_open;
         let properties_tab = self.document_state.panel_ctx.properties_tab;
-        let active_library = self.document_state.panel_ctx.active_library.clone();
-        let library_symbols = self.document_state.panel_ctx.library_symbols.clone();
         let selected_component = self.document_state.panel_ctx.selected_component.clone();
-        let selected_pins = self.document_state.panel_ctx.selected_pins.clone();
-        let selected_lib_symbol = self.document_state.panel_ctx.selected_lib_symbol.clone();
-        let components_split = self.document_state.panel_ctx.components_split;
         let selection_count = self.document_state.panel_ctx.selection_count;
         let selected_uuid = self.document_state.panel_ctx.selected_uuid;
         let selected_kind = self.document_state.panel_ctx.selected_kind;
@@ -610,12 +605,7 @@ impl Signex {
             canvas_font_popup_open,
             properties_tab,
             net_classes,
-            active_library,
-            library_symbols,
             selected_component,
-            selected_pins,
-            selected_lib_symbol,
-            components_split,
             project_tree: kept_project_tree,
             project_tree_builds,
             project_tree_selected: self.document_state.panel_ctx.project_tree_selected.clone(),

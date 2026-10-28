@@ -633,8 +633,6 @@ pub enum PanelMsg {
     /// Net Classes section of the Properties panel (#1042). One nested
     /// message so the section adds no flat leaves.
     NetClass(NetClassMsg),
-    SelectComponent(String),
-    DragComponentsSplit,
     ComponentFilter(String),
     /// F15 — Properties panel: open the primitive picker (symbol /
     /// footprint) for the row described by the active

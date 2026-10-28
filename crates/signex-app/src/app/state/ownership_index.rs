@@ -149,16 +149,18 @@ impl DocumentState {
     /// no edit path has to remember to invalidate it).
     pub(crate) fn ownership_index(&self) -> std::cell::Ref<'_, OwnershipIndex> {
         let stamp = ownership_stamp(&self.projects, &self.engines);
-        {
-            let mut slot = self.ownership.borrow_mut();
-            if slot.as_ref().map(OwnershipIndex::stamp) != Some(stamp) {
-                *slot = Some(OwnershipIndex::build(
-                    stamp,
-                    &self.projects,
-                    &self.child_sheet_refs(),
-                    None,
-                ));
-            }
+        let fresh = self
+            .ownership
+            .borrow()
+            .as_ref()
+            .is_some_and(|index| index.stamp() == stamp);
+        if !fresh {
+            *self.ownership.borrow_mut() = Some(OwnershipIndex::build(
+                stamp,
+                &self.projects,
+                &self.child_sheet_refs(),
+                None,
+            ));
         }
         std::cell::Ref::map(self.ownership.borrow(), |slot| {
             slot.as_ref().expect("built above")

@@ -85,39 +85,54 @@ impl Signex {
         ))
     }
 
-    /// Run the wanted assembly inline and apply it. Tests only: production
-    /// hands the same work to a Task so `update` never reads the disk; tests
-    /// that read the hierarchy straight after a message need it settled.
-    #[cfg(test)]
-    pub(crate) fn settle_navigator(&mut self) {
-        let applied = self.document_state.panel_ctx.navigator.fingerprint.clone();
-        if let Some((generation, request)) = self.document_state.navigator_job.begin(&applied) {
+    /// Run the wanted assembly inline and apply it, as the Task would. For
+    /// tests, which read the hierarchy straight after a message; production
+    /// never calls it, so `update` stays free of disk reads.
+    #[doc(hidden)]
+    pub fn settle_navigator(&mut self) {
+        self.document_state.navigator_job.abandon_running();
+        while let Some((generation, request)) = {
+            let applied = self.document_state.panel_ctx.navigator.fingerprint.clone();
+            self.document_state.navigator_job.begin(&applied)
+        } {
             let open = open_sheets_snapshot(&self.document_state);
             let assembly = assemble_navigator(&open, request);
-            self.handle_navigator_assembled(generation, Ok(Box::new(assembly)));
+            let _ = self.handle_navigator_assembled(generation, Ok(Box::new(assembly)));
         }
     }
 
-    /// An assembly landed: swap it in unless a newer request superseded it.
+    /// Whether the Navigator's hierarchy is the current one and nothing is
+    /// rebuilding it. While it is not, it may describe an earlier state of the
+    /// project, so anything that WRITES on the strength of it ("this sheet is
+    /// placed once") must treat the walk as incomplete.
+    pub(crate) fn navigator_is_settled(&self) -> bool {
+        self.document_state
+            .navigator_job
+            .is_settled(&self.document_state.panel_ctx.navigator.fingerprint)
+    }
+
+    /// An assembly landed: swap it in if it is still what the Navigator
+    /// wants, then start the latest wanted one if it moved on meanwhile.
     pub(crate) fn handle_navigator_assembled(
         &mut self,
         generation: u64,
         assembly: Result<Box<NavigatorAssembly>, String>,
-    ) {
-        if !self
-            .document_state
-            .navigator_job
-            .finish(generation, assembly.is_ok())
-        {
-            return;
-        }
+    ) -> Task<Message> {
+        let fingerprint = assembly.as_ref().ok().map(|a| a.fingerprint.clone());
+        let current = self.document_state.navigator_job.finish(
+            generation,
+            fingerprint.as_deref(),
+            assembly.is_ok(),
+        );
         let assembly = match assembly {
-            Ok(assembly) => *assembly,
+            Ok(assembly) if current => *assembly,
+            Ok(_) => return self.start_navigator_assembly().unwrap_or_else(Task::none),
             Err(reason) => {
                 crate::diagnostics::log_warning(format!(
-                    "Navigator: the sheet hierarchy could not be built ({reason});                      it keeps its previous state"
+                    "Navigator: the sheet hierarchy could not be built ({reason});\
+                     it keeps its previous state"
                 ));
-                return;
+                return Task::none();
             }
         };
         // Said once per rebuild, not per refresh: the reason a sheet that
@@ -144,6 +159,7 @@ impl Signex {
         navigator.fingerprint = assembly.fingerprint;
         // The canvas designators are a function of the hierarchy's placements.
         self.refresh_canvas_designators();
+        Task::none()
     }
 
     /// The project the Navigator describes, as `(root sheet, declared pages,
@@ -278,6 +294,25 @@ mod tests {
         })
     }
 
+    fn wanted(app: &Signex) -> String {
+        app.document_state
+            .navigator_job
+            .wanted_fingerprint()
+            .expect("a project is in view")
+            .to_string()
+    }
+
+    fn add_page(app: &mut Signex, filename: &str) {
+        app.document_state.projects[0].data.sheets.push(SheetEntry {
+            name: filename.to_string(),
+            filename: filename.to_string(),
+            symbols_count: 0,
+            wires_count: 0,
+            labels_count: 0,
+            unknown: Default::default(),
+        });
+    }
+
     /// The refresh asks for an assembly and shows the previous hierarchy;
     /// the answer is applied when it lands and not re-requested.
     #[test]
@@ -288,6 +323,7 @@ mod tests {
             app.document_state.panel_ctx.navigator.hierarchy.is_none(),
             "the refresh itself assembles nothing"
         );
+        assert!(!app.navigator_is_settled());
         assert!(
             app.start_navigator_assembly().is_some(),
             "assembly requested"
@@ -298,38 +334,111 @@ mod tests {
         );
 
         let generation = app.document_state.navigator_job.latest_generation();
-        app.handle_navigator_assembled(generation, Ok(assembly("fp-1")));
+        let fp = wanted(&app);
+        let _ = app.handle_navigator_assembled(generation, Ok(assembly(&fp)));
         let navigator = &app.document_state.panel_ctx.navigator;
         assert!(navigator.hierarchy.is_some());
-        assert_eq!(navigator.fingerprint, "fp-1");
+        assert_eq!(navigator.fingerprint, fp);
+        assert!(app.navigator_is_settled());
     }
 
-    /// An answer superseded by a newer request is dropped.
+    /// An answer for a request the project has moved past is dropped, and the
+    /// latest request starts as soon as it lands.
     #[test]
-    fn a_superseded_result_is_dropped() {
+    fn a_superseded_result_is_dropped_and_the_latest_starts() {
         let mut app = app_with_project();
         app.refresh_panel_ctx();
         assert!(app.start_navigator_assembly().is_some());
-        let stale = app.document_state.navigator_job.latest_generation();
-        // The project changes under the running assembly: a newer request.
-        app.document_state.projects[0].data.sheets.push(SheetEntry {
-            name: "T".to_string(),
-            filename: "T.snxsch".to_string(),
-            symbols_count: 0,
-            wires_count: 0,
-            labels_count: 0,
-            unknown: Default::default(),
-        });
+        let (stale, stale_fp) = (
+            app.document_state.navigator_job.latest_generation(),
+            wanted(&app),
+        );
+        add_page(&mut app, "T.snxsch");
         app.refresh_panel_ctx();
-        assert!(app.start_navigator_assembly().is_some(), "newer request");
+        assert!(app.start_navigator_assembly().is_none(), "one at a time");
 
-        app.handle_navigator_assembled(stale, Ok(assembly("stale")));
+        let next = app.handle_navigator_assembled(stale, Ok(assembly(&stale_fp)));
+        drop(next);
         assert!(
             app.document_state.panel_ctx.navigator.hierarchy.is_none(),
             "the stale answer must not land"
         );
-        let latest = app.document_state.navigator_job.latest_generation();
-        app.handle_navigator_assembled(latest, Ok(assembly("fresh")));
-        assert_eq!(app.document_state.panel_ctx.navigator.fingerprint, "fresh");
+        assert_eq!(
+            app.document_state.navigator_job.latest_generation(),
+            stale + 1,
+            "the latest request started when the stale one landed"
+        );
+        let latest_fp = wanted(&app);
+        let _ = app.handle_navigator_assembled(stale + 1, Ok(assembly(&latest_fp)));
+        assert_eq!(
+            app.document_state.panel_ctx.navigator.fingerprint,
+            latest_fp
+        );
+    }
+
+    /// The project returns to the state already on screen while an assembly
+    /// for the intermediate state runs (an undo): that answer must not land.
+    #[test]
+    fn an_answer_for_a_state_the_user_undid_is_dropped() {
+        let mut app = app_with_project();
+        app.refresh_panel_ctx();
+        app.settle_navigator();
+        let on_screen = app.document_state.panel_ctx.navigator.fingerprint.clone();
+        assert!(!on_screen.is_empty());
+
+        add_page(&mut app, "T.snxsch");
+        app.refresh_panel_ctx();
+        assert!(app.start_navigator_assembly().is_some());
+        let (generation, intermediate) = (
+            app.document_state.navigator_job.latest_generation(),
+            wanted(&app),
+        );
+        app.document_state.projects[0].data.sheets.pop();
+        app.refresh_panel_ctx();
+        assert!(app.start_navigator_assembly().is_none());
+        assert!(app.navigator_is_settled());
+
+        let _ = app.handle_navigator_assembled(generation, Ok(assembly(&intermediate)));
+        assert_eq!(
+            app.document_state.panel_ctx.navigator.fingerprint,
+            on_screen
+        );
+    }
+
+    /// The project closes while its assembly runs: nothing may be installed.
+    #[test]
+    fn an_answer_for_a_closed_project_is_dropped() {
+        let mut app = app_with_project();
+        app.refresh_panel_ctx();
+        assert!(app.start_navigator_assembly().is_some());
+        let (generation, fp) = (
+            app.document_state.navigator_job.latest_generation(),
+            wanted(&app),
+        );
+        app.document_state.projects.clear();
+        app.document_state.active_project = None;
+        app.refresh_panel_ctx();
+        assert!(app.start_navigator_assembly().is_none());
+
+        let _ = app.handle_navigator_assembled(generation, Ok(assembly(&fp)));
+        assert!(app.document_state.panel_ctx.navigator.hierarchy.is_none());
+        assert!(app.navigator_is_settled());
+    }
+
+    /// Between the request and the settle, the hierarchy on screen may
+    /// predate the edit: a designator edit must take the entry branch, not
+    /// write `reference` on the strength of "placed once".
+    #[test]
+    fn a_pending_hierarchy_is_not_trusted_to_be_a_single_placement() {
+        let mut app = app_with_project();
+        app.refresh_panel_ctx();
+        app.settle_navigator();
+        assert!(app.navigator_is_settled());
+        let path = std::path::Path::new("/nowhere/1470/S.snxsch");
+
+        add_page(&mut app, "T.snxsch");
+        app.refresh_panel_ctx();
+        assert!(!app.navigator_is_settled());
+        assert!(!app.known_single_placement(path));
     }
 }

@@ -92,8 +92,7 @@ impl Signex {
                 self.handle_project_fs_probed(generation, facts)
             }
             ProjectMsg::NavigatorAssembled(generation, assembly) => {
-                self.handle_navigator_assembled(generation, assembly);
-                Task::none()
+                self.handle_navigator_assembled(generation, assembly)
             }
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
             ProjectMsg::Tab(msg) => {

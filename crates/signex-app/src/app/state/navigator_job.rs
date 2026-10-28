@@ -46,21 +46,46 @@ impl NavigatorJob {
         self.wanted = request;
     }
 
-    /// Claim an assembly to start, unless the wanted one is already on screen
-    /// (`applied`), running, or failed. A newer request supersedes a running
-    /// one: bumping the generation makes the older answer drop on arrival.
+    /// Claim an assembly to start. Nothing starts when the wanted one is
+    /// already on screen (`applied`), has failed, or another is still
+    /// running (the latest wanted starts when that one lands). A wanted state
+    /// that is already on screen, or gone, abandons a running assembly: its
+    /// answer would install a hierarchy the Navigator no longer wants.
     pub fn begin(&mut self, applied: &str) -> Option<(u64, NavigatorRequest)> {
-        let wanted = self.wanted.as_ref()?;
-        let fp = wanted.fingerprint.as_str();
-        if fp == applied
-            || self.failed.as_deref() == Some(fp)
-            || self.in_flight.as_ref().is_some_and(|(_, f)| f == fp)
-        {
+        let Some(wanted) = self.wanted.as_ref() else {
+            self.in_flight = None;
+            return None;
+        };
+        if wanted.fingerprint == applied {
+            self.in_flight = None;
+            return None;
+        }
+        if self.failed.as_deref() == Some(wanted.fingerprint.as_str()) || self.in_flight.is_some() {
             return None;
         }
         self.generation += 1;
-        self.in_flight = Some((self.generation, fp.to_owned()));
+        self.in_flight = Some((self.generation, wanted.fingerprint.clone()));
         Some((self.generation, wanted.clone()))
+    }
+
+    /// Forget the running assembly, so the next [`begin`](Self::begin) starts
+    /// afresh. For tests that run the work inline after `update` already
+    /// started a Task they never deliver; its late answer would be dropped.
+    #[doc(hidden)]
+    pub fn abandon_running(&mut self) {
+        self.in_flight = None;
+    }
+
+    /// The fingerprint the Navigator currently wants, if any.
+    pub fn wanted_fingerprint(&self) -> Option<&str> {
+        self.wanted.as_ref().map(|w| w.fingerprint.as_str())
+    }
+
+    /// True when the hierarchy on screen (`applied`) is the wanted one and
+    /// nothing is being rebuilt. Until then it may describe an earlier state
+    /// of the project, so callers that WRITE from it must not trust it.
+    pub fn is_settled(&self, applied: &str) -> bool {
+        self.in_flight.is_none() && self.wanted_fingerprint().is_none_or(|fp| fp == applied)
     }
 
     /// The generation of the latest assembly started.
@@ -69,13 +94,15 @@ impl NavigatorJob {
         self.generation
     }
 
-    /// An assembly ended. `true` when it is the latest and should be applied;
-    /// a superseded one returns `false`. `ok == false` remembers the failure.
-    pub fn finish(&mut self, generation: u64, ok: bool) -> bool {
+    /// An assembly ended. `true` when it is the running one and still wanted
+    /// (`fingerprint` is what it was built for), so it should be applied; an
+    /// abandoned or superseded one returns `false`. `ok == false` remembers
+    /// the failure.
+    pub fn finish(&mut self, generation: u64, fingerprint: Option<&str>, ok: bool) -> bool {
         match self.in_flight.take() {
             Some((g, fp)) if g == generation => {
-                self.failed = (!ok).then_some(fp);
-                true
+                self.failed = (!ok).then(|| fp.clone());
+                ok && fingerprint.is_none_or(|f| Some(f) == self.wanted_fingerprint())
             }
             other => {
                 self.in_flight = other;
@@ -104,19 +131,45 @@ mod tests {
         job.want(Some(req("a")));
         let (g, _) = job.begin("").unwrap();
         assert!(job.begin("").is_none(), "already running");
-        assert!(job.finish(g, true));
+        assert!(!job.is_settled(""));
+        assert!(job.finish(g, Some("a"), true));
         assert!(job.begin("a").is_none(), "already on screen");
+        assert!(job.is_settled("a"));
     }
 
     #[test]
-    fn a_superseded_result_is_dropped() {
+    fn a_result_for_a_superseded_request_is_dropped_and_the_latest_starts_next() {
         let mut job = NavigatorJob::default();
         job.want(Some(req("a")));
         let (old, _) = job.begin("").unwrap();
         job.want(Some(req("b")));
+        assert!(job.begin("").is_none(), "one at a time");
+        assert!(!job.finish(old, Some("a"), true), "stale answer dropped");
         let (new, _) = job.begin("").unwrap();
-        assert!(!job.finish(old, true), "stale generation dropped");
-        assert!(job.finish(new, true), "the latest still applies");
+        assert!(job.finish(new, Some("b"), true));
+    }
+
+    #[test]
+    fn going_back_to_the_applied_state_abandons_the_running_assembly() {
+        let mut job = NavigatorJob::default();
+        job.want(Some(req("a")));
+        job.begin("").unwrap();
+        // The user undid back to what is already on screen ("") ...
+        job.want(Some(req("")));
+        assert!(job.begin("").is_none());
+        // ... so the answer for "a" must not land.
+        assert!(job.is_settled(""));
+        assert!(!job.finish(1, Some("a"), true));
+    }
+
+    #[test]
+    fn a_project_closed_during_assembly_drops_the_answer() {
+        let mut job = NavigatorJob::default();
+        job.want(Some(req("a")));
+        let (g, _) = job.begin("").unwrap();
+        job.want(None);
+        assert!(!job.finish(g, Some("a"), true));
+        assert!(job.begin("").is_none());
     }
 
     #[test]
@@ -124,7 +177,7 @@ mod tests {
         let mut job = NavigatorJob::default();
         job.want(Some(req("a")));
         let (g, _) = job.begin("").unwrap();
-        assert!(job.finish(g, false));
+        assert!(!job.finish(g, None, false));
         assert!(job.begin("").is_none());
         job.want(Some(req("b")));
         assert!(job.begin("").is_some());
@@ -134,5 +187,6 @@ mod tests {
     fn nothing_wanted_starts_nothing() {
         let mut job = NavigatorJob::default();
         assert!(job.begin("").is_none());
+        assert!(job.is_settled("anything"));
     }
 }

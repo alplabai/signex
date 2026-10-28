@@ -102,6 +102,7 @@ mod tests {
         assert_eq!(navigator_fold(&app), Some(CaseFold::from_probe(false)));
 
         deliver(&mut app, id, CaseProbeOutcome::Decided(true));
+        app.settle_navigator();
 
         assert!(
             !has_duplicate_uuid(&app),

@@ -264,9 +264,6 @@ pub enum LibraryMessage {
         path: PathBuf,
         prepared: crate::library::mount::PreparedMountCell,
     },
-    /// The bundled stock library, resolved and prepared off the UI thread at
-    /// startup (#1470). `None`: not found or unreadable (already warned).
-    StockMountFinished(crate::panels::components_panel::stock::StockMount),
     /// An off-thread library refresh (#1374) has read the library. Applied
     /// only while `generation` is still the latest for `path`; a result
     /// superseded by a newer refresh, or for a closed library, is dropped.
