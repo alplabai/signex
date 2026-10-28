@@ -50,8 +50,8 @@ pub(super) fn alternate_symbols_from_cell(s: &str) -> Result<Vec<AlternateSymbol
 }
 
 /// Repair for a component table's row that is exactly one cell short of the
-/// 22-column header (a merge artefact): reads as no alternates. Only when
-/// the row is shaped like a legacy 21-cell row, so a dropped middle cell,
+/// 23-column header (a merge artefact): reads as no alternates. Only when
+/// the row is shaped like a legacy 22-cell row, so a dropped middle cell,
 /// which shifts every later cell left, stays an error whenever the shift
 /// shows. Not repaired: any other table, any other count.
 pub(crate) fn repair_short_component_row(
@@ -73,7 +73,10 @@ pub(crate) fn repair_short_component_row(
     // cell is a shift, not a legacy row. `version` may be written empty
     // (the reader maps it to 0.0.1) but is never `true`/`false`.
     let version_ok = is_version_like(row_version) && !matches!(row_version, "true" | "false");
-    if !matches!(released, "true" | "false") || !version_ok || !versions_ok {
+    // A shifted alternates cell lands in the description slot as JSON.
+    let description_ok = at("description")
+        .is_some_and(|i| serde_json::from_str::<Vec<AlternateSymbol>>(cells[i]).is_err());
+    if !matches!(released, "true" | "false") || !version_ok || !versions_ok || !description_ok {
         return None;
     }
     let mut fixed: Vec<String> = cells.iter().map(|c| (*c).to_string()).collect();

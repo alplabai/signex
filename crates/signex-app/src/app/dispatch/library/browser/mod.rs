@@ -494,6 +494,11 @@ impl Signex {
                     modal.draft.primary_mpn.mpn = s;
                     modal.error = None;
                 }
+                BrowserEditMsg::SetDescription(s) => {
+                    // One line: a tab or newline cannot live in a table cell.
+                    modal.draft.description = s.chars().filter(|c| !c.is_control()).collect();
+                    modal.error = None;
+                }
                 BrowserEditMsg::SetParamValue { key, value } => {
                     let entry = modal
                         .param_buf

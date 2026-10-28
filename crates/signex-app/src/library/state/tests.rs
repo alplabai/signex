@@ -88,6 +88,7 @@ fn fixture_row(pn: &str) -> ComponentRow {
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::new_v4()),
@@ -193,6 +194,7 @@ fn edit_row_modal_state_seeds_tags_buffer() {
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::new_v4()),
@@ -387,4 +389,19 @@ fn reload_tables_loads_cached_pricing() {
     lib.reload_tables(&adapter).expect("reload");
 
     assert!(lib.pricing.contains_key(&adapter.priced_row));
+}
+
+/// The row's description reaches the picker summary (#1474).
+#[test]
+fn summarize_row_carries_the_row_description() {
+    let mut row = fixture_row("C1");
+    row.description = "100 nF 50 V X7R".into();
+    assert_eq!(
+        super::methods::summarize_row(&row).description,
+        "100 nF 50 V X7R"
+    );
+    assert_eq!(
+        super::methods::summarize_row(&fixture_row("C2")).description,
+        ""
+    );
 }
