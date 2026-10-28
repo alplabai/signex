@@ -63,8 +63,6 @@ pub struct PanelContext {
     pub properties_tab: usize, // 0=General, 1=Parameters
     /// Net Classes section of the General tab (#1042).
     pub net_classes: NetClassPanel,
-    /// Selected component lib_id.
-    pub selected_component: Option<String>,
     /// Persistent project tree — toggle state survives across renders.
     pub project_tree: Vec<TreeNode>,
     /// How many times `project_tree` has been rebuilt; `refresh_panel_ctx`
@@ -153,8 +151,6 @@ pub struct PanelContext {
     pub numeric_draft: Option<super::NumericDraft>,
     /// The sheet `title_block` and the shown drafts belong to.
     pub title_block_sheet: Option<std::path::PathBuf>,
-    /// Component search filter text.
-    pub component_filter: String,
     /// Which sections are collapsed (by section name key).
     pub collapsed_sections: CollapsedSections,
     /// Pre-placement configuration (shown when Tab pressed during placement tool).

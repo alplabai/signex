@@ -2,6 +2,11 @@
 //! Properties views (#912).
 
 use super::super::*;
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// The "Symbol" pick list of a placed symbol whose library row offers
 /// alternate drawings (#1230). Nothing when there is only the default.
@@ -58,22 +63,23 @@ pub(super) fn push_library_rows<'a>(
         ));
     }
     if drifted {
-        let update = iced::widget::button(iced::widget::text("Update from library").size(11))
-            .padding([2, 8])
+        let update = iced::widget::button(iced::widget::text("Update from library").size(TS.body))
+            .padding([SP.xs, SP.m])
             .on_press(PanelMsg::UpdateSymbolFromLibrary(id));
         c = c.push(
             iced::widget::row![
                 iced::widget::text("Library: out of date")
-                    .size(11)
+                    .size(TS.body)
                     .color(muted),
                 iced::widget::tooltip(
                     update,
-                    iced::widget::text("Updates every instance of this part on the sheet").size(11),
+                    iced::widget::text("Updates every instance of this part on the sheet")
+                        .size(TS.body),
                     iced::widget::tooltip::Position::Bottom,
                 ),
             ]
-            .spacing(8)
-            .padding([2, 8])
+            .spacing(SP.m)
+            .padding([SP.xs, SP.m])
             .align_y(iced::Alignment::Center),
         );
     }
