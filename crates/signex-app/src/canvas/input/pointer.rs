@@ -179,13 +179,18 @@ impl SchematicCanvas<'_> {
             if let (Some(origin), Some(current)) = (state.move_origin, state.move_current) {
                 let dx = current.0 - origin.0;
                 let dy = current.1 - origin.1;
+                let connections = state.move_connections();
                 state.move_dragging = false;
                 state.move_origin = None;
                 state.move_current = None;
                 state.click_on_selected = false;
                 if dx.abs() > 0.01 || dy.abs() > 0.01 {
                     return Some(canvas::Action::publish(Message::CanvasEvent(
-                        CanvasEvent::MoveSelected { dx, dy },
+                        CanvasEvent::MoveSelected {
+                            dx,
+                            dy,
+                            connections,
+                        },
                     )));
                 }
             }

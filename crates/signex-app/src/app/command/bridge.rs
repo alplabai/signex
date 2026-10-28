@@ -62,6 +62,9 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "show_all_design_objects" | "zoom_to_all_objects" | "zoom_to_fit" => {
             Message::CanvasEvent(CanvasEvent::FitAll)
         }
+        "drag_keep_connections" => {
+            Message::Selection(selection_request::SelectionRequest::DragKeepingConnections)
+        }
         "zoom_to_selection_area" => Message::CanvasEvent(CanvasEvent::FitSelection),
         "measure_distance" => Message::Tool(ToolMessage::SelectTool(Tool::Measure)),
         "copy" => Message::Edit(EditMsg::Copy),
@@ -381,7 +384,7 @@ mod tests {
     const UNMAPPED_CATALOG_IDS: &[&str] = &[
         "autoplace_fields", "break_wire", "center_on_cursor", "clear_net_highlighting",
         "close_active_document", "copy_attributes_or_add_vertex", "cycle_fast_grid",
-        "cycle_wiring_mode", "drag_keep_connections",
+        "cycle_wiring_mode",
         "edit_footprint_field",
         "edit_library_symbol", "edit_reference_designator",
         "edit_selected_symbol_in_symbol_editor",

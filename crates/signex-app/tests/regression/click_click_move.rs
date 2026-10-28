@@ -133,6 +133,7 @@ fn move_picked_selects_only_the_object_under_the_cursor_and_disarms() {
     let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
         dx: 2.54,
         dy: 0.0,
+        connections: Default::default(),
     }));
     assert!(
         (wire_start(&app, &path, a).x - 12.54).abs() < 1e-6,

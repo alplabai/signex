@@ -16,6 +16,7 @@ mod layout_drag;
 mod measure_tool;
 mod move_pick;
 mod sheet_tool;
+mod status_activity;
 mod sync_sheet_pins;
 #[cfg(test)]
 mod tests;
@@ -137,7 +138,11 @@ impl Signex {
             CanvasEvent::Clicked { world_x, world_y } => {
                 return self.handle_canvas_clicked(world_x, world_y);
             }
-            CanvasEvent::MoveSelected { dx, dy } => {
+            CanvasEvent::MoveSelected {
+                dx,
+                dy,
+                connections,
+            } => {
                 // Snap so the PRIMARY selected item's connection point (its
                 // stored `position`) lands on a grid dot after the move, not
                 // just the drag delta. Snapping only the delta preserves an
@@ -172,7 +177,7 @@ impl Signex {
                             items: self.interaction_state.active_canvas().selected.clone(),
                             dx,
                             dy,
-                            keep_wires: self.ui_state.move_keeps_wires,
+                            keep_wires: connections.keeps_wires(self.ui_state.move_keeps_wires),
                         },
                         true,
                         true,

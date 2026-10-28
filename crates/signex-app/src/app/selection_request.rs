@@ -30,6 +30,9 @@ pub enum SelectionRequest {
     /// lands on an already-selected item — used for the Active Bar "Drag"
     /// action. Cleared on Escape or after the next click commits.
     ArmDrag,
+    /// `drag_keep_connections` (G): the next object picked is dragged with
+    /// its wires attached, whatever "Keep wires connected when moving" says.
+    DragKeepingConnections,
     /// Cycle the rubber-band selection mode (Inside / Touching). Bound
     /// to Shift+S.
     CycleMode,

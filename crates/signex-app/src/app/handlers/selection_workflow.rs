@@ -225,6 +225,9 @@ impl Signex {
                     }
                 }
             }
+            selection_request::SelectionRequest::DragKeepingConnections => {
+                self.arm_drag_keeping_connections();
+            }
             selection_request::SelectionRequest::CycleMode => return self.cycle_selection_mode(),
             selection_request::SelectionRequest::LassoCommit => {
                 return self.commit_lasso_or_polyline();

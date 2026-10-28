@@ -114,6 +114,11 @@ Pointer gestures such as `DoubleClick` and `Shift+Click` can appear in a
 profile for reference, but the current editor only supports editing keyboard
 sequences.
 
+Two canvas modifiers are hard-wired rather than profile bindings: `Ctrl+Click`
+toggles an item in the selection, and `Alt` held through a drag flips
+"Keep wires connected when moving" for that drag only (#1266). The status bar
+names the behaviour while the drag is live.
+
 ## Shortcut Labels
 
 Visible shortcut labels should query the active keymap instead of hardcoding
