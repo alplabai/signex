@@ -632,6 +632,7 @@ impl LibraryAdapter for DatabaseAdapter {
     fn insert_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
         crate::validate_row_for_write(&row)?;
         self.row_schema.check(&self.client, &self.url("/version"))?;
+        self.check_pn_free_for_insert(&row)?;
         // The DB backend has no commit log — surface the audit message at
         // the `tracing` layer so it shows up in operator logs even before
         // the planned `audit_log` table lands.
@@ -681,6 +682,7 @@ impl LibraryAdapter for DatabaseAdapter {
     ) -> Result<Option<u64>, LibraryError> {
         crate::validate_row_for_write(&row)?;
         self.row_schema.check(&self.client, &self.url("/version"))?;
+        self.check_pn_free_for_update(table, &row)?;
         tracing::info!(
             target: "signex_library::database",
             library_id = %self.manifest.library.library_id,
@@ -868,6 +870,8 @@ fn synthesize_legacy_manifest(snx: SnxlibManifest) -> Manifest {
         tables: Vec::new(),
     }
 }
+
+mod pn_unique;
 
 #[cfg(test)]
 mod tests;
