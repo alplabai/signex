@@ -7,6 +7,7 @@
 
 mod batch;
 mod designator_in;
+mod drawings;
 mod edits;
 mod font_family;
 pub(crate) mod pin_changes;
@@ -16,6 +17,8 @@ mod structure;
 
 #[cfg(test)]
 mod designator_in_tests;
+#[cfg(test)]
+mod drawings_tests;
 #[cfg(test)]
 mod font_family_tests;
 #[cfg(test)]

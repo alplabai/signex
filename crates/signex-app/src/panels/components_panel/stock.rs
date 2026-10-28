@@ -76,8 +76,8 @@ pub fn stock_library_path() -> Option<PathBuf> {
 }
 
 /// What the off-thread stock prepare hands back: the resolved path and the
-/// prepared read-only mount, or `None` when the library is missing or
-/// unreadable (already warned).
+/// outcome of preparing it as a read-only mount, or `None` when no stock
+/// library was found (already warned).
 pub type StockMount = Option<(PathBuf, crate::library::mount::PreparedMountCell)>;
 
 /// Resolve and prepare the stock library off the UI thread: both the
@@ -91,21 +91,14 @@ pub async fn prepare_stock_off_thread() -> StockMount {
             );
             return None;
         };
-        match crate::library::mount::prepare_read_only_mount(&path) {
-            Ok(prepared) => Some((
-                path,
-                crate::library::mount::PreparedMountCell::new(Ok(prepared)),
-            )),
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %path.display(),
-                    error = %e,
-                    "stock library mount failed; Stock section left empty"
-                );
-                None
-            }
-        }
+        // A failure travels too: the path is recorded either way, so the
+        // recovery flows stay blocked against a stock library that is there
+        // but broken.
+        let prepared = crate::library::mount::prepare_read_only_mount(&path);
+        Some((
+            path,
+            crate::library::mount::PreparedMountCell::new(prepared),
+        ))
     })
     .await
     .unwrap_or(None)
@@ -127,8 +120,18 @@ pub fn finish_mount(
     mount: StockMount,
 ) -> Option<uuid::Uuid> {
     let (path, cell) = mount?;
-    let Ok(prepared) = cell.take()? else {
-        return None;
+    library_state.stock_library_root = Some(path.clone());
+    let prepared = match cell.take()? {
+        Ok(prepared) => prepared,
+        Err(e) => {
+            tracing::warn!(
+                target: "signex::library",
+                path = %path.display(),
+                error = %e,
+                "stock library mount failed; Stock section left empty"
+            );
+            return None;
+        }
     };
     let id = prepared.entry.library_id;
     let newly = library_state.library_at(&path).is_none();
@@ -248,7 +251,15 @@ mod tests {
         assert!(finish_mount(&mut lib, None).is_none());
         let tmp = tempfile::tempdir().unwrap();
         let gone = tmp.path().join("gone/Stock.snxlib");
-        assert!(crate::library::mount::prepare_read_only_mount(&gone).is_err());
+        let mut failed = Some((
+            gone.clone(),
+            crate::library::mount::PreparedMountCell::new(
+                crate::library::mount::prepare_read_only_mount(&gone),
+            ),
+        ));
+        assert!(finish_mount(&mut lib, failed.take()).is_none());
+        // A failed mount still records the root so recovery stays blocked.
+        assert_eq!(lib.stock_library_root, Some(gone));
         assert!(lib.stock_library.is_none());
         assert!(lib.open_libraries.is_empty());
     }

@@ -282,6 +282,14 @@ pub(in crate::format) struct SheetExtras {
     /// so are gone after the next save.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(in crate::format) note_font_families: BTreeMap<String, String>,
+    /// Drawing placements by drawing uuid; only `"above"` is written, because
+    /// no entry means behind. Kept beside the drawings, not in them: a build
+    /// that predates the field drops unknown keys nested in the typed
+    /// `drawings` array on re-save but keeps unknown keys of this table.
+    /// Entries for drawings that no longer exist are ignored on load and so
+    /// are gone after the next save.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(in crate::format) drawing_placements: BTreeMap<String, String>,
     /// Frame settings (`[extras.sheet.frame]`); omitted at the default so a
     /// sheet that never changed them re-saves byte-identical.
     #[serde(default, skip_serializing_if = "FrameExtras::is_default")]
@@ -305,6 +313,7 @@ impl SheetExtras {
             && self.net_colors.is_empty()
             && self.font_family.is_none()
             && self.note_font_families.is_empty()
+            && self.drawing_placements.is_empty()
             && self.frame.is_default()
             && self.unknown.is_empty()
     }
@@ -346,6 +355,13 @@ impl SheetExtras {
                 .text_notes
                 .iter()
                 .filter_map(|note| Some((note.uuid.to_string(), note.font_family.clone()?)))
+                .collect(),
+            drawing_placements: s
+                .drawing_placements
+                .iter()
+                .filter(|(_, placement)| **placement == crate::schematic::DrawingPlacement::Above)
+                .filter(|(id, _)| s.drawings.iter().any(|d| d.uuid() == **id))
+                .map(|(id, _)| (id.to_string(), "above".to_string()))
                 .collect(),
             frame: FrameExtras {
                 settings: s.frame,
@@ -525,6 +541,23 @@ impl SheetExtras {
                     crate::theme::Color::parse_hex(hex)?,
                 ))
             })
+            .collect()
+    }
+}
+
+impl SheetExtras {
+    /// The placements of drawings that exist and sit above the circuit. A key
+    /// that is not a uuid, a value other than `"above"` and an entry for a
+    /// missing drawing are dropped: each means "behind".
+    pub(in crate::format) fn parsed_drawing_placements(
+        &self,
+    ) -> BTreeMap<Uuid, crate::schematic::DrawingPlacement> {
+        self.drawing_placements
+            .iter()
+            .filter(|(_, value)| value.as_str() == "above")
+            .filter_map(|(id, _)| Uuid::parse_str(id).ok())
+            .filter(|id| self.drawings.iter().any(|d| d.uuid() == *id))
+            .map(|id| (id, crate::schematic::DrawingPlacement::Above))
             .collect()
     }
 }

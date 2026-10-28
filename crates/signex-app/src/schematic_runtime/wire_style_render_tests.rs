@@ -82,28 +82,40 @@ fn scene_cache_rebuilds_on_class_style_or_designator_change() {
     renamed.insert(uuid::Uuid::new_v4(), "R7".to_string());
 
     let mut cache = ContentSceneCache::default();
-    let mut request = |styles: &WireClassStyles, designators: &HashMap<uuid::Uuid, String>| {
-        cache.scene_for(
-            &sheet,
-            &transform,
-            &colors,
-            bounds,
-            None,
-            SceneOverrides {
-                wire_styling: Some(WireStyling {
-                    color_overrides: &no_colors,
-                    class_styles: styles,
-                }),
-                designators: Some(designators),
-                special_strings: None,
-            },
-        );
-        cache.builds()
-    };
-    assert_eq!(request(&thin, &no_designators), 1);
-    assert_eq!(request(&thin, &no_designators), 1, "same request is reused");
-    assert_eq!(request(&thick, &no_designators), 2, "class style changed");
-    assert_eq!(request(&thick, &renamed), 3, "designators changed");
+    let mut request =
+        |styles: &WireClassStyles, revision: u64, designators: &HashMap<uuid::Uuid, String>| {
+            cache.scene_for(
+                &sheet,
+                &transform,
+                &colors,
+                bounds,
+                None,
+                SceneOverrides {
+                    wire_styling: Some(WireStyling {
+                        color_overrides: &no_colors,
+                        class_styles: styles,
+                        class_revision: revision,
+                    }),
+                    designators: Some(designators),
+                    special_strings: None,
+                },
+            );
+            cache.builds()
+        };
+    assert_eq!(request(&thin, 1, &no_designators), 1);
+    assert_eq!(
+        request(&thin, 1, &no_designators),
+        1,
+        "same request is reused"
+    );
+    assert_eq!(
+        request(&thick, 2, &no_designators),
+        2,
+        "class style changed"
+    );
+    assert_eq!(request(&thick, 2, &renamed), 3, "designators changed");
+    // The map is not compared per frame: the revision is what says it moved.
+    assert_eq!(request(&thin, 2, &renamed), 3, "same revision is reused");
 }
 
 #[test]
@@ -118,6 +130,7 @@ fn class_line_style_width_and_colour_reach_the_scene() {
         Some(WireStyling {
             color_overrides: &no_overrides,
             class_styles: &classes,
+            class_revision: 0,
         }),
     );
 
@@ -137,6 +150,7 @@ fn dotted_class_draws_dotted() {
         Some(WireStyling {
             color_overrides: &no_overrides,
             class_styles: &classes,
+            class_revision: 0,
         }),
     );
 
@@ -158,6 +172,7 @@ fn per_net_colour_override_wins_over_the_class_colour() {
         Some(WireStyling {
             color_overrides: &overrides,
             class_styles: &classes,
+            class_revision: 0,
         }),
     );
 
@@ -250,6 +265,7 @@ fn a_junction_takes_its_net_class_colour_and_otherwise_the_theme_colour() {
     let styling = |classes| WireStyling {
         color_overrides: &no_overrides,
         class_styles: classes,
+        class_revision: 0,
     };
 
     let coloured = junction_class(Some(red));
@@ -273,6 +289,7 @@ fn a_junction_override_beats_the_class_colour_but_does_not_tint_alone() {
     let with_class = WireStyling {
         color_overrides: &overrides,
         class_styles: &coloured,
+        class_revision: 0,
     };
     assert_eq!(
         junction_draw_color(Some(with_class)),
@@ -284,6 +301,7 @@ fn a_junction_override_beats_the_class_colour_but_does_not_tint_alone() {
     let override_only = WireStyling {
         color_overrides: &overrides,
         class_styles: &no_classes,
+        class_revision: 0,
     };
     assert_eq!(
         junction_draw_color(Some(override_only)),

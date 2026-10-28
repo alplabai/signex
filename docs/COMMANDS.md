@@ -26,6 +26,8 @@ shrink.
 | --- | --- | --- | --- | --- |
 | `autoplace_fields` | Autoplace fields | edit | — | `O` |
 | `break_wire` | Break wire | modify | `E W` | — |
+| `bring_drawings_forward` | Bring drawings forward | edit | — | — |
+| `bring_drawings_to_front` | Bring drawings to front | edit | — | — |
 | `cancel_current_tool` | Cancel current stage / exit placement mode | interactive | `Escape` | `Escape` |
 | `center_on_cursor` | Center on cursor | view | — | `F4` |
 | `center_view_at_cursor` | Center/redraw view around cursor | view | `Home` | — |
@@ -96,6 +98,8 @@ shrink.
 | `select_all` | Select all | select | `Ctrl+A` | `Ctrl+A` |
 | `select_expand_connection` | Select / expand connection | select | — | `Ctrl+4` |
 | `select_node_or_connection_item` | Select node / connection item under cursor | select | — | `Alt+3` |
+| `send_drawings_backward` | Send drawings backward | edit | — | — |
+| `send_drawings_to_back` | Send drawings to back | edit | — | — |
 | `show_all_design_objects` | Show all design objects | view | `Ctrl+PageDown` | — |
 | `show_current_command_hotkeys` | Show graphical editing hotkey list for current command | help | `F1` | — |
 | `show_current_command_shortcuts` | Show valid shortcuts for the current interactive command | help | `Shift+F1` | — |

@@ -128,6 +128,7 @@ impl Signex {
             .selected
             .iter()
             .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet);
+        let drawing_selected = !self.selected_drawing_ids().is_empty();
         let active_submenu = self.interaction_state.context_submenu;
         // Shortcut hints read from the active keymap profile, falling
         // back to the historic Altium defaults when a command is unbound.
@@ -144,6 +145,7 @@ impl Signex {
             tokens,
             has_selection,
             child_sheet_selected,
+            drawing_selected,
             active_submenu,
             &sc,
         );
@@ -188,6 +190,7 @@ pub(super) fn canvas_menu_entries(
     tokens: &ThemeTokens,
     has_selection: bool,
     child_sheet_selected: bool,
+    drawing_selected: bool,
     active_submenu: Option<ContextSubmenu>,
     sc: &CanvasShortcuts,
 ) -> Vec<DropdownEntry<Message>> {
@@ -241,6 +244,15 @@ pub(super) fn canvas_menu_entries(
             ContextSubmenu::Align,
             active_submenu == Some(ContextSubmenu::Align),
         ));
+        if drawing_selected {
+            v.push(submenu_launcher(
+                tokens,
+                None,
+                "Arrange",
+                ContextSubmenu::Arrange,
+                active_submenu == Some(ContextSubmenu::Arrange),
+            ));
+        }
         v.push(dd_disabled(
             Some(ic::icon_dd_unions(tid)),
             "Unions",
