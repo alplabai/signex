@@ -10,6 +10,7 @@ mod case_fold;
 mod child_refs_cache;
 pub(crate) mod dir_case;
 mod interaction;
+mod keymap_recorder;
 pub(crate) mod library_entry;
 mod link_policy;
 pub(crate) mod net_class_picks;
@@ -23,6 +24,7 @@ mod profile_update;
 pub(crate) mod project_case;
 pub(crate) mod project_fs;
 mod reference_policy;
+pub(crate) mod rule_profile_ui;
 pub(crate) mod rules_history;
 pub(crate) mod scope;
 mod sheet_read;
@@ -33,6 +35,7 @@ pub(crate) mod volume_case;
 
 pub use case_fold::CaseFold;
 pub use interaction::InteractionState;
+pub use keymap_recorder::KeymapRecorderState;
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
     PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
@@ -51,59 +54,6 @@ pub struct Signex {
     /// `document_state` so the library dispatcher can mutate it
     /// without colliding with schematic / PCB engine borrows.
     pub library: crate::library::LibraryState,
-}
-
-/// Chord-recorder overlay state for the Preferences ▸ Keyboard
-/// Shortcuts pane. Holds the binding being edited plus the strokes
-/// captured so far. The keyboard subscription feeds raw key events
-/// here (as `PrefMsg::KeymapRecorderKeyPressed`) while this is `Some`,
-/// so recording never triggers a live command.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KeymapRecorderState {
-    pub command: crate::keymap::AppCommandId,
-    pub command_label: String,
-    pub context: crate::keymap::ShortcutContext,
-    pub original_trigger: String,
-    pub strokes: Vec<crate::keymap::KeyStroke>,
-    pub modifiers: crate::keymap::Modifiers,
-    pub recording: bool,
-}
-
-impl KeymapRecorderState {
-    /// Longest chord the recorder will hold before wrapping back to a
-    /// single stroke (Altium-style two/three-key gestures fit inside).
-    pub const MAX_STROKES: usize = 3;
-
-    pub fn new(
-        command: crate::keymap::AppCommandId,
-        command_label: String,
-        context: crate::keymap::ShortcutContext,
-        trigger: String,
-    ) -> Self {
-        // Seed the capture buffer with the binding's current key
-        // sequence so the user sees what they are replacing. Pointer
-        // gestures aren't keyboard-recordable, so they start empty.
-        let strokes = crate::keymap::ShortcutTrigger::parse(&trigger)
-            .ok()
-            .and_then(|trigger| match trigger {
-                crate::keymap::ShortcutTrigger::KeySequence(strokes) => Some(strokes),
-                crate::keymap::ShortcutTrigger::PointerGesture(_) => None,
-            })
-            .unwrap_or_default();
-        Self {
-            command,
-            command_label,
-            context,
-            original_trigger: trigger,
-            strokes,
-            modifiers: crate::keymap::Modifiers::default(),
-            recording: true,
-        }
-    }
-
-    pub fn trigger_text(&self) -> String {
-        crate::keymap::ShortcutTrigger::KeySequence(self.strokes.clone()).display_text()
-    }
 }
 
 /// Role of a non-main window opened by Signex. Phase 2 adds detached

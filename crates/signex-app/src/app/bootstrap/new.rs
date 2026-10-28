@@ -45,6 +45,7 @@ impl Signex {
         });
         // The old prefs.json rules become the user's default profile; here,
         // not in `new`, so a test app never writes a profile library.
+        app.ui_state.machine_rules_loading = crate::rule_profiles::profiles_dir().is_some();
         let profile_migration = Self::migrate_default_profile_task();
         let controls_probe = Self::detect_window_controls_task();
         (
@@ -141,7 +142,7 @@ impl Signex {
         let autosave_enabled = crate::fonts::read_autosave_enabled_pref_from(prefs);
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
-        let erc_severity_boot = crate::fonts::read_erc_severity_overrides_from(prefs);
+        let default_rule_profile = crate::fonts::read_default_rule_profile_pref_from(prefs);
         let grid_size_mm = crate::fonts::read_grid_size_mm_pref_from(prefs)
             .unwrap_or(crate::canvas::grid::GRID_SIZES_MM[1]);
         let standard_lib_dir = helpers::find_standard_symbols_dir();
@@ -337,9 +338,16 @@ impl Signex {
                 erc_run_rule_set: None,
                 pending_profile_update: None,
                 erc_running: false,
-                erc_severity_override: erc_severity_boot.clone(),
-                preferences_draft_erc_severity: erc_severity_boot.clone(),
-                preferences_seed_erc_severity: erc_severity_boot,
+                // The machine's rules live in the `User Default` profile; the
+                // boot task loads them (`ErcMsg::UserDefaultLoaded`).
+                erc_severity_override: std::collections::HashMap::new(),
+                profile_manager: Default::default(),
+                default_rule_profile,
+                machine_rules_loading: false,
+                machine_rules_problem: None,
+                machine_rules_locked: None,
+                save_profile_dialog: None,
+                profile_writes: Default::default(),
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,
                 annotate_dialog_open: false,
@@ -359,7 +367,7 @@ impl Signex {
                 parameter_manager_open: false,
                 reorder_picker: None,
                 move_pick: None,
-                pin_matrix_overrides: crate::fonts::read_pin_matrix_overrides_from(prefs),
+                pin_matrix_overrides: std::collections::HashMap::new(),
                 annotate_locked: std::collections::HashSet::new(),
                 annotate_preview: Default::default(),
                 reprefix_generation: 0,
