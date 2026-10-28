@@ -97,8 +97,8 @@ impl Signex {
         } {
             let open = open_sheets_snapshot(&self.document_state);
             let assembly = assemble_navigator(&open, request);
-            // The follow-up it would start is the next loop turn.
-            drop(self.handle_navigator_assembled(generation, Ok(Box::new(assembly))));
+            // A stale answer wants a follow-up: that is the next loop turn.
+            self.apply_navigator_assembly(generation, Ok(Box::new(assembly)));
         }
     }
 
@@ -119,6 +119,20 @@ impl Signex {
         generation: u64,
         assembly: Result<Box<NavigatorAssembly>, String>,
     ) -> Task<Message> {
+        if self.apply_navigator_assembly(generation, assembly) {
+            self.start_navigator_assembly().unwrap_or_else(Task::none)
+        } else {
+            Task::none()
+        }
+    }
+
+    /// Apply an assembly result. True when it was stale and the latest
+    /// wanted assembly should start.
+    fn apply_navigator_assembly(
+        &mut self,
+        generation: u64,
+        assembly: Result<Box<NavigatorAssembly>, String>,
+    ) -> bool {
         let fingerprint = assembly.as_ref().ok().map(|a| a.fingerprint.clone());
         let current = self.document_state.navigator_job.finish(
             generation,
@@ -127,13 +141,13 @@ impl Signex {
         );
         let assembly = match assembly {
             Ok(assembly) if current => *assembly,
-            Ok(_) => return self.start_navigator_assembly().unwrap_or_else(Task::none),
+            Ok(_) => return true,
             Err(reason) => {
                 crate::diagnostics::log_warning(format!(
                     "Navigator: the sheet hierarchy could not be built ({reason});\
                      it keeps its previous state"
                 ));
-                return Task::none();
+                return false;
             }
         };
         // Said once per rebuild, not per refresh: the reason a sheet that
@@ -160,7 +174,7 @@ impl Signex {
         navigator.fingerprint = assembly.fingerprint;
         // The canvas designators are a function of the hierarchy's placements.
         self.refresh_canvas_designators();
-        Task::none()
+        false
     }
 
     /// The project the Navigator describes, as `(root sheet, declared pages,
@@ -359,7 +373,7 @@ mod tests {
         assert!(app.start_navigator_assembly().is_none(), "one at a time");
 
         let next = app.handle_navigator_assembled(stale, Ok(assembly(&stale_fp)));
-        drop(next);
+        assert_eq!(next.units(), 1, "the stale answer starts the latest");
         assert!(
             app.document_state.panel_ctx.navigator.hierarchy.is_none(),
             "the stale answer must not land"
