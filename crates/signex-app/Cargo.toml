@@ -21,6 +21,9 @@ signex-renderer = { workspace = true }
 signex-gfx = { workspace = true }
 iced = { workspace = true }
 iced_aw = { workspace = true }
+# Runs the "unfocus" widget operation when a confirm dialog locks a window;
+# tests also drive an `iced::Task` to completion with it (dock_layout_persist).
+iced_runtime = "0.14"
 num-traits = "0.2"
 unicode-normalization = "0.1"
 serde = { workspace = true }
@@ -96,9 +99,6 @@ signex-library = { workspace = true, features = ["test-identity"] }
 git2 = { workspace = true }
 # Names `url::Url` in a fake `DistributorAdapter` (pricing refresh tests).
 url = "2"
-# Drives an `iced::Task` to completion without the iced runtime, so a
-# regression test can observe what a `Task` really does (dock_layout_persist).
-iced_runtime = "0.14"
 # A headless renderer for laying a widget tree out in a unit test, so text
 # is measured with real fonts (`layout_probe`, #623). Already in the lock
 # file through `iced`'s default `tiny-skia` feature.

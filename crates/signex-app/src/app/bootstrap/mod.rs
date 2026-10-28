@@ -25,6 +25,7 @@ fn bundled_window_icon() -> Option<iced::window::Icon> {
 mod boot_tests;
 mod new;
 mod subscription;
+mod window_subscriptions;
 
 impl Signex {
     pub(super) const CONTEXT_MENU_WIDTH: f32 = 248.0;

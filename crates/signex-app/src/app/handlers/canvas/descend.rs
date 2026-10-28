@@ -18,7 +18,6 @@ impl Signex {
         };
         if !path.exists() {
             // No silent no-op: offer to create the file (#1275).
-            let _ = path;
             self.open_create_child_sheet_dialog(sheet_symbol, true);
             return;
         }

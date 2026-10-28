@@ -401,18 +401,24 @@ impl Signex {
                 overlays.push(self.view_tab_drag_ghost(&tab.title));
             }
         }
-        // A confirm dialog in its own window locks this one: the topmost
-        // layer eats the pointer and a click raises that dialog.
-        if self.locking_confirm_window().is_some() {
-            overlays.push(Self::locked_window_layer());
-        }
-        if !overlays.is_empty() {
+        // A confirm dialog in its own window locks this one: a layer above
+        // the content eats the pointer and a click raises that dialog. It
+        // sits BELOW the in-window overlays, so a dialog that opens here
+        // meanwhile (quit confirm, error notice) can still be answered.
+        let lock = self
+            .locking_confirm_window()
+            .is_some()
+            .then(|| self.locked_window_layer());
+        if !overlays.is_empty() || lock.is_some() {
             let mut stack = iced::widget::Stack::new().push(main);
             // Resize edges sit above the content but below functional
             // overlays (Active Bar, menus, modals) so the 6 px border
             // strip doesn't eat clicks on those.
             if has_resize_edges {
                 stack = stack.push(Self::resize_edges_overlay());
+            }
+            if let Some(lock) = lock {
+                stack = stack.push(lock);
             }
             for overlay in overlays {
                 stack = stack.push(overlay);
@@ -430,14 +436,20 @@ impl Signex {
 
     /// Full-window layer that takes every pointer event while a detached
     /// confirm dialog locks the window; pressing it raises that dialog.
-    fn locked_window_layer<'a>() -> Element<'a, Message> {
+    fn locked_window_layer(&self) -> Element<'_, Message> {
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let hint = iced::widget::container(
+            iced::widget::text("A dialog is open: click to show it, Esc to cancel")
+                .size(12)
+                .color(crate::styles::ti(tokens.text_secondary)),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x(Length::Fill)
+        .center_y(Length::Fill);
         iced::widget::opaque(
-            iced::widget::mouse_area(
-                iced::widget::Space::new()
-                    .width(Length::Fill)
-                    .height(Length::Fill),
-            )
-            .on_press(Message::Window(WindowMsg::LockedWindowClicked)),
+            iced::widget::mouse_area(hint)
+                .on_press(Message::Window(WindowMsg::LockedWindowClicked)),
         )
     }
 

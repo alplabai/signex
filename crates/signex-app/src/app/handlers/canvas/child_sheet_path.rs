@@ -4,6 +4,9 @@
 
 use std::path::{Component, Path, PathBuf};
 
+use crate::app::state::CaseFold;
+use crate::app::state::scope::path_key_with;
+
 /// Extension every sheet file keeps.
 const SHEET_EXTENSION: &str = "snxsch";
 
@@ -34,6 +37,7 @@ pub(crate) fn resolve_new_sheet_path(
     parent_dir: &Path,
     project_dir: &Path,
     text: &str,
+    fold: CaseFold,
 ) -> Result<PathBuf, String> {
     let text = text.trim();
     if text.is_empty() {
@@ -53,10 +57,32 @@ pub(crate) fn resolve_new_sheet_path(
         parent_dir.join(typed)
     };
     let resolved = fold_dots(&joined);
-    if !resolved.starts_with(fold_dots(project_dir)) {
+    if !is_inside(&resolved, project_dir, fold) {
         return Err("The sheet must be inside the project folder".to_owned());
     }
     Ok(resolved)
+}
+
+/// Whether `path` is `dir` or below it, compared under the project's case
+/// rules (so a pick that differs only in case still counts as inside).
+fn is_inside(path: &Path, dir: &Path, fold: CaseFold) -> bool {
+    let key = path_key_with(&fold_dots(path), fold);
+    let dir_key = path_key_with(&fold_dots(dir), fold);
+    let dir_key = dir_key.trim_end_matches('/');
+    key == dir_key || key.starts_with(&format!("{dir_key}/"))
+}
+
+/// Whether writing `path` would land outside `project_dir` through a symlink:
+/// the nearest ancestor of `path` that exists, with links resolved, must stay
+/// inside the project folder with links resolved. Reads the disk.
+pub(crate) fn escapes_through_symlink(project_dir: &Path, path: &Path) -> bool {
+    let Ok(root) = project_dir.canonicalize() else {
+        return false;
+    };
+    let nearest = path.ancestors().find(|a| a.exists());
+    nearest
+        .and_then(|a| a.canonicalize().ok())
+        .is_some_and(|real| !real.starts_with(&root))
 }
 
 /// `to` as a reference from the folder `from_dir`, with `/` separators:
@@ -86,15 +112,30 @@ mod tests {
 
     #[test]
     fn a_plain_name_lands_beside_the_parent() {
-        let got = resolve_new_sheet_path(&p("/proj/top"), &p("/proj"), "sheet1.snxsch");
+        let got = resolve_new_sheet_path(
+            &p("/proj/top"),
+            &p("/proj"),
+            "sheet1.snxsch",
+            CaseFold::PRESERVE,
+        );
         assert_eq!(got, Ok(p("/proj/top/sheet1.snxsch")));
     }
 
     #[test]
     fn a_sub_folder_path_is_allowed_inside_the_project() {
-        let got = resolve_new_sheet_path(&p("/proj"), &p("/proj"), "power/regulator.snxsch");
+        let got = resolve_new_sheet_path(
+            &p("/proj"),
+            &p("/proj"),
+            "power/regulator.snxsch",
+            CaseFold::PRESERVE,
+        );
         assert_eq!(got, Ok(p("/proj/power/regulator.snxsch")));
-        let up = resolve_new_sheet_path(&p("/proj/top"), &p("/proj"), "../shared/x.snxsch");
+        let up = resolve_new_sheet_path(
+            &p("/proj/top"),
+            &p("/proj"),
+            "../shared/x.snxsch",
+            CaseFold::PRESERVE,
+        );
         assert_eq!(up, Ok(p("/proj/shared/x.snxsch")));
     }
 
@@ -105,21 +146,56 @@ mod tests {
             "/elsewhere/x.snxsch",
             "../../../etc/x.snxsch",
         ] {
-            let got = resolve_new_sheet_path(&p("/proj/top"), &p("/proj"), text);
+            let got =
+                resolve_new_sheet_path(&p("/proj/top"), &p("/proj"), text, CaseFold::PRESERVE);
             assert!(got.is_err(), "{text}: {got:?}");
         }
         // A sibling folder that only shares a prefix is outside too.
-        let got = resolve_new_sheet_path(&p("/proj"), &p("/proj"), "../proj2/x.snxsch");
+        let got = resolve_new_sheet_path(
+            &p("/proj"),
+            &p("/proj"),
+            "../proj2/x.snxsch",
+            CaseFold::PRESERVE,
+        );
         assert!(got.is_err(), "{got:?}");
     }
 
     #[test]
     fn the_name_must_be_a_snxsch() {
         for text in ["", "  ", "x", "x.txt", ".snxsch", "dir/"] {
-            let got = resolve_new_sheet_path(&p("/proj"), &p("/proj"), text);
+            let got = resolve_new_sheet_path(&p("/proj"), &p("/proj"), text, CaseFold::PRESERVE);
             assert!(got.is_err(), "{text:?}: {got:?}");
         }
-        assert!(resolve_new_sheet_path(&p("/proj"), &p("/proj"), "X.SNXSCH").is_ok());
+        assert!(
+            resolve_new_sheet_path(&p("/proj"), &p("/proj"), "X.SNXSCH", CaseFold::PRESERVE)
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn a_pick_that_differs_only_in_case_is_inside_under_a_folding_project() {
+        let text = "/PROJ/Top/x.snxsch";
+        assert!(resolve_new_sheet_path(&p("/proj"), &p("/proj"), text, CaseFold::FOLD).is_ok());
+        assert!(
+            resolve_new_sheet_path(&p("/proj"), &p("/proj"), text, CaseFold::PRESERVE).is_err()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlinked_sub_folder_that_leaves_the_project_is_caught() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let project = dir.path().join("proj");
+        let outside = dir.path().join("outside");
+        std::fs::create_dir_all(&project).expect("project");
+        std::fs::create_dir_all(&outside).expect("outside");
+        std::os::unix::fs::symlink(&outside, project.join("link")).expect("symlink");
+        let through = project.join("link").join("new").join("x.snxsch");
+        assert!(escapes_through_symlink(&project, &through));
+        assert!(!escapes_through_symlink(
+            &project,
+            &project.join("fresh").join("x.snxsch")
+        ));
     }
 
     #[test]

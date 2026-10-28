@@ -7,7 +7,7 @@ use crate::app::Message;
 use crate::app::state::{ModalId, Signex, WindowKind};
 
 /// Dialogs whose window follows their open state, whatever code flips it.
-const FOLLOWED: [ModalId; 11] = [
+const FOLLOWED: [ModalId; 10] = [
     ModalId::FindReplace,
     ModalId::RenameDialog,
     ModalId::RemoveDialog,
@@ -17,7 +17,6 @@ const FOLLOWED: [ModalId; 11] = [
     ModalId::About,
     ModalId::KeyboardShortcuts,
     ModalId::PassiveCalculator,
-    ModalId::FirstRunTour,
     ModalId::CreateChildSheet,
 ];
 
@@ -29,6 +28,13 @@ const LOCKING: [ModalId; 4] = [
     ModalId::AnnotateResetConfirm,
     ModalId::CreateChildSheet,
 ];
+
+/// Take keyboard focus away from whatever text input holds it, in every window.
+fn unfocus_text_inputs() -> Task<Message> {
+    iced_runtime::task::effect(iced_runtime::Action::widget(
+        iced::advanced::widget::operation::focusable::unfocus::<()>(),
+    ))
+}
 
 impl Signex {
     /// Whether a followed dialog's state says it is open; `None` for a
@@ -77,6 +83,13 @@ impl Signex {
                 (true, true) | (false, false) => {}
             }
         }
+        // A text field that had keyboard focus keeps taking typing under the
+        // lock, so release it once when a confirm dialog locks the windows.
+        let locked = self.locking_confirm_window().is_some();
+        if locked && !self.ui_state.lock_unfocused {
+            tasks.push(unfocus_text_inputs());
+        }
+        self.ui_state.lock_unfocused = locked;
         (!tasks.is_empty()).then(|| Task::batch(tasks))
     }
 
@@ -277,7 +290,6 @@ mod tests {
                 ModalId::FindReplace,
                 "Targets: labels, notes, designators, values",
             ),
-            (ModalId::FirstRunTour, "F1 for keyboard shortcuts"),
         ];
         for (modal, probe) in probes {
             let (mut app, main) = test_app();
@@ -391,5 +403,65 @@ mod tests {
         // A task, not Task::none(): it asks the OS to focus the dialog.
         let task = app.update(Message::Window(WindowMsg::LockedWindowClicked));
         assert!(task.units() > 0, "no gain_focus task");
+    }
+
+    #[test]
+    fn a_quit_confirm_stays_answerable_while_a_detached_confirm_is_open() {
+        let (mut app, main) = test_app();
+        open(&mut app, ModalId::RenameDialog);
+        let _ = app.sync_detached_modals();
+        assert!(app.locking_confirm_window().is_some());
+        app.document_state.dirty_paths.insert("/p/a.snxsch".into());
+        let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
+        assert!(
+            app.ui_state.app_quit_confirm.is_some(),
+            "the quit confirm opened"
+        );
+        // It paints in the main window (above the lock layer)...
+        assert!(
+            main_texts(&app, main)
+                .iter()
+                .any(|t| t.text.starts_with("Exit Signex")),
+            "the quit confirm is hidden under the lock"
+        );
+        // ...and Esc, which the lock lets through, cancels it.
+        let _ = app.update(Message::Input(InputMsg::EscapePressed {
+            window: Some(main),
+        }));
+        assert!(app.ui_state.app_quit_confirm.is_none());
+    }
+
+    #[test]
+    fn closing_enable_version_control_while_git_runs_keeps_the_dialog() {
+        let (mut app, _main) = test_app();
+        open(&mut app, ModalId::EnableVersionControl);
+        app.ui_state
+            .enable_version_control
+            .as_mut()
+            .expect("open")
+            .working = true;
+        let _ = app.sync_detached_modals();
+        let id = window_of(&app, ModalId::EnableVersionControl).expect("window");
+        let _ = app.update(Message::Window(WindowMsg::WindowCloseRequested(id)));
+        assert!(
+            app.ui_state.enable_version_control.is_some(),
+            "state is not dropped"
+        );
+        assert!(
+            window_of(&app, ModalId::EnableVersionControl).is_some(),
+            "window stays"
+        );
+    }
+
+    #[test]
+    fn the_lock_asks_the_runtime_to_release_text_focus_once() {
+        let (mut app, _main) = test_app();
+        open(&mut app, ModalId::RenameDialog);
+        assert!(!app.ui_state.lock_unfocused);
+        let first = app.sync_detached_modals().expect("tasks");
+        assert!(app.ui_state.lock_unfocused);
+        assert!(first.units() >= 2, "window open + unfocus");
+        let second = app.sync_detached_modals();
+        assert!(second.is_none(), "not repeated while the lock holds");
     }
 }

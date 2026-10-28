@@ -33,14 +33,18 @@ impl Signex {
         match signex_engine::child_sheet_from_corners(anchor, corner, &stem) {
             Some(child_sheet) => {
                 let symbol = child_sheet.uuid;
-                self.apply_engine_command(
+                let placed = self.apply_engine_command(
                     signex_engine::Command::PlaceChildSheet { child_sheet },
                     false,
                     true,
                 );
-                // Ask where the new sheet's file goes (Later keeps the symbol
-                // alone).
-                self.open_create_child_sheet_dialog(symbol, false);
+                if placed {
+                    // Ask where the new sheet's file goes (Later keeps the
+                    // symbol alone); the tool stays armed for the next one.
+                    self.open_create_child_sheet_dialog(symbol, false);
+                } else {
+                    crate::diagnostics::log_warning("Sheet not placed: the edit was refused");
+                }
             }
             None => crate::diagnostics::log_warning(format!(
                 "Sheet not placed: each edge must be at least {} mm",

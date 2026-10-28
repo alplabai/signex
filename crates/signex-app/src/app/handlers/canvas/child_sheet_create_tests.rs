@@ -403,3 +403,80 @@ fn a_case_variant_of_a_listed_sheet_is_not_listed_twice() {
     );
     assert_eq!(project.data.sheets.len(), 1);
 }
+
+#[test]
+fn a_project_being_renamed_refuses_inline_in_the_dialog_not_in_a_notice() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _top, id) = parent_with_symbol(dir.path());
+    let project = app.document_state.projects[0].id;
+    app.document_state.project_folder_renames.insert(project);
+    dialog_with(&mut app, id, "kid.snxsch");
+    assert!(app.plan_child_sheet_from_dialog().is_none());
+    let c = confirm(&app);
+    assert!(
+        c.error.as_deref().is_some_and(|e| e.contains("renamed")),
+        "{c:?}"
+    );
+    assert!(
+        app.document_state.error_notice.is_none(),
+        "no notice over the dialog"
+    );
+}
+
+#[test]
+fn open_it_on_a_file_another_symbol_uses_keeps_the_dialog_and_registers_nothing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, id) = parent_with_symbol(dir.path());
+    // A second symbol already points at taken.snxsch.
+    let mut other = signex_engine::child_sheet_from_corners(
+        Point::new(200.0, 50.0),
+        Point::new(230.0, 80.0),
+        "taken",
+    )
+    .expect("big enough");
+    other.filename = "taken.snxsch".into();
+    app.document_state
+        .engines
+        .get_mut(&top)
+        .expect("engine")
+        .execute(signex_engine::Command::PlaceChildSheet { child_sheet: other })
+        .expect("placed");
+    std::fs::write(dir.path().join("taken.snxsch"), "x").expect("existing file");
+    dialog_with(&mut app, id, "taken.snxsch");
+    assert!(app.plan_child_sheet_from_dialog().is_none());
+    assert!(confirm(&app).exists);
+    let listed_before = app.document_state.projects[0].data.sheets.len();
+    let _ = app.handle_create_child_sheet_open_existing();
+    let c = confirm(&app);
+    assert!(
+        c.error
+            .as_deref()
+            .is_some_and(|e| e.contains("already points")),
+        "{c:?}"
+    );
+    assert_eq!(
+        app.document_state.projects[0].data.sheets.len(),
+        listed_before
+    );
+    assert_eq!(
+        file_field(&app, &top),
+        "sheet1.snxsch",
+        "the field is unchanged"
+    );
+}
+
+#[test]
+fn the_place_tool_stays_armed_after_the_dialog_and_later() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _top, _id) = parent_with_symbol(dir.path());
+    app.interaction_state.current_tool = crate::app::Tool::Sheet;
+    app.place_sheet_click(10.0, 10.0);
+    app.place_sheet_click(40.0, 40.0);
+    assert!(app.ui_state.create_child_sheet_confirm.is_some());
+    let _ = app.handle_create_child_sheet_answered(false);
+    assert!(
+        app.ui_state.create_child_sheet_confirm.is_none(),
+        "Later is immediate"
+    );
+    assert_eq!(app.interaction_state.current_tool, crate::app::Tool::Sheet);
+}

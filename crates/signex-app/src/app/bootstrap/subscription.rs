@@ -3,6 +3,7 @@
 
 use super::super::*;
 
+use super::window_subscriptions;
 use crate::app::view::overlay_id::OverlayId;
 use iced::Subscription;
 
@@ -763,20 +764,9 @@ impl Signex {
         )
         .map(Message::Autosave);
 
-        // Which window has focus: the system menu bar acts on it.
-        let window_focus = iced::event::listen_with(|event, _status, window| match event {
-            iced::Event::Window(iced::window::Event::Focused) => {
-                Some(Message::Window(WindowMsg::WindowFocused(window)))
-            }
-            iced::Event::Window(iced::window::Event::Unfocused) => {
-                Some(Message::Window(WindowMsg::WindowUnfocused(window)))
-            }
-            _ => None,
-        });
-
         Subscription::batch([
-            window_focus,
-            native_menu_activations(),
+            window_subscriptions::window_focus(),
+            window_subscriptions::native_menu_activations(),
             kbd,
             mouse_sub,
             window_close,
@@ -788,22 +778,6 @@ impl Signex {
             autosave_tick,
         ])
     }
-}
-
-/// Row activations of the macOS system menu bar; empty elsewhere.
-#[cfg(target_os = "macos")]
-fn native_menu_activations() -> Subscription<Message> {
-    use iced::futures::StreamExt;
-    fn stream() -> impl iced::futures::Stream<Item = Message> {
-        crate::menu_bar::native::activations()
-            .map(|id| Message::Window(WindowMsg::NativeMenuItemActivated(id)))
-    }
-    Subscription::run(stream)
-}
-
-#[cfg(not(target_os = "macos"))]
-fn native_menu_activations() -> Subscription<Message> {
-    Subscription::none()
 }
 
 #[cfg(test)]

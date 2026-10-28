@@ -297,7 +297,6 @@ impl Signex {
         &mut self,
         modal: super::super::super::state::ModalId,
     ) -> Task<Message> {
-        use super::super::super::state::ModalId;
         // Don't open a second window for the same modal — treat detach
         // on an already-detached modal as a no-op.
         if self.ui_state.windows.values().any(
@@ -306,28 +305,7 @@ impl Signex {
             return Task::none();
         }
 
-        let size = match modal {
-            ModalId::AnnotateDialog => iced::Size::new(1100.0, 760.0),
-            ModalId::ErcDialog => iced::Size::new(1000.0, 600.0),
-            ModalId::AnnotateResetConfirm => iced::Size::new(420.0, 180.0),
-            ModalId::MoveSelection => iced::Size::new(420.0, 240.0),
-            ModalId::NetColorPalette => iced::Size::new(520.0, 480.0),
-            ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
-            ModalId::Preferences => iced::Size::new(900.0, 620.0),
-            ModalId::FindReplace => iced::Size::new(420.0, 180.0),
-            ModalId::RenameDialog => iced::Size::new(420.0, 200.0),
-            ModalId::RemoveDialog => iced::Size::new(560.0, 260.0),
-            ModalId::PrintPreview => iced::Size::new(1100.0, 780.0),
-            ModalId::BomPreview => iced::Size::new(1180.0, 760.0),
-            ModalId::EnableVersionControl => iced::Size::new(560.0, 480.0),
-            ModalId::GridProperties => iced::Size::new(480.0, 280.0),
-            ModalId::SelectionFilterCustom => iced::Size::new(440.0, 380.0),
-            ModalId::About => iced::Size::new(380.0, 260.0),
-            ModalId::KeyboardShortcuts => iced::Size::new(520.0, 600.0),
-            ModalId::PassiveCalculator => iced::Size::new(640.0, 520.0),
-            ModalId::FirstRunTour => iced::Size::new(360.0, 170.0),
-            ModalId::CreateChildSheet => iced::Size::new(560.0, 260.0),
-        };
+        let size = modal_size(modal);
 
         let (id, open_task) = iced::window::open(detached_modal_settings(size));
         // Stash the mapping right away — view(id) for the new window
@@ -436,6 +414,33 @@ fn move_offset(field: &str, text: &str) -> Option<f64> {
         FieldNumber::Number(v) => Some(v),
         FieldNumber::NotANumber => Some(0.0),
         FieldNumber::Refused => None,
+    }
+}
+
+/// The initial window size of `modal`: its in-window dimensions, so the user
+/// sees continuity.
+pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
+    match modal {
+        ModalId::AnnotateDialog => iced::Size::new(1100.0, 760.0),
+        ModalId::ErcDialog => iced::Size::new(1000.0, 600.0),
+        ModalId::AnnotateResetConfirm => iced::Size::new(420.0, 180.0),
+        ModalId::MoveSelection => iced::Size::new(420.0, 240.0),
+        ModalId::NetColorPalette => iced::Size::new(520.0, 480.0),
+        ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
+        ModalId::Preferences => iced::Size::new(900.0, 620.0),
+        ModalId::FindReplace => iced::Size::new(420.0, 180.0),
+        ModalId::RenameDialog => iced::Size::new(420.0, 200.0),
+        ModalId::RemoveDialog => iced::Size::new(560.0, 260.0),
+        ModalId::PrintPreview => iced::Size::new(1100.0, 780.0),
+        ModalId::BomPreview => iced::Size::new(1180.0, 760.0),
+        ModalId::EnableVersionControl => iced::Size::new(560.0, 480.0),
+        ModalId::GridProperties => iced::Size::new(480.0, 280.0),
+        ModalId::SelectionFilterCustom => iced::Size::new(440.0, 380.0),
+        ModalId::About => iced::Size::new(380.0, 260.0),
+        ModalId::KeyboardShortcuts => iced::Size::new(520.0, 600.0),
+        ModalId::PassiveCalculator => iced::Size::new(640.0, 520.0),
+        ModalId::FirstRunTour => iced::Size::new(360.0, 170.0),
+        ModalId::CreateChildSheet => iced::Size::new(560.0, 260.0),
     }
 }
 

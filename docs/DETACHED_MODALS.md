@@ -21,10 +21,14 @@ backstop; Esc typed in the window resolves through the Esc ladder.
 
 **Followed dialogs.** For Find / Replace, Rename, Remove, Enable Version
 Control, Grid Properties, Custom Selection Filter, About, Keyboard Shortcuts,
-the Passive Calculator, the first-run tour and Create Sheet, `sync_detached_modals`
+the Passive Calculator and Create Sheet, `sync_detached_modals`
 (`app/handlers/detached_modals.rs`) runs after every `update` and opens or
 closes the window to match the dialog's open state. Whatever code flips the
 flag (a menu row, F1, Esc, a handler) needs no wiring.
+
+The first-run tour stays in the main window on purpose: it opens on the very
+first update, when a new window can land behind the main window on Windows, and
+it is a corner card, not a dialog.
 
 F1 toggles the shortcuts sheet from the main window and from the sheet's own
 window.
@@ -40,10 +44,14 @@ Confirm and warning dialogs lock the main window; tool windows do not.
   `locking_confirm_window` names a locking dialog that has its own window.
 - **While a detached confirm is open:** the main window and undocked tabs take
   no key (`route_key`; Esc still resolves, so the lock can be dismissed), a
-  layer over the window eats the pointer, and clicking it raises the dialog
-  (`WindowMsg::LockedWindowClicked`). A text field that already has keyboard
-  focus in the main window can still receive typing; the layer cannot unfocus
-  it.
+  layer over the content eats the pointer and shows "A dialog is open: click to
+  show it, Esc to cancel", and clicking it raises the dialog
+  (`WindowMsg::LockedWindowClicked`). The layer sits BELOW the in-window
+  overlays, so a dialog that opens meanwhile (quit confirm, an error notice) is
+  still painted above it and can be answered. Where the window system ignores a
+  request to focus a window (some Wayland compositors), Esc and the dialog's own
+  window still work. A text input that had focus is released when the lock
+  starts (`operation::focusable::unfocus`, once per lock).
 - **Tool windows** (Find / Replace, Grid Properties, Custom Selection Filter,
   Enable Version Control, About, Shortcuts, Calculator, tour, ERC, Preferences,
   Annotate, Print Preview, BOM, ...) leave the main window fully usable.

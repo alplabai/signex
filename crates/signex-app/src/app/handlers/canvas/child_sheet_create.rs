@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use super::super::super::*;
 use super::super::dock::project_navigation::add_io;
-use super::child_sheet_path::{reference_from, resolve_new_sheet_path};
+use super::child_sheet_path::{escapes_through_symlink, reference_from, resolve_new_sheet_path};
 use crate::app::contracts::CreateChildSheetConfirmState;
 use crate::app::state::ProjectId;
 use add_io::ChildSheetWriteError;
@@ -188,7 +188,8 @@ impl Signex {
     }
 
     /// "Open it": the typed path already exists; link the symbol to it and
-    /// open it, writing nothing.
+    /// open it, writing nothing. If the symbol cannot be linked (another
+    /// symbol already uses that file) the dialog stays open with the reason.
     pub(crate) fn handle_create_child_sheet_open_existing(&mut self) -> Task<Message> {
         let Some(confirm) = self.ui_state.create_child_sheet_confirm.clone() else {
             return Task::none();
@@ -196,18 +197,15 @@ impl Signex {
         let Ok(path) = self.resolve_dialog_path(&confirm) else {
             return Task::none();
         };
-        self.ui_state.create_child_sheet_confirm = None;
         let project_id = self
             .document_state
             .document_project(&confirm.parent)
             .map(|p| p.id);
-        self.finish_child_sheet(
-            project_id,
-            &confirm.parent,
-            confirm.symbol,
-            path,
-            Err(ChildSheetWriteError::AlreadyExists),
-        )
+        match self.link_and_open_child_sheet(project_id, &confirm.parent, confirm.symbol, path) {
+            Ok(()) => self.ui_state.create_child_sheet_confirm = None,
+            Err(why) => self.set_dialog_error(why, true),
+        }
+        Task::none()
     }
 
     fn resolve_dialog_path(
@@ -218,7 +216,18 @@ impl Signex {
             .parent
             .parent()
             .unwrap_or_else(|| std::path::Path::new(""));
-        resolve_new_sheet_path(parent_dir, &confirm.project_dir, &confirm.path_text)
+        let fold = crate::app::state::project_case::fold_of(
+            self.document_state.document_project(&confirm.parent),
+        );
+        let path =
+            resolve_new_sheet_path(parent_dir, &confirm.project_dir, &confirm.path_text, fold)?;
+        if escapes_through_symlink(&confirm.project_dir, &path) {
+            return Err(
+                "The sheet must be inside the project folder (a linked folder leaves it)"
+                    .to_owned(),
+            );
+        }
+        Ok(path)
     }
 
     /// Create: validate what was typed and decide what to write. `None` keeps
@@ -240,11 +249,8 @@ impl Signex {
             );
             return None;
         }
-        if self.refuse_with_notice_while_project_moves(
-            &path,
-            "create",
-            crate::app::state::ErrorNotice::create,
-        ) {
+        if let Err(why) = self.refuse_while_project_moves(&path, "create") {
+            self.set_dialog_error(why.to_string(), false);
             return None;
         }
         let symbol = self
@@ -303,7 +309,7 @@ impl Signex {
         self.finish_child_sheet(project_id, parent, symbol, path, result)
     }
 
-    /// Log the outcome, register the file, point the symbol at it and open it.
+    /// Log the outcome, then link the symbol, register the file and open it.
     fn finish_child_sheet(
         &mut self,
         project_id: Option<ProjectId>,
@@ -326,10 +332,26 @@ impl Signex {
                 return Task::none();
             }
         }
+        if let Err(why) = self.link_and_open_child_sheet(project_id, parent, symbol, path) {
+            self.refuse_child_sheet(why);
+        }
+        Task::none()
+    }
+
+    /// Point the symbol at `path` FIRST (the engine may refuse), then list the
+    /// file in the project and open it. On refusal nothing is registered or
+    /// opened and the engine's reason is returned.
+    fn link_and_open_child_sheet(
+        &mut self,
+        project_id: Option<ProjectId>,
+        parent: &std::path::Path,
+        symbol: Uuid,
+        path: std::path::PathBuf,
+    ) -> Result<(), String> {
+        self.point_symbol_at_file(parent, symbol, &path)?;
         if let Some(id) = project_id {
             self.register_child_sheet_in_project(id, &path);
         }
-        self.point_symbol_at_file(parent, symbol, &path);
         let filename = self
             .document_state
             .engines
@@ -340,20 +362,21 @@ impl Signex {
             Some(filename) => self.open_existing_child_sheet(parent, symbol, &filename, path),
             None => self.open_sheet_with_placement(path, None),
         }
-        Task::none()
+        Ok(())
     }
 
     /// Set the symbol's File field to `path`, relative to the parent sheet:
     /// one undoable step on the parent's document (focused first, as edits go
-    /// through the active tab).
+    /// through the active tab). `Err` is the engine's refusal, or why the
+    /// parent could not be edited.
     fn point_symbol_at_file(
         &mut self,
         parent: &std::path::Path,
         symbol: Uuid,
         path: &std::path::Path,
-    ) {
+    ) -> Result<(), String> {
         let Some(dir) = parent.parent() else {
-            return;
+            return Ok(());
         };
         let reference = reference_from(dir, path);
         let current = self
@@ -363,21 +386,20 @@ impl Signex {
             .and_then(|e| e.document().child_sheets.iter().find(|c| c.uuid == symbol))
             .map(|c| c.filename.clone());
         let Some(current) = current else {
-            return;
+            return Err("The sheet symbol is no longer there".to_owned());
         };
         if current == reference {
-            return;
+            return Ok(());
         }
         if self.active_tab_path().as_deref() != Some(parent)
             && !self.open_or_focus_sheet_path(parent.to_path_buf())
         {
-            crate::diagnostics::log_warning(format!(
+            return Err(format!(
                 "The sheet's File field was not updated: {} could not be focused",
                 parent.display()
             ));
-            return;
         }
-        self.apply_engine_command(
+        let (_, refused) = self.apply_engine_command_reporting(
             signex_engine::Command::ModifyChildSheet {
                 sheet_id: symbol,
                 name: None,
@@ -386,6 +408,7 @@ impl Signex {
             false,
             true,
         );
+        refused.map_or(Ok(()), Err)
     }
 
     /// Open `path`, the child of `symbol` of `parent`: through the symbol when

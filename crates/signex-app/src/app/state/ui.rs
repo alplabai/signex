@@ -156,6 +156,9 @@ pub struct UiState {
     /// The main window has opened (`MainWindowOpened`): dialogs may open
     /// their own windows from here on.
     pub main_window_opened: bool,
+    /// Text inputs were unfocused for the confirm dialog that now locks the
+    /// main window (once per lock).
+    pub lock_unfocused: bool,
     /// Logical size of the monitor holding the main window, when known.
     pub main_window_monitor_size: Option<iced::Size>,
     /// Opt-in autosave of recovery copies (#104). Off by default.
