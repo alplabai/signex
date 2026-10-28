@@ -720,6 +720,7 @@ mod tests {
             path: PathBuf::from("snx-1383-tree/p.snxprj"),
             data: ProjectData {
                 name: "p".to_string(),
+                description: None,
                 dir: "snx-1383-tree".to_string(),
                 schematic_root: Some("a.snxsch".to_string()),
                 pcb_file: None,
