@@ -55,6 +55,14 @@ fn lib_symbol(pins: Vec<LibPin>) -> LibSymbol {
 /// Symbol U1 at (10, 10) of `pins`, with a wire ending at world (12.54, 10),
 /// i.e. on a pin at local x = 2.54.
 fn engine(pins: Vec<LibPin>, body_style: BodyStyle) -> (Engine, Uuid) {
+    let (sheet, uuid) = sheet(pins, body_style);
+    (Engine::new(sheet).unwrap(), uuid)
+}
+
+fn sheet(
+    pins: Vec<LibPin>,
+    body_style: BodyStyle,
+) -> (signex_types::schematic::SchematicSheet, Uuid) {
     let mut sheet = test_sheet();
     sheet.lib_symbols.insert(ID.into(), lib_symbol(pins));
     let uuid = Uuid::new_v4();
@@ -71,7 +79,7 @@ fn engine(pins: Vec<LibPin>, body_style: BodyStyle) -> (Engine, Uuid) {
         end: Point::new(20.0, 10.0),
         ..Default::default()
     });
-    (Engine::new(sheet).unwrap(), uuid)
+    (sheet, uuid)
 }
 
 fn body_of(engine: &Engine) -> BodyStyle {
@@ -193,4 +201,20 @@ fn replacing_a_lib_symbol_that_loses_an_unwired_alternate_keeps_the_stored_body(
     // The choice is not dropped; the symbol draws as Normal until the library
     // gains an alternate again.
     assert_eq!(body_of(&e), BodyStyle::Alternate);
+}
+
+/// A `body_style` value this build cannot read is kept on the symbol until
+/// the user picks a body; picking the body already shown counts.
+#[test]
+fn picking_normal_clears_a_kept_unreadable_value() {
+    let (mut doc, id) = sheet(vec![lib_pin(0, "1", 2.54)], BodyStyle::Normal);
+    // Same shape a load of `body_style = 3` leaves behind.
+    doc.symbols[0].unknown =
+        serde_json::from_value(serde_json::json!({ "body_style": 3 })).unwrap();
+    let mut e = Engine::new(doc).unwrap();
+    assert!(e.document().symbols[0].unknown.contains_key("body_style"));
+    assert!(switch(&mut e, id, BodyStyle::Normal).unwrap());
+    assert!(!e.document().symbols[0].unknown.contains_key("body_style"));
+    e.undo().unwrap();
+    assert!(e.document().symbols[0].unknown.contains_key("body_style"));
 }

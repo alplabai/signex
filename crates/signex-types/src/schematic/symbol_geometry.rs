@@ -7,7 +7,7 @@
 
 use super::{
     Aabb, FillType, Graphic, HAlign, LibPin, LibSymbol, PIN_LENGTH_MM, Point, SCHEMATIC_TEXT_MM,
-    Symbol, SymbolTransform, VAlign, circumcircle, readable_text_style, shown_on,
+    Symbol, SymbolTransform, VAlign, circumcircle, item_shown, readable_text_style,
 };
 use std::f64::consts::{FRAC_PI_2, TAU};
 
@@ -57,9 +57,11 @@ pub enum SymbolPrimitive {
 
 /// Library pins that belong to `sym`'s unit and body style.
 pub fn instance_pins<'a>(lib: &'a LibSymbol, sym: &'a Symbol) -> impl Iterator<Item = &'a LibPin> {
+    // The body is per instance, not per pin: resolve it once.
+    let body = lib.effective_body(sym.unit, sym.body_style);
     lib.pins
         .iter()
-        .filter(move |lp| shown_on(lib, lp.unit, lp.body_style, sym))
+        .filter(move |lp| item_shown(lp.unit, lp.body_style, sym.unit, body))
 }
 
 /// Unit direction of a pin in library space (Y-up), from its rotation.
@@ -80,8 +82,9 @@ pub fn pin_direction(rotation_deg: f64) -> (f64, f64) {
 pub fn lower_symbol(lib: &LibSymbol, sym: &Symbol) -> Vec<SymbolPrimitive> {
     let t = SymbolTransform::from_symbol(sym);
     let mut out = Vec::with_capacity(lib.graphics.len() + lib.pins.len());
+    let body = lib.effective_body(sym.unit, sym.body_style);
     for lg in &lib.graphics {
-        if shown_on(lib, lg.unit, lg.body_style, sym) {
+        if item_shown(lg.unit, lg.body_style, sym.unit, body) {
             lower_graphic(&lg.graphic, &t, &mut out);
         }
     }

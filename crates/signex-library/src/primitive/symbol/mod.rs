@@ -790,6 +790,18 @@ impl SymbolFile {
             // before `part_count` existed, defaulting to 1) keep all
             // their units instead of collapsing to one.
             let pin_max = pins.iter().map(|p| p.part_number).max().unwrap_or(1).max(1);
+            // Same handling as a pin's `body_style` cell: a tag that names no
+            // body would load as an item nothing shows or selects.
+            if let Some(bad) = sw
+                .graphics
+                .iter()
+                .find(|g| !matches!(g.body_style, BODY_COMMON | BODY_NORMAL | BODY_ALTERNATE))
+            {
+                return Err(SymbolFileError::InvalidNumericCell {
+                    column: "graphic body_style",
+                    value: bad.body_style.to_string(),
+                });
+            }
             let graphics = sw
                 .graphics
                 .into_iter()
@@ -852,6 +864,8 @@ impl SymbolFile {
             .iter()
             .flat_map(|s| &s.graphics)
             .any(|g| matches!(g.kind, SymbolGraphicKind::Polygon { .. }));
+        // Body 0 alone counts too: a v3 token is the cheap conservative gate,
+        // and an older build would drop the tag on its next save.
         let has_body_styles = self.symbols.iter().any(|s| {
             s.pins.iter().any(|p| p.body_style != BODY_NORMAL)
                 || s.graphics.iter().any(|g| g.body_style != BODY_NORMAL)

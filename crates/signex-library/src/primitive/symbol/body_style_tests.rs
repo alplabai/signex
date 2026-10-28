@@ -1,6 +1,6 @@
 //! De Morgan body style on `.snxsym` items (#1233): `0` common, `1` normal
 //! (default), `2` alternate. A file with no off-normal item keeps its exact
-//! legacy bytes; one with any is written as v2 with an appended TSV column.
+//! legacy bytes; one with any is written as v3 with an appended TSV column.
 
 use super::serde_tsv::*;
 use super::*;
@@ -53,7 +53,7 @@ fn body_styles_zero_one_and_two_round_trip_on_pins_and_graphics() {
 }
 
 #[test]
-fn a_file_with_an_off_normal_item_is_v2_and_appends_the_column() {
+fn a_file_with_an_off_normal_item_is_v3_and_appends_the_column() {
     let text = file(vec![pin("1", 2)], vec![]).to_toml_string().unwrap();
     assert!(text.contains("snxsym/v3"), "{text}");
     assert!(
@@ -140,4 +140,26 @@ fn to_lib_symbol_carries_the_body_instead_of_hard_coding_one() {
         vec![0, 2]
     );
     assert!(lib.has_alternate_body(0));
+}
+
+#[test]
+fn an_out_of_range_graphic_body_style_is_refused_like_a_pin_one() {
+    let text = file(vec![pin("1", 1)], vec![graphic(2)])
+        .to_toml_string()
+        .unwrap();
+    assert!(text.contains("body_style = 2"), "{text}");
+    for bad in ["3", "255"] {
+        let bad_text = text.replace("body_style = 2", &format!("body_style = {bad}"));
+        let err = SymbolFile::from_toml_str(&bad_text).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                SymbolFileError::InvalidNumericCell {
+                    column: "graphic body_style",
+                    ..
+                }
+            ),
+            "{bad}: {err:?}"
+        );
+    }
 }

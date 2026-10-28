@@ -25,8 +25,16 @@ nothing, so every file that never uses the feature is byte-identical. The key
 counts toward the extras table's `is_default`, otherwise an alternate-only
 symbol would be elided. A value other than 1 or 2 loads as Normal and logs a
 warning, and the raw value is kept and written back unchanged until the user
-picks a body for that symbol. No format-token bump: an older build keeps the key as an unknown
-extras key, but shows both bodies' pins.
+picks a body for that symbol. So does a value that is not an integer (`-1`,
+`"2"`); the sheet still opens.
+
+There is no `.snxsch` format-token bump, so a build that predates body styles
+opens such a sheet without any warning. It keeps the key as an unknown extras
+key and draws the normal body, but its netlist and ERC filter by unit only, so
+they also count the alternate pins. A sheet that embeds a De Morgan symbol
+therefore gets a wrong netlist and ERC there. Gating it would mean writing a
+newer minor token, and this build reads that token as its own current one, so
+every file would have to move with it; that was not done.
 
 ## `.snxsym`
 
@@ -34,7 +42,8 @@ extras key, but shows both bodies' pins.
 Graphics are TOML and skip the key when it is `1`. Pins are a TSV block with a
 fixed header, so the column is appended (`body_style`, 21 columns) only when a
 pin is off the normal body. The reader accepts both layouts; a missing column
-means body 1. A file holding any pin or graphic off the normal body (0 or 2) is written as
+means body 1. A pin or graphic `body_style` other than 0, 1 or 2 is refused on load. A file
+holding any pin or graphic off the normal body (0 or 2) is written as
 `snxsym/v3`. Builds that predate this accept only v1 and v2, so they refuse a
 v3 file with `UnsupportedFormat`. Reusing v2 would not do that: those builds
 accept v2, ignore the unknown graphic key, hard-code body 1 and drop every tag
@@ -46,4 +55,4 @@ everything else, with their exact legacy bytes. This build reads v1, v2 and v3.
 `Command::SetSymbolBodyStyle` refuses with
 `EngineError::SymbolBodyPinsConnected` when a connected pin would be lost,
 moved or land on a new connection. It shares its comparison
-(`exec/connected_pins.rs`) with `ReplaceLibSymbol`. Unconnected pins may move.
+(`exec/pin_changes.rs`) with `ReplaceLibSymbol` and the library switch. Unconnected pins may move.

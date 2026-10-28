@@ -57,10 +57,10 @@ pub(super) fn instance_pin_changes(
         if !has_connection(doc, gate, &at) {
             continue;
         }
+        // Both lists are what this instance shows, so which unit a pin is
+        // tagged with does not matter: a relabel at the same tip is the same pin.
         let kept = new_pins.iter().any(|np| {
-            np.unit == lp.unit
-                && pin_key(np) == pin_key(lp)
-                && pt_key(&xform.apply(np.pin.position)) == pt_key(&at)
+            pin_key(np) == pin_key(lp) && pt_key(&xform.apply(np.pin.position)) == pt_key(&at)
         });
         if !kept {
             changes.lost.push(pin_key(lp).to_string());

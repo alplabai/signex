@@ -86,3 +86,19 @@ fn json_round_trips_the_alternate() {
     let symbol: Symbol = serde_json::from_str(&json).unwrap();
     assert_eq!(symbol.body_style, BodyStyle::Alternate);
 }
+
+#[test]
+fn a_non_integer_or_negative_body_style_keeps_the_sheet_loadable() {
+    for bad in ["-1", "\"2\"", "2.5", "true"] {
+        let text = write(&sheet(BodyStyle::Alternate))
+            .replace("body_style = 2", &format!("body_style = {bad}"));
+        let back = read(&text);
+        assert_eq!(back.symbols[0].body_style, BodyStyle::Normal, "{bad}");
+        let again = write(&back);
+        assert_eq!(again.matches("body_style").count(), 1, "{bad}:\n{again}");
+        assert!(
+            again.contains(&format!("body_style = {bad}")),
+            "{bad}:\n{again}"
+        );
+    }
+}
