@@ -78,14 +78,19 @@ fn build(name: &str, symbol_ref: Option<(Uuid, Uuid)>) -> Fixture {
 }
 
 fn build_with(name: &str, symbol_ref: Option<(Uuid, Uuid)>, symbol: Symbol) -> Fixture {
-    build_with_class(name, symbol_ref, symbol, "IC")
+    build_with_class(name, symbol_ref, symbol, "IC", ParamMap::new())
 }
 
 /// A library whose single row has component class `class` and a `D?` symbol.
 pub(crate) fn fixture_of_class(class: &str) -> Fixture {
+    fixture_with_parameters(class, ParamMap::new())
+}
+
+/// [`fixture_of_class`] with `parameters` on the row (e.g. a prefix override).
+pub(crate) fn fixture_with_parameters(class: &str, parameters: ParamMap) -> Fixture {
     let mut symbol = two_unit_symbol();
     symbol.designator = "D?".into();
-    build_with_class("lib", None, symbol, class)
+    build_with_class("lib", None, symbol, class, parameters)
 }
 
 fn build_with_class(
@@ -93,13 +98,28 @@ fn build_with_class(
     symbol_ref: Option<(Uuid, Uuid)>,
     symbol: Symbol,
     class: &str,
+    parameters: ParamMap,
 ) -> Fixture {
-    build_in_mode(name, symbol_ref, symbol, class, WorkflowMode::Personal)
+    build_in_mode(
+        name,
+        symbol_ref,
+        symbol,
+        class,
+        parameters,
+        WorkflowMode::Personal,
+    )
 }
 
 /// A library named `name` whose manifest runs the Team workflow.
 pub(crate) fn team_fixture(name: &str) -> Fixture {
-    build_in_mode(name, None, two_unit_symbol(), "IC", WorkflowMode::Team)
+    build_in_mode(
+        name,
+        None,
+        two_unit_symbol(),
+        "IC",
+        ParamMap::new(),
+        WorkflowMode::Team,
+    )
 }
 
 fn build_in_mode(
@@ -107,6 +127,7 @@ fn build_in_mode(
     symbol_ref: Option<(Uuid, Uuid)>,
     symbol: Symbol,
     class: &str,
+    parameters: ParamMap,
     mode: WorkflowMode,
 ) -> Fixture {
     signex_library::git_identity::test_identity::install();
@@ -171,7 +192,7 @@ fn build_in_mode(
         primary_mpn: ManufacturerPart::draft("Acme", "TWO-1"),
         alternates: Vec::new(),
         supply: Vec::new(),
-        parameters: ParamMap::new(),
+        parameters,
         plm: PlmReserved::default(),
         version: "1.2.3".into(),
         released: false,

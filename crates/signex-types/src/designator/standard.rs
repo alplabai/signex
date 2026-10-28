@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::prefix::placement_prefix;
+use super::prefix::{normalize_prefix_override, placement_prefix};
 
 /// A reference-designation standard a project can follow.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -82,20 +82,52 @@ pub fn class_prefix(standard: DesignatorStandard, class_key: &str) -> Option<&'s
     })
 }
 
+/// Letters an earlier table issued for a class and the current one no longer
+/// does (the corrections of #1428). A part placed under one of them was issued
+/// by the system, so it still counts as issued; a table change adds the
+/// letters it retires here in the same PR.
+fn retired_class_letters(class_key: &str) -> &'static [&'static str] {
+    match class_key {
+        "inductor" => &["R"],
+        "transistor_bjt" | "transistor_mosfet" | "transistor_jfet" => &["K"],
+        "opamp" | "comparator" => &["K"],
+        "regulator_linear" => &["T"],
+        "regulator_switching" => &["N"],
+        "antenna" => &["W"],
+        "display" => &["H"],
+        _ => &[],
+    }
+}
+
+/// Could a table, current or retired, have issued `letters` for this class?
+pub fn class_letters_ever_issued(class_key: &str, letters: &str) -> bool {
+    DesignatorStandard::ALL
+        .iter()
+        .any(|&standard| class_prefix(standard, class_key) == Some(letters))
+        || retired_class_letters(class_key).contains(&letters)
+}
+
 /// The reference prefix a freshly placed part gets.
 ///
 /// A symbol designator starting with `#` (power ports, flags, virtual parts)
 /// always wins: those are net anchors, not designated components, under every
-/// standard. Otherwise the project's standard decides by class; with no
-/// standard, or a class it does not cover, the symbol's own designator letters
-/// apply (the legacy behaviour).
+/// standard and over every row override. Otherwise, in order: the library
+/// row's `row_override` (ignored when [`normalize_prefix_override`] refuses
+/// it), the project standard's table entry for the class, and finally the
+/// symbol's own designator letters (the legacy behaviour). An edit of a
+/// placed reference beats all of these; that is the caller's rule, since it
+/// is not an input here.
 pub fn resolve_prefix(
     standard: Option<DesignatorStandard>,
     class_key: Option<&str>,
+    row_override: Option<&str>,
     symbol_designator: &str,
 ) -> String {
     if symbol_designator.trim().starts_with('#') {
         return placement_prefix(symbol_designator);
+    }
+    if let Some(prefix) = row_override.and_then(|raw| normalize_prefix_override(raw).ok()) {
+        return prefix;
     }
     standard
         .zip(class_key)
@@ -106,6 +138,30 @@ pub fn resolve_prefix(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retired_letters_still_count_as_issued() {
+        for (class, letters) in [
+            ("inductor", "R"),
+            ("transistor_bjt", "K"),
+            ("transistor_mosfet", "K"),
+            ("transistor_jfet", "K"),
+            ("opamp", "K"),
+            ("comparator", "K"),
+            ("regulator_linear", "T"),
+            ("regulator_switching", "N"),
+            ("antenna", "W"),
+            ("display", "H"),
+        ] {
+            assert!(
+                class_letters_ever_issued(class, letters),
+                "{class} {letters}"
+            );
+        }
+        assert!(class_letters_ever_issued("diode", "V"));
+        assert!(!class_letters_ever_issued("diode", "K"));
+        assert!(!class_letters_ever_issued("generic", "R"));
+    }
 
     #[test]
     fn serialized_names_are_pinned() {
@@ -146,7 +202,7 @@ mod tests {
         for designator in ["U?", "#PWR?", "r1", "?", "#?"] {
             for class in [None, Some("diode"), Some("generic")] {
                 assert_eq!(
-                    resolve_prefix(None, class, designator),
+                    resolve_prefix(None, class, None, designator),
                     placement_prefix(designator)
                 );
             }
@@ -157,8 +213,14 @@ mod tests {
     fn power_and_flag_designators_ignore_every_standard_and_class() {
         for standard in DesignatorStandard::ALL {
             for class in [None, Some("diode"), Some("connector"), Some("generic")] {
-                assert_eq!(resolve_prefix(Some(standard), class, "#PWR?"), "#PWR");
-                assert_eq!(resolve_prefix(Some(standard), class, " #FLG?"), "#FLG");
+                assert_eq!(
+                    resolve_prefix(Some(standard), class, Some("Q"), "#PWR?"),
+                    "#PWR"
+                );
+                assert_eq!(
+                    resolve_prefix(Some(standard), class, Some("Q"), " #FLG?"),
+                    "#FLG"
+                );
             }
         }
     }
@@ -166,14 +228,40 @@ mod tests {
     #[test]
     fn a_standard_and_known_class_override_the_symbol_letter() {
         let din = Some(DesignatorStandard::Din40719_2);
-        assert_eq!(resolve_prefix(din, Some("diode"), "D?"), "V");
+        assert_eq!(resolve_prefix(din, Some("diode"), None, "D?"), "V");
     }
 
     #[test]
     fn generic_and_unknown_classes_fall_back_to_the_symbol_designator() {
         let std = Some(DesignatorStandard::Iec81346_2);
-        assert_eq!(resolve_prefix(std, Some("generic"), "x?"), "X");
-        assert_eq!(resolve_prefix(std, Some("zzz"), "Q?"), "Q");
-        assert_eq!(resolve_prefix(std, None, "Q?"), "Q");
+        assert_eq!(resolve_prefix(std, Some("generic"), None, "x?"), "X");
+        assert_eq!(resolve_prefix(std, Some("zzz"), None, "Q?"), "Q");
+        assert_eq!(resolve_prefix(std, None, None, "Q?"), "Q");
+    }
+
+    #[test]
+    fn row_override_beats_the_standard_table() {
+        let din = Some(DesignatorStandard::Din40719_2);
+        assert_eq!(resolve_prefix(din, Some("diode"), Some("zd"), "D?"), "ZD");
+        // Also over the symbol letters when the standard knows nothing.
+        assert_eq!(resolve_prefix(None, None, Some("TP"), "U?"), "TP");
+        assert_eq!(resolve_prefix(din, Some("generic"), Some("X"), "U?"), "X");
+    }
+
+    #[test]
+    fn row_override_never_touches_hash_designators() {
+        let ieee = Some(DesignatorStandard::Ieee315);
+        assert_eq!(resolve_prefix(ieee, None, Some("TP"), "#PWR?"), "#PWR");
+        assert_eq!(resolve_prefix(None, None, Some("TP"), "#FLG?"), "#FLG");
+    }
+
+    #[test]
+    fn invalid_row_override_falls_back_and_is_reported() {
+        let din = Some(DesignatorStandard::Din40719_2);
+        for bad in ["", "R1", "#X", "a b"] {
+            assert_eq!(resolve_prefix(din, Some("diode"), Some(bad), "D?"), "V");
+            // The caller reports the same refusal in the Messages panel.
+            assert!(normalize_prefix_override(bad).is_err(), "{bad:?}");
+        }
     }
 }

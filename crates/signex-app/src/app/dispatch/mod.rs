@@ -176,6 +176,7 @@ impl Signex {
                             ModalId::AnnotateResetConfirm => {
                                 self.ui_state.annotate_reset_confirm = false
                             }
+                            ModalId::ReprefixConfirm => self.ui_state.reprefix_confirm = None,
                             ModalId::ErcDialog => self.ui_state.erc_dialog_open = false,
                             ModalId::Preferences => {
                                 // Backstop for a Preferences window destroyed
