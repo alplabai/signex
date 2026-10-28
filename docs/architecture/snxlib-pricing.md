@@ -40,11 +40,11 @@ breaks = [{ qty = 1, unit_price = 0.1 }, { qty = 100, unit_price = 0.05 }]
 - The sections are written only when a table has cached prices. A library with
   none is byte-identical to one written before this existed, and re-saves
   byte-identical.
-- The format token stays `snxlib/1`. The change is additive and optional; a
-  build that predates it ignores the unknown sub-tables (the TOML layer does
-  not reject unknown keys) and keeps working, at the cost of dropping the cache
-  the next time it saves. Bumping the token would instead make older builds
-  refuse the file, which is the wrong trade for a cache that can be re-fetched.
+- The price cache did not change the format token on its own: it is additive
+  and optional, and a build that predates it ignores the unknown sub-tables
+  (the TOML layer does not reject unknown keys), at the cost of dropping the
+  cache the next time it saves. The token is now `snxlib/2` because of the
+  required component `description` column (#1474), not because of pricing.
 - A record may carry keys this build does not know (from a newer build); a
   save keeps them while the record is unchanged or only partly edited
   (#1435). When the record is fetched again (`fetched_at` changes) the whole
