@@ -1385,6 +1385,7 @@ fn fixture_schematic_with_symbol_and_child_sheet()
             mirror_x: false,
             mirror_y: false,
             unit: 1,
+            body_style: Default::default(),
             is_power: false,
             ref_text: None,
             val_text: None,

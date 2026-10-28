@@ -47,11 +47,12 @@ impl crate::app::Signex {
                 ports: sync.ports.clone(),
             })
             .collect();
-        let outcome = self.apply_engine_commands_checked(commands, true, true);
+        let (outcome, reason) = self.apply_engine_commands_reporting(commands, true, true);
         if outcome == CommandOutcome::Failed {
+            let reason = reason.unwrap_or_else(|| "the engine refused the batch".to_string());
             for sync in &syncs {
                 crate::diagnostics::log_warning(format!(
-                    "Sync Sheet Pins: could not update pins for '{}'; see the error above",
+                    "Sync Sheet Pins: could not update pins for '{}': {reason}",
                     sync.filename
                 ));
             }

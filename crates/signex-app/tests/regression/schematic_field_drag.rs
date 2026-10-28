@@ -27,6 +27,7 @@ fn symbol(uuid: uuid::Uuid, ref_text: TextProp) -> Symbol {
         mirror_x: false,
         mirror_y: false,
         unit: 1,
+        body_style: Default::default(),
         is_power: false,
         ref_text: Some(ref_text),
         val_text: None,

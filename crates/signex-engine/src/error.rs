@@ -14,6 +14,14 @@ pub enum EngineError {
     )]
     LibSymbolPinsConnected { lib_id: String, pins: Vec<String> },
     #[error(
+        "body switch refused for {reference}, connected pins would be lost, moved or land on a connection: {}; remove those wires or no-connects first",
+        pins.join(", ")
+    )]
+    SymbolBodyPinsConnected {
+        reference: String,
+        pins: Vec<String>,
+    },
+    #[error(
         "library symbol update refused, the library symbol no longer has the unit placed as: {}; delete or re-unit those parts first",
         parts.join(", ")
     )]
@@ -51,6 +59,8 @@ pub enum EngineError {
     },
     #[error("an unrecorded edit is only allowed on a freshly loaded sheet with no undo history")]
     UnrecordedEditRefused,
+    #[error("this sheet was written by a newer Signex and is read-only; edit it in that version")]
+    ReadOnly,
 }
 
 fn locked_message(references: &[String], action: &str) -> String {

@@ -163,6 +163,20 @@ impl Signex {
             .map(|&idx| self.plan_reference_rewrites(idx, &state.target_path, new_name))
             .unwrap_or_default();
 
+        // A read-only parent (newer Signex) would refuse the re-point after
+        // the file moved, breaking the hierarchy: refuse the whole rename
+        // while nothing has changed (#1402).
+        if !plan.read_only_parents.is_empty() {
+            let detail = super::sheet_references::read_only_parents_detail(&plan.read_only_parents);
+            crate::diagnostics::log_warning(format!(
+                "Rename of {} refused. {detail}",
+                state.target_path.display()
+            ));
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::rename(detail));
+            self.ui_state.rename_dialog = None;
+            return iced::Task::none();
+        }
+
         // A write still running for this sheet would recreate the old file
         // (or land after the move); let it finish first. Same bounded wait
         // as Save All's `try_save_dirty_path`.

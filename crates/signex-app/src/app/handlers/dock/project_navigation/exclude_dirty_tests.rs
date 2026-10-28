@@ -20,6 +20,7 @@ fn folding_project_with_dirty_lowercase_sheet() -> (Signex, tempfile::TempDir, P
     let dir = tmp.path().to_str().expect("utf8 tempdir").to_string();
     let mut app = app_workspace(&dir, &["X.snxsch"]);
     app.document_state.projects[0].case_fold = CaseFold::from_probe(true);
+    app.document_state.projects[0].case_decided = true;
     let held = tmp.path().join("x.snxsch");
     std::fs::write(&held, ORIGINAL).expect("write sheet");
     let mut engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default())
@@ -133,6 +134,7 @@ fn two_folding_projects_sharing_one_sheet() -> (Signex, tempfile::TempDir, PathB
     app.document_state.projects.push(other);
     for project in &mut app.document_state.projects {
         project.case_fold = CaseFold::from_probe(true);
+        project.case_decided = true;
     }
     let a_sheet = tmp.path().join("Power.snxsch");
     let b_sheet = tmp.path().join("power.snxsch");
@@ -243,6 +245,7 @@ fn save_all_refuses_differing_variants_on_a_folding_project_and_keeps_markers() 
     let dir = tmp.path().to_str().expect("utf8 tempdir").to_string();
     let mut app = app_workspace(&dir, &["Lib.snxsch"]);
     app.document_state.projects[0].case_fold = CaseFold::from_probe(true);
+    app.document_state.projects[0].case_decided = true;
     let (upper, lower) = hold_differing_case_variants(&mut app, tmp.path());
     std::fs::write(&upper, ORIGINAL).unwrap();
 
@@ -254,9 +257,10 @@ fn save_all_refuses_differing_variants_on_a_folding_project_and_keeps_markers() 
     assert!(app.document_state.dirty_paths.contains(&lower));
 }
 
-/// #1077 — a loose document has no probe, so the host default decides.
+/// #1447 — a loose document in a folder no probe answered is treated as one
+/// file, as open and Ctrl+S treat it, on every host.
 #[test]
-fn save_all_uses_the_host_default_for_a_loose_document() {
+fn save_all_treats_an_unprobed_loose_document_as_one_file() {
     let _ = crate::diagnostics::init_logging();
     let tmp = tempfile::tempdir().expect("tempdir");
     let (mut app, _task) = Signex::new();
@@ -264,12 +268,108 @@ fn save_all_uses_the_host_default_for_a_loose_document() {
 
     let result = app.try_save_dirty_path(&upper);
 
+    assert!(result.is_err(), "unknown folds: variants are one file");
+    assert!(app.document_state.dirty_paths.contains(&lower));
+}
+
+/// #1447 — a project whose probe DECIDED case-sensitive keeps the spellings
+/// apart on every host; an assumed fold would refuse them.
+#[test]
+fn a_decided_case_sensitive_project_saves_each_spelling_on_its_own() {
+    let _ = crate::diagnostics::init_logging();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let dir = tmp.path().to_str().expect("utf8 tempdir").to_string();
+    let mut app = app_workspace(&dir, &["Lib.snxsch"]);
+    app.document_state.projects[0].case_fold = CaseFold::from_probe(false);
+    app.document_state.projects[0].case_decided = true;
+    let (upper, lower) = hold_differing_case_variants(&mut app, tmp.path());
+
+    app.try_save_dirty_path(&upper)
+        .expect("first spelling saves");
+    app.try_save_dirty_path(&lower)
+        .expect("second spelling saves");
+
+    assert!(app.document_state.dirty_paths.is_empty());
+}
+
+/// #1447 — in a folder whose case rule is unknown, the Exclude save writes
+/// one spelling and keeps the other. The card names the kept one, the prompt
+/// stays open, and the next Save finishes.
+#[test]
+fn an_exclude_save_in_an_undecided_folder_names_the_kept_spelling() {
+    let _ = crate::diagnostics::init_logging();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let dir = tmp.path().to_str().expect("utf8 tempdir").to_string();
+    let mut app = app_workspace(&dir, &["Lib.snxsch"]);
+    assert!(!app.document_state.projects[0].case_decided);
+    let (upper, lower) = (tmp.path().join("Lib.snxsch"), tmp.path().join("lib.snxsch"));
+    for path in [&upper, &lower] {
+        let mut engine =
+            signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default())
+                .expect("engine");
+        engine.set_path(Some(path.clone()));
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.dirty_paths.insert(path.clone());
+    }
+    app.ui_state.remove_dialog = Some(RemoveDialogState {
+        target_path: upper.clone(),
+        tree_path: vec![0, 0],
+        project_id: Some(app.document_state.projects[0].id),
+        display_name: "Lib.snxsch".to_string(),
+        is_outside_project: false,
+        unsaved_prompt: false,
+    });
+
+    exclude_then(&mut app, ExcludeDirtyChoice::Save);
+
+    let notice = app.document_state.error_notice.take().expect("card");
+    assert!(
+        notice
+            .detail
+            .starts_with("\"Lib.snxsch\" was not excluded: Save each spelling"),
+        "{}",
+        notice.detail
+    );
+    let (_, kept) = notice
+        .detail
+        .split_once("kept unsaved: ")
+        .expect("names it");
+    assert_eq!(
+        kept,
+        lower.display().to_string(),
+        "only lib.snxsch was kept"
+    );
+    assert!(
+        app.ui_state.remove_dialog.is_some(),
+        "the prompt stays open"
+    );
+    let lists_lib = |app: &Signex| {
+        app.document_state.projects[0]
+            .data
+            .sheets
+            .iter()
+            .any(|s| s.filename == "Lib.snxsch")
+    };
+    assert!(lists_lib(&app), "nothing was excluded yet");
+
+    let _ = app.update(Message::Remove(RemoveMsg::ExcludeDirty(
+        ExcludeDirtyChoice::Save,
+    )));
+    assert!(
+        app.ui_state.remove_dialog.is_none(),
+        "the second Save finishes"
+    );
+    assert!(!lists_lib(&app));
+    // The dialog lists files by the project's own rule (host default while
+    // undecided). Where the host folds (Windows) that list holds `lib` too,
+    // so the retry writes it and clears its marker. Where the host keeps case
+    // apart, the retry excludes `Lib` without writing `lib`: its marker and
+    // engine survive, and Quit and Save All still catch it.
     if CaseFold::host_default().fold_case {
-        assert!(result.is_err(), "host folds: variants are one file");
-        assert!(app.document_state.dirty_paths.contains(&lower));
+        assert!(!app.document_state.dirty_paths.contains(&lower));
     } else {
-        assert!(result.is_ok(), "host keeps case: {result:?}");
         assert!(app.document_state.dirty_paths.contains(&lower));
+        assert!(app.document_state.engines.contains_key(&lower));
     }
 }
 
@@ -283,6 +383,7 @@ fn save_all_follows_the_projects_rule_not_the_hosts() {
     let mut app = app_workspace(&dir, &["Lib.snxsch"]);
     let project_folds = !CaseFold::host_default().fold_case;
     app.document_state.projects[0].case_fold = CaseFold::from_probe(project_folds);
+    app.document_state.projects[0].case_decided = true;
     let (upper, lower) = hold_differing_case_variants(&mut app, tmp.path());
 
     let result = app.try_save_dirty_path(&upper);
@@ -308,12 +409,14 @@ fn save_all_uses_the_innermost_projects_rule_for_nested_projects() {
     let dir = tmp.path().to_str().expect("utf8 tempdir").to_string();
     let mut app = app_workspace(&dir, &["Top.snxsch"]);
     app.document_state.projects[0].case_fold = CaseFold::from_probe(false);
+    app.document_state.projects[0].case_decided = true;
     let inner_dir = tmp.path().join("inner");
     std::fs::create_dir(&inner_dir).expect("inner dir");
     let mut inner = app.document_state.projects[0].clone();
     inner.id = app.document_state.mint_project_id();
     inner.path = inner_dir.join("Inner.snxprj");
     inner.case_fold = CaseFold::from_probe(true);
+    inner.case_decided = true;
     app.document_state.projects.push(inner);
     let (upper, lower) = hold_differing_case_variants(&mut app, &inner_dir);
 
@@ -362,9 +465,8 @@ fn save_all_ignores_a_project_with_an_empty_dir() {
 
     let result = app.try_save_dirty_path(&upper);
 
-    assert_eq!(
+    assert!(
         result.is_err(),
-        CaseFold::host_default().fold_case,
-        "a loose file keys by the host default: {result:?}"
+        "an empty-dir project owns nothing; the loose rule folds: {result:?}"
     );
 }
