@@ -237,6 +237,7 @@ fn move_pin_tip_near_wire_end(hotspots: bool) -> (f64, f64) {
     let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
         dx: 12.8,
         dy: 6.4,
+        connections: Default::default(),
     }));
     let moved = &app.document_state.engines[&path].document().symbols[0];
     (moved.position.x, moved.position.y)
