@@ -415,6 +415,7 @@ impl Signex {
                 net_class_picks: std::collections::HashMap::new(),
                 next_project_id: 0,
                 next_undo_group: 0,
+                documents_epoch: 0,
                 next_pcb_revision: 0,
                 pcb_revisions: std::collections::HashMap::new(),
                 undo_groups: std::collections::HashMap::new(),

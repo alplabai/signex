@@ -1,9 +1,7 @@
 -- v0.9-refactor-2 (WS-3 / WS-4) — DBLib row model.
 --
 -- Per `v0.9-refactor-2-plan.md` §2.1, components are now rows inside category
--- tables (Altium DBLib parity). The legacy per-revision schema in
--- `0001_initial.sql` and `004_primitives.sql` (components / revisions /
--- parameters / suppliers) is superseded by a single `component_rows` table
+-- tables (Altium DBLib parity), stored in a single `component_rows` table
 -- whose payload is the JSON-serialised `ComponentRow` struct from
 -- `signex-library`.
 --

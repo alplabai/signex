@@ -31,15 +31,74 @@ pub struct LibraryMeta {
     pub description: Option<String>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+/// Manifest `auth` prefix that names an OS-keychain item instead of a token.
+pub(crate) const KEYCHAIN_SIGIL: &str = "@signex-keychain:";
+
+#[derive(Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LibraryMode {
     #[default]
     LocalGit,
     Database {
         url: String,
+        /// Empty (no auth), a `@signex-keychain:` reference, or a raw
+        /// token. The database adapter cannot resolve keychain
+        /// references yet (#976), so a raw token is the only value that
+        /// works today and is still written back, with a warning, so the
+        /// manifest stays saveable. `Debug` never prints a raw token.
+        #[serde(serialize_with = "serialize_auth_reference")]
         auth: String,
     },
+}
+
+/// Write the `auth` value as is. A raw token is written back because the
+/// keychain alternative does not work yet (#976); refusing would leave a
+/// working manifest unsaveable. Move it to a `@signex-keychain:` reference
+/// once #976 lands.
+fn serialize_auth_reference<S: serde::Serializer>(
+    auth: &str,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    if !auth.is_empty() && !auth.starts_with(KEYCHAIN_SIGIL) {
+        tracing::warn!(
+            "writing a raw auth token into the library manifest; keychain references are not \
+             usable until #976"
+        );
+    }
+    serializer.serialize_str(auth)
+}
+
+/// Replace the userinfo of `scheme://user:pass@host/...` with
+/// `<redacted>`, so a credential embedded in a URL never reaches a log.
+/// A URL without userinfo is returned unchanged.
+fn redact_url_userinfo(url: &str) -> String {
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return url.to_string();
+    };
+    let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    match rest[..authority_end].rfind('@') {
+        Some(at) => format!("{scheme}://<redacted>@{}", &rest[at + 1..]),
+        None => url.to_string(),
+    }
+}
+
+impl std::fmt::Debug for LibraryMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::LocalGit => f.write_str("LocalGit"),
+            Self::Database { url, auth } => {
+                let shown = if auth.is_empty() || auth.starts_with(KEYCHAIN_SIGIL) {
+                    auth.as_str()
+                } else {
+                    "<redacted>"
+                };
+                f.debug_struct("Database")
+                    .field("url", &redact_url_userinfo(url))
+                    .field("auth", &shown)
+                    .finish()
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -287,6 +346,49 @@ auth = "@signex-keychain:alplab-libserver"
             }
             _ => panic!("expected database mode"),
         }
+    }
+
+    #[test]
+    fn raw_auth_token_is_written_back_but_never_printed() {
+        let mode = LibraryMode::Database {
+            url: "https://lib.example/api".into(),
+            auth: "s3cr3t-token".into(),
+        };
+        assert!(!format!("{mode:?}").contains("s3cr3t-token"));
+        assert!(!format!("{mode:#?}").contains("s3cr3t-token"));
+        // Kept saveable until keychain references work (#976).
+        assert!(toml::to_string(&mode).unwrap().contains("s3cr3t-token"));
+        let keychain = LibraryMode::Database {
+            url: "https://lib.example/api".into(),
+            auth: "@signex-keychain:lab".into(),
+        };
+        assert!(
+            toml::to_string(&keychain)
+                .unwrap()
+                .contains("@signex-keychain:lab")
+        );
+    }
+
+    #[test]
+    fn database_url_userinfo_is_redacted_in_debug() {
+        let mode = LibraryMode::Database {
+            url: "https://alice:hunter2@lib.example:8443/api?x=a@b".into(),
+            auth: String::new(),
+        };
+        let shown = format!("{mode:?}");
+        assert!(
+            !shown.contains("alice") && !shown.contains("hunter2"),
+            "{shown}"
+        );
+        assert!(
+            shown.contains("https://<redacted>@lib.example:8443/api?x=a@b"),
+            "{shown}"
+        );
+        let plain = LibraryMode::Database {
+            url: "https://lib.example/api@v1".into(),
+            auth: String::new(),
+        };
+        assert!(format!("{plain:?}").contains("https://lib.example/api@v1"));
     }
 
     #[test]
