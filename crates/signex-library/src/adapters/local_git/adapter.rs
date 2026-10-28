@@ -304,13 +304,17 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn insert_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
+        check_table_name(table)?;
         let table_owned = table.to_string();
         let row_id = row.row_id;
         let lib_row = component_to_library_row(&row)?;
+        let new_row_id = row_id.to_string();
+        let new_pn = row.internal_pn.to_string();
         let fallback = format!("insert row {row_id} into {table_owned}");
         self.save_row_edit(
             table,
             |lf| {
+                check_insert_unique(lf, &new_row_id, &new_pn)?;
                 let entry = lf
                     .tables
                     .entry(table_owned.clone())
@@ -725,8 +729,29 @@ impl LibraryAdapter for LocalGitAdapter {
                 continue;
             }
 
-            entries.push(commit_to_history_entry(&commit));
+            entries.push(HistoryEntry::from_commit(&commit));
         }
         Ok(entries)
     }
+}
+
+/// Refuse a table name that is empty or holds a character a file browser
+/// or the `.snxlib` table header cannot carry; shared by every table
+/// write so a bad name fails the same way everywhere.
+fn check_table_name(name: &str) -> Result<(), LibraryError> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err(LibraryError::Backend("table name cannot be empty".into()));
+    }
+    if trimmed.chars().any(|c| {
+        matches!(
+            c,
+            '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
+        )
+    }) {
+        return Err(LibraryError::Backend(format!(
+            "table name {trimmed:?} contains illegal characters"
+        )));
+    }
+    Ok(())
 }

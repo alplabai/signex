@@ -31,15 +31,57 @@ pub struct LibraryMeta {
     pub description: Option<String>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+/// Manifest `auth` prefix that names an OS-keychain item instead of a token.
+pub(crate) const KEYCHAIN_SIGIL: &str = "@signex-keychain:";
+
+#[derive(Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LibraryMode {
     #[default]
     LocalGit,
     Database {
         url: String,
+        /// Empty (no auth) or a `@signex-keychain:` reference. A raw
+        /// token read from a hand-authored manifest is never written
+        /// back or printed.
+        #[serde(serialize_with = "serialize_auth_reference")]
         auth: String,
     },
+}
+
+/// Refuse to write a raw secret into a `.snxlib`; only an empty value or a
+/// keychain reference is stored.
+fn serialize_auth_reference<S: serde::Serializer>(
+    auth: &str,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    if auth.is_empty() || auth.starts_with(KEYCHAIN_SIGIL) {
+        serializer.serialize_str(auth)
+    } else {
+        Err(serde::ser::Error::custom(format!(
+            "refusing to write a raw auth token into the library manifest; use a \
+             `{KEYCHAIN_SIGIL}<name>` reference"
+        )))
+    }
+}
+
+impl std::fmt::Debug for LibraryMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::LocalGit => f.write_str("LocalGit"),
+            Self::Database { url, auth } => {
+                let shown = if auth.is_empty() || auth.starts_with(KEYCHAIN_SIGIL) {
+                    auth.as_str()
+                } else {
+                    "<redacted>"
+                };
+                f.debug_struct("Database")
+                    .field("url", url)
+                    .field("auth", &shown)
+                    .finish()
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -287,6 +329,26 @@ auth = "@signex-keychain:alplab-libserver"
             }
             _ => panic!("expected database mode"),
         }
+    }
+
+    #[test]
+    fn raw_auth_token_is_never_serialized_or_printed() {
+        let mode = LibraryMode::Database {
+            url: "https://lib.example/api".into(),
+            auth: "s3cr3t-token".into(),
+        };
+        assert!(!format!("{mode:?}").contains("s3cr3t-token"));
+        assert!(!format!("{mode:#?}").contains("s3cr3t-token"));
+        assert!(toml::to_string(&mode).is_err());
+        let keychain = LibraryMode::Database {
+            url: "https://lib.example/api".into(),
+            auth: "@signex-keychain:lab".into(),
+        };
+        assert!(
+            toml::to_string(&keychain)
+                .unwrap()
+                .contains("@signex-keychain:lab")
+        );
     }
 
     #[test]

@@ -275,35 +275,28 @@ fn stale_lock(git_dir: &Path) -> Option<std::path::PathBuf> {
         .find(|path| path.extension().is_some_and(|e| e == "lock") && is_stale(path))
 }
 
-/// Project a `git2::Commit` onto the trait-level [`HistoryEntry`].
-///
-/// Diff-stat fields (`additions`, `deletions`, `files_changed`) stay
-/// at the scaffold defaults — Stage 17 ships the list shape without
-/// the lazy diff plumbing. The author timestamp is preferred over
-/// the committer's so rebases/cherry-picks don't visually skew the
-/// "12 minutes ago" labels.
-pub(super) fn commit_to_history_entry(commit: &git2::Commit<'_>) -> HistoryEntry {
-    let author = commit.author();
-    let secs = author.when().seconds();
-    let time =
-        chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0).unwrap_or_else(chrono::Utc::now);
-    let raw = commit.message().unwrap_or("");
-    let (subject, body) = match raw.find("\n\n") {
-        Some(i) => (raw[..i].trim_end().to_string(), raw[i + 2..].to_string()),
-        None => (raw.trim_end().to_string(), String::new()),
-    };
-    HistoryEntry {
-        sha: commit.id().to_string(),
-        author_name: author.name().unwrap_or_default().to_string(),
-        author_email: author.email().unwrap_or_default().to_string(),
-        time,
-        subject,
-        body,
-        parent_shas: commit.parent_ids().map(|id| id.to_string()).collect(),
-        files_changed: Vec::new(),
-        additions: 0,
-        deletions: 0,
+/// Refuse an insert whose `row_id` or `internal_pn` is already stored in
+/// any table of `lf`; the part number is the library-wide key.
+pub(super) fn check_insert_unique(
+    lf: &LibraryFile,
+    row_id: &str,
+    internal_pn: &str,
+) -> Result<(), LibraryError> {
+    for (name, table) in &lf.tables {
+        for stored in &table.rows {
+            if stored.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(row_id) {
+                return Err(LibraryError::Conflict(format!(
+                    "row {row_id} already exists in table {name:?}"
+                )));
+            }
+            if stored.cells.get("internal_pn").map(String::as_str) == Some(internal_pn) {
+                return Err(LibraryError::Conflict(format!(
+                    "internal_pn {internal_pn:?} already exists in table {name:?}"
+                )));
+            }
+        }
     }
+    Ok(())
 }
 
 /// True if `commit` modified `rel_path` relative to *any* of its

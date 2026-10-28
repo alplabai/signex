@@ -48,8 +48,7 @@ pub struct DatabaseAdapter {
     row_schema: RowSchemaGuard,
 }
 
-/// Manifest `auth` prefix that names an OS-keychain item instead of a token.
-const KEYCHAIN_SIGIL: &str = "@signex-keychain:";
+use crate::manifest::KEYCHAIN_SIGIL;
 
 /// Refuse to send a bearer token over cleartext HTTP to a non-loopback host.
 /// Loopback http (local dev server) and any https URL pass.

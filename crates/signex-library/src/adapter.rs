@@ -144,6 +144,36 @@ pub struct HistoryEntry {
     pub deletions: u32,
 }
 
+#[cfg(feature = "local-git")]
+impl HistoryEntry {
+    /// Project a `git2::Commit` onto an entry with no diff stats. The
+    /// author timestamp is preferred over the committer's so rebases and
+    /// cherry-picks do not skew the "12 minutes ago" labels; the subject
+    /// is the first line and the body the rest, minus the blank separator.
+    pub(crate) fn from_commit(commit: &git2::Commit<'_>) -> Self {
+        let author = commit.author();
+        let time =
+            DateTime::<Utc>::from_timestamp(author.when().seconds(), 0).unwrap_or_else(Utc::now);
+        let full = commit.message().unwrap_or_default();
+        let (subject, body) = match full.split_once('\n') {
+            Some((s, rest)) => (s.to_string(), rest.trim_start_matches('\n').to_string()),
+            None => (full.to_string(), String::new()),
+        };
+        Self {
+            sha: commit.id().to_string(),
+            author_name: author.name().unwrap_or_default().to_string(),
+            author_email: author.email().unwrap_or_default().to_string(),
+            time,
+            subject,
+            body,
+            parent_shas: commit.parent_ids().map(|id| id.to_string()).collect(),
+            files_changed: Vec::new(),
+            additions: 0,
+            deletions: 0,
+        }
+    }
+}
+
 /// A primitive together with the revision this copy was read at — the
 /// primitive tier's counterpart of `ComponentRow::server_revision`. The
 /// caller that holds the copy keeps the revision with it and hands it back
