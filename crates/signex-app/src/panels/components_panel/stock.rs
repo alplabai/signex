@@ -86,6 +86,7 @@ pub fn mount_at(library_state: &mut crate::library::LibraryState, path: Option<P
         );
         return;
     };
+    library_state.stock_library_root = Some(path.clone());
     match library_state.open_library_read_only(path.clone()) {
         Ok(()) => library_state.stock_library = Some(path),
         Err(e) => tracing::warn!(
@@ -200,7 +201,10 @@ mod tests {
         let mut lib = crate::library::LibraryState::default();
         mount_at(&mut lib, None);
         let tmp = tempfile::tempdir().unwrap();
-        mount_at(&mut lib, Some(tmp.path().join("gone/Stock.snxlib")));
+        let gone = tmp.path().join("gone/Stock.snxlib");
+        mount_at(&mut lib, Some(gone.clone()));
+        // A failed mount still records the root so recovery stays blocked.
+        assert_eq!(lib.stock_library_root, Some(gone));
         assert!(lib.stock_library.is_none());
         assert!(lib.open_libraries.is_empty());
     }
