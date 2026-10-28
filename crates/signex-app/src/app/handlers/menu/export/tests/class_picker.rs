@@ -241,7 +241,7 @@ fn late_and_failed_resolutions_delivered_through_update_leave_the_canvas_alone()
 }
 
 #[test]
-fn a_failed_resolution_is_asked_again_by_the_next_request() {
+fn a_failed_resolution_is_not_retried_until_the_project_changes() {
     let (mut app, ..) = child_label_selected("/w/pick-retry");
     let project = app.document_state.active_project.expect("project");
     // The class table changes and its resolution is planned, then the task
@@ -257,8 +257,14 @@ fn a_failed_resolution_is_asked_again_by_the_next_request() {
     }));
 
     assert!(
+        app.plan_net_class_refresh().is_none(),
+        "the failed inputs are not retried on every request"
+    );
+
+    app.document_state.projects[0].data.net_classes = vec![NetClass::named("Third")];
+    assert!(
         app.plan_net_class_refresh().is_some(),
-        "the next request retries without any new edit"
+        "a changed class table asks again"
     );
 }
 

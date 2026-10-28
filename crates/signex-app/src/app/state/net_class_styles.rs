@@ -134,6 +134,10 @@ pub struct NetClassStyleCache {
     /// The key each project was last asked to resolve for: the answer in
     /// flight, or the one already stored.
     wanted: HashMap<ProjectId, ProjectKey>,
+    /// The key whose resolution failed for each project. It is not asked for
+    /// again until the project's key moves, so a task that fails every time
+    /// reports once instead of on every click.
+    failed: HashMap<ProjectId, ProjectKey>,
     projects: HashMap<ProjectId, ProjectEntry>,
     merged: HashMap<Uuid, NetClassStyle>,
     /// Counts rebuilds of `merged`, so a consumer that caches something drawn
@@ -212,6 +216,10 @@ impl NetClassStyleCache {
     /// has it in flight. A project moving back to a key the cache already
     /// holds cancels the answer in flight for the key it left.
     pub fn want(&mut self, project: ProjectId, key: &ProjectKey) -> bool {
+        if self.failed.get(&project) == Some(key) {
+            return false;
+        }
+        self.failed.remove(&project);
         let held = self
             .projects
             .get(&project)
@@ -237,17 +245,26 @@ impl NetClassStyleCache {
     }
 
     /// A background resolution failed, so no answer is coming for `failed`'s
-    /// projects: forget their requests still in flight and reopen the gate, so
-    /// the next update asks again instead of waiting for an unrelated edit.
-    /// Other projects' requests are left alone.
+    /// projects: forget their requests still in flight and remember the key
+    /// that failed, so it is not retried (and not reported again) until the
+    /// project's key moves. Other projects' requests are left alone.
     pub fn give_up(&mut self, failed: &[ProjectId]) {
+        for id in failed {
+            let Some(key) = self.wanted.get(id) else {
+                continue;
+            };
+            if self.projects.get(id).is_none_or(|entry| entry.key != *key) {
+                self.failed.insert(*id, key.clone());
+            }
+        }
         self.forget_pending(|id| failed.contains(id));
-        self.reopen_gate();
     }
 
-    /// [`Self::give_up`] for every project, for a caller that lost its tasks.
+    /// Forget every request in flight and every recorded failure, and reopen
+    /// the gate, for a caller that lost its tasks.
     pub fn give_up_pending(&mut self) {
         self.forget_pending(|_| true);
+        self.failed.clear();
         self.reopen_gate();
     }
 

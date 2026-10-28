@@ -133,6 +133,11 @@ impl std::fmt::Display for NetClassChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NoClass => f.write_str(signex_types::net_class::NO_CLASS_ENTRY),
+            // A class literally named like the clear entry is quoted, so the
+            // picker never shows two identical rows.
+            Self::Class(name) if name == signex_types::net_class::NO_CLASS_ENTRY => {
+                write!(f, "\"{name}\"")
+            }
             Self::Class(name) => f.write_str(name),
         }
     }
@@ -347,4 +352,18 @@ fn commit_row<'a>(
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NetClassChoice;
+
+    #[test]
+    fn a_class_named_like_the_clear_entry_is_shown_distinctly() {
+        let clear = NetClassChoice::NoClass.to_string();
+        let lookalike = NetClassChoice::Class(clear.clone()).to_string();
+
+        assert_ne!(clear, lookalike);
+        assert_eq!(NetClassChoice::Class("Power".into()).to_string(), "Power");
+    }
 }

@@ -367,7 +367,7 @@ fn going_back_to_the_stored_key_cancels_the_answer_in_flight() {
 }
 
 #[test]
-fn giving_up_forgets_requests_in_flight_so_they_are_asked_again() {
+fn a_failed_key_is_not_asked_again_until_the_key_moves() {
     let classes = [dashed_class("Power", "VCC")];
     let mut cache = NetClassStyleCache::default();
     let k = key(1, &classes);
@@ -375,7 +375,10 @@ fn giving_up_forgets_requests_in_flight_so_they_are_asked_again() {
 
     cache.give_up(&[PROJECT]);
 
-    assert!(cache.want(PROJECT, &k));
+    assert!(!cache.want(PROJECT, &k), "same failing key: not retried");
+    assert!(cache.want(PROJECT, &key(2, &classes)), "moved key: asked");
+    cache.give_up(&[PROJECT]);
+    assert!(cache.want(PROJECT, &k), "back to the old key after a move");
 }
 
 #[test]
@@ -388,7 +391,7 @@ fn a_failed_task_forgets_only_its_own_projects() {
 
     cache.give_up(&[PROJECT]);
 
-    assert!(cache.want(PROJECT, &k), "asked again");
+    assert!(!cache.want(PROJECT, &k), "failed key not retried");
     assert!(!cache.want(OTHER, &k), "still in flight");
 }
 
