@@ -315,6 +315,14 @@ pub enum LibraryMessage {
         path: PathBuf,
         prepared: crate::library::mount::PreparedMountCell,
     },
+    /// An off-thread library refresh (#1374) has read the library. Applied
+    /// only while `generation` is still the latest for `path`; a result
+    /// superseded by a newer refresh, or for a closed library, is dropped.
+    RefreshFinished {
+        path: PathBuf,
+        generation: u64,
+        snapshot: crate::library::refresh::RefreshSnapshotCell,
+    },
     /// Active table change inside a Library Browser tab — clicked one
     /// of the category tabs in the strip.
     BrowserSelectTable {
