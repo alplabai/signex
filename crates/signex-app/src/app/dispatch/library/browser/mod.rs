@@ -519,14 +519,12 @@ impl Signex {
                         .or_insert_with(|| (String::new(), String::new()));
                     entry.1 = unit;
                 }
+                BrowserEditMsg::ParamPrefixPicked { key, prefix } => {
+                    modal.param_prefix.insert(key.clone(), prefix);
+                    param_commit::commit_param_buffer(modal, &key);
+                }
                 BrowserEditMsg::CommitParam { key } => {
-                    if let Some((value, unit)) = modal.param_buf.get(&key).cloned() {
-                        // A refused entry leaves the draft untouched.
-                        let Some(pv) = param_commit::modal_param_value(value, &unit) else {
-                            return Task::none();
-                        };
-                        modal.draft.parameters.insert(key, pv);
-                    }
+                    param_commit::commit_param_buffer(modal, &key)
                 }
                 BrowserEditMsg::AddParam => {
                     // Find a unique key like "param_N".
@@ -547,6 +545,7 @@ impl Signex {
                 BrowserEditMsg::DeleteParam { key } => {
                     modal.draft.parameters.remove(&key);
                     modal.param_buf.remove(&key);
+                    modal.param_prefix.remove(&key);
                 }
                 BrowserEditMsg::SetTags(s) => {
                     modal.tags_buf = s;
@@ -575,11 +574,12 @@ impl Signex {
                     match param_commit::uncommitted_param_edits(
                         &modal.draft.parameters,
                         &modal.param_buf,
+                        &modal.param_prefix,
                     ) {
                         Ok(edits) => modal.draft.parameters.extend(edits),
-                        Err(key) => {
+                        Err((key, reason)) => {
                             modal.error = Some(format!(
-                                "Parameter \"{key}\" has an invalid value; fix it before saving."
+                                "Parameter \"{key}\" has an invalid value ({reason}); fix it before saving."
                             ));
                             return Task::none();
                         }

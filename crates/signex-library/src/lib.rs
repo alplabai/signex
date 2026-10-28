@@ -29,6 +29,7 @@ pub mod lifecycle;
 pub mod manifest;
 pub mod manufacturer;
 pub mod param;
+pub mod param_edit;
 pub mod pricing;
 pub mod pricing_refresh;
 pub mod primitive;
@@ -96,6 +97,7 @@ pub use manifest::{
 };
 pub use manufacturer::{AlternateStatus, DistributorListing, ManufacturerPart};
 pub use param::{ParamMap, ParamValue};
+pub use param_edit::{MeasurementParts, commit_measurement};
 pub use pricing::{
     CachedPricing, DroppedUpdate, PricingError, PricingUpdate, RowPricing, StoreOutcome, age_label,
     current_pricing, distributor_key, format_price,

@@ -39,6 +39,7 @@ pub mod mount;
 pub mod panel;
 pub mod picker;
 pub mod place;
+pub(crate) mod prefix_picker;
 pub mod preview_refresh;
 pub mod pricing;
 pub mod primitive_picker;

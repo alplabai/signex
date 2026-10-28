@@ -124,6 +124,10 @@ pub struct ComponentPreviewState {
     /// directly to `f64` fights typing.
     pub params_edit_buf: HashMap<String, String>,
 
+    /// The SI prefix picked next to a measurement's number buffer, by
+    /// parameter name. Absent = the prefix the stored value displays.
+    pub params_prefix: HashMap<String, signex_types::quantity::SiPrefix>,
+
     /// Name typed into the "Add custom parameter" input, consumed by the
     /// kind pills.
     pub new_param_name: String,
@@ -185,6 +189,7 @@ impl ComponentPreviewState {
             sim_body: None,
             active_tab: PreviewTab::Preview,
             params_edit_buf: HashMap::new(),
+            params_prefix: HashMap::new(),
             new_param_name: String::new(),
             pin_map_state: PinMapInlineState::default(),
             alternate_error: None,
@@ -197,6 +202,22 @@ impl ComponentPreviewState {
             saving_generation: 0,
             saving_batch: None,
         }
+    }
+
+    /// The prefix the picker beside a measurement's number shows: the one
+    /// picked, else the one the stored value displays with, else none.
+    pub fn measurement_prefix(&self, name: &str) -> signex_types::quantity::SiPrefix {
+        self.params_prefix
+            .get(name)
+            .copied()
+            .or_else(|| {
+                self.row
+                    .parameters
+                    .get(name)
+                    .and_then(|v| v.measurement_parts())
+                    .map(|p| p.prefix)
+            })
+            .unwrap_or(signex_types::quantity::SiPrefix::One)
     }
 
     /// Unsaved work: the dirty flag, or a half-typed numeric value still in

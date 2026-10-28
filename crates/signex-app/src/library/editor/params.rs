@@ -20,12 +20,17 @@ use std::collections::BTreeSet;
 
 use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
 use iced::{Border, Element, Length, Theme};
-use signex_library::{ParamKind, ParamSlot, ParamValue, ParameterTemplate};
+use signex_library::{ParamKind, ParamSlot, ParamValue, ParameterTemplate, TemplateViolation};
+use signex_types::quantity::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage, ParamKindMsg};
+use super::super::prefix_picker::prefix_picker;
 use super::super::state::{ComponentPreviewState, EditorAddress, LibraryState};
+
+/// Width of the status column: the missing badge or a slot problem.
+const STATUS_W: f32 = 170.0;
 
 /// Resolve the parameter template for a preview state by walking
 /// `LibraryState.open_libraries` for the matching `library_path`, then
@@ -38,12 +43,56 @@ fn resolve_template<'a>(
     if class.trim().is_empty() {
         return None;
     }
-    let library_id = library_state
+    let library_id = library_id_of(state, library_state)?;
+    library_state.template_registry.resolve(library_id, class)
+}
+
+fn library_id_of(
+    state: &ComponentPreviewState,
+    library_state: &LibraryState,
+) -> Option<uuid::Uuid> {
+    library_state
         .open_libraries
         .iter()
         .find(|lib| lib.root == state.library_path)
-        .map(|lib| lib.library_id)?;
-    library_state.template_registry.resolve(library_id, class)
+        .map(|lib| lib.library_id)
+}
+
+/// The short reason a slot's current value breaks its template, shown in
+/// the slot's status column. A missing required slot has its own badge.
+fn violation_text(v: &TemplateViolation) -> Option<(&str, String)> {
+    match v {
+        TemplateViolation::MissingRequired { .. } => None,
+        TemplateViolation::WrongKind { name, expected, .. } => {
+            Some((name, format!("expects {expected:?}")))
+        }
+        TemplateViolation::WrongUnit {
+            name,
+            expected,
+            found,
+        } => Some((name, format!("unit {found}, expected {expected}"))),
+        TemplateViolation::ZeroNotAllowed { name } => Some((name, "zero not allowed".into())),
+        TemplateViolation::NegativeNotAllowed { name } => {
+            Some((name, "negative not allowed".into()))
+        }
+    }
+}
+
+/// Per slot name, what is wrong with the row's current value for it.
+fn slot_problems(
+    state: &ComponentPreviewState,
+    library_state: &LibraryState,
+) -> std::collections::BTreeMap<String, String> {
+    let Some(library_id) = library_id_of(state, library_state) else {
+        return Default::default();
+    };
+    library_state
+        .template_registry
+        .validate_params(library_id, state.row.class.as_str(), &state.row.parameters)
+        .iter()
+        .filter_map(violation_text)
+        .map(|(name, why)| (name.to_string(), why))
+        .collect()
 }
 
 pub fn view<'a>(
@@ -56,6 +105,7 @@ pub fn view<'a>(
     let muted = theme_ext::text_secondary(tokens);
 
     let template = resolve_template(state, library_state);
+    let problems = slot_problems(state, library_state);
 
     let header_label = match template {
         Some(t) => format!("Parameters (class: {})", t.class),
@@ -88,7 +138,14 @@ pub fn view<'a>(
             body = body.push(text("Required").size(11).color(muted));
             body = body.push(Space::new().height(6));
             for slot in &t.required_params {
-                body = body.push(template_row(state, slot, true, tokens, &address));
+                body = body.push(template_row(
+                    state,
+                    slot,
+                    true,
+                    problems.get(&slot.name),
+                    tokens,
+                    &address,
+                ));
                 body = body.push(Space::new().height(4));
             }
             body = body.push(Space::new().height(8));
@@ -98,7 +155,14 @@ pub fn view<'a>(
             body = body.push(text("Optional").size(11).color(muted));
             body = body.push(Space::new().height(6));
             for slot in &t.optional_params {
-                body = body.push(template_row(state, slot, false, tokens, &address));
+                body = body.push(template_row(
+                    state,
+                    slot,
+                    false,
+                    problems.get(&slot.name),
+                    tokens,
+                    &address,
+                ));
                 body = body.push(Space::new().height(4));
             }
             body = body.push(Space::new().height(8));
@@ -153,6 +217,7 @@ fn template_row<'a>(
     state: &'a ComponentPreviewState,
     slot: &'a ParamSlot,
     required: bool,
+    problem: Option<&String>,
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
@@ -179,10 +244,18 @@ fn template_row<'a>(
     let status: Element<'a, LibraryMessage> = if required && !present {
         let amber = iced::Color::from_rgb(0.95, 0.70, 0.18);
         container(text("\u{2717} missing").size(11).color(amber))
-            .width(Length::Fixed(110.0))
+            .width(Length::Fixed(STATUS_W))
             .into()
+    } else if let Some(why) = problem {
+        container(
+            text(format!("\u{2717} {why}"))
+                .size(11)
+                .color(theme_ext::error_color(tokens)),
+        )
+        .width(Length::Fixed(STATUS_W))
+        .into()
     } else {
-        Space::new().width(Length::Fixed(110.0)).into()
+        Space::new().width(Length::Fixed(STATUS_W)).into()
     };
 
     row![
@@ -372,26 +445,34 @@ fn slot_input<'a>(
                 .into()
         }
         ParamKind::Measurement => {
-            let buf = state.params_edit_buf.get(name).cloned().unwrap_or_else(|| {
-                match state.row.parameters.get(name) {
-                    Some(ParamValue::Measurement { value, .. }) => value.to_string(),
-                    Some(other) => display_param(other),
-                    None => String::new(),
-                }
-            });
             let row_unit = match (unit, state.row.parameters.get(name)) {
                 (Some(u), _) => u,
                 (None, Some(ParamValue::Measurement { unit, .. })) => unit.clone(),
                 _ => String::new(),
             };
+            // A known unit: a number-only field plus the SI-prefix picker.
+            // An unknown unit string keeps the raw text editor.
+            let known = Unit::from_alias(row_unit.trim());
+            let buf = state.params_edit_buf.get(name).cloned().unwrap_or_else(|| {
+                let stored = state.row.parameters.get(name);
+                match (stored, &known) {
+                    (Some(v), Some(_)) if v.measurement_parts().is_some() => v
+                        .measurement_parts()
+                        .map(|p| p.mantissa)
+                        .unwrap_or_default(),
+                    (Some(ParamValue::Measurement { value, .. }), _) => value.to_string(),
+                    (Some(other), _) => display_param(other),
+                    (None, _) => String::new(),
+                }
+            });
             let lib_path_input = lib_path.clone();
-            let lib_path_submit = lib_path;
+            let lib_path_submit = lib_path.clone();
             let table_input = table.clone();
-            let table_submit = table;
+            let table_submit = table.clone();
             let name_for_input = name_owned.clone();
-            let name_for_submit = name_owned;
-            let unit_for_submit = row_unit;
-            text_input("", &buf)
+            let name_for_submit = name_owned.clone();
+            let unit_for_submit = row_unit.clone();
+            let field = text_input("", &buf)
                 .on_input(move |s| LibraryMessage::EditorEvent {
                     library_path: lib_path_input.clone(),
                     table: table_input.clone(),
@@ -411,8 +492,30 @@ fn slot_input<'a>(
                     },
                 })
                 .padding([4, 8])
-                .size(11)
-                .into()
+                .size(11);
+            let picker = known.and_then(|u| {
+                let unit_token = row_unit.clone();
+                let name_for_pick = name_owned.clone();
+                prefix_picker(&u, state.measurement_prefix(name), 11, move |prefix| {
+                    LibraryMessage::EditorEvent {
+                        library_path: lib_path.clone(),
+                        table: table.clone(),
+                        row_id,
+                        msg: EditorMsg::ParamPrefixPicked {
+                            name: name_for_pick.clone(),
+                            unit: unit_token.clone(),
+                            prefix,
+                        },
+                    }
+                })
+            });
+            match picker {
+                Some(pick) => row![field, pick]
+                    .spacing(4)
+                    .align_y(iced::Alignment::Center)
+                    .into(),
+                None => field.into(),
+            }
         }
     }
 }
@@ -613,5 +716,78 @@ mod tests {
         assert!(missing.contains(&"tolerance".to_string()));
         assert!(missing.contains(&"power".to_string()));
         assert!(!missing.contains(&"value".to_string()));
+    }
+
+    /// A zero capacitor, a negative resistor and a wrong-unit value each
+    /// get a visible reason in the slot's status column.
+    #[test]
+    fn template_violations_become_slot_problems() {
+        let registry = TemplateRegistry::new_with_builtins();
+        let capacitor = registry
+            .resolve(Uuid::nil(), "capacitor")
+            .expect("capacitor template");
+        let value_slot = capacitor
+            .required_params
+            .iter()
+            .find(|s| s.kind == ParamKind::Measurement && s.unit.as_deref() == Some("F"))
+            .expect("a farad slot")
+            .name
+            .clone();
+        let mut params = ParamMap::new();
+        params.insert(
+            value_slot.clone(),
+            ParamValue::Measurement {
+                value: 0.0,
+                unit: "F".into(),
+            },
+        );
+        let zero = problem_of(&registry, "capacitor", &params, &value_slot);
+        assert_eq!(zero.as_deref(), Some("zero not allowed"));
+
+        params.insert(
+            value_slot.clone(),
+            ParamValue::Measurement {
+                value: -1e-6,
+                unit: "F".into(),
+            },
+        );
+        let negative = problem_of(&registry, "capacitor", &params, &value_slot);
+        assert_eq!(negative.as_deref(), Some("negative not allowed"));
+
+        params.insert(
+            value_slot.clone(),
+            ParamValue::Measurement {
+                value: 4.7,
+                unit: "V".into(),
+            },
+        );
+        let wrong = problem_of(&registry, "capacitor", &params, &value_slot);
+        assert_eq!(wrong.as_deref(), Some("unit V, expected F"));
+
+        params.insert(
+            value_slot.clone(),
+            ParamValue::Measurement {
+                value: 4.7e-6,
+                unit: "F".into(),
+            },
+        );
+        assert_eq!(
+            problem_of(&registry, "capacitor", &params, &value_slot),
+            None
+        );
+    }
+
+    fn problem_of(
+        registry: &signex_library::TemplateRegistry,
+        class: &str,
+        params: &ParamMap,
+        slot: &str,
+    ) -> Option<String> {
+        registry
+            .validate_params(Uuid::nil(), class, params)
+            .iter()
+            .filter_map(violation_text)
+            .find(|(name, _)| *name == slot)
+            .map(|(_, why)| why)
     }
 }

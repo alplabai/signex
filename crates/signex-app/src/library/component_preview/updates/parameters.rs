@@ -5,8 +5,11 @@
 //! (`params_edit_buf`) and committed on demand so a half-typed value is
 //! never parsed.
 
+use signex_types::quantity::{MantissaError, SiPrefix, Unit};
+
 use crate::library::ComponentPreviewState;
 use crate::library::messages::ParamKindMsg;
+use crate::library::prefix_picker::effective_prefix;
 
 /// Set a text parameter's value directly. Ignores an empty name.
 pub(super) fn set_text(state: &mut ComponentPreviewState, name: String, value: String) {
@@ -43,18 +46,80 @@ pub(super) fn set_measurement_buf(state: &mut ComponentPreviewState, name: Strin
     state.params_edit_buf.insert(name, buf);
 }
 
-/// Commit a measurement parameter (value + unit) from its edit buffer,
-/// ignoring a buffer that is not a finite number.
+/// Commit a measurement parameter from its edit buffer, ignoring a
+/// buffer that is not a finite number.
+///
+/// A known `unit` makes the buffer a plain number in the picked SI prefix
+/// ([`pick_prefix`]; by default the prefix the stored value displays
+/// with). It is stored canonical (`{4700, "ohm"}` for 4.7 + k) and an
+/// unchanged number leaves the stored value, legacy `{4.7, "kΩ"}`
+/// included, exactly as it was. A unit string that is not a known unit
+/// keeps the raw number and its string.
 pub(super) fn commit_measurement(state: &mut ComponentPreviewState, name: String, unit: String) {
-    if let Some(buf) = state.params_edit_buf.get(&name).cloned()
-        && let Some(value) = crate::numeric_field::parse_field_f64(&buf)
-    {
+    let Some(buf) = state.params_edit_buf.get(&name).cloned() else {
+        return;
+    };
+    if let Some(known) = Unit::from_alias(unit.trim()) {
+        commit_typed_measurement(state, name, &buf, &known);
+    } else if let Some(value) = crate::numeric_field::parse_field_f64(&buf) {
         state.row.parameters.insert(
             name,
             signex_library::ParamValue::Measurement { value, unit },
         );
         state.dirty = true;
     }
+}
+
+fn commit_typed_measurement(
+    state: &mut ComponentPreviewState,
+    name: String,
+    buf: &str,
+    unit: &Unit,
+) {
+    let prefix = effective_prefix(unit, state.measurement_prefix(&name));
+    match signex_library::commit_measurement(state.row.parameters.get(&name), buf, prefix, unit) {
+        Ok(value) => {
+            if state.row.parameters.get(&name) != Some(&value) {
+                state.row.parameters.insert(name.clone(), value);
+                state.dirty = true;
+            }
+            // The field reads from the stored value again.
+            state.params_edit_buf.remove(&name);
+            state.params_prefix.remove(&name);
+        }
+        Err(err @ MantissaError::NonFinite(_)) => {
+            crate::diagnostics::log_warning(format!("Parameter '{name}' refused: {err}"));
+        }
+        // Mid-edit or not a plain number: the typed text stays for the
+        // user to fix, and Save names it.
+        Err(_) => {}
+    }
+}
+
+/// The user picked an SI prefix for a measurement's number: remember it
+/// and commit the buffered number (or the stored one) in that prefix.
+pub(super) fn pick_prefix(
+    state: &mut ComponentPreviewState,
+    name: String,
+    unit: String,
+    prefix: SiPrefix,
+) {
+    let Some(known) = Unit::from_alias(unit.trim()) else {
+        return;
+    };
+    if !state.params_edit_buf.contains_key(&name)
+        && let Some(parts) = state
+            .row
+            .parameters
+            .get(&name)
+            .and_then(|v| v.measurement_parts())
+    {
+        state.params_edit_buf.insert(name.clone(), parts.mantissa);
+    }
+    state
+        .params_prefix
+        .insert(name.clone(), effective_prefix(&known, prefix));
+    commit_measurement(state, name, unit);
 }
 
 /// Toggle a boolean parameter.
@@ -70,6 +135,7 @@ pub(super) fn set_bool(state: &mut ComponentPreviewState, name: String, value: b
 pub(super) fn remove(state: &mut ComponentPreviewState, name: String) {
     state.row.parameters.remove(&name);
     state.params_edit_buf.remove(&name);
+    state.params_prefix.remove(&name);
     state.dirty = true;
 }
 
@@ -96,12 +162,15 @@ pub(crate) fn flush_edit_buffers(state: &mut ComponentPreviewState) -> Result<()
             None => commit_number(state, name.clone()),
             Some(unit) => commit_measurement(state, name.clone(), unit),
         }
+        // A typed measurement commit clears its own buffer; what is left
+        // is committed text (numbers) or text that is not a number.
         let parses = state
             .params_edit_buf
             .get(&name)
-            .is_some_and(|b| crate::numeric_field::parse_field_f64(b).is_some());
+            .is_none_or(|b| crate::numeric_field::parse_field_f64(b).is_some());
         if parses {
             state.params_edit_buf.remove(&name);
+            state.params_prefix.remove(&name);
         } else if unparsed.is_none() {
             unparsed = Some(name);
         }
@@ -141,6 +210,7 @@ mod tests {
         ComponentClass, ComponentRow, DatasheetRef, InternalPn, LifecycleState, ManufacturerPart,
         ParamMap, ParamValue, PlmReserved, PrimitiveRef,
     };
+    use signex_types::quantity::SiPrefix;
     use std::path::PathBuf;
     use uuid::Uuid;
 
@@ -353,5 +423,103 @@ mod tests {
         );
         assert!(state.params_edit_buf.contains_key("tcr"));
         assert!(!state.params_edit_buf.contains_key("note"));
+    }
+
+    fn meas(value: f64, unit: &str) -> ParamValue {
+        ParamValue::Measurement {
+            value,
+            unit: unit.into(),
+        }
+    }
+
+    fn state_with(name: &str, stored: ParamValue) -> ComponentPreviewState {
+        let mut state = fixture();
+        state.row.parameters.insert(name.into(), stored);
+        state
+    }
+
+    /// The prefix the picker shows next to a stored value, and the number
+    /// the field seeds with, for the unit's editor.
+    fn shown(state: &ComponentPreviewState, name: &str) -> (String, SiPrefix) {
+        let parts = state.row.parameters[name].measurement_parts().unwrap();
+        (parts.mantissa, state.measurement_prefix(name))
+    }
+
+    /// #1606: a legacy `{4.7, "kΩ"}` edits as 4.7 with the k picker, not
+    /// as 4.7 ohm. Retyping the seed is a no-op; a real edit stores the
+    /// base value.
+    #[test]
+    fn a_legacy_kilo_ohm_edits_as_4_7_with_the_k_picker() {
+        let mut state = state_with("value", meas(4.7, "kΩ"));
+        assert_eq!(shown(&state, "value"), ("4.7".into(), SiPrefix::Kilo));
+
+        set_measurement_buf(&mut state, "value".into(), "4.7".into());
+        commit_measurement(&mut state, "value".into(), "ohm".into());
+        assert_eq!(state.row.parameters["value"], meas(4.7, "kΩ"));
+        assert!(!state.dirty, "an unchanged commit must not dirty the row");
+
+        set_measurement_buf(&mut state, "value".into(), "10".into());
+        commit_measurement(&mut state, "value".into(), "ohm".into());
+        assert_eq!(state.row.parameters["value"], meas(10_000.0, "ohm"));
+        assert!(state.dirty);
+    }
+
+    #[test]
+    fn a_canonical_value_edits_in_its_shown_prefix() {
+        let mut state = state_with("value", meas(4700.0, "ohm"));
+        assert_eq!(shown(&state, "value"), ("4.7".into(), SiPrefix::Kilo));
+        set_measurement_buf(&mut state, "value".into(), "4.7".into());
+        commit_measurement(&mut state, "value".into(), "ohm".into());
+        assert_eq!(state.row.parameters["value"], meas(4700.0, "ohm"));
+        assert!(!state.dirty);
+        set_measurement_buf(&mut state, "value".into(), "5.6".into());
+        commit_measurement(&mut state, "value".into(), "ohm".into());
+        assert_eq!(state.row.parameters["value"], meas(5600.0, "ohm"));
+    }
+
+    #[test]
+    fn picking_a_prefix_commits_the_number_in_it() {
+        let mut state = state_with("value", meas(4700.0, "ohm"));
+        pick_prefix(&mut state, "value".into(), "ohm".into(), SiPrefix::Mega);
+        assert_eq!(state.row.parameters["value"], meas(4_700_000.0, "ohm"));
+        // A typed number picks up the prefix chosen afterwards.
+        set_measurement_buf(&mut state, "value".into(), "33".into());
+        pick_prefix(&mut state, "value".into(), "ohm".into(), SiPrefix::Kilo);
+        assert_eq!(state.row.parameters["value"], meas(33_000.0, "ohm"));
+    }
+
+    #[test]
+    fn a_prefix_typed_into_the_number_field_is_refused() {
+        for typed in ["4k7", "10k", "4.7uF"] {
+            let mut state = state_with("value", meas(4700.0, "ohm"));
+            set_measurement_buf(&mut state, "value".into(), typed.into());
+            commit_measurement(&mut state, "value".into(), "ohm".into());
+            assert_eq!(
+                state.row.parameters["value"],
+                meas(4700.0, "ohm"),
+                "{typed}"
+            );
+            assert!(!state.dirty, "{typed}");
+            assert_eq!(
+                state.params_edit_buf.get("value").map(String::as_str),
+                Some(typed)
+            );
+        }
+    }
+
+    #[test]
+    fn a_unit_without_prefixes_ignores_a_stale_pick() {
+        let mut state = state_with("tolerance", meas(1.0, "%"));
+        set_measurement_buf(&mut state, "tolerance".into(), "5".into());
+        pick_prefix(&mut state, "tolerance".into(), "%".into(), SiPrefix::Kilo);
+        assert_eq!(state.row.parameters["tolerance"], meas(5.0, "%"));
+    }
+
+    #[test]
+    fn an_unknown_unit_keeps_the_text_editor_and_its_string() {
+        let mut state = state_with("len", meas(1.5, "furlong"));
+        set_measurement_buf(&mut state, "len".into(), "2".into());
+        commit_measurement(&mut state, "len".into(), "furlong".into());
+        assert_eq!(state.row.parameters["len"], meas(2.0, "furlong"));
     }
 }

@@ -10,11 +10,13 @@ use iced::widget::{
 };
 use iced::{Border, Element, Length, Theme};
 use signex_library::{ComponentClass, DatasheetRef, LifecycleState, ParamValue};
+use signex_types::quantity::{SiPrefix, Unit};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::{BrowserEditMsg, LibraryMessage};
 use super::modal_chrome::close_x;
+use super::prefix_picker::prefix_picker;
 use super::state::{DeleteConfirmState, EditRowModalState};
 
 const CONFIRM_W: f32 = 480.0;
@@ -478,14 +480,8 @@ fn view_params_section<'a>(
             let key_owned = key.clone();
             let (cur_value, cur_unit) = match edit.param_buf.get(&key_owned) {
                 Some((v, u)) => (v.clone(), u.clone()),
-                None => match value {
-                    ParamValue::Text(s) => (s.clone(), String::new()),
-                    ParamValue::Number(n) => (n.to_string(), String::new()),
-                    ParamValue::Bool(b) => (b.to_string(), String::new()),
-                    ParamValue::Measurement { value, unit } => (value.to_string(), unit.clone()),
-                },
+                None => EditRowModalState::param_buf_entry(value),
             };
-
             let send_v = send.clone();
             let key_for_v = key_owned.clone();
             let val_input = text_input("value", &cur_value)
@@ -502,6 +498,32 @@ fn view_params_section<'a>(
                 })
                 .padding(4)
                 .size(11);
+
+            // A known unit takes the number in a picked SI prefix; the
+            // number field itself never takes a prefix or unit. Hidden
+            // for units that take no prefix (`%`, `ppm/C`).
+            let prefix_pick = Unit::from_alias(cur_unit.trim()).and_then(|u| {
+                let selected = edit
+                    .param_prefix
+                    .get(&key_owned)
+                    .copied()
+                    .unwrap_or(SiPrefix::One);
+                let send_p = send.clone();
+                let key_p = key_owned.clone();
+                prefix_picker(&u, selected, 11, move |prefix| {
+                    send_p(BrowserEditMsg::ParamPrefixPicked {
+                        key: key_p.clone(),
+                        prefix,
+                    })
+                })
+            });
+            let value_cell: Element<'a, LibraryMessage> = match prefix_pick {
+                Some(pick) => row![val_input, pick]
+                    .spacing(4)
+                    .align_y(iced::Alignment::Center)
+                    .into(),
+                None => val_input.into(),
+            };
 
             let send_u = send.clone();
             let key_for_u = key_owned.clone();
@@ -546,7 +568,7 @@ fn view_params_section<'a>(
                     container(text(key_owned.clone()).size(11).color(text_c))
                         .padding([2, 6])
                         .width(Length::FillPortion(3)),
-                    container(val_input)
+                    container(value_cell)
                         .padding([2, 4])
                         .width(Length::FillPortion(3)),
                     container(unit_input)

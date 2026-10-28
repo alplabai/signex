@@ -306,13 +306,56 @@ pub(super) fn view_grid<'a>(
                     continue;
                 }
 
+                // A measurement is edited as a number, an SI prefix and
+                // its unit. A 90-110 px column cannot hold the number
+                // field and the prefix picker beside the cell's text, so
+                // the cell opens the Edit Component Details modal, which
+                // has both, instead of taking raw text.
+                if let ColumnKind::Parameter(key) = &c.kind
+                    && matches!(
+                        r.parameters.get(key),
+                        Some(signex_library::ParamValue::Measurement { .. })
+                    )
+                {
+                    let text_c = theme_ext::text_primary(tokens);
+                    let open = LibraryMessage::BrowserOpenEditModal {
+                        library_path: lib_pb.clone(),
+                        table: table.to_string(),
+                        row_id,
+                    };
+                    let hover = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06);
+                    let cell = iced::widget::button(
+                        text(row_value)
+                            .size(BROWSER_TEXT_SIZE)
+                            .wrapping(iced::widget::text::Wrapping::None)
+                            .color(text_c),
+                    )
+                    .padding([2, 6])
+                    .width(Length::Fill)
+                    .on_press(open)
+                    .style(move |_: &Theme, status| {
+                        iced::widget::button::Style {
+                            background: matches!(status, iced::widget::button::Status::Hovered)
+                                .then_some(iced::Background::Color(hover)),
+                            text_color: text_c,
+                            ..iced::widget::button::Style::default()
+                        }
+                    });
+                    data_row = data_row.push(
+                        container(cell)
+                            .padding([2, 2])
+                            .width(Length::Fixed(c.width)),
+                    );
+                    continue;
+                }
+
                 // Buffer wins over row when active.
                 let buf_key = (row_id, column_key.clone());
                 let cell_value = browser
                     .cell_edit
                     .get(&buf_key)
                     .cloned()
-                    .unwrap_or_else(|| c.kind.edit_seed(r));
+                    .unwrap_or(row_value);
 
                 let library_for_input = lib_pb.clone();
                 let column_for_input = column_key.clone();

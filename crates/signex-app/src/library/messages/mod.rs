@@ -255,6 +255,14 @@ pub enum EditorMsg {
         name: String,
         unit: String,
     },
+    /// The user picked an SI prefix for a `ParamValue::Measurement` row.
+    /// `unit` is the slot's unit token; the pick commits the buffered
+    /// number (or the stored one) in that prefix.
+    ParamPrefixPicked {
+        name: String,
+        unit: String,
+        prefix: signex_types::quantity::SiPrefix,
+    },
     /// Toggle a `ParamValue::Bool` parameter.
     ParamSetBool {
         name: String,
@@ -598,6 +606,11 @@ pub enum BrowserEditMsg {
     SetParamUnit {
         key: String,
         unit: String,
+    },
+    /// The user picked an SI prefix for a measurement row's number.
+    ParamPrefixPicked {
+        key: String,
+        prefix: signex_types::quantity::SiPrefix,
     },
     /// Commit the live param buffer for `key` to the draft.
     CommitParam {
