@@ -206,6 +206,10 @@ pub enum UiMsg {
     /// Nothing to do. Produced by widgets / tasks that must emit a
     /// `Message` but carry no event.
     Noop,
+    /// A background `prefs.json` write finished (#1351). A failed write has
+    /// already logged its error; this republishes the Messages panel so the
+    /// record shows now rather than at the next unrelated message.
+    PrefWriteFinished,
     /// Edit → Undo / Redo clicked in an undocked tab's own menu bar. Runs
     /// the command against that window's document, as its shortcut does
     /// (#1550); every other menu row still arrives as `Message::Menu`.

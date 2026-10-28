@@ -66,6 +66,6 @@ pub use messages::{
 };
 pub use state::{
     ComponentPreviewState, ComponentsMountSource, ComponentsPanelState, DeleteConfirmState,
-    EditRowModalState, LibraryBrowserState, LibraryState, OpenLibrary, PickerState, PreviewTab,
-    PrimitivePickerState, PrimitivePickerTarget,
+    EditRowModalState, LibraryBrowserState, LibraryState, NewLibraryDefaults, OpenLibrary,
+    PickerState, PreviewTab, PrimitivePickerState, PrimitivePickerTarget,
 };

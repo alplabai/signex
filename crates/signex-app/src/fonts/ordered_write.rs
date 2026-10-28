@@ -8,14 +8,50 @@
 //! newer ticket already applied for the same key skips its write.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 use iced::Task;
 
 use crate::app::{Message, UiMsg};
 
 static NEXT_TICKET: AtomicU64 = AtomicU64::new(1);
+
+/// Writes handed out by `background_pref_write` that have not finished (or
+/// been dropped unrun). The quit path waits for this to reach zero so the
+/// last preference change is never lost to `iced::exit()` (#1351).
+static IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
+
+/// Holds one slot of `IN_FLIGHT`; releases it when the write completes or its
+/// task is dropped without running.
+struct InFlightSlot;
+
+impl InFlightSlot {
+    fn take() -> Self {
+        IN_FLIGHT.fetch_add(1, Ordering::SeqCst);
+        Self
+    }
+}
+
+impl Drop for InFlightSlot {
+    fn drop(&mut self) {
+        IN_FLIGHT.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+/// Block until every ordered write started so far has finished, or `limit`
+/// passes. Returns whether none are left. Call from a blocking worker.
+pub fn wait_for_pref_writes(limit: Duration) -> bool {
+    let deadline = Instant::now() + limit;
+    while IN_FLIGHT.load(Ordering::SeqCst) != 0 {
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    true
+}
 
 /// Newest ticket applied per key. Guards ordering only, holds no app state.
 /// Held while a write runs, which is already serialised by the prefs lock.
@@ -63,20 +99,24 @@ impl OrderedPrefWrite {
 }
 
 /// The `Task` that performs `write` on a blocking worker, never in `update`.
-/// It needs no completion handling: `write` reports its own failure through
-/// the prefs refusal log.
+/// `write` reports its own failure through the prefs refusal log; the
+/// completion message only republishes that log to the Messages panel.
 pub fn background_pref_write(
     key: &'static str,
     write: impl FnOnce() + Send + 'static,
 ) -> Task<Message> {
     let ordered = OrderedPrefWrite::new(key);
+    // Taken here, on the UI thread, so a quit that follows sees the write
+    // even before its worker has started.
+    let slot = InFlightSlot::take();
     Task::perform(
         async move {
-            if let Err(join_error) = tokio::task::spawn_blocking(move || {
+            let result = tokio::task::spawn_blocking(move || {
                 ordered.run(write);
             })
-            .await
-            {
+            .await;
+            drop(slot);
+            if let Err(join_error) = result {
                 tracing::error!(
                     target: "signex::prefs",
                     key = key,
@@ -85,6 +125,6 @@ pub fn background_pref_write(
                 );
             }
         },
-        |()| Message::Ui(UiMsg::Noop),
+        |()| Message::Ui(UiMsg::PrefWriteFinished),
     )
 }

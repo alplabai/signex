@@ -1,5 +1,6 @@
 use iced::Task;
 
+mod committed_writes;
 mod keymap;
 
 use super::super::*;
@@ -334,83 +335,17 @@ impl Signex {
                 // saved and rendered styles can't diverge (same rule as
                 // the PCB GPU flag above).
                 //
-                // #1351 — every write below is a background task, collected
-                // in `writes` and never run inline in `update`. Each keeps
-                // its per-key ticket, so a later toggle of the same key
-                // still wins over this Save.
+                // #1351 — every write is a background task, collected in
+                // `writes` and never run inline in `update`. Each keeps its
+                // per-key ticket, so a later toggle of the same key still
+                // wins over this Save.
                 let mut writes: Vec<Task<Message>> = Vec::new();
-                let font = self.ui_state.ui_font_name.clone();
-                writes.push(crate::fonts::background_pref_write("ui_font", move || {
-                    crate::fonts::write_ui_font_pref(&font)
-                }));
-                let (grid_style, annotate_undo, keeps_wires, placement, autosave, gpu, theme) = (
-                    self.ui_state.grid_style,
-                    self.ui_state.annotate_undo,
-                    self.ui_state.move_keeps_wires,
-                    self.ui_state.window_controls_placement,
-                    self.ui_state.autosave_enabled,
-                    self.ui_state.pcb_gpu_render,
-                    self.ui_state.theme_id,
-                );
-                writes.push(crate::fonts::background_pref_write(
-                    "grid_style",
-                    move || crate::fonts::write_grid_style_pref(grid_style),
-                ));
-                writes.push(crate::fonts::background_pref_write(
-                    "annotate_undo",
-                    move || crate::fonts::write_annotate_undo_pref(annotate_undo),
-                ));
-                writes.push(crate::fonts::background_pref_write(
-                    "move_keeps_wires",
-                    move || crate::fonts::write_move_keeps_wires_pref(keeps_wires),
-                ));
-                writes.push(crate::fonts::background_pref_write(
-                    "window_controls_placement",
-                    move || crate::fonts::write_window_controls_placement_pref(placement),
-                ));
-                writes.push(crate::fonts::background_pref_write(
-                    "autosave_enabled",
-                    move || crate::fonts::write_autosave_enabled_pref(autosave),
-                ));
-                writes.push(crate::fonts::background_pref_write(
-                    "pcb_gpu_render",
-                    move || crate::fonts::write_pcb_gpu_render_pref(gpu),
-                ));
-                writes.push(crate::fonts::background_pref_write("theme", move || {
-                    crate::fonts::write_theme_pref(theme)
-                }));
                 // #629 — moved here from the three `PrefMsg::DraftSymbol*`
                 // arms, which wrote on every picker move. Re-asserting the
                 // render input from the committed value keeps the saved
                 // and effective styles from diverging, the same way the
                 // PCB GPU flag is re-asserted above.
                 self.document_state.panel_ctx.symbol_grid_style = self.ui_state.symbol_grid_style;
-                let (sym_size, sym_style, sym_pins, zoom, scale) = (
-                    self.ui_state.symbol_grid_size_mm,
-                    self.ui_state.symbol_grid_style,
-                    self.ui_state.symbol_pin_selection,
-                    self.ui_state.zoom_step_percent,
-                    self.ui_state.ui_scale,
-                );
-                writes.push(crate::fonts::background_pref_write(
-                    "symbol_grid_size_mm",
-                    move || crate::fonts::write_symbol_grid_size_mm_pref(sym_size),
-                ));
-                writes.push(crate::fonts::background_pref_write(
-                    "symbol_grid_style",
-                    move || crate::fonts::write_symbol_grid_style_pref(sym_style),
-                ));
-                writes.push(crate::fonts::background_pref_write(
-                    "symbol_pin_selection",
-                    move || crate::fonts::write_symbol_pin_selection_pref(sym_pins),
-                ));
-                writes.push(crate::fonts::background_pref_write(
-                    "zoom_step_percent",
-                    move || crate::fonts::write_zoom_step_percent_pref(zoom),
-                ));
-                writes.push(crate::fonts::background_pref_write("ui_scale", move || {
-                    crate::fonts::write_ui_scale_pref(scale)
-                }));
                 writes.push(self.commit_erc_severity_draft());
                 // Component classes — keep entries with non-empty keys
                 // and labels, dedupe by key (last write wins) so the
@@ -431,21 +366,20 @@ impl Signex {
                         });
                     }
                 }
-                // Persist first (the prefs writer borrows by ref so
-                // it can run before any moves), then move `sanitised`
-                // into the live registry. The draft + panel-ctx
-                // mirrors clone from the field rather than from
-                // `sanitised` so we drop one redundant clone.
-                let classes = sanitised.clone();
-                writes.push(crate::fonts::background_pref_write(
-                    "component_classes",
-                    move || crate::fonts::write_component_classes_pref(&classes),
-                ));
                 self.ui_state.component_classes = sanitised;
                 self.ui_state.preferences_draft_component_classes =
                     self.ui_state.component_classes.clone();
                 self.document_state.panel_ctx.component_classes =
                     self.ui_state.component_classes.clone();
+                // Everything committed above is in `ui_state` now: queue its
+                // writes, and hand new libraries the same values so none of
+                // them reads `prefs.json` while those writes are in flight.
+                writes.extend(self.committed_pref_writes());
+                self.library.new_library_defaults = crate::library::NewLibraryDefaults {
+                    grid_size_mm: self.ui_state.symbol_grid_size_mm,
+                    pin_selection: self.ui_state.symbol_pin_selection,
+                    component_classes: self.ui_state.component_classes.clone(),
+                };
                 // Commit the keymap working copy: persist to disk first,
                 // then swap it into the live set and recompile so the
                 // running dispatch bridge (`ui_state.active_keymap`)
@@ -478,7 +412,7 @@ impl Signex {
                                  not be backed up first, so it was left untouched rather than \
                                  overwritten ({error})."
                             );
-                            // The prefs writes above already ran, so this
+                            // The prefs writes above are already started, so this
                             // early return is still a path that has to
                             // report a file that broke since the dialog
                             // opened (#602).
@@ -505,7 +439,7 @@ impl Signex {
                         self.ui_state.preferences_keymap_status =
                             format!("Could not save keyboard shortcuts: {error}");
                         // Same reason as the backup-failure return above:
-                        // the prefs writes already ran (#602).
+                        // the prefs writes are already started (#602).
                         self.recompute_preferences_dirty();
                         return self.save_follow_up(writes, ui_scale_changed);
                     }
@@ -519,6 +453,13 @@ impl Signex {
                 // case, so nothing else would ever raise the banner and
                 // the dialog would keep reporting a save that was refused.
                 // One extra file read per Save.
+                //
+                // Limit: the dialog reports "Saved" from the committed model,
+                // before the background writes finish. A write that fails
+                // (full disk) is logged and shown in the Messages panel when
+                // it completes, and a file broken beyond use raises the
+                // banner through the probe; the dialog does not turn the
+                // "Saved" line into an error after the fact.
                 self.ui_state.preferences_dirty = false;
                 self.ui_state.preferences_dirty_sticky = false;
                 return self.save_follow_up(writes, ui_scale_changed);

@@ -6,6 +6,10 @@ impl Signex {
     pub(super) fn dispatch_ui_message(&mut self, message: UiMsg) -> Task<Message> {
         match message {
             UiMsg::Noop => Task::none(),
+            UiMsg::PrefWriteFinished => {
+                self.sync_diagnostics_panel_ctx();
+                Task::none()
+            }
             UiMsg::MenuInWindow { window, msg } => {
                 let command = match msg {
                     MenuMessage::Undo => "undo",

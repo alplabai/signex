@@ -434,6 +434,20 @@ pub fn move_prefs_file_aside() -> Result<Option<PathBuf>, std::io::Error> {
     move_prefs_file_aside_at(&prefs_file_path())
 }
 
+/// Test hook: keep the prefs file busy for `hold`, so a background write
+/// started meanwhile cannot finish before then. Returns once the lock is held.
+#[cfg(test)]
+pub(crate) fn hold_prefs_io_for(hold: std::time::Duration) -> std::thread::JoinHandle<()> {
+    let (held_tx, held_rx) = std::sync::mpsc::channel();
+    let handle = std::thread::spawn(move || {
+        let _io = prefs_io_lock();
+        held_tx.send(()).ok();
+        std::thread::sleep(hold);
+    });
+    held_rx.recv().expect("the holder thread took the lock");
+    handle
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

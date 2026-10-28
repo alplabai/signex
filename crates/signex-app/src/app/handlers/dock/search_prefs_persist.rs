@@ -60,6 +60,10 @@ impl Signex {
         // A pricing walk must not write into a library after quit, and an
         // in-flight save + commit is waited for.
         let next = self.wait_for_pricing_then(next);
+        // Every `background_pref_write` started so far (Save Preferences,
+        // recent projects, ERC severities, toggles) must land before exit
+        // (#1351).
+        let next = wait_for_pref_writes_then(next);
         let search = self.flush_search_prefs_then(next);
         // After the document saves: a save supersedes its recovery copy, and
         // the removal that follows must finish before the process exits.
@@ -90,6 +94,32 @@ impl Signex {
         }
     }
 }
+
+/// Wait (bounded) for every in-flight ordered preference write, then `next`.
+fn wait_for_pref_writes_then(next: Task<Message>) -> Task<Message> {
+    Task::perform(
+        async {
+            tokio::task::spawn_blocking(|| {
+                if !crate::fonts::wait_for_pref_writes(PREF_WRITE_QUIT_LIMIT) {
+                    crate::diagnostics::log_error(
+                        "Preferences were not fully saved before exit",
+                        &anyhow::anyhow!(
+                            "a preference write was still running after {} s",
+                            PREF_WRITE_QUIT_LIMIT.as_secs()
+                        ),
+                    );
+                }
+            })
+            .await
+            .ok();
+        },
+        |()| Message::noop(),
+    )
+    .chain(next)
+}
+
+/// How long quit waits for preference writes before giving up.
+const PREF_WRITE_QUIT_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 fn search_prefs_timer(armed: Option<u64>) -> Task<Message> {
     let Some(generation) = armed else {

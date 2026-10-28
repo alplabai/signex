@@ -1,10 +1,4 @@
 // Standalone binary: every test shares the one process-wide prefs file under a per-module lock that other modules would not take.
-// This integration-test binary discards fallible test-setup calls with
-// `let _ = ...` routinely; see `passive_calculator_tests.rs`.
-#![expect(
-    clippy::let_underscore_must_use,
-    reason = "integration tests discard Results with `let _ = ...` routinely; this is test scaffolding, not a production `iced::Task` being dropped, and `[lints]` in Cargo.toml is package-scoped so each integration-test crate root needs its own"
-)]
 
 //! File ▸ Open Recent end to end: the real open path, the real prefs
 //! file (redirected to a per-process temp dir by `test-prefs-redirect`).
@@ -18,13 +12,16 @@ use std::sync::{Mutex, MutexGuard};
 use signex_app::app::{FileMsg, Message, Signex};
 use signex_app::menu_bar::MenuMessage;
 
+#[path = "support/drive.rs"]
+mod drive;
+
 static PREFS_LOCK: Mutex<()> = Mutex::new(());
 
 /// A fresh app with an empty recent list, holding the prefs lock.
 fn fresh_app() -> (Signex, MutexGuard<'static, ()>) {
     let guard = PREFS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let (mut app, _startup) = Signex::new();
-    let _ = app.update(Message::Menu(MenuMessage::ClearRecentProjects));
+    send(&mut app, Message::Menu(MenuMessage::ClearRecentProjects));
     (app, guard)
 }
 
@@ -34,8 +31,18 @@ fn make_project(dir: &Path, name: &str) -> PathBuf {
     path
 }
 
+/// Send `msg` and run the Tasks it returns, so the background prefs write
+/// has landed before the test reads the file (#1351).
+fn send(app: &mut Signex, msg: Message) {
+    let task = app.update(msg);
+    drive::drive(app, task);
+}
+
 fn open(app: &mut Signex, path: &Path) {
-    let _ = app.update(Message::File(FileMsg::Opened(Some(path.to_path_buf()))));
+    send(
+        app,
+        Message::File(FileMsg::Opened(Some(path.to_path_buf()))),
+    );
 }
 
 #[test]
@@ -97,7 +104,10 @@ fn choosing_a_vanished_entry_drops_it_and_says_so() {
     std::fs::remove_file(&project).expect("delete project");
     let projects_before = app.document_state.projects.len();
 
-    let _ = app.update(Message::Menu(MenuMessage::OpenRecentProject(listed)));
+    send(
+        &mut app,
+        Message::Menu(MenuMessage::OpenRecentProject(listed)),
+    );
 
     assert!(app.ui_state.recent_projects.entries().is_empty());
     assert!(signex_app::fonts::read_recent_projects().is_empty());
@@ -123,11 +133,14 @@ fn choosing_a_live_entry_reopens_it_and_clear_empties_the_list() {
     let listed = app.ui_state.recent_projects.entries()[0].clone();
     app.document_state.projects.clear();
 
-    let _ = app.update(Message::Menu(MenuMessage::OpenRecentProject(listed)));
+    send(
+        &mut app,
+        Message::Menu(MenuMessage::OpenRecentProject(listed)),
+    );
     assert_eq!(app.document_state.projects.len(), 1, "the project reopened");
     assert!(app.document_state.error_notice.is_none());
 
-    let _ = app.update(Message::Menu(MenuMessage::ClearRecentProjects));
+    send(&mut app, Message::Menu(MenuMessage::ClearRecentProjects));
     assert!(app.ui_state.recent_projects.entries().is_empty());
     assert!(signex_app::fonts::read_recent_projects().is_empty());
 }

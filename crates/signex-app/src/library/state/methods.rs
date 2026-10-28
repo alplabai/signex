@@ -89,6 +89,7 @@ impl Default for LibraryState {
             refresh_in_flight: HashMap::new(),
             pending_follow_ups: HashMap::new(),
             data_version: 0,
+            new_library_defaults: NewLibraryDefaults::default(),
         }
     }
 }
@@ -231,7 +232,7 @@ impl LibraryState {
             dangling: Default::default(),
             pricing: Default::default(),
             own_edit_stamp: None,
-            display: LibraryDisplaySettings::default(),
+            display: LibraryDisplaySettings::seeded(&self.new_library_defaults),
         };
         if let Some(adapter) = self.set.get(library_id)
             && let Err(e) = entry.reload_tables(adapter)
@@ -541,18 +542,26 @@ pub struct LibraryDisplaySettings {
     pub pin_selection: crate::render_config::PinSelectionMode,
 }
 
-impl Default for LibraryDisplaySettings {
-    fn default() -> Self {
-        // Altium SchLib defaults: cream sheet + fine 50-mil (1.27 mm)
-        // grid + visible-on. Matches the look in the user's reference
-        // screenshot of an Altium .SchLib document.
+impl LibraryDisplaySettings {
+    /// Altium SchLib defaults: cream sheet + visible grid, with the grid
+    /// size and pin selection taken from `defaults` (the model's copy of the
+    /// preferences, never a fresh disk read).
+    pub fn seeded(defaults: &NewLibraryDefaults) -> Self {
         Self {
             unit: Unit::Mm,
-            grid_size_mm: crate::fonts::read_symbol_grid_size_mm_pref(),
+            grid_size_mm: defaults.grid_size_mm,
             grid_visible: true,
             sheet_color: SheetColor::Cream,
-            pin_selection: crate::fonts::read_symbol_pin_selection_pref(),
+            pin_selection: defaults.pin_selection,
         }
+    }
+}
+
+impl Default for LibraryDisplaySettings {
+    /// Same look as [`Self::seeded`], with the preferences read from disk.
+    /// For fixtures that have no model; the app seeds from `LibraryState`.
+    fn default() -> Self {
+        Self::seeded(&NewLibraryDefaults::default())
     }
 }
 

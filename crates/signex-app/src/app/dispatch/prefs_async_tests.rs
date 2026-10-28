@@ -5,6 +5,51 @@ use signex_types::coord::Unit;
 
 use super::*;
 
+/// Run `task` the way the iced runtime would and hand every message it
+/// yields to `on_message` as it arrives, so a test can look at the file at
+/// that exact moment.
+fn run_task_observing(task: iced::Task<Message>, mut on_message: impl FnMut(&Message)) {
+    use futures::StreamExt as _;
+    let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+        return;
+    };
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    runtime.block_on(async {
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Output(message) = action {
+                on_message(&message);
+            }
+        }
+    });
+}
+
+fn run_task(task: iced::Task<Message>) {
+    run_task_observing(task, |_| {});
+}
+
+/// The Save tests all drive `autosave_enabled` in the one process-wide
+/// prefs file, so they take turns.
+static AUTOSAVE_KEY: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn autosave_key() -> std::sync::MutexGuard<'static, ()> {
+    AUTOSAVE_KEY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn save_message() -> Message {
+    Message::Preferences(PreferencesMsg::Inner(crate::preferences::PrefMsg::Save))
+}
+
+fn is_save_writes_finished(message: &Message) -> bool {
+    matches!(
+        message,
+        Message::Preferences(PreferencesMsg::Inner(
+            crate::preferences::PrefMsg::SaveWritesFinished
+        ))
+    )
+}
+
 #[test]
 fn cycling_the_unit_leaves_prefs_json_to_the_returned_task() {
     let (mut app, _task) = Signex::new();
@@ -20,6 +65,13 @@ fn cycling_the_unit_leaves_prefs_json_to_the_returned_task() {
         "update must not write prefs.json inline"
     );
     assert!(task.units() >= 1, "the write is handed back as a Task");
+
+    run_task(task);
+    assert_eq!(
+        crate::fonts::read_unit_pref(),
+        Unit::Mil,
+        "the returned task writes the new unit"
+    );
 }
 
 #[test]
@@ -38,10 +90,18 @@ fn setting_the_grid_size_leaves_prefs_json_to_the_returned_task() {
         "update must not write prefs.json inline"
     );
     assert!(task.units() >= 1);
+
+    run_task(task);
+    assert_eq!(
+        crate::fonts::read_grid_size_mm_pref(),
+        Some(5.08),
+        "the returned task writes the new grid size"
+    );
 }
 
 #[test]
 fn saving_preferences_leaves_prefs_json_to_the_returned_tasks() {
+    let _turn = autosave_key();
     let (mut app, _task) = Signex::new();
     crate::fonts::write_autosave_enabled_pref(false);
     app.ui_state.autosave_enabled = false;
@@ -57,6 +117,12 @@ fn saving_preferences_leaves_prefs_json_to_the_returned_tasks() {
         "Save must not write prefs.json inline"
     );
     assert!(task.units() >= 1, "the writes are handed back as Tasks");
+
+    run_task(task);
+    assert!(
+        crate::fonts::read_autosave_enabled_pref(),
+        "the Save tasks write the committed value"
+    );
 }
 
 #[test]
@@ -77,6 +143,13 @@ fn changing_an_erc_severity_leaves_prefs_json_to_the_returned_task() {
         "update must not write prefs.json inline"
     );
     assert!(task.units() >= 1);
+
+    run_task(task);
+    assert_eq!(
+        crate::fonts::read_erc_severity_overrides().get(&RuleKind::UnusedPin),
+        Some(&Severity::Info),
+        "the returned task writes the override"
+    );
 }
 
 #[test]
@@ -96,6 +169,12 @@ fn clearing_recent_projects_leaves_prefs_json_to_the_returned_task() {
         "update must not write prefs.json inline"
     );
     assert!(task.units() >= 1);
+
+    run_task(task);
+    assert!(
+        crate::fonts::read_recent_projects().is_empty(),
+        "the returned task writes the cleared list"
+    );
 }
 
 #[test]
@@ -114,4 +193,88 @@ fn adding_a_custom_filter_preset_leaves_prefs_json_to_the_returned_task() {
         "update must not write prefs.json inline"
     );
     assert!(task.units() >= 1);
+
+    run_task(task);
+    assert_eq!(
+        crate::fonts::read_custom_filter_presets().len(),
+        1,
+        "the returned task writes the new preset"
+    );
+}
+
+#[test]
+fn a_save_writes_the_value_committed_at_dispatch_not_a_later_one() {
+    let _turn = autosave_key();
+    let (mut app, _task) = Signex::new();
+    crate::fonts::write_autosave_enabled_pref(false);
+    app.ui_state.autosave_enabled = false;
+    app.ui_state.preferences_draft_autosave_enabled = true;
+
+    let task = app.dispatch_update(save_message());
+    // The user flips the setting again before the worker gets to run.
+    app.ui_state.autosave_enabled = false;
+    run_task(task);
+
+    assert!(
+        crate::fonts::read_autosave_enabled_pref(),
+        "the write carries the snapshot taken when Save was dispatched"
+    );
+}
+
+#[test]
+fn save_writes_finished_runs_only_after_the_writes_landed() {
+    let _turn = autosave_key();
+    let (mut app, _task) = Signex::new();
+    crate::fonts::write_autosave_enabled_pref(false);
+    app.ui_state.autosave_enabled = false;
+    app.ui_state.preferences_draft_autosave_enabled = true;
+
+    let task = app.dispatch_update(save_message());
+    let mut probed = false;
+    run_task_observing(task, |message| {
+        if is_save_writes_finished(message) {
+            probed = true;
+            assert!(
+                crate::fonts::read_autosave_enabled_pref(),
+                "the file-health probe must not run before the writes finished"
+            );
+        }
+    });
+
+    assert!(probed, "Save chains the probe after its writes");
+}
+
+/// Save, then quit at once: the quit path must not release `next` (which
+/// ends in `iced::exit()`) until the background writes have landed.
+#[test]
+fn quitting_right_after_save_waits_for_the_preference_writes() {
+    let _turn = autosave_key();
+    let (mut app, _task) = Signex::new();
+    crate::fonts::write_autosave_enabled_pref(false);
+    app.ui_state.autosave_enabled = false;
+    app.ui_state.preferences_draft_autosave_enabled = true;
+
+    // The prefs file is busy for a while, so the writes cannot land before
+    // the quit chain would reach its exit step unless it waits for them.
+    let busy = crate::fonts::hold_prefs_io_for(std::time::Duration::from_millis(400));
+    let save = app.dispatch_update(save_message());
+    let exit_marker =
+        Message::Preferences(PreferencesMsg::Inner(crate::preferences::PrefMsg::Noop));
+    let quit = app.flush_quit_writes_then(iced::Task::done(exit_marker));
+    let mut exited = false;
+    run_task_observing(iced::Task::batch([save, quit]), |message| {
+        if matches!(
+            message,
+            Message::Preferences(PreferencesMsg::Inner(crate::preferences::PrefMsg::Noop))
+        ) {
+            exited = true;
+            assert!(
+                crate::fonts::read_autosave_enabled_pref(),
+                "the app would exit here: the saved value must already be on disk"
+            );
+        }
+    });
+
+    assert!(exited, "the quit chain reaches its exit step");
+    busy.join().expect("holder thread");
 }

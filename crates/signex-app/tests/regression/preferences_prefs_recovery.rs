@@ -278,7 +278,10 @@ fn saving_reprobes_a_file_that_broke_while_the_dialog_was_open() {
     // the workflow the banner's own "repair it by hand" advice invites,
     // then save without ever closing the dialog.
     guard.seed_broken();
-    let _ = app.update(inner(PrefMsg::Save));
+    {
+        let task = app.update(inner(PrefMsg::Save));
+        crate::drive::drive(&mut app, task);
+    }
 
     // Assert
     let reported = app
@@ -372,7 +375,10 @@ fn erc_severity_override_equal_to_the_default_is_stored_verbatim() {
     app.ui_state.erc_severity_override.clear();
 
     // Act: ERC dialog
-    let _ = app.update(Message::Erc(ErcMsg::SeverityChanged(rule, default)));
+    {
+        let task = app.update(Message::Erc(ErcMsg::SeverityChanged(rule, default)));
+        crate::drive::drive(&mut app, task);
+    }
 
     // Assert
     assert_eq!(
@@ -517,7 +523,10 @@ fn erc_severity_draft_then_save_persists() {
 
     // Act
     let _ = app.update(inner(PrefMsg::DraftErcSeverity(rule, Severity::Off)));
-    let _ = app.update(inner(PrefMsg::Save));
+    {
+        let task = app.update(inner(PrefMsg::Save));
+        crate::drive::drive(&mut app, task);
+    }
 
     // Assert
     let expected = rule.normalize_override(Severity::Off);
@@ -578,7 +587,10 @@ fn erc_dialog_change_while_preferences_open_survives_save() {
     let _ = app.update(Message::Preferences(PreferencesMsg::Open));
 
     // Act: dialog edit while Preferences is open, then an unrelated Save
-    let _ = app.update(Message::Erc(ErcMsg::SeverityChanged(rule, Severity::Off)));
+    {
+        let task = app.update(Message::Erc(ErcMsg::SeverityChanged(rule, Severity::Off)));
+        crate::drive::drive(&mut app, task);
+    }
     assert!(
         !app.ui_state.preferences_dirty,
         "a committed ERC dialog change is not an unsaved Preferences edit"
@@ -586,7 +598,10 @@ fn erc_dialog_change_while_preferences_open_survives_save() {
     let _ = app.update(inner(PrefMsg::DraftAutosaveEnabled(
         !app.ui_state.autosave_enabled,
     )));
-    let _ = app.update(inner(PrefMsg::Save));
+    {
+        let task = app.update(inner(PrefMsg::Save));
+        crate::drive::drive(&mut app, task);
+    }
 
     // Assert
     let expected = rule.normalize_override(Severity::Off);
@@ -618,8 +633,14 @@ fn preferences_and_erc_dialog_edits_to_different_rules_both_survive_save() {
 
     // Act
     let _ = app.update(inner(PrefMsg::DraftErcSeverity(x, Severity::Off)));
-    let _ = app.update(Message::Erc(ErcMsg::SeverityChanged(y, Severity::Off)));
-    let _ = app.update(inner(PrefMsg::Save));
+    {
+        let task = app.update(Message::Erc(ErcMsg::SeverityChanged(y, Severity::Off)));
+        crate::drive::drive(&mut app, task);
+    }
+    {
+        let task = app.update(inner(PrefMsg::Save));
+        crate::drive::drive(&mut app, task);
+    }
 
     // Assert
     let off_x = x.normalize_override(Severity::Off);
@@ -650,7 +671,10 @@ fn erc_dialog_matching_a_pending_preferences_edit_clears_dirty() {
     assert!(app.ui_state.preferences_dirty);
 
     // Act
-    let _ = app.update(Message::Erc(ErcMsg::SeverityChanged(rule, Severity::Off)));
+    {
+        let task = app.update(Message::Erc(ErcMsg::SeverityChanged(rule, Severity::Off)));
+        crate::drive::drive(&mut app, task);
+    }
 
     // Assert
     assert!(

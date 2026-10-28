@@ -39,8 +39,9 @@ impl Signex {
         self.ui_state
             .erc_severity_override
             .insert(rule, rule.normalize_override(severity));
-        // Persist so the override survives restart, off the UI thread. Silent
-        // on I/O errors — this is a preference, not critical state.
+        // Persist so the override survives restart, off the UI thread. A
+        // failed write is logged at `error!` by the prefs writer; it does not
+        // interrupt the user.
         let overrides = self.ui_state.erc_severity_override.clone();
         let persist = crate::fonts::background_pref_write("erc_severity_overrides", move || {
             crate::fonts::write_erc_severity_overrides(&overrides)
