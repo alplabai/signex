@@ -527,6 +527,10 @@ fn loose_identical_variants_stay_apart_when_the_directory_probe_says_so() {
 #[test]
 fn begin_save_all_probes_the_loose_directory_then_saves_both_spellings() {
     let dir = tempfile::tempdir().expect("tempdir");
+    // A lettered entry of its own, so the probe answers from this directory
+    // instead of borrowing a sibling in the shared temp dir that a parallel
+    // test may delete mid-probe.
+    std::fs::write(dir.path().join("Probe.txt"), b"").expect("probe entry");
     let (mut app, upper, lower) = loose_identical_variants(dir.path());
     let folds = crate::app::state::volume_case::directory_ignores_case(dir.path());
     let sink = count_writes(&mut app);
