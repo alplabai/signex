@@ -15,32 +15,37 @@ impl Signex {
             // state (#557 phase 1) — the subscription no longer decides
             // anything.
             InputMsg::KeyInput { window, event } => self.handle_key_input(window, event),
-            InputMsg::FootprintModeShortcut(target) => {
-                // v0.14.2 — gate on "active tab is a footprint
-                // editor". When yes, route through the existing
-                // FootprintSetMode dispatch (which also runs the
-                // sketch dispatcher's SetMode handler so the
-                // SetMode side-effects fire). Otherwise no-op so the
-                // bare digits don't hijack other tabs.
-                let path = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
-                    .and_then(|t| t.kind.as_footprint_editor())
-                    .cloned();
-                if let Some(path) = path {
-                    self.update(Message::Library(
-                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                            path,
-                            msg: crate::library::messages::PrimitiveEdit::Footprint(
-                                crate::library::messages::FootprintEditorMsg::SetMode(target),
-                            ),
-                        },
-                    ))
-                } else {
-                    Task::none()
-                }
-            }
+            InputMsg::FootprintModeShortcut(target) => self.update_active_footprint_editor(
+                crate::library::messages::FootprintEditorMsg::SetMode(target),
+            ),
+            InputMsg::FootprintCourtyardOutlineRequested => self.update_active_footprint_editor(
+                crate::library::messages::FootprintEditorMsg::RecomputeCourtyardOutline,
+            ),
         }
+    }
+
+    /// Send `msg` to the footprint editor on the active tab; a no-op on any
+    /// other tab, so a bare digit key never hijacks them. A mode switch
+    /// goes through the same dispatch as the toolbar, so the sketch
+    /// dispatcher's `SetMode` side effects fire.
+    fn update_active_footprint_editor(
+        &mut self,
+        msg: crate::library::messages::FootprintEditorMsg,
+    ) -> Task<Message> {
+        let path = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .and_then(|t| t.kind.as_footprint_editor())
+            .cloned();
+        let Some(path) = path else {
+            return Task::none();
+        };
+        self.update(Message::Library(
+            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                path,
+                msg: crate::library::messages::PrimitiveEdit::Footprint(msg),
+            },
+        ))
     }
 }

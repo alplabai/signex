@@ -283,7 +283,9 @@ fn recompute_courtyard_outline(editor: &mut crate::app::FootprintDocument) {
     // on the editor state; the new polygon lands on
     // `state.courtyard_outline_mm` and the canvas draws it
     // in preference to the bbox.
-    editor.state.recompute_courtyard_outline();
+    if let Err(error) = editor.state.recompute_courtyard_outline() {
+        crate::diagnostics::log_warning(format!("Courtyard outline: {error}"));
+    }
     editor.canvas_cache.clear();
     editor.dirty = true;
 }

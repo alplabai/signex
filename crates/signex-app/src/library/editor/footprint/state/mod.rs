@@ -13,6 +13,7 @@
 //! Submodules:
 //! - [`pad`] — `EditorPad`, `PadStackUi`, `NextPadDefaults`, `PadSide`,
 //!   `CourtyardRect`, `ShapeParamMap`, `AlignOp`.
+//! - `courtyard` — the outline-following courtyard.
 //! - [`mode`] — `EditorMode`, `FpActiveBarMenu`, `PadStackTab`.
 //! - [`context_menu`] — right-click menu state types.
 //! - [`placement`] — `PlacementInput*`, `PlaceArcPending`.
@@ -24,6 +25,9 @@
 
 pub mod conflict;
 pub mod context_menu;
+mod courtyard;
+#[cfg(test)]
+mod courtyard_tests;
 pub mod mode;
 pub mod pad;
 pub mod placement;
@@ -584,115 +588,6 @@ impl FootprintEditorState {
         self.recompute_courtyard();
     }
 
-    /// v0.27 — outline-following courtyard. Builds a polygon for
-    /// each pad's bbox, unions the lot via the sketch geom module,
-    /// offsets the union by `COURTYARD_SLACK_MM`, and stores the
-    /// result on `courtyard_outline_mm`. Replaces the bbox-based
-    /// `recompute_courtyard` for users who want the courtyard to
-    /// hug the actual pad cluster rather than its enclosing
-    /// rectangle. Returns `true` when a polygon was produced;
-    /// `false` when there are no pads. Pads whose union was refused
-    /// (they touch a neighbour) stay as separate rings, so the stored
-    /// outline may omit them: one Messages-panel warning lists them
-    /// and the return value is still `true`.
-    pub fn recompute_courtyard_outline(&mut self) -> bool {
-        use signex_sketch::geom::{BoolOp, CornerStyle, Point2, offset_polygon, polygon_op};
-
-        if self.pads.is_empty() {
-            self.courtyard_outline_mm = None;
-            return false;
-        }
-
-        // Per-pad quad from the ROTATED corners, so a turned pad's
-        // courtyard hugs the copper instead of the box it would
-        // occupy unrotated. Round/Oval/RoundRect/etc. still fall back
-        // to the enclosing quad; a follow-up can mint the shape-
-        // accurate outline (sampled circle for Round, arc-anchor for
-        // RoundRect, etc.).
-        let pad_polys: Vec<Vec<Point2>> = self
-            .pads
-            .iter()
-            .map(|p| {
-                p.rotated_corners_mm()
-                    .iter()
-                    .map(|&(x, y)| Point2::new(x, y))
-                    .collect()
-            })
-            .collect();
-
-        // Union pads pairwise. For disjoint pads polygon_op returns
-        // both rings; we keep them all and offset each individually.
-        // Connected pads collapse into a single ring through the
-        // accumulating union. When the union is refused (pads sharing
-        // an edge or vertex) the two rings stay separate and the
-        // refusal is reported to the Messages panel.
-        let mut accumulated: Vec<Vec<Point2>> = vec![pad_polys[0].clone()];
-        let mut refused: Vec<usize> = Vec::new();
-        for (idx, next) in pad_polys.iter().enumerate().skip(1) {
-            let mut new_acc: Vec<Vec<Point2>> = Vec::new();
-            let mut consumed = false;
-            for ring in accumulated.drain(..) {
-                match polygon_op(&ring, next, BoolOp::Union) {
-                    Ok(unioned) if unioned.is_empty() => new_acc.push(ring),
-                    Ok(unioned) => {
-                        new_acc.extend(unioned);
-                        consumed = true;
-                    }
-                    Err(_) => {
-                        if !refused.contains(&idx) {
-                            refused.push(idx);
-                        }
-                        new_acc.push(ring);
-                    }
-                }
-            }
-            if !consumed {
-                new_acc.push(next.clone());
-            }
-            accumulated = new_acc;
-        }
-
-        if !refused.is_empty() {
-            tracing::warn!(
-                "courtyard outline: {} pad(s) touch a neighbour and were not merged: {}",
-                refused.len(),
-                refused
-                    .iter()
-                    .map(|&i| self.pads[i].number.as_str())
-                    .collect::<Vec<_>>()
-                    .join(",")
-            );
-        }
-
-        // Offset each ring outward by COURTYARD_SLACK_MM with
-        // round corners (matches the Altium-PCB convention of an
-        // arc-cornered courtyard) sampled at 4 segments per
-        // corner — enough to read smooth at typical zooms.
-        let mut offsetted: Vec<Vec<Point2>> = Vec::new();
-        for ring in &accumulated {
-            let off = offset_polygon(
-                ring,
-                COURTYARD_SLACK_MM,
-                CornerStyle::Round { arc_segments: 4 },
-            );
-            if off.len() >= 3 {
-                offsetted.push(off);
-            }
-        }
-
-        if offsetted.is_empty() {
-            self.courtyard_outline_mm = None;
-            return false;
-        }
-        // For now we surface only the first ring — the bake's
-        // `Footprint::courtyard` field carries one polygon. Multi-
-        // ring courtyards (separate pad islands) need a schema
-        // bump; queued for v0.28.
-        let chosen = &offsetted[0];
-        self.courtyard_outline_mm = Some(chosen.iter().map(|p| (p.x, p.y)).collect());
-        true
-    }
-
     /// v0.22 Phase D2 — Inverse of `sync_pads_to_primitive`. After a
     /// Sketch-mode solve+bake regenerates `Footprint::pads` from the
     /// sketch source-of-truth, refresh the editor-side `pads` cache.
@@ -808,42 +703,6 @@ mod tests {
         assert_eq!(s.pads.len(), 1);
         assert_eq!(s.pads[0].number, "1");
         assert_eq!(s.pads[0].size_mm, (1.0, 1.5));
-    }
-
-    /// #1448: two pads sharing an edge cannot be unioned. The outline
-    /// must keep them as separate rings and say so in the Messages
-    /// panel instead of trusting a wrong polygon.
-    #[test]
-    fn courtyard_outline_falls_back_and_warns_when_union_is_refused() {
-        use crate::ignore::IgnoreResult;
-        crate::diagnostics::init_logging().ignore("the logger may already be installed");
-        let mut s = FootprintEditorState::empty();
-        s.add_pad_at(0.0, 0.0);
-        s.add_pad_at(2.0, 0.0);
-        for pad in &mut s.pads {
-            pad.size_mm = (2.0, 2.0);
-        }
-        s.pads[0].number = "SHARED_EDGE_A".into();
-        s.pads[1].number = "SHARED_EDGE_B".into();
-
-        assert!(s.recompute_courtyard_outline());
-        let warnings = || {
-            crate::diagnostics::recent_entries()
-                .iter()
-                .filter(|e| e.message.contains("SHARED_EDGE_B"))
-                .count()
-        };
-        assert_eq!(warnings(), 1, "one batched warning per recompute");
-
-        // First ring is pad A's own offset square: it spans x in
-        // [-1 - slack, 1 + slack], not the merged [-1, 3] extent.
-        let outline = s.courtyard_outline_mm.as_ref().expect("an outline");
-        let max_x = outline.iter().map(|p| p.0).fold(f64::MIN, f64::max);
-        assert!(max_x < 1.0 + 2.0 * COURTYARD_SLACK_MM, "max_x {max_x}");
-        let logged = crate::diagnostics::recent_entries()
-            .iter()
-            .any(|e| e.message.contains("SHARED_EDGE_B") && e.message.contains("not merged"));
-        assert!(logged, "the refusal must reach the Messages panel");
     }
 
     #[test]
