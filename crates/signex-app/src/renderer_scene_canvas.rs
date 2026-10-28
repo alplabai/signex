@@ -6,6 +6,7 @@ use iced::{Color, Point};
 use signex_gfx::primitive::arc::Arc;
 use signex_gfx::primitive::circle::Circle;
 use signex_gfx::primitive::line::LineSegment;
+use signex_gfx::primitive::ordered::OrderedItem;
 use signex_gfx::primitive::polygon::GpuPolygon;
 use signex_gfx::primitive::text::{TextHAlign, TextItem, TextVAlign};
 use signex_gfx::scene::{CPU_SCHEMATIC_DRAW_ORDER, Scene, SceneBucket};
@@ -186,6 +187,36 @@ pub(crate) fn draw_dashed_line(
                 .with_color(color),
         );
         dist += dash + gap;
+    }
+}
+
+/// Replay the ordered drawings one item at a time, so list order is the paint
+/// order across kinds (#1579). Each item goes through its kind's bucket drawer
+/// as a one-element slice, which keeps the per-kind look identical.
+fn draw_drawings<F>(
+    frame: &mut canvas::Frame,
+    drawings: &[OrderedItem],
+    world_to_screen: F,
+    options: SceneDrawOptions,
+) where
+    F: Fn([f32; 2]) -> Point + Copy,
+{
+    use std::slice::from_ref;
+    for item in drawings {
+        match item {
+            OrderedItem::Line(line) => {
+                draw_line_bucket(frame, from_ref(line), world_to_screen, options);
+            }
+            OrderedItem::Circle(circle) => {
+                draw_circle_bucket(frame, from_ref(circle), world_to_screen, options);
+            }
+            OrderedItem::Arc(arc) => {
+                draw_arc_bucket(frame, from_ref(arc), world_to_screen, options);
+            }
+            OrderedItem::Polygon(polygon) => {
+                draw_polygon_bucket(frame, from_ref(polygon), world_to_screen, options);
+            }
+        }
     }
 }
 
@@ -480,6 +511,12 @@ pub fn draw_scene_with_world_to_screen<F>(
     // the surface #199 is about to move onto the GPU (#645).
     for &bucket in CPU_SCHEMATIC_DRAW_ORDER {
         match bucket {
+            SceneBucket::Drawings => {
+                draw_drawings(frame, &scene.drawings, world_to_screen, options);
+            }
+            SceneBucket::DrawingsFront => {
+                draw_drawings(frame, &scene.drawings_front, world_to_screen, options);
+            }
             SceneBucket::Lines => draw_line_bucket(frame, &scene.lines, world_to_screen, options),
             SceneBucket::Circles => {
                 draw_circle_bucket(frame, &scene.circles, world_to_screen, options);

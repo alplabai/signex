@@ -666,8 +666,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                                     PanelMsg::NetClass(NetClassMsg::AssignNet {
                                         project,
                                         net: net.clone(),
-                                        class: (choice != crate::panels::NO_NET_CLASS)
-                                            .then_some(choice),
+                                        class: choice.into_class(),
                                     })
                                 },
                                 muted,

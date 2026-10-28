@@ -205,6 +205,7 @@ impl Signex {
         self.document_state.panel_ctx.selected_uuid = None;
         self.document_state.panel_ctx.selected_kind = None;
         self.document_state.panel_ctx.selected_drawing = None;
+        self.document_state.panel_ctx.selected_drawing_placement = Default::default();
         self.document_state.panel_ctx.selected_child_sheet = None;
 
         if selected.len() != 1 {
@@ -312,6 +313,8 @@ impl Signex {
                 signex_types::schematic::SelectedKind::Drawing
             ) {
                 use signex_types::schematic::SchDrawing;
+                self.document_state.panel_ctx.selected_drawing_placement =
+                    engine.document().drawing_placement(details.selected_uuid);
                 self.document_state.panel_ctx.selected_drawing = engine
                     .document()
                     .drawings
@@ -412,6 +415,7 @@ impl Signex {
             window_width: self.ui_state.window_size.0,
             wire_color_overrides: &self.ui_state.wire_color_overrides,
             wire_class_styles: self.ui_state.net_class_styles.styles(),
+            wire_class_revision: self.ui_state.net_class_styles.revision(),
             selection_filters: &self.interaction_state.selection_filters,
             placement: None,
         }

@@ -350,6 +350,9 @@ impl Signex {
                     }
                     ContextAction::MirrorX => self.dispatch_edit_message(EditMsg::MirrorSelectedY),
                     ContextAction::MirrorY => self.dispatch_edit_message(EditMsg::MirrorSelectedX),
+                    ContextAction::ArrangeDrawings(arrange) => {
+                        self.dispatch_edit_message(EditMsg::ArrangeDrawings(arrange))
+                    }
                     ContextAction::ActiveBar(active_bar_action) => {
                         self.handle_active_bar_action(active_bar_action)
                     }

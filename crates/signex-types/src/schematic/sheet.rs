@@ -306,6 +306,43 @@ impl FromIterator<(String, LibSymbol)> for LibSymbolTable {
 // Top-level sheet
 // ---------------------------------------------------------------------------
 
+impl SchDrawing {
+    /// The drawing's own id, whichever shape it is.
+    pub fn uuid(&self) -> Uuid {
+        match self {
+            Self::Line { uuid, .. }
+            | Self::Rect { uuid, .. }
+            | Self::Circle { uuid, .. }
+            | Self::Arc { uuid, .. }
+            | Self::Polyline { uuid, .. } => *uuid,
+        }
+    }
+}
+
+/// Whether a drawing paints under the circuit or over it (#1583).
+///
+/// Drawings are documentation, so the default keeps them behind symbols,
+/// wires and pins; `Above` is for a highlight or a callout laid over the
+/// circuit. Text notes are not drawings and always stay on top.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DrawingPlacement {
+    #[default]
+    Behind,
+    Above,
+}
+
+impl SchematicSheet {
+    /// The placement of drawing `uuid`; [`DrawingPlacement::Behind`] when none
+    /// was chosen.
+    pub fn drawing_placement(&self, uuid: Uuid) -> DrawingPlacement {
+        self.drawing_placements
+            .get(&uuid)
+            .copied()
+            .unwrap_or_default()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SchematicSheet {
     pub uuid: Uuid,
@@ -357,6 +394,13 @@ pub struct SchematicSheet {
     /// the sheet is saved.
     #[serde(default)]
     pub net_colors: HashMap<Uuid, crate::theme::Color>,
+    /// Where each drawing sits against the circuit (#1583), by drawing uuid.
+    /// Only drawings that sit [`DrawingPlacement::Above`] have an entry: no
+    /// entry means [`DrawingPlacement::Behind`], so a sheet that never chose
+    /// one writes nothing and re-saves byte-identical. Saved in
+    /// `[extras.sheet.drawing_placements]`.
+    #[serde(default)]
+    pub drawing_placements: BTreeMap<Uuid, DrawingPlacement>,
     /// Border, title block and zone counts of the sheet frame. Saved in
     /// `[extras.sheet.frame]` only when not the default.
     #[serde(default, skip_serializing_if = "SheetFrameSettings::is_default")]
@@ -401,6 +445,7 @@ impl Default for SchematicSheet {
             title_block: HashMap::new(),
             lib_symbols: LibSymbolTable::default(),
             net_colors: HashMap::new(),
+            drawing_placements: BTreeMap::new(),
             frame: SheetFrameSettings::default(),
             unknown: SheetUnknown::default(),
         }

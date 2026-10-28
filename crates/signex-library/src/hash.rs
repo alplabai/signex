@@ -195,6 +195,32 @@ mod tests {
         );
     }
 
+    /// A row holding a legacy prefixed measurement hashes exactly as it
+    /// did before the quantity core: reading it through `as_quantity`
+    /// never rewrites or re-encodes the stored value.
+    #[test]
+    fn hash_of_untouched_legacy_measurement_row_is_stable() {
+        let mut row = fixture_row();
+        row.parameters.insert(
+            "value".into(),
+            ParamValue::Measurement {
+                value: 4.7,
+                unit: "kΩ".into(),
+            },
+        );
+        let before = hex(&hash_row_content(&row).unwrap());
+        assert_eq!(
+            row.parameters["value"].as_quantity().unwrap().base(),
+            4700.0
+        );
+        let _ = row.parameters["value"].display();
+        assert_eq!(hex(&hash_row_content(&row).unwrap()), before);
+        assert_eq!(
+            before,
+            "0061c8e28d45c7338940261e03b1e1fc17b216178dbfeaa0ed1158a3b8d26db6"
+        );
+    }
+
     #[test]
     fn hash_changes_when_alternate_symbol_added() {
         let a = fixture_row();

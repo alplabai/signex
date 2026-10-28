@@ -18,6 +18,9 @@ use crate::app::state::scope::path_key_with;
 use crate::app::state::volume_case::probe_directory_case;
 use std::collections::HashMap;
 
+/// The reason Save All records for a spelling it kept unsaved.
+const CASE_RULE_UNKNOWN_REASON: &str = "folder case rule unknown, save it separately";
+
 impl Signex {
     /// Start the write of one dirty file, matching `path` to the spelling it
     /// is held under by the volume rule `fold`; see [`Self::begin_held_save`].
@@ -179,10 +182,14 @@ impl Signex {
         // One file reached under several spellings is written once.
         let mut begun = std::collections::HashSet::new();
         let mut case_variants = Vec::new();
-        // A reason left by an earlier pass (say, a spelling kept unsaved)
-        // must not outlive it: this pass records its own.
+        // The case-spelling reason an earlier pass left must not outlive it:
+        // this pass records its own. Any other reason (say, a Ctrl+S that
+        // failed) is not Save All's to clear.
         for path in paths {
-            self.document_state.document_saves.clear_failure(path);
+            let saves = &mut self.document_state.document_saves;
+            if saves.failure(path) == Some(CASE_RULE_UNKNOWN_REASON) {
+                saves.clear_failure(path);
+            }
         }
         for path in paths {
             let FoldAnswer { fold, decided } = self.identity_decision(path);
@@ -204,10 +211,9 @@ impl Signex {
                         if let Some((kept, message)) = self.unsaved_spellings(&held, &target) {
                             crate::diagnostics::log_warning(message);
                             for path in kept {
-                                self.document_state.document_saves.record_failure(
-                                    path,
-                                    "folder case rule unknown, save it separately".into(),
-                                );
+                                self.document_state
+                                    .document_saves
+                                    .record_failure(path, CASE_RULE_UNKNOWN_REASON.into());
                             }
                         }
                     } else if held.len() > 1 {

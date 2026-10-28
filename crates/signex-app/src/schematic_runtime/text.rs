@@ -32,6 +32,8 @@ pub fn draw_text_note_preview(
         }],
         overlays: OverlayInputs::default(),
         erc_markers: Vec::new(),
+        drawings: Vec::new(),
+        drawings_front: Vec::new(),
         wire_color_overrides: HashMap::new(),
         wire_line_styles: HashMap::new(),
     };

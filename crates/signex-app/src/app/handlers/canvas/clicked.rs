@@ -188,11 +188,12 @@ impl Signex {
         // Altium's "click the object to reference" convention.
         if let Some(picker) = self.ui_state.reorder_picker {
             if let Some(snapshot) = self.active_render_snapshot() {
-                let hit = crate::schematic_runtime::hit_test::hit_test(
+                let hit = crate::schematic_runtime::hit_test::hit_test_styled(
                     snapshot,
                     &self.interaction_state.active_canvas().designators,
                     world_x,
                     world_y,
+                    self.ui_state.net_class_styles.styles(),
                 );
                 if let Some(reference) = hit {
                     let direction = match picker {

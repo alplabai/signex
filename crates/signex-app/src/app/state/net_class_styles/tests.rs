@@ -154,6 +154,30 @@ fn a_member_net_wire_gets_the_class_style() {
 }
 
 #[test]
+fn the_revision_moves_with_the_style_map_and_only_then() {
+    let wire_id = Uuid::from_u128(1);
+    let sheet = sheet_with_net(wire_id, "VCC");
+    let classes = [dashed_class("Power", "VCC")];
+    let mut cache = NetClassStyleCache::default();
+    let start = cache.revision();
+
+    resolve_and_apply(&mut cache, PROJECT, key(1, &classes), &sheet);
+    let styled = cache.revision();
+    assert_ne!(styled, start, "the map gained a style");
+
+    // Same styles under a new connectivity stamp: the map did not change.
+    resolve_and_apply(&mut cache, PROJECT, key(2, &classes), &sheet);
+    assert_eq!(cache.revision(), styled, "an equal map keeps the revision");
+
+    cache.retain_projects(&[]);
+    assert_ne!(
+        cache.revision(),
+        styled,
+        "dropping the project empties the map"
+    );
+}
+
+#[test]
 fn no_classes_leaves_the_cache_empty_and_reports_no_change() {
     let sheet = sheet_with_net(Uuid::from_u128(1), "VCC");
     let mut cache = NetClassStyleCache::default();
@@ -343,15 +367,19 @@ fn going_back_to_the_stored_key_cancels_the_answer_in_flight() {
 }
 
 #[test]
-fn giving_up_forgets_requests_in_flight_so_they_are_asked_again() {
+fn a_failed_key_is_not_asked_again_until_the_key_moves() {
     let classes = [dashed_class("Power", "VCC")];
     let mut cache = NetClassStyleCache::default();
     let k = key(1, &classes);
     assert!(cache.want(PROJECT, &k));
 
-    cache.give_up(&[PROJECT]);
+    cache.give_up(&[(PROJECT, k.clone())]);
 
-    assert!(cache.want(PROJECT, &k));
+    assert!(!cache.want(PROJECT, &k), "same failing key: not retried");
+    let moved = key(2, &classes);
+    assert!(cache.want(PROJECT, &moved), "moved key: asked");
+    cache.give_up(&[(PROJECT, moved)]);
+    assert!(cache.want(PROJECT, &k), "back to the old key after a move");
 }
 
 #[test]
@@ -362,10 +390,29 @@ fn a_failed_task_forgets_only_its_own_projects() {
     cache.want(PROJECT, &k);
     cache.want(OTHER, &k);
 
-    cache.give_up(&[PROJECT]);
+    cache.give_up(&[(PROJECT, k.clone())]);
 
-    assert!(cache.want(PROJECT, &k), "asked again");
+    assert!(!cache.want(PROJECT, &k), "failed key not retried");
     assert!(!cache.want(OTHER, &k), "still in flight");
+}
+
+#[test]
+fn a_failure_for_a_key_the_project_left_does_not_block_the_newer_key() {
+    let wire_id = Uuid::from_u128(1);
+    let classes = [dashed_class("Power", "VCC")];
+    let netlist = signex_net::build_netlist(&sheet_with_net(wire_id, "VCC"));
+    let mut cache = NetClassStyleCache::default();
+    let (k1, k2) = (key(1, &classes), key(2, &classes));
+    cache.want(PROJECT, &k1);
+    cache.want(PROJECT, &k2);
+
+    cache.give_up(&[(PROJECT, k1)]);
+    let applied = cache.apply(&ResolvedStyles {
+        projects: vec![resolved(PROJECT, k2, &netlist)],
+    });
+
+    assert!(applied.styles_changed, "the answer for K2 is still wanted");
+    assert!(cache.styles().contains_key(&wire_id));
 }
 
 #[test]

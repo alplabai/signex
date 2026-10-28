@@ -1,3 +1,4 @@
+use signex_types::designator::DesignatorStandard;
 use signex_types::project::ProjectData;
 
 use super::*;
@@ -125,4 +126,99 @@ fn parameters_are_set_cleared_removed_and_undone() {
     assert_eq!(data.parameters.get("rev").map(String::as_str), Some("B"));
     assert!(history.redo(&mut data));
     assert!(!data.parameters.contains_key("rev"));
+}
+
+fn pick(standard: Option<DesignatorStandard>) -> ProjectGeneralCommand {
+    ProjectGeneralCommand::SetDesignatorStandard(standard)
+}
+
+#[test]
+fn picks_description_and_parameters_undo_and_redo_in_order() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    history.apply(&mut data, set_description("Motor"));
+    assert!(history.apply(&mut data, pick(Some(DesignatorStandard::Iec81346_2))));
+    assert!(history.apply(&mut data, set_parameter("rev", "B")));
+    assert!(history.undo(&mut data));
+    assert!(data.parameters.is_empty());
+    assert_eq!(
+        data.designator_standard(),
+        Some(DesignatorStandard::Iec81346_2)
+    );
+    assert!(history.undo(&mut data));
+    assert_eq!(data.designator_standard(), None);
+    assert_eq!(
+        data.annotation, None,
+        "a project that never had one saves as before"
+    );
+    assert_eq!(data.description.as_deref(), Some("Motor"));
+    assert!(history.undo(&mut data));
+    assert_eq!(data.description, None);
+    assert!(!history.undo(&mut data));
+    assert!(history.redo(&mut data));
+    assert!(history.redo(&mut data));
+    assert_eq!(
+        data.designator_standard(),
+        Some(DesignatorStandard::Iec81346_2)
+    );
+    assert!(history.redo(&mut data));
+    assert_eq!(data.parameters.get("rev").map(String::as_str), Some("B"));
+}
+
+#[test]
+fn a_pick_closes_the_typing_run_on_both_sides() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    history.apply(&mut data, set_description("a"));
+    history.apply(&mut data, pick(Some(DesignatorStandard::Ieee315)));
+    history.apply(&mut data, set_description("ab"));
+    history.apply(&mut data, set_description("abc"));
+    assert!(history.undo(&mut data));
+    assert_eq!(data.description.as_deref(), Some("a"));
+    assert_eq!(
+        data.designator_standard(),
+        Some(DesignatorStandard::Ieee315)
+    );
+    assert!(history.undo(&mut data));
+    assert_eq!(data.designator_standard(), None);
+    assert_eq!(data.description.as_deref(), Some("a"));
+}
+
+#[test]
+fn re_picking_the_same_standard_records_nothing() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    assert!(!history.apply(&mut data, pick(None)));
+    assert!(history.apply(&mut data, pick(Some(DesignatorStandard::Ieee315))));
+    assert!(!history.apply(&mut data, pick(Some(DesignatorStandard::Ieee315))));
+}
+
+#[test]
+fn undoing_a_pick_over_an_unreadable_standard_restores_it_unchanged() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("p.snxprj");
+    std::fs::write(
+        &path,
+        r#"{"name":"p","dir":"","schematic_root":null,"pcb_file":null,
+            "annotation":{"designator_standard":"from_the_future","future":[1]}}"#,
+    )
+    .unwrap();
+    let mut data = signex_types::project::parse_project(&path).unwrap();
+    assert!(data.has_unreadable_annotation());
+    let kept = data.annotation_state();
+    let mut history = ProjectGeneralHistory::default();
+    assert!(!history.apply(&mut data, pick(None)), "the guard keeps it");
+    assert_eq!(data.annotation_state(), kept);
+    assert!(history.apply(&mut data, pick(Some(DesignatorStandard::Din40719_2))));
+    assert!(!data.has_unreadable_annotation());
+    assert!(history.undo(&mut data));
+    assert!(data.has_unreadable_annotation());
+    assert_eq!(data.annotation_state(), kept);
+    assert!(history.redo(&mut data));
+    assert_eq!(
+        data.designator_standard(),
+        Some(DesignatorStandard::Din40719_2)
+    );
+    assert!(history.undo(&mut data));
+    assert_eq!(data.annotation_state(), kept);
 }

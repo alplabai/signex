@@ -285,6 +285,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         unknown: _,
         // Loaded baseline only; the app owns the live overrides and no command edits them.
         net_colors: _,
+        drawing_placements,
         paper_size,
         font_family,
         root_sheet_page,
@@ -327,7 +328,10 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         differ(bus_entries, &b.bus_entries),
         DocumentPatch::BUS_ENTRIES,
     );
-    flag(differ(drawings, &b.drawings), DocumentPatch::DRAWINGS);
+    flag(
+        differ(drawings, &b.drawings) || differ(drawing_placements, &b.drawing_placements),
+        DocumentPatch::DRAWINGS,
+    );
     flag(
         differ(no_erc_directives, &b.no_erc_directives),
         DocumentPatch::NO_ERC_DIRECTIVES,
@@ -363,7 +367,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 44] = [
+const ALL_KINDS: [CommandKind; 46] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -407,6 +411,8 @@ const ALL_KINDS: [CommandKind; 44] = [
     CommandKind::SetTextFontFamily,
     CommandKind::SetSymbolDesignatorIn,
     CommandKind::SetDocumentFontFamily,
+    CommandKind::ArrangeDrawings,
+    CommandKind::SetDrawingPlacement,
     CommandKind::MoveEach,
 ];
 
@@ -458,6 +464,8 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetTextFontFamily
         | CommandKind::SetSymbolDesignatorIn
         | CommandKind::SetDocumentFontFamily
+        | CommandKind::ArrangeDrawings
+        | CommandKind::SetDrawingPlacement
         | CommandKind::MoveEach => {}
     }
 }
@@ -909,6 +917,20 @@ fn samples() -> Vec<(String, Command)> {
         Command::SetTextFontFamily {
             target: crate::TextTarget::Label(uid(LABEL, 1)),
             font_family: Some("Fira Mono".into()),
+        },
+    );
+    add(
+        "ArrangeDrawings",
+        Command::ArrangeDrawings {
+            ids: vec![uid(DRAWING, 1)],
+            arrange: crate::DrawingArrange::ToFront,
+        },
+    );
+    add(
+        "SetDrawingPlacement",
+        Command::SetDrawingPlacement {
+            ids: vec![uid(DRAWING, 1)],
+            placement: signex_types::schematic::DrawingPlacement::Above,
         },
     );
     add(
