@@ -188,9 +188,11 @@ pub fn view<'a>(
 /// nothing (#103), so listing it would advertise a dead binding. Rows
 /// without a command id are kept as they were.
 fn is_listed(row: &KeymapEditorRow) -> bool {
-    row.command
-        .as_ref()
-        .is_none_or(crate::app::command::bridge::is_dispatchable)
+    !row.unbound
+        && row
+            .command
+            .as_ref()
+            .is_none_or(crate::app::command::bridge::is_dispatchable)
 }
 
 fn title_case(value: &str) -> String {
