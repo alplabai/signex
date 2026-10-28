@@ -17,6 +17,7 @@ use crate::styles::{HAIRLINE, Spacing, TypeScale};
 use signex_widgets::theme_ext;
 
 use super::super::messages::{LibraryMessage, SettingsMsg};
+use super::super::modal_chrome::{primary_btn, secondary_btn};
 use super::super::state::DistributorSettings;
 
 /// Render the Distributor APIs panel. Mounts inside the existing
@@ -227,33 +228,5 @@ fn divider(color: iced::Color) -> Element<'static, LibraryMessage> {
             background: Some(iced::Background::Color(color)),
             ..Default::default()
         })
-        .into()
-}
-
-fn primary_btn<'a>(
-    label: &'a str,
-    message: LibraryMessage,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
-    let sp = Spacing::default();
-    let on_accent = crate::styles::tokens::on_accent(tokens);
-    button(container(text(label.to_string()).size(ts.body).color(on_accent)).padding([sp.s, sp.l]))
-        .on_press(message)
-        .style(crate::styles::accent_button(tokens))
-        .into()
-}
-
-fn secondary_btn<'a>(
-    label: &'a str,
-    message: LibraryMessage,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
-    let sp = Spacing::default();
-    let text_c = crate::styles::ti(tokens.text);
-    button(container(text(label.to_string()).size(ts.body).color(text_c)).padding([sp.s, sp.l]))
-        .on_press(message)
-        .style(crate::styles::outline_button(tokens))
         .into()
 }

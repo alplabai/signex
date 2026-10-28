@@ -83,12 +83,17 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
             message: e.to_string(),
         })?;
 
+    let dependency_stamp = match format {
+        SourceFormat::Gltf => gltf::dependency_stamp(source_path),
+        _ => String::new(),
+    };
     let glb_path = cache::cache_path(
         &request.cache_dir,
         source_path,
         source_mtime,
         source_meta.len(),
         request.converter_version,
+        &dependency_stamp,
     )?;
 
     // Cache hit: a valid GLB plus the warnings its conversion recorded. A GLB
@@ -98,6 +103,7 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
         && let Some(warnings) = cache::read_warnings(&glb_path)
     {
         let byte_len = glb_path.metadata().map(|m| m.len() as usize).unwrap_or(0);
+        cache::touch(&glb_path);
         return Ok(ModelImportResult {
             glb_path,
             cache_hit: true,
@@ -202,6 +208,8 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
             reason: format!("writing {}: {e}", glb_path.display()),
         }
     })?;
+
+    cache::evict_oldest(&request.cache_dir, cache::MAX_CACHE_ENTRIES, &glb_path);
 
     let byte_len = glb_bytes.len();
 

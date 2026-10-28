@@ -88,18 +88,8 @@ fn map_import_warning(warning: ModelImportWarning) -> RuntimeModelBridgeWarning 
         | ModelImportWarning::TextureUnreadable { uri, .. } => {
             RuntimeModelBridgeWarning::TextureMissing { uri }
         }
-        ModelImportWarning::EmptyPrimitive {
-            mesh_index,
-            primitive_index,
-        } => RuntimeModelBridgeWarning::EmptyPrimitive {
-            mesh_index,
-            primitive_index,
-        },
         ModelImportWarning::UnsupportedGeometry { entity_type } => {
             RuntimeModelBridgeWarning::UnsupportedGeometry { entity_type }
-        }
-        ModelImportWarning::UnsupportedGltfExtension { name } => {
-            RuntimeModelBridgeWarning::UnsupportedGltfExtension { name }
         }
         ModelImportWarning::GeometryAltered { line, reason } => {
             RuntimeModelBridgeWarning::GeometryAltered { line, reason }

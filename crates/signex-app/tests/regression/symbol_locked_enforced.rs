@@ -251,7 +251,7 @@ fn cut_skips_a_locked_symbol_without_touching_the_clipboard() {
 
     assert_eq!(symbols(&app).len(), 1, "the locked symbol was cut");
     assert!(
-        app.interaction_state.clipboard_symbols.is_empty(),
+        app.interaction_state.clipboard.is_none(),
         "the locked symbol reached the clipboard"
     );
     assert_eq!(logged(&needle), before + 1, "the skip was not reported");
@@ -272,8 +272,9 @@ fn cut_takes_the_free_symbol_of_a_mixed_selection_only() {
     assert_eq!(left, vec![locked], "only the free symbol should be cut");
     let copied: Vec<_> = app
         .interaction_state
-        .clipboard_symbols
+        .clipboard
         .iter()
+        .flat_map(|c| c.payload.fragment().symbols.iter())
         .map(|s| s.uuid)
         .collect();
     assert_eq!(copied, vec![free]);

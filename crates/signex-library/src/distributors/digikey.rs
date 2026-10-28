@@ -236,7 +236,7 @@ impl DigiKeyAuth {
                 "CSRF state mismatch — refusing to exchange OAuth code".into(),
             ));
         }
-        let http = build_http_client();
+        let http = try_build_http_client()?;
         let token = self
             .client
             .exchange_code(AuthorizationCode::new(code.to_string()))
@@ -276,7 +276,7 @@ impl DigiKeyAuth {
                 Err(KeyringError::Backend(m)) => return Err(DigiKeyAuthError::Keyring(m)),
             }
         };
-        let http = build_http_client();
+        let http = try_build_http_client()?;
         let token = self
             .client
             .exchange_refresh_token(&RefreshToken::new(refresh))
@@ -310,6 +310,15 @@ impl DigiKeyAuth {
         session.access = Some((access.clone(), Instant::now() + lifetime));
         Ok(access)
     }
+}
+
+/// Client for the OAuth token exchanges. A TLS backend that cannot start
+/// comes back as an error the pricing walk reports, not a panic.
+fn try_build_http_client() -> Result<reqwest::blocking::Client, DigiKeyAuthError> {
+    super::http::client_builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| DigiKeyAuthError::Config(format!("http client: {e}")))
 }
 
 fn build_http_client() -> reqwest::blocking::Client {

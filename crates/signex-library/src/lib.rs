@@ -385,34 +385,7 @@ pub fn project_file_history(
             continue;
         }
 
-        entries.push(commit_to_history_entry(&commit));
-    }
-
-    // Local helpers — duplicated from local_git.rs deliberately so
-    // this routine doesn't depend on adapter internals (the adapter
-    // version is library-rooted; this one walks any repo).
-    fn commit_to_history_entry(commit: &git2::Commit<'_>) -> HistoryEntry {
-        let author = commit.author();
-        let secs = author.when().seconds();
-        let time = chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0)
-            .unwrap_or_else(chrono::Utc::now);
-        let raw = commit.message().unwrap_or("");
-        let (subject, body) = match raw.find("\n\n") {
-            Some(i) => (raw[..i].trim_end().to_string(), raw[i + 2..].to_string()),
-            None => (raw.trim_end().to_string(), String::new()),
-        };
-        HistoryEntry {
-            sha: commit.id().to_string(),
-            author_name: author.name().unwrap_or_default().to_string(),
-            author_email: author.email().unwrap_or_default().to_string(),
-            time,
-            subject,
-            body,
-            parent_shas: commit.parent_ids().map(|id| id.to_string()).collect(),
-            files_changed: Vec::new(),
-            additions: 0,
-            deletions: 0,
-        }
+        entries.push(HistoryEntry::from_commit(&commit));
     }
 
     fn commit_touches_path(

@@ -11,11 +11,17 @@ use std::cell::RefCell;
 
 use iced::Rectangle;
 use iced::widget::canvas;
+use signex_engine::PlacementPayload;
 use signex_gfx::scene::Scene;
 use signex_types::schematic::SchematicSheet;
 use signex_types::theme::CanvasColors;
 
 use crate::schematic_runtime::{ScreenTransform, build_schematic_scene, draw_built_scene};
+
+/// A payload with more items than this is drawn as its bounding box only: a
+/// full scene of a large paste would be rebuilt at every zoom step for a ghost
+/// that is only there to be aimed.
+pub const MAX_GHOST_SCENE_ITEMS: usize = 60;
 
 /// Half-extent (px) of the cull rectangle the ghost scene is built in. A
 /// fragment is a part or a pasted selection: far inside this at any zoom.
@@ -55,6 +61,9 @@ struct BuiltFor {
 /// A fragment to draw at the cursor, with its scene cached per zoom step.
 pub struct PlacementGhost {
     fragment: SchematicSheet,
+    /// `Some` when the payload is too large to draw item by item: the box
+    /// drawn in its place, in fragment coordinates.
+    bounding_box: Option<signex_types::schematic::Aabb>,
     /// What the scene was built for and the scene; `None` scene = draws
     /// nothing. Filled during `draw` like `canvas::Cache`: a render cache,
     /// not model state.
@@ -63,11 +72,23 @@ pub struct PlacementGhost {
 
 impl PlacementGhost {
     #[must_use]
-    pub fn new(fragment: SchematicSheet) -> Self {
+    pub fn new(payload: &PlacementPayload) -> Self {
+        let bounding_box = if payload.item_count() > MAX_GHOST_SCENE_ITEMS {
+            payload.bounds()
+        } else {
+            None
+        };
         Self {
-            fragment,
+            fragment: payload.fragment().clone(),
+            bounding_box,
             built: RefCell::new(None),
         }
+    }
+
+    /// Whether this ghost is drawn as a box instead of its items.
+    #[must_use]
+    pub fn is_bounding_box_only(&self) -> bool {
+        self.bounding_box.is_some()
     }
 
     /// The camera transform shifted so the fragment origin lands on `anchor`
@@ -89,6 +110,22 @@ impl PlacementGhost {
         anchor: (f64, f64),
         colors: &CanvasColors,
     ) {
+        if let Some(bounds) = &self.bounding_box {
+            let at = Self::transform_at(camera, anchor);
+            let top_left = at.world_to_screen((bounds.min_x, bounds.min_y));
+            let bottom_right = at.world_to_screen((bounds.max_x, bounds.max_y));
+            let outline = canvas::Path::rectangle(
+                top_left,
+                iced::Size::new(bottom_right.x - top_left.x, bottom_right.y - top_left.y),
+            );
+            frame.stroke(
+                &outline,
+                canvas::Stroke::default()
+                    .with_color(crate::render_config::to_iced(&colors.cursor))
+                    .with_width(2.0),
+            );
+            return;
+        }
         let mut built = self.built.borrow_mut();
         let key = BuiltFor {
             scale: camera.scale,
@@ -129,7 +166,7 @@ mod tests {
 
     #[test]
     fn no_ghost_is_drawn_while_placement_is_paused() {
-        let ghost = PlacementGhost::new(SchematicSheet::default());
+        let ghost = PlacementGhost::new(&PlacementPayload::new(SchematicSheet::default()));
         assert!(visible_ghost(Some(&ghost), false).is_some());
         assert!(visible_ghost(Some(&ghost), true).is_none());
         assert!(visible_ghost(None, false).is_none());

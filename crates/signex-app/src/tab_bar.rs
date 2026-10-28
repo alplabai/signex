@@ -7,7 +7,10 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
 
 use crate::app::TabInfo;
-use crate::styles;
+use crate::styles::{self, Spacing, TypeScale};
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 #[derive(Debug, Clone)]
 pub enum TabMessage {
@@ -116,8 +119,8 @@ pub fn view<'a>(
         if tab_is_dirty(tab, dirty_paths) {
             content = content.push(dirty_dot(tokens));
         }
-        let inner =
-            container(content.push(text(label).size(TAB_FONT_SIZE).color(text_c))).padding([4, 10]);
+        let inner = container(content.push(text(label).size(TAB_FONT_SIZE).color(text_c)))
+            .padding([SP.s, 10.0]);
         // Cursor: default Pointer on hover so the bar reads as
         // "clickable tabs", switching to Grabbing only while a tab
         // is in flight so the drag-to-reorder / drag-to-undock
@@ -137,7 +140,8 @@ pub fn view<'a>(
         // The pill shows an ellipsized title; hovering names the full path.
         let tab_el: Element<'_, TabMessage> = tooltip(
             tab_el,
-            container(text(tab.path.display().to_string()).size(TAB_FONT_SIZE)).padding([2, 6]),
+            container(text(tab.path.display().to_string()).size(TAB_FONT_SIZE))
+                .padding([SP.xs, 6.0]),
             tooltip::Position::Bottom,
         )
         .style(styles::context_menu(tokens))
@@ -184,7 +188,7 @@ pub fn view<'a>(
 }
 
 /// Tab label font size; the dirty dot is sized from it.
-const TAB_FONT_SIZE: f32 = 11.0;
+const TAB_FONT_SIZE: f32 = TS.body;
 
 /// Dirty dot diameter as a fraction of the tab font size.
 const DIRTY_DOT_EM: f32 = 0.6;

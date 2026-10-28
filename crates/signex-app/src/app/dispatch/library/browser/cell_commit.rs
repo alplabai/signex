@@ -48,7 +48,7 @@ impl Signex {
         };
         match column.as_str() {
             "internal_pn" => {
-                row.internal_pn = signex_library::InternalPn::new(buf.clone());
+                row.internal_pn = signex_library::InternalPn::new(buf.trim());
             }
             "manufacturer" => {
                 row.primary_mpn.manufacturer = buf.clone();

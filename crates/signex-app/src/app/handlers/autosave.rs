@@ -269,6 +269,8 @@ impl Signex {
     /// it stays for the reconcile at the next open to compare bytes and
     /// offer it.
     pub(crate) fn autosave_after_disk_write(&mut self, path: &Path) -> Task<Message> {
+        // The file changed behind the engines; any earlier read of it is stale.
+        self.document_state.note_document_written_behind_engines();
         let ours = self.document_state.autosave.saved(path);
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             return Task::none();
