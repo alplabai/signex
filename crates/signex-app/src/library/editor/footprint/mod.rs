@@ -21,6 +21,8 @@ pub mod pad_to_sketch;
 pub mod pads_active_bar;
 pub mod preview3d;
 mod sketch_bake;
+#[cfg(test)]
+mod sketch_bake_tests;
 mod sketch_conflict;
 #[cfg(test)]
 mod sketch_conflict_tests;
