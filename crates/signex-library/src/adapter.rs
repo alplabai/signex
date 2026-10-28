@@ -208,7 +208,7 @@ fn refuse_unversioned_base(base: Option<u64>) -> Result<(), LibraryError> {
 /// actually support. `LocalGitAdapter` and `DatabaseAdapter` supply
 /// real implementations.
 pub trait LibraryAdapter: Send + Sync {
-    /// Stable UUID of this library, sourced from `library.toml::library.library_id`.
+    /// Stable UUID of this library, sourced from the `library_id` at the root of the `.snxlib` document.
     ///
     /// Used by [`crate::adapters::library_set::LibrarySet`] to key resolution
     /// of cross-library [`crate::primitive::PrimitiveRef`]s. The default
