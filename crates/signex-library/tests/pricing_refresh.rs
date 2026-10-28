@@ -143,6 +143,7 @@ fn row(pn: &str, lib: Uuid, listings: &[(&str, &str)]) -> ComponentRow {
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),

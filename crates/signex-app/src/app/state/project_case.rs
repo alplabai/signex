@@ -38,24 +38,31 @@ pub enum CaseProbeOutcome {
     Failed(String),
 }
 
+/// Probe `dir`'s volume on a blocking worker.
+pub(crate) async fn probe_case_outcome(dir: PathBuf) -> CaseProbeOutcome {
+    match tokio::task::spawn_blocking(move || probe_directory_case(&dir)).await {
+        Ok(Ok(Some(ignores_case))) => CaseProbeOutcome::Decided(ignores_case),
+        Ok(Ok(None)) => CaseProbeOutcome::Undecided,
+        Ok(Err(reason)) => CaseProbeOutcome::StatFailed(reason),
+        Err(error) => CaseProbeOutcome::Failed(error.to_string()),
+    }
+}
+
 /// Probe `dir`'s volume off the update thread.
 pub(crate) fn spawn_case_probe(project_id: ProjectId, dir: PathBuf) -> Task<Message> {
-    Task::perform(
-        async move {
-            match tokio::task::spawn_blocking(move || probe_directory_case(&dir)).await {
-                Ok(Ok(Some(ignores_case))) => CaseProbeOutcome::Decided(ignores_case),
-                Ok(Ok(None)) => CaseProbeOutcome::Undecided,
-                Ok(Err(reason)) => CaseProbeOutcome::StatFailed(reason),
-                Err(error) => CaseProbeOutcome::Failed(error.to_string()),
-            }
-        },
-        move |outcome| {
-            Message::Project(ProjectMsg::CaseProbed {
-                project_id,
-                outcome,
-            })
-        },
-    )
+    Task::perform(probe_case_outcome(dir), move |outcome| {
+        Message::Project(ProjectMsg::CaseProbed {
+            project_id,
+            outcome,
+        })
+    })
+}
+
+/// The one answer for a directory nobody could decide: its case variants are
+/// one file. Two documents for one file can lose edits; one document for two
+/// files only costs a tab.
+pub(crate) fn undecided_identity_fold() -> CaseFold {
+    CaseFold::from_probe(true)
 }
 
 /// The Messages-panel line for a project whose volume could not be probed:
@@ -104,7 +111,10 @@ impl DocumentState {
         }
         let before = project.case_fold;
         match outcome {
-            CaseProbeOutcome::Decided(ignores) => project.case_fold = CaseFold::from_probe(ignores),
+            CaseProbeOutcome::Decided(ignores) => {
+                project.case_fold = CaseFold::from_probe(ignores);
+                project.case_decided = true;
+            }
             undecided => {
                 project.case_fold = CaseFold::host_default();
                 crate::diagnostics::log_warning(undecided_message(
@@ -166,6 +176,7 @@ mod tests {
             pending_libraries: HashMap::new(),
             case_fold: CaseFold::default(),
             case_probed: false,
+            case_decided: false,
         });
         (app.document_state, id)
     }

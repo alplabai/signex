@@ -353,6 +353,7 @@ fn save_all_ignores_a_project_with_an_empty_dir() {
         pending_libraries: std::collections::HashMap::new(),
         case_fold: CaseFold::default(),
         case_probed: false,
+        case_decided: false,
     };
     stray.case_fold = CaseFold::from_probe(!CaseFold::host_default().fold_case);
     app.document_state.projects.push(stray);

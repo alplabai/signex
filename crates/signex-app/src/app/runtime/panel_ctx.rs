@@ -737,6 +737,7 @@ mod tests {
             pending_libraries: Default::default(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         });
         app.refresh_panel_ctx();
         let builds = app.document_state.panel_ctx.project_tree_builds;
@@ -804,6 +805,7 @@ mod tests {
             pending_libraries: Default::default(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         });
 
         let request = app.project_fs_request();

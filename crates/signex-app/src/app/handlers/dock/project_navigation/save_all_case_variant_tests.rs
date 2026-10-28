@@ -153,12 +153,12 @@ fn a_net_colour_edit_during_the_write_keeps_the_other_spelling_dirty() {
 #[test]
 fn an_undecided_directory_is_reported_by_the_shared_builder_from_update() {
     use crate::app::contracts::{SaveAllNext, SaveAllPlan};
+    use crate::app::state::project_case::undecided_identity_fold;
     use crate::app::state::project_case::{CaseProbeOutcome, undecided_message};
-    use crate::app::state::scope::CaseFold;
 
     let dir = Path::new("/undecided-1423-probe-dir");
     let outcome = CaseProbeOutcome::StatFailed("permission denied".into());
-    let line = undecided_message(&outcome, dir, CaseFold::host_default());
+    let line = undecided_message(&outcome, dir, undecided_identity_fold());
     assert!(line.len() <= 157, "{} bytes: {line}", line.len());
     assert!(line.ends_with(&format!("{}", dir.display())), "{line}");
 

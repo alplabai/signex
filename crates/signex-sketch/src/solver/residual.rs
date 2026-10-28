@@ -58,7 +58,7 @@ pub fn resolve_dim(target: &DimTarget, params: &ResolvedParams) -> Result<f64, S
 /// neither re-parses nor rebuilds anything. The result is identical to
 /// [`resolve_dim`]: an expression or parameter set the cache does not hold
 /// falls back to the uncached path.
-fn resolve_dim_cached(
+pub(crate) fn resolve_dim_cached(
     target: &DimTarget,
     params: &ResolvedParams,
     index: &EntityIndex,

@@ -59,6 +59,7 @@ pub use documents::{
 };
 pub(crate) use handlers::selection_workflow::passes_filter;
 pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};
+pub use state::project_case::CaseProbeOutcome;
 pub use state::{
     CaseFold, DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
     PreviewState, ProjectId, Signex, UiState,

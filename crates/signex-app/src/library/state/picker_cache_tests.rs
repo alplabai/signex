@@ -157,3 +157,14 @@ fn the_filtered_list_matches_the_old_per_frame_filter() {
         assert_eq!(visible_pns(&state), expected, "filter {needle:?}");
     }
 }
+
+/// A component found only by the description of its row (#1474).
+#[test]
+fn the_picker_filter_matches_a_row_description() {
+    let mut state = state_with_picker();
+    state.open_libraries[0].cached_components[0].description = "Precision shunt".into();
+    state.touch_data();
+    set_filter(&mut state, "shunt");
+    state.sync_view_caches();
+    assert_eq!(visible_pns(&state), ["R-10K"]);
+}
