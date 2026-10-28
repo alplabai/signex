@@ -122,6 +122,19 @@ impl Signex {
         }
     }
 
+    /// The stock library prepared at startup has landed (#1470).
+    pub(super) fn handle_stock_mount_finished(
+        &mut self,
+        mount: crate::panels::components_panel::stock::StockMount,
+    ) {
+        if let Some(library_id) =
+            crate::panels::components_panel::stock::finish_mount(&mut self.library, mount)
+        {
+            self.library.drift.check_pending = true;
+            self.rescan_library_updates_after_mount(library_id);
+        }
+    }
+
     /// Close an open library — diverts to the confirm modal when any
     /// Component Preview editor against it is dirty.
     pub(crate) fn handle_close_library(&mut self, path: std::path::PathBuf) -> Task<Message> {

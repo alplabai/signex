@@ -75,31 +75,78 @@ pub fn stock_library_path() -> Option<PathBuf> {
     })
 }
 
-/// Mount `path` (if any) onto `library_state`, read-only: the bundled
-/// library ships with the app and must never be edited in place. Never fails the caller: a
-/// missing or unmountable library warns and leaves the Stock section empty.
-pub fn mount_at(library_state: &mut crate::library::LibraryState, path: Option<PathBuf>) {
-    let Some(path) = path else {
-        tracing::warn!(
-            target: "signex::library",
-            "stock library not found next to the executable; Stock section left empty"
-        );
-        return;
-    };
-    match library_state.open_library_read_only(path.clone()) {
-        Ok(()) => library_state.stock_library = Some(path),
-        Err(e) => tracing::warn!(
-            target: "signex::library",
-            path = %path.display(),
-            error = %e,
-            "stock library mount failed; Stock section left empty"
-        ),
-    }
+/// What the off-thread stock prepare hands back: the resolved path and the
+/// prepared read-only mount, or `None` when the library is missing or
+/// unreadable (already warned).
+pub type StockMount = Option<(PathBuf, crate::library::mount::PreparedMountCell)>;
+
+/// Resolve and prepare the stock library off the UI thread: both the
+/// path probe and the manifest/table reads touch the disk.
+pub async fn prepare_stock_off_thread() -> StockMount {
+    tokio::task::spawn_blocking(|| {
+        let Some(path) = stock_library_path() else {
+            tracing::warn!(
+                target: "signex::library",
+                "stock library not found next to the executable; Stock section left empty"
+            );
+            return None;
+        };
+        match crate::library::mount::prepare_read_only_mount(&path) {
+            Ok(prepared) => Some((
+                path,
+                crate::library::mount::PreparedMountCell::new(Ok(prepared)),
+            )),
+            Err(e) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    path = %path.display(),
+                    error = %e,
+                    "stock library mount failed; Stock section left empty"
+                );
+                None
+            }
+        }
+    })
+    .await
+    .unwrap_or(None)
 }
 
-/// Bootstrap entry point, called next to the global-library mount.
-pub fn mount_stock(library_state: &mut crate::library::LibraryState) {
-    mount_at(library_state, stock_library_path());
+/// Bootstrap entry point: prepare the stock library in the background; it
+/// lands as `LibraryMessage::StockMountFinished`.
+pub fn spawn_stock_mount() -> iced::Task<crate::app::Message> {
+    iced::Task::perform(prepare_stock_off_thread(), |mount| {
+        crate::app::Message::Library(crate::library::LibraryMessage::StockMountFinished(mount))
+    })
+}
+
+/// Mount a prepared stock library onto `library_state`, read-only. Cheap (no
+/// disk IO). Returns the library id when it newly mounted; never fails the
+/// caller — an unmountable library warns and leaves the Stock section empty.
+pub fn finish_mount(
+    library_state: &mut crate::library::LibraryState,
+    mount: StockMount,
+) -> Option<uuid::Uuid> {
+    let (path, cell) = mount?;
+    let Ok(prepared) = cell.take()? else {
+        return None;
+    };
+    let id = prepared.entry.library_id;
+    let newly = library_state.library_at(&path).is_none();
+    match library_state.mount_prepared(prepared) {
+        Ok(()) => {
+            library_state.stock_library = Some(path);
+            newly.then_some(id)
+        }
+        Err(e) => {
+            tracing::warn!(
+                target: "signex::library",
+                path = %path.display(),
+                error = %e,
+                "stock library mount failed; Stock section left empty"
+            );
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -198,20 +245,27 @@ mod tests {
     #[test]
     fn missing_library_does_not_panic_and_mounts_nothing() {
         let mut lib = crate::library::LibraryState::default();
-        mount_at(&mut lib, None);
+        assert!(finish_mount(&mut lib, None).is_none());
         let tmp = tempfile::tempdir().unwrap();
-        mount_at(&mut lib, Some(tmp.path().join("gone/Stock.snxlib")));
+        let gone = tmp.path().join("gone/Stock.snxlib");
+        assert!(crate::library::mount::prepare_read_only_mount(&gone).is_err());
         assert!(lib.stock_library.is_none());
         assert!(lib.open_libraries.is_empty());
     }
 
     #[test]
-    fn bundled_dev_library_mounts_as_stock() {
+    fn bundled_dev_library_mounts_as_stock_read_only() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let path = dev_path(&root);
         let mut lib = crate::library::LibraryState::default();
-        mount_at(&mut lib, Some(path.clone()));
+        let prepared = crate::library::mount::prepare_read_only_mount(&path).unwrap();
+        let mount = Some((
+            path.clone(),
+            crate::library::mount::PreparedMountCell::new(Ok(prepared)),
+        ));
+        assert!(finish_mount(&mut lib, mount).is_some());
         assert_eq!(lib.stock_library, Some(path.clone()));
+        assert!(lib.is_read_only(&path));
         assert_eq!(
             lib.mount_source_for(&path, &[]),
             crate::library::state::ComponentsMountSource::Stock

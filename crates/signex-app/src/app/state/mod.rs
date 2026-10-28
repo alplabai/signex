@@ -11,8 +11,10 @@ pub(crate) mod dir_case;
 mod interaction;
 pub(crate) mod library_entry;
 mod link_policy;
+pub(crate) mod navigator_job;
 pub(crate) mod net_class_picks;
 pub(crate) mod net_class_styles;
+pub(crate) mod ownership_index;
 mod path_key;
 mod pcb_revision;
 mod pdf_page_setup;
@@ -517,6 +519,11 @@ pub struct DocumentState {
     pub autosave: crate::autosave::AutosaveState,
     /// Disk facts behind the project tree's `(missing)` marks (#111).
     pub project_fs: project_fs::ProjectFsCache,
+    /// Off-thread Navigator hierarchy assembly (#1470).
+    pub navigator_job: navigator_job::NavigatorJob,
+    /// Cached sheet-path -> owning-project index, rebuilt when its inputs
+    /// change (#1470); see `state/ownership_index.rs`.
+    pub(crate) ownership: std::cell::RefCell<Option<ownership_index::OwnershipIndex>>,
     /// Projects already told (once per open) that an ERC run fell back to this
     /// machine's preferences because they store no rule set (#1085).
     pub erc_fallback_noted: std::collections::HashSet<ProjectId>,
@@ -626,7 +633,6 @@ pub struct DocumentState {
     pub undo_groups:
         std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
     pub panel_ctx: crate::panels::PanelContext,
-    pub standard_lib_dir: Option<PathBuf>,
     pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
     /// Print-preview overlay state. `Some` while the preview dialog is
     /// open. Doubles as the unified PDF Export modal — `File → Export
@@ -1037,7 +1043,28 @@ impl DocumentState {
     /// [`active_document_project`](Self::active_document_project), for async
     /// completions that resolve against the document they started from).
     pub fn document_project(&self, path: &std::path::Path) -> Option<&LoadedProject> {
-        scope::project_owning_sheet(&self.projects, &self.child_sheet_refs(), path)
+        self.ownership_index().owner(&self.projects, path)
+    }
+
+    /// The ownership index for the current projects and engines, rebuilt only
+    /// when the data it is built from changed (compared by content stamp, so
+    /// no edit path has to remember to invalidate it).
+    pub(crate) fn ownership_index(&self) -> std::cell::Ref<'_, ownership_index::OwnershipIndex> {
+        let stamp = ownership_index::ownership_stamp(&self.projects, &self.engines);
+        {
+            let mut slot = self.ownership.borrow_mut();
+            if slot.as_ref().map(ownership_index::OwnershipIndex::stamp) != Some(stamp) {
+                *slot = Some(ownership_index::OwnershipIndex::build(
+                    stamp,
+                    &self.projects,
+                    &self.child_sheet_refs(),
+                    None,
+                ));
+            }
+        }
+        std::cell::Ref::map(self.ownership.borrow(), |slot| {
+            slot.as_ref().expect("built above")
+        })
     }
 
     /// Open engine paths that belong to no loaded project — the page set of a
@@ -1050,11 +1077,11 @@ impl DocumentState {
     /// order — visibly reshuffling between rerasterizes with two or more loose
     /// schematics open. Callers that want a specific page first re-order after.
     pub fn unowned_engine_paths(&self) -> Vec<PathBuf> {
-        let refs = self.child_sheet_refs();
+        let index = self.ownership_index();
         let mut paths: Vec<PathBuf> = self
             .engines
             .keys()
-            .filter(|p| scope::project_owning_sheet(&self.projects, &refs, p).is_none())
+            .filter(|p| index.owner(&self.projects, p).is_none())
             .cloned()
             .collect();
         paths.sort();
@@ -1089,7 +1116,7 @@ impl DocumentState {
         };
         scope::engines_in_project(
             &self.projects,
-            &self.child_sheet_refs(),
+            &self.ownership_index(),
             &self.engines,
             project.id,
         )
@@ -1111,7 +1138,7 @@ impl DocumentState {
         };
         scope::engine_entries_in_project(
             &self.projects,
-            &self.child_sheet_refs(),
+            &self.ownership_index(),
             &self.engines,
             project.id,
         )

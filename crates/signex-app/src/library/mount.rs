@@ -77,6 +77,8 @@ impl MountIntent {
 pub struct PreparedMount {
     pub(crate) adapter: Box<dyn LibraryAdapter>,
     pub(crate) entry: OpenLibrary,
+    /// Mount through `LibrarySet::mount_read_only` (the bundled stock library).
+    pub(crate) read_only: bool,
 }
 
 impl PreparedMount {
@@ -141,8 +143,8 @@ impl std::fmt::Debug for PreparedMountCell {
 /// [`LibraryError`] is not — the same reason `read_and_parse_schematic`
 /// returns `Result<_, String>`.
 ///
-/// Always writable: the read-only stock library mounts synchronously
-/// through [`LibraryState::open_library_read_only`], not this path.
+/// Always writable; the read-only stock library prepares through
+/// [`prepare_read_only_mount`].
 pub fn prepare_mount(path: &Path) -> Result<PreparedMount, String> {
     let adapter = LocalGitAdapter::open(path).map_err(|e: LibraryError| e.to_string())?;
     let manifest = adapter.manifest();
@@ -176,7 +178,17 @@ pub fn prepare_mount(path: &Path) -> Result<PreparedMount, String> {
     Ok(PreparedMount {
         adapter: Box::new(adapter),
         entry,
+        read_only: false,
     })
+}
+
+/// [`prepare_mount`] for a library that must never be written (the bundled
+/// stock library): every write through the mounted adapter fails with
+/// `LibraryError::ReadOnly`.
+pub fn prepare_read_only_mount(path: &Path) -> Result<PreparedMount, String> {
+    let mut prepared = prepare_mount(path)?;
+    prepared.read_only = true;
+    Ok(prepared)
 }
 
 /// Widen a concrete adapter to the trait object `reload_tables` takes.
@@ -265,7 +277,11 @@ impl LibraryState {
         // library sharing a `library_id` at different paths both mount
         // fine, by design (`adapters/library_set.rs`, "Resolution
         // semantics").
-        self.set.mount(prepared.adapter)?;
+        if prepared.read_only {
+            self.set.mount_read_only(prepared.adapter)?;
+        } else {
+            self.set.mount(prepared.adapter)?;
+        }
         self.open_libraries.push(prepared.entry);
         self.touch_data();
         self.sweep_dangling_refs();

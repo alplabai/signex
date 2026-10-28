@@ -17,20 +17,6 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // ── TOP: Library selector + component list (scrollable) ──
     let mut list_col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    list_col = list_col.push(
-        container(
-            iced::widget::pick_list(
-                ctx.standard_libraries.clone(),
-                ctx.active_library.clone(),
-                PanelMsg::SelectLibrary,
-            )
-            .placeholder("Select a library...")
-            .text_size(11)
-            .width(Length::Fill),
-        )
-        .padding([4, 8]),
-    );
-
     // Search filter input
     list_col = list_col.push(
         container(
@@ -82,14 +68,10 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     };
 
     if filtered_symbols.is_empty() {
-        let msg = if ctx.active_library.is_some() {
-            if filter.is_empty() {
-                "Loading..."
-            } else {
-                "No matches"
-            }
+        let msg = if filter.is_empty() {
+            "No symbols"
         } else {
-            "Select a library above"
+            "No matches"
         };
         list_col = list_col.push(container(text(msg).size(10).color(muted)).padding([8, 8]));
     } else {

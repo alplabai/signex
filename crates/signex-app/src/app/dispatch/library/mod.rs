@@ -258,6 +258,10 @@ impl Signex {
             LibraryMessage::MountFinished { path, prepared } => {
                 self.handle_mount_finished(path, prepared)
             }
+            LibraryMessage::StockMountFinished(mount) => {
+                self.handle_stock_mount_finished(mount);
+                Task::none()
+            }
             LibraryMessage::RefreshFinished {
                 path,
                 generation,

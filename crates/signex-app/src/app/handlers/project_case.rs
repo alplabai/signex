@@ -94,6 +94,7 @@ mod tests {
         let mut app = app_with_two_spellings(CaseFold::from_probe(false));
         let id = app.document_state.projects[0].id;
         app.refresh_panel_ctx();
+        app.settle_navigator();
         assert!(
             has_duplicate_uuid(&app),
             "precondition: two spellings are two sheets under a case-sensitive rule"

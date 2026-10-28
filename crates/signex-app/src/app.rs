@@ -94,6 +94,15 @@ impl Signex {
         if let Some(probe) = self.start_project_fs_probe(false) {
             tasks.push(probe);
         }
+        // Likewise the Navigator hierarchy: the refresh records the request,
+        // the sheet reads run here off-thread (#1470).
+        #[cfg(not(test))]
+        if let Some(assembly) = self.start_navigator_assembly() {
+            tasks.push(assembly);
+        }
+        // Unit tests read the hierarchy straight after a message.
+        #[cfg(test)]
+        self.settle_navigator();
         if tasks.len() == 1 {
             return tasks.pop().expect("one task");
         }

@@ -63,8 +63,6 @@ pub struct PanelContext {
     pub properties_tab: usize, // 0=General, 1=Parameters
     /// Net Classes section of the General tab (#1042).
     pub net_classes: NetClassPanel,
-    // Components panel
-    pub standard_libraries: Vec<String>,
     pub active_library: Option<String>,
     /// Browser entries from the selected library or aggregated catalog.
     pub library_symbols: Vec<LibrarySymbolEntry>,
