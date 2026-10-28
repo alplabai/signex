@@ -15,6 +15,8 @@ pub mod components_panel;
 mod element_properties;
 mod footprint_editor_properties;
 pub mod history;
+mod scroll;
+pub(crate) use scroll::panel_scrollable;
 mod properties_parameters;
 mod symbol_editor_properties;
 
@@ -266,5 +268,5 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::History => return history::view_history(ctx),
     };
 
-    scrollable(content).width(Length::Fill).into()
+    panel_scrollable(content).into()
 }

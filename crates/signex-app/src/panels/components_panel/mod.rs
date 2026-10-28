@@ -25,9 +25,7 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{
-    Column, Space, button, column, container, row, scrollable, svg, text, text_input,
-};
+use iced::widget::{Column, Space, button, column, container, row, svg, text, text_input};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use signex_library::ComponentRow;
@@ -129,7 +127,7 @@ pub fn view<'a>(
         );
     }
 
-    container(scrollable(col).width(Length::Fill).height(Length::Fill))
+    container(crate::panels::panel_scrollable(col).height(Length::Fill))
         .width(Length::Fill)
         .height(Length::Fill)
         .into()

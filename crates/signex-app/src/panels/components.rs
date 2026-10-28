@@ -270,7 +270,7 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     // Split view: list (fixed height) | handle | details (fill)
     column![
-        container(scrollable(list_col).width(Length::Fill))
+        container(super::panel_scrollable(list_col))
             .height(ctx.components_split)
             .width(Length::Fill),
         // Drag handle
@@ -285,7 +285,7 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         )
         .interaction(iced::mouse::Interaction::ResizingVertically)
         .on_press(PanelMsg::DragComponentsSplit),
-        container(scrollable(detail_col).width(Length::Fill))
+        container(super::panel_scrollable(detail_col))
             .height(Length::Fill)
             .width(Length::Fill),
     ]
