@@ -54,6 +54,7 @@ fn app_focused_on(focused: &str) -> Signex {
         pending_libraries: std::collections::HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
     let path = PathBuf::from(focused);

@@ -718,6 +718,7 @@ fn closing_the_project_forgets_its_documents_page_setup() {
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.tabs[0].project_id = Some(id);
 

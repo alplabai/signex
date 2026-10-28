@@ -423,6 +423,7 @@ mod tests {
             pending_libraries: Default::default(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         });
         app.document_state.active_project = Some(project);
         assert!(!enabled(&app, "save_document"));

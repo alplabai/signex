@@ -804,6 +804,7 @@ mod tests {
             pending_libraries: Default::default(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         });
 
         let request = app.project_fs_request();
