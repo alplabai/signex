@@ -47,6 +47,7 @@ pub(crate) fn two_unit_symbol() -> Symbol {
     }
     for part in [1u8, 2] {
         s.graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Line {
                 from: [0.0, 0.0],
                 to: [f64::from(part), 0.0],

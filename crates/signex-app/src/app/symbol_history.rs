@@ -105,6 +105,7 @@ impl SymbolDocument {
     pub(crate) fn reset_view_for_symbol_switch(&mut self) {
         self.selected = None;
         self.active_part = 1;
+        self.active_body = signex_types::schematic::BodyStyle::Normal;
         self.reset_camera_origin_center();
         self.cursor_mm = None;
         self.canvas_cache.clear();

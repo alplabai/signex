@@ -15,6 +15,9 @@ pub enum ContextAction {
     Paste,
     SmartPaste,
     OpenChildSheet,
+    /// Write the missing child file of the selected sheet symbol, with one
+    /// port per entry, then open it.
+    CreateChildSheet,
     /// Reconcile the selected sheet symbol's pins with the child schematic's
     /// hierarchical / global labels (#359). Gated like `OpenChildSheet`.
     SyncSheetPins,
@@ -153,6 +156,36 @@ pub struct ProjectCloseConfirmState {
     /// Save All / Discard All paths reuse them for the engine sweep instead
     /// of reading the disk again.
     pub sheet_refs: crate::app::state::sheet_refs::SheetRefs,
+}
+
+/// Why a child sheet could not be written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChildSheetWriteError {
+    /// The file was already there; it was left alone.
+    AlreadyExists,
+    Failed(String),
+}
+
+/// The "Create Sheet" dialog: the file a sheet symbol points at does not
+/// exist, and the user picks where to write it. Held by the parent sheet's
+/// path and the symbol's id, so the answer acts on THAT document whatever tab
+/// is active by then.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateChildSheetConfirmState {
+    pub symbol: uuid::Uuid,
+    /// The symbol's name, for the dialog text.
+    pub name: String,
+    /// The sheet that carries the symbol.
+    pub parent: std::path::PathBuf,
+    /// The project folder the file must stay inside (the parent's folder for
+    /// a loose sheet).
+    pub project_dir: std::path::PathBuf,
+    /// The editable file path: relative to the parent's folder, or absolute.
+    pub path_text: String,
+    /// Why Create refused, shown under the field.
+    pub error: Option<String>,
+    /// The typed path names a file that already exists: offer to open it.
+    pub exists: bool,
 }
 
 /// State for the "Exit Signex — Unsaved Edits" confirmation modal.

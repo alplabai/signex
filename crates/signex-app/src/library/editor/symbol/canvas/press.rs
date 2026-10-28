@@ -33,14 +33,9 @@ impl SymbolCanvas<'_> {
         y: f64,
     ) -> Option<PressTarget> {
         let tol_mm = self.pick_tolerance_mm();
-        if let Some(pin) = state::hit_test_pin(
-            self.symbol,
-            x,
-            y,
-            tol_mm,
-            self.active_part,
-            &self.selection_filter,
-        ) {
+        if let Some(pin) =
+            state::hit_test_pin(self.symbol, x, y, tol_mm, self.view, &self.selection_filter)
+        {
             return Some(PressTarget::Pin(pin));
         }
         if let Some((idx, handle)) = state::hit_test_graphic_handle(
@@ -48,18 +43,18 @@ impl SymbolCanvas<'_> {
             x,
             y,
             tol_mm,
-            self.active_part,
+            self.view,
             &self.selected,
             &self.selection_filter,
         ) {
             return Some(PressTarget::Handle(idx, handle));
         }
         if let Some(key) =
-            state::hit_test_field(self.symbol, x, y, self.active_part, &self.selection_filter)
+            state::hit_test_field(self.symbol, x, y, self.view, &self.selection_filter)
         {
             return Some(PressTarget::Field(key));
         }
-        state::hit_test_graphic(self.symbol, x, y, self.active_part, &self.selection_filter)
+        state::hit_test_graphic(self.symbol, x, y, self.view, &self.selection_filter)
             .map(PressTarget::Graphic)
             .or_else(|| self.pin_hit_by_label(x, y).map(PressTarget::Pin))
     }

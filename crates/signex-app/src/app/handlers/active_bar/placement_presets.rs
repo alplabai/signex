@@ -106,13 +106,15 @@ impl Signex {
             ActiveBarAction::PlaceSheetSymbol => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Sheet)));
             }
-            // Sheet entry / rounded rect / graphic — rectangle-dragged
+            // Device sheet / reuse block / rounded rect / graphic — rectangle-dragged
             // shapes in Altium. Until each has a bespoke tool, use the
             // rectangle tool so the drag-to-size gesture produces a visible
             // shape. (Text Frame is handled in action_groups so the ghost
             // text preview kicks in.)
-            ActiveBarAction::PlaceSheetEntry
-            | ActiveBarAction::PlaceDeviceSheetSymbol
+            ActiveBarAction::PlaceSheetEntry => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::SheetEntry)));
+            }
+            ActiveBarAction::PlaceDeviceSheetSymbol
             | ActiveBarAction::PlaceReuseBlock
             | ActiveBarAction::DrawRoundRectangle
             | ActiveBarAction::PlaceGraphic => {
@@ -248,13 +250,19 @@ impl Signex {
                 // the canvas reads that map through `CanvasViewPrefs`
                 // instead of keeping a cleared-in-parallel copy. #1005 —
                 // each sheet keeps its own undo step for what this removes.
-                self.clear_all_net_colors_undoably();
+                let kept = self.clear_all_net_colors_undoably();
                 self.ui_state.pending_net_color = None;
                 self.interaction_state.active_canvas_mut().pending_net_color = None;
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
-                crate::diagnostics::log_info("Cleared all net-color overrides");
+                if kept == 0 {
+                    crate::diagnostics::log_info("Cleared all net-color overrides");
+                } else {
+                    crate::diagnostics::log_info(format!(
+                        "Cleared net-color overrides, except on {kept} read-only sheet(s)"
+                    ));
+                }
             }
             _ => {}
         }
@@ -287,6 +295,7 @@ impl Signex {
                 mirror_x: false,
                 mirror_y: false,
                 unit: 1,
+                body_style: Default::default(),
                 is_power: true,
                 ref_text: None,
                 val_text: None,

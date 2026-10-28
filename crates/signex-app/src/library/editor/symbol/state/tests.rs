@@ -5,8 +5,8 @@ use signex_library::Symbol;
 #[test]
 fn add_pin_assigns_next_number() {
     let mut s = Symbol::empty("test");
-    add_pin(&mut s, 0.0, 0.0, 1); // seed first pin so numbering starts at "1"
-    let idx = add_pin(&mut s, 1.0, 1.0, 1);
+    add_pin(&mut s, 0.0, 0.0, PartView::normal(1)); // seed first pin so numbering starts at "1"
+    let idx = add_pin(&mut s, 1.0, 1.0, PartView::normal(1));
     assert_eq!(idx, 1);
     assert_eq!(s.pins[1].number, "2");
 }
@@ -14,16 +14,16 @@ fn add_pin_assigns_next_number() {
 #[test]
 fn add_pin_records_active_part() {
     let mut s = Symbol::empty("test");
-    let idx = add_pin(&mut s, 0.0, 0.0, 3);
+    let idx = add_pin(&mut s, 0.0, 0.0, PartView::normal(3));
     assert_eq!(s.pins[idx].part_number, 3);
 }
 
 #[test]
 fn max_part_number_ignores_part_zero() {
     let mut s = Symbol::empty("test");
-    add_pin(&mut s, 0.0, 0.0, 0); // shared
-    add_pin(&mut s, 0.0, 0.0, 2);
-    add_pin(&mut s, 0.0, 0.0, 4);
+    add_pin(&mut s, 0.0, 0.0, PartView::normal(0)); // shared
+    add_pin(&mut s, 0.0, 0.0, PartView::normal(2));
+    add_pin(&mut s, 0.0, 0.0, PartView::normal(4));
     assert_eq!(max_part_number(&s), 4);
 }
 
@@ -36,9 +36,9 @@ fn max_part_number_defaults_to_one() {
 #[test]
 fn delete_unit_removes_and_renumbers() {
     let mut s = Symbol::empty("test");
-    add_pin(&mut s, 0.0, 0.0, 1); // pin "1" on part 1
-    add_pin(&mut s, 1.0, 0.0, 2); // pin "2" on part 2 (deleted)
-    add_pin(&mut s, 2.0, 0.0, 3); // pin "3" on part 3 (renumbers to 2)
+    add_pin(&mut s, 0.0, 0.0, PartView::normal(1)); // pin "1" on part 1
+    add_pin(&mut s, 1.0, 0.0, PartView::normal(2)); // pin "2" on part 2 (deleted)
+    add_pin(&mut s, 2.0, 0.0, PartView::normal(3)); // pin "3" on part 3 (renumbers to 2)
     s.part_count = 3;
 
     let active = delete_unit(&mut s, 2);
@@ -64,7 +64,7 @@ fn delete_unit_out_of_range_leaves_count_unchanged() {
     // Part) must not silently drop a unit. delete_unit with a part
     // greater than the count is a no-op on part_count.
     let mut s = Symbol::empty("test");
-    add_pin(&mut s, 0.0, 0.0, 1); // populated part 1
+    add_pin(&mut s, 0.0, 0.0, PartView::normal(1)); // populated part 1
     s.part_count = 2; // an empty part 2 exists (no pins on it)
 
     let active = delete_unit(&mut s, 3); // 3 > count (2)
@@ -76,8 +76,8 @@ fn delete_unit_out_of_range_leaves_count_unchanged() {
 #[test]
 fn delete_pin_clears_selection_via_return() {
     let mut s = Symbol::empty("test");
-    add_pin(&mut s, 0.0, 0.0, 1); // first pin
-    add_pin(&mut s, 1.0, 1.0, 1); // second pin
+    add_pin(&mut s, 0.0, 0.0, PartView::normal(1)); // first pin
+    add_pin(&mut s, 1.0, 1.0, PartView::normal(1)); // second pin
     let new_sel = delete_selected(&mut s, Some(SymbolSelection::Pin(0)));
     assert_eq!(new_sel, Some(None));
     assert_eq!(s.pins.len(), 1);
@@ -86,7 +86,7 @@ fn delete_pin_clears_selection_via_return() {
 #[test]
 fn move_selected_updates_position() {
     let mut s = Symbol::empty("test");
-    add_pin(&mut s, 0.0, 0.0, 1);
+    add_pin(&mut s, 0.0, 0.0, PartView::normal(1));
     move_selected(&mut s, Some(SymbolSelection::Pin(0)), 5.5, -2.0);
     assert_eq!(s.pins[0].position, [5.5, -2.0]);
 }
@@ -98,7 +98,7 @@ fn hit_test(sym: &Symbol, x: f64, y: f64, active_part: u8) -> Option<SymbolSelec
         x,
         y,
         1.5,
-        active_part,
+        PartView::normal(active_part),
         &SymbolSelectionFilter::default(),
     )
 }
@@ -119,7 +119,7 @@ fn select_in_box(
         x1,
         y1,
         kind,
-        active_part,
+        PartView::normal(active_part),
         &SymbolSelectionFilter::default(),
     )
 }
@@ -127,7 +127,7 @@ fn select_in_box(
 #[test]
 fn hit_test_returns_pin() {
     let mut s = Symbol::empty("test");
-    add_pin(&mut s, 3.0, 4.0, 1);
+    add_pin(&mut s, 3.0, 4.0, PartView::normal(1));
     let sel = hit_test(&s, 3.0, 4.0, 1);
     assert_eq!(sel, Some(SymbolSelection::Pin(0)));
 }
@@ -136,6 +136,7 @@ fn hit_test_returns_pin() {
 fn graphic_handle_position_returns_rectangle_corners() {
     let mut s = Symbol::empty("test");
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [-2.0, -1.0],
             to: [2.0, 1.0],
@@ -159,6 +160,7 @@ fn graphic_handle_position_returns_rectangle_corners() {
 fn hit_test_graphic_handle_finds_rectangle_corner() {
     let mut s = Symbol::empty("test");
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [0.0, 0.0],
             to: [10.0, 5.0],
@@ -174,7 +176,7 @@ fn hit_test_graphic_handle_finds_rectangle_corner() {
         10.0,
         0.0,
         1.5,
-        1,
+        PartView::normal(1),
         &selected,
         &SymbolSelectionFilter::default(),
     );
@@ -185,6 +187,7 @@ fn hit_test_graphic_handle_finds_rectangle_corner() {
 fn move_graphic_handle_moves_line_endpoint() {
     let mut s = Symbol::empty("test");
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Line {
             from: [0.0, 0.0],
             to: [5.0, 0.0],
@@ -204,6 +207,7 @@ fn move_graphic_handle_moves_line_endpoint() {
 fn move_graphic_handle_resizes_circle_radius() {
     let mut s = Symbol::empty("test");
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Circle {
             center: [0.0, 0.0],
             radius: 1.0,
@@ -223,6 +227,7 @@ fn move_graphic_handle_resizes_circle_radius() {
 fn hit_test_returns_graphic_inside_rectangle() {
     let mut s = Symbol::empty("test");
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [0.0, 0.0],
             to: [10.0, 5.0],
@@ -240,6 +245,7 @@ fn hit_test_returns_graphic_inside_rectangle() {
 fn move_selected_translates_rectangle_by_anchor_delta() {
     let mut s = Symbol::empty("test");
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [0.0, 0.0],
             to: [10.0, 5.0],
@@ -262,6 +268,7 @@ fn move_selected_translates_rectangle_by_anchor_delta() {
 fn rotate_selected_rotates_rectangle_clockwise_around_origin() {
     let mut s = Symbol::empty("test");
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [1.0, 2.0],
             to: [3.0, 4.0],
@@ -285,7 +292,7 @@ fn rotate_selected_rotates_rectangle_clockwise_around_origin() {
 #[test]
 fn rotate_selected_rotates_pin_orientation_in_place() {
     let mut s = Symbol::empty("test");
-    let idx = add_pin(&mut s, 2.0, 1.0, 1);
+    let idx = add_pin(&mut s, 2.0, 1.0, PartView::normal(1));
     s.pins[idx].orientation = PinOrientation::Right;
 
     rotate_selected(&mut s, Some(SymbolSelection::Pin(idx)), false);
@@ -300,6 +307,7 @@ fn rotate_selected_rotates_pin_orientation_in_place() {
 fn rotate_selected_about_geometry_center_keeps_rectangle_center() {
     let mut s = Symbol::empty("test");
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [1.0, 2.0],
             to: [3.0, 4.0],
@@ -329,6 +337,7 @@ fn rotate_selected_about_geometry_center_keeps_rectangle_center() {
 fn rotate_selected_about_geometry_center_keeps_text_anchor_fixed() {
     let mut s = Symbol::empty("test");
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Text {
             position: [5.0, -7.0],
             content: "R".into(),
@@ -353,6 +362,7 @@ fn rotate_selected_about_geometry_center_keeps_text_anchor_fixed() {
 fn delete_selected_removes_graphic() {
     let mut s = Symbol::empty("test");
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Circle {
             center: [0.0, 0.0],
             radius: 1.0,
@@ -370,6 +380,7 @@ fn delete_selected_removes_graphic() {
 fn move_graphic_handle_no_op_for_mismatched_variant() {
     let mut s = Symbol::empty("test");
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Line {
             from: [0.0, 0.0],
             to: [5.0, 0.0],
@@ -394,6 +405,7 @@ fn graphic_on_part_shared_and_scoped() {
     let mut s = Symbol::empty("test");
     // Shared graphic (part 0) — visible on every unit.
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [0.0, 0.0],
             to: [1.0, 1.0],
@@ -404,6 +416,7 @@ fn graphic_on_part_shared_and_scoped() {
     });
     // Graphic scoped to unit 2.
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [0.0, 0.0],
             to: [1.0, 1.0],
@@ -417,14 +430,14 @@ fn graphic_on_part_shared_and_scoped() {
     let scoped = &s.graphics[1];
 
     // Part 0 is visible regardless of the active unit.
-    assert!(graphic_on_part(shared, 1));
-    assert!(graphic_on_part(shared, 2));
-    assert!(graphic_on_part(shared, 5));
+    assert!(graphic_on_part(shared, PartView::normal(1)));
+    assert!(graphic_on_part(shared, PartView::normal(2)));
+    assert!(graphic_on_part(shared, PartView::normal(5)));
 
     // A scoped graphic is visible only on its own unit.
-    assert!(graphic_on_part(scoped, 2));
-    assert!(!graphic_on_part(scoped, 1));
-    assert!(!graphic_on_part(scoped, 3));
+    assert!(graphic_on_part(scoped, PartView::normal(2)));
+    assert!(!graphic_on_part(scoped, PartView::normal(1)));
+    assert!(!graphic_on_part(scoped, PartView::normal(3)));
 }
 
 #[test]
@@ -432,6 +445,7 @@ fn hit_test_respects_active_part() {
     let mut s = Symbol::empty("test");
     // A rectangle scoped to unit 2, covering the point (5.0, 2.5).
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [0.0, 0.0],
             to: [10.0, 5.0],
@@ -451,6 +465,7 @@ fn hit_test_respects_active_part() {
     // A shared (part 0) rectangle is hittable on any active unit.
     let mut shared = Symbol::empty("test");
     shared.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [0.0, 0.0],
             to: [10.0, 5.0],
@@ -476,6 +491,7 @@ fn delete_unit_prunes_and_renumbers_graphics() {
     let mut s = Symbol::empty("test");
     // Shared body geometry (part 0) — must survive untouched.
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [0.0, 0.0],
             to: [1.0, 1.0],
@@ -486,6 +502,7 @@ fn delete_unit_prunes_and_renumbers_graphics() {
     });
     // Distinct `from` per unit so we can identify which rectangle survived.
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [10.0, 10.0],
             to: [11.0, 11.0],
@@ -495,6 +512,7 @@ fn delete_unit_prunes_and_renumbers_graphics() {
         fill: None,
     });
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [20.0, 20.0],
             to: [21.0, 21.0],
@@ -504,6 +522,7 @@ fn delete_unit_prunes_and_renumbers_graphics() {
         fill: None,
     });
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [30.0, 30.0],
             to: [31.0, 31.0],
@@ -542,7 +561,7 @@ fn delete_unit_prunes_and_renumbers_graphics() {
 #[test]
 fn hit_test_ignores_other_unit_pin() {
     let mut s = Symbol::empty("test");
-    add_pin(&mut s, 3.0, 3.0, 2); // pin scoped to unit 2
+    add_pin(&mut s, 3.0, 3.0, PartView::normal(2)); // pin scoped to unit 2
 
     // Hidden while unit 1 is active — nothing under the cursor.
     assert_eq!(hit_test(&s, 3.0, 3.0, 1), None);
@@ -553,7 +572,7 @@ fn hit_test_ignores_other_unit_pin() {
     ));
 
     // A Part-Zero pin is hittable on any active unit.
-    add_pin(&mut s, -3.0, -3.0, 0);
+    add_pin(&mut s, -3.0, -3.0, PartView::normal(0));
     assert!(matches!(
         hit_test(&s, -3.0, -3.0, 1),
         Some(SymbolSelection::Pin(_))
@@ -564,8 +583,9 @@ fn hit_test_ignores_other_unit_pin() {
 fn select_in_box_all_uses_visible_counts() {
     let mut s = Symbol::empty("test");
     // One pin and one rectangle visible on unit 1.
-    add_pin(&mut s, 5.0, 5.0, 1);
+    add_pin(&mut s, 5.0, 5.0, PartView::normal(1));
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [0.0, 0.0],
             to: [10.0, 10.0],
@@ -576,6 +596,7 @@ fn select_in_box_all_uses_visible_counts() {
     });
     // A unit-2 rectangle far away — invisible while unit 1 is active.
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [100.0, 100.0],
             to: [101.0, 101.0],
@@ -613,6 +634,7 @@ fn select_in_box_all_uses_visible_counts() {
 fn polygon_symbol(vertices: Vec<[f64; 2]>, fill: Option<[u8; 4]>) -> Symbol {
     let mut s = Symbol::empty("test");
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Polygon { vertices },
         stroke_width: 0.15,
         part_number: 0,
@@ -757,7 +779,7 @@ fn hit_test_graphic_handle_finds_polygon_vertex_when_selected() {
         2.0,
         0.0,
         1.5,
-        1,
+        PartView::normal(1),
         &selected,
         &SymbolSelectionFilter::default(),
     );
@@ -776,7 +798,7 @@ fn hit_test_graphic_handle_ignores_polygon_vertex_when_not_selected() {
         2.0,
         0.0,
         1.5,
-        1,
+        PartView::normal(1),
         &None,
         &SymbolSelectionFilter::default(),
     );
@@ -874,6 +896,7 @@ fn select_in_box_crossing_touches_polygon_bbox() {
 fn arc_symbol(start_deg: f64, end_deg: f64) -> Symbol {
     let mut s = Symbol::empty("test");
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Arc {
             center: [0.0, 0.0],
             radius: 5.0,
@@ -1002,6 +1025,7 @@ fn arc_endpoint_handle_drag_survives_save_reload() {
 fn sym_with_graphic(kind: SymbolGraphicKind, fill: Option<[u8; 4]>) -> Symbol {
     let mut s = Symbol::empty("test");
     s.graphics.push(signex_library::SymbolGraphic {
+        body_style: 1,
         kind,
         stroke_width: 0.15,
         part_number: 0,

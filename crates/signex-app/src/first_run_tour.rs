@@ -18,7 +18,17 @@ const CARD_W: f32 = 360.0;
 const CARD_PAD_RIGHT: f32 = 24.0;
 const CARD_PAD_BOTTOM: f32 = 36.0;
 
+/// The tour painted as a card pinned to the main window's corner.
 pub fn view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
+    build(tokens, false)
+}
+
+/// The tour as the content of its own OS window: no header, filling it.
+pub fn window_view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
+    build(tokens, true)
+}
+
+fn build<'a>(tokens: &'a ThemeTokens, windowed: bool) -> Element<'a, Message> {
     let text_primary = styles::ti(tokens.text);
     let text_secondary = styles::ti(tokens.text_secondary);
 
@@ -51,6 +61,13 @@ pub fn view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
     .padding([10.0, SP.l])
     .width(Length::Fill);
 
+    if windowed {
+        return container(body)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(styles::modal_card(tokens))
+            .into();
+    }
     let card = container(column![header, body].spacing(0))
         .width(Length::Fixed(CARD_W))
         .clip(true)

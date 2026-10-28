@@ -12,7 +12,25 @@ const SP: Spacing = Spacing::DEFAULT;
 const DIALOG_W: f32 = 440.0;
 const DIALOG_H: f32 = 400.0;
 
+/// The dialog painted as a centred card on a scrim in the main window.
 pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a, FindReplaceMsg> {
+    build(state, tokens, false)
+}
+
+/// The dialog as the content of its own OS window: no header (the native
+/// title bar has the title and the close), filling the window.
+pub fn window_view<'a>(
+    state: &'a FindReplaceState,
+    tokens: &ThemeTokens,
+) -> Element<'a, FindReplaceMsg> {
+    build(state, tokens, true)
+}
+
+fn build<'a>(
+    state: &'a FindReplaceState,
+    tokens: &ThemeTokens,
+    windowed: bool,
+) -> Element<'a, FindReplaceMsg> {
     let text_primary = crate::styles::ti(tokens.text);
     let text_secondary = crate::styles::ti(tokens.text_secondary);
     let border = crate::styles::ti(tokens.border);
@@ -206,6 +224,16 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
     .align_y(iced::Alignment::Center)
     .spacing(SP.m);
 
+    let header: Element<'a, FindReplaceMsg> = if windowed {
+        Space::new().height(0).into()
+    } else {
+        header.into()
+    };
+    let (dialog_w, dialog_h) = if windowed {
+        (Length::Fill, Length::Fill)
+    } else {
+        (Length::Fixed(DIALOG_W), Length::Fixed(DIALOG_H))
+    };
     let dialog = container(
         column![
             header,
@@ -214,10 +242,13 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
                 .padding([10, 10]),
             container(footer).padding([10, 14]),
         ]
-        .width(DIALOG_W)
-        .height(DIALOG_H),
+        .width(dialog_w)
+        .height(dialog_h),
     )
     .style(crate::styles::context_menu(tokens));
+    if windowed {
+        return dialog.into();
+    }
 
     container(
         column![

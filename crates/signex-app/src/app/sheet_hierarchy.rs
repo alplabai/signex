@@ -180,6 +180,51 @@ impl SheetHierarchy {
         self.top_level().all(complete)
     }
 
+    /// The designators a search reads at `path`: every placement the walk
+    /// reaches the sheet through, and whether that list is certain to be
+    /// complete (so a designator edit may write `reference` alone).
+    pub fn designator_scope(&self, path: &Path) -> signex_engine::DesignatorScope {
+        let placements = self.placements_of(path);
+        let single = self.is_complete() && placements.len() <= 1;
+        signex_engine::DesignatorScope { placements, single }
+    }
+
+    /// Every loaded sheet occurrence with the placement that reaches it,
+    /// walk order: a child placed twice is two entries, a hierarchical child
+    /// no page list names is one.
+    pub fn occurrences(&self) -> Vec<(InstancePath, &SheetNode)> {
+        fn walk<'a>(
+            node: &'a SheetNode,
+            chain: &mut Vec<Uuid>,
+            out: &mut Vec<(InstancePath, &'a SheetNode)>,
+        ) {
+            chain.extend(node.placed_as);
+            if node.kind == SheetNodeKind::Present {
+                out.push((InstancePath::from_chain(chain.clone()), node));
+            }
+            for child in &node.children {
+                walk(child, chain, out);
+            }
+            if node.placed_as.is_some() {
+                chain.pop();
+            }
+        }
+        let mut out = Vec::new();
+        for node in self.top_level() {
+            walk(node, &mut Vec::new(), &mut out);
+        }
+        out
+    }
+
+    /// The sheet file an occurrence path stands for. The root chain names the
+    /// root sheet (loose pages share it and are not reachable this way).
+    pub fn sheet_path_at(&self, occurrence: &InstancePath) -> Option<PathBuf> {
+        self.occurrences()
+            .into_iter()
+            .find(|(chain, _)| chain == occurrence)
+            .map(|(_, node)| node.path.clone())
+    }
+
     /// The placement a tree-row path stands for: the sheet-symbol uuids
     /// walked from the top-level page down to that row. A top-level row is a
     /// page the walk starts at, so it is the root chain.

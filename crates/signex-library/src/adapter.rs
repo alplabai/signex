@@ -208,7 +208,7 @@ fn refuse_unversioned_base(base: Option<u64>) -> Result<(), LibraryError> {
 /// actually support. `LocalGitAdapter` and `DatabaseAdapter` supply
 /// real implementations.
 pub trait LibraryAdapter: Send + Sync {
-    /// Stable UUID of this library, sourced from `library.toml::library.library_id`.
+    /// Stable UUID of this library, sourced from the `library_id` at the root of the `.snxlib` document.
     ///
     /// Used by [`crate::adapters::library_set::LibrarySet`] to key resolution
     /// of cross-library [`crate::primitive::PrimitiveRef`]s. The default
@@ -470,6 +470,55 @@ pub trait LibraryAdapter: Send + Sync {
         crate::cascade::apply_cascade_bump(&mut row, save);
         self.update_row(table, row, message)?;
         Ok(true)
+    }
+
+    /// Apply `edit` to every row in `targets` (`(table, row)` pairs) as one
+    /// batch, returning one outcome per target in order: `Ok(true)` when
+    /// the edit changed the row, `Ok(false)` when it left it alone, `Err`
+    /// when that row could not be read or written.
+    ///
+    /// Each row is re-read at write time, so the edit keeps any other
+    /// field changed since a caller's snapshot. The edit must not change a
+    /// row's identity or part number: a batch is for re-pinning versions,
+    /// so it skips the part-number uniqueness check `update_row` runs on a
+    /// changed part number. An `Err` for the whole call means nothing was
+    /// written.
+    ///
+    /// The default is `read_row` + `update_row` per target, in order,
+    /// stopping at the first failure: the targets after it are reported as
+    /// not attempted. An adapter that can write the whole batch at once
+    /// (one file write and one commit, one transaction) overrides it.
+    fn update_rows(
+        &self,
+        targets: &[(String, RowId)],
+        edit: &mut RowEdit<'_>,
+        message: &str,
+    ) -> Result<Vec<RowEditOutcome>, LibraryError> {
+        let mut outcomes: Vec<RowEditOutcome> = Vec::with_capacity(targets.len());
+        let mut failed: Option<String> = None;
+        for (table, row_id) in targets {
+            if let Some(first) = &failed {
+                outcomes.push((
+                    *row_id,
+                    Err(LibraryError::Backend(format!(
+                        "not attempted: an earlier row failed ({first})"
+                    ))),
+                ));
+                continue;
+            }
+            let outcome = self.read_row(table, *row_id).and_then(|mut row| {
+                if !edit(&mut row) {
+                    return Ok(false);
+                }
+                self.update_row(table, row, message)?;
+                Ok(true)
+            });
+            if let Err(e) = &outcome {
+                failed = Some(e.to_string());
+            }
+            outcomes.push((*row_id, outcome));
+        }
+        Ok(outcomes)
     }
 
     // ── Row CRUD ────────────────────────────────────────────────────────
@@ -775,6 +824,13 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 }
+
+/// The edit of [`LibraryAdapter::update_rows`]: changes the row it is given
+/// and returns whether it did.
+pub type RowEdit<'a> = dyn FnMut(&mut ComponentRow) -> bool + 'a;
+
+/// One target's outcome from [`LibraryAdapter::update_rows`].
+pub type RowEditOutcome = (RowId, Result<bool, LibraryError>);
 
 /// The rewrite step of [`LibraryAdapter::rewrite_file_locked`]: given the
 /// file's current bytes (`None` when it does not exist), the bytes to write,
