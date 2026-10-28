@@ -584,35 +584,31 @@ impl OpenLibrary {
         // extra refresh on the next poll, never a missed one.
         let stamp = signex_library::DiskStamp::of(&self.root).ok();
         let names = adapter.list_tables()?;
-        let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
-        let mut summaries: Vec<ComponentSummary> = Vec::new();
-        let mut pricing: HashMap<Uuid, signex_library::RowPricing> = HashMap::new();
-        for name in names {
-            match adapter.table_pricing(&name) {
-                Ok(cached) => pricing.extend(cached),
-                Err(e) => tracing::warn!(
+        let super::table_scan::TableScan {
+            tables,
+            summaries,
+            pricing,
+        } = super::table_scan::scan_tables(
+            adapter,
+            names,
+            summarize_row,
+            |name, e| {
+                tracing::warn!(
                     target: "signex::library",
                     table = %name,
                     error = %e,
                     "reload_tables: cached prices could not be read; none are shown"
-                ),
-            }
-            match adapter.read_table(&name) {
-                Ok(rows) => {
-                    summaries.extend(rows.iter().map(summarize_row));
-                    tables.insert(name, rows);
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        table = %name,
-                        error = %e,
-                        "read_table failed; entry left empty"
-                    );
-                    tables.insert(name, Vec::new());
-                }
-            }
-        }
+                )
+            },
+            |name, e| {
+                tracing::warn!(
+                    target: "signex::library",
+                    table = %name,
+                    error = %e,
+                    "read_table failed; entry left empty"
+                )
+            },
+        );
         self.tables = tables;
         self.pricing = pricing;
         self.cached_components = summaries;
