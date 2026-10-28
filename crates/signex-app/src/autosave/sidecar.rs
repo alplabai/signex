@@ -17,14 +17,59 @@
 
 use std::path::{Path, PathBuf};
 
+use super::pending_move;
+
 /// Extension that marks a file as a recovery sidecar.
 pub const SIDECAR_EXTENSION: &str = "recovery";
 
 /// FNV-1a over the path text. Stable across Rust versions and platforms
 /// (unlike `DefaultHasher`), which is what a name that must be found again
 /// on the next launch needs.
+///
+/// Dot segments are resolved first, with the normaliser the rest of the app
+/// compares paths by, so `W/x/../Foo/a` and `W/Foo/a` name one sidecar.
+///
+/// The resolution is lexical, never a disk lookup: `w/link/../x` and `w/x`
+/// share a key even when `link` is a symlink and they are different files.
+/// Sheet paths are compared the same way elsewhere (`KeyMap::lexical_key`),
+/// and the key must be computable without IO on the UI thread.
 fn path_hash(path: &Path) -> u64 {
+    let path = crate::app::project_sheets::normalize_clamped(path);
     bytes_hash(path.to_string_lossy().as_bytes())
+}
+
+/// The key a build before #1510 gave `path`: the hash of its text exactly as
+/// spelled, with no normalising.
+fn legacy_path_hash(path: &Path) -> u64 {
+    bytes_hash(path.to_string_lossy().as_bytes())
+}
+
+/// Move a copy written under the pre-#1510 key of `document` to its current
+/// key, so an upgrade (or a dot-segment spelling) does not strand it. Nothing
+/// happens when the keys agree, when no old-key copy exists, or when a copy
+/// already sits at the current key (that one wins; the old one is kept).
+pub fn adopt_legacy(recovery_dir: &Path, document: &Path) -> Result<(), String> {
+    let current = sidecar_path(recovery_dir, document);
+    let legacy = key_path(recovery_dir, document, legacy_path_hash(document));
+    if legacy == current || !legacy.is_file() {
+        return Ok(());
+    }
+    if current.exists() {
+        crate::diagnostics::log_warning(format!(
+            "The recovery copy {} (an older key of {}) was left on disk: a copy already sits \
+             under the current key.",
+            legacy.display(),
+            document.display()
+        ));
+        return Ok(());
+    }
+    std::fs::rename(&legacy, &current).map_err(|e| {
+        format!(
+            "{e}: could not move recovery copy {} to {}",
+            legacy.display(),
+            current.display()
+        )
+    })
 }
 
 /// FNV-1a over `bytes`; also the stamp of a draft without a revision counter.
@@ -39,14 +84,15 @@ pub fn bytes_hash(bytes: &[u8]) -> u64 {
 
 /// The sidecar path for the document at `document` inside `recovery_dir`.
 pub fn sidecar_path(recovery_dir: &Path, document: &Path) -> PathBuf {
+    key_path(recovery_dir, document, path_hash(document))
+}
+
+fn key_path(recovery_dir: &Path, document: &Path, hash: u64) -> PathBuf {
     let name = document
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "document".to_string());
-    recovery_dir.join(format!(
-        "{name}-{:016x}.{SIDECAR_EXTENSION}",
-        path_hash(document)
-    ))
+    recovery_dir.join(format!("{name}-{hash:016x}.{SIDECAR_EXTENSION}"))
 }
 
 /// Atomically write `bytes` as the sidecar of `document`.
@@ -61,32 +107,54 @@ pub fn write(recovery_dir: &Path, document: &Path, bytes: &[u8]) -> Result<(), S
 pub fn remove(recovery_dir: &Path, document: &Path) -> Result<(), String> {
     let sidecar = sidecar_path(recovery_dir, document);
     match std::fs::remove_file(&sidecar) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(format!(
-            "{e}: could not remove recovery copy {}",
-            sidecar.display()
-        )),
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            return Err(format!(
+                "{e}: could not remove recovery copy {}",
+                sidecar.display()
+            ));
+        }
     }
+    // No copy left to move.
+    pending_move::clear(recovery_dir, document);
+    Ok(())
 }
 
 /// Move the sidecar of `from` to where `to` looks for it, after the
 /// document was renamed or its folder moved. A sidecar that is not there is
 /// success: the document had no recovery copy.
+///
+/// The move is journalled first ([`pending_move`]) and the entry cleared
+/// once the copy sits under the new key, so a move that fails until the app
+/// quits is finished by the next run instead of stranding the copy.
 pub fn rename(recovery_dir: &Path, from: &Path, to: &Path) -> Result<(), String> {
     let (src, dst) = (
         sidecar_path(recovery_dir, from),
         sidecar_path(recovery_dir, to),
     );
-    match std::fs::rename(&src, &dst) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(format!(
-            "could not move recovery copy {} to {}: {e}",
-            src.display(),
-            dst.display()
-        )),
+    if src == dst || !src.is_file() {
+        // Nothing to move: an entry for `from` would only mislead.
+        pending_move::clear(recovery_dir, from);
+        return Ok(());
     }
+    // A journal that cannot be written must not block the move itself.
+    if let Err(reason) = pending_move::record(recovery_dir, from, to) {
+        crate::diagnostics::log_warning(reason);
+    }
+    match std::fs::rename(&src, &dst) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            return Err(format!(
+                "could not move recovery copy {} to {}: {e}",
+                src.display(),
+                dst.display()
+            ));
+        }
+    }
+    pending_move::clear_if(recovery_dir, from, std::slice::from_ref(&to.to_path_buf()));
+    Ok(())
 }
 
 #[cfg(test)]
@@ -115,6 +183,15 @@ mod tests {
         remove(&rec, &doc).unwrap();
         remove(&rec, &doc).unwrap();
         assert!(!sidecar_path(&rec, &doc).exists());
+    }
+
+    #[test]
+    fn dot_segment_spellings_of_a_document_share_one_sidecar() {
+        let dir = Path::new("rec");
+        assert_eq!(
+            sidecar_path(dir, Path::new("w/x/../Foo/./a.snxsch")),
+            sidecar_path(dir, Path::new("w/Foo/a.snxsch"))
+        );
     }
 
     #[test]

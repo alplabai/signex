@@ -373,3 +373,18 @@ fn primitive_file_resolves_through_the_ref_library_id() {
             .is_none()
     );
 }
+
+/// `reload_tables` (the open/mount path) left `pricing` empty, so a
+/// freshly mounted library showed no cached prices until a later
+/// `refresh_components`.
+#[test]
+fn reload_tables_loads_cached_pricing() {
+    let library_id = Uuid::new_v4();
+    let adapter = crate::library::test_adapters::PricedAdapter::new(library_id);
+    let mut lib = library_with_cached_primitives(Path::new("/tmp/priced.snxlib"), library_id);
+    assert!(lib.pricing.is_empty());
+
+    lib.reload_tables(&adapter).expect("reload");
+
+    assert!(lib.pricing.contains_key(&adapter.priced_row));
+}

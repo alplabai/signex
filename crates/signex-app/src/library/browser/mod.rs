@@ -26,10 +26,13 @@ mod columns;
 mod empty_state;
 mod grid;
 mod header;
+mod keyed;
 mod price;
 mod sidebar;
+mod size_sensor;
 mod sort;
 mod view_cache;
+mod window;
 
 use action_row::view_action_row;
 use empty_state::view_empty_state;
@@ -38,6 +41,8 @@ use header::view_header;
 use sidebar::view_table_sidebar;
 pub use view_cache::BrowserViewCache;
 use view_cache::active_table;
+pub use window::{GridScroll, grid_scroll_id, reveal_row_offset, visible_rows};
+pub(crate) use window::{OVERSCAN_ROWS, visible_range};
 
 const BROWSER_TEXT_SIZE: f32 = 11.0;
 const BROWSER_HEADER_SIZE: f32 = 10.0;

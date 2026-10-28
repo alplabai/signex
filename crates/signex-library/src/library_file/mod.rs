@@ -7,7 +7,7 @@
 //! holds raw TSV inside a TOML literal multi-line string so the data is
 //! line-diffable in git and editable in any spreadsheet.
 //!
-//! Stage 1 (this module) lands the storage shape only:
+//! This module owns the storage shape:
 //!  * [`SnxlibManifest`] — the manifest header (everything outside the
 //!    `[tables.*]` blocks). `library_id` lives at the document root, not
 //!    inside `[library]`, matching the v0.9 format.

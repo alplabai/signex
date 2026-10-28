@@ -53,6 +53,14 @@ impl Signex {
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
         self.sync_panel_ctx_mirrors();
+        let shown_browser = match self.document_state.tabs.get(self.document_state.active_tab) {
+            Some(tab) => match &tab.kind {
+                crate::app::TabKind::LibraryBrowser(path) => Some(path.clone()),
+                _ => None,
+            },
+            None => None,
+        };
+        self.library.note_shown_browser(shown_browser.as_deref());
         self.library.sync_view_caches();
         let class_styles = self.refresh_net_class_styles();
         self.sync_label_class_pick();
