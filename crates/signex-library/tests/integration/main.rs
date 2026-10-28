@@ -2,6 +2,7 @@ mod ai_stub;
 mod alternate_symbols_short_rows;
 mod alternate_symbols_tsv;
 mod database_adapter;
+mod database_pn_unique;
 mod database_row_schema;
 mod diff_golden;
 mod distributor_cache;

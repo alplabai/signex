@@ -209,9 +209,13 @@ fn a_cached_good_row_schema_is_dropped_after_a_transport_error() {
 fn a_schema_refusal_drops_the_cache_and_asks_for_an_upgrade() {
     let row = row();
     let put = format!("PUT /tables/resistors/rows/{}", row.row_id);
+    let get = format!("GET /tables/resistors/rows/{}", row.row_id);
+    let body = stored(&row);
     let fake = Fake::start(move |line, _| {
         if line == "GET /version" {
             Reply::Json(200, version_body(ROW_SCHEMA))
+        } else if line == get {
+            Reply::Json(200, body.clone())
         } else if line == put {
             Reply::Json(
                 400,
