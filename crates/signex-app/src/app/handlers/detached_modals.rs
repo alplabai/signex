@@ -7,7 +7,7 @@ use crate::app::Message;
 use crate::app::state::{ModalId, Signex, WindowKind};
 
 /// Dialogs whose window follows their open state, whatever code flips it.
-const FOLLOWED: [ModalId; 10] = [
+const FOLLOWED: [ModalId; 15] = [
     ModalId::FindReplace,
     ModalId::RenameDialog,
     ModalId::RemoveDialog,
@@ -18,15 +18,25 @@ const FOLLOWED: [ModalId; 10] = [
     ModalId::KeyboardShortcuts,
     ModalId::PassiveCalculator,
     ModalId::CreateChildSheet,
+    ModalId::ErrorNotice,
+    ModalId::NetlistIncompletePrompt,
+    ModalId::AutosaveRecovery,
+    ModalId::ProjectCloseConfirm,
+    ModalId::AppQuitConfirm,
 ];
 
 /// Confirm-class dialogs among the detached ones: while one is open the
 /// main window takes no input.
-const LOCKING: [ModalId; 4] = [
+const LOCKING: [ModalId; 9] = [
     ModalId::RenameDialog,
     ModalId::RemoveDialog,
     ModalId::AnnotateResetConfirm,
     ModalId::CreateChildSheet,
+    ModalId::ErrorNotice,
+    ModalId::NetlistIncompletePrompt,
+    ModalId::AutosaveRecovery,
+    ModalId::ProjectCloseConfirm,
+    ModalId::AppQuitConfirm,
 ];
 
 /// Take keyboard focus away from whatever text input holds it, in every window.
@@ -53,6 +63,13 @@ impl Signex {
             ModalId::PassiveCalculator => ui.passive_calculator_open,
             ModalId::FirstRunTour => ui.first_run_tour_open,
             ModalId::CreateChildSheet => ui.create_child_sheet_confirm.is_some(),
+            ModalId::ErrorNotice => self.document_state.error_notice.is_some(),
+            ModalId::NetlistIncompletePrompt => {
+                self.document_state.netlist_incomplete_prompt.is_some()
+            }
+            ModalId::AutosaveRecovery => self.document_state.autosave.current_offer().is_some(),
+            ModalId::ProjectCloseConfirm => ui.project_close_confirm.is_some(),
+            ModalId::AppQuitConfirm => ui.app_quit_confirm.is_some(),
             ModalId::AnnotateDialog
             | ModalId::AnnotateResetConfirm
             | ModalId::ErcDialog
@@ -91,6 +108,13 @@ impl Signex {
         }
         self.ui_state.lock_unfocused = locked;
         (!tasks.is_empty()).then(|| Task::batch(tasks))
+    }
+
+    /// The window `modal` lives in, if it is detached.
+    pub(crate) fn detached_window_of(&self, modal: ModalId) -> Option<iced::window::Id> {
+        self.ui_state.windows.iter().find_map(|(id, kind)| {
+            matches!(kind, WindowKind::DetachedModal(m) if *m == modal).then_some(*id)
+        })
     }
 
     /// The window of the open confirm dialog that locks the main window, if
@@ -192,6 +216,37 @@ mod tests {
             ModalId::KeyboardShortcuts => ui.keyboard_shortcuts_open = true,
             ModalId::PassiveCalculator => ui.passive_calculator_open = true,
             ModalId::FirstRunTour => ui.first_run_tour_open = true,
+            ModalId::ErrorNotice => {
+                app.document_state.error_notice =
+                    Some(crate::app::state::ErrorNotice::create("it failed"))
+            }
+            ModalId::AutosaveRecovery => {
+                app.document_state
+                    .autosave
+                    .offer(crate::autosave::RecoveryOffer {
+                        path: "p.snxsch".into(),
+                        age_secs: 90,
+                        older_than_file: false,
+                    })
+            }
+            ModalId::ProjectCloseConfirm => {
+                let project_id = app.document_state.mint_project_id();
+                app.ui_state.project_close_confirm = Some(crate::app::ProjectCloseConfirmState {
+                    project_id,
+                    project_name: "p".into(),
+                    dirty_paths: vec!["/p/a.snxsch".into()],
+                    dirty_rows: Vec::new(),
+                    kept_paths: Vec::new(),
+                    sheet_refs: Default::default(),
+                })
+            }
+            ModalId::AppQuitConfirm => {
+                app.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState {
+                    dirty_paths: vec!["/p/a.snxsch".into()],
+                    dirty_rows: Vec::new(),
+                })
+            }
+            ModalId::NetlistIncompletePrompt => panic!("needs an export context"),
             ModalId::CreateChildSheet => {
                 ui.create_child_sheet_confirm =
                     Some(crate::app::contracts::CreateChildSheetConfirmState {
@@ -208,6 +263,14 @@ mod tests {
         }
     }
 
+    /// Every followed dialog the fixtures can open (the netlist prompt needs a
+    /// whole export context and has its own test).
+    fn testable() -> impl Iterator<Item = ModalId> {
+        FOLLOWED
+            .into_iter()
+            .filter(|m| *m != ModalId::NetlistIncompletePrompt)
+    }
+
     fn window_of(app: &Signex, modal: ModalId) -> Option<iced::window::Id> {
         app.ui_state.windows.iter().find_map(|(id, kind)| {
             matches!(kind, WindowKind::DetachedModal(m) if *m == modal).then_some(*id)
@@ -216,7 +279,7 @@ mod tests {
 
     #[test]
     fn opening_each_followed_dialog_gives_it_a_window_and_closing_removes_it() {
-        for modal in FOLLOWED {
+        for modal in testable() {
             let (mut app, _main) = test_app();
             open(&mut app, modal);
             assert!(
@@ -240,7 +303,7 @@ mod tests {
 
     #[test]
     fn the_os_close_request_and_esc_close_each_followed_dialog() {
-        for modal in FOLLOWED {
+        for modal in testable() {
             for via_esc in [false, true] {
                 let (mut app, _main) = test_app();
                 open(&mut app, modal);
@@ -267,13 +330,16 @@ mod tests {
 
     #[test]
     fn a_window_that_closes_underneath_clears_the_state() {
-        for modal in FOLLOWED {
+        for modal in testable() {
             let (mut app, _main) = test_app();
             open(&mut app, modal);
             let _ = app.sync_detached_modals();
             let id = window_of(&app, modal).expect("window");
             let _ = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(id)));
-            assert_eq!(app.followed_modal_open(modal), Some(false), "{modal:?}");
+            // A recovery offer is only ever answered by the user: its window
+            // vanishing keeps it (the sync shows it again).
+            let expected = modal == ModalId::AutosaveRecovery;
+            assert_eq!(app.followed_modal_open(modal), Some(expected), "{modal:?}");
         }
     }
 
@@ -417,12 +483,14 @@ mod tests {
             app.ui_state.app_quit_confirm.is_some(),
             "the quit confirm opened"
         );
-        // It paints in the main window (above the lock layer)...
+        // It has its own window, so the lock layer cannot hide it...
+        let window = app
+            .detached_window_of(ModalId::AppQuitConfirm)
+            .expect("its window");
+        let texts = lay_out_texts(app.view(window), iced::Size::new(540.0, 380.0));
         assert!(
-            main_texts(&app, main)
-                .iter()
-                .any(|t| t.text.starts_with("Exit Signex")),
-            "the quit confirm is hidden under the lock"
+            texts.iter().any(|t| t.text.contains("unsaved item")),
+            "the quit confirm shows its own window"
         );
         // ...and Esc, which the lock lets through, cancels it.
         let _ = app.update(Message::Input(InputMsg::EscapePressed {

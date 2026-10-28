@@ -261,6 +261,21 @@ impl Signex {
                     create: false,
                 }))
             }
+            ModalId::ErrorNotice => Some(Message::Overlay(OverlayMsg::DismissErrorNotice)),
+            ModalId::NetlistIncompletePrompt => {
+                Some(Message::Export(ExportMsg::NetlistCancelIncomplete))
+            }
+            // The safe choice for each: the copy is kept, nothing is saved,
+            // discarded or exited by closing the window.
+            ModalId::AutosaveRecovery => Some(Message::Autosave(
+                crate::autosave::AutosaveMsg::Recovery(crate::autosave::RecoveryChoice::Later),
+            )),
+            ModalId::ProjectCloseConfirm => Some(Message::Project(ProjectMsg::CloseConfirm(
+                ProjectCloseChoice::Cancel,
+            ))),
+            ModalId::AppQuitConfirm => Some(Message::Project(ProjectMsg::AppQuitConfirm(
+                ProjectCloseChoice::Cancel,
+            ))),
         }
     }
 
@@ -441,6 +456,11 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::PassiveCalculator => iced::Size::new(640.0, 520.0),
         ModalId::FirstRunTour => iced::Size::new(360.0, 170.0),
         ModalId::CreateChildSheet => iced::Size::new(560.0, 260.0),
+        ModalId::ErrorNotice => iced::Size::new(520.0, 220.0),
+        ModalId::NetlistIncompletePrompt => iced::Size::new(580.0, 330.0),
+        ModalId::AutosaveRecovery => iced::Size::new(540.0, 280.0),
+        ModalId::ProjectCloseConfirm => iced::Size::new(540.0, 380.0),
+        ModalId::AppQuitConfirm => iced::Size::new(540.0, 380.0),
     }
 }
 

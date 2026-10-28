@@ -388,6 +388,16 @@ pub enum ModalId {
     /// "Create Sheet": where to write the file of a sheet symbol (confirm
     /// class).
     CreateChildSheet,
+    /// The error card (confirm class): one at a time.
+    ErrorNotice,
+    /// The netlist-incomplete "export anyway?" prompt (confirm class).
+    NetlistIncompletePrompt,
+    /// The autosave recovery prompt (confirm class).
+    AutosaveRecovery,
+    /// "Close Project - Unsaved Edits" (confirm class, on the data-loss path).
+    ProjectCloseConfirm,
+    /// "Exit Signex - Unsaved Edits" (confirm class, on the data-loss path).
+    AppQuitConfirm,
 }
 
 pub use signex_types::schematic::AnnotateOrder;

@@ -234,6 +234,17 @@ impl Signex {
                             ModalId::CreateChildSheet => {
                                 self.ui_state.create_child_sheet_confirm = None
                             }
+                            // A window that went away without a close
+                            // request is a Cancel, never a Discard.
+                            ModalId::ErrorNotice => self.document_state.error_notice = None,
+                            ModalId::NetlistIncompletePrompt => {
+                                self.document_state.netlist_incomplete_prompt = None
+                            }
+                            ModalId::AutosaveRecovery => {}
+                            ModalId::ProjectCloseConfirm => {
+                                self.ui_state.project_close_confirm = None
+                            }
+                            ModalId::AppQuitConfirm => self.ui_state.app_quit_confirm = None,
                         },
                         // Closing an undocked-tab window is the reattach
                         // gesture — the tab itself stays in

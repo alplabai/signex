@@ -43,8 +43,10 @@ impl Signex {
     /// rather than live state. The two must agree term for term or Esc
     /// resolves against a stack that is not on screen.
     pub(crate) fn has_blocking_modal(&self) -> bool {
-        self.document_state.error_notice.is_some()
-            || self.document_state.netlist_incomplete_prompt.is_some()
+        (self.document_state.error_notice.is_some()
+            && !self.modal_detached(crate::app::state::ModalId::ErrorNotice))
+            || (self.document_state.netlist_incomplete_prompt.is_some()
+                && !self.modal_detached(crate::app::state::ModalId::NetlistIncompletePrompt))
             || (self.document_state.preview.is_some()
                 && !self.modal_detached(crate::app::state::ModalId::PrintPreview))
             || self.ui_state.net_color_custom.show
@@ -55,7 +57,9 @@ impl Signex {
     /// empty schematic). Dismiss via OK button or clicking outside.
     /// Pushes the dismiss backdrop then the error card.
     pub(in crate::app::view) fn error_notice_overlay(&self) -> Vec<Element<'_, Message>> {
-        if self.document_state.error_notice.is_none() {
+        if self.document_state.error_notice.is_none()
+            || self.modal_detached(crate::app::state::ModalId::ErrorNotice)
+        {
             return Vec::new();
         }
         vec![
@@ -71,7 +75,9 @@ impl Signex {
     pub(in crate::app::view) fn netlist_incomplete_prompt_overlay(
         &self,
     ) -> Vec<Element<'_, Message>> {
-        if self.document_state.netlist_incomplete_prompt.is_none() {
+        if self.document_state.netlist_incomplete_prompt.is_none()
+            || self.modal_detached(crate::app::state::ModalId::NetlistIncompletePrompt)
+        {
             return Vec::new();
         }
         vec![

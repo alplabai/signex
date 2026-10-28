@@ -21,7 +21,8 @@ backstop; Esc typed in the window resolves through the Esc ladder.
 
 **Followed dialogs.** For Find / Replace, Rename, Remove, Enable Version
 Control, Grid Properties, Custom Selection Filter, About, Keyboard Shortcuts,
-the Passive Calculator and Create Sheet, `sync_detached_modals`
+the Passive Calculator, Create Sheet, the error notice, the netlist-incomplete
+prompt, the autosave recovery prompt, and the project-close and app-quit confirms, `sync_detached_modals`
 (`app/handlers/detached_modals.rs`) runs after every `update` and opens or
 closes the window to match the dialog's open state. Whatever code flips the
 flag (a menu row, F1, Esc, a handler) needs no wiring.
@@ -56,11 +57,39 @@ Confirm and warning dialogs lock the main window; tool windows do not.
   Enable Version Control, About, Shortcuts, Calculator, tour, ERC, Preferences,
   Annotate, Print Preview, BOM, ...) leave the main window fully usable.
 
+## Per-dialog table
+
+| Dialog | Class | OS close means | Tests |
+|---|---|---|---|
+| Rename, Remove | locking | Cancel | `detached_modals` |
+| Annotate reset confirm | locking | Cancel | `detached_modal_os_close` |
+| Create Sheet | locking | Later (writes nothing) | `child_sheet_create_tests` |
+| Error notice | locking | dismiss (OK) | `detached_confirm_tests`, `detached_modals` |
+| Netlist-incomplete prompt | locking | Cancel (writes nothing) | `detached_confirm_tests` (close mapping) |
+| Autosave recovery | locking | Decide later (copy kept; the offer returns if its window vanishes) | `detached_modals`, `detached_confirm_tests` |
+| Project-close confirm | locking | Cancel (never Discard) | `detached_modals`, `detached_confirm_tests` |
+| App-quit confirm | locking | Cancel (never Discard or exit) | `detached_confirm_tests`, `tests/regression/project.rs` |
+| Find / Replace, Grid Properties, Custom Selection Filter, Enable Version Control, About, Shortcuts, Calculator | tool | close | `detached_modals` |
+
+## The quit and data-loss path
+
+The app-quit confirm keeps every guarantee of the in-window one. Each quit
+route (the menu's Quit, the red traffic light, Alt+F4, the taskbar) goes
+through `handle_app_quit_requested`, which opens the confirm or, when it is
+already open, raises its window instead of stacking another; the main
+window never exits behind it. Save All settles against the live dirty set
+(`SaveAllNext::Quit`), Discard All closes the main window, Cancel leaves
+everything open, and closing the confirm's own window is Cancel. The main
+window's own close event (`SecondaryWindowClosed(main)`) is still the one
+that ends the app.
+
 ## Still in the window
 
 Command palette, context menus, dropdown pickers, Active Bar menus, the grid
-picker, the panel list, text edit and drag ghosts stay in the main window.
-Not yet detached: the error notice, netlist-incomplete prompt, custom net
-colour, autosave recovery, project-close and app-quit confirms and the
-library modals. The confirms need the same lock
-treatment once detached; the library modals are tool windows.
+picker, the panel list, text edit, drag ghosts and the first-run tour stay in
+the main window. Not yet detached: the custom net colour picker and the nine
+library dialogs (library picker, edit row, primitive picker, document options,
+create options, updates, close-library confirm, delete confirm, library
+recovery). The library ones are keyed by browser (`self.library.*`, the first
+browser with an open dialog is the one painted) and need their windows bound to
+the browser that opened them before they can follow the same rule.

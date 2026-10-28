@@ -5,6 +5,8 @@ pub mod autosave_primitives;
 pub mod autosave_recovery;
 pub mod canvas;
 pub mod clipboard_workflows;
+#[cfg(test)]
+mod detached_confirm_tests;
 pub mod detached_modals;
 pub mod dock;
 pub mod document_files;

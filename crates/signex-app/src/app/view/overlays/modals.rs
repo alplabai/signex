@@ -158,6 +158,9 @@ impl Signex {
 
     /// The recovery-copy prompt (#1164); shows the first queued offer.
     pub(in crate::app::view) fn autosave_recovery_overlay(&self) -> Option<Element<'_, Message>> {
+        if self.modal_detached(crate::app::state::ModalId::AutosaveRecovery) {
+            return None;
+        }
         self.document_state
             .autosave
             .current_offer()
@@ -211,10 +214,9 @@ impl Signex {
     pub(in crate::app::view) fn project_close_confirm_overlay(
         &self,
     ) -> Option<Element<'_, Message>> {
-        self.ui_state
-            .project_close_confirm
-            .is_some()
-            .then(|| self.view_project_close_confirm())
+        (self.ui_state.project_close_confirm.is_some()
+            && !self.modal_detached(crate::app::state::ModalId::ProjectCloseConfirm))
+        .then(|| self.view_project_close_confirm())
     }
 
     pub(in crate::app::view) fn create_child_sheet_confirm_overlay(
@@ -226,10 +228,9 @@ impl Signex {
     }
 
     pub(in crate::app::view) fn app_quit_confirm_overlay(&self) -> Option<Element<'_, Message>> {
-        self.ui_state
-            .app_quit_confirm
-            .is_some()
-            .then(|| self.view_app_quit_confirm())
+        (self.ui_state.app_quit_confirm.is_some()
+            && !self.modal_detached(crate::app::state::ModalId::AppQuitConfirm))
+        .then(|| self.view_app_quit_confirm())
     }
 
     pub(in crate::app::view) fn enable_version_control_overlay(

@@ -61,7 +61,10 @@ struct OpenOverlays {
     /// the three dialogs' own Cancel-choice messages.
     recovery_kind: Option<RecoveryKind>,
     error_notice_open: bool,
+    /// The notice lives in its own window: it no longer blocks the stack here.
+    error_notice_detached: bool,
     netlist_incomplete_prompt_open: bool,
+    netlist_prompt_detached: bool,
     print_preview_open: bool,
     bom_preview_open: bool,
     net_color_custom_open: bool,
@@ -145,8 +148,8 @@ impl OpenOverlays {
     /// painting. The painter now carries the same filter and the terms
     /// match one for one.
     fn has_blocking_modal(&self) -> bool {
-        self.error_notice_open
-            || self.netlist_incomplete_prompt_open
+        (self.error_notice_open && !self.error_notice_detached)
+            || (self.netlist_incomplete_prompt_open && !self.netlist_prompt_detached)
             || self.print_preview_open
             || self.net_color_custom_open
     }
@@ -404,6 +407,11 @@ fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
         ModalId::PassiveCalculator => Some(OverlayId::PassiveCalculator),
         ModalId::FirstRunTour => Some(OverlayId::FirstRunTour),
         ModalId::CreateChildSheet => Some(OverlayId::CreateChildSheetConfirm),
+        ModalId::ErrorNotice => Some(OverlayId::ErrorNotice),
+        ModalId::NetlistIncompletePrompt => Some(OverlayId::NetlistIncompletePrompt),
+        ModalId::AutosaveRecovery => Some(OverlayId::AutosaveRecovery),
+        ModalId::ProjectCloseConfirm => Some(OverlayId::ProjectCloseConfirm),
+        ModalId::AppQuitConfirm => Some(OverlayId::AppQuitConfirm),
         ModalId::MoveSelection | ModalId::NetColorPalette | ModalId::ParameterManager => None,
     }
 }
@@ -541,7 +549,11 @@ impl Signex {
                     }
                 }),
             error_notice_open: self.document_state.error_notice.is_some(),
+            error_notice_detached: modal_detached(crate::app::state::ModalId::ErrorNotice),
             netlist_incomplete_prompt_open: self.document_state.netlist_incomplete_prompt.is_some(),
+            netlist_prompt_detached: modal_detached(
+                crate::app::state::ModalId::NetlistIncompletePrompt,
+            ),
             print_preview_open: self.document_state.preview.is_some()
                 && !modal_detached(crate::app::state::ModalId::PrintPreview),
             bom_preview_open: self.document_state.bom_preview.is_some()
@@ -1513,7 +1525,9 @@ mod tests {
             close_library_confirm_open,
             recovery_kind,
             error_notice_open,
+            error_notice_detached,
             netlist_incomplete_prompt_open,
+            netlist_prompt_detached,
             print_preview_open,
             bom_preview_open,
             net_color_custom_open,
@@ -1599,7 +1613,11 @@ mod tests {
             }),
         ];
 
-        let macro_fields: std::collections::BTreeSet<&str> = field_names.into_iter().collect();
+        // Where a notice lives, not a modal of its own: no rung.
+        let macro_fields: std::collections::BTreeSet<&str> = field_names
+            .into_iter()
+            .filter(|name| !matches!(*name, "error_notice_detached" | "netlist_prompt_detached"))
+            .collect();
         let claims_escape: std::collections::BTreeSet<&str> =
             setters.iter().map(|(name, _)| *name).collect();
 

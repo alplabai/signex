@@ -9,9 +9,7 @@ use super::*;
 use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-use super::widgets::{
-    close_x_button, draggable_header, primary_button, secondary_button, wrap_modal,
-};
+use super::widgets::{close_x_button, primary_button, secondary_button, wrap_modal};
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
 impl Signex {
@@ -235,7 +233,7 @@ impl Signex {
         wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 360.0))
     }
 
-    fn view_project_close_confirm_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_project_close_confirm_body(&self) -> Element<'_, Message> {
         use crate::app::ProjectCloseChoice;
         let Some(ref st) = self.ui_state.project_close_confirm else {
             return container(Space::new()).into();
@@ -265,10 +263,9 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let header = draggable_header(
+        let header = self.modal_header(
             header_content,
-            super::super::super::state::ModalId::RenameDialog,
-            self.interaction_state.last_mouse_pos,
+            super::super::super::state::ModalId::ProjectCloseConfirm,
         );
 
         // List of dirty filenames, scrollable in case the project
@@ -407,7 +404,7 @@ impl Signex {
             .collect()
     }
 
-    fn view_app_quit_confirm_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_app_quit_confirm_body(&self) -> Element<'_, Message> {
         use crate::app::ProjectCloseChoice;
         let Some(ref st) = self.ui_state.app_quit_confirm else {
             return container(Space::new()).into();
@@ -437,10 +434,9 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let header = draggable_header(
+        let header = self.modal_header(
             header_content,
-            super::super::super::state::ModalId::RenameDialog,
-            self.interaction_state.last_mouse_pos,
+            super::super::super::state::ModalId::AppQuitConfirm,
         );
 
         // List of dirty filenames across the whole workspace,

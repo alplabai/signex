@@ -27,6 +27,11 @@ pub(crate) fn detached_modal_title(modal: ModalId) -> &'static str {
         ModalId::PassiveCalculator => "Passive Network Calculator",
         ModalId::FirstRunTour => "Welcome to Signex",
         ModalId::CreateChildSheet => "Create Sheet",
+        ModalId::ErrorNotice => "Signex",
+        ModalId::NetlistIncompletePrompt => "Netlist is incomplete",
+        ModalId::AutosaveRecovery => "Recover Unsaved Edits",
+        ModalId::ProjectCloseConfirm => "Close Project",
+        ModalId::AppQuitConfirm => "Exit Signex",
     }
 }
 

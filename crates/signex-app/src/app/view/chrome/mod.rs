@@ -282,6 +282,14 @@ impl Signex {
                 &self.ui_state.passive_calculator,
             ),
             ModalId::CreateChildSheet => self.view_create_child_sheet_body(),
+            ModalId::ErrorNotice => self.view_error_notice(),
+            ModalId::NetlistIncompletePrompt => self.view_netlist_incomplete_prompt(),
+            ModalId::AutosaveRecovery => match self.document_state.autosave.current_offer() {
+                Some(offer) => self.view_autosave_recovery_window(offer),
+                None => iced::widget::Space::new().into(),
+            },
+            ModalId::ProjectCloseConfirm => self.view_project_close_confirm_body(),
+            ModalId::AppQuitConfirm => self.view_app_quit_confirm_body(),
             ModalId::FirstRunTour => {
                 crate::first_run_tour::window_view(&self.document_state.panel_ctx.tokens)
             }

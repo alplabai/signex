@@ -643,7 +643,11 @@ impl Signex {
         // Guard against a second close request stacking a duplicate
         // modal while the first is still up.
         if self.ui_state.app_quit_confirm.is_some() {
-            return Task::none();
+            // A second quit request raises the open confirm; it never stacks
+            // another or exits.
+            return self
+                .detached_window_of(crate::app::state::ModalId::AppQuitConfirm)
+                .map_or_else(Task::none, iced::window::gain_focus);
         }
         let dirty_rows = self.library.dirty_editors();
         if self.document_state.dirty_paths.is_empty() && dirty_rows.is_empty() {
