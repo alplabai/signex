@@ -88,6 +88,8 @@ mod preferences_export_status;
 
 #[path = "regression/preferences_prefs_recovery.rs"]
 mod preferences_prefs_recovery;
+#[path = "regression/rule_profiles_ui.rs"]
+mod rule_profiles_ui;
 
 #[path = "regression/preferences_symbol_drafts.rs"]
 mod preferences_symbol_drafts;
