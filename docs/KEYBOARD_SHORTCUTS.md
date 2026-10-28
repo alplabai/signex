@@ -67,6 +67,31 @@ If a keymap entry matches but maps to an unknown command or an explicit unbind,
 the event is consumed as `Noop`. This prevents the old fallback code from making
 custom unbinds ineffective.
 
+## Modifiers
+
+`Ctrl` is the physical Control key on every OS. `Cmd`, `Win` and `Super` all
+mean the logo key (Command on macOS, Windows key elsewhere). So `Ctrl+C` in a
+built-in profile is Control on macOS too, not Command. Profile files always
+write the logo key as `Cmd`; the parser also accepts `command`, `super` and
+`win`, so existing files load unchanged.
+
+## Chords
+
+A trigger can be a sequence of keys, such as `Ctrl+K Ctrl+S`. When a complete
+trigger is also the start of a longer one, Signex waits `CHORD_TIMEOUT`
+(800 ms) for the next key before running the shorter one. Esc, a pointer press
+or a focus change cancels the wait. Only a live command binding makes a
+shorter chord wait; an `unbind` entry never does.
+
+## Backups
+
+When `keyboard_shortcuts.toml` cannot be read, Signex uses the built-in
+profiles for the session and leaves the file untouched. Before the next Apply
+would write over it, the unreadable file is copied aside as
+`keyboard_shortcuts.toml.bak`. A backup never overwrites an earlier one: the
+names go `.bak`, `.bak.2`, `.bak.3` and so on. Restore and Discard in
+Preferences act on the newest backup.
+
 ## Profiles And Editing
 
 Built-in profiles are immutable. Editing starts by creating a custom profile
@@ -80,6 +105,11 @@ The editor is backed by `KeymapEditorModel`, which exposes rows with:
 - current trigger text
 - conflict, invalid, unbound, gesture, and editable state
 
+An `[unbind]` entry is not listed as a row of its own. It marks the matching
+`bindings` row (same command, context and trigger, earlier in the profile) as
+**Unbound**: the row stays visible, the shortcut does not work, and the
+reference sheet leaves it out.
+
 Pointer gestures such as `DoubleClick` and `Shift+Click` can appear in a
 profile for reference, but the current editor only supports editing keyboard
 sequences.
@@ -92,8 +122,10 @@ display text. Existing examples:
 - menu labels use `shortcut_for` in `menu_bar/mod.rs`
 - context menus use `keymap_shortcut_label` (`app/view/context_menu/items.rs`)
 
-Fallback display strings are allowed only as display fallbacks for missing
-profiles or unavailable commands. They should not drive runtime dispatch.
+A command the active profile has unbound shows no shortcut hint. Fallback
+display strings are allowed only for a command the profile never mentions
+(missing profiles, unavailable commands). They should not drive runtime
+dispatch.
 
 ## Intentional Non-Configurable Behavior
 

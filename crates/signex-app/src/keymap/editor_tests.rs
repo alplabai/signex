@@ -290,3 +290,36 @@ fn unbind_entries_are_not_listed_as_shortcut_rows() {
     // The slot still addresses the real binding index, not the filtered one.
     assert_eq!(rows[0].slot.binding, 1);
 }
+
+// A `Command` row that a later `Unbind` (same command, context, trigger)
+// shadows does not work, so the editor must not present it as live.
+#[test]
+fn a_command_row_shadowed_by_a_later_unbind_is_flagged_unbound() {
+    use super::{
+        ShortcutBinding, ShortcutBindingAction, ShortcutProfile, ShortcutProfileKind,
+        ShortcutTrigger,
+    };
+    let command = AppCommandId::new("print").unwrap();
+    let binding = |action, trigger: &str| ShortcutBinding {
+        action,
+        context: ShortcutContext::Global,
+        triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+    };
+    let profile = ShortcutProfile {
+        id: "t".to_string(),
+        name: "T".to_string(),
+        kind: ShortcutProfileKind::Custom,
+        schema_version: 1,
+        description: None,
+        base_profile: None,
+        bindings: vec![
+            binding(ShortcutBindingAction::Command(command.clone()), "Ctrl+P"),
+            binding(ShortcutBindingAction::Command(command.clone()), "F7"),
+            binding(ShortcutBindingAction::Unbind(command), "Ctrl+P"),
+        ],
+    };
+    let rows = KeymapEditorModel::from(profile).rows();
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert!(rows[0].unbound, "Ctrl+P is shadowed: {rows:?}");
+    assert!(!rows[1].unbound, "F7 is live: {rows:?}");
+}

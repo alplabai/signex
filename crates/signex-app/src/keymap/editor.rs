@@ -102,6 +102,7 @@ impl KeymapEditorModel {
                             trigger: trigger_text,
                             trigger_valid,
                             keyboard_editable: matches!(trigger, ShortcutTrigger::KeySequence(_)),
+                            unbound: is_shadowed_by_unbind(active, binding_index, trigger),
                             source: source.clone(),
                         }
                     })
@@ -270,6 +271,9 @@ pub struct KeymapEditorRow {
     pub trigger: String,
     pub trigger_valid: bool,
     pub keyboard_editable: bool,
+    /// A later `Unbind` of this command on this trigger and context shadows
+    /// the row: it is listed, but the shortcut does not work.
+    pub unbound: bool,
     pub source: KeymapEditorSource,
 }
 
@@ -307,4 +311,22 @@ impl From<ShortcutProfile> for KeymapEditorModel {
             .expect("single-profile editor model uses its profile as active");
         Self::new(profiles)
     }
+}
+
+/// Whether a binding after `binding_index` unbinds the same command on the
+/// same context and trigger, which makes that `Command` row dead.
+fn is_shadowed_by_unbind(
+    profile: &ShortcutProfile,
+    binding_index: usize,
+    trigger: &ShortcutTrigger,
+) -> bool {
+    let binding = &profile.bindings[binding_index];
+    let ShortcutBindingAction::Command(command) = &binding.action else {
+        return false;
+    };
+    profile.bindings[binding_index + 1..].iter().any(|later| {
+        matches!(&later.action, ShortcutBindingAction::Unbind(c) if c == command)
+            && later.context == binding.context
+            && later.triggers.contains(trigger)
+    })
 }

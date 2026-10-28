@@ -230,7 +230,7 @@ fn keymap_table_row<'a>(
         "Invalid"
     } else if has_conflict {
         "Conflict"
-    } else if row_model.trigger.trim().is_empty() {
+    } else if row_model.unbound || row_model.trigger.trim().is_empty() {
         "Unbound"
     } else if row_model.keyboard_editable && active_profile_is_custom {
         "Editable"
@@ -240,7 +240,7 @@ fn keymap_table_row<'a>(
         "Gesture"
     };
     let state_warn = !row_model.trigger_valid || has_conflict;
-    let state_unbound = row_model.trigger.trim().is_empty();
+    let state_unbound = row_model.unbound || row_model.trigger.trim().is_empty();
     let state_style = move |theme: &Theme| text::Style {
         color: Some(if state_warn {
             theme.palette().warning
