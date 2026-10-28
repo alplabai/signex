@@ -297,6 +297,7 @@ impl Signex {
                 pending_profile_update: None,
                 erc_running: false,
                 erc_severity_override: crate::fonts::read_erc_severity_overrides(),
+                preferences_draft_erc_severity: crate::fonts::read_erc_severity_overrides(),
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,
                 annotate_dialog_open: false,
