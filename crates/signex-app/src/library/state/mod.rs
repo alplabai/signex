@@ -429,6 +429,10 @@ pub struct LibraryState {
     pub panel_search: String,
     /// "Close Library — Unsaved Drafts" modal state — `None` while closed.
     pub close_library_confirm: Option<CloseLibraryConfirmState>,
+    /// `(label, reason)` of each Save-All row whose off-thread datasheet
+    /// store or commit failed, keyed by `(batch id, row)`, until that Save
+    /// All settles and reports it. Another Save All never touches them.
+    pub batch_row_failures: HashMap<(u64, EditorAddress), (String, String)>,
     /// Bundled + per-library parameter templates. Reference-counted
     /// because both the editor and the validator borrow it. The
     /// Component Preview tab + the validator both read through this

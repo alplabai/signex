@@ -166,6 +166,10 @@ pub struct ComponentPreviewState {
     /// so the completion of an older save (the editor was closed and
     /// reopened meanwhile) cannot act on a newer one. `0` until a save starts.
     pub saving_generation: u64,
+    /// The Save All (its batch id) the running save belongs to: its outcome
+    /// is recorded for that flow's settle step
+    /// (`LibraryState::batch_row_failures`) instead of raising its own card.
+    pub saving_batch: Option<u64>,
 }
 
 impl ComponentPreviewState {
@@ -191,6 +195,7 @@ impl ComponentPreviewState {
             datasheet_errors: HashMap::new(),
             saving_row: None,
             saving_generation: 0,
+            saving_batch: None,
         }
     }
 

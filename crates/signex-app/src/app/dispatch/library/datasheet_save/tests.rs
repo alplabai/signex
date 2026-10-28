@@ -22,6 +22,15 @@ const PDF: &[u8] = b"%PDF-1.7 the datasheet";
 /// An app with a real git-backed library holding one row, and a Component
 /// Preview of that row.
 fn app_with_git_library(dir: &Path) -> (Signex, EditorAddress, PathBuf) {
+    let (mut app, _task) = Signex::new();
+    app.library.open_libraries.clear();
+    let (address, file) = add_git_library(&mut app, dir);
+    (app, address, file)
+}
+
+/// Mount another git-backed library under `dir`, with a Component Preview
+/// of its one row.
+fn add_git_library(app: &mut Signex, dir: &Path) -> (EditorAddress, PathBuf) {
     signex_library::git_identity::test_identity::install();
     let file = dir.join("Lib").join("Lib.snxlib");
     let library_id = Uuid::now_v7();
@@ -53,14 +62,12 @@ fn app_with_git_library(dir: &Path) -> (Signex, EditorAddress, PathBuf) {
         .read_row(TABLE, RowId::from_uuid(seed.row_id))
         .unwrap();
 
-    let (mut app, _task) = Signex::new();
-    app.library.open_libraries.clear();
     app.library.set.mount(Box::new(adapter)).expect("mount");
-    open_library(&mut app, &file, library_id, &row);
+    open_library(app, &file, library_id, &row);
     let address = EditorAddress::new(file.clone(), TABLE.into(), RowId::from_uuid(row.row_id));
     let preview = ComponentPreviewState::from_row(file.clone(), TABLE.into(), row);
     app.library.editors.insert(address.clone(), preview);
-    (app, address, file)
+    (address, file)
 }
 
 fn open_library(
@@ -107,6 +114,20 @@ fn pick(app: &mut Signex, address: &EditorAddress, bytes: &[u8]) -> String {
     signex_library::datasheet_hash(bytes)
 }
 
+/// Run `task` the way the iced runtime does, feeding each message back.
+fn settle(app: &mut Signex, task: iced::Task<Message>) {
+    for message in crate::persist::run_task::outputs(task) {
+        let next = app.update(message);
+        settle(app, next);
+    }
+}
+
+/// The Save button, with the worker's store and the commit that follows it.
+fn save_row_to_completion(app: &mut Signex, address: &EditorAddress) {
+    let task = app.handle_save_row(address);
+    settle(app, task);
+}
+
 fn editor<'a>(app: &'a Signex, address: &EditorAddress) -> &'a ComponentPreviewState {
     app.library.editors.get(address).expect("editor open")
 }
@@ -142,7 +163,7 @@ fn a_save_commits_the_pdf_with_the_row_and_a_clone_resolves_the_hash() {
     let (mut app, address, file) = app_with_git_library(tmp.path());
     let hash = pick(&mut app, &address, PDF);
 
-    app.try_save_row(&address).expect("save");
+    save_row_to_completion(&mut app, &address);
 
     assert!(!editor(&app, &address).dirty);
     assert!(editor(&app, &address).staged_datasheets.is_empty());
@@ -479,13 +500,15 @@ fn a_failed_commit_keeps_the_editor_owed_and_a_retry_commits_the_pdf() {
     let good_head = std::fs::read(&head).unwrap();
     std::fs::write(&head, b"not a ref").unwrap();
 
-    let err = app.try_save_row(&address).unwrap_err();
-    assert!(format!("{err:#}").contains("not saved"), "{err:#}");
+    save_row_to_completion(&mut app, &address);
+    let notice = app.document_state.error_notice.take().expect("a card");
+    assert!(format!("{notice:?}").contains("not saved"), "{notice:?}");
     let state = editor(&app, &address);
     assert!(state.dirty && state.staged_datasheets.contains_key(&hash));
 
     std::fs::write(&head, good_head).unwrap();
-    app.try_save_row(&address).expect("retry");
+    save_row_to_completion(&mut app, &address);
+    assert!(app.document_state.error_notice.is_none());
     assert!(!editor(&app, &address).dirty);
     let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
     let tree = repo
@@ -535,7 +558,7 @@ fn binding_a_primitive_never_saves_a_staged_hash_without_its_file() {
     }
     // The preview keeps its unsaved pin, and can still save it.
     assert!(editor(&app, &address).dirty);
-    app.try_save_row(&address).expect("save");
+    save_row_to_completion(&mut app, &address);
     assert!(!editor(&app, &address).dirty);
 }
 
@@ -608,43 +631,249 @@ fn the_messages_route_through_update() {
     assert!(tree.get_path(Path::new(&rel)).is_ok());
 }
 
-#[test]
-fn save_all_and_close_library_write_a_staged_pdf_with_its_row() {
+/// A Save All over the row, as quit does it (nothing but the row to save).
+fn start_save_all(app: &mut Signex, address: &EditorAddress) -> iced::Task<Message> {
     use crate::app::contracts::{SaveAllNext, SaveAllPlan};
-    let tmp = tempfile::tempdir().unwrap();
-    let (mut app, address, file) = app_with_git_library(tmp.path());
-    let hash = pick(&mut app, &address, PDF);
-    let _ = app.begin_save_all_planned(SaveAllPlan {
+    app.begin_save_all_planned(SaveAllPlan {
         context: "Save All".into(),
         paths: Vec::new(),
         rows: vec![address.clone()],
         next: SaveAllNext::Quit,
         probes: Default::default(),
-    });
-    assert!(!editor(&app, &address).dirty);
-    assert!(datasheet_asset_path(&file, &hash).unwrap().is_file());
+    })
+}
 
+/// Run a Save All's task: the store completions, then the settle message,
+/// which quits only when every row saved and otherwise raises the
+/// "stayed open" card.
+fn run_save_all(app: &mut Signex, task: iced::Task<Message>) {
+    settle(app, task);
+}
+
+#[test]
+fn save_all_stores_the_staged_pdf_off_the_update_and_then_quits() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    let hash = pick(&mut app, &address, PDF);
+
+    let task = start_save_all(&mut app, &address);
+    // `update` wrote nothing: the row waits on the worker.
+    assert!(!datasheet_asset_path(&file, &hash).unwrap().exists());
+    assert!(editor(&app, &address).saving_row.is_some());
+    assert!(app.document_state.document_saves.is_saving(&file));
+    // A second Save All meanwhile is refused for that row, not doubled.
+    let second = start_save_all(&mut app, &address);
+    run_save_all(&mut app, second);
+    let notice = app.document_state.error_notice.take().expect("a card");
+    assert!(
+        format!("{notice:?}").contains("still being saved"),
+        "{notice:?}"
+    );
+    assert!(
+        app.document_state.document_saves.is_saving(&file),
+        "the first store still runs"
+    );
+    assert!(editor(&app, &address).saving_row.is_some());
+
+    run_save_all(&mut app, task);
+    assert!(datasheet_asset_path(&file, &hash).unwrap().is_file());
+    assert!(!editor(&app, &address).dirty);
+    assert!(head_has(&file, &hash));
+    assert!(!app.document_state.document_saves.is_saving(&file));
+    assert!(app.document_state.error_notice.is_none());
+}
+
+#[test]
+fn save_all_with_a_failing_store_reports_it_and_does_not_quit() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    let hash = pick(&mut app, &address, PDF);
+    // A file where the assets directory belongs makes the store fail.
+    std::fs::write(file.parent().unwrap().join("assets"), b"x").unwrap();
+
+    let task = start_save_all(&mut app, &address);
+    run_save_all(&mut app, task);
+
+    let state = editor(&app, &address);
+    assert!(state.dirty && state.saving_row.is_none());
+    assert!(
+        state.staged_datasheets.contains_key(&hash),
+        "the PDF is still staged"
+    );
+    let notice = app.document_state.error_notice.as_ref().expect("a card");
+    assert!(format!("{notice:?}").contains("stayed open"), "{notice:?}");
+    assert!(
+        app.library.batch_row_failures.is_empty(),
+        "taken by the settle"
+    );
+    assert!(!app.document_state.document_saves.is_saving(&file));
+}
+
+fn close_library_save_all(app: &mut Signex, address: &EditorAddress) -> iced::Task<Message> {
+    let _ = app.update(Message::Library(LibraryMessage::ConfirmCloseLibrary {
+        library_path: address.library_path.clone(),
+        dirty_editors: vec![address.clone()],
+    }));
+    app.update(Message::Library(LibraryMessage::CloseLibraryConfirm(
+        crate::library::messages::CloseLibraryChoice::SaveAll,
+    )))
+}
+
+#[test]
+fn close_library_stores_the_staged_pdf_off_the_update_then_closes() {
     let tmp = tempfile::tempdir().unwrap();
     let (mut app, address, file) = app_with_git_library(tmp.path());
     let hash = pick(&mut app, &address, b"%PDF-1.7 closing");
-    let _ = app.update(Message::Library(LibraryMessage::ConfirmCloseLibrary {
-        library_path: file.clone(),
-        dirty_editors: vec![address.clone()],
-    }));
-    let _ = app.update(Message::Library(LibraryMessage::CloseLibraryConfirm(
-        crate::library::messages::CloseLibraryChoice::SaveAll,
-    )));
+
+    let task = close_library_save_all(&mut app, &address);
+    assert!(!datasheet_asset_path(&file, &hash).unwrap().exists());
+    assert!(app.library.library_at(&file).is_some(), "still open");
+
+    settle(&mut app, task);
     assert!(datasheet_asset_path(&file, &hash).unwrap().is_file());
-    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
-    let tree = repo
-        .head()
-        .unwrap()
-        .peel_to_commit()
-        .unwrap()
-        .tree()
-        .unwrap();
-    let rel = signex_library::datasheet_asset_rel_path(&hash).unwrap();
-    assert!(tree.get_path(Path::new(&rel)).is_ok());
+    assert!(head_has(&file, &hash));
+    assert!(app.library.library_at(&file).is_none(), "closed");
+}
+
+#[test]
+fn close_library_with_a_failing_store_keeps_the_library_and_the_draft() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    let hash = pick(&mut app, &address, PDF);
+    std::fs::write(file.parent().unwrap().join("assets"), b"x").unwrap();
+
+    let task = close_library_save_all(&mut app, &address);
+    settle(&mut app, task);
+
+    assert!(
+        app.library.library_at(&file).is_some(),
+        "the library stays open"
+    );
+    let state = editor(&app, &address);
+    assert!(state.dirty && state.staged_datasheets.contains_key(&hash));
+    let notice = app.document_state.error_notice.as_ref().expect("a card");
+    assert!(format!("{notice:?}").contains("not closed"), "{notice:?}");
+}
+
+#[test]
+fn close_library_prompts_again_for_a_row_edited_while_its_pdf_was_stored() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    pick(&mut app, &address, PDF);
+
+    let task = close_library_save_all(&mut app, &address);
+    let state = app.library.editors.get_mut(&address).unwrap();
+    state.row.datasheet_label = "typed while the PDF was being stored".into();
+    state.dirty = true;
+    settle(&mut app, task);
+
+    assert!(
+        app.library.library_at(&file).is_some(),
+        "not closed over an edit"
+    );
+    assert!(app.library.close_library_confirm.is_some(), "asked again");
+}
+
+/// Break the repository's HEAD so the row commit fails after the PDF store.
+fn break_head(file: &Path) -> Vec<u8> {
+    let head = file.parent().unwrap().join(".git").join("HEAD");
+    let good = std::fs::read(&head).unwrap();
+    std::fs::write(&head, b"not a ref").unwrap();
+    good
+}
+
+#[test]
+fn save_all_where_the_store_works_but_the_commit_fails_stays_open() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    let hash = pick(&mut app, &address, PDF);
+    let good_head = break_head(&file);
+
+    let task = start_save_all(&mut app, &address);
+    run_save_all(&mut app, task);
+
+    assert!(datasheet_asset_path(&file, &hash).unwrap().is_file());
+    let state = editor(&app, &address);
+    assert!(state.dirty && state.staged_datasheets.contains_key(&hash));
+    let notice = app.document_state.error_notice.as_ref().expect("a card");
+    assert!(format!("{notice:?}").contains("stayed open"), "{notice:?}");
+    assert!(app.library.batch_row_failures.is_empty());
+    std::fs::write(file.parent().unwrap().join(".git").join("HEAD"), good_head).unwrap();
+}
+
+#[test]
+fn a_batch_across_two_libraries_commits_one_and_lists_the_other() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, good, good_file) = app_with_git_library(&tmp.path().join("a"));
+    let (bad, bad_file) = add_git_library(&mut app, &tmp.path().join("b"));
+    let good_hash = pick(&mut app, &good, PDF);
+    pick(&mut app, &bad, b"%PDF-1.7 the other library");
+    std::fs::write(bad_file.parent().unwrap().join("assets"), b"x").unwrap();
+
+    use crate::app::contracts::{SaveAllNext, SaveAllPlan};
+    let task = app.begin_save_all_planned(SaveAllPlan {
+        context: "Save All".into(),
+        paths: Vec::new(),
+        rows: vec![good.clone(), bad.clone()],
+        next: SaveAllNext::Quit,
+        probes: Default::default(),
+    });
+    run_save_all(&mut app, task);
+
+    assert!(!editor(&app, &good).dirty, "the working library saved");
+    assert!(head_has(&good_file, &good_hash));
+    assert!(editor(&app, &bad).dirty);
+    let notice = format!(
+        "{:?}",
+        app.document_state.error_notice.as_ref().expect("a card")
+    );
+    assert!(
+        notice.contains("stayed open") && notice.contains("1 item"),
+        "{notice}"
+    );
+}
+
+#[test]
+fn close_project_save_all_waits_for_a_staged_row() {
+    use crate::app::contracts::{SaveAllNext, SaveAllPlan};
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    let hash = pick(&mut app, &address, PDF);
+    let task = app.begin_save_all_planned(SaveAllPlan {
+        context: "Close Project".into(),
+        paths: Vec::new(),
+        rows: vec![address.clone()],
+        next: SaveAllNext::CloseProject {
+            project_id: crate::app::ProjectId::test_id(9999),
+            sheet_refs: Default::default(),
+            kept_paths: Vec::new(),
+        },
+        probes: Default::default(),
+    });
+    assert!(!datasheet_asset_path(&file, &hash).unwrap().exists());
+    run_save_all(&mut app, task);
+    assert!(head_has(&file, &hash));
+    assert!(app.library.batch_row_failures.is_empty());
+}
+
+#[test]
+fn a_stale_completion_during_a_batch_is_not_a_failure_of_the_reopened_editor() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    pick(&mut app, &address, PDF);
+    let _task = start_save_all(&mut app, &address);
+    let old_generation = editor(&app, &address).saving_generation;
+
+    let before = stored_row(&app, &file, &address);
+    app.library.editors.remove(&address);
+    app.library.editors.insert(
+        address.clone(),
+        ComponentPreviewState::from_row(file.clone(), TABLE.into(), before),
+    );
+    app.finish_staged_asset_store(&address, old_generation, Err("late".into()));
+
+    assert!(app.library.batch_row_failures.is_empty());
+    assert!(editor(&app, &address).saving_batch.is_none());
 }
 
 #[test]
@@ -676,7 +905,7 @@ fn a_library_that_keeps_no_files_refuses_a_pinned_pdf() {
     pick(&mut app, &address, PDF);
 
     for result in [
-        app.try_save_row(&address),
+        app.begin_save_row_in_batch(&address, 1).map(|_| ()),
         app.begin_save_row(&address).map(|_| ()),
     ] {
         let err = result.unwrap_err();
