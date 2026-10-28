@@ -264,6 +264,8 @@ mod library_update_apply;
 mod non_finite_edits;
 #[path = "regression/numeric_drafts.rs"]
 mod numeric_drafts;
+#[path = "regression/paste_on_cursor.rs"]
+mod paste_on_cursor;
 #[path = "regression/placement_session.rs"]
 mod placement_session;
 #[path = "regression/reprefix_standard.rs"]

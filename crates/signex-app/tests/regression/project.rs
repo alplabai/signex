@@ -1466,12 +1466,17 @@ fn cut_leaves_non_cuttable_child_sheet_in_place_and_selected() {
         doc.symbols.is_empty(),
         "Cut must remove the cuttable Symbol from the engine document"
     );
+    let clipboard = app
+        .interaction_state
+        .clipboard
+        .as_ref()
+        .expect("Cut must populate the clipboard");
     assert_eq!(
-        app.interaction_state.clipboard_symbols.len(),
+        clipboard.payload.fragment().symbols.len(),
         1,
         "Cut must populate the clipboard with the cuttable Symbol"
     );
-    assert_eq!(app.interaction_state.clipboard_symbols[0].uuid, symbol_uuid);
+    assert_eq!(clipboard.payload.fragment().symbols[0].uuid, symbol_uuid);
 
     // The ChildSheet is not cuttable: still in the document, still selected.
     assert_eq!(
