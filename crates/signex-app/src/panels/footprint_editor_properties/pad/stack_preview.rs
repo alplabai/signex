@@ -7,6 +7,11 @@ use iced::{Color, Length, Theme};
 
 use super::super::super::PanelMsg;
 use super::form::PadFormValues;
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// v0.20 — Pad Stack preview. CPU-side iso-projected 3D rendering of
 /// the pad: copper top face (red), solder mask outset (blue) at the
@@ -431,7 +436,7 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
             .width(Length::Fill)
             .height(Length::Fixed(160.0)),
     )
-    .padding([4, 8])
+    .padding([SP.s, SP.m])
     .width(Length::Fill)
     .into()
 }
@@ -454,11 +459,11 @@ pub(super) fn pad_stack_tab_strip<'a>(
         let active = current == target;
         iced::widget::button(
             text(label)
-                .size(10)
+                .size(TS.caption)
                 .color(if active { primary } else { muted })
                 .align_x(iced::alignment::Horizontal::Center),
         )
-        .padding([4, 10])
+        .padding([SP.s, 10.0])
         .width(Length::FillPortion(1))
         .on_press(PanelMsg::FpEditorSetPadStackTab(target))
         .style(move |_: &Theme, status: iced::widget::button::Status| {
@@ -490,10 +495,10 @@ pub(super) fn pad_stack_tab_strip<'a>(
             mk("Top-Middle-Bottom", PadStackTab::TopMiddleBottom),
             mk("Full Stack", PadStackTab::FullStack),
         ]
-        .spacing(2)
+        .spacing(SP.xs)
         .align_y(iced::Alignment::Center),
     )
-    .padding([4, 8])
+    .padding([SP.s, SP.m])
     .width(Length::Fill)
     .into()
 }
