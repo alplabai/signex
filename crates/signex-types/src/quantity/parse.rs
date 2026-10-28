@@ -51,14 +51,16 @@ pub fn parse_mantissa(input: &str) -> Result<f64, MantissaError> {
 
 /// `"<mantissa>e<exp>"`: the mantissa text with `add` added to its own
 /// exponent (if any). The text must already be a valid plain number.
-fn join_exponent(mantissa: &str, add: i32) -> String {
+fn join_exponent(mantissa: &str, add: i32) -> Option<String> {
     let text = mantissa.trim();
     match text.find(['e', 'E']) {
         Some(i) => {
-            let own: i32 = text[i + 1..].parse().unwrap_or(0);
-            format!("{}e{}", &text[..i], own + add)
+            // An exponent that does not fit, or would overflow with the
+            // prefix added, is refused rather than silently dropped.
+            let own: i32 = text[i + 1..].parse().ok()?;
+            Some(format!("{}e{}", &text[..i], own.checked_add(add)?))
         }
-        None => format!("{text}e{add}"),
+        None => Some(format!("{text}e{add}")),
     }
 }
 
@@ -73,7 +75,8 @@ pub fn quantity_from_parts(
     if prefix != SiPrefix::One && !unit.takes_prefix() {
         return Err(MantissaError::PrefixNotAllowed(unit.token().to_string()));
     }
-    let joined = join_exponent(mantissa, prefix.exponent());
+    let joined = join_exponent(mantissa, prefix.exponent())
+        .ok_or_else(|| MantissaError::NonFinite(mantissa.trim().to_string()))?;
     let base: f64 = joined
         .parse()
         .map_err(|_| MantissaError::NotANumber(mantissa.trim().to_string()))?;
@@ -88,7 +91,7 @@ impl Quantity {
             return None;
         }
         // `{:e}` is the shortest round-trip form, so this is exact.
-        let joined = join_exponent(&format!("{mantissa:e}"), prefix.exponent());
+        let joined = join_exponent(&format!("{mantissa:e}"), prefix.exponent())?;
         Quantity::new(joined.parse().ok()?, unit)
     }
 }

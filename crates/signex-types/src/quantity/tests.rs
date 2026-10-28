@@ -386,3 +386,11 @@ fn round_trip_zero() {
         assert_eq!(split_unit_string(suffix).unwrap().1, unit);
     }
 }
+
+#[test]
+fn an_exponent_that_does_not_fit_is_refused_not_dropped() {
+    // "1e-99999999999" parses as 0.0 alone; joined with kilo it must not
+    // turn into "1e3" (1000) by dropping the unreadable exponent.
+    assert!(quantity_from_parts("1e-99999999999", SiPrefix::Kilo, Unit::Ohm).is_err());
+    assert!(quantity_from_parts("1e2147483647", SiPrefix::Kilo, Unit::Ohm).is_err());
+}
