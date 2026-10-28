@@ -257,9 +257,9 @@ impl Signex {
         let (_, mount_task) = self.load_or_activate_project(&path)?;
         // Success path only: `?` above returns before a project that
         // failed to load can be recorded.
-        self.record_recent_project(&path);
+        let recent_task = self.record_recent_project(&path);
         self.refresh_panel_ctx();
-        Ok(mount_task)
+        Ok(iced::Task::batch([mount_task, recent_task]))
     }
 
     /// Append a `LoadedProject` for `project_path` to the workspace if

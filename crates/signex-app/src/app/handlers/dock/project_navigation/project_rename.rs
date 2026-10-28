@@ -110,11 +110,11 @@ impl Signex {
             return Task::none();
         }
         self.rekey_renamed_project_file(idx, &state.target_path, &new_prj, new_stem);
-        self.replace_recent_project(&recent_key, &new_prj);
+        let recent_task = self.replace_recent_project(&recent_key, &new_prj);
         self.queue_project_rename_commit(&state.target_path, &new_prj, &old_stem, new_stem);
         self.ui_state.rename_dialog = None;
         self.refresh_panel_ctx();
-        Task::none()
+        recent_task
     }
 
     /// Whether the folder of the project at `idx` may follow a rename:
@@ -397,6 +397,7 @@ impl Signex {
             // in-memory project there so it does not reference a missing file.
             let old_file = job.old_project_file();
             let renamed_in_old_dir = job.old_dir.join(format!("{}.snxprj", job.new_stem));
+            let mut recent_task = Task::none();
             if !old_file.exists()
                 && renamed_in_old_dir.exists()
                 && let Some(idx) = self
@@ -406,7 +407,7 @@ impl Signex {
                     .position(|p| p.id == job.project_id)
             {
                 self.rekey_renamed_project_file(idx, &old_file, &renamed_in_old_dir, &job.new_stem);
-                self.replace_recent_project(&job.recent_key, &renamed_in_old_dir);
+                recent_task = self.replace_recent_project(&job.recent_key, &renamed_in_old_dir);
                 self.queue_project_rename_commit(
                     &old_file,
                     &renamed_in_old_dir,
@@ -417,7 +418,7 @@ impl Signex {
             }
             self.run_deferred_git_commits(job, None);
             self.set_rename_error(&reason);
-            return Task::none();
+            return recent_task;
         }
         let old_file = job.old_project_file();
         let new_file = job.new_project_file();
@@ -443,10 +444,10 @@ impl Signex {
         } else {
             self.run_deferred_git_commits(job, None);
         }
-        self.replace_recent_project(&job.recent_key, &new_file);
+        let recent_task = self.replace_recent_project(&job.recent_key, &new_file);
         self.ui_state.rename_dialog = None;
         self.refresh_panel_ctx();
-        self.autosave_flush_moves()
+        Task::batch([recent_task, self.autosave_flush_moves()])
     }
 
     /// Update the in-memory project and any tab / engine that referenced

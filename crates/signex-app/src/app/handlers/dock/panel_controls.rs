@@ -512,22 +512,22 @@ impl Signex {
                 follow = self.handle_active_bar_all_filters_toggle();
             }
             crate::panels::PanelMsg::AddCustomFilterPreset => {
-                self.handle_add_custom_filter_preset();
+                follow = self.handle_add_custom_filter_preset();
             }
             crate::panels::PanelMsg::RemoveCustomFilterPreset(idx) => {
-                self.handle_remove_custom_filter_preset(*idx);
+                follow = self.handle_remove_custom_filter_preset(*idx);
             }
             crate::panels::PanelMsg::RenameCustomFilterPreset(idx, name) => {
-                self.handle_rename_custom_filter_preset(*idx, name.clone());
+                follow = self.handle_rename_custom_filter_preset(*idx, name.clone());
             }
             crate::panels::PanelMsg::ToggleCustomFilterPresetMember(idx, filter) => {
-                self.handle_toggle_custom_filter_preset_member(*idx, *filter);
+                follow = self.handle_toggle_custom_filter_preset_member(*idx, *filter);
             }
             crate::panels::PanelMsg::CaptureCustomFilterPreset(idx) => {
-                self.handle_capture_custom_filter_preset(*idx);
+                follow = self.handle_capture_custom_filter_preset(*idx);
             }
             crate::panels::PanelMsg::SelectCustomFilterTab(idx) => {
-                self.handle_select_custom_filter_tab(*idx);
+                follow = self.handle_select_custom_filter_tab(*idx);
             }
             _ => return None,
         }
