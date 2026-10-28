@@ -2,7 +2,7 @@
 //! write still produces the same bytes and refuses a stale edit.
 //!
 //! The timing tests are ignored by default. Run them with
-//! `cargo test -p signex-library --test table_write_cost --release -- --ignored --nocapture`.
+//! `cargo test -p signex-library --test integration --release -- table_write_cost --ignored --nocapture`.
 
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
