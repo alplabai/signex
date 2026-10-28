@@ -43,13 +43,9 @@ pub struct InteractionState {
     /// Two-click shape placement: first click sets the anchor, second
     /// click commits. Used by Tool::Line, Tool::Rectangle, Tool::Circle.
     pub shape_anchor: Option<signex_types::schematic::Point>,
-    pub clipboard_wires: Vec<signex_types::schematic::Wire>,
-    pub clipboard_buses: Vec<signex_types::schematic::Bus>,
-    pub clipboard_labels: Vec<signex_types::schematic::Label>,
-    pub clipboard_symbols: Vec<signex_types::schematic::Symbol>,
-    pub clipboard_junctions: Vec<signex_types::schematic::Junction>,
-    pub clipboard_no_connects: Vec<signex_types::schematic::NoConnect>,
-    pub clipboard_text_notes: Vec<signex_types::schematic::TextNote>,
+    /// The last Copy or Cut: the items with the library bodies they use,
+    /// anchored at the grid-snapped centre they were copied from.
+    pub clipboard: Option<signex_engine::CopiedSelection>,
     pub draw_mode: DrawMode,
     pub editing_text: Option<TextEditState>,
     pub context_menu: Option<ContextMenuState>,
@@ -122,6 +118,13 @@ pub struct InteractionState {
     pub selection_slots: [Vec<signex_types::schematic::SelectedItem>; 8],
     pub last_tool: std::collections::HashMap<String, crate::active_bar::ActiveBarAction>,
     pub pending_power: Option<(String, String)>,
+    /// A library part attached to the cursor, waiting for its click.
+    pub placement: Option<super::PlacementSession>,
+    /// Token for library reads. Every pick takes a new value and carries it,
+    /// so only the LATEST pick may arm a session; Esc, a right-click and any
+    /// tool change bump it too, so a read that finishes after a cancel arms
+    /// nothing. Arming itself leaves it alone.
+    pub placement_epoch: u64,
     pub pending_port: Option<(signex_types::schematic::LabelType, String)>,
     /// Orientation and size of the next bus entry (Space / Shift+Space / X / Y
     /// while the Bus Entry tool is armed). The signs are the orientation; see

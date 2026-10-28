@@ -49,6 +49,7 @@ fn app_focused_on(focused: &str) -> Signex {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),

@@ -52,6 +52,34 @@ impl Scene {
         self.dirty = DirtyFlags::ALL;
     }
 
+    /// Which geometry categories differ from `prev`, as dirty flags.
+    ///
+    /// Compares primitive buckets by value, which is far cheaper than
+    /// re-uploading them. Colours are part of each primitive, so a theme change
+    /// shows up here as the buckets whose colours moved. Text is not compared
+    /// (it is re-prepared every frame) and neither are the grid and theme-only
+    /// flags, which carry no geometry.
+    pub fn changed_geometry_since(&self, prev: &Scene) -> DirtyFlags {
+        let mut changed = DirtyFlags::empty();
+        changed.set(DirtyFlags::LINES, self.lines != prev.lines);
+        changed.set(DirtyFlags::CIRCLES, self.circles != prev.circles);
+        changed.set(DirtyFlags::ARCS, self.arcs != prev.arcs);
+        changed.set(
+            DirtyFlags::POLYGONS,
+            self.polygons != prev.polygons || self.top_polygons != prev.top_polygons,
+        );
+        changed.set(
+            DirtyFlags::OVERLAY,
+            self.overlay_lines != prev.overlay_lines
+                || self.overlay_circles != prev.overlay_circles
+                || self.overlay_polygons != prev.overlay_polygons
+                || self.erc_marker_lines != prev.erc_marker_lines
+                || self.erc_marker_circles != prev.erc_marker_circles
+                || self.erc_marker_polygons != prev.erc_marker_polygons,
+        );
+        changed
+    }
+
     pub fn is_empty(&self) -> bool {
         self.lines.is_empty()
             && self.circles.is_empty()

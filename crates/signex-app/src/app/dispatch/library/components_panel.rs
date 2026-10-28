@@ -159,8 +159,7 @@ impl Signex {
         table: String,
         row_id: RowId,
     ) -> Task<Message> {
-        // Same drop-at-view-centre placement as the picker; a ghost drag
-        // is not wired on trunk.
+        // Same flow as the picker: the part attaches to the cursor.
         Task::done(Message::Library(LibraryMessage::PlaceLibraryComponent {
             library_path,
             table,

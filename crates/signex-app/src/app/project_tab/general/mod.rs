@@ -5,7 +5,7 @@
 mod designator_standard;
 mod view;
 
-pub(super) use view::view;
+pub(super) use view::{labelled, tab_message, view};
 
 use crate::app::state::LoadedProject;
 

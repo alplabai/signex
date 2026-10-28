@@ -145,7 +145,15 @@ impl SchematicCanvas<'_> {
             focus_set,
             self.scene_overrides(),
         ) {
-            crate::schematic_runtime::draw_built_scene(frame, scene, transform);
+            match self.mode {
+                ContentMode::Cpu => {
+                    crate::schematic_runtime::draw_built_scene(frame, scene, transform);
+                }
+                // The GPU shader beneath draws everything else.
+                ContentMode::GpuOverlay => {
+                    crate::schematic_runtime::draw_rotated_text_fallback(frame, scene, transform);
+                }
+            }
         }
     }
 
