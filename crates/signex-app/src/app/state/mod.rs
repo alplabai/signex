@@ -16,6 +16,7 @@ mod path_key;
 mod pcb_revision;
 mod pdf_page_setup;
 mod pdf_preview_raster;
+mod profile_update;
 pub(crate) mod project_case;
 pub(crate) mod project_fs;
 mod reference_policy;
@@ -31,9 +32,10 @@ pub use case_fold::CaseFold;
 pub use interaction::InteractionState;
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
-    PageSetupMemory, RasterOutcome, RasterQueue, RememberedPageSetup, forget_page_setup,
-    rekey_page_setup,
+    PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
+    forget_page_setup, rekey_page_setup,
 };
+pub use profile_update::PendingProfileUpdate;
 pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{NetColorStep, UiState};
 
@@ -220,6 +222,14 @@ impl ErrorNotice {
         }
     }
 
+    /// Annotate or Reset Duplicate Designators was refused up front.
+    pub fn annotate(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Annotate Refused".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A delete was refused because it would have removed a file the
     /// project does not own (#139).
     pub fn delete(detail: impl Into<String>) -> Self {
@@ -392,7 +402,7 @@ impl std::fmt::Display for ProjectId {
 }
 
 /// One loaded project in the multi-project workspace. `path` is the
-/// canonical identity (`.standard_pro` / `.snxprj` location on disk); `data`
+/// canonical identity (`.snxprj` location on disk); `data`
 /// is the parsed project contents. Multiple projects with different
 /// `path`s coexist in `DocumentState.projects`; two identical `path`s
 /// at once is a loader bug (existing `open_project_file` de-dupes).
@@ -503,6 +513,9 @@ pub struct DocumentState {
     /// Projects already told (once per open) that an ERC run fell back to this
     /// machine's preferences because they store no rule set (#1085).
     pub erc_fallback_noted: std::collections::HashSet<ProjectId>,
+    /// Projects already told (once per open) that the profile their rules
+    /// were seeded from has changed locally (#1085).
+    pub profile_drift_noted: std::collections::HashSet<ProjectId>,
     /// Undo / redo of each project's stored rule set edits (#1085).
     pub rules_history: std::collections::HashMap<ProjectId, rules_history::RulesHistory>,
     /// Which font families the Messages panel has already said an open
@@ -665,7 +678,11 @@ pub struct DocumentState {
     /// orphans the other. Inserted right before the `Task::perform` is
     /// spawned; cleared in both the `Ok` and `Err` arms of
     /// `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished`.
-    pub pending_opens: std::collections::HashSet<PathBuf>,
+    pub pending_opens: crate::app::document_read::InFlightReads,
+    /// #859 — History restores running on a worker, keyed by the document
+    /// path. A second restore click for the same document is ignored until
+    /// the first completes; closing the project or all documents cancels it.
+    pub pending_restores: crate::app::document_read::InFlightReads,
     /// The Altium import still running, if any. A second import is
     /// refused while one runs: two converters writing the same output
     /// folder would interleave.
@@ -674,6 +691,38 @@ pub struct DocumentState {
     /// A second rename of the same project is refused until the first
     /// reports back.
     pub project_folder_renames: std::collections::HashSet<ProjectId>,
+    /// Where each write running on the blocking pool lands (an export, Add
+    /// New Schematic, the target folder of an Add Existing copy, a new
+    /// library file), one entry per write. A folder rename is refused while
+    /// one lies under the folder, or the late write would land in the old
+    /// folder.
+    pub project_writes: Vec<PathBuf>,
+    /// Project folders a rename moved away this session. A write a dialog
+    /// aimed there before the move is refused, or it would recreate the old
+    /// folder as an orphan.
+    pub moved_project_dirs: Vec<MovedProjectDir>,
+    /// Commits asked for while their project folder moved, run once the move
+    /// has finished.
+    pub deferred_git_commits: Vec<DeferredGitCommit>,
+}
+
+/// A project folder a rename moved from `old` to `new`.
+#[derive(Debug, Clone)]
+pub struct MovedProjectDir {
+    pub old: PathBuf,
+    pub new: PathBuf,
+    pub fold: CaseFold,
+}
+
+/// A project commit asked for while the project folder moved; the paths are
+/// as they were named then.
+#[derive(Debug, Clone)]
+pub struct DeferredGitCommit {
+    pub project: ProjectId,
+    pub file_path: PathBuf,
+    pub message: String,
+    pub replace_message: bool,
+    pub removed_path: Option<PathBuf>,
 }
 
 /// An Altium import on the blocking pool (#1123).
@@ -849,8 +898,12 @@ pub struct PreviewState {
     /// The document the preview was built for; Export writes this one even if
     /// the user has switched tabs since (#852).
     pub source: PathBuf,
-    pub pages: Vec<signex_output::PreviewPage>,
-    pub page_handles: Vec<iced::widget::image::Handle>,
+    /// The previewed pages in print order. Their pixels are rasterised
+    /// lazily: the shown page first, any other when it is navigated to.
+    pub pages: Vec<PreviewSlot>,
+    /// What the newest rasterisation renders from, so a page navigated to
+    /// later is rasterised from the same snapshot.
+    pub raster_source: Option<RasterSource>,
     pub selected: usize,
     pub pdf_options: signex_output::PdfOptions,
     pub specific_page_input: String,
@@ -890,7 +943,7 @@ pub struct PreviewState {
     pub variants: Vec<String>,
     /// Quality preset shown in the Settings tab dropdown. Mapped to
     /// `pdf_options.dpi` at export time; the preview always rasterises
-    /// at 96 DPI for speed.
+    /// at `PdfQuality::preview_dpi` (72/144/200) for speed.
     pub quality: PdfQuality,
     /// Typed text of the page-setup fields (custom size, margins, percent)
     /// plus the reason the last edit was rejected or clamped.

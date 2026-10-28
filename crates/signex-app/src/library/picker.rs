@@ -22,19 +22,16 @@ use iced::{Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
-use super::commands::list_components_filtered;
 use super::messages::{LibraryMessage, PickerMsg};
 use super::modal_chrome::close_x;
-use super::state::{LibraryState, PickerState};
+use super::state::PickerState;
 
 const PICKER_W: f32 = 720.0;
 const PICKER_H: f32 = 480.0;
 
-pub fn view<'a>(
-    state: &'a LibraryState,
-    picker: &'a PickerState,
-    tokens: &'a ThemeTokens,
-) -> Element<'a, LibraryMessage> {
+/// Draws the list `LibraryState::sync_view_caches` last built for the
+/// picker; `view` itself filters and clones nothing.
+pub fn view<'a>(picker: &'a PickerState, tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
@@ -55,7 +52,7 @@ pub fn view<'a>(
         .padding(6)
         .size(12);
 
-    let rows = list_components_filtered(state, &picker.filter);
+    let rows = &picker.rows;
 
     let mut list_col = column![].spacing(0);
     if rows.is_empty() {
@@ -68,33 +65,33 @@ pub fn view<'a>(
             .padding([14, 14]),
         );
     } else {
-        for (path, summary) in rows.iter() {
+        for entry in rows.visible() {
+            let summary = &entry.summary;
             let is_selected = picker
                 .selected
                 .as_ref()
-                .map(|(p, c)| p == path && c.row_id == summary.row_id)
+                .map(|(p, c)| p.as_path() == &*entry.path && c.row_id == summary.row_id)
                 .unwrap_or(false);
             let row_bg = if is_selected {
                 Some(crate::styles::ti(tokens.hover))
             } else {
                 None
             };
-            let summary_clone = summary.clone();
             let row_widget = button(
                 row![
-                    text(summary.internal_pn.as_str().to_string())
+                    text(summary.internal_pn.as_str())
                         .size(11)
                         .color(text_c)
                         .width(Length::FillPortion(2)),
-                    text(format!("{:?}", summary.state))
+                    text(entry.state_label.as_str())
                         .size(11)
                         .color(muted)
                         .width(Length::Fixed(96.0)),
-                    text(summary.mpn.clone())
+                    text(summary.mpn.as_str())
                         .size(11)
                         .color(text_c)
                         .width(Length::FillPortion(3)),
-                    text(summary.description.clone())
+                    text(summary.description.as_str())
                         .size(11)
                         .color(muted)
                         .width(Length::FillPortion(4)),
@@ -105,7 +102,7 @@ pub fn view<'a>(
             .padding(0)
             .width(Length::Fill)
             .on_press(LibraryMessage::Picker(PickerMsg::SelectComponent(
-                summary_clone,
+                summary.row_id,
             )))
             .style(move |_: &Theme, status: iced::widget::button::Status| {
                 let hover_bg = crate::styles::ti(tokens.hover);

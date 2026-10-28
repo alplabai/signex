@@ -158,56 +158,6 @@ pub enum LibraryMessage {
     BrowserConfirmRenameTable {
         library_path: PathBuf,
     },
-    /// Sidebar `+ Class` — opens the inline create form on
-    /// `LibraryBrowserState.adding_class`.
-    BrowserBeginAddClass {
-        library_path: PathBuf,
-    },
-    BrowserSetNewClassKey {
-        library_path: PathBuf,
-        value: String,
-    },
-    BrowserSetNewClassLabel {
-        library_path: PathBuf,
-        value: String,
-    },
-    BrowserCancelAddClass {
-        library_path: PathBuf,
-    },
-    /// Append the new class to the library's `[[classes]]` block via
-    /// `update_library_classes` and refresh.
-    BrowserConfirmAddClass {
-        library_path: PathBuf,
-    },
-    /// Per-row `×` delete — drops the matching class from the
-    /// library's `[[classes]]` block. Components referencing the
-    /// class by key keep their stored class string; the dropdown
-    /// just stops surfacing it.
-    BrowserDeleteClass {
-        library_path: PathBuf,
-        key: String,
-    },
-    /// Sidebar `✎` rename for a class row — flips the matching row
-    /// into edit mode (key + label inputs).
-    BrowserBeginRenameClass {
-        library_path: PathBuf,
-        key: String,
-    },
-    BrowserSetRenameClassKey {
-        library_path: PathBuf,
-        value: String,
-    },
-    BrowserSetRenameClassLabel {
-        library_path: PathBuf,
-        value: String,
-    },
-    BrowserCancelRenameClass {
-        library_path: PathBuf,
-    },
-    /// Confirm — writes the renamed class via `update_library_classes`.
-    BrowserConfirmRenameClass {
-        library_path: PathBuf,
-    },
     // ─────────────────────────────────────────────────────────────────
     /// Toggle the Library left-dock panel's library tree node at
     /// `path` (path relative to the open libraries list).
@@ -315,6 +265,14 @@ pub enum LibraryMessage {
         path: PathBuf,
         prepared: crate::library::mount::PreparedMountCell,
     },
+    /// An off-thread library refresh (#1374) has read the library. Applied
+    /// only while `generation` is still the latest for `path`; a result
+    /// superseded by a newer refresh, or for a closed library, is dropped.
+    RefreshFinished {
+        path: PathBuf,
+        generation: u64,
+        snapshot: crate::library::refresh::RefreshSnapshotCell,
+    },
     /// Active table change inside a Library Browser tab — clicked one
     /// of the category tabs in the strip.
     BrowserSelectTable {
@@ -379,7 +337,7 @@ pub enum LibraryMessage {
     },
     /// Inner-message envelope for primitive picker events.
     PrimitivePicker(PrimitivePickerMsg),
-    /// Double-click on a row in the browser grid → opens the Edit
+    /// "Edit Details" on the selected browser row → opens the Edit
     /// Component Details modal. Loads the row from the cached tables
     /// and seeds `EditRowModalState.draft`.
     BrowserOpenEditModal {

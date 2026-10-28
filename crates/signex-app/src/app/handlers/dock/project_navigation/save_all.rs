@@ -83,6 +83,8 @@ impl Signex {
         &mut self,
         path: &std::path::Path,
     ) -> anyhow::Result<Option<Task<Message>>> {
+        // Reported as this file's failure; the rest of the batch still saves.
+        self.refuse_save_while_restoring(path)?;
         if self.document_state.engines.contains_key(path) {
             return self
                 .begin_schematic_save(path.to_path_buf(), None)

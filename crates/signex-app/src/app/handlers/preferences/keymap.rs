@@ -314,27 +314,6 @@ impl Signex {
                     Err(detail) => format!("Could not export keyboard shortcuts: {detail}"),
                 };
             }
-            PrefMsg::KeymapBindingChanged {
-                command,
-                context,
-                trigger,
-            } => {
-                match self
-                    .ui_state
-                    .preferences_keymap_editor
-                    .edit_active_trigger(command, context, trigger)
-                {
-                    Ok(()) => {
-                        self.ui_state.preferences_keymap_status.clear();
-                        self.recompute_preferences_dirty();
-                    }
-                    Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Invalid shortcut: {error}");
-                        self.recompute_preferences_dirty();
-                    }
-                }
-            }
             PrefMsg::KeymapRecorderOpen {
                 command,
                 label,

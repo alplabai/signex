@@ -93,13 +93,13 @@ pub(super) fn dragged_connection_points(
             SelectedKind::Symbol => {
                 let index = symbols.get_or_init(|| by_uuid(&snap.symbols, |s| s.uuid));
                 if let Some(sym) = index.get(&sel.uuid)
-                    && let Some(lib_sym) = snap.lib_symbols.get(&sym.lib_id)
+                    && let Some(lib_sym) = snap.resolve_lib_symbol(sym)
                 {
                     // Project the pins at the dragged position.
                     let mut shifted = (*sym).clone();
                     shifted.position = Point::new(sym.position.x + dx, sym.position.y + dy);
                     let xform = SymbolTransform::from_symbol(&shifted);
-                    points.extend(instance_pins(lib_sym, sym).map(|lp| {
+                    points.extend(instance_pins(&lib_sym, sym).map(|lp| {
                         let Point { x, y } = xform.apply(lp.pin.position);
                         (x, y)
                     }));

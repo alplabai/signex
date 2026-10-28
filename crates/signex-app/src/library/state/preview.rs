@@ -7,6 +7,8 @@ use super::*;
 pub struct PickerState {
     pub filter: String,
     pub selected: Option<(PathBuf, ComponentSummary)>,
+    /// The list the picker draws; kept current by `sync_view_caches`.
+    pub rows: PickerRows,
 }
 
 /// Inline form state for "+ New Table…" on the Library Browser
@@ -160,6 +162,10 @@ pub struct ComponentPreviewState {
     /// a reload are refused, and the save commits this copy, so edits made
     /// meanwhile stay unsaved and the editor stays dirty.
     pub saving_row: Option<ComponentRow>,
+    /// Stamp of the save `saving_row` belongs to (`DocumentSaves::mint_generation`),
+    /// so the completion of an older save (the editor was closed and
+    /// reopened meanwhile) cannot act on a newer one. `0` until a save starts.
+    pub saving_generation: u64,
 }
 
 impl ComponentPreviewState {
@@ -184,6 +190,7 @@ impl ComponentPreviewState {
             staged_datasheets: HashMap::new(),
             datasheet_errors: HashMap::new(),
             saving_row: None,
+            saving_generation: 0,
         }
     }
 

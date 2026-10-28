@@ -77,7 +77,7 @@ pub fn bake_body3d(
             body_3d.outline = Some(Polygon::new(vertices));
             // Evaluate offset_z_expr to mm; on failure, leave whatever
             // the caller had set and warn.
-            let ctx = build_ctx(params_canonical);
+            let ctx = build_ctx(sketch, params_canonical);
             match eval_mm(&offset_z_expr, &ctx) {
                 Ok(z_mm) => {
                     // MD-9: guard against NaN / Inf / overflow before

@@ -53,23 +53,82 @@ pub struct PreviewPage {
     pub rgba: Vec<u8>,
 }
 
+/// What a previewed page is, known without rasterising it: enough to lay out
+/// the thumbnail rail and the page caption before any pixel is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PreviewPageInfo {
+    /// The sheet number the page prints (N in "Sheet N of M").
+    pub page_number: usize,
+    /// The sheet count the page prints (M in "Sheet N of M").
+    pub sheet_count: usize,
+    /// Width in pixels the page rasterises to at the preview DPI.
+    pub width_px: u32,
+    /// Height in pixels the page rasterises to at the preview DPI.
+    pub height_px: u32,
+}
+
 impl PreviewRasterizer {
+    /// The pages the options select, in print order, without rasterising any.
+    ///
+    /// Empty when the range selects nothing or the page is too small to
+    /// rasterise. A page's *position* in this list is what
+    /// [`Self::rasterize_pages`] takes.
+    pub fn outline(&self, ctx: &ExportContext, opts: &PreviewOptions) -> Vec<PreviewPageInfo> {
+        let (page_w_mm, page_h_mm) = opts.pdf.page_size.dimensions_mm(opts.pdf.orientation);
+        let (width_px, height_px, _, _) = preview_raster_size(page_w_mm, page_h_mm, opts.dpi);
+        if width_px < 1 || height_px < 1 {
+            return Vec::new();
+        }
+        preview_page_indices(&opts.pdf.page_range, &ctx.sheets, ctx.current_sheet_index())
+            .into_iter()
+            .filter_map(|idx| ctx.sheets.get(idx))
+            .map(|sheet| PreviewPageInfo {
+                page_number: sheet.sheet_number,
+                sheet_count: sheet.sheet_count,
+                width_px,
+                height_px,
+            })
+            .collect()
+    }
+
+    /// Rasterise only the pages at `positions` in [`Self::outline`], each
+    /// returned with its position. A position past the end, or a page that
+    /// fails to rasterise, is skipped.
+    pub fn rasterize_pages(
+        &self,
+        ctx: &ExportContext,
+        opts: &PreviewOptions,
+        positions: &[usize],
+    ) -> Vec<(usize, PreviewPage)> {
+        let (page_w_mm, page_h_mm) = opts.pdf.page_size.dimensions_mm(opts.pdf.orientation);
+        let sheet_indices =
+            preview_page_indices(&opts.pdf.page_range, &ctx.sheets, ctx.current_sheet_index());
+        let wanted: Vec<(usize, &crate::SheetSnapshot)> = positions
+            .iter()
+            .filter_map(|&pos| Some((pos, ctx.sheets.get(*sheet_indices.get(pos)?)?)))
+            .collect();
+        if wanted.is_empty() {
+            return Vec::new();
+        }
+        let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref());
+        wanted
+            .into_iter()
+            .filter_map(|(pos, sheet)| {
+                rasterize::rasterize_page(sheet, page_w_mm, page_h_mm, opts, ctx, &expr_tables)
+                    .map(|page| (pos, page))
+            })
+            .collect()
+    }
+
     /// Rasterise all sheets in the export context to RGBA bitmaps.
     ///
     /// Returns a vec of preview pages, one per sheet in sheet order.
     /// If a page fails to rasterise (e.g., dimensions too small), it is skipped.
     pub fn rasterize(&self, ctx: &ExportContext, opts: &PreviewOptions) -> Vec<PreviewPage> {
-        let (page_w_mm, page_h_mm) = opts.pdf.page_size.dimensions_mm(opts.pdf.orientation);
-        let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref());
-        let sheet_indices =
-            preview_page_indices(&opts.pdf.page_range, &ctx.sheets, ctx.current_sheet_index());
-
-        sheet_indices
+        let all: Vec<usize> = (0..self.outline(ctx, opts).len()).collect();
+        self.rasterize_pages(ctx, opts, &all)
             .into_iter()
-            .filter_map(|idx| ctx.sheets.get(idx))
-            .filter_map(|sheet| {
-                rasterize::rasterize_page(sheet, page_w_mm, page_h_mm, opts, ctx, &expr_tables)
-            })
+            .map(|(_, page)| page)
             .collect()
     }
 }
@@ -93,6 +152,62 @@ mod tests {
         assert_eq!(page.width_px, 100);
         assert_eq!(page.height_px, 200);
         assert_eq!(page.rgba.len(), 100 * 200 * 4);
+    }
+
+    fn five_page_ctx() -> ExportContext {
+        let mut ctx = crate::pdf::tests::sample_ctx(5);
+        for (sheet, number) in ctx.sheets.iter_mut().zip(1..) {
+            sheet.sheet_number = number;
+            sheet.sheet_count = 5;
+        }
+        ctx
+    }
+
+    fn small_opts() -> PreviewOptions {
+        PreviewOptions {
+            dpi: 10.0,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn the_outline_lists_every_page_without_rasterising() {
+        let outline = PreviewRasterizer.outline(&five_page_ctx(), &small_opts());
+        let numbers: Vec<usize> = outline.iter().map(|p| p.page_number).collect();
+        assert_eq!(numbers, [1, 2, 3, 4, 5]);
+        assert!(outline.iter().all(|p| p.width_px > 0 && p.height_px > 0));
+    }
+
+    #[test]
+    fn only_the_requested_positions_are_rasterised() {
+        let ctx = five_page_ctx();
+        let pages = PreviewRasterizer.rasterize_pages(&ctx, &small_opts(), &[3, 1]);
+        let got: Vec<(usize, usize)> = pages.iter().map(|(pos, p)| (*pos, p.page_number)).collect();
+        assert_eq!(got, [(3, 4), (1, 2)]);
+        let outline = PreviewRasterizer.outline(&ctx, &small_opts());
+        for (pos, page) in &pages {
+            assert_eq!(page.width_px, outline[*pos].width_px);
+            assert_eq!(
+                page.rgba.len(),
+                (page.width_px * page.height_px * 4) as usize
+            );
+        }
+    }
+
+    #[test]
+    fn a_position_past_the_end_is_skipped() {
+        let pages = PreviewRasterizer.rasterize_pages(&five_page_ctx(), &small_opts(), &[9]);
+        assert!(pages.is_empty());
+    }
+
+    #[test]
+    fn rasterize_all_matches_the_outline() {
+        let ctx = five_page_ctx();
+        let all = PreviewRasterizer.rasterize(&ctx, &small_opts());
+        assert_eq!(
+            all.len(),
+            PreviewRasterizer.outline(&ctx, &small_opts()).len()
+        );
     }
 
     #[test]

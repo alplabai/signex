@@ -22,6 +22,8 @@ mod project_actions;
 mod project_rename;
 mod project_rename_fs;
 #[cfg(test)]
+mod project_rename_inflight_tests;
+#[cfg(test)]
 mod project_rename_tests;
 mod remove;
 mod remove_guard;
@@ -199,6 +201,7 @@ impl Signex {
                 // items we haven't touched yet. Collects close tasks
                 // into a single batch so orphan-window close commands
                 // from every tab fire concurrently.
+                self.cancel_in_flight_reads();
                 let mut tasks = Vec::new();
                 for idx in (0..self.document_state.tabs.len()).rev() {
                     tasks.push(self.close_tab_parking_dirty(idx));

@@ -37,6 +37,16 @@ pub struct UiState {
     /// semantics — mutated as the user edits, copied back into
     /// `component_classes` + persisted on Save.
     pub preferences_draft_component_classes: Vec<crate::fonts::ComponentClassEntry>,
+    /// Draft of `erc_severity_override` for Preferences ▸ Electrical Rules:
+    /// edited by the chips, committed + persisted on Save, re-seeded from
+    /// the committed map on Discard.
+    pub preferences_draft_erc_severity:
+        std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    /// What the draft was seeded from. Dirty and Save work on the delta
+    /// between draft and this snapshot, so a change the ERC dialog commits
+    /// while Preferences is open is neither "unsaved" nor reverted by Save.
+    pub preferences_seed_erc_severity:
+        std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     /// Loaded keyboard-shortcut profiles (bundled Altium / Classic
     /// built-ins plus any user profile in the OS config dir). Drives
     /// shortcut dispatch and the Help ▸ Keyboard Shortcuts reference.
@@ -316,14 +326,17 @@ pub struct UiState {
     pub erc_run_generation: u64,
     /// An ERC run is in flight; the ERC panel shows "Running…".
     pub erc_running: bool,
+    /// The rule set the newest ERC run used, for the report header (#1085).
+    pub erc_run_rule_set: Option<signex_output::ErcReportRuleSet>,
+    /// An "Update from profile" waiting for the user's confirmation, with the
+    /// diff it would apply (#1085). Nothing is changed until confirmed.
+    pub pending_profile_update: Option<crate::app::state::PendingProfileUpdate>,
     /// Per-rule severity override — if empty, the rule's default is used.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    /// Net-color overrides keyed by net-label text. Superseded by the
-    /// per-wire `wire_color_overrides` map below which the Active-Bar
-    /// net-colour flood populates; kept here so a future net-name
-    /// palette (maybe the F5 dialog) can cross-reference it without
-    /// another round-trip through state plumbing.
+    /// Net-color overrides keyed by net-label text. Drives the Active-Bar
+    /// net-colour menu state and the net-color modal; the canvas paints
+    /// from the per-wire `wire_color_overrides` map below.
     pub net_colors: std::collections::HashMap<String, signex_types::theme::Color>,
     /// AutoFocus mode — when true, non-selected items dim on the canvas.
     pub auto_focus: bool,
@@ -475,6 +488,7 @@ impl UiState {
             || self.preferences_draft_ui_scale_percent
                 != crate::ui_scale::scale_to_percent(self.ui_scale)
             || self.preferences_draft_component_classes != self.component_classes
+            || self.preferences_draft_erc_severity != self.preferences_seed_erc_severity
             || self
                 .preferences_keymap_editor
                 .differs_from(&self.keymap_profiles)
