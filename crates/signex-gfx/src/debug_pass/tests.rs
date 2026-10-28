@@ -663,3 +663,158 @@ fn a_stroke_thicker_than_its_edges_has_no_gap_and_no_double_blend() {
         );
     }
 }
+
+/// Half the stroke of the join-band tests below, in pixels, and the scale they
+/// draw at (`POLYGON_SQUARE_SCALE` px per mm).
+const JOIN_HALF_PX: f32 = 3.2;
+
+/// A rounded square around the middle of the target: long straight edges
+/// joined by arcs whose chords are about two pixels, so a corner pairs a long
+/// edge with a short one.
+fn rounded_square(half_mm: f32, radius_mm: f32) -> Vec<[f32; 2]> {
+    let c = POLYGON_SQUARE_PX as f32 / POLYGON_SQUARE_SCALE / 2.0;
+    let inner = half_mm - radius_mm;
+    let steps = 12;
+    let mut ring = Vec::new();
+    for (quarter, (sx, sy)) in [(1.0, 1.0), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)]
+        .into_iter()
+        .enumerate()
+    {
+        for step in 0..=steps {
+            let t = (quarter as f32 + step as f32 / steps as f32) * std::f32::consts::FRAC_PI_2;
+            // Quarter `q` sweeps the angles q*90 .. (q+1)*90 around its corner.
+            ring.push([
+                c + sx * inner + radius_mm * t.cos(),
+                c + sy * inner + radius_mm * t.sin(),
+            ]);
+        }
+    }
+    ring
+}
+
+/// Pixels on the stroke band at every vertex that touches an edge shorter than
+/// twice the half-width (the mitered regime): on the corner's own bisector, on
+/// the centreline and half a half-width to either side.
+fn join_samples(ring: &[[f32; 2]]) -> Vec<(u32, u32)> {
+    let scale = POLYGON_SQUARE_SCALE;
+    let normal = |a: [f32; 2], b: [f32; 2]| {
+        let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+        let len = (dx * dx + dy * dy).sqrt();
+        ([-dy / len, dx / len], len * scale)
+    };
+    let mut out = Vec::new();
+    for i in 0..ring.len() {
+        let (prev, p, next) = (
+            ring[(i + ring.len() - 1) % ring.len()],
+            ring[i],
+            ring[(i + 1) % ring.len()],
+        );
+        let ((n1, l1), (n2, l2)) = (normal(prev, p), normal(p, next));
+        if l1.min(l2) >= 2.0 * JOIN_HALF_PX {
+            continue;
+        }
+        let (bx, by) = (n1[0] + n2[0], n1[1] + n2[1]);
+        let blen = (bx * bx + by * by).sqrt();
+        for frac in [-0.5, 0.0, 0.5] {
+            let d = frac * JOIN_HALF_PX / blen;
+            out.push((
+                (p[0] * scale + bx * d) as u32,
+                (p[1] * scale + by * d) as u32,
+            ));
+        }
+    }
+    out
+}
+
+/// Every join-band pixel of `polygon` reads one 50% layer: no gap, no double
+/// blend, whichever of its edges are long and whichever short.
+fn assert_one_layer_at_joins(polygon: GpuPolygon, samples: &[(u32, u32)]) {
+    assert!(samples.len() >= 6, "the shape has joins to sample");
+    let reds = on_gpu(run_polygon_square_readback_smoke_pass(polygon, samples))
+        .expect("join band readback");
+    let bad: Vec<_> = samples
+        .iter()
+        .zip(&reds)
+        .filter(|(_, red)| !(110..=145).contains(*red))
+        .collect();
+    assert!(
+        bad.is_empty(),
+        "{} of {} join pixels are not one 50% layer (below 110 a gap, above 145 a double blend): {bad:?}",
+        bad.len(),
+        samples.len()
+    );
+}
+
+fn half_red_stroke(ring: Vec<[f32; 2]>, holes: Vec<Vec<[f32; 2]>>) -> GpuPolygon {
+    GpuPolygon {
+        vertices: ring,
+        holes,
+        fill_color: [0.0; 4],
+        stroke_color: Some([1.0, 0.0, 0.0, 0.5]),
+        stroke_width: 2.0 * JOIN_HALF_PX / POLYGON_SQUARE_SCALE,
+    }
+}
+
+/// A square with every corner cut by a short diagonal, so each cut joins two
+/// long edges through an edge no longer than the half-width: fully mitered
+/// (a part-way miter overlaps on the inside by design).
+fn chamfered_square(half_mm: f32, cut_mm: f32) -> Vec<[f32; 2]> {
+    let c = POLYGON_SQUARE_PX as f32 / POLYGON_SQUARE_SCALE / 2.0;
+    let (lo, hi) = (c - half_mm, c + half_mm);
+    vec![
+        [lo + cut_mm, lo],
+        [hi - cut_mm, lo],
+        [hi, lo + cut_mm],
+        [hi, hi - cut_mm],
+        [hi - cut_mm, hi],
+        [lo + cut_mm, hi],
+        [lo, hi - cut_mm],
+        [lo, lo + cut_mm],
+    ]
+}
+
+/// A corner that joins a short edge to a long one: the long edge's quad used to
+/// keep its plain corner while the short edge's moved to the miter point, so
+/// the two missed each other (a notch outside, a double blend inside).
+#[test]
+fn a_long_edge_meeting_a_short_one_joins_the_band_exactly() {
+    let ring = chamfered_square(6.0, 0.5);
+    let samples = join_samples(&ring);
+    assert_one_layer_at_joins(half_red_stroke(ring, Vec::new()), &samples);
+}
+
+/// Long edges joined by arcs of two-pixel chords: the turns are gentle, but
+/// the join must stay exact all the way round.
+#[test]
+fn a_rounded_square_joins_the_band_exactly() {
+    let ring = rounded_square(6.0, 4.0);
+    let samples = join_samples(&ring);
+    assert_one_layer_at_joins(half_red_stroke(ring, Vec::new()), &samples);
+}
+
+/// An L whose reflex corner is cut by a short diagonal: the chamfer's two
+/// corners join it to long edges at a reflex and a convex turn.
+#[test]
+fn an_l_outline_with_a_short_reflex_cut_joins_the_band_exactly() {
+    let chamfer = 0.5;
+    let ring = vec![
+        [2.0, 2.0],
+        [14.0, 2.0],
+        [14.0, 7.0],
+        [8.0 + chamfer, 7.0],
+        [8.0, 7.0 + chamfer],
+        [8.0, 14.0],
+        [2.0, 14.0],
+    ];
+    let samples = join_samples(&ring);
+    assert_one_layer_at_joins(half_red_stroke(ring, Vec::new()), &samples);
+}
+
+/// A hole's outline is a stroke ring of its own, with the same joins.
+#[test]
+fn a_polygon_with_a_hole_joins_the_hole_band_exactly() {
+    let hole = chamfered_square(3.0, 0.5);
+    let samples = join_samples(&hole);
+    let outer = vec![[1.5, 1.5], [14.5, 1.5], [14.5, 14.5], [1.5, 14.5]];
+    assert_one_layer_at_joins(half_red_stroke(outer, vec![hole]), &samples);
+}

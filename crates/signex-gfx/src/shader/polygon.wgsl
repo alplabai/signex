@@ -29,7 +29,8 @@ struct PolygonVertex {
     @location(2) extrude: vec2<f32>,
     @location(3) half_width: f32,
     // Stroke corners only: the miter vector for this end of the edge (signed
-    // like `extrude`) and the edge's length in world mm. Zero for fill vertices.
+    // like `extrude`) and the length in world mm of the shorter of the two
+    // edges that meet at this corner. Zero for fill vertices.
     @location(4) miter: vec2<f32>,
     @location(5) edge_len: f32,
 };
@@ -53,9 +54,11 @@ fn vs_main(input: PolygonVertex) -> VertexOut {
     // zone corner, anything the pixel floor thickens) leaves real gaps instead.
     // Moving each corner to the miter point makes neighbouring edges share it
     // exactly: no gap, and no overlap that would blend a translucent stroke
-    // twice. `w` runs 0 -> 1 as the edge shrinks from twice the half-width to
-    // one, so the change is continuous in zoom and edges at least twice the
-    // half-width are drawn exactly as before.
+    // twice. `edge_len` belongs to the corner (the shorter of its two edges),
+    // so both quads that meet there compute the same `w` and land on the same
+    // point. `w` runs 0 -> 1 as that edge shrinks from twice the half-width to
+    // one, so the change is continuous in zoom, and a corner whose edges are
+    // both at least twice the half-width is drawn exactly as before.
     let w = clamp(2.0 - input.edge_len / max(half, 1e-9), 0.0, 1.0);
     let world = input.position + mix(input.extrude, input.miter, w) * half;
     out.clip_pos = camera.view_proj * vec4<f32>(world, 0.0, 1.0);
