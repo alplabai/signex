@@ -56,13 +56,15 @@ pub(crate) const CHROME_SEARCH_RIGHT_GAP: f32 = 16.0;
 /// starts after the leading ones). Whatever is left over is the bar,
 /// clamped to `[CHROME_SEARCH_BAR_MIN_WIDTH, CHROME_SEARCH_BAR_WIDTH]`,
 /// so it shrinks as the window narrows and never grows past its design
-/// width on a wide monitor.
+/// width on a wide monitor. `menu_w` is the in-window menu row's width, 0
+/// when the system menu bar carries the menus.
 pub(crate) fn chrome_search_bar_geometry(
     window_w: f32,
     leading_w: f32,
     trailing_w: f32,
+    menu_w: f32,
 ) -> (f32, f32) {
-    let menu_end = leading_w + crate::menu_bar::approx_menu_bar_width() + CHROME_SEARCH_LEFT_GAP;
+    let menu_end = leading_w + menu_w + CHROME_SEARCH_LEFT_GAP;
     let side = menu_end.max(trailing_w + CHROME_SEARCH_RIGHT_GAP);
     let width = (window_w - 2.0 * side).clamp(CHROME_SEARCH_BAR_MIN_WIDTH, CHROME_SEARCH_BAR_WIDTH);
     // Once the window is too narrow to centre a `MIN_WIDTH` bar, centring
@@ -188,7 +190,7 @@ impl Signex {
             recent_projects: ui.recent_projects.entries(),
         };
         let undocked = ui.main_window_id != Some(window_id);
-        let menu_row =
+        let menu_row = || {
             menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(move |msg| match msg {
                 MenuMessage::Undo | MenuMessage::Redo if undocked => {
                     Message::Ui(UiMsg::MenuInWindow {
@@ -197,7 +199,8 @@ impl Signex {
                     })
                 }
                 msg => Message::Menu(msg),
-            });
+            })
+        };
 
         let left_has_panels = document.dock.has_panels(PanelPosition::Left);
         let right_has_panels = document.dock.has_panels(PanelPosition::Right);
@@ -283,9 +286,11 @@ impl Signex {
         // min/max/close in a single 36 px row. Undocked tab windows keep
         // their OS chrome and use the plain styled strip.
         let top_chrome: Element<'_, Message> = if is_main_window {
-            self.view_main_window_chrome(menu_row, &document.panel_ctx.tokens)
+            // The system menu bar replaces the in-window row on macOS.
+            let row = (!self.native_menu.is_installed()).then(menu_row);
+            self.view_main_window_chrome(row, &document.panel_ctx.tokens)
         } else {
-            menu_bar::wrap_plain(menu_row, &document.panel_ctx.tokens)
+            menu_bar::wrap_plain(menu_row(), &document.panel_ctx.tokens)
         };
         // Native macOS decorations resize the window themselves.
         let has_resize_edges = is_main_window && !self.window_controls_layout().is_native();
@@ -678,18 +683,20 @@ mod chrome_geometry_tests {
     #[test]
     fn search_bar_stays_centred_and_clamped() {
         // Windows-style: nothing leading, 138 px of controls trailing.
-        search_bar_invariants(0.0, 138.0);
+        let in_window = crate::menu_bar::approx_menu_bar_width();
+        search_bar_invariants(0.0, 138.0, in_window);
         // Native macOS lights: room leading, nothing trailing.
-        search_bar_invariants(78.0, 0.0);
+        search_bar_invariants(78.0, 0.0, in_window);
         // Round buttons on both sides.
-        search_bar_invariants(56.0, 40.0);
+        search_bar_invariants(56.0, 40.0, in_window);
+        // The system menu bar carries the menus: nothing to clear.
+        search_bar_invariants(78.0, 0.0, 0.0);
     }
 
-    fn search_bar_invariants(leading_w: f32, trailing_w: f32) {
-        let menu_end =
-            leading_w + crate::menu_bar::approx_menu_bar_width() + CHROME_SEARCH_LEFT_GAP;
+    fn search_bar_invariants(leading_w: f32, trailing_w: f32, menu_w: f32) {
+        let menu_end = leading_w + menu_w + CHROME_SEARCH_LEFT_GAP;
         for window_w in [1000.0_f32, 1280.0, 1440.0, 1920.0, 3840.0] {
-            let (x, w) = chrome_search_bar_geometry(window_w, leading_w, trailing_w);
+            let (x, w) = chrome_search_bar_geometry(window_w, leading_w, trailing_w, menu_w);
             assert!(
                 (CHROME_SEARCH_BAR_MIN_WIDTH..=CHROME_SEARCH_BAR_WIDTH).contains(&w),
                 "bar width {w} out of range at {window_w}"
@@ -708,8 +715,8 @@ mod chrome_geometry_tests {
             }
         }
         // Narrowing the window never widens the bar.
-        let (_, wide) = chrome_search_bar_geometry(1920.0, leading_w, trailing_w);
-        let (_, narrow) = chrome_search_bar_geometry(1100.0, leading_w, trailing_w);
+        let (_, wide) = chrome_search_bar_geometry(1920.0, leading_w, trailing_w, menu_w);
+        let (_, narrow) = chrome_search_bar_geometry(1100.0, leading_w, trailing_w, menu_w);
         assert!(narrow <= wide, "bar grew as the window shrank");
     }
 }

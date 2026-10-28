@@ -16,6 +16,9 @@ impl Signex {
     ///
     /// `[leading controls] [wordmark + menus] [drag] [drag] [trailing controls]`
     ///
+    /// With the macOS system menu bar installed `menu_row` is `None` and the
+    /// wordmark + menus section is absent.
+    ///
     /// Which buttons sit where depends on the platform and the Window
     /// controls preference (`Signex::window_controls_layout`). The search
     /// bar is stacked on top of it, centred on the window
@@ -26,7 +29,7 @@ impl Signex {
     /// handlers. Double-click on a drag zone toggles maximize.
     pub(super) fn view_main_window_chrome<'a>(
         &self,
-        menu_row: Element<'a, Message>,
+        menu_row: Option<Element<'a, Message>>,
         tokens: &signex_types::theme::ThemeTokens,
     ) -> Element<'a, Message> {
         use iced::widget::{Space, container, mouse_area, row, svg};
@@ -56,11 +59,13 @@ impl Signex {
         // Left-pad the menu row so the wordmark doesn't sit flush against
         // the window edge; Windows-style controls stay flush so their hover
         // boxes touch the corner like in native chrome.
-        let menu_padded = container(menu_row).padding(iced::Padding {
-            top: 0.0,
-            right: 0.0,
-            bottom: 0.0,
-            left: 8.0,
+        let menu_padded = menu_row.map(|row| {
+            container(row).padding(iced::Padding {
+                top: 0.0,
+                right: 0.0,
+                bottom: 0.0,
+                left: 8.0,
+            })
         });
 
         // Shrinks with the window; the palette dropdown reads the same
@@ -154,15 +159,13 @@ impl Signex {
         // The top layer is a bare container — outside the bar's own
         // bounds it captures nothing, so presses fall straight through
         // to the drag zones below and the whole strip stays draggable.
-        let strip = row![
-            leading_controls,
-            menu_padded,
-            drag_zone(),
-            drag_zone(),
-            trailing_controls
-        ]
-        .width(Length::Fill)
-        .align_y(Alignment::Center);
+        let strip = row![leading_controls]
+            .push(menu_padded)
+            .push(drag_zone())
+            .push(drag_zone())
+            .push(trailing_controls)
+            .width(Length::Fill)
+            .align_y(Alignment::Center);
         // Positioned by left padding rather than centre alignment so it
         // lands on exactly the `x` the geometry helper reports — the
         // dropdown anchors to that same `x`, and the helper stops
@@ -191,10 +194,16 @@ impl Signex {
     pub(in crate::app::view) fn chrome_search_bar_geometry(&self) -> (f32, f32) {
         let fullscreen = self.ui_state.main_window_is_fullscreen();
         let (leading_w, trailing_w) = buttons::extents(&self.window_controls_layout(), fullscreen);
+        let menu_w = if self.native_menu.is_installed() {
+            0.0
+        } else {
+            crate::menu_bar::approx_menu_bar_width()
+        };
         crate::app::view::chrome_search_bar_geometry(
             self.ui_state.window_size.0,
             leading_w,
             trailing_w,
+            menu_w,
         )
     }
 
@@ -436,7 +445,7 @@ impl Signex {
 #[cfg(test)]
 mod layout_tests {
     use super::*;
-    use crate::layout_probe::{find, lay_out_texts, natural};
+    use crate::layout_probe::{LaidOutText, find, lay_out_texts, natural};
 
     const RESET: &str = "Start a fresh preferences file";
 
@@ -462,5 +471,39 @@ mod layout_tests {
             label.width + 0.5 >= one_line.width,
             "the button is narrower than its label: {label:?}, natural {one_line:?}"
         );
+    }
+
+    fn main_window_app() -> (Signex, iced::window::Id) {
+        let window = iced::window::Id::unique();
+        let (mut app, _task) = Signex::new();
+        app.ui_state.main_window_id = Some(window);
+        app.ui_state.first_run_tour_open = false;
+        (app, window)
+    }
+
+    fn main_window_texts(app: &Signex, window: iced::window::Id) -> Vec<LaidOutText> {
+        lay_out_texts(app.view(window), iced::Size::new(1400.0, 900.0))
+    }
+
+    #[test]
+    fn the_in_window_menu_row_shows_while_the_native_menu_is_not_installed() {
+        let (app, window) = main_window_app();
+        let texts = main_window_texts(&app, window);
+        for root in crate::menu_bar::model::ROOT_TITLES {
+            assert!(texts.iter().any(|t| t.text == root), "no {root} root");
+        }
+    }
+
+    /// With the system menu bar showing the menus, the strip carries no
+    /// in-window row (macOS only; the native menu never installs elsewhere).
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_menu_row_is_absent_once_the_native_menu_is_installed() {
+        let (mut app, window) = main_window_app();
+        app.native_menu.mark_installed_for_test();
+        let texts = main_window_texts(&app, window);
+        for root in crate::menu_bar::model::ROOT_TITLES {
+            assert!(!texts.iter().any(|t| t.text == root), "{root} still drawn");
+        }
     }
 }
