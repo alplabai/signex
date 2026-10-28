@@ -162,3 +162,45 @@ fn a_cancelled_flow_that_stored_nothing_frees_connect() {
     drop(app.handle_library_settings_message(result_message(generation, None)));
     assert!(!app.library.settings.digikey_worker_busy);
 }
+
+/// Connected, then a reconnect cancelled after its token was stored: the
+/// cleanup empties the keyring, so the panel must stop saying "Connected".
+#[test]
+fn removing_the_stale_token_clears_the_connected_label() {
+    let (mut app, _startup) = Signex::new();
+    app.library.settings.digikey_account_email = Some("DigiKey".to_string());
+    app.library.settings.digikey_status = Some("Connected as DigiKey".to_string());
+    app.library.settings.digikey_worker_busy = true;
+
+    drop(app.handle_library_settings_message(SettingsMsg::DigiKeyStaleTokenRemoved(Ok(()))));
+
+    assert_eq!(app.library.settings.digikey_account_email, None);
+    assert_eq!(
+        app.library.settings.digikey_status.as_deref(),
+        Some("Not connected")
+    );
+
+    // A failed delete leaves the token in place, so the label stays.
+    app.library.settings.digikey_account_email = Some("DigiKey".to_string());
+    drop(
+        app.handle_library_settings_message(SettingsMsg::DigiKeyStaleTokenRemoved(Err(
+            "locked".to_string()
+        ))),
+    );
+    assert_eq!(
+        app.library.settings.digikey_account_email.as_deref(),
+        Some("DigiKey")
+    );
+}
+
+#[test]
+fn the_busy_refusal_is_one_clean_sentence() {
+    let (mut app, _startup) = Signex::new();
+    app.library.settings.digikey_worker_busy = true;
+
+    drop(app.handle_library_settings_message(SettingsMsg::DigiKeyConnect));
+
+    let status = app.library.settings.digikey_status.expect("status");
+    assert!(!status.contains("  "), "no run of spaces: {status:?}");
+    assert!(status.contains("winding down; try Connect"), "{status:?}");
+}

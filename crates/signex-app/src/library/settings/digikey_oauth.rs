@@ -23,10 +23,11 @@
 //!   committed to source.
 //!
 //! Cancellation:
-//! - The caller holds a `CancelHandle` that, when dropped or via
-//!   `cancel()`, asks the listener to stop blocking on the next
-//!   `recv_timeout`. The handler observes cancellation and returns
-//!   [`Outcome::Cancelled`].
+//! - Setting the shared flag (`CancelHandle::cancel`, or the dispatcher's
+//!   `DigiKeyCancel`) is observed between `accept` polls, before the
+//!   exchange, and at the persist veto; the flow then returns
+//!   [`Outcome::Cancelled`]. A token stored before the cancel landed is
+//!   removed by the stale-result handler.
 
 use std::net::TcpListener;
 use std::sync::Arc;
@@ -56,7 +57,7 @@ pub enum Outcome {
     Connected { account_label: String },
     /// User-visible reason. Surfaced as "Failed: <reason>".
     Failed { reason: String },
-    /// User clicked Cancel before the browser callback fired.
+    /// Cancel landed before the refresh token was stored.
     Cancelled,
 }
 
@@ -929,6 +930,27 @@ mod tests {
             panic!("an idle connection must not exchange")
         });
         assert!(idle_step.is_none(), "idle connection must not end the flow");
+
+        let real = accepted_stream_with(GOOD_REQUEST);
+        let step = handle_callback(real, &cancel, Duration::from_secs(5), |_, _, _| {
+            Ok("access".into())
+        });
+        assert!(
+            matches!(step, Some(Outcome::Connected { .. })),
+            "got {step:?}"
+        );
+    }
+
+    /// A `GET /favicon.ico` is answered 404 and skipped (#1373); the real
+    /// redirect afterwards still completes the flow.
+    #[test]
+    fn a_stray_path_is_skipped_and_the_redirect_still_connects() {
+        let cancel = CancelHandle::new();
+        let stray = accepted_stream_with("GET /favicon.ico HTTP/1.1\r\nHost: x\r\n\r\n");
+        let step = handle_callback(stray, &cancel, Duration::from_secs(5), |_, _, _| {
+            panic!("a stray request must not exchange")
+        });
+        assert!(step.is_none(), "stray path must not end the flow");
 
         let real = accepted_stream_with(GOOD_REQUEST);
         let step = handle_callback(real, &cancel, Duration::from_secs(5), |_, _, _| {

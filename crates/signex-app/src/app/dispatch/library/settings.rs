@@ -24,7 +24,8 @@ impl Signex {
                 // queued), and a second flow writing in between would have
                 // its token removed. Refuse until the old worker is done.
                 if self.library.settings.digikey_worker_busy {
-                    let reason = "the cancelled DigiKey attempt is still winding down;                                   try Connect again in a moment";
+                    let reason = "the cancelled DigiKey attempt is still winding down; \
+                        try Connect again in a moment";
                     tracing::warn!(
                         target: "signex::distributor",
                         distributor = "digikey",
@@ -164,7 +165,20 @@ impl Signex {
             }
             SettingsMsg::DigiKeyStaleTokenRemoved(result) => {
                 self.library.settings.digikey_worker_busy = false;
+                let removed = result.is_ok();
                 digikey_oauth::log_stale_token_removal(result);
+                // The keyring is now empty: the panel must not keep saying
+                // "Connected" over it (a reconnect cancelled late took the
+                // earlier token with it).
+                if removed && self.library.settings.digikey_account_email.take().is_some() {
+                    crate::diagnostics::log_warning(
+                        "The DigiKey connection was cleared: a cancelled reconnect had replaced \
+                         the stored token, and that token was removed. Connect again to use DigiKey.",
+                    );
+                    if !self.library.settings.digikey_in_flight {
+                        self.library.settings.digikey_status = Some("Not connected".to_string());
+                    }
+                }
             }
             SettingsMsg::MouserApiKeyChanged(s) => {
                 self.library.settings.mouser_api_key_buf = s;
