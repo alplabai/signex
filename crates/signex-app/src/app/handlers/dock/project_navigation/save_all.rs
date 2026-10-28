@@ -179,6 +179,11 @@ impl Signex {
         // One file reached under several spellings is written once.
         let mut begun = std::collections::HashSet::new();
         let mut case_variants = Vec::new();
+        // A reason left by an earlier pass (say, a spelling kept unsaved)
+        // must not outlive it: this pass records its own.
+        for path in paths {
+            self.document_state.document_saves.clear_failure(path);
+        }
         for path in paths {
             let FoldAnswer { fold, decided } = self.identity_decision(path);
             if !begun.insert(path_key_with(path, fold)) {

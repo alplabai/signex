@@ -50,6 +50,8 @@ impl Signex {
             Some(CaseProbeOutcome::Decided(ignores_case)) => {
                 IdentityRule::Decided(CaseFold::from_probe(*ignores_case))
             }
+            // Same fact as `undecided_identity_fold()`, which the Assumed
+            // arm of `identity_answer` and `identity_decision` returns.
             Some(_) => IdentityRule::Assumed,
         }
     }
