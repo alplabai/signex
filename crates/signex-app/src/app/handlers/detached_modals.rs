@@ -764,7 +764,7 @@ mod tests {
             .expect("its window");
         let texts = lay_out_texts(app.view(window), iced::Size::new(540.0, 380.0));
         assert!(
-            texts.iter().any(|t| t.text.contains("unsaved item")),
+            texts.iter().any(|t| t.text.contains("unsaved document")),
             "the quit confirm shows its own window"
         );
         // ...and Esc, which the lock lets through, cancels it.
