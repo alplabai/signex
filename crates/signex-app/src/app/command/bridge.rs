@@ -69,9 +69,9 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "previous_grid" | "cycle_snap_grid_backward" => Message::Ui(UiMsg::GridCycleBackward),
         "next_document_tab" => Message::Menu(MenuMessage::NextDocumentTab),
         "previous_document_tab" => Message::Menu(MenuMessage::PreviousDocumentTab),
-        "find_next" => Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::NextResult),
+        "find_next" => Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::NextRequested),
         "find_previous" => {
-            Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::PreviousResult)
+            Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::PreviousRequested)
         }
         "next_grid" => Message::Ui(UiMsg::GridCycle),
         "cycle_snap_grid_forward" | "open_grid_picker" => Message::Ui(UiMsg::GridPickerOpen),

@@ -18,6 +18,7 @@ mod sheet_placement;
 mod transform;
 
 mod exec;
+mod find;
 
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -49,6 +50,10 @@ pub use command::{
 };
 pub use error::EngineError;
 pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
+pub use find::{
+    DesignatorScope, FindHit, FindKind, designator_commands, replace_all_ci, replace_commands,
+    scan_sheet,
+};
 use history::HistoryEntry;
 pub use history::UndoGroupId;
 pub use net_class_table::{
