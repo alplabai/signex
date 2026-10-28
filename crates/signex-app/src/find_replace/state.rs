@@ -38,6 +38,12 @@ pub struct ReplacePrep {
     pub unreadable: Vec<(PathBuf, String)>,
 }
 
+/// Every open sheet's child-sheet placements `(uuid, name, filename)`, in
+/// document order. They decide which instance paths a designator is read at,
+/// hence its `single` flag; none of them moves `documents_epoch`.
+pub type ChildSheetSignature =
+    std::collections::BTreeMap<PathBuf, Vec<(uuid::Uuid, String, String)>>;
+
 /// A project Replace waiting for [`ReplacePrep`].
 #[derive(Debug, Clone)]
 pub struct ReplaceJob {
@@ -47,6 +53,10 @@ pub struct ReplaceJob {
     /// was opened, saved or closed since, the whole replace is refused: what
     /// was read may no longer be what the sheets hold.
     pub epoch: u64,
+    /// The open sheets' [`ChildSheetSignature`] when the hierarchy was
+    /// captured. If it differs at apply time the replace is refused: a sheet
+    /// symbol was placed, removed, renamed or re-pointed mid-read.
+    pub child_sheets: ChildSheetSignature,
     pub query: String,
     pub replacement: String,
     /// The results the user was looking at: the only hits it may replace.
