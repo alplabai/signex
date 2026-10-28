@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::app::contracts::{SaveAllNext, SaveAllPlan};
+use crate::app::state::project_case::CaseProbeOutcome;
 use crate::app::state::scope::CaseFold;
 use crate::app::{FileMsg, Message, Signex, SymbolDocument, TabInfo, TabKind};
 use crate::persist::run_task::outputs;
@@ -547,13 +548,28 @@ fn begin_save_all_probes_the_loose_directory_then_saves_both_spellings() {
     }
 }
 
+/// #1505 — a directory the probe cannot decide is one file for Save All,
+/// open and Ctrl+S alike (they all read `identity_fold_for`), so Save All
+/// writes the case-variant pair once on every host and agrees with open.
 #[test]
-fn an_undecided_probe_keeps_the_host_default_fold() {
-    let (app, _task) = Signex::new();
-    let path = Path::new("/w/Lib.snxsch");
-    let fold = |probes| app.fold_for_save(path, &probes).fold_case;
+fn an_undecided_directory_folds_for_save_all_as_it_does_for_open_and_ctrl_s() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, lower) = loose_identical_variants(dir.path());
+    let sink = count_writes(&mut app);
 
-    assert_eq!(fold(HashMap::new()), CaseFold::host_default().fold_case);
-    assert!(fold(HashMap::from([(PathBuf::from("/w"), true)])));
-    assert!(!fold(HashMap::from([(PathBuf::from("/w"), false)])));
+    let task = app.begin_save_all_planned(SaveAllPlan {
+        context: "Save All".into(),
+        paths: vec![upper.clone(), lower.clone()],
+        rows: Vec::new(),
+        next: SaveAllNext::Quit,
+        probes: HashMap::new(),
+        undecided: vec![(dir.path().to_path_buf(), CaseProbeOutcome::Undecided)],
+    });
+    feed(&mut app, outputs(task));
+
+    assert!(
+        app.identity_fold_for(&lower).fold_case,
+        "open and Ctrl+S fold"
+    );
+    assert_eq!(*sink.0.lock().unwrap(), vec![upper], "one file, one write");
 }
