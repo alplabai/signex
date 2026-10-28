@@ -6,6 +6,21 @@ impl Signex {
     pub(super) fn dispatch_ui_message(&mut self, message: UiMsg) -> Task<Message> {
         match message {
             UiMsg::Noop => Task::none(),
+            UiMsg::MenuInWindow { window, msg } => {
+                let command = match msg {
+                    MenuMessage::Undo => "undo",
+                    MenuMessage::Redo => "redo",
+                    other => return self.update(Message::Menu(other)),
+                };
+                match crate::keymap::AppCommandId::new(command) {
+                    Ok(id) => self.dispatch_command(
+                        &id,
+                        crate::app::command::CommandArgs::none(),
+                        Some(window),
+                    ),
+                    Err(_) => Task::none(),
+                }
+            }
             UiMsg::HistoryLoaded {
                 generation,
                 path,

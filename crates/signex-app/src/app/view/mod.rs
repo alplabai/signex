@@ -186,7 +186,17 @@ impl Signex {
             active_keymap: Some(std::sync::Arc::clone(&ui.active_keymap)),
             recent_projects: ui.recent_projects.entries().to_vec(),
         };
-        let menu_row = menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(Message::Menu);
+        let undocked = ui.main_window_id != Some(window_id);
+        let menu_row =
+            menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(move |msg| match msg {
+                MenuMessage::Undo | MenuMessage::Redo if undocked => {
+                    Message::Ui(UiMsg::MenuInWindow {
+                        window: window_id,
+                        msg,
+                    })
+                }
+                msg => Message::Menu(msg),
+            });
 
         let left_has_panels = document.dock.has_panels(PanelPosition::Left);
         let right_has_panels = document.dock.has_panels(PanelPosition::Right);
