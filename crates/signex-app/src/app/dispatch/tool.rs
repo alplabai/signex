@@ -98,12 +98,10 @@ impl Signex {
                                     )
                                 } else {
                                     // A part on the cursor is the truth for its
-                                    // own form; `selected_component` is the
-                                    // legacy lib_id flow.
+                                    // own form.
                                     let (label, designator) = session_form
                                         .as_ref()
                                         .map(|f| (f.value.clone(), f.designator.clone()))
-                                        .or_else(|| self.current_component_defaults())
                                         .unwrap_or_else(|| ("NET".to_string(), String::new()));
                                     (
                                         PrePlacementKind::Component,

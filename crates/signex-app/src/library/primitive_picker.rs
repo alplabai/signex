@@ -29,7 +29,7 @@ use signex_widgets::theme_ext;
 
 use super::browser::{OVERSCAN_ROWS, visible_range};
 use super::messages::{LibraryMessage, PrimitivePickerMsg};
-use super::modal_chrome::close_x;
+use super::modal_chrome::{close_x, secondary_btn};
 use super::state::{LibraryState, PrimitivePickerState};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -106,6 +106,7 @@ fn row_button<'a>(
     kind: PrimitiveKind,
     text_c: iced::Color,
     muted: iced::Color,
+    hover: iced::Color,
 ) -> Element<'a, LibraryMessage> {
     let short_uuid = {
         let s = uuid.simple().to_string();
@@ -142,9 +143,7 @@ fn row_button<'a>(
     )))
     .style(move |_: &Theme, status: iced::widget::button::Status| {
         let bg = match status {
-            iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06),
-            )),
+            iced::widget::button::Status::Hovered => Some(iced::Background::Color(hover)),
             _ => None,
         };
         iced::widget::button::Style {
@@ -165,7 +164,7 @@ pub fn view<'a>(
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
+    let hover = crate::styles::tokens::hover_overlay(tokens);
 
     let title = match picker.kind {
         PrimitiveKind::Symbol => "Pick Symbol",
@@ -223,6 +222,7 @@ pub fn view<'a>(
                 picker.kind,
                 text_c,
                 muted,
+                hover,
             ),
         });
     }
@@ -262,7 +262,7 @@ pub fn view<'a>(
         container(
             text(err.clone())
                 .size(TS.body)
-                .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
+                .color(crate::styles::tokens::danger(tokens)),
         )
         .padding([SP.s, 14.0])
         .into()
@@ -270,41 +270,19 @@ pub fn view<'a>(
         Space::new().height(0).into()
     };
 
-    let browse_btn = button(
-        container(text("Browse filesystem…").size(TS.body).color(text_c)).padding([SP.s, 14.0]),
-    )
-    .on_press(LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Browse))
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgba(
-            1.0, 1.0, 1.0, 0.04,
-        ))),
-        text_color: text_c,
-        border: Border {
-            width: 1.0,
-            radius: 3.0.into(),
-            color: border,
-        },
-        ..iced::widget::button::Style::default()
-    });
-
     let footer = container(
         row![
-            browse_btn,
+            secondary_btn(
+                "Browse filesystem…",
+                LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Browse),
+                tokens,
+            ),
             Space::new().width(Length::Fill),
-            button(container(text("Cancel").size(TS.body).color(text_c)).padding([SP.s, 14.0]))
-                .on_press(LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Cancel))
-                .style(move |_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.04
-                    ))),
-                    text_color: text_c,
-                    border: Border {
-                        width: 1.0,
-                        radius: 3.0.into(),
-                        color: border,
-                    },
-                    ..iced::widget::button::Style::default()
-                }),
+            secondary_btn(
+                "Cancel",
+                LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Cancel),
+                tokens,
+            ),
         ]
         .align_y(iced::Alignment::Center),
     )
