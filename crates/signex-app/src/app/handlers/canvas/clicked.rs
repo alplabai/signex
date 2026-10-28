@@ -467,6 +467,7 @@ impl Signex {
             }
             Tool::Sheet => self.place_sheet_click(wx, wy),
             Tool::SheetEntry => self.place_sheet_entry_click(wx, wy),
+            Tool::Measure => self.measure_click(wx, wy),
             Tool::Rectangle => {
                 // Two-click: corner → opposite-corner →
                 // SchDrawing::Rect. Rearms blank for the

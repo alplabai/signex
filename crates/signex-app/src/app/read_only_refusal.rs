@@ -92,7 +92,11 @@ mod tests {
     }
 
     fn drag(app: &mut Signex, window_id: iced::window::Id) {
-        let event = crate::canvas::CanvasEvent::MoveSelected { dx: 10.0, dy: 0.0 };
+        let event = crate::canvas::CanvasEvent::MoveSelected {
+            dx: 10.0,
+            dy: 0.0,
+            connections: Default::default(),
+        };
         let _task = app.dispatch_update(Message::CanvasEventInWindow { window_id, event });
     }
 

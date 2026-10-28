@@ -214,7 +214,8 @@ impl Signex {
                     return Task::none();
                 }
                 if self.interaction_state.active_bar_menu.is_none() {
-                    self.interaction_state.context_menu = Some(ContextMenuState { x, y });
+                    let world = self.cursor_world_now();
+                    self.interaction_state.context_menu = Some(ContextMenuState { x, y, world });
                 }
                 Task::none()
             }
@@ -344,7 +345,11 @@ impl Signex {
                 Task::none()
             }
             ContextMenuMsg::Action(action) => {
-                self.interaction_state.context_menu = None;
+                let opened_at = self
+                    .interaction_state
+                    .context_menu
+                    .take()
+                    .and_then(|menu| menu.world);
                 self.interaction_state.context_submenu = None;
                 self.interaction_state.pending_submenu = None;
                 self.interaction_state.submenu_launcher_hovered = None;
@@ -387,6 +392,9 @@ impl Signex {
                     ContextAction::ActiveBar(active_bar_action) => {
                         self.handle_active_bar_action(active_bar_action)
                     }
+                    ContextAction::FindSimilar => self.handle_find_similar_message(
+                        crate::find_similar::FindSimilarMsg::OpenRequested { at: opened_at },
+                    ),
                 }
             }
         }
