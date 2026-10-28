@@ -34,6 +34,9 @@ pub enum ContextAction {
     ActiveBar(crate::active_bar::ActiveBarAction),
     /// Reorder the selected drawings from the Arrange submenu (#1583).
     ArrangeDrawings(signex_engine::DrawingArrange),
+    /// Open Datasheet / Edit Symbol / Change Component on the selected
+    /// placed part (#1301, #1262, #1260).
+    PlacedPart(crate::library::PlacedPartAction),
 }
 
 /// Which click-to-open submenu is currently expanded inside the right-

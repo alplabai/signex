@@ -694,6 +694,7 @@ mod panel_rows_tests;
 mod picker_cache;
 #[cfg(test)]
 mod picker_cache_tests;
+mod placed_part;
 mod preview;
 mod refresh;
 #[cfg(test)]
@@ -708,6 +709,7 @@ mod under_folder;
 pub use methods::*;
 pub use panel_rows::PanelRows;
 pub use picker_cache::{PickerEntry, PickerRows};
+pub use placed_part::{ChangePreview, DatasheetChoice, PickerMode};
 pub use preview::*;
 pub use refresh::{LibrarySnapshot, RefreshFinish, RefreshStart};
 pub use relocate::rebase_path;

@@ -34,6 +34,16 @@ pub(super) struct CanvasShortcuts {
     pub smart_paste: String,
 }
 
+/// What the canvas menu asks of the selection.
+#[derive(Debug, Default, Clone, Copy)]
+pub(super) struct CanvasSelection {
+    pub has_selection: bool,
+    pub child_sheet_selected: bool,
+    pub drawing_selected: bool,
+    /// One non-power symbol: the placed-part actions apply (#1260).
+    pub placed_part_selected: bool,
+}
+
 impl Signex {
     /// v0.18.10 — Altium-style grid picker popup body. Renders the
     /// standard 1mil…2.5mm ladder; clicking a row sends
@@ -127,12 +137,15 @@ impl Signex {
     pub(in crate::app::view) fn view_context_menu(&self) -> Element<'_, Message> {
         let tid = self.ui_state.theme_id;
         let canvas = self.interaction_state.active_canvas();
-        let has_selection = !canvas.selected.is_empty();
-        let child_sheet_selected = canvas
-            .selected
-            .iter()
-            .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet);
-        let drawing_selected = !self.selected_drawing_ids().is_empty();
+        let selection = CanvasSelection {
+            has_selection: !canvas.selected.is_empty(),
+            child_sheet_selected: canvas
+                .selected
+                .iter()
+                .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet),
+            drawing_selected: !self.selected_drawing_ids().is_empty(),
+            placed_part_selected: self.has_placed_part_selected(),
+        };
         let active_submenu = self.interaction_state.context_submenu;
         // Shortcut hints read from the active keymap profile; a command
         // it does not bind has none.
@@ -144,15 +157,7 @@ impl Signex {
             smart_paste: self.keymap_shortcut_label("smart_paste"),
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let entries = canvas_menu_entries(
-            tid,
-            tokens,
-            has_selection,
-            child_sheet_selected,
-            drawing_selected,
-            active_submenu,
-            &sc,
-        );
+        let entries = canvas_menu_entries(tid, tokens, &selection, active_submenu, &sc);
         signex_widgets::active_bar_dropdown::view(entries, tokens, Some(Self::CONTEXT_MENU_WIDTH))
     }
 
@@ -192,12 +197,16 @@ impl Signex {
 pub(super) fn canvas_menu_entries(
     tid: ThemeId,
     tokens: &ThemeTokens,
-    has_selection: bool,
-    child_sheet_selected: bool,
-    drawing_selected: bool,
+    selection: &CanvasSelection,
     active_submenu: Option<ContextSubmenu>,
     sc: &CanvasShortcuts,
 ) -> Vec<DropdownEntry<Message>> {
+    let CanvasSelection {
+        has_selection,
+        child_sheet_selected,
+        drawing_selected,
+        placed_part_selected,
+    } = *selection;
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(24);
 
     v.push(dd_disabled(
@@ -373,6 +382,16 @@ pub(super) fn canvas_menu_entries(
         Message::Preferences(PreferencesMsg::Open),
     ));
 
+    if placed_part_selected {
+        use crate::library::PlacedPartAction as A;
+        for (label, action) in [
+            ("Open Datasheet", A::OpenDatasheet),
+            ("Edit Symbol", A::EditSymbol),
+            ("Change Component\u{2026}", A::ChangeComponent),
+        ] {
+            v.push(dd_kb(None, label, "", ContextAction::PlacedPart(action)));
+        }
+    }
     if has_selection {
         v.push(dd_disabled(
             Some(ic::icon_dd_supplier_links(tid)),

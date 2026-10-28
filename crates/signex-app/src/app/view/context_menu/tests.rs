@@ -6,7 +6,7 @@
 use super::*;
 
 use super::items::{dd_disabled, dd_msg};
-use super::menus::{CanvasShortcuts, canvas_menu_entries, tab_menu_entries};
+use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries, tab_menu_entries};
 use super::project_tree::{TreeNodeRole, tree_node_role};
 use super::submenu::{align_entries, align_gate, place_entries};
 use signex_types::theme::{ThemeId, theme_tokens};
@@ -51,6 +51,15 @@ fn disabled_of(entries: &[DropdownEntry<Message>], label: &str) -> bool {
             _ => None,
         })
         .unwrap_or_else(|| panic!("missing row {label:?}"))
+}
+
+fn sel(has_selection: bool, child_sheet: bool, drawing: bool) -> CanvasSelection {
+    CanvasSelection {
+        has_selection,
+        child_sheet_selected: child_sheet,
+        drawing_selected: drawing,
+        placed_part_selected: false,
+    }
 }
 
 fn shortcuts() -> CanvasShortcuts {
@@ -108,8 +117,8 @@ fn dd_msg_row_carries_message_and_optional_shortcut() {
 fn canvas_menu_grows_and_gates_on_selection() {
     let tokens = theme_tokens(TID);
     let sc = shortcuts();
-    let with = canvas_menu_entries(TID, &tokens, true, false, false, None, &sc);
-    let without = canvas_menu_entries(TID, &tokens, false, false, false, None, &sc);
+    let with = canvas_menu_entries(TID, &tokens, &sel(true, false, false), None, &sc);
+    let without = canvas_menu_entries(TID, &tokens, &sel(false, false, false), None, &sc);
 
     // Clipboard + find rows are always present.
     for row in ["Find Text...", "Cut", "Copy", "Paste", "Paste Special"] {
@@ -128,8 +137,8 @@ fn canvas_menu_grows_and_gates_on_selection() {
 fn canvas_child_sheet_adds_open_row() {
     let tokens = theme_tokens(TID);
     let sc = shortcuts();
-    let plain = canvas_menu_entries(TID, &tokens, false, false, false, None, &sc);
-    let child = canvas_menu_entries(TID, &tokens, false, true, false, None, &sc);
+    let plain = canvas_menu_entries(TID, &tokens, &sel(false, false, false), None, &sc);
+    let child = canvas_menu_entries(TID, &tokens, &sel(false, true, false), None, &sc);
     assert!(!has_row(&plain, "Open Child Sheet"));
     assert!(has_row(&child, "Open Child Sheet"));
     assert!(!has_row(&plain, "Sync Sheet Pins"));
@@ -339,7 +348,7 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
 #[test]
 fn canvas_row_text_is_byte_identical_to_the_old_literals() {
     let tokens = theme_tokens(TID);
-    let rows = canvas_menu_entries(TID, &tokens, true, true, false, None, &shortcuts());
+    let rows = canvas_menu_entries(TID, &tokens, &sel(true, true, false), None, &shortcuts());
     for expected in [
         "Find Text...",
         "Cut",
@@ -369,7 +378,7 @@ fn shared_command_ids_read_the_same_label_on_every_surface() {
     // Context-menu canvas ids: label comes from the catalog, so the menu
     // bar's lookup of the same id must agree with the row.
     let tokens = theme_tokens(TID);
-    let rows = canvas_menu_entries(TID, &tokens, true, true, false, None, &shortcuts());
+    let rows = canvas_menu_entries(TID, &tokens, &sel(true, true, false), None, &shortcuts());
     for (id, row_label) in [
         ("cut", "Cut"),
         ("copy", "Copy"),
@@ -440,8 +449,8 @@ fn a_command_the_keymap_does_not_bind_gets_no_shortcut_hint() {
 fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
     let tokens = theme_tokens(TID);
     let sc = shortcuts();
-    let with = canvas_menu_entries(TID, &tokens, true, false, true, None, &sc);
-    let without = canvas_menu_entries(TID, &tokens, true, false, false, None, &sc);
+    let with = canvas_menu_entries(TID, &tokens, &sel(true, false, true), None, &sc);
+    let without = canvas_menu_entries(TID, &tokens, &sel(true, false, false), None, &sc);
     assert_eq!(customs(&with), customs(&without) + 1);
 
     let rows = super::submenu::arrange_entries();
@@ -453,4 +462,44 @@ fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
     ] {
         assert!(has_row(&rows, label), "missing {label}");
     }
+}
+
+/// The placed-part actions (#1301, #1262, #1260) show for one selected
+/// non-power symbol only, under exactly these labels, and each row carries
+/// its own action.
+#[test]
+fn canvas_menu_offers_the_placed_part_actions_for_a_placed_part_only() {
+    use crate::library::PlacedPartAction as A;
+    let tokens = theme_tokens(TID);
+    let sc = shortcuts();
+    let part = CanvasSelection {
+        placed_part_selected: true,
+        ..sel(true, false, false)
+    };
+    let with = canvas_menu_entries(TID, &tokens, &part, None, &sc);
+    let without = canvas_menu_entries(TID, &tokens, &sel(true, false, false), None, &sc);
+
+    for (label, action) in [
+        ("Open Datasheet", A::OpenDatasheet),
+        ("Edit Symbol", A::EditSymbol),
+        ("Change Component\u{2026}", A::ChangeComponent),
+    ] {
+        assert!(!has_row(&without, label), "{label} without a placed part");
+        let message = with
+            .iter()
+            .find_map(|e| match e {
+                DropdownEntry::Item(it) if it.label == label => it.on_press.clone(),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("missing or inert row {label:?}"));
+        assert!(
+            matches!(
+                message,
+                Message::ContextMenu(ContextMenuMsg::Action(ContextAction::PlacedPart(a))) if a == action
+            ),
+            "{label} sent the wrong message"
+        );
+    }
+    // Nothing else moved: the rest of the menu is identical.
+    assert_eq!(labels(&with).len(), labels(&without).len() + 3);
 }

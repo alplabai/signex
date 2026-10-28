@@ -222,6 +222,9 @@ pub enum LibraryMessage {
         label: String,
         result: Result<Box<ResolvedSymbolChoice>, String>,
     },
+    /// An action on the selected placed part: Open Datasheet, Edit Symbol,
+    /// Change Component (#1301, #1262, #1260), and their follow-ups.
+    PlacedPart(super::PlacedPartMsg),
     /// Internal trace-only signal: a Component Preview tab was
     /// opened for the given address. Fired alongside
     /// `OpenComponentRow` so downstream observers can attach to a
