@@ -99,6 +99,8 @@ fn random_row(rng: &mut Rng, w: &World, row_id: Uuid) -> ComponentRow {
         updated: at,
         content_hash: [0u8; 32],
         server_revision: None,
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
     }
 }
 
@@ -208,7 +210,13 @@ fn adapter_apply(a: &LocalGitAdapter, edit: &Edit) -> Result<(), LibraryError> {
         Edit::Bind(t, id, save) => a
             .bind_row_primitive_version(t, RowId::from_uuid(*id), save, "bind")
             .map(|_| ()),
-        Edit::Price(update) => a.store_pricing(vec![update.clone()], "price").map(|_| ()),
+        Edit::Price(update) => a
+            .store_pricing(
+                vec![update.clone()],
+                &std::sync::atomic::AtomicBool::new(false),
+                "price",
+            )
+            .map(|_| ()),
     }
 }
 
@@ -346,6 +354,7 @@ fn seeded(dir: &Path, rng: &mut Rng, w: &World, rows: usize, git: bool) -> PathB
     let lf = LibraryFile {
         manifest,
         tables: [(TABLE.to_string(), parts), ("notes".to_string(), notes)].into(),
+        layout: Default::default(),
     };
     fs::write(&file, lf.write().unwrap()).unwrap();
     file
@@ -710,4 +719,49 @@ fn a_poisoned_row_line_cache_does_not_block_row_writes() {
     assert!(!adapter.row_lines.is_poisoned());
     let reread = LibraryFile::parse(&fs::read_to_string(&file).unwrap()).unwrap();
     assert_eq!(reread.write().unwrap(), fs::read_to_string(&file).unwrap());
+}
+
+/// #1435 + #416: a file holding keys this build does not model keeps its
+/// text, which only the full write edits in place; every edit of it takes
+/// the full write and the unknown keys stay on disk byte for byte.
+#[test]
+fn a_file_with_unknown_keys_keeps_them_on_every_edit() {
+    let mut rng = Rng(23);
+    let w = World {
+        lib: rng.uuid(),
+        symbols: (0..3).map(|_| rng.uuid()).collect(),
+        footprints: (0..3).map(|_| rng.uuid()).collect(),
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let file = seeded(dir.path(), &mut rng, &w, 4, false);
+    let text = fs::read_to_string(&file).unwrap();
+    let text = format!("future_root = 1\n{text}").replacen(
+        "[tables.parts]\n",
+        "[tables.parts]\nfuture_table_key = \"kept\"\n",
+        1,
+    );
+    fs::write(&file, &text).unwrap();
+    let adapter = LocalGitAdapter::open(&file).unwrap();
+    let start = row_writes();
+    for n in 0..2 {
+        let id = rng.uuid();
+        let mut row = random_row(&mut rng, &w, id);
+        row.internal_pn = InternalPn::new(format!("kept-{n}"));
+        row.primary_mpn = ManufacturerPart::draft("Acme", "ok");
+        row.alternate_symbols.clear();
+        adapter.insert_row(TABLE, row, "edit").unwrap();
+        let on_disk = fs::read_to_string(&file).unwrap();
+        assert!(on_disk.contains("future_root = 1\n"), "edit {n}");
+        assert!(
+            on_disk.contains("[tables.parts]\nfuture_table_key = \"kept\"\n"),
+            "edit {n}"
+        );
+    }
+    assert_eq!(
+        row_writes(),
+        start,
+        "a file with kept text never takes the row write"
+    );
+    let reread = LibraryFile::parse(&fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(reread.tables[TABLE].rows.len(), 4 + 1 + 2);
 }

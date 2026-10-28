@@ -45,6 +45,14 @@ breaks = [{ qty = 1, unit_price = 0.1 }, { qty = 100, unit_price = 0.05 }]
   not reject unknown keys) and keeps working, at the cost of dropping the cache
   the next time it saves. Bumping the token would instead make older builds
   refuse the file, which is the wrong trade for a cache that can be re-fetched.
+- A record may carry keys this build does not know (from a newer build); a
+  save keeps them while the record is unchanged or only partly edited
+  (#1435). When the record is fetched again (`fetched_at` changes) the whole
+  record is replaced and those keys go with it: they described the old fetch.
+  Editing an array inside a record (`breaks`) without a fetch replaces the
+  whole array, which would drop unknown keys on its entries; such a save is
+  refused with `WrittenDocumentDiffers` rather than written lossily. Any array
+  other than `classes` behaves the same way.
 - Deleting a row deletes its cached prices. A price whose `sku` no longer
   matches the row's listing is ignored by the display, refused by `store_pricing`, and removed silently by every other save (see Records, pruning and damaged caches).
 
@@ -159,3 +167,13 @@ hold in memory (`OpenLibrary::tables` / `pricing`).
 - **When.** Prices are read when the BOM is rolled up: opening the preview,
   changing its grouping or filters, and exporting. A price refresh while the
   preview is open shows on its next roll-up.
+
+## Safety rules added in review
+
+- **Price strings.** One comma or dot is a decimal mark unless it is a thousands mark: a nonzero integer part, exactly three digits after it, and a currency that does not write decimals with that character. `0,125` is 0.125 in every currency, `1,250` USD is 1250, `1,25` is 1.25.
+- **Missing numbers are not zero.** A DigiKey price break without `UnitPrice` makes the whole part's price unreadable.
+- **Loading is lenient, level by level.** A pricing node of the wrong shape (a string where a table belongs, a record without fields) is dropped with a Messages-panel warning and the library still opens. A non-finite price still refuses the load.
+- **DigiKey tokens.** The access token is reused until it expires, so a walk exchanges the refresh token once. The rotated refresh token is kept in process memory (keyed by client id and token endpoint) as well as written to the keyring, so after a failed keyring write every later refresh keeps working until the app restarts; the next launch then needs DigiKey authorised again.
+- **SKU-less listings** keep only their newest priced part; older ones are replaced on write and pruned on save.
+- **Cancel.** The flag is checked between rows, before the save, and again under the write lock before the file is written. On quit the app waits up to 5 s for the worker, so it never exits between the write and its commit.
+- **Menu gate.** Refresh All Pricing is enabled when an enabled distributor has a client that can price. Credentials are not checked (`view` must not touch the keyring); a missing key shows up per row as an authentication failure.

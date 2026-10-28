@@ -181,6 +181,19 @@ pub enum SaveAllNext {
     Quit,
 }
 
+/// A Save All whose loose documents' volumes have been probed off-thread;
+/// it is started, with `probes`, when this message arrives (#1216).
+#[derive(Debug, Clone)]
+pub struct SaveAllPlan {
+    pub context: String,
+    pub paths: Vec<std::path::PathBuf>,
+    pub rows: Vec<crate::library::state::EditorAddress>,
+    pub next: SaveAllNext,
+    /// Directory -> whether its volume ignores case, for every directory
+    /// the probe could decide. An undecided one is absent.
+    pub probes: std::collections::HashMap<std::path::PathBuf, bool>,
+}
+
 /// The tail of a Save All, sent when its writes have completed.
 #[derive(Debug, Clone)]
 pub struct SaveAllSettle {

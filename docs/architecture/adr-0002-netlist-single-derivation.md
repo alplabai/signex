@@ -65,6 +65,8 @@ A shared fixture corpus lives in `signex-net` (`tests/fixtures/`) covering: T-ju
 
 **Freshness — the netlist is derived state, held like any other Model state (MVU).** The `Netlist`/`Connectivity` for a document is computed in `update` and cached in the Model, invalidated by the same `DocumentPatch` bits that already drive dirty-tracking (`WIRES | JUNCTIONS | LABELS | SYMBOLS`), exactly like the existing `canvas_cache` idiom. It is **never** computed inside `view` or a canvas `draw` — a derivation over every wire on the sheet has no place on the render path. Consumers read the cached value; a stale-read is impossible because the only writer is `update`, which is also the only place patches land.
 
+*Amendment (#1344, #1420): the in-`update` project netlist cache (`ui_state.project_netlist`, rebuilt after every connectivity edit) is deleted. Nothing outside tests read it, and rebuilding it read and parsed every closed child sheet from disk on the UI thread. The rule above still holds for the derivation itself (never in `view` or `draw`), but the project-wide stitch now lives only off-thread (net-class styling, keyed by `ProjectKey`) or at the point of use (ERC, export). Stitch warnings therefore reach the Messages panel from those paths, not on every edit.*
+
 ### D8. Multi-sheet follows the ERC precedent — amended with the approved stitching design (2026-07-08, issue #156)
 
 *Amendment note: the first draft deferred stitching semantics to a later increment and returned a bare `Netlist`. The design round settled the semantics, so inc2c ships them; the return type is `ProjectNetlist` (netlist + in-band issues).*

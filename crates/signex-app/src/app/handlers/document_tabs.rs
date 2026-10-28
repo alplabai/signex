@@ -151,6 +151,12 @@ impl Signex {
             return Task::none();
         }
         let closing_path = self.document_state.tabs[idx].path.clone();
+        // A History restore still running for this document must not land in
+        // a tab reopened later, but its worker may still write the file, so
+        // the claim stays (and saves stay refused) until it reports (#859).
+        self.document_state
+            .pending_restores
+            .cancel_retaining(&closing_path);
         // Capture the tab kind before removal so the editor-state
         // cleanup below can run after the tab is dropped.
         let closing_kind = self.document_state.tabs[idx].kind.clone();
@@ -340,6 +346,7 @@ impl Signex {
                 }
             }
             A::CloseAll => {
+                self.cancel_in_flight_reads();
                 let mut tasks = Vec::new();
                 for idx in (0..self.document_state.tabs.len()).rev() {
                     tasks.push(self.close_tab_parking_dirty(idx));

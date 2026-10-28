@@ -258,6 +258,21 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         result: Result<Box<ResolvedPlacement>, String>,
     },
+    /// Completion of the off-thread read behind a placed symbol's switch
+    /// to another drawing of its row (#1230). `target_sheet` is the sheet
+    /// that was active when the switch started.
+    SymbolChoiceResolved {
+        target_sheet: PathBuf,
+        /// The engine instance that held the sheet when the switch started;
+        /// a re-opened document is a different instance.
+        engine_instance: u64,
+        symbol_id: uuid::Uuid,
+        /// Request number among the switches of `symbol_id`.
+        request: u64,
+        /// The drawing's name in the row ("IEC"), for messages.
+        label: String,
+        result: Result<Box<ResolvedSymbolChoice>, String>,
+    },
     /// Internal trace-only signal: a Component Preview tab was
     /// opened for the given address. Fired alongside
     /// `OpenComponentRow` so downstream observers can attach to a
@@ -299,6 +314,14 @@ pub enum LibraryMessage {
     MountFinished {
         path: PathBuf,
         prepared: crate::library::mount::PreparedMountCell,
+    },
+    /// An off-thread library refresh (#1374) has read the library. Applied
+    /// only while `generation` is still the latest for `path`; a result
+    /// superseded by a newer refresh, or for a closed library, is dropped.
+    RefreshFinished {
+        path: PathBuf,
+        generation: u64,
+        snapshot: crate::library::refresh::RefreshSnapshotCell,
     },
     /// Active table change inside a Library Browser tab — clicked one
     /// of the category tabs in the strip.
@@ -364,7 +387,7 @@ pub enum LibraryMessage {
     },
     /// Inner-message envelope for primitive picker events.
     PrimitivePicker(PrimitivePickerMsg),
-    /// Double-click on a row in the browser grid → opens the Edit
+    /// "Edit Details" on the selected browser row → opens the Edit
     /// Component Details modal. Loads the row from the cached tables
     /// and seeds `EditRowModalState.draft`.
     BrowserOpenEditModal {
@@ -541,4 +564,12 @@ pub struct ResolvedPlacement {
     /// The row's component class key (`"diode"`, `"generic"`), for the
     /// project's designator standard (#1232).
     pub class: String,
+}
+
+/// The drawing a placed symbol is switched to, read off-thread: the
+/// converted symbol and its `"<library uuid>:<symbol uuid>"` key.
+#[derive(Debug, Clone)]
+pub struct ResolvedSymbolChoice {
+    pub lib_id: String,
+    pub lib_symbol: signex_types::schematic::LibSymbol,
 }

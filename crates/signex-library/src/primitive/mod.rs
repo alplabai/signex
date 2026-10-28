@@ -19,6 +19,7 @@ pub mod footprint;
 pub mod ref_;
 pub mod sim;
 pub mod symbol;
+mod tsv_cell;
 
 pub use container_merge::{ContainerMerge, DuplicatedUuid};
 pub use footprint::{

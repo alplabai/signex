@@ -9,7 +9,9 @@
 //! encodes the whole document, taking unchanged rows' lines from the last
 //! row write (`RowLines`); the save protocol around it (atomic write,
 //! memory after the rename, one commit) is the same. Anything else takes
-//! the full write: the first edit after a load, a new table, a new column.
+//! the full write: the first edit after a load, a new table, a new column,
+//! or a file that keeps unknown keys (#1435), whose text only the full
+//! write edits in place.
 //!
 //! Debug builds also run the full write on the same state and assert both
 //! give the same bytes, or the same refusal.
@@ -40,6 +42,7 @@ impl LocalGitAdapter {
         &self,
         table: &str,
         edit: F,
+        asset_rel_paths: &[String],
         message: &str,
         fallback: &str,
     ) -> Result<(), LibraryError>
@@ -57,9 +60,12 @@ impl LocalGitAdapter {
                 };
                 let same_shape =
                     columns_before.as_ref() == lf.tables.get(table).map(|t| &t.columns);
-                let Some(id) = id.filter(|_| holds_own_write && same_shape) else {
+                // A file with keys this build does not model keeps its text,
+                // which only the full write edits in place (#1435).
+                let canonical = !lf.layout.keeps_text();
+                let Some(id) = id.filter(|_| holds_own_write && same_shape && canonical) else {
                     prune_stale_pricing(lf);
-                    let text = lf.write()?;
+                    let text = lf.write_and_rebase()?;
                     self.row_lines().retain_rows(lf);
                     return Ok(Some(text));
                 };
@@ -73,6 +79,7 @@ impl LocalGitAdapter {
                 ROW_WRITES.with(|n| n.set(n.get() + 1));
                 Ok(Some(text?))
             },
+            asset_rel_paths,
             message,
             fallback,
         )

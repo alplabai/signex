@@ -42,8 +42,8 @@ is Apache-2.0 clean and contains no KiCad-derived code by design — see
 
 ### Add Test Fixtures
 
-We maintain a corpus of native Signex `.snxsch` / `.snxpcb` files in
-`tests/fixtures/`. Adding more fixtures from diverse designs improves
+We maintain a corpus of native Signex `.snxsch` / `.snxpcb` files under
+each crate's `tests/fixtures/` (e.g. `crates/signex-types/tests/fixtures/`). Adding more fixtures from diverse designs improves
 coverage. If you have a project you're willing to share (or can create
 a minimal reproducer), PRs that add fixtures are very welcome.
 
@@ -90,7 +90,7 @@ cargo run -p signex-app
 cargo test --workspace        # hard gate — must pass
 cargo check --workspace       # hard gate — must compile
 cargo fmt --all               # hard gate — the tree must be rustfmt-clean
-cargo clippy --workspace --all-targets --all-features   # exactly what CI runs
+cargo clippy --workspace --all-targets --all-features -- -D warnings   # exactly what CI runs
 ```
 
 `cargo test`, `cargo check`, `cargo fmt --all -- --check` and `clippy` are all
@@ -251,6 +251,7 @@ Each crate maps to an `area:` label (auto-applied to PRs by path — see
 |---|---|---|
 | `signex-types` | Domain types (schematic, PCB, net, layer, theme) + native `.snxsch`/`.snxpcb` format codec. **No rendering deps.** | `types` |
 | `signex-engine` | Edit engine + multi-window history. | `engine` |
+| `signex-net` | Authoritative netlist / connectivity derivation. | `engine` |
 | `signex-sketch` | 2D geometry, constraints, and the sketch solver. | `sketch` |
 | `signex-bake` | Pad baking, arrays, pad/via numbering. | `bake` |
 | `signex-library` / `signex-library-server` | Component library model + the library server. | `library` |

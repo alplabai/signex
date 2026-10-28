@@ -67,13 +67,14 @@ fn strip_eq_prefix(src: &str) -> &str {
     s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s)
 }
 
-/// Resolve every parameter to a canonical-unit `f64` (mm for
-/// `Length`, rad for `Angle`, raw for `Count`).
+/// Resolve every parameter to a canonical-unit [`Quantity`]: millimetres
+/// for `Length`, radians for `Angle`, a plain number for `Count`. Unlike
+/// [`resolve`] this keeps each parameter's unit family.
 ///
 /// Returns `ExprError::Cycle(name)` if the dependency graph contains
 /// a cycle through `name`. Other parse / eval errors propagate as
 /// the corresponding [`ExprError`] variant.
-pub fn resolve(table: &ParameterTable) -> Result<HashMap<String, f64>, ExprError> {
+pub fn resolve_quantities(table: &ParameterTable) -> Result<HashMap<String, Quantity>, ExprError> {
     // 1. Parse every parameter source string into an AST.
     let mut asts: BTreeMap<String, ExprNode> = BTreeMap::new();
     for (name, src) in table.iter() {
@@ -99,17 +100,30 @@ pub fn resolve(table: &ParameterTable) -> Result<HashMap<String, f64>, ExprError
         resolved_quantities.insert(name.clone(), q);
     }
 
-    // 4. Convert each Quantity to its canonical-unit f64.
+    // 4. Convert each Quantity to its canonical unit.
     let mut out = HashMap::with_capacity(resolved_quantities.len());
     for (name, q) in resolved_quantities {
         let canonical = match q.unit.family() {
-            UnitFamily::Length => q.as_mm()?,
-            UnitFamily::Angle => q.as_rad()?,
-            UnitFamily::Count => q.as_count()?,
+            UnitFamily::Length => Quantity::length(q.as_mm()?),
+            UnitFamily::Angle => Quantity::angle(q.as_rad()?),
+            UnitFamily::Count => Quantity::count(q.as_count()?),
         };
         out.insert(name, canonical);
     }
     Ok(out)
+}
+
+/// Resolve every parameter to a canonical-unit `f64` (mm for
+/// `Length`, rad for `Angle`, raw for `Count`).
+///
+/// Returns `ExprError::Cycle(name)` if the dependency graph contains
+/// a cycle through `name`. Other parse / eval errors propagate as
+/// the corresponding [`ExprError`] variant.
+pub fn resolve(table: &ParameterTable) -> Result<HashMap<String, f64>, ExprError> {
+    Ok(resolve_quantities(table)?
+        .into_iter()
+        .map(|(name, q)| (name, q.value))
+        .collect())
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

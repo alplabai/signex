@@ -75,6 +75,8 @@ fn row(n: usize, lib: Uuid) -> ComponentRow {
         updated: Utc::now(),
         content_hash: [0u8; 32],
         server_revision: None,
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
     }
 }
 
@@ -248,7 +250,9 @@ fn adapter_one_row_edit_cost_by_library_size() {
             .step_by(10)
             .map(|r| price(r.row_id))
             .collect();
-        adapter.store_pricing(prices, "prices").unwrap();
+        adapter
+            .store_pricing(prices, &std::sync::atomic::AtomicBool::new(false), "prices")
+            .unwrap();
         let bytes = fs::metadata(&file).unwrap().len();
         // The read + hash every edit starts with, to spot an external change.
         let mut read_hash = Duration::MAX;

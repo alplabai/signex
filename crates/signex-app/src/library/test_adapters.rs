@@ -125,6 +125,51 @@ impl LibraryAdapter for CountingAdapter {
     }
 }
 
+/// An adapter whose symbol listing is whatever the test last put behind
+/// the handle — lets a test tell two reads of the same library apart.
+pub(crate) struct ScriptedSymbolsAdapter {
+    manifest: Manifest,
+    symbols: std::sync::Arc<std::sync::Mutex<Vec<PrimitiveSummary>>>,
+}
+
+impl ScriptedSymbolsAdapter {
+    pub(crate) fn new(
+        library_id: Uuid,
+    ) -> (
+        Self,
+        std::sync::Arc<std::sync::Mutex<Vec<PrimitiveSummary>>>,
+    ) {
+        let symbols = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let adapter = Self {
+            manifest: FailingListingAdapter::new(library_id).manifest,
+            symbols: symbols.clone(),
+        };
+        (adapter, symbols)
+    }
+}
+
+impl LibraryAdapter for ScriptedSymbolsAdapter {
+    fn manifest(&self) -> &Manifest {
+        &self.manifest
+    }
+
+    fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
+        Ok(Vec::new())
+    }
+
+    fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        Ok(self.symbols.lock().expect("symbols lock").clone())
+    }
+
+    fn list_footprints(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        Ok(Vec::new())
+    }
+
+    fn list_sims(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        Ok(Vec::new())
+    }
+}
+
 /// A `PrimitiveSummary` standing in for an entry already on disk and
 /// already cached — the thing a failed listing used to erase.
 pub(crate) fn cached_summary(name: &str) -> PrimitiveSummary {

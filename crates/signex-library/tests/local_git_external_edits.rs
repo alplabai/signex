@@ -51,6 +51,8 @@ fn row(internal_pn: &str, library_id: Uuid) -> ComponentRow {
         internal_pn: InternalPn::new(internal_pn),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(library_id, Uuid::now_v7()),
         footprint_ref: None,
@@ -492,7 +494,14 @@ fn an_external_edit_that_stales_a_price_is_pruned_by_the_next_edit() {
         },
     };
     assert_eq!(
-        mounted.store_pricing(vec![update], "price").unwrap().stored,
+        mounted
+            .store_pricing(
+                vec![update],
+                &std::sync::atomic::AtomicBool::new(false),
+                "price",
+            )
+            .unwrap()
+            .stored,
         1
     );
 

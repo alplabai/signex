@@ -65,6 +65,7 @@ fn library(tables: Vec<(&str, LibraryTable)>) -> LibraryFile {
             .into_iter()
             .map(|(n, t)| (n.to_string(), t))
             .collect(),
+        layout: SourceLayout::default(),
     }
 }
 

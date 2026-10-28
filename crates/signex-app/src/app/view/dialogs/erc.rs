@@ -10,8 +10,8 @@ use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::widgets::{
-    close_x_button, draggable_header, os_title_bar_slot, primary_button, secondary_button,
-    secondary_button_maybe, wrap_modal,
+    close_x_button, draggable_header, fit_modal_size, os_title_bar_slot, primary_button,
+    secondary_button, secondary_button_maybe, wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
@@ -24,7 +24,18 @@ impl Signex {
             .get(&super::super::super::state::ModalId::ErcDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (1000.0, 600.0))
+        wrap_modal(
+            dialog,
+            offset,
+            self.ui_state.window_size,
+            self.erc_modal_size(),
+        )
+    }
+
+    /// The in-window ERC modal: 1000 x 600 where the window allows, capped
+    /// to the window otherwise (#1227).
+    pub(in crate::app::view) fn erc_modal_size(&self) -> (f32, f32) {
+        fit_modal_size(self.ui_state.window_size, (1000.0, 600.0))
     }
 
     pub(in crate::app::view) fn view_erc_dialog_body(&self) -> Element<'_, Message> {
@@ -147,6 +158,24 @@ impl Signex {
             ));
         }
         if stored.is_some() {
+            // The name is fixed to "<project> rules" until the dialog has a
+            // text field for it; a taken name gets the next free number.
+            footer = footer.push(secondary_button(
+                "Save as profile",
+                Message::Erc(ErcMsg::ProfileSaveRequested {
+                    name: self.default_profile_name(),
+                }),
+                text_c,
+                border_c,
+            ));
+            if self.active_project_has_profile() {
+                footer = footer.push(secondary_button(
+                    "Update from profile",
+                    Message::Erc(ErcMsg::ProfileUpdateRequested),
+                    text_c,
+                    border_c,
+                ));
+            }
             footer = footer
                 .push(secondary_button_maybe(
                     "Undo",
@@ -223,21 +252,85 @@ impl Signex {
         let body =
             row![rules_pane, Space::new().width(16), matrix_pane,].align_y(iced::Alignment::Start);
 
+        // In-window: sized to the window-capped modal. Detached: the OS
+        // window owns the size, so fill it. The body scrolls; the footer
+        // holds the buttons and stays outside the scrollable (#1227).
+        let (modal_w, modal_h): (Length, Length) = if draggable {
+            let (w, h) = self.erc_modal_size();
+            (Length::Fixed(w), Length::Fixed(h))
+        } else {
+            (Length::Fill, Length::Fill)
+        };
         let dialog = container(
             column![
                 header,
-                container(body)
-                    .padding([14, 14])
-                    .width(Length::Fill)
-                    .height(Length::Fill),
+                container(iced::widget::scrollable(
+                    container(body).padding([14, 14]).width(Length::Fill)
+                ))
+                .width(Length::Fill)
+                .height(Length::Fill),
+                self.view_profile_update_panel(text_c, text_muted, border_c),
                 container(footer).padding([10, 14]),
             ]
-            .width(1000)
-            .height(600),
+            .width(modal_w)
+            .height(modal_h),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
         dialog.into()
+    }
+}
+
+impl Signex {
+    /// The diff an "Update from profile" would apply, with Apply / Cancel.
+    /// Empty space when no update is pending.
+    fn view_profile_update_panel(
+        &self,
+        text_c: Color,
+        text_muted: Color,
+        border_c: Color,
+    ) -> Element<'_, Message> {
+        let Some((name, lines)) = self.pending_profile_update_lines() else {
+            return Space::new().height(0).into();
+        };
+        let heading = if lines.is_empty() {
+            format!(
+                "Profile \"{name}\": rules already match; only the recorded hash is out of date."
+            )
+        } else {
+            format!(
+                "Update from profile \"{name}\" changes {} entries:",
+                lines.len()
+            )
+        };
+        let mut list = column![text(heading).size(11).color(text_c)].spacing(2);
+        for line in lines {
+            list = list.push(text(line).size(10).color(text_muted));
+        }
+        let buttons = row![
+            primary_button(
+                "Apply update",
+                Some(Message::Erc(ErcMsg::ProfileUpdateConfirmed)),
+                border_c,
+            ),
+            secondary_button(
+                "Cancel",
+                Message::Erc(ErcMsg::ProfileUpdateCancelled),
+                text_c,
+                border_c,
+            ),
+        ]
+        .spacing(8);
+        container(
+            column![
+                container(iced::widget::scrollable(list)).max_height(120),
+                buttons
+            ]
+            .spacing(6),
+        )
+        .padding([8, 14])
+        .width(Length::Fill)
+        .into()
     }
 }
 

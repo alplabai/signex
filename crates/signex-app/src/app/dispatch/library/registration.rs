@@ -145,7 +145,7 @@ impl Signex {
                     project_path: project_path.clone(),
                     lib_path,
                 }),
-                None => Message::Noop,
+                None => Message::noop(),
             },
         )
     }
@@ -241,27 +241,28 @@ impl Signex {
     }
 
     pub(super) fn handle_picker_message(&mut self, msg: PickerMsg) -> Task<Message> {
+        if let PickerMsg::PanelSearchChanged(s) = msg {
+            self.library.panel_search = s;
+            return Task::none();
+        }
         let Some(picker) = self.library.picker.as_mut() else {
             return Task::none();
         };
         match msg {
+            PickerMsg::PanelSearchChanged(_) => {}
             PickerMsg::FilterChanged(s) => {
                 picker.filter = s;
+                self.library.sync_view_caches();
             }
-            PickerMsg::SelectComponent(summary) => {
+            PickerMsg::SelectComponent(row_id) => {
                 // `ComponentSummary` carries `row_id` directly in the
                 // DBLib model; match against that.
-                let path = self
-                    .library
-                    .open_libraries
-                    .iter()
-                    .find(|lib| {
-                        lib.cached_components
-                            .iter()
-                            .any(|c| c.row_id == summary.row_id)
-                    })
-                    .map(|lib| lib.root.clone());
-                picker.selected = path.map(|p| (p, summary));
+                picker.selected = self.library.open_libraries.iter().find_map(|lib| {
+                    lib.cached_components
+                        .iter()
+                        .find(|c| c.row_id == row_id)
+                        .map(|summary| (lib.root.clone(), summary.clone()))
+                });
             }
             PickerMsg::PlaceSelected => {
                 let Some((path, summary)) = picker.selected.clone() else {

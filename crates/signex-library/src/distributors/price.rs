@@ -36,13 +36,18 @@ pub(crate) fn parse_price(text: &str, currency: &str) -> Result<f64, String> {
         (_, 0) => {
             let integer_part = kept.split('.').next().unwrap_or("");
             let thousands =
-                comma_locale && (dots > 1 || (after_last('.') == 3 && integer_part != "0"));
+                dots > 1 || (comma_locale && after_last('.') == 3 && integer_part != "0");
             (!thousands).then_some('.')
         }
         (0, _) => {
-            let thousands = !comma_locale && commas == 1 && after_last(',') == 3;
-            let decimal = !thousands && commas == 1;
-            decimal.then_some(',')
+            // One comma is a decimal mark unless it is a thousands mark: a
+            // nonzero integer part and exactly three digits after it, in a
+            // currency that does not write decimals with a comma. `0,125`
+            // is 0.125 in every currency; `1,25` is 1.25.
+            let integer_part = kept.split(',').next().unwrap_or("");
+            let thousands =
+                commas > 1 || (!comma_locale && integer_part != "0" && after_last(',') == 3);
+            (!thousands).then_some(',')
         }
         _ => Some(if kept.rfind('.') > kept.rfind(',') {
             '.'
@@ -117,6 +122,11 @@ pub(crate) fn pricing_or_error(part: DistributorPart) -> Result<PricingSnapshot,
     }
 }
 
+/// The error of a provider whose responses carry no prices at all.
+pub(crate) fn pricing_unavailable(provider: &str) -> DistributorError {
+    DistributorError::Backend(format!("pricing not available from {provider}"))
+}
+
 /// Whether `hit` is the row's part for an MPN-only lookup: the MPN equals
 /// exactly (ignoring case) and the manufacturer is the row's. A row without a
 /// manufacturer accepts an MPN-exact hit only when it is the sole one, since
@@ -151,9 +161,74 @@ pub(crate) fn pick_exact_mpn_hit<'a>(
     matching.next().is_none().then_some(first)
 }
 
+/// The hit a product-URL `token` names, out of a keyword search's hits.
+///
+/// A keyword search is fuzzy and returns neighbours, so the last (or first)
+/// hit is not "the" part. A hit is the URL's part when its MPN or one of the
+/// `id_keys` entries of its `extra` map equals `token` (ignoring case). With
+/// no such hit, a lone result is still accepted (the URL's opaque token, e.g.
+/// Mouser's `qs=`, cannot be matched, but there is nothing to confuse it
+/// with); several unmatched hits are ambiguous and give `None`.
+pub(crate) fn pick_url_hit(
+    mut hits: Vec<DistributorPart>,
+    token: &str,
+    id_keys: &[&str],
+) -> Option<DistributorPart> {
+    let token = token.trim();
+    let named = hits.iter().position(|h| {
+        h.mpn.trim().eq_ignore_ascii_case(token)
+            || id_keys.iter().any(|k| {
+                h.extra
+                    .get(*k)
+                    .is_some_and(|v| v.trim().eq_ignore_ascii_case(token))
+            })
+    });
+    match named {
+        Some(i) => Some(hits.swap_remove(i)),
+        None if hits.len() == 1 => hits.pop(),
+        None => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn hit(mpn: &str, extra: &[(&str, &str)]) -> DistributorPart {
+        DistributorPart {
+            mpn: mpn.into(),
+            manufacturer: "M".into(),
+            description: String::new(),
+            datasheet_url: None,
+            footprint_hint: None,
+            parameters: Default::default(),
+            pricing: None,
+            stock: None,
+            source: crate::distributor::DistributorSource::Other,
+            captured_at: chrono::Utc::now(),
+            extra: extra
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn url_hit_is_the_one_named_not_the_last() {
+        let hits = vec![
+            hit("A", &[("code", "C1")]),
+            hit("B", &[("code", "C2")]),
+            hit("C", &[("code", "C3")]),
+        ];
+        let got = pick_url_hit(hits.clone(), "c2", &["code"]).unwrap();
+        assert_eq!(got.mpn, "B");
+        assert_eq!(pick_url_hit(hits.clone(), "B", &["code"]).unwrap().mpn, "B");
+        // Several hits, none named: ambiguous, never "the last one".
+        assert!(pick_url_hit(hits, "C9", &["code"]).is_none());
+        // A lone hit is accepted even when the token is opaque.
+        let one = vec![hit("A", &[])];
+        assert_eq!(pick_url_hit(one, "opaque", &["code"]).unwrap().mpn, "A");
+    }
 
     #[test]
     fn reads_common_price_shapes() {
@@ -168,6 +243,13 @@ mod tests {
             ("0.125", "EUR", 0.125),
             ("0,125", "EUR", 0.125),
             ("12", "USD", 12.0),
+            ("0,125", "USD", 0.125),
+            ("0,125", "GBP", 0.125),
+            ("1,250", "USD", 1250.0),
+            ("1,25", "USD", 1.25),
+            ("1,25", "JPY", 1.25),
+            ("1,234,567", "USD", 1_234_567.0),
+            ("0.125", "USD", 0.125),
         ] {
             assert_eq!(parse_price(text, cur), Ok(want), "{text} {cur}");
         }

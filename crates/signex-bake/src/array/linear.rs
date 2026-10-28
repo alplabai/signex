@@ -15,7 +15,8 @@ use signex_sketch::solver::FullSolveOutput;
 
 use crate::pad::bake_one_pad;
 
-use super::numbering::{derive_pad_number, strip_eq_prefix};
+use super::numbering::derive_pad_number;
+use crate::eval_util::strip_eq_prefix;
 
 /// One LinearArray expansion. Steps `0..count`, evaluating `dx_expr`
 /// / `dy_expr` once per step (each in its own `EvalContext` with the
@@ -99,10 +100,8 @@ pub(super) fn bake_linear(
         };
 
         // dx / dy are length expressions in mm.
-        let dx_q = eval(&dx_ast, &step_ctx).map_err(SketchError::Expr)?;
-        let dy_q = eval(&dy_ast, &step_ctx).map_err(SketchError::Expr)?;
-        let dx_mm = dx_q.as_mm().map_err(SketchError::Unit)?;
-        let dy_mm = dy_q.as_mm().map_err(SketchError::Unit)?;
+        let dx_mm = crate::params::eval_length_mm(&dx_ast, &step_ctx)?;
+        let dy_mm = crate::params::eval_length_mm(&dy_ast, &step_ctx)?;
 
         let extra_dx = i as f64 * dx_mm;
         let extra_dy = i as f64 * dy_mm;

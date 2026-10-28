@@ -93,8 +93,8 @@ impl LibraryAdapter for LocalGitAdapter {
                         "table {new_owned:?} already exists"
                     )));
                 }
-                let entry = lf.tables.remove(&old_owned).expect("contains_key checked");
-                lf.tables.insert(new_owned, entry);
+                // Through the file, so the table keeps its unknown keys (#1435).
+                lf.rename_table(&old_owned, &new_owned);
                 Ok(())
             },
             msg,
@@ -217,12 +217,8 @@ impl LibraryAdapter for LocalGitAdapter {
                         new_entry.key
                     )));
                 }
-                for c in lf.manifest.classes.iter_mut() {
-                    if c.key == owned_old {
-                        *c = new_entry.clone();
-                        break;
-                    }
-                }
+                // Through the file, so the class keeps its unknown keys (#1435).
+                lf.rename_class(&owned_old, new_entry.clone());
                 Ok(())
             },
             msg,
@@ -329,6 +325,7 @@ impl LibraryAdapter for LocalGitAdapter {
                 entry.rows.push(Arc::new(lib_row));
                 Ok(RowChange::Wrote(entry.rows.len() - 1))
             },
+            &[],
             msg,
             &fallback,
         )
@@ -340,6 +337,17 @@ impl LibraryAdapter for LocalGitAdapter {
         row: ComponentRow,
         msg: &str,
     ) -> Result<Option<u64>, LibraryError> {
+        self.update_row_with_assets(table, row, msg, &[])
+    }
+
+    fn update_row_with_assets(
+        &self,
+        table: &str,
+        row: ComponentRow,
+        msg: &str,
+        asset_rel_paths: &[String],
+    ) -> Result<Option<u64>, LibraryError> {
+        self.check_datasheet_assets(asset_rel_paths)?;
         let table_owned = table.to_string();
         let row_id = row.row_id;
         let base = row.server_revision;
@@ -371,6 +379,7 @@ impl LibraryAdapter for LocalGitAdapter {
                 entry.rows[index] = Arc::new(lib_row);
                 Ok(RowChange::Wrote(index))
             },
+            asset_rel_paths,
             msg,
             &fallback,
         )?;
@@ -411,6 +420,7 @@ impl LibraryAdapter for LocalGitAdapter {
                 entry.pricing.remove(&target);
                 Ok(RowChange::Removed(target))
             },
+            &[],
             msg,
             &fallback,
         )
@@ -438,6 +448,7 @@ impl LibraryAdapter for LocalGitAdapter {
     fn store_pricing(
         &self,
         updates: Vec<crate::pricing::PricingUpdate>,
+        cancel: &std::sync::atomic::AtomicBool,
         msg: &str,
     ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
         let mut outcome = crate::pricing::StoreOutcome::default();
@@ -447,6 +458,10 @@ impl LibraryAdapter for LocalGitAdapter {
         // attach a price to a SKU the row no longer has.
         self.mutate_library_file_if_changed(
             |lf| {
+                // Last chance to stop: the lock is held, the write is next.
+                if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Ok(false);
+                }
                 for update in updates {
                     match apply_pricing_update(lf, &update) {
                         Ok(()) => outcome.stored += 1,
@@ -585,6 +600,7 @@ impl LibraryAdapter for LocalGitAdapter {
                 changed = true;
                 Ok(RowChange::Wrote(index))
             },
+            &[],
             message,
             &fallback,
         )?;
