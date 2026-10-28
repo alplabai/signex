@@ -440,8 +440,12 @@ impl Signex {
     /// attention": the system menu bar greys its model rows and refuses them
     /// while it holds. Read from the same snapshot the Esc ladder uses, so
     /// both see the same open dialogs (docs/MENU_BAR.md, "Native macOS menu").
+    ///
+    /// The annotate-reset confirm is the one locking dialog the snapshot
+    /// hides while detached; naming it as the Esc source keeps it counted.
     pub(crate) fn has_locking_confirm_modal(&self) -> bool {
-        self.open_overlays(None).has_locking_confirm()
+        self.open_overlays(Some(crate::app::state::ModalId::AnnotateResetConfirm))
+            .has_locking_confirm()
     }
 
     /// Snapshot the open overlays for Esc resolution, from live state.

@@ -26,6 +26,10 @@ pub(crate) use state::{MenuInputs, NativeMenuState};
 /// Title of the app menu. AppKit shows the process name regardless.
 const APP_MENU_TITLE: &str = "Signex";
 
+const ABOUT_LABEL: &str = "About Signex";
+const PREFERENCES_LABEL: &str = "Preferences...";
+const QUIT_LABEL: &str = "Quit Signex";
+
 /// A key equivalent. Only the app menu has any (docs/MENU_BAR.md).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Accelerator {
@@ -114,7 +118,7 @@ impl Builder {
         let nodes = vec![
             self.item(
                 APP_MENU_TITLE,
-                "About Signex",
+                ABOUT_LABEL,
                 Some(MenuMessage::OpenAbout),
                 true,
                 None,
@@ -122,7 +126,7 @@ impl Builder {
             NativeNode::Separator,
             self.item(
                 APP_MENU_TITLE,
-                "Preferences...",
+                PREFERENCES_LABEL,
                 Some(MenuMessage::OpenPreferences),
                 true,
                 Some(Accelerator::CommandComma),
@@ -135,7 +139,7 @@ impl Builder {
             // Routed to the unsaved-changes guard, not the stock `terminate:`.
             self.item(
                 APP_MENU_TITLE,
-                "Quit Signex",
+                QUIT_LABEL,
                 Some(MenuMessage::Exit),
                 true,
                 Some(Accelerator::CommandQ),
@@ -231,8 +235,10 @@ fn join(path: &str, segment: &str) -> String {
     }
 }
 
-/// Whether `id` is a row of the app menu, which a locked bar keeps live.
+/// Whether `id` is one of the three app-menu rows, which a locked bar keeps
+/// live. Built from the labels `app_menu` uses.
 pub(crate) fn is_app_menu_id(id: &str) -> bool {
-    id.strip_prefix(APP_MENU_TITLE)
-        .is_some_and(|rest| rest.starts_with('/'))
+    [ABOUT_LABEL, PREFERENCES_LABEL, QUIT_LABEL]
+        .iter()
+        .any(|label| id == join(APP_MENU_TITLE, label))
 }

@@ -157,18 +157,26 @@ fn set_sink(sender: Option<UnboundedSender<String>>) {
     *SINK.lock().unwrap_or_else(PoisonError::into_inner) = sender;
 }
 
+/// Empty the slot, unless a newer stream has already refilled it.
+fn clear_sink(ours: &UnboundedSender<String>) {
+    let mut sink = SINK.lock().unwrap_or_else(PoisonError::into_inner);
+    if sink.as_ref().is_some_and(|tx| tx.same_receiver(ours)) {
+        *sink = None;
+    }
+}
+
 /// Stream of activated native item ids, from muda's global event channel.
 /// The handler runs on the main thread and only forwards; `update` decides.
 pub(crate) fn activations() -> impl iced::futures::Stream<Item = String> {
     iced::stream::channel(16, async |mut output| {
         use iced::futures::{SinkExt, StreamExt, channel::mpsc};
         let (tx, mut rx) = mpsc::unbounded::<String>();
-        set_sink(Some(tx));
+        set_sink(Some(tx.clone()));
         while let Some(id) = rx.next().await {
             if output.send(id).await.is_err() {
                 break;
             }
         }
-        set_sink(None);
+        clear_sink(&tx);
     })
 }

@@ -158,6 +158,18 @@ mod tests {
     }
 
     #[test]
+    fn a_detached_annotate_reset_confirm_still_locks_the_bar() {
+        use crate::app::state::{ModalId, WindowKind};
+        let (mut app, _task) = Signex::new();
+        app.ui_state.annotate_reset_confirm = true;
+        app.ui_state.windows.insert(
+            iced::window::Id::unique(),
+            WindowKind::DetachedModal(ModalId::AnnotateResetConfirm),
+        );
+        assert!(app.has_locking_confirm_modal());
+    }
+
+    #[test]
     fn undo_goes_to_the_focused_non_main_window() {
         let (mut app, _task) = Signex::new();
         let main = iced::window::Id::unique();
