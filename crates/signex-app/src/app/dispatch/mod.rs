@@ -391,6 +391,10 @@ impl Signex {
             WindowMsg::ControlsLayoutDetected(layout) => {
                 self.handle_controls_layout_detected(layout)
             }
+            WindowMsg::MainWindowMonitorSizeRead(size) => {
+                self.ui_state.main_window_monitor_size = size;
+                Task::none()
+            }
             WindowMsg::MainWindowModeChanged(mode) => {
                 self.ui_state.main_window_mode = mode;
                 Task::none()

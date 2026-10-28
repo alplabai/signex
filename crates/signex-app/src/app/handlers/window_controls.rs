@@ -60,7 +60,12 @@ impl Signex {
     /// answer is always the current mode.
     pub(crate) fn main_window_mode_task(&self, id: iced::window::Id) -> Task<Message> {
         let query = move || {
-            iced::window::mode(id).map(|m| Message::Window(WindowMsg::MainWindowModeChanged(m)))
+            Task::batch([
+                iced::window::mode(id)
+                    .map(|m| Message::Window(WindowMsg::MainWindowModeChanged(m))),
+                iced::window::monitor_size(id)
+                    .map(|s| Message::Window(WindowMsg::MainWindowMonitorSizeRead(s))),
+            ])
         };
         if self.ui_state.main_window_mode != iced::window::Mode::Fullscreen {
             return query();

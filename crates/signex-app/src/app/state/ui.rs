@@ -143,6 +143,8 @@ pub struct UiState {
     pub desktop_button_layout: Option<crate::chrome::desktop::DesktopButtonLayout>,
     /// Last known mode of the main window (fullscreen hides the macOS inset).
     pub main_window_mode: iced::window::Mode,
+    /// Logical size of the monitor holding the main window, when known.
+    pub main_window_monitor_size: Option<iced::Size>,
     /// Opt-in autosave of recovery copies (#104). Off by default.
     pub autosave_enabled: bool,
     /// Draft mirror of [`Self::autosave_enabled`] for the Preferences dialog.
@@ -465,6 +467,16 @@ pub struct UiState {
 }
 
 impl UiState {
+    /// The one answer to "is the main window fullscreen" the strip and the
+    /// search-bar geometry share.
+    pub fn main_window_is_fullscreen(&self) -> bool {
+        crate::chrome::controls::is_effectively_fullscreen(
+            self.main_window_mode,
+            self.window_size,
+            self.main_window_monitor_size,
+        )
+    }
+
     /// Per-wheel-notch zoom factor every canvas uses. Reads the DRAFT, like
     /// `grid_style`: it carries the live preview while Preferences is open
     /// and equals the saved value otherwise (Discard re-seeds the draft).

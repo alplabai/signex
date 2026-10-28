@@ -197,6 +197,31 @@ pub fn needs_restart(
     platform == ChromePlatform::MacOs && style(shown) != style(draft)
 }
 
+/// How far (logical px) a window may differ from its monitor and still count
+/// as filling it.
+const FULLSCREEN_SIZE_TOLERANCE: f32 = 1.5;
+
+/// Whether the main window is really fullscreen. winit keeps reporting
+/// `Fullscreen` until the exit animation ends, but the resize events of that
+/// animation already carry the shrinking size, so a window clearly smaller
+/// than its monitor is not fullscreen. With no monitor size the mode decides.
+pub fn is_effectively_fullscreen(
+    mode: iced::window::Mode,
+    window_size: (f32, f32),
+    monitor_size: Option<iced::Size>,
+) -> bool {
+    if mode != iced::window::Mode::Fullscreen {
+        return false;
+    }
+    match monitor_size {
+        None => true,
+        Some(monitor) => {
+            (window_size.0 - monitor.width).abs() <= FULLSCREEN_SIZE_TOLERANCE
+                && (window_size.1 - monitor.height).abs() <= FULLSCREEN_SIZE_TOLERANCE
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -303,6 +328,32 @@ mod tests {
                 &[]
             )
         );
+    }
+
+    #[test]
+    fn fullscreen_needs_the_flag_and_a_monitor_sized_window() {
+        use iced::window::Mode::{Fullscreen, Windowed};
+        let monitor = Some(iced::Size::new(1728.0, 1117.0));
+        assert!(is_effectively_fullscreen(
+            Fullscreen,
+            (1728.0, 1117.0),
+            monitor
+        ));
+        // winit's flag is stale mid-exit: the window is already smaller.
+        assert!(!is_effectively_fullscreen(
+            Fullscreen,
+            (1400.0, 900.0),
+            monitor
+        ));
+        // Windowed at the monitor's size (e.g. maximized) is not fullscreen.
+        assert!(!is_effectively_fullscreen(
+            Windowed,
+            (1728.0, 1117.0),
+            monitor
+        ));
+        // No monitor size: the mode decides.
+        assert!(is_effectively_fullscreen(Fullscreen, (1400.0, 900.0), None));
+        assert!(!is_effectively_fullscreen(Windowed, (1400.0, 900.0), None));
     }
 
     #[test]

@@ -87,6 +87,9 @@ pub enum WindowMsg {
     /// The main window's mode (windowed / fullscreen) was read after a
     /// resize; fullscreen hides the macOS traffic-light inset.
     MainWindowModeChanged(iced::window::Mode),
+    /// The monitor size was read after a resize; together with the mode it
+    /// tells a real fullscreen window from winit's stale flag mid-exit.
+    MainWindowMonitorSizeRead(Option<iced::Size>),
 }
 
 /// Command-palette message family (ADR-0001 D3). Namespaced under

@@ -49,7 +49,7 @@ impl Signex {
         };
         let btn_h = crate::menu_bar::MENU_BAR_HEIGHT;
         let layout = self.window_controls_layout();
-        let fullscreen = self.ui_state.main_window_mode == iced::window::Mode::Fullscreen;
+        let fullscreen = self.ui_state.main_window_is_fullscreen();
         let leading_controls = buttons::leading(&layout, palette, fullscreen);
         let trailing_controls = buttons::trailing(&layout, palette);
 
@@ -189,7 +189,7 @@ impl Signex {
     /// `(x, width)` of the search bar for the current window width and
     /// control layout; the palette dropdown anchors to the same `x`.
     pub(in crate::app::view) fn chrome_search_bar_geometry(&self) -> (f32, f32) {
-        let fullscreen = self.ui_state.main_window_mode == iced::window::Mode::Fullscreen;
+        let fullscreen = self.ui_state.main_window_is_fullscreen();
         let (leading_w, trailing_w) = buttons::extents(&self.window_controls_layout(), fullscreen);
         crate::app::view::chrome_search_bar_geometry(
             self.ui_state.window_size.0,
