@@ -209,3 +209,42 @@ fn legacy_duplicate_part_numbers_stay_editable_but_cannot_be_copied() {
         Err(LibraryError::Conflict(_))
     ));
 }
+
+#[test]
+fn part_numbers_differing_only_in_whitespace_are_duplicates() {
+    let (mut rng, w, _dir, adapter) = world_and_adapter(9);
+    let mut rows = Vec::new();
+    for pn in ["PN-A", "PN-B"] {
+        let id = rng.uuid();
+        let mut r = random_row(&mut rng, &w, id);
+        r.internal_pn = InternalPn::new(pn);
+        adapter.insert_row("t", r.clone(), "seed").unwrap();
+        rows.push(r);
+    }
+    // Insert a padded copy of an existing PN.
+    let mut padded = {
+        let id = rng.uuid();
+        random_row(&mut rng, &w, id)
+    };
+    padded.internal_pn = InternalPn::new("PN-A ");
+    assert!(matches!(
+        adapter.insert_row("t", padded, "pad"),
+        Err(LibraryError::Conflict(_))
+    ));
+    // Move another row onto a padded copy.
+    let mut clash = adapter
+        .read_row("t", RowId::from_uuid(rows[1].row_id))
+        .unwrap();
+    clash.internal_pn = InternalPn::new(" PN-A\t");
+    assert!(matches!(
+        adapter.update_row("t", clash, "clash"),
+        Err(LibraryError::Conflict(_))
+    ));
+    // Case stays significant.
+    let mut lower = {
+        let id = rng.uuid();
+        random_row(&mut rng, &w, id)
+    };
+    lower.internal_pn = InternalPn::new("pn-a");
+    adapter.insert_row("t", lower, "case").unwrap();
+}

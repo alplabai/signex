@@ -1,3 +1,5 @@
+use signex_types::quantity::{Quantity, Unit, ValueStyle, format_quantity_sig};
+
 use super::domain::{ComponentKind, PreferredComponent, SiPrefix, Tolerance};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -240,16 +242,22 @@ pub fn parallel_value(left: f64, right: f64) -> f64 {
     smaller / (1.0 + smaller / larger)
 }
 
+/// Significant digits a calculator result shows.
+const RESULT_SIG_DIGITS: usize = 4;
+
 pub fn format_value(value: f64, kind: ComponentKind) -> String {
     if value == f64::INFINITY {
         return format!("∞ {}", SiPrefix::None.unit(kind));
     }
-    let prefix = best_prefix(value);
-    format!(
-        "{} {}",
-        format_number(value / prefix.multiplier()),
-        prefix.unit(kind)
-    )
+    let unit = match kind {
+        ComponentKind::Resistor => Unit::Ohm,
+        ComponentKind::Capacitor => Unit::Farad,
+        ComponentKind::Inductor => Unit::Henry,
+    };
+    match Quantity::new(value, unit) {
+        Some(q) => format_quantity_sig(&q, ValueStyle::Engineering, false, RESULT_SIG_DIGITS),
+        None => value.to_string(),
+    }
 }
 
 pub fn format_number(value: f64) -> String {
@@ -269,24 +277,6 @@ pub fn format_number(value: f64) -> String {
         .trim_end_matches('0')
         .trim_end_matches('.')
         .to_string()
-}
-
-fn best_prefix(value: f64) -> SiPrefix {
-    let exponent = if value == 0.0 {
-        0
-    } else {
-        value.abs().log10().floor() as i8
-    };
-    match exponent {
-        ..=-10 => SiPrefix::Pico,
-        -9..=-7 => SiPrefix::Nano,
-        -6..=-4 => SiPrefix::Micro,
-        -3..=-1 => SiPrefix::Milli,
-        0..=2 => SiPrefix::None,
-        3..=5 => SiPrefix::Kilo,
-        6..=8 => SiPrefix::Mega,
-        _ => SiPrefix::Giga,
-    }
 }
 
 fn to_subscript(value: usize) -> String {
@@ -314,4 +304,21 @@ enum Bound {
     Nominal,
     Minimum,
     Maximum,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A calculator result shows four significant digits, not the 15 the
+    /// core would print for 10 k || 4.7 k.
+    #[test]
+    fn results_keep_four_significant_digits() {
+        let parallel = 10_000.0 * 4_700.0 / 14_700.0;
+        assert_eq!(format_value(parallel, ComponentKind::Resistor), "3.197 kΩ");
+        assert_eq!(format_value(4700.0, ComponentKind::Resistor), "4.7 kΩ");
+        assert_eq!(format_value(100e-9, ComponentKind::Capacitor), "100 nF");
+        assert_eq!(format_value(10e-6, ComponentKind::Inductor), "10 µH");
+        assert_eq!(format_value(f64::INFINITY, ComponentKind::Resistor), "∞ Ω");
+    }
 }
