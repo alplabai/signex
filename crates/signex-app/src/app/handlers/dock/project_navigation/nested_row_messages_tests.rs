@@ -9,6 +9,8 @@ use crate::app::{ProjectTreeAction, RemoveChoice, RemoveDialogState};
 
 #[test]
 fn a_refused_exclude_reaches_the_messages_panel() {
+    // A fresh process (nextest) has no logger until the test installs one.
+    let _ = crate::diagnostics::init_logging();
     let dir = "/w/nested-messages";
     let mut app = app_workspace(dir, &["top.snxsch"]);
     open_with(
