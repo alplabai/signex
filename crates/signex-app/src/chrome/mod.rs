@@ -15,6 +15,9 @@
 //!   rounded-container fallback can be layered on later without touching
 //!   the Windows path.
 
+pub mod controls;
+pub mod desktop;
+
 use iced::Task;
 use iced::window::{Direction, Id};
 

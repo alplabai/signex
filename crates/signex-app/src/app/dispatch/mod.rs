@@ -121,8 +121,11 @@ impl Signex {
                     // re-querying the scale factor here keeps the
                     // wordmark-PNG tier picker in sync after a
                     // cross-monitor drag.
-                    return iced::window::scale_factor(id)
+                    let scale_task = iced::window::scale_factor(id)
                         .map(|s| Message::Window(WindowMsg::MainWindowScaleChanged(s)));
+                    let mode_task = iced::window::mode(id)
+                        .map(|m| Message::Window(WindowMsg::MainWindowModeChanged(m)));
+                    return Task::batch([scale_task, mode_task]);
                 }
                 Task::none()
             }
@@ -387,6 +390,13 @@ impl Signex {
                 None => Task::none(),
             },
             WindowMsg::CloseMainWindow => self.handle_app_quit_requested(),
+            WindowMsg::ControlsLayoutDetected(layout) => {
+                self.handle_controls_layout_detected(layout)
+            }
+            WindowMsg::MainWindowModeChanged(mode) => {
+                self.ui_state.main_window_mode = mode;
+                Task::none()
+            }
             WindowMsg::WindowCloseRequested(id) => {
                 // OS close request (Alt+F4 / native close). Daemon mode
                 // does not auto-close, so route the main window through

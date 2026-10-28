@@ -92,6 +92,9 @@ mod preferences_prefs_recovery;
 #[path = "regression/preferences_symbol_drafts.rs"]
 mod preferences_symbol_drafts;
 
+#[path = "regression/preferences_window_controls.rs"]
+mod preferences_window_controls;
+
 #[path = "regression/undo_marker_divergence.rs"]
 mod undo_marker_divergence;
 

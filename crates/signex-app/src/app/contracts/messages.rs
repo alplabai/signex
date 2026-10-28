@@ -81,6 +81,12 @@ pub enum WindowMsg {
     MinimizeMainWindow,
     ToggleMaximizeMainWindow,
     CloseMainWindow,
+    /// The Linux startup probe finished: the buttons the desktop lists, or
+    /// `None` when it could not be read.
+    ControlsLayoutDetected(Option<crate::chrome::desktop::DesktopButtonLayout>),
+    /// The main window's mode (windowed / fullscreen) was read after a
+    /// resize; fullscreen hides the macOS traffic-light inset.
+    MainWindowModeChanged(iced::window::Mode),
 }
 
 /// Command-palette message family (ADR-0001 D3). Namespaced under

@@ -1,6 +1,7 @@
 //! Misc UI preference IO (first-run tour, component filter, browser searches). Split from `fonts.rs`.
 
 use super::*;
+use crate::chrome::controls::WindowControlsPlacement;
 
 // ──────────────────────────────────────────────────────────────────────────
 // First-run tour (UX_IMPROVEMENTS_OVER_ALTIUM §4.3)
@@ -214,6 +215,40 @@ pub fn write_move_keeps_wires_pref(enabled: bool) {
 pub fn write_move_keeps_wires_pref_at(path: &Path, enabled: bool) {
     update_prefs_json(path, "move_keeps_wires", |prefs| {
         prefs.insert("move_keeps_wires".to_string(), serde_json::json!(enabled));
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Window controls placement
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read where the main window's min/max/close buttons go. Anything missing
+/// or unrecognised is `Auto`.
+pub fn read_window_controls_placement_pref() -> WindowControlsPlacement {
+    read_window_controls_placement_pref_at(&prefs_path())
+}
+
+pub fn read_window_controls_placement_pref_at(path: &Path) -> WindowControlsPlacement {
+    read_prefs_json(path)
+        .and_then(|json| {
+            json["window_controls_placement"]
+                .as_str()
+                .map(str::to_string)
+        })
+        .map(|token| WindowControlsPlacement::from_token(&token))
+        .unwrap_or_default()
+}
+
+pub fn write_window_controls_placement_pref(placement: WindowControlsPlacement) {
+    write_window_controls_placement_pref_at(&prefs_path(), placement)
+}
+
+pub fn write_window_controls_placement_pref_at(path: &Path, placement: WindowControlsPlacement) {
+    update_prefs_json(path, "window_controls_placement", |prefs| {
+        prefs.insert(
+            "window_controls_placement".to_string(),
+            serde_json::json!(placement.token()),
+        );
     })
 }
 
