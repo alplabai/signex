@@ -141,15 +141,25 @@ impl Signex {
         // A (project_root, rel_path) still queued has not started, so the
         // newest write takes its bytes (even "read the file", or the newer
         // write would never be committed) and, unless the caller must not
-        // relabel, its message. A commit already
-        // running is not touched: this one queues behind it (commits of one
-        // repo run in order) and holds its own bytes, so nothing landing
-        // after the running commit read the file is left without a version.
+        // relabel, its message. The newest queued entry of the file is the
+        // one that merges. A commit already running is not touched: this one
+        // queues behind it (commits of one repo run in order) and holds its
+        // own bytes, so nothing landing after the running commit read the
+        // file is left without a version.
+        //
+        // The exception is a History restore (sequence 0 with bytes) meeting
+        // a queued entry that carries bytes: those are a save's snapshot,
+        // possibly the user's last saved version, and merging would replace
+        // them with the restored revision, leaving that save in neither the
+        // file nor git. The restore queues behind it instead.
+        let is_restore = sequence == 0 && content_bytes.is_some();
         if let Some(queued) = self
             .document_state
             .pending_git_commits
             .iter_mut()
+            .rev()
             .find(|c| c.project_root == project_root && c.rel_path == rel_path)
+            .filter(|queued| !(is_restore && queued.content.is_some()))
         {
             if replace_message {
                 queued.message = default_message.to_string();

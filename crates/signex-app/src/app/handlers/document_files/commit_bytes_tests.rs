@@ -124,8 +124,8 @@ fn a_save_queued_behind_a_running_commit_keeps_its_own_bytes_and_the_newest_wins
         .active_git_repos
         .insert(running.project_root.clone());
 
-    app.commit_bytes_to_project_git(&path, "Save second", commit_bytes(b"second", 0));
-    app.commit_bytes_to_project_git(&path, "Save third", commit_bytes(b"third", 0));
+    app.commit_bytes_to_project_git(&path, "Save second", commit_bytes(b"second", 2));
+    app.commit_bytes_to_project_git(&path, "Save third", commit_bytes(b"third", 3));
 
     let queued = &app.document_state.pending_git_commits;
     assert_eq!(queued.len(), 1, "one commit queued behind the running one");
@@ -190,7 +190,7 @@ fn a_message_only_enqueue_still_commits_the_file_as_it_is() {
 #[test]
 fn a_restore_is_not_held_back_by_a_save_commit_that_carries_its_bytes() {
     let (_dir, path, sha, mut app) = footprint_fixture();
-    app.commit_bytes_to_project_git(&path, "Save part", commit_bytes(b"saved", 0));
+    app.commit_bytes_to_project_git(&path, "Save part", commit_bytes(b"saved", 1));
     assert_eq!(app.document_state.pending_git_commits.len(), 1);
     assert!(app.document_state.unbound_git_commits.is_empty());
 
@@ -202,6 +202,93 @@ fn a_restore_is_not_held_back_by_a_save_commit_that_carries_its_bytes() {
     );
     assert!(app.document_state.error_notice.is_none());
     drop(task);
+}
+
+/// `(subject, blob)` of every commit of `rel`, newest first.
+fn log_of(dir: &Path, rel: &str) -> Vec<(String, Vec<u8>)> {
+    let repo = git2::Repository::open(dir).expect("repo");
+    let mut walk = repo.revwalk().expect("walk");
+    walk.push_head().expect("head");
+    walk.map(|oid| {
+        let commit = repo.find_commit(oid.expect("oid")).expect("commit");
+        let entry = commit
+            .tree()
+            .expect("tree")
+            .get_path(Path::new(rel))
+            .expect("entry");
+        let blob = repo.find_blob(entry.id()).expect("blob").content().to_vec();
+        let subject = commit.message().unwrap_or_default().lines().next();
+        (subject.unwrap_or_default().to_owned(), blob)
+    })
+    .collect()
+}
+
+#[test]
+fn a_restore_queues_behind_a_pending_save_commit_instead_of_replacing_it() {
+    let (dir, path, sha, mut app) = footprint_fixture();
+    let rel = file_name(&path);
+    // Save All: this file's "Save" commit waits in the queue (bytes S).
+    app.commit_bytes_to_project_git(&path, "Save part", commit_bytes(b"S, the last save", 1));
+    let restored = {
+        let repo = git2::Repository::open(dir.path()).expect("repo");
+        let commit = repo
+            .find_commit(git2::Oid::from_str(&sha).expect("sha"))
+            .expect("commit");
+        let entry = commit
+            .tree()
+            .expect("tree")
+            .get_path(Path::new(&rel))
+            .expect("entry");
+        repo.find_blob(entry.id()).expect("blob").content().to_vec()
+    };
+
+    let task = app.handle_history_restore_clicked(&sha);
+    finish_restore(&mut app, collect_messages(task));
+    assert_eq!(
+        app.document_state.pending_git_commits.len(),
+        2,
+        "the restore is a second entry, not a merge into the save"
+    );
+    assert!(app.document_state.inflight_git_commits.len() == 1);
+    assert!(app.document_state.unbound_git_commits.is_empty());
+
+    let commits = app.drain_pending_git_commits();
+    run_task(&mut app, commits);
+
+    let log = log_of(dir.path(), &rel);
+    assert_eq!(log[0], (format!("Restore {rel}"), restored));
+    assert_eq!(
+        log[1],
+        ("Save part".to_owned(), b"S, the last save".to_vec())
+    );
+    assert!(app.document_state.pending_git_commits.is_empty());
+    assert!(app.document_state.inflight_git_commits.is_empty());
+    assert!(app.document_state.active_git_repos.is_empty());
+}
+
+#[test]
+fn a_later_save_coalesces_into_the_newest_queued_entry_of_the_file() {
+    let (dir, path, sha, mut app) = footprint_fixture();
+    let rel = file_name(&path);
+    app.commit_bytes_to_project_git(&path, "Save part", commit_bytes(b"S", 1));
+    let task = app.handle_history_restore_clicked(&sha);
+    finish_restore(&mut app, collect_messages(task));
+    app.commit_bytes_to_project_git(&path, "Save part again", commit_bytes(b"S2", 2));
+    app.commit_bytes_to_project_git(&path, "Save part third", commit_bytes(b"S3", 3));
+
+    let queued = &app.document_state.pending_git_commits;
+    assert_eq!(
+        queued.len(),
+        2,
+        "the Save stays; later saves merge behind it"
+    );
+    assert_eq!(queued[0].message, "Save part");
+
+    let commits = app.drain_pending_git_commits();
+    run_task(&mut app, commits);
+    let log = log_of(dir.path(), &rel);
+    assert_eq!(log[0], ("Save part third".to_owned(), b"S3".to_vec()));
+    assert_eq!(log[1], ("Save part".to_owned(), b"S".to_vec()));
 }
 
 #[test]
