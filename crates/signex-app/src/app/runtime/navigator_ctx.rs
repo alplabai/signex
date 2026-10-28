@@ -22,8 +22,7 @@ use iced::Task;
 
 use super::super::*;
 use crate::app::project_sheets::{
-    OpenSheets, assemble_project_sheets_taking, open_sheets_snapshot_reachable,
-    project_root_sheet_path,
+    OpenSheets, assemble_project_sheets_taking, open_sheets_snapshot, project_root_sheet_path,
 };
 use crate::app::sheet_hierarchy::build_sheet_hierarchy;
 use crate::app::state::scope::CaseFold;
@@ -126,11 +125,12 @@ impl Signex {
         ))
     }
 
-    /// The open sheets the build for `request` can read, and no others.
-    pub(crate) fn navigator_open_snapshot(&self, request: &NavigatorBuildRequest) -> OpenSheets {
-        let mut seeds = request.pages.clone();
-        seeds.push(request.root.clone());
-        open_sheets_snapshot_reachable(&self.document_state, &seeds)
+    /// The open sheets the build for `request` reads. Every open engine, not
+    /// only those the in-memory references reach: the walk also follows
+    /// references through closed sheets read from disk, so an open sheet
+    /// behind a closed one must still contribute its unsaved edits.
+    pub(crate) fn navigator_open_snapshot(&self, _request: &NavigatorBuildRequest) -> OpenSheets {
+        open_sheets_snapshot(&self.document_state)
     }
 
     /// A build landed: swap the hierarchy in unless a newer request overtook it.

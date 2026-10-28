@@ -89,9 +89,10 @@ impl NavigatorModel {
             .filter(|_| self.wanted.is_none() && self.requested == self.fingerprint)
     }
 
-    /// The hierarchy node a tree row path stands for.
+    /// The hierarchy node a tree row path stands for; `None` while a rebuild is
+    /// pending, so a click cannot record a placement from a stale tree.
     pub fn node_at(&self, tree_path: &[usize]) -> Option<&SheetNode> {
-        self.hierarchy.as_ref()?.node_at(tree_path)
+        self.current_hierarchy()?.node_at(tree_path)
     }
 
     /// Swap in a freshly built hierarchy, carrying the selection, the pending

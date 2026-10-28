@@ -589,7 +589,7 @@ mod tests {
         // the HashMap iterates first.
         //
         // The nondeterminism only surfaces ACROSS separately-built maps
-        // (production rebuilds `child_sheet_refs()` on every call), so reusing
+        // (production builds `child_sheet_refs()` from a `HashMap`), so reusing
         // one fixed instance proves nothing — a fixed map's iteration order
         // never changes between reads. Rebuild a FRESH map, in BOTH insertion
         // orders, on every iteration: sorted by parent path

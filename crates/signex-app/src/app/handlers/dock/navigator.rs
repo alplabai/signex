@@ -45,8 +45,7 @@ impl Signex {
             return;
         };
         let placement = navigator
-            .hierarchy
-            .as_ref()
+            .current_hierarchy()
             .and_then(|hierarchy| hierarchy.placement_at(path));
         let (sheet_path, kind, label, detail) = (
             node.path.clone(),
@@ -260,33 +259,36 @@ mod tests {
     }
 
     #[test]
-    fn the_build_snapshot_leaves_out_open_sheets_the_project_cannot_reach() {
+    fn an_unsaved_edit_on_an_open_sheet_behind_a_closed_one_reaches_the_hierarchy() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let (mut app, [root, mid, _leaf]) = three_level_project(&dir, &[]);
-        let unrelated = write_sheet(dir.path(), "unrelated.snxsch", &[]);
-        app.open_or_focus_sheet_path(root.clone());
-        app.open_or_focus_sheet_path(mid.clone());
-        app.open_or_focus_sheet_path(unrelated.clone());
-        app.refresh_panel_ctx();
-        let request = app
+        let (mut app, [root, _mid, leaf]) = three_level_project(&dir, &[]);
+        // root and leaf are open; mid, between them, is closed.
+        app.open_or_focus_sheet_path(root);
+        app.open_or_focus_sheet_path(leaf.clone());
+        let engine = app
             .document_state
-            .panel_ctx
-            .navigator
-            .wanted
-            .clone()
-            .expect("a build is asked for");
+            .engines
+            .get_mut(&leaf)
+            .expect("leaf open");
+        let mut document = engine.document().clone();
+        let mut extra = document.child_sheets.first().cloned().unwrap_or_else(|| {
+            sheet_with_net("R1", "N", &["extra.snxsch"]).child_sheets[0].clone()
+        });
+        extra.name = "Extra".into();
+        extra.filename = "extra.snxsch".into();
+        document.child_sheets.push(extra);
+        engine
+            .execute(signex_engine::Command::ReplaceDocument { document })
+            .expect("replace");
 
-        let snapshot = app.navigator_open_snapshot(&request);
+        app.refresh_panel_ctx();
+        app.settle_navigator();
 
-        assert!(snapshot.contains_key(&root) && snapshot.contains_key(&mid));
-        assert!(
-            !snapshot.contains_key(&unrelated),
-            "a sheet outside the project is not cloned for its build"
+        assert_eq!(
+            labels(&app, &[0, 0, 0, 0]),
+            ["root", "Mid", "Leaf", "Extra (missing)"],
+            "the unsaved reference on the open leaf is in the Navigator"
         );
-        let built =
-            crate::app::runtime::navigator_ctx::build_navigator_hierarchy(snapshot, &request);
-        app.handle_navigator_built(request.generation, Ok(Box::new(built)));
-        assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Leaf"]);
     }
 
     #[test]

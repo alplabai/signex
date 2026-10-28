@@ -291,33 +291,6 @@ pub(crate) fn open_sheets_snapshot_of(
         .collect()
 }
 
-/// Snapshot the open engines the assembly walk can look up: the seeds and
-/// whatever open sheets they reach down the in-memory `child_sheets`
-/// references. A sheet outside that set is never read by the walk, so cloning
-/// it would be pure UI-thread cost (every open project's sheets, not just the
-/// one in view).
-pub(crate) fn open_sheets_snapshot_reachable(
-    document_state: &DocumentState,
-    seeds: &[PathBuf],
-) -> OpenSheets {
-    let refs = document_state.child_sheet_refs();
-    let mut reached: HashSet<PathBuf> = HashSet::new();
-    let mut queue: Vec<PathBuf> = seeds.to_vec();
-    while let Some(path) = queue.pop() {
-        if !document_state.engines.contains_key(&path) || !reached.insert(path.clone()) {
-            continue;
-        }
-        let dir = path.parent().unwrap_or_else(|| Path::new(""));
-        for filename in refs.get(&path).into_iter().flatten() {
-            if let Some(resolved) = resolve_child_reference(dir, filename) {
-                queue.push(resolved);
-            }
-        }
-    }
-    let paths: Vec<PathBuf> = reached.into_iter().collect();
-    open_sheets_snapshot_of(document_state, &paths)
-}
-
 /// [`assemble_project_sheets_from`] that moves each sheet out of `open` instead
 /// of cloning it again: the walk looks a path up at most once.
 pub(crate) fn assemble_project_sheets_taking(
