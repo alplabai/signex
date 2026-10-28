@@ -1,8 +1,50 @@
-//! TSV wire format for `alternate_symbols`: optional 22nd column.
+//! `.snxlib` storage of `alternate_symbols`: an optional 22nd column that
+//! appears only once a row carries an alternate.
+
+#![cfg(feature = "local-git")]
+
+use std::path::PathBuf;
 
 use chrono::Utc;
+use signex_library::adapter::LibraryAdapter;
+use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
+use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
+use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 use signex_library::*;
 use uuid::Uuid;
+
+/// An empty git-less library at `<dir>/L/L.snxlib`.
+fn new_library() -> (tempfile::TempDir, PathBuf, LocalGitAdapter) {
+    signex_library::git_identity::test_identity::install();
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("L").join("L.snxlib");
+    let manifest = SnxlibManifest {
+        format: FORMAT_TOKEN.into(),
+        library_id: Uuid::now_v7(),
+        library: LibrarySection {
+            name: "L".into(),
+            description: None,
+        },
+        mode: LibraryMode::default(),
+        workflow: WorkflowConfig::default(),
+        users: UsersConfig::default(),
+        classes: Vec::new(),
+    };
+    let opts = LibraryInitOptions {
+        enable_git: false,
+        use_lfs: false,
+    };
+    let adapter = LocalGitAdapter::init(&file, manifest, opts).unwrap();
+    (dir, file, adapter)
+}
+
+/// Column header of table `t` as stored in the file.
+fn stored_columns(file: &PathBuf) -> Vec<String> {
+    let text = std::fs::read_to_string(file).unwrap();
+    LibraryFile::parse(&text).unwrap().tables["t"]
+        .columns
+        .clone()
+}
 
 fn row(pn: &str) -> ComponentRow {
     let lib = Uuid::new_v4();
@@ -48,55 +90,66 @@ fn with_alternate(mut r: ComponentRow) -> ComponentRow {
 
 #[test]
 fn table_without_alternates_keeps_the_legacy_21_column_layout() {
-    let tmp = tempfile::NamedTempFile::new().unwrap();
-    write_table(tmp.path(), &[row("A"), row("B")]).unwrap();
-    let text = std::fs::read_to_string(tmp.path()).unwrap();
-    let mut lines = text.lines();
-    assert_eq!(lines.next().unwrap(), TABLE_HEADER.join("\t"));
-    for line in lines {
-        assert_eq!(line.split('\t').count(), TABLE_HEADER.len());
-    }
+    let (_dir, file, adapter) = new_library();
+    adapter.insert_row("t", row("A"), "seed").unwrap();
+    adapter.insert_row("t", row("B"), "seed").unwrap();
+    assert_eq!(stored_columns(&file), TABLE_HEADER);
 }
 
 #[test]
-fn legacy_21_column_file_reads_with_no_alternates() {
-    let tmp = tempfile::NamedTempFile::new().unwrap();
+fn legacy_21_column_table_reads_with_no_alternates() {
+    let (_dir, _file, adapter) = new_library();
     let original = row("A");
-    write_table(tmp.path(), std::slice::from_ref(&original)).unwrap();
-    let back = read_table(tmp.path()).unwrap();
-    assert_eq!(back, vec![original]);
-    assert!(back[0].alternate_symbols.is_empty());
+    adapter.insert_row("t", original.clone(), "seed").unwrap();
+    let back = adapter
+        .read_row("t", RowId::from_uuid(original.row_id))
+        .unwrap();
+    assert_eq!(back.internal_pn, original.internal_pn);
+    assert!(back.alternate_symbols.is_empty());
 }
 
 #[test]
 fn alternates_round_trip_through_the_22_column_layout() {
-    let tmp = tempfile::NamedTempFile::new().unwrap();
-    let rows = vec![with_alternate(row("A")), row("B")];
-    write_table(tmp.path(), &rows).unwrap();
-    let text = std::fs::read_to_string(tmp.path()).unwrap();
-    let header = text.lines().next().unwrap();
-    assert!(header.ends_with(ALTERNATE_SYMBOLS_COLUMN));
-    assert_eq!(header.split('\t').count(), TABLE_HEADER.len() + 1);
-    assert_eq!(read_table(tmp.path()).unwrap(), rows);
+    let (_dir, file, adapter) = new_library();
+    let with = with_alternate(row("A"));
+    adapter.insert_row("t", with.clone(), "seed").unwrap();
+    adapter.insert_row("t", row("B"), "seed").unwrap();
+
+    let columns = stored_columns(&file);
+    assert_eq!(columns.last().unwrap(), ALTERNATE_SYMBOLS_COLUMN);
+    assert_eq!(columns.len(), TABLE_HEADER.len() + 1);
+    let back = adapter
+        .read_row("t", RowId::from_uuid(with.row_id))
+        .unwrap();
+    assert_eq!(back.alternate_symbols, with.alternate_symbols);
 }
 
 #[test]
 fn any_other_column_layout_still_errors() {
-    let tmp = tempfile::NamedTempFile::new().unwrap();
-    let header = format!("{}\textra\tmore\n", TABLE_HEADER.join("\t"));
-    std::fs::write(tmp.path(), header).unwrap();
-    assert!(read_table(tmp.path()).is_err());
+    for extra in ["\textra\tmore", "\tnot_alternates"] {
+        let (_dir, file, adapter) = new_library();
+        let r = row("A");
+        adapter.insert_row("t", r.clone(), "seed").unwrap();
+        adapter
+            .delete_row("t", RowId::from_uuid(r.row_id), None, "empty the table")
+            .unwrap();
+        drop(adapter);
+        let text = std::fs::read_to_string(&file).unwrap();
+        let header = TABLE_HEADER.join("\t");
+        assert!(text.contains(&header), "header line not found");
+        std::fs::write(&file, text.replace(&header, &format!("{header}{extra}"))).unwrap();
 
-    let wrong_name = format!("{}\tnot_alternates\n", TABLE_HEADER.join("\t"));
-    std::fs::write(tmp.path(), wrong_name).unwrap();
-    assert!(read_table(tmp.path()).is_err());
+        let refused = LocalGitAdapter::open(&file).is_err_and(|_| true)
+            || LocalGitAdapter::open(&file).is_ok_and(|a| a.iter_rows().is_err());
+        assert!(refused, "layout with {extra:?} was accepted");
+    }
 }
 
 #[test]
 fn write_refuses_an_alternate_equal_to_the_default_symbol() {
-    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let (_dir, _file, adapter) = new_library();
     let mut r = row("A");
     r.alternate_symbols
         .push(AlternateSymbol::new(r.symbol_ref, "0.0.1", "same"));
-    assert!(write_table(tmp.path(), &[r]).is_err());
+    assert!(adapter.insert_row("t", r, "seed").is_err());
 }

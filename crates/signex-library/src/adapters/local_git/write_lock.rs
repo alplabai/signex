@@ -85,6 +85,33 @@ impl LocalGitAdapter {
     /// A filesystem that cannot lock (some network mounts) gives `None`: the
     /// edit goes ahead unlocked, as before #832, with a one-time warning,
     /// rather than leaving the library read-only.
+    /// Warn once per adapter that a saved database token sits in the
+    /// `.snxlib` in plain text, and name the `${env:NAME}` alternative.
+    /// Returns whether it warned.
+    pub(super) fn warn_plain_token_once(&self, mode: &crate::manifest::LibraryMode) -> bool {
+        use std::sync::atomic::Ordering;
+        let crate::manifest::LibraryMode::Database { auth, .. } = mode else {
+            return false;
+        };
+        if !crate::manifest::auth_is_plain_token(auth) {
+            return false;
+        }
+        if self
+            .plain_token_warnings
+            .compare_exchange(0, 1, Ordering::Relaxed, Ordering::Relaxed)
+            .is_err()
+        {
+            return false;
+        }
+        tracing::warn!(
+            target: "signex::library",
+            path = %self.file_path.display(),
+            "this library's database token is saved in plain text in the .snxlib; set auth to \
+             ${{env:NAME}} and keep the token in that environment variable instead"
+        );
+        true
+    }
+
     pub(super) fn lock_for_write(&self) -> Result<Option<WriteLock>, LibraryError> {
         acquire(&self.file_path, &self.write_lock_warned)
     }
