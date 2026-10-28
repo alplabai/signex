@@ -99,6 +99,9 @@ impl Signex {
 mod arrange_tests;
 
 #[cfg(test)]
+mod shortcut_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::keymap::AppCommandId;
