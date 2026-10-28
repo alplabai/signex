@@ -8,12 +8,12 @@ use signex_engine::{
     Command, ComponentChangePreview, ComponentReplacement, change_component_preview,
     placed_unit_ids,
 };
-use signex_types::schematic::Symbol;
+use signex_types::schematic::{Symbol, normalized_lib_id};
 use uuid::Uuid;
 
 use super::{PlacedPart, part_name};
 use crate::app::contracts::Message;
-use crate::app::project_sheets::project_pages;
+use crate::app::project_sheets::{project_pages, resolve_child_reference_quiet};
 use crate::app::state::Signex;
 use crate::app::state::scope::path_key_with;
 use crate::library::PickerState;
@@ -247,7 +247,11 @@ impl Signex {
     /// they reference. A single-unit part cannot have siblings (a duplicate
     /// designator is another part, as in `group_into_parts`), and an
     /// unannotated one is a part of its own.
-    fn change_blocker(&self, target: &PlacedPartTarget, symbol: &Symbol) -> Option<String> {
+    pub(super) fn change_blocker(
+        &self,
+        target: &PlacedPartTarget,
+        symbol: &Symbol,
+    ) -> Option<String> {
         let name = part_name(symbol);
         let docs = &self.document_state;
         let doc = self.target_document(target)?;
@@ -306,7 +310,12 @@ impl Signex {
             };
             let dir = path.parent().unwrap_or_else(|| std::path::Path::new(""));
             for child in &engine.document().child_sheets {
-                let child_path = dir.join(&child.filename);
+                // The stitcher's own resolution; a reference it would not
+                // follow (blank, or escaping the sheet's folder) is not a
+                // sheet of this hierarchy.
+                let Ok(child_path) = resolve_child_reference_quiet(dir, &child.filename) else {
+                    continue;
+                };
                 if seen.insert(key(&child_path)) {
                     reached.push(child_path);
                 }
@@ -322,7 +331,7 @@ impl Signex {
                 Some((_, engine)) => {
                     let holds_a_unit = engine.document().symbols.iter().any(|s| {
                         s.reference.trim() == reference
-                            && s.lib_id == symbol.lib_id
+                            && normalized_lib_id(&s.lib_id) == normalized_lib_id(&symbol.lib_id)
                             && !placed_units.contains(&s.unit)
                     });
                     if holds_a_unit {

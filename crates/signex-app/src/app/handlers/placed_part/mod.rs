@@ -6,6 +6,8 @@
 //! selected, non-power symbol. Reading a library file or launching a viewer
 //! is a `Task`; `update` only decides, logs and edits the model.
 
+#[cfg(test)]
+mod blocker_tests;
 mod change_component;
 mod datasheet;
 mod edit_symbol;

@@ -975,6 +975,15 @@ fn a_child_sheet_that_is_neither_open_nor_a_declared_page_refuses_the_change() {
         .unwrap()
         .set_document(d);
 
+    // Child references resolve against the sheet's folder, so the sheet
+    // needs a real one.
+    let old = app.document_state.active_path.clone().unwrap();
+    let absolute = PathBuf::from("/proj").join(&old);
+    let engine = app.document_state.engines.remove(&old).unwrap();
+    app.document_state.engines.insert(absolute.clone(), engine);
+    app.document_state.tabs[0].path = absolute.clone();
+    app.document_state.active_path = Some(absolute);
+
     request(&mut app, PlacedPartAction::ChangeComponent);
 
     assert!(logged(&[
@@ -1042,4 +1051,59 @@ fn a_sibling_that_appears_on_another_open_sheet_after_the_preview_refuses_the_co
     assert!(logged(&["units of ZK1 are also on", "sheet-two.snxsch"]));
     assert_eq!(symbol_lib_id(&app), before, "nothing was changed");
     assert!(app.library.picker.is_none());
+}
+
+#[test]
+fn a_duplicate_designator_with_the_same_unit_on_another_open_sheet_does_not_refuse() {
+    // ZD9 unit 1 here and ZD9 unit 1 there: a duplicate designator, which is
+    // another part, not a sibling unit.
+    let (mut app, _new) = change_setup("ZD9", renumbered(), &[]);
+    let other_sheet = join_project_with_a_second_sheet(&mut app);
+    let mut there = doc(&app).clone();
+    there.symbols[0].uuid = Uuid::new_v4();
+    app.document_state.engines.insert(
+        other_sheet,
+        signex_engine::Engine::new(there).expect("engine"),
+    );
+
+    request(&mut app, PlacedPartAction::ChangeComponent);
+
+    assert!(matches!(
+        app.library.picker.as_ref().map(|p| &p.mode),
+        Some(PickerMode::ChangeComponent(_))
+    ));
+}
+
+#[test]
+fn a_drawing_that_is_not_embedded_counts_as_possibly_multi_unit() {
+    // Nothing says the part is single-unit, so the unopened page matters.
+    let (mut app, _new) = change_setup_from(single_unit_old(), "lib-new", "ZN1", renumbered(), &[]);
+    let mut d = doc(&app).clone();
+    d.lib_symbols = Default::default();
+    app.document_state
+        .active_engine_mut()
+        .unwrap()
+        .set_document(d);
+    join_project_with_a_second_sheet(&mut app);
+
+    request(&mut app, PlacedPartAction::ChangeComponent);
+
+    assert!(logged(&["Open every sheet of the project to change ZN1"]));
+    assert!(app.library.picker.is_none());
+}
+
+#[test]
+fn an_unannotated_part_skips_the_cross_sheet_check() {
+    let (mut app, _new) = change_setup("U?", renumbered(), &[]);
+    join_project_with_a_second_sheet(&mut app);
+
+    request(&mut app, PlacedPartAction::ChangeComponent);
+
+    assert!(
+        matches!(
+            app.library.picker.as_ref().map(|p| &p.mode),
+            Some(PickerMode::ChangeComponent(_))
+        ),
+        "a U? part is a part of its own"
+    );
 }

@@ -71,8 +71,16 @@ impl ComponentChangePreview {
 /// The placed units of the part `symbol_id` belongs to on this sheet, by the
 /// one grouping rule every consumer shares
 /// ([`group_into_parts`]): units of one designator and drawing with different
-/// unit numbers. An empty or unannotated (`U?`) designator is a part of its
-/// own, and so is a duplicate designator with the same unit.
+/// unit numbers. A duplicate designator with the same unit is a part of its
+/// own.
+///
+/// An empty or unannotated (`U?`) designator is deliberately a part of its
+/// own, which differs from [`group_into_parts`]: that pairs `U?` symbols of
+/// one drawing in input order, a guess Annotate needs to number them but one
+/// a swap must not make, since two unrelated `U?` parts would be swapped
+/// together. Treating the picked symbol alone is the safe side: at worst a
+/// multi-unit `U?` part is changed one unit at a time, and the user sees
+/// each step, where the other way silently rewrites a part nobody picked.
 fn placed_units(doc: &SchematicSheet, symbol_id: Uuid) -> Vec<&Symbol> {
     let Some(at) = doc.symbols.iter().position(|s| s.uuid == symbol_id) else {
         return Vec::new();
