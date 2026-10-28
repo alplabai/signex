@@ -50,27 +50,45 @@ impl Signex {
             ]
             .align_y(iced::Alignment::Center),
             iced::widget::Space::new().height(8),
-            text(notice.detail.clone()).size(TS.label).color(text_c),
+            container(iced::widget::scrollable(
+                text(notice.detail.clone()).size(TS.label).color(text_c)
+            ))
+            .max_height(200),
             iced::widget::Space::new().height(12),
             row![iced::widget::Space::new().width(Length::Fill), ok_btn,],
         ]
         .padding(20);
 
         let card = container(body)
-            .max_width(480)
-            .style(move |_: &iced::Theme| container::Style {
-                background: Some(panel_bg.into()),
-                border: iced::Border {
-                    color: border_c,
-                    width: 1.0,
-                    radius: iced::border::Radius::from(8.0),
+            .max_width(
+                if self.modal_detached(crate::app::state::ModalId::ErrorNotice) {
+                    f32::INFINITY
+                } else {
+                    480.0
                 },
-                shadow: iced::Shadow {
-                    color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
-                    offset: iced::Vector::new(0.0, 4.0),
-                    blur_radius: 16.0,
-                },
-                ..container::Style::default()
+            )
+            .style(move |theme: &iced::Theme| {
+                if crate::styles::is_dialog_window(theme) {
+                    // Flat in its own window: no second frame.
+                    return container::Style {
+                        background: Some(panel_bg.into()),
+                        ..container::Style::default()
+                    };
+                }
+                container::Style {
+                    background: Some(panel_bg.into()),
+                    border: iced::Border {
+                        color: border_c,
+                        width: 1.0,
+                        radius: iced::border::Radius::from(8.0),
+                    },
+                    shadow: iced::Shadow {
+                        color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
+                        offset: iced::Vector::new(0.0, 4.0),
+                        blur_radius: 16.0,
+                    },
+                    ..container::Style::default()
+                }
             });
 
         container(card)
@@ -78,6 +96,17 @@ impl Signex {
             .height(Length::Fill)
             .align_x(iced::alignment::Horizontal::Center)
             .align_y(iced::alignment::Vertical::Center)
+            .style(move |theme: &iced::Theme| {
+                // In its own window the dialog fills the window surface.
+                if crate::styles::is_dialog_window(theme) {
+                    container::Style {
+                        background: Some(panel_bg.into()),
+                        ..container::Style::default()
+                    }
+                } else {
+                    container::Style::default()
+                }
+            })
             .into()
     }
 
@@ -163,7 +192,10 @@ impl Signex {
             .size(TS.label)
             .color(text_c),
             iced::widget::Space::new().height(8),
-            text(detail).size(TS.body).color(text_muted),
+            container(iced::widget::scrollable(
+                text(detail).size(TS.body).color(text_muted)
+            ))
+            .max_height(120),
             iced::widget::Space::new().height(14),
             row![
                 iced::widget::Space::new().width(Length::Fill),
@@ -176,20 +208,35 @@ impl Signex {
         .padding(20);
 
         let card = container(body)
-            .max_width(520)
-            .style(move |_: &iced::Theme| container::Style {
-                background: Some(panel_bg.into()),
-                border: iced::Border {
-                    color: border_c,
-                    width: 1.0,
-                    radius: iced::border::Radius::from(8.0),
+            .max_width(
+                if self.modal_detached(crate::app::state::ModalId::NetlistIncompletePrompt) {
+                    f32::INFINITY
+                } else {
+                    520.0
                 },
-                shadow: iced::Shadow {
-                    color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
-                    offset: iced::Vector::new(0.0, 4.0),
-                    blur_radius: 16.0,
-                },
-                ..container::Style::default()
+            )
+            .style(move |theme: &iced::Theme| {
+                if crate::styles::is_dialog_window(theme) {
+                    // Flat in its own window: no second frame.
+                    return container::Style {
+                        background: Some(panel_bg.into()),
+                        ..container::Style::default()
+                    };
+                }
+                container::Style {
+                    background: Some(panel_bg.into()),
+                    border: iced::Border {
+                        color: border_c,
+                        width: 1.0,
+                        radius: iced::border::Radius::from(8.0),
+                    },
+                    shadow: iced::Shadow {
+                        color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
+                        offset: iced::Vector::new(0.0, 4.0),
+                        blur_radius: 16.0,
+                    },
+                    ..container::Style::default()
+                }
             });
 
         container(card)
@@ -197,6 +244,17 @@ impl Signex {
             .height(Length::Fill)
             .align_x(iced::alignment::Horizontal::Center)
             .align_y(iced::alignment::Vertical::Center)
+            .style(move |theme: &iced::Theme| {
+                // In its own window the dialog fills the window surface.
+                if crate::styles::is_dialog_window(theme) {
+                    container::Style {
+                        background: Some(panel_bg.into()),
+                        ..container::Style::default()
+                    }
+                } else {
+                    container::Style::default()
+                }
+            })
             .into()
     }
 

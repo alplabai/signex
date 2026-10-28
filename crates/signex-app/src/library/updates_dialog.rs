@@ -225,6 +225,7 @@ impl LibraryUpdatesState {
 pub fn view<'a>(
     state: &'a LibraryUpdatesState,
     tokens: &'a ThemeTokens,
+    windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -293,7 +294,7 @@ pub fn view<'a>(
 
     container(
         column![header, container(body).padding([14.0, SP.xl]), footer]
-            .width(Length::Fixed(MODAL_W)),
+            .width(super::card_len(windowed, MODAL_W)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

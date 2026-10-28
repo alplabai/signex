@@ -16,6 +16,7 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 mod bars;
 mod modals;
+pub(super) mod read_only_badge;
 
 impl Signex {
     /// Hover tooltip card showing the placed symbol's designator,
@@ -182,6 +183,8 @@ impl Signex {
             let source_label = match entry.source {
                 CommandSource::Command => "Command",
                 CommandSource::Symbol => "Symbol",
+                CommandSource::Net => "Net",
+                CommandSource::Sheet => "Sheet",
                 CommandSource::File => "File",
             };
             let label_col = column![

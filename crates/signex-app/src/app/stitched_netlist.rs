@@ -35,7 +35,7 @@ pub(crate) fn stitched_project_netlist_from(
     project_dir: Option<PathBuf>,
 ) -> Stitched {
     let set = super::project_sheets::assemble_project_sheets_from(open, pages, root, fold);
-    netlist_of_set(set, project_dir)
+    netlist_of_set(&set, project_dir)
 }
 
 /// The Messages line for a sheet that exists but would not read or parse. The
@@ -49,7 +49,9 @@ fn unreadable_message(path: &Path, why: &str) -> String {
     )
 }
 
-fn netlist_of_set(set: ProjectSheetSet, project_dir: Option<PathBuf>) -> Stitched {
+/// The stitched netlist of an already assembled sheet set, so a caller that
+/// needs the set for other things reads the disk once.
+pub(crate) fn netlist_of_set(set: &ProjectSheetSet, project_dir: Option<PathBuf>) -> Stitched {
     let mut warnings: Vec<String> = set
         .unreadable
         .iter()
@@ -84,7 +86,7 @@ fn netlist_of_set(set: ProjectSheetSet, project_dir: Option<PathBuf>) -> Stitche
         };
     }
     let roots =
-        super::project_sheets::project_roots(root_key, &set, &graph, base_dir.as_deref(), fold);
+        super::project_sheets::project_roots(root_key, set, &graph, base_dir.as_deref(), fold);
     let project = signex_net::ProjectGraph {
         sheets: &graph.sheets,
         resolved: &graph.resolved,
