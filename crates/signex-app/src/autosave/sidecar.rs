@@ -70,24 +70,47 @@ pub fn adopt_legacy(recovery_dir: &Path, document: &Path) -> Result<(), String> 
         // Only the newest of the two is offered. The other is never deleted:
         // it stays on disk under a name no scan offers, and is logged.
         if newer(&legacy, &current) {
-            let mut aside = current.clone().into_os_string();
-            aside.push(".");
-            aside.push(SUPERSEDED_EXTENSION);
-            let aside = PathBuf::from(aside);
-            if std::fs::rename(&current, &aside).is_ok() {
-                crate::diagnostics::log_warning(format!(
-                    "The recovery copy {} of {} was older than {}; it was kept as {}.",
+            // Never overwrite an earlier set-aside copy: take the first free
+            // name (`.older`, `.older.1`, ...). With none free the move is
+            // refused, so the document stays protected by what is on disk.
+            let base = {
+                let mut base = current.clone().into_os_string();
+                base.push(".");
+                base.push(SUPERSEDED_EXTENSION);
+                base
+            };
+            let aside = (0..100u32)
+                .map(|n| {
+                    let mut name = base.clone();
+                    if n > 0 {
+                        name.push(format!(".{n}"));
+                    }
+                    PathBuf::from(name)
+                })
+                .find(|p| std::fs::symlink_metadata(p).is_err())
+                .ok_or_else(|| {
+                    format!(
+                        "no free name to set aside the recovery copy {}",
+                        current.display()
+                    )
+                })?;
+            std::fs::rename(&current, &aside).map_err(|e| {
+                format!(
+                    "{e}: could not set aside recovery copy {} as {}",
                     current.display(),
-                    document.display(),
-                    legacy.display(),
                     aside.display()
-                ));
-            } else {
-                return Ok(());
-            }
+                )
+            })?;
+            crate::diagnostics::log_warning(format!(
+                "The recovery copy {} of {} was older than {}; it was kept as {}.",
+                current.display(),
+                document.display(),
+                legacy.display(),
+                aside.display()
+            ));
         } else {
             crate::diagnostics::log_warning(format!(
-                "The recovery copy {} (an older key of {}) was left on disk: a copy already                  sits under the current key.",
+                "The recovery copy {} (an older key of {}) was left on disk: a copy already \n                 sits under the current key.",
                 legacy.display(),
                 document.display()
             ));
@@ -233,6 +256,44 @@ mod tests {
         let aside = format!("{}.{SUPERSEDED_EXTENSION}", current.display());
         assert_eq!(std::fs::read(aside).unwrap(), b"old");
         assert!(!legacy.exists());
+    }
+
+    #[test]
+    fn an_existing_older_copy_is_never_overwritten() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let doc = tmp.path().join("w/../main.snxsch");
+        let current = sidecar_path(&rec, &doc);
+        let legacy = key_path(&rec, &doc, legacy_path_hash(&doc));
+        std::fs::create_dir_all(&rec).unwrap();
+        let older = format!("{}.{SUPERSEDED_EXTENSION}", current.display());
+        std::fs::write(&older, b"earliest").unwrap();
+        std::fs::write(&current, b"old").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::fs::write(&legacy, b"new").unwrap();
+        adopt_legacy(&rec, &doc).unwrap();
+        assert_eq!(std::fs::read(&current).unwrap(), b"new");
+        assert_eq!(std::fs::read(&older).unwrap(), b"earliest");
+        assert_eq!(std::fs::read(format!("{older}.1")).unwrap(), b"old");
+        assert!(!legacy.exists());
+    }
+
+    #[test]
+    fn a_newer_current_copy_leaves_both_files_untouched() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let doc = tmp.path().join("w/../main.snxsch");
+        let current = sidecar_path(&rec, &doc);
+        let legacy = key_path(&rec, &doc, legacy_path_hash(&doc));
+        std::fs::create_dir_all(&rec).unwrap();
+        std::fs::write(&legacy, b"old").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::fs::write(&current, b"new").unwrap();
+        adopt_legacy(&rec, &doc).unwrap();
+        assert_eq!(std::fs::read(&current).unwrap(), b"new");
+        assert_eq!(std::fs::read(&legacy).unwrap(), b"old");
+        let aside = format!("{}.{SUPERSEDED_EXTENSION}", current.display());
+        assert!(!Path::new(&aside).exists());
     }
 
     #[test]
