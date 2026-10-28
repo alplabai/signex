@@ -72,7 +72,24 @@ pub(super) fn dd_disabled(
         shortcut: right.map(|s| s.to_string()),
         disabled: true,
         on_press: None,
+        tooltip: None,
     })
+}
+
+/// A greyed row for a feature that does not exist yet: the same passive
+/// row as [`dd_disabled`], plus the shared "planned" tooltip so the row
+/// reads as unbuilt rather than broken (#1251).
+pub(super) fn dd_planned(
+    icon: Option<Handle>,
+    label: &str,
+    right: Option<&str>,
+) -> DropdownEntry<Message> {
+    match dd_disabled(icon, label, right) {
+        DropdownEntry::Item(item) => {
+            DropdownEntry::Item(item.tooltip(crate::active_bar::PLANNED_TOOLTIP))
+        }
+        other => other,
+    }
 }
 
 /// Save row for the project-root menu — active only when a schematic tab
