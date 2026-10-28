@@ -4,7 +4,7 @@
 
 use signex_app::app::{
     ContextMenuMsg, EditMsg, FileMsg, Message, ProjectCloseChoice, ProjectGeneralFacts, ProjectMsg,
-    TabContextAction, WindowMsg,
+    TabContextAction, UiMsg, WindowMsg,
 };
 use signex_app::dock::DockMessage;
 use signex_app::panels::PanelMsg;
@@ -334,4 +334,46 @@ fn a_history_restore_of_the_project_tab_is_refused_and_changes_nothing() {
         }),
         "the refusal reaches Messages"
     );
+}
+
+/// The messages `task` emits, without feeding them back.
+fn emitted(task: iced::Task<Message>) -> Vec<Message> {
+    let Some(stream) = iced_runtime::task::into_stream(task) else {
+        return Vec::new();
+    };
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime
+        .block_on(futures::StreamExt::collect::<Vec<_>>(stream))
+        .into_iter()
+        .filter_map(|action| match action {
+            iced_runtime::Action::Output(message) => Some(message),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn dragging_the_project_tab_past_the_edge_asks_to_undock_once() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    f.app.ui_state.window_size = (800.0, 600.0);
+    f.app.ui_state.tab_dragging = Some((0, 10.0, 10.0));
+
+    let mut undock_requests = 0;
+    for x in [-100.0, -120.0, -140.0] {
+        let task = f.app.update(Message::Ui(UiMsg::DragMove(x, 10.0)));
+        for message in emitted(task) {
+            if matches!(message, Message::Window(WindowMsg::UndockTab(0))) {
+                undock_requests += 1;
+            }
+            let _ = f.app.update(message);
+        }
+    }
+
+    assert_eq!(undock_requests, 1, "one refusal per drag, not per move");
+    assert!(
+        f.app.ui_state.tab_dragging.is_none(),
+        "the refusal ends the drag"
+    );
+    assert_eq!(f.app.document_state.tabs.len(), 1, "the tab stays docked");
 }

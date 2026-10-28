@@ -91,6 +91,20 @@ impl Signex {
             // A newer write of this file landed first; its own completion
             // (or the inline save that made it) decides.
             Ok(SaveOutcome::Superseded) => return Task::none(),
+            // An older write failing late says nothing about the file now:
+            // the newest write's completion decides, so only log it.
+            Err(reason)
+                if !self
+                    .document_state
+                    .document_saves
+                    .is_newest_begun(&path, sequence) =>
+            {
+                crate::diagnostics::log_warning(format!(
+                    "[save] An earlier write of project {} failed after a newer one began: {reason}",
+                    path.display()
+                ));
+                return Task::none();
+            }
             Err(reason) => {
                 self.document_state
                     .document_saves

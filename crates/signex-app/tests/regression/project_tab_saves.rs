@@ -6,11 +6,11 @@ use std::io;
 use std::path::Path;
 use std::sync::Arc;
 
-use signex_app::app::{FileMsg, Message};
-use signex_app::persist::{DocumentSaves, DocumentSink};
+use signex_app::app::{FileMsg, Message, ProjectCloseChoice, ProjectMsg};
+use signex_app::persist::{AtomicFileSink, DocumentSaves, DocumentSink};
 
 use crate::project_tab_support::{edit_description, fixture, is_dirty, on_disk, open_tab};
-use crate::settle_support::settle_task;
+use crate::settle_support::{settle, settle_task};
 
 /// Fails every write: the disk-full case.
 struct FailingSink(&'static str);
@@ -104,4 +104,85 @@ fn a_failed_write_keeps_the_project_dirty_and_is_reported() {
             .any(|entry| entry.message.contains(reason)),
         "the failure must be in the Messages panel snapshot"
     );
+}
+
+/// Fails only the writes whose bytes contain `marker`; the rest land.
+struct FailingWhenContains(&'static str);
+
+impl DocumentSink for FailingWhenContains {
+    fn write(&self, path: &Path, bytes: &[u8]) -> io::Result<()> {
+        if String::from_utf8_lossy(bytes).contains(self.0) {
+            return Err(io::Error::other("older write failed"));
+        }
+        AtomicFileSink.write(path, bytes)
+    }
+}
+
+#[test]
+fn a_late_failure_of_an_older_write_raises_no_save_failure() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    f.app.document_state.document_saves =
+        DocumentSaves::new(Arc::new(FailingWhenContains("doomed")));
+    edit_description(&mut f.app, "doomed");
+    let older = f.app.update(Message::File(FileMsg::Save));
+    edit_description(&mut f.app, "kept");
+    let newer = f.app.update(Message::File(FileMsg::Save));
+
+    // The older write fails after the newer one began.
+    settle_task(&mut f.app, older);
+    assert!(
+        f.app
+            .document_state
+            .document_saves
+            .failure(&f.prj)
+            .is_none(),
+        "a stale failure must not be recorded for Save All"
+    );
+    assert!(
+        f.app.document_state.error_notice.is_none(),
+        "a stale failure must not raise the Save Failed card"
+    );
+
+    settle_task(&mut f.app, newer);
+    assert_eq!(on_disk(&f.prj).description.as_deref(), Some("kept"));
+    assert!(!is_dirty(&f), "the newest write decides");
+}
+
+#[test]
+fn reopening_a_project_whose_write_is_in_flight_is_refused() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "saved");
+    let held = f.app.update(Message::File(FileMsg::Save));
+
+    crate::close_support::close_first_project(&mut f.app);
+    let _ = f.app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+    assert!(f.app.document_state.projects.is_empty());
+
+    // The old bytes are still on disk; loading them now would be clean.
+    settle(
+        &mut f.app,
+        Message::File(FileMsg::Opened(Some(f.prj.clone()))),
+    );
+    assert!(
+        f.app.document_state.projects.is_empty(),
+        "the project must not load while its write is in flight"
+    );
+
+    settle_task(&mut f.app, held);
+    settle(
+        &mut f.app,
+        Message::File(FileMsg::Opened(Some(f.prj.clone()))),
+    );
+
+    assert_eq!(on_disk(&f.prj).description.as_deref(), Some("saved"));
+    assert_eq!(f.app.document_state.projects.len(), 1);
+    assert_eq!(
+        f.app.document_state.projects[0].data.description.as_deref(),
+        Some("saved")
+    );
+    assert!(!is_dirty(&f));
 }

@@ -1,5 +1,6 @@
-//! General section of the Project tab: the editable name and description,
-//! and the read-only facts about the project's files.
+//! General section of the Project tab: the read-only name (with a Rename…
+//! action), the editable description, and the read-only facts about the
+//! project's files.
 
 mod designator_standard;
 mod view;

@@ -7,8 +7,9 @@
 //! place, through `update`, and its undo history covers only the fields its
 //! sections own. The project name is the file stem and is not a document
 //! edit: Rename… runs the project-tree Rename flow. The tab is docked only
-//! (an undocked window would take the main window's shortcuts). One module per section (`general`); the shell (`view`)
-//! lays out the section list beside the selected section.
+//! (an undocked window would take the main window's shortcuts). One module
+//! per section (`general`); the shell (`view`) lays out the section list
+//! beside the selected section.
 
 mod general;
 mod open;

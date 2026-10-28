@@ -97,6 +97,9 @@ impl Signex {
         // window act on the main window's active tab, so Ctrl+Z / Ctrl+S
         // there would reach another document.
         if tab.kind.as_project().is_some() {
+            // End the tab drag so the next move past the edge does not ask
+            // (and log the refusal) again.
+            self.ui_state.tab_dragging = None;
             crate::diagnostics::log_warning(
                 "The Project tab stays in the main window; it cannot be undocked yet",
             );
