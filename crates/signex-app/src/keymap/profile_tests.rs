@@ -573,3 +573,18 @@ fn discarding_removes_the_backup_and_is_a_no_op_when_there_is_none() {
         "discarding the backup must never touch the live file"
     );
 }
+
+/// #1379 - a built-in profile must not bind one stroke to two commands in
+/// the same context; the later one silently wins at lookup.
+#[test]
+fn no_built_in_profile_binds_a_stroke_to_two_commands() {
+    for id in ["classic", "altium"] {
+        let mut set = ShortcutProfileSet::built_ins().unwrap();
+        set.set_active_profile(id).unwrap();
+        let conflicts = set.compile_active().conflicts();
+        assert!(
+            conflicts.is_empty(),
+            "{id} has conflicting bindings: {conflicts:?}"
+        );
+    }
+}
