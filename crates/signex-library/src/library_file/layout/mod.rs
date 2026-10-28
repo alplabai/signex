@@ -49,6 +49,11 @@ impl fmt::Debug for SourceLayout {
 }
 
 impl SourceLayout {
+    /// Whether text is kept: the file held keys the typed structs drop.
+    pub(crate) fn keeps_text(&self) -> bool {
+        self.0.is_some()
+    }
+
     /// Keep `text` (untyped: `untyped`) if it holds a key `file`, the typed
     /// read of it, does not model.
     pub(super) fn of(
