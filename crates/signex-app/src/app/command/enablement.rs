@@ -138,8 +138,17 @@ impl Signex {
         let active_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
         let (can_undo, can_redo) = if self.erc_dialog_takes_input(window) {
             self.rules_history_available()
+        } else if let Some(path) = self.undocked_tab_path(window) {
+            // Undo / Redo there step that window's document (#1546), so
+            // its menu rows grey by that document's history (#1550).
+            let kind = document
+                .tabs
+                .iter()
+                .find(|t| &t.path == path)
+                .map(|t| &t.kind);
+            self.history_available(kind, Some(path))
         } else {
-            self.history_available(active_kind)
+            self.history_available(active_kind, document.active_path.as_ref())
         };
         CommandContext {
             has_schematic: document.active_engine().is_some(),
@@ -154,6 +163,19 @@ impl Signex {
             can_undo,
             can_redo,
             project_dirty: self.active_project_is_dirty(),
+        }
+    }
+
+    /// The document path of `window` when it is an undocked tab window
+    /// showing a schematic or a PCB.
+    fn undocked_tab_path(&self, window: Option<iced::window::Id>) -> Option<&std::path::PathBuf> {
+        match self.ui_state.windows.get(&window?)? {
+            crate::app::state::WindowKind::UndockedTab { path, .. }
+                if self.undocked_tab_has_canvas(window) =>
+            {
+                Some(path)
+            }
+            _ => None,
         }
     }
 
@@ -191,9 +213,14 @@ impl Signex {
             .map_or((false, false), |h| (h.can_undo(), h.can_redo()))
     }
 
-    /// `(can_undo, can_redo)` for the active tab: an editor tab's own
-    /// history, else net-colour changes and the schematic engine.
-    fn history_available(&self, active_kind: Option<&TabKind>) -> (bool, bool) {
+    /// `(can_undo, can_redo)` for the tab of `kind` showing `path`: an
+    /// editor tab's own history, else net-colour changes and the schematic
+    /// engine.
+    fn history_available(
+        &self,
+        active_kind: Option<&TabKind>,
+        path: Option<&std::path::PathBuf>,
+    ) -> (bool, bool) {
         let document = &self.document_state;
         match active_kind {
             Some(TabKind::SymbolEditor(path)) => document
@@ -209,20 +236,17 @@ impl Signex {
                     (!e.history.is_empty(), !e.redo.is_empty())
                 }),
             _ => {
-                let engine = document.active_engine();
+                let engine = path.and_then(|p| document.engines.get(p));
                 let has_steps = |steps: &std::collections::HashMap<_, Vec<_>>| {
-                    document
-                        .active_path
-                        .as_ref()
-                        .and_then(|p| steps.get(p))
+                    path.and_then(|p| steps.get(p))
                         .is_some_and(|s| !s.is_empty())
                 };
                 (
                     has_steps(&self.ui_state.net_color_undo)
-                        || self.has_net_class_pick(true)
+                        || path.is_some_and(|p| self.has_net_class_pick(p, true))
                         || engine.is_some_and(|e| e.can_undo()),
                     has_steps(&self.ui_state.net_color_redo)
-                        || self.has_net_class_pick(false)
+                        || path.is_some_and(|p| self.has_net_class_pick(p, false))
                         || engine.is_some_and(|e| e.can_redo()),
                 )
             }
@@ -552,19 +576,10 @@ mod tests {
         assert!(!is_enabled(&id("save_document_as"), &ctx));
     }
 
-    /// #1546: Ctrl+Z typed in an undocked schematic window steps that
-    /// window's sheet, even while the main window shows another document
-    /// with history of its own.
-    #[test]
-    fn undo_in_an_undocked_window_steps_that_windows_sheet() {
-        let (mut app, footprint) = with_footprint_editor();
-        app.document_state
-            .footprint_editors
-            .get_mut(&footprint)
-            .unwrap()
-            .push_history();
+    /// An undocked schematic window whose sheet has one undo step, its tab
+    /// placed before the main window's active tab.
+    fn undock_sheet_with_a_step(app: &mut Signex) -> (iced::window::Id, PathBuf) {
         let main_tab = app.document_state.active_tab;
-
         let path = PathBuf::from("undocked.snxsch");
         let mut engine =
             signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default()).unwrap();
@@ -596,6 +611,22 @@ mod tests {
         app.interaction_state
             .canvases
             .insert(window, crate::canvas::CanvasSlot::new());
+        (window, path)
+    }
+
+    /// #1546: Ctrl+Z typed in an undocked schematic window steps that
+    /// window's sheet, even while the main window shows another document
+    /// with history of its own.
+    #[test]
+    fn undo_in_an_undocked_window_steps_that_windows_sheet() {
+        let (mut app, footprint) = with_footprint_editor();
+        app.document_state
+            .footprint_editors
+            .get_mut(&footprint)
+            .unwrap()
+            .push_history();
+        let (window, path) = undock_sheet_with_a_step(&mut app);
+        let main_tab = app.document_state.active_tab;
 
         let _ = app.dispatch_command(&id("undo"), CommandArgs::none(), Some(window));
 
@@ -607,8 +638,31 @@ mod tests {
                 .is_empty(),
             "the main window's footprint editor kept its step"
         );
-        assert_eq!(app.document_state.active_tab, main_tab + 1);
+        assert_eq!(app.document_state.active_tab, main_tab);
         assert_eq!(app.document_state.active_path, None);
+    }
+
+    /// #1550: an undocked window's Edit menu greys Undo / Redo by that
+    /// window's sheet, and a click there steps that sheet.
+    #[test]
+    fn the_undocked_windows_edit_menu_follows_its_own_sheet() {
+        let (mut app, _task) = Signex::new();
+        let (window, path) = undock_sheet_with_a_step(&mut app);
+
+        assert!(!enabled(&app, "undo"), "the main window has no history");
+        let ctx = app.command_context(Some(window));
+        assert!(is_enabled(&id("undo"), &ctx));
+        assert!(!is_enabled(&id("redo"), &ctx));
+
+        let _ = app.update(Message::Ui(UiMsg::MenuInWindow {
+            window,
+            msg: MenuMessage::Undo,
+        }));
+
+        assert!(app.document_state.engines[&path].can_redo());
+        let ctx = app.command_context(Some(window));
+        assert!(!is_enabled(&id("undo"), &ctx));
+        assert!(is_enabled(&id("redo"), &ctx));
     }
 
     /// #907 review: Save As and Print explain in the Messages panel why

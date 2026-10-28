@@ -197,6 +197,13 @@ pub enum UiMsg {
     /// Nothing to do. Produced by widgets / tasks that must emit a
     /// `Message` but carry no event.
     Noop,
+    /// Edit → Undo / Redo clicked in an undocked tab's own menu bar. Runs
+    /// the command against that window's document, as its shortcut does
+    /// (#1550); every other menu row still arrives as `Message::Menu`.
+    MenuInWindow {
+        window: iced::window::Id,
+        msg: MenuMessage,
+    },
     /// Async result of a per-file Git history load issued by the
     /// right-dock History panel. `generation` is the value of
     /// `DocumentState.history.generation` when the load was kicked off;
