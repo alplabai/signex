@@ -66,16 +66,21 @@ impl NavigatorJob {
             self.in_flight = None;
             return None;
         }
-        let exhausted = self
-            .failed
-            .as_ref()
-            .is_some_and(|(fp, attempts)| *fp == wanted.fingerprint && *attempts >= MAX_ATTEMPTS);
-        if exhausted || self.in_flight.is_some() {
+        if self.is_exhausted() || self.in_flight.is_some() {
             return None;
         }
         self.generation += 1;
         self.in_flight = Some((self.generation, wanted.fingerprint.clone()));
         Some((self.generation, wanted.clone()))
+    }
+
+    /// True when the wanted state failed [`MAX_ATTEMPTS`] times in a row and
+    /// will not be tried again until the inputs change.
+    pub fn is_exhausted(&self) -> bool {
+        let wanted = self.wanted_fingerprint();
+        self.failed
+            .as_ref()
+            .is_some_and(|(fp, attempts)| Some(fp.as_str()) == wanted && *attempts >= MAX_ATTEMPTS)
     }
 
     /// Forget the running assembly, so the next [`begin`](Self::begin) starts
@@ -194,6 +199,7 @@ mod tests {
             assert!(!job.finish(g, None, false), "attempt {attempt} failed");
         }
         assert!(job.begin("").is_none(), "gives up rather than spinning");
+        assert!(job.is_exhausted(), "the stuck state can be reported");
         job.want(Some(req("b")));
         assert!(job.begin("").is_some());
     }

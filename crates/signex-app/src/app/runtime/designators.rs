@@ -59,8 +59,11 @@ impl Signex {
     pub(crate) fn shown_placement(&self, path: &std::path::Path) -> Option<InstancePath> {
         let document_state = &self.document_state;
         let recorded = document_state.tab_placements.get(path);
-        let hierarchy = self
-            .settled_navigator_hierarchy()
+        let hierarchy = document_state
+            .panel_ctx
+            .navigator
+            .hierarchy
+            .as_ref()
             .filter(|_| document_state.active_path.as_deref() == Some(path));
         let Some(hierarchy) = hierarchy else {
             return recorded.cloned();

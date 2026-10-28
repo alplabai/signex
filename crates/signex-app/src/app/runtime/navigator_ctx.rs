@@ -115,19 +115,6 @@ impl Signex {
             .is_settled(&self.document_state.panel_ctx.navigator.fingerprint)
     }
 
-    /// The Navigator's hierarchy, only while it is the current one and nothing
-    /// is rebuilding it. Readers that decide something from it (which
-    /// placement a descent or a click starts from) use this; the panel itself
-    /// shows the previous hierarchy meanwhile.
-    pub(crate) fn settled_navigator_hierarchy(
-        &self,
-    ) -> Option<&crate::app::sheet_hierarchy::SheetHierarchy> {
-        if !self.navigator_is_settled() {
-            return None;
-        }
-        self.document_state.panel_ctx.navigator.hierarchy.as_ref()
-    }
-
     /// An assembly landed: swap it in if it is still what the Navigator
     /// wants, then start the latest wanted one if it moved on meanwhile.
     pub(crate) fn handle_navigator_assembled(
@@ -146,9 +133,15 @@ impl Signex {
             Ok(_) => return self.start_navigator_assembly().unwrap_or_else(Task::none),
             Err(reason) => {
                 crate::diagnostics::log_warning(format!(
-                    "Navigator: the sheet hierarchy could not be built ({reason});\
+                    "Navigator: the sheet hierarchy could not be built ({reason}); \
                      it keeps its previous state until it is retried"
                 ));
+                if self.document_state.navigator_job.is_exhausted() {
+                    crate::diagnostics::log_warning(
+                        "Navigator: giving up on rebuilding the sheet hierarchy after repeated \
+                         failures; it stays as it was until the project changes",
+                    );
+                }
                 return self.start_navigator_assembly().unwrap_or_else(Task::none);
             }
         };
