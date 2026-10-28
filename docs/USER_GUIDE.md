@@ -333,6 +333,42 @@ A schematic without placed parts produces an empty BOM.
 The same menu also offers **Netlist (Protel .NET)…** and **ERC Report…**
 (saved as `erc-report.txt` by default).
 
+### Title block, project parameters and special strings
+
+The title block of every sheet is filled from **project parameters**. Open the
+project's **Project** tab (project tree, **Project Options**) and choose
+**Parameters**: title, document number, revision, date, company, drawn by,
+checked by and approved by apply to every sheet, and **Custom parameters** adds
+your own name/value pairs. Edits there are undoable with `Ctrl+Z` and are saved
+to the `.snxprj` with `Ctrl+S`.
+
+A sheet can override a value: in the sheet's **Properties** panel, **Title
+Block** section, type the value for that sheet. The label shows `(project)`
+while the field is empty and takes the project's value, and `(overrides
+project)` while the sheet has its own. Clear the field to fall back to the
+project's value.
+
+Any text note, and the title block, can use these special strings. They
+resolve the same way on the canvas, in the PDF and in the SVG page:
+
+| String | Value |
+|---|---|
+| `${PROJECT_NAME}` | the project's name |
+| `${TITLE}` | title |
+| `${DOCUMENTNUMBER}` | document number |
+| `${REVISION}` (or `${REV}`) | revision |
+| `${DATE}` | date |
+| `${COMPANY}` | company |
+| `${DRAWNBY}`, `${CHECKEDBY}`, `${APPROVEDBY}` | the sign-off names |
+| `${COMMENT1}` to `${COMMENT4}` | the four comment lines |
+| `${SHEETNUMBER}`, `${SHEETCOUNT}` | this sheet's number and the sheet count |
+| `${SHEETNAME}`, `${FILENAME}` | the sheet's name and file name |
+| `${NAME}` | a custom parameter called `NAME` (case matters) |
+
+An unknown string prints as empty text. The standard title block prints the
+title, document number, revision, sheet, date, company, file name and the
+Drawn / Checked / Approved row.
+
 ## Walkthrough: a saved schematic with a wired symbol
 
 This is sections 3 to 10 as one run. Each step names the section with the

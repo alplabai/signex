@@ -46,6 +46,7 @@ fn project(
         net_classes: Vec::new(),
         rules: None,
         annotation: None,
+        parameters: Default::default(),
         unknown: Default::default(),
     };
     data.set_designator_standard(standard);
