@@ -589,10 +589,14 @@ pub trait LibraryAdapter: Send + Sync {
     // returns the revision the copy was read at; `save_*_versioned` sends it
     // back as the base, and the save is refused with
     // `LibraryError::RowChanged` when the stored primitive has moved on.
-    // A `None` base creates the primitive (`Conflict` if it exists). The
-    // saved revision comes back so the next save of the same copy can use
-    // it. Backends without primitive revisions keep the defaults, which
-    // carry `None` both ways.
+    // On a versioned backend a `None` base creates the primitive
+    // (`Conflict` if it exists). The saved revision comes back so the next
+    // save of the same copy can use it. The defaults carry `None` both ways
+    // and call the plain `save_*`, so a `None`-base save is only create-only
+    // when the plain `save_*` is. A shared backend must therefore make its
+    // plain `save_*` create-only (as `DatabaseAdapter` does); a local
+    // single-writer backend such as `LocalGitAdapter` overwrites, which is
+    // fine there because nobody else writes the copy.
 
     fn get_symbol_versioned(&self, uuid: Uuid) -> Result<Versioned<Symbol>, LibraryError> {
         self.get_symbol(uuid).map(|value| Versioned {
