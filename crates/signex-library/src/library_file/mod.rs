@@ -36,7 +36,7 @@ pub use layout::SourceLayout;
 
 /// Format token written at the top of every `.snxlib`. Bumping this is a
 /// wire-format break — older Signex versions refuse to open the file.
-pub const FORMAT_TOKEN: &str = "snxlib/1";
+pub const FORMAT_TOKEN: &str = "snxlib/2";
 
 /// Top-level on-disk shape of a `.snxlib` file.
 ///

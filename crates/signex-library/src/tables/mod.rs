@@ -45,8 +45,9 @@ use crate::validate::validate_row_for_write;
 /// Header row — the canonical column ordering for every adapter.
 ///
 /// Renaming or reordering this is a wire-format break: existing TSV files
-/// would parse into the wrong fields. Add new columns at the end with a
-/// `#[serde(default)]` on the row struct.
+/// would parse into the wrong fields. New columns go at the end and are
+/// required: signex keeps no compatibility with tables written before a
+/// column existed.
 ///
 /// An optional 23rd column, [`ALTERNATE_SYMBOLS_COLUMN`], follows these 22.
 /// Readers accept both widths; writers emit it only when a row has
