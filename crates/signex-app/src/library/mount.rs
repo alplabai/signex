@@ -273,10 +273,14 @@ impl LibraryState {
         } else {
             self.set.mount(prepared.adapter)?;
         }
+        let mut entry = prepared.entry;
         if stock {
-            self.stock_library = Some(prepared.entry.root.clone());
+            self.stock_library = Some(entry.root.clone());
         }
-        self.open_libraries.push(prepared.entry);
+        // Prepared off-thread, possibly before a Save Preferences landed on
+        // disk: take the model's values, not the worker's placeholder.
+        entry.display = LibraryDisplaySettings::seeded(&self.new_library_defaults);
+        self.open_libraries.push(entry);
         self.touch_data();
         self.sweep_dangling_refs();
         Ok(())

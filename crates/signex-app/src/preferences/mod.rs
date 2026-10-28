@@ -125,6 +125,10 @@ pub enum PrefMsg {
     DiscardAndClose,
     /// Commit the current draft and keep the dialog open.
     Save,
+    /// Every `prefs.json` write a Save started has finished (#1351). Save
+    /// returns them as background tasks, so the file-health probe that
+    /// reports a refused write has to wait for this.
+    SaveWritesFinished,
     /// Update the draft theme (not applied until Save).
     DraftTheme(ThemeId),
     /// Update the draft UI font (not applied until Save).
