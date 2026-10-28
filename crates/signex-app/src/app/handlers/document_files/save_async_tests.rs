@@ -28,6 +28,8 @@ fn land(app: &mut Signex, path: &Path, revision: u64) {
         revision,
         net_color_revision: 0,
         save_as_from: None,
+        bytes: std::sync::Arc::new(b"saved".to_vec()),
+        sequence: 0,
         result: Ok(SaveOutcome::Written),
         recovery_hold: None,
     })));

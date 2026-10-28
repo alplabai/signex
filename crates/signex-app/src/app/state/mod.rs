@@ -670,9 +670,15 @@ pub struct DocumentState {
     /// [`Signex::commit_save_to_project_git`] enqueues the work and
     /// clears on `Message::Project(ProjectMsg::GitCommitDone)`.
     pub inflight_git_commits: std::collections::HashSet<(PathBuf, PathBuf)>,
-    /// Files enqueued again while their commit was inflight, with the
-    /// newest message; one more commit is queued when the running one ends.
-    pub requeued_git_commits: std::collections::HashMap<(PathBuf, PathBuf), String>,
+    /// The subset of `inflight_git_commits` whose commit reads the working
+    /// file when its worker starts instead of holding the bytes it records
+    /// (primitive-editor saves, project-file saves, renames). A History
+    /// restore of such a file waits, or the commit would record the restored
+    /// bytes under its own label; commits that carry their bytes never block it.
+    pub unbound_git_commits: std::collections::HashSet<(PathBuf, PathBuf)>,
+    /// The newest save sequence queued for a commit, per `(project_root,
+    /// rel_path)`; a commit of an older write is dropped.
+    pub git_commit_sequences: std::collections::HashMap<(PathBuf, PathBuf), u64>,
     /// #833 — repo roots with a commit currently running. At most one
     /// commit per repo is in flight; the rest wait in
     /// `pending_git_commits` so concurrent tasks never race on the
@@ -765,6 +771,30 @@ pub struct PendingGitCommit {
     /// a rename in the history (#1219).
     pub removed_rel_path: Option<PathBuf>,
     pub message: String,
+    /// The exact bytes to commit for `rel_path`: what a save wrote or a
+    /// restore read back. `None` commits the working file as it is when the
+    /// worker runs (callers that hold no copy of what they wrote).
+    pub content: Option<crate::persist::SharedBytes>,
+}
+
+impl PendingGitCommit {
+    /// Whether the worker reads the working file when it runs: it holds no
+    /// bytes, or it is a rename commit, which stages the file from disk and
+    /// ignores any bytes.
+    pub fn reads_working_file(&self) -> bool {
+        self.content.is_none() || self.removed_rel_path.is_some()
+    }
+}
+
+/// The bytes a commit records and the order of the write they came from.
+/// Saves of one file can report completion out of order; a commit of an
+/// older write must never replace, or queue behind, a newer one's.
+#[derive(Debug, Clone)]
+pub struct CommitBytes {
+    pub bytes: crate::persist::SharedBytes,
+    /// The write's position in its document-save ledger; `0` is exempt from
+    /// ordering (a restore).
+    pub sequence: u64,
 }
 
 /// Which sidebar tab is currently shown inside the BOM preview's
