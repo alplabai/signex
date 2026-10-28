@@ -37,6 +37,9 @@ mod status;
 mod symbol_context;
 mod widgets;
 
+#[cfg(test)]
+mod planned_tests;
+
 pub(crate) use element_properties::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
 };

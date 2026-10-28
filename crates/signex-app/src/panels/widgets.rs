@@ -157,6 +157,9 @@ pub fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a,
         column![
             section_title(title, &ctx.tokens),
             separator(&ctx.tokens),
+            text(crate::active_bar::PLANNED_TOOLTIP)
+                .size(10)
+                .color(theme_ext::text_primary(&ctx.tokens)),
             text(desc.to_string())
                 .size(TS.caption)
                 .color(theme_ext::text_secondary(&ctx.tokens)),

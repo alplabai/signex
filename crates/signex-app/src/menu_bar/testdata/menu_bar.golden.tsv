@@ -42,8 +42,8 @@ Edit/---	separator	-	-	-	-	-	-
 Edit/Find	item	Find	find	Ctrl+F	Find	11111111	cmd:find
 Edit/Find and Replace	item	Find and Replace	find_and_replace	Ctrl+H	Replace	11111111	cmd:find_and_replace
 View	menu	View	-	-	-	-	-
-View/Zoom In	stub	Zoom In	zoom_in_at_cursor	Ctrl+=	-	00000000	never
-View/Zoom Out	stub	Zoom Out	zoom_out_at_cursor	Ctrl+-	-	00000000	never
+View/Zoom In	item	Zoom In	zoom_in_at_cursor	Ctrl+=	ZoomIn	11111111	cmd:zoom_in_at_cursor
+View/Zoom Out	item	Zoom Out	zoom_out_at_cursor	Ctrl+-	ZoomOut	11111111	cmd:zoom_out_at_cursor
 View/Fit All	item	Fit All	zoom_to_fit	Home	ZoomFit	01100100	cmd:zoom_to_fit
 View/---	separator	-	-	-	-	-	-
 View/Toggle Grid	item	Toggle Grid	toggle_visible_grid	Shift+Ctrl+G	ToggleGrid	11111111	cmd:toggle_visible_grid
@@ -63,10 +63,10 @@ Place/Bus	item	Bus	place_bus	B	PlaceBus	01000000	cmd:place_bus
 Place/Net Label	item	Net Label	place_net_label	L	PlaceLabel	01000000	cmd:place_net_label
 Place/---	separator	-	-	-	-	-	-
 Place/Component...	item	Component...	open_components_panel	P	PlaceComponent	01000000	cmd:open_components_panel
-Place/Power Port	stub	Power Port	-	-	-	00000000	never
+Place/Power Port	item	Power Port	-	-	PlacePowerPort	01000000	sch
 Place/---	separator	-	-	-	-	-	-
-Place/Text	stub	Text	-	-	-	00000000	never
-Place/No Connect	stub	No Connect	-	-	-	00000000	never
+Place/Text	item	Text	-	-	PlaceText	01000000	sch
+Place/No Connect	item	No Connect	-	-	PlaceNoConnect	01000000	sch
 Place/Sheet Entry	stub	Sheet Entry	-	-	-	00000000	never
 Design	menu	Design	-	-	-	-	-
 Design/Annotation	submenu	Annotation	-	-	-	-	-
@@ -82,7 +82,7 @@ Design/Annotation/Number Schematic Sheets...	stub	Number Schematic Sheets...	-	-
 Design/---	separator	-	-	-	-	-	-
 Design/Electrical Rules Check	item	Electrical Rules Check	run_erc	F8	Erc	01001000	cmd:run_erc
 Design/---	separator	-	-	-	-	-	-
-Design/Generate BOM	stub	Generate BOM	-	-	-	00000000	never
+Design/Generate BOM	item	Generate BOM	-	-	ExportBom	01000000	sch
 Tools	menu	Tools	-	-	-	-	-
 Tools/Assign Footprints	stub	Assign Footprints	-	-	-	00000000	never
 Tools/Library Editor	stub	Library Editor	-	-	-	00000000	never
