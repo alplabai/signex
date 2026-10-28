@@ -366,7 +366,7 @@ const BOUNDS: Rectangle = Rectangle {
     height: 600.0,
 };
 
-fn screen_at(app: &Signex, wx: f32, wy: f32) -> iced::Point {
+pub(super) fn screen_at(app: &Signex, wx: f32, wy: f32) -> iced::Point {
     let (ox, oy, scale) = app.interaction_state.active_canvas().live_camera();
     iced::Point::new(wx * scale + ox, wy * scale + oy)
 }
@@ -377,6 +377,27 @@ fn canvas_event(
     state: &mut CanvasState,
     event: Event,
     at: iced::Point,
+) -> Option<Message> {
+    deliver(app, state, event, at, false)
+}
+
+/// [`canvas_event`] for a canvas that shows the session's ghost, as the
+/// window of the placement's target sheet does.
+pub(super) fn canvas_event_placing(
+    app: &mut Signex,
+    state: &mut CanvasState,
+    event: Event,
+    at: iced::Point,
+) -> Option<Message> {
+    deliver(app, state, event, at, true)
+}
+
+fn deliver(
+    app: &mut Signex,
+    state: &mut CanvasState,
+    event: Event,
+    at: iced::Point,
+    with_ghost: bool,
 ) -> Option<Message> {
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
     let overrides = HashMap::new();
@@ -404,6 +425,9 @@ fn canvas_event(
             wire_class_styles: &class_styles,
             wire_class_revision: 0,
             selection_filters: &app.interaction_state.selection_filters,
+            placement: with_ghost
+                .then(|| app.interaction_state.placement.as_ref().map(|s| &s.ghost))
+                .flatten(),
         };
         let view = SchematicCanvas::new(app.interaction_state.active_canvas(), prefs);
         view.update(state, &event, BOUNDS, mouse::Cursor::Available(at))
@@ -415,7 +439,7 @@ fn canvas_event(
     message
 }
 
-fn left_press() -> Event {
+pub(super) fn left_press() -> Event {
     Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
 }
 

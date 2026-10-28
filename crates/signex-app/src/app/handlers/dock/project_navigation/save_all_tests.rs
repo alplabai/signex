@@ -498,11 +498,19 @@ fn loose_identical_variants_collapse_when_the_directory_probe_says_so() {
 }
 
 /// The mirror image: a directory that probes case-sensitive keeps the two
-/// spellings apart on any host, so a host that folds by default (Windows)
-/// goes red if `fold_for_save` reverts to the host default.
+/// spellings apart, so a host that folds by default (Windows) goes red if
+/// Save All reverts to the host default.
+///
+/// The probe result is fed in, but the writes still hit the real volume: on a
+/// case-insensitive one (APFS on the macOS runners, #1576) `Lib.snxsch` and
+/// `lib.snxsch` really are one file, so the premise only holds where the temp
+/// directory is genuinely case-sensitive.
 #[test]
 fn loose_identical_variants_stay_apart_when_the_directory_probe_says_so() {
     let dir = tempfile::tempdir().expect("tempdir");
+    if crate::app::state::volume_case::directory_ignores_case(dir.path()) {
+        return;
+    }
     let (mut app, upper, lower) = loose_identical_variants(dir.path());
     let sink = count_writes(&mut app);
     let probes = HashMap::from([(dir.path().to_path_buf(), false)]);

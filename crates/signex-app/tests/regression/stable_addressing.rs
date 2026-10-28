@@ -120,6 +120,7 @@ fn close_project_with_interleaved_tabs_keeps_the_active_document() {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                parameters: Default::default(),
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),

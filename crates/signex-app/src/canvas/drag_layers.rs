@@ -519,6 +519,7 @@ mod tests {
                     class_revision: 0,
                 }),
                 designators: None,
+                special_strings: None,
             },
         )
     }

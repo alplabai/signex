@@ -18,8 +18,10 @@ pub(crate) mod gpu_mount;
 pub mod grid;
 mod input;
 mod move_pick;
+pub mod placement_ghost;
 mod shape_preview;
 mod shift_selection;
+mod special_strings;
 
 use gpu_mount::ContentMode;
 use shift_selection::shift_snapshot_for_selection;
@@ -32,7 +34,9 @@ use iced::{Color, Rectangle, Renderer, Theme};
 pub use camera::Camera;
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 pub use move_pick::MovePick;
+pub use placement_ghost::PlacementGhost;
 pub use shape_preview::ShapePreviewKind;
+pub use special_strings::SpecialStrings;
 
 use crate::schematic_runtime::SchematicSheetExt as _;
 
@@ -157,6 +161,9 @@ pub struct CanvasSlot {
     /// Border, zone markers and title block for the paper, lowered by the
     /// app with the same lowering the PDF uses (#1079). Drawn in sheet mm.
     pub sheet_frame: Vec<signex_output::template::FramePrimitive>,
+    /// What `${TOKEN}` special strings resolve to in this sheet's text
+    /// notes (#1080); `None` leaves the text as stored.
+    pub special_strings: Option<SpecialStrings>,
     /// Designators of the placement this tab was opened through (#1151), by
     /// symbol uuid, for the symbols whose designator there differs from their
     /// `reference`. Empty for a tab with no recorded placement. Set by the app
@@ -250,6 +257,7 @@ impl CanvasSlot {
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
             sheet_frame: Vec::new(),
+            special_strings: None,
             designators: std::collections::HashMap::new(),
             designators_key: None,
             erc_markers: Vec::new(),
@@ -340,16 +348,6 @@ impl CanvasSlot {
         self.viewport.set(bounds);
     }
 
-    /// World-space point (mm) under the centre of the last-recorded canvas
-    /// viewport. Used to drop a part that was picked from a list rather than
-    /// aimed at the canvas.
-    pub fn view_centre_world(&self) -> (f64, f64) {
-        let bounds = self.viewport.get();
-        let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
-        let world = self.camera.borrow().screen_to_world(centre, bounds);
-        (f64::from(world.x), f64::from(world.y))
-    }
-
     /// View > Zoom In/Out: one `step` notch about the centre; false at the limits.
     pub fn zoom_about_centre(&self, zoom_in: bool, step: f32) -> bool {
         let bounds = self.viewport.get();
@@ -436,6 +434,9 @@ pub struct CanvasViewPrefs<'a> {
     /// the map does.
     pub wire_class_revision: u64,
     pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
+    /// Content attached to the cursor, for the window whose document is the
+    /// session's target sheet only (`None` everywhere else).
+    pub placement: Option<&'a PlacementGhost>,
 }
 
 impl CanvasViewPrefs<'_> {
@@ -482,6 +483,7 @@ impl<'a> SchematicCanvas<'a> {
         crate::schematic_runtime::SceneOverrides {
             wire_styling: Some(self.prefs.wire_styling()),
             designators: Some(&self.slot.designators),
+            special_strings: self.slot.special_strings.as_ref(),
         }
     }
 
@@ -875,6 +877,7 @@ mod tests {
             wire_class_styles: class_styles,
             wire_class_revision: 0,
             selection_filters: filters,
+            placement: None,
         }
     }
 

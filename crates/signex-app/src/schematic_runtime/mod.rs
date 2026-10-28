@@ -365,6 +365,8 @@ pub struct SceneOverrides<'a> {
     /// Designators of the placement the tab was opened through (#1151), by
     /// symbol uuid; only those that differ from the symbol's `reference`.
     pub designators: Option<&'a HashMap<uuid::Uuid, String>>,
+    /// Resolves `${TOKEN}` special strings in text notes (#1080).
+    pub special_strings: Option<&'a crate::canvas::SpecialStrings>,
 }
 
 pub fn render_schematic(

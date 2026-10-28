@@ -144,9 +144,31 @@ To place a part, open a schematic sheet, then either:
   **Place**; or
 - press **Place** at the end of a part's row in the Components panel.
 
-The part is dropped near the centre of the view with the next free
-designator, and one **Undo** removes it. With no schematic open, Signex shows
-a **Place Failed** notice instead.
+The part attaches to the cursor and follows it on the grid. While it is
+attached:
+
+- **Rotate and mirror** it with the keys that rotate and mirror a selection
+  (section 13: `Space` rotates in the default profile; `X` and `Y` mirror). They
+  turn the part on the cursor, not whatever is selected on the sheet.
+- Press `Tab` to open the pre-placement properties in the Properties panel:
+  the value, the designator and the rotation. Placement pauses until you press
+  **Resume**.
+- Click to place it. One click is one **Undo** step. The part stays on the
+  cursor, and each further click places another copy with the next free
+  designator (R1, R2, R3...). A designator typed in the `Tab` form is used for
+  the next click and then counts up from it. If that designator is already on
+  the sheet, the click uses the next free one and the Messages panel says so.
+  A blank value in the `Tab` form is ignored: the part keeps its value.
+  Pressing on the sheet while a part is on the cursor always places it; it
+  never moves or selects what is already there.
+  A part with several units places unit 1 under a new number at each click.
+- Press `Esc` or right-click to let go of the part.
+
+The part belongs to the sheet that was showing when you picked it. Switching to
+another tab, or closing the sheet, lets go of it, and a click on another sheet
+never places into it. A sheet written by a newer Signex is read-only in this
+build: Signex says so in the Messages panel and does not attach the part. With
+no schematic open, Signex shows a **Place Failed** notice instead.
 
 **Datasheets.** A part's Component Preview tab has a **Datasheet** tab that
 holds one or more documents: a datasheet per manufacturer, an errata, an
@@ -156,6 +178,21 @@ label. **Add document** appends one; **Make primary**, **Up**, **Down** and
 the one the schematic treats as the part's datasheet. Selecting a placed part
 lists all of its documents in the Properties panel. A document left empty is
 not saved.
+
+**Copy and paste.** Select items and use **Edit ▸ Copy** or **Edit ▸ Cut**,
+then **Edit ▸ Paste**. The copy attaches to the cursor, centred on it and
+snapped to the grid. The rotate and mirror keys turn the whole group about the
+cursor (a single pasted part turns about the cursor too, not about itself), a
+click places it as one **Undo** step, and the paste then ends: paste again to
+place another copy. `Esc` or a right-click drops it. Pasted parts keep
+their designators, so run **Annotate** (section 8) to renumber duplicates. The
+copy carries the library symbols its parts use, so it can be pasted into another
+sheet; if that sheet already holds a different version of one of those symbols,
+Signex says so in the Messages panel and the pasted parts use the sheet's
+version. A group of more than 60 items follows the cursor as an outline.
+**Edit ▸ Paste Special** skips the cursor and places the copy at once, to the
+right of the sheet's content. A sheet written by a newer Signex is read-only in
+this build, so nothing is pasted into it.
 
 ## 6. Wire
 
@@ -260,8 +297,11 @@ the project in the Projects panel, choose **Project Options...** and pick a
 **Designator standard** (IEEE 315, DIN 40719-2 or EN IEC 81346-2). New parts
 then get the standard's letters for their component class, for example a diode
 is `D` under IEEE 315 and `V` under DIN 40719-2. Power ports and flags keep
-their `#` references, and a class the standard does not cover (such as
-Generic) uses the symbol's own letters. Editing a reference by hand always
+their `#` references, and a class the standard does not name (such as Generic,
+or a crystal under EN IEC 81346-2) uses the symbol's own letters. EN IEC
+81346-2 uses its single-letter main classes. The letters and the pages of the
+standards they come from are listed in
+`docs/architecture/designator-standards.md`. Editing a reference by hand always
 wins, and **Library designator** switches the project back to the default.
 The choice is saved in the project file when you save the project.
 
@@ -308,6 +348,39 @@ parameter yet, so the key has to be set in the row data directly.
 
 Parts of the dialog are marked in the dialog itself as not active yet (the
 multi-sheet columns and the parameter-matching checkboxes).
+
+### Find and Replace
+
+**Edit ▸ Find** (`Ctrl+F`) and **Find and Replace** (`Ctrl+H` in the Altium
+profile) search the text of labels, text notes, designators and values. The
+**Scope** row chooses how far the search reaches:
+
+- **Sheet** searches the active sheet only.
+- **Project** searches every sheet of the project, including sheets you have
+  not opened. Results are grouped under the sheet they are on. A sheet that
+  cannot be read, or that was written by a newer Signex and is read-only in
+  this build, is not searched; the dialog says so and the Messages panel names
+  it.
+
+Click a result to open its sheet and zoom to the item. `F3` steps to the next
+result and `Shift+F3` to the previous one (in both profiles), wrapping at the
+ends. A sheet placed more than once shows one designator result per placement,
+labelled "placement 2 of 3".
+
+**Replace Current** and **Replace All** replace only the matched text, not the
+whole field, and match without regard to case. In **Project** scope a Replace
+All is one undo step: `Ctrl+Z` on any of the changed sheets reverts every one of
+them together. If one of those sheets was edited afterwards, the undo is
+refused and the Messages panel names the sheet; undo the newer edit first.
+
+A replace never writes a sheet you have not opened. It loads the sheet, changes
+it in memory and leaves it unsaved, like any other edit, so save it (or discard
+it) when you are ready. The Messages panel logs "Replaced N on M sheets" and
+names them. The text replaced is always read from the sheet as it is when you
+press Replace, never from the search results, so an edit made after the search
+is not overwritten with stale text. If you open, save or close a document, or close the
+project, while a project Replace is still reading the sheets, it is cancelled with a
+Messages line and changes nothing; run it again.
 
 ## 9. Run ERC
 
@@ -374,6 +447,42 @@ A schematic without placed parts produces an empty BOM.
 The same menu also offers **Netlist (Protel .NET)…** and **ERC Report…**
 (saved as `erc-report.txt` by default).
 
+### Title block, project parameters and special strings
+
+The title block of every sheet is filled from **project parameters**. Open the
+project's **Project** tab (project tree, **Project Options**) and choose
+**Parameters**: title, document number, revision, date, company, drawn by,
+checked by and approved by apply to every sheet, and **Custom parameters** adds
+your own name/value pairs. Edits there are undoable with `Ctrl+Z` and are saved
+to the `.snxprj` with `Ctrl+S`.
+
+A sheet can override a value: in the sheet's **Properties** panel, **Title
+Block** section, type the value for that sheet. The label shows `(project)`
+while the field is empty and takes the project's value, and `(overrides
+project)` while the sheet has its own. Clear the field to fall back to the
+project's value.
+
+Any text note, and the title block, can use these special strings. They
+resolve the same way on the canvas, in the PDF and in the SVG page:
+
+| String | Value |
+|---|---|
+| `${PROJECT_NAME}` | the project's name |
+| `${TITLE}` | title |
+| `${DOCUMENTNUMBER}` | document number |
+| `${REVISION}` (or `${REV}`) | revision |
+| `${DATE}` | date |
+| `${COMPANY}` | company |
+| `${DRAWNBY}`, `${CHECKEDBY}`, `${APPROVEDBY}` | the sign-off names |
+| `${COMMENT1}` to `${COMMENT4}` | the four comment lines |
+| `${SHEETNUMBER}`, `${SHEETCOUNT}` | this sheet's number and the sheet count |
+| `${SHEETNAME}`, `${FILENAME}` | the sheet's name and file name |
+| `${NAME}` | a custom parameter called `NAME` (case matters) |
+
+An unknown string prints as empty text. The standard title block prints the
+title, document number, revision, sheet, date, company, file name and the
+Drawn / Checked / Approved row.
+
 ## Walkthrough: a saved schematic with a wired symbol
 
 This is sections 3 to 10 as one run. Each step names the section with the
@@ -438,6 +547,8 @@ Shortcuts used in this guide, in the default Altium profile:
 | Run ERC | `F8` |
 | Annotate | `T A` |
 | Annotate quietly | `Alt+A` |
+| Find / Find and Replace | `Ctrl+F` / `Ctrl+H` |
+| Next / previous Find result | `F3` / `Shift+F3` |
 | Toggle visible grid | `Ctrl+Shift+G` |
 | Keyboard shortcut reference | `F1` |
 | Preferences | `Ctrl+,` |

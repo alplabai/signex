@@ -97,6 +97,7 @@ fn scene_cache_rebuilds_on_class_style_or_designator_change() {
                         class_revision: revision,
                     }),
                     designators: Some(designators),
+                    special_strings: None,
                 },
             );
             cache.builds()

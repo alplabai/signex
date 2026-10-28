@@ -42,6 +42,7 @@ fn project_with_sheet(dir: &Path) -> (Signex, PathBuf) {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),

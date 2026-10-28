@@ -121,6 +121,11 @@ impl Signex {
             overrides,
             rule_set,
             config: signex_erc::ErcConfig::with_pin_matrix_overrides(&pin_matrix_overrides),
+            net_waivers: ds
+                .active_document_project()
+                .and_then(|p| p.data.rules.as_ref())
+                .map(|r| r.erc_net_waivers.clone())
+                .unwrap_or_default(),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
         };
 
@@ -183,6 +188,7 @@ impl Signex {
             .get(self.document_state.active_tab)
             .map(|t| t.path.clone());
         self.ui_state.erc_violations_by_path = outcome.by_path.clone();
+        self.ui_state.erc_waived_hidden = outcome.waived_hidden.clone();
         self.ui_state.erc_focus_global_index = self
             .ui_state
             .erc_violations_by_path
@@ -274,6 +280,7 @@ impl Signex {
                             signex_erc::LocationSpace::ThisSheet | signex_erc::LocationSpace::Net
                         ),
                         net: v.net.clone(),
+                        rule_id: v.rule_id.to_string(),
                     });
                 }
             }
