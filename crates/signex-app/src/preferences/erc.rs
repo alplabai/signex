@@ -6,6 +6,10 @@ use super::*;
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 pub(super) fn content_erc<'a>(
     overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
 ) -> Element<'a, PrefMsg> {
@@ -21,10 +25,10 @@ pub(super) fn content_erc<'a>(
         text("Electrical Rules Severity").size(15).style(text_primary),
         Space::new().height(4),
         text("Per-rule severity override. Errors show red, Warnings yellow, Info blue; Off silences the rule entirely.")
-            .size(11)
+            .size(TS.body)
             .style(text_muted),
     ]
-    .padding([16, 20]);
+    .padding([SP.xl, 20.0]);
 
     let mut rows_col = column![].spacing(0).padding([0, 20]);
     for rule in &RuleKind::ALL {
@@ -38,9 +42,14 @@ pub(super) fn content_erc<'a>(
         } else {
             rule.label().to_string()
         };
-        let mut row_ui = row![text(label).size(12).style(text_primary).width(Length::Fill)]
-            .spacing(6)
-            .align_y(iced::Alignment::Center);
+        let mut row_ui = row![
+            text(label)
+                .size(TS.label)
+                .style(text_primary)
+                .width(Length::Fill)
+        ]
+        .spacing(6)
+        .align_y(iced::Alignment::Center);
         for &sev in CHOICES {
             // An on/off-only row offers its default level (shown "On") and Off.
             if on_off_only && sev != rule.default_severity() && sev != Severity::Off {
@@ -60,7 +69,7 @@ pub(super) fn content_erc<'a>(
                     } else {
                         severity_label(sev)
                     })
-                    .size(11)
+                    .size(TS.body)
                     .style(move |theme: &Theme| text::Style {
                         // Active chips sit on the saturated (theme-neutral)
                         // severity fill, so white reads on both palettes;
@@ -72,7 +81,7 @@ pub(super) fn content_erc<'a>(
                         }),
                     }),
                 )
-                .padding([4, 10])
+                .padding([SP.s, 10.0])
                 .on_press(PrefMsg::DraftErcSeverity(r, s))
                 .style(move |theme: &Theme, status: button::Status| {
                     let palette = theme.extended_palette();
@@ -99,30 +108,33 @@ pub(super) fn content_erc<'a>(
                 }),
             );
         }
-        rows_col = rows_col.push(container(row_ui).padding([6, 4]).width(Length::Fill).style(
-            |theme: &Theme| container::Style {
-                background: None,
-                border: Border {
-                    width: 1.0,
-                    color: theme.extended_palette().background.strong.color,
-                    radius: 0.0.into(),
-                },
-                ..container::Style::default()
-            },
-        ));
+        rows_col = rows_col.push(
+            container(row_ui)
+                .padding([6.0, SP.s])
+                .width(Length::Fill)
+                .style(|theme: &Theme| container::Style {
+                    background: None,
+                    border: Border {
+                        width: 1.0,
+                        color: theme.extended_palette().background.strong.color,
+                        radius: 0.0.into(),
+                    },
+                    ..container::Style::default()
+                }),
+        );
     }
 
     let reset_row = container(
         row![
             Space::new().width(Length::Fill),
-            button(text("Reset to defaults").size(11))
-                .padding([5, 12])
+            button(text("Reset to defaults").size(TS.body))
+                .padding([5.0, SP.l])
                 .on_press(PrefMsg::ResetErcSeverities)
                 .style(primary_button_style),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([12, 20])
+    .padding([SP.l, 20.0])
     .width(Length::Fill);
 
     column![header, rows_col, reset_row].spacing(0).into()

@@ -15,6 +15,10 @@ use super::widgets::{
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 impl Signex {
     pub(in crate::app::view) fn view_erc_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_erc_dialog_body_inner(true);
@@ -77,15 +81,15 @@ impl Signex {
         let mut rule_rows = column![
             row![
                 text("Rule")
-                    .size(10)
+                    .size(TS.caption)
                     .color(text_muted)
                     .width(Length::FillPortion(3)),
                 text("Severity")
-                    .size(10)
+                    .size(TS.caption)
                     .color(text_muted)
                     .width(Length::FillPortion(2)),
             ]
-            .padding([4, 8]),
+            .padding([SP.s, SP.m]),
         ]
         .spacing(0);
         // A project that stores its own rules shows (and edits) those; the
@@ -115,13 +119,13 @@ impl Signex {
             rule_rows = rule_rows.push(
                 row![
                     text(label)
-                        .size(11)
+                        .size(TS.body)
                         .color(text_c)
                         .width(Length::FillPortion(3)),
                     severity_segmented(*rule, current, border_c, text_muted),
                 ]
                 .align_y(iced::Alignment::Center)
-                .padding([2, 8]),
+                .padding([SP.xs, SP.m]),
             );
         }
 
@@ -144,8 +148,8 @@ impl Signex {
             }
             (false, false, _) => "Editing this machine's preferences.",
         };
-        let mut footer = row![text(scope_note).size(10).color(text_muted)]
-            .spacing(8)
+        let mut footer = row![text(scope_note).size(TS.caption).color(text_muted)]
+            .spacing(SP.m)
             .align_y(iced::Alignment::Center);
         // A rule set from a newer Signex sits unread in the file; storing
         // would replace it on save, so the action is not offered.
@@ -210,11 +214,13 @@ impl Signex {
         // lets both the full 11-rule list and the full 6×6 matrix
         // breathe without internal scrolling.
         let rules_pane = column![
-            text("Severity per rule").size(11).color(text_c),
-            text("Click a cell to change.").size(10).color(text_muted),
+            text("Severity per rule").size(TS.body).color(text_c),
+            text("Click a cell to change.")
+                .size(TS.caption)
+                .color(text_muted),
             Space::new().height(8),
             container(rule_rows)
-                .padding(4)
+                .padding(SP.s)
                 .width(Length::Fill)
                 .style(move |_: &Theme| container::Style {
                     border: Border {
@@ -225,17 +231,17 @@ impl Signex {
                     ..container::Style::default()
                 }),
         ]
-        .spacing(2)
+        .spacing(SP.xs)
         .width(Length::FillPortion(3));
 
         let matrix_pane = column![
-            text("Pin Connection Matrix").size(11).color(text_c),
+            text("Pin Connection Matrix").size(TS.body).color(text_c),
             text("Click a cell to cycle severity.")
-                .size(10)
+                .size(TS.caption)
                 .color(text_muted),
             Space::new().height(8),
             container(pin_matrix_view(tokens, pin_map))
-                .padding(8)
+                .padding(SP.m)
                 .width(Length::Fill)
                 .style(move |_: &Theme| container::Style {
                     border: Border {
@@ -246,7 +252,7 @@ impl Signex {
                     ..container::Style::default()
                 }),
         ]
-        .spacing(2)
+        .spacing(SP.xs)
         .width(Length::FillPortion(2));
 
         let body =
@@ -303,9 +309,9 @@ impl Signex {
                 lines.len()
             )
         };
-        let mut list = column![text(heading).size(11).color(text_c)].spacing(2);
+        let mut list = column![text(heading).size(TS.body).color(text_c)].spacing(SP.xs);
         for line in lines {
-            list = list.push(text(line).size(10).color(text_muted));
+            list = list.push(text(line).size(TS.caption).color(text_muted));
         }
         let buttons = row![
             primary_button(
@@ -320,7 +326,7 @@ impl Signex {
                 border_c,
             ),
         ]
-        .spacing(8);
+        .spacing(SP.m);
         container(
             column![
                 container(iced::widget::scrollable(list)).max_height(120),
@@ -328,7 +334,7 @@ impl Signex {
             ]
             .spacing(6),
         )
-        .padding([8, 14])
+        .padding([SP.m, 14.0])
         .width(Length::Fill)
         .into()
     }
@@ -355,7 +361,7 @@ fn severity_segmented(
             Color::from_rgba(1.0, 1.0, 1.0, 0.03)
         };
         let fg = if selected { Color::WHITE } else { text_muted };
-        button(container(text(label.to_string()).size(10).color(fg)).padding([3, 8]))
+        button(container(text(label.to_string()).size(TS.caption).color(fg)).padding([3.0, SP.m]))
             .on_press(Message::Erc(ErcMsg::SeverityChanged(rule, value)))
             .style(move |_: &Theme, _| button::Style {
                 background: Some(Background::Color(bg)),
@@ -384,7 +390,7 @@ fn severity_segmented(
             ),
             off
         ]
-        .spacing(2)
+        .spacing(SP.xs)
         .into();
     }
     row![
@@ -405,7 +411,7 @@ fn severity_segmented(
         ),
         off,
     ]
-    .spacing(2)
+    .spacing(SP.xs)
     .into()
 }
 
@@ -434,7 +440,7 @@ fn pin_matrix_view(
             Severity::Off => (Color::from_rgba(0.25, 0.70, 0.30, 0.35), "\u{00B7}"),
         };
         button(
-            container(text(ch.to_string()).size(12).color(text_c))
+            container(text(ch.to_string()).size(TS.label).color(text_c))
                 .width(40)
                 .height(30)
                 .align_x(iced::alignment::Horizontal::Center)
@@ -456,7 +462,7 @@ fn pin_matrix_view(
     };
 
     let header_label = |label: &str| -> Element<'static, Message> {
-        container(text(label.to_string()).size(10).color(text_muted))
+        container(text(label.to_string()).size(TS.caption).color(text_muted))
             .width(80)
             .height(30)
             .align_x(iced::alignment::Horizontal::Right)
@@ -465,7 +471,7 @@ fn pin_matrix_view(
             .into()
     };
     let col_label = |label: &str| -> Element<'static, Message> {
-        container(text(label.to_string()).size(10).color(text_muted))
+        container(text(label.to_string()).size(TS.caption).color(text_muted))
             .width(40)
             .height(24)
             .align_x(iced::alignment::Horizontal::Center)
