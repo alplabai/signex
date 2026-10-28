@@ -13,6 +13,7 @@ impl Signex {
         let ui = &self.ui_state;
         let font = ui.ui_font_name.clone();
         let classes = ui.component_classes.clone();
+        let drag_direction = ui.drag_direction_select;
         let (grid_style, annotate_undo, keeps_wires, placement, autosave, gpu, theme) = (
             ui.grid_style,
             ui.annotate_undo,
@@ -42,6 +43,9 @@ impl Signex {
             }),
             write("move_keeps_wires", move || {
                 crate::fonts::write_move_keeps_wires_pref(keeps_wires)
+            }),
+            write("drag_direction_select", move || {
+                crate::fonts::write_drag_direction_select_pref(drag_direction)
             }),
             write("window_controls_placement", move || {
                 crate::fonts::write_window_controls_placement_pref(placement)

@@ -133,6 +133,7 @@ fn move_picked_selects_only_the_object_under_the_cursor_and_disarms() {
     let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
         dx: 2.54,
         dy: 0.0,
+        connections: Default::default(),
     }));
     assert!(
         (wire_start(&app, &path, a).x - 12.54).abs() < 1e-6,
@@ -414,6 +415,7 @@ fn deliver(
             snap_enabled: false,
             snap_grid_mm: 1.27,
             snap_hotspots: false,
+            unit: signex_types::coord::Unit::Mm,
             wire_tool_active: false,
             visible_grid_mm: 1.27,
             grid_style: signex_app::render_config::GridStyle::Dots,
