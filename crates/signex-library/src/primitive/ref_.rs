@@ -2,7 +2,7 @@
 //!
 //! Every primitive lives inside a single library and is identified
 //! by its UUID *within that library*. Cross-library references
-//! compose the library UUID (from `library.toml::library_id`) with
+//! compose the library UUID (the `library_id` at the root of the `.snxlib` document) with
 //! the primitive UUID. [`crate::adapters::library_set::LibrarySet`]
 //! resolves these tuples back to the actual primitive struct.
 

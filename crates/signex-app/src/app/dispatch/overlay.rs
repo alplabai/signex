@@ -120,6 +120,26 @@ impl Signex {
                 self.handle_add_new_schematic_written(project_id, path, result);
                 Task::none()
             }
+            ProjectMsg::CreateChildSheetPathChanged(text) => {
+                self.handle_create_child_sheet_path_changed(text)
+            }
+            ProjectMsg::CreateChildSheetBrowse => self.handle_create_child_sheet_browse(),
+            ProjectMsg::CreateChildSheetBrowsed(picked) => {
+                self.handle_create_child_sheet_browsed(picked)
+            }
+            ProjectMsg::CreateChildSheetAnswered { create } => {
+                self.handle_create_child_sheet_answered(create)
+            }
+            ProjectMsg::CreateChildSheetOpenExisting => {
+                self.handle_create_child_sheet_open_existing()
+            }
+            ProjectMsg::ChildSheetCreated {
+                project_id,
+                parent,
+                symbol,
+                path,
+                result,
+            } => self.handle_child_sheet_created(project_id, &parent, symbol, path, result),
             ProjectMsg::AddNewSchematicPicked { project_id, path } => {
                 self.handle_add_new_schematic_picked(project_id, path)
             }
@@ -339,6 +359,10 @@ impl Signex {
                         self.open_selected_child_sheet();
                         Task::none()
                     }
+                    ContextAction::CreateChildSheet => match self.selected_child_sheet() {
+                        Some((symbol, _)) => self.create_child_sheet_from_symbol(symbol),
+                        None => Task::none(),
+                    },
                     ContextAction::SyncSheetPins => {
                         self.sync_selected_sheet_pins();
                         // This dispatcher does not run `finish_update`; publish

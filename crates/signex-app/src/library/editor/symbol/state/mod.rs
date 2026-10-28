@@ -342,10 +342,10 @@ pub fn delete_unit(sym: &mut Symbol, part: u8) -> u8 {
     part.min(sym.part_count).max(1)
 }
 
-/// A graphic is visible/editable on `active_part` when it is shared
-/// (part 0) or scoped to that exact unit — mirrors pin part visibility.
-pub fn graphic_on_part(g: &signex_library::SymbolGraphic, active_part: u8) -> bool {
-    g.part_number == 0 || g.part_number == active_part
+/// A graphic is visible/editable in `view` when it is shared (part 0 /
+/// body 0) or scoped to that exact unit and body — mirrors pin visibility.
+pub fn graphic_on_part(g: &signex_library::SymbolGraphic, view: PartView) -> bool {
+    view.shows(g.part_number, g.body_style)
 }
 
 /// Whether the graphic at `idx` is part of `sel` — single source of
@@ -414,12 +414,12 @@ fn polygon_vertex_mean(vertices: &[[f64; 2]]) -> [f64; 2] {
     [sx / n, sy / n]
 }
 
-/// A pin is visible/editable on `active_part` when it is shared (Part
-/// Zero) or scoped to that exact unit — the interaction-side mirror of
+/// A pin is visible/editable in `view` when it is shared (Part Zero /
+/// body 0) or scoped to that exact unit and body — the interaction-side mirror of
 /// `SymbolCanvas::pin_visible_on_active_part`, so click / box-select /
 /// handle hit-tests match what the canvas actually draws.
-pub fn pin_on_part(pin: &SymbolPin, active_part: u8) -> bool {
-    pin.part_number == 0 || pin.part_number == active_part
+pub fn pin_on_part(pin: &SymbolPin, view: PartView) -> bool {
+    view.shows(pin.part_number, pin.body_style)
 }
 
 /// Graphic indices the current selection names individually. Shared
@@ -428,7 +428,7 @@ pub fn pin_on_part(pin: &SymbolPin, active_part: u8) -> bool {
 /// exactly which selections name eligible sources.
 ///
 /// `All` (box-select-everything / Ctrl+A / the Select All menu row)
-/// resolves to every graphic index visible on `active_part` — the
+/// resolves to every graphic index visible in `view` — the
 /// same [`graphic_on_part`] filter hit-test and box-select already
 /// use — rather than the empty `Vec` it used to fall through to,
 /// which disabled Join on a perfect ring the user had just selected
@@ -436,7 +436,7 @@ pub fn pin_on_part(pin: &SymbolPin, active_part: u8) -> bool {
 /// graphic.
 pub fn join_source_indices(
     sym: &Symbol,
-    active_part: u8,
+    view: PartView,
     selected: &Option<SymbolSelection>,
 ) -> Vec<usize> {
     match selected {
@@ -445,7 +445,7 @@ pub fn join_source_indices(
             graphic_indices, ..
         }) => graphic_indices.clone(),
         Some(SymbolSelection::All) => (0..sym.graphics.len())
-            .filter(|&idx| graphic_on_part(&sym.graphics[idx], active_part))
+            .filter(|&idx| graphic_on_part(&sym.graphics[idx], view))
             .collect(),
         _ => Vec::new(),
     }
@@ -484,6 +484,20 @@ pub fn common_graphic_part_number(sym: &Symbol, indices: &[usize]) -> Option<u8>
     parts.all(|p| p == Some(first)).then_some(first)
 }
 
+/// The body tag a joined polygon takes: the one every graphic in `indices`
+/// shares, else `fallback` (the active body) when the sources mix common and
+/// body-specific shapes. Keeps a join of alternate-body lines on the
+/// alternate body instead of silently moving it to the normal one.
+pub fn joined_graphic_body_style(sym: &Symbol, indices: &[usize], fallback: u8) -> u8 {
+    let mut bodies = indices
+        .iter()
+        .filter_map(|&idx| sym.graphics.get(idx).map(|g| g.body_style));
+    match bodies.next() {
+        Some(first) if bodies.all(|b| b == first) => first,
+        _ => fallback,
+    }
+}
+
 /// Whether `indices` names enough sources to plausibly close into a
 /// ring: at least 2 (a lone pair might still fail to chain, but
 /// that's a `chain_into_closed_contour` topology diagnosis, not
@@ -516,10 +530,10 @@ pub fn selection_has_enough_join_sources(sym: &Symbol, indices: &[usize]) -> boo
 /// no-op).
 pub fn selection_is_join_eligible(
     sym: &Symbol,
-    active_part: u8,
+    view: PartView,
     selected: &Option<SymbolSelection>,
 ) -> bool {
-    let indices = join_source_indices(sym, active_part, selected);
+    let indices = join_source_indices(sym, view, selected);
     selection_kinds_are_line_or_arc(sym, &indices)
         && selection_has_enough_join_sources(sym, &indices)
         && common_graphic_part_number(sym, &indices).is_some()
@@ -554,14 +568,14 @@ pub fn selected_is_alignable(selected: &Option<SymbolSelection>) -> bool {
 
 /// Add a pin at the given canvas coordinates and return its index in
 /// `Symbol::pins`. Auto-assigns the next free numeric pin number and
-/// scopes it to `part_number` (typically the editor's active sub-part
-/// for multi-part components; `1` for single-part).
-pub fn add_pin(sym: &mut Symbol, x: f64, y: f64, part_number: u8) -> usize {
+/// scopes it to the editor's active sub-part and body (`view`).
+pub fn add_pin(sym: &mut Symbol, x: f64, y: f64, view: PartView) -> usize {
     let next_num = next_pin_number(sym);
     let mut pin = SymbolPin::new(next_num.clone(), format!("PIN{next_num}"));
     pin.position = [x, y];
     pin.length = DEFAULT_PIN_LENGTH_MM;
-    pin.part_number = part_number;
+    pin.part_number = view.part;
+    pin.body_style = view.body_tag();
     sym.pins.push(pin);
     sym.pins.len() - 1
 }
@@ -578,16 +592,20 @@ fn next_pin_number(sym: &Symbol) -> String {
     (highest + 1).to_string()
 }
 
+mod body;
 mod context_menu;
 mod fields;
 mod hit_test;
 mod movement;
+mod part_view;
 mod rotation;
 #[cfg(test)]
 mod tests;
 
+pub use body::{assign_body, body_assign_targets};
 pub use context_menu::*;
 pub use fields::*;
 pub use hit_test::*;
 pub use movement::*;
+pub use part_view::PartView;
 pub use rotation::*;

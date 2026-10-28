@@ -61,7 +61,7 @@ impl SymbolMenuRow {
 /// disables clicks on a `enabled: false` row.
 pub fn build_symbol_context_menu_rows(
     sym: &Symbol,
-    active_part: u8,
+    view: crate::library::editor::symbol::state::PartView,
     selected: &Option<SymbolSelection>,
 ) -> Vec<SymbolMenuRow> {
     vec![
@@ -69,7 +69,7 @@ pub fn build_symbol_context_menu_rows(
         SymbolMenuRow::item(
             "symbol.join-into-polygon",
             "Join into Polygon",
-            selection_is_join_eligible(sym, active_part, selected),
+            selection_is_join_eligible(sym, view, selected),
             SymbolEditorMsg::JoinSelectionIntoPolygon,
         ),
         SymbolMenuRow::item(
@@ -152,7 +152,11 @@ mod tests {
     #[test]
     fn top_level_ids_are_stable() {
         let sym = Symbol::empty("T");
-        let rows = build_symbol_context_menu_rows(&sym, 1, &None);
+        let rows = build_symbol_context_menu_rows(
+            &sym,
+            crate::library::editor::symbol::state::PartView::normal(1),
+            &None,
+        );
         assert_eq!(
             row_ids(&rows),
             vec![
@@ -185,7 +189,11 @@ mod tests {
     #[test]
     fn empty_selection_disables_selection_dependent_rows() {
         let sym = Symbol::empty("T");
-        let rows = build_symbol_context_menu_rows(&sym, 1, &None);
+        let rows = build_symbol_context_menu_rows(
+            &sym,
+            crate::library::editor::symbol::state::PartView::normal(1),
+            &None,
+        );
 
         assert!(!find(&rows, "symbol.join-into-polygon").enabled);
         assert!(!find(&rows, "symbol.delete").enabled);
@@ -202,7 +210,11 @@ mod tests {
     #[test]
     fn all_selection_disables_delete() {
         let sym = Symbol::empty("T");
-        let rows = build_symbol_context_menu_rows(&sym, 1, &Some(SymbolSelection::All));
+        let rows = build_symbol_context_menu_rows(
+            &sym,
+            crate::library::editor::symbol::state::PartView::normal(1),
+            &Some(SymbolSelection::All),
+        );
 
         assert!(!find(&rows, "symbol.delete").enabled);
         // Select All / Fit stay enabled; Deselect All is enabled too
@@ -216,6 +228,7 @@ mod tests {
     fn line_only_selection_enables_join() {
         let mut sym = Symbol::empty("T");
         sym.graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Line {
                 from: [0.0, 0.0],
                 to: [4.0, 0.0],
@@ -225,6 +238,7 @@ mod tests {
             part_number: 0,
         });
         sym.graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Line {
                 from: [4.0, 0.0],
                 to: [4.0, 4.0],
@@ -237,7 +251,11 @@ mod tests {
             pin_indices: Vec::new(),
             graphic_indices: vec![0, 1],
         });
-        let rows = build_symbol_context_menu_rows(&sym, 1, &selected);
+        let rows = build_symbol_context_menu_rows(
+            &sym,
+            crate::library::editor::symbol::state::PartView::normal(1),
+            &selected,
+        );
 
         assert!(find(&rows, "symbol.join-into-polygon").enabled);
         assert!(find(&rows, "symbol.delete").enabled);
@@ -250,6 +268,7 @@ mod tests {
     fn single_line_selection_disables_join_but_not_delete() {
         let mut sym = Symbol::empty("T");
         sym.graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Line {
                 from: [0.0, 0.0],
                 to: [4.0, 0.0],
@@ -259,7 +278,11 @@ mod tests {
             part_number: 0,
         });
         let selected = Some(SymbolSelection::Graphic(0));
-        let rows = build_symbol_context_menu_rows(&sym, 1, &selected);
+        let rows = build_symbol_context_menu_rows(
+            &sym,
+            crate::library::editor::symbol::state::PartView::normal(1),
+            &selected,
+        );
 
         assert!(!find(&rows, "symbol.join-into-polygon").enabled);
         assert!(find(&rows, "symbol.delete").enabled);
@@ -271,6 +294,7 @@ mod tests {
     fn single_arc_selection_enables_join() {
         let mut sym = Symbol::empty("T");
         sym.graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Arc {
                 center: [0.0, 0.0],
                 radius: 2.0,
@@ -282,7 +306,11 @@ mod tests {
             part_number: 0,
         });
         let selected = Some(SymbolSelection::Graphic(0));
-        let rows = build_symbol_context_menu_rows(&sym, 1, &selected);
+        let rows = build_symbol_context_menu_rows(
+            &sym,
+            crate::library::editor::symbol::state::PartView::normal(1),
+            &selected,
+        );
 
         assert!(find(&rows, "symbol.join-into-polygon").enabled);
     }
@@ -300,6 +328,7 @@ mod tests {
             ([0.0, 4.0], [0.0, 0.0]),
         ] {
             sym.graphics.push(SymbolGraphic {
+                body_style: 1,
                 kind: SymbolGraphicKind::Line { from, to },
                 stroke_width: 0.15,
                 fill: None,
@@ -307,7 +336,11 @@ mod tests {
             });
         }
         let selected = Some(SymbolSelection::All);
-        let rows = build_symbol_context_menu_rows(&sym, 1, &selected);
+        let rows = build_symbol_context_menu_rows(
+            &sym,
+            crate::library::editor::symbol::state::PartView::normal(1),
+            &selected,
+        );
 
         assert!(find(&rows, "symbol.join-into-polygon").enabled);
     }
@@ -319,6 +352,7 @@ mod tests {
     fn mixed_selection_with_rectangle_disables_join_but_not_delete() {
         let mut sym = Symbol::empty("T");
         sym.graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Line {
                 from: [0.0, 0.0],
                 to: [4.0, 0.0],
@@ -328,6 +362,7 @@ mod tests {
             part_number: 0,
         });
         sym.graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Rectangle {
                 from: [0.0, 0.0],
                 to: [2.0, 2.0],
@@ -340,7 +375,11 @@ mod tests {
             pin_indices: Vec::new(),
             graphic_indices: vec![0, 1],
         });
-        let rows = build_symbol_context_menu_rows(&sym, 1, &selected);
+        let rows = build_symbol_context_menu_rows(
+            &sym,
+            crate::library::editor::symbol::state::PartView::normal(1),
+            &selected,
+        );
 
         assert!(!find(&rows, "symbol.join-into-polygon").enabled);
         assert!(find(&rows, "symbol.delete").enabled);
@@ -352,6 +391,7 @@ mod tests {
     fn polygon_selected_disables_join_but_not_delete() {
         let mut sym = Symbol::empty("T");
         sym.graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Polygon {
                 vertices: vec![[0.0, 0.0], [4.0, 0.0], [2.0, 3.0]],
             },
@@ -360,7 +400,11 @@ mod tests {
             part_number: 0,
         });
         let selected = Some(SymbolSelection::Graphic(0));
-        let rows = build_symbol_context_menu_rows(&sym, 1, &selected);
+        let rows = build_symbol_context_menu_rows(
+            &sym,
+            crate::library::editor::symbol::state::PartView::normal(1),
+            &selected,
+        );
 
         assert!(!find(&rows, "symbol.join-into-polygon").enabled);
         assert!(find(&rows, "symbol.delete").enabled);

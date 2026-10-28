@@ -13,6 +13,7 @@ mod project_general;
 mod selection;
 mod selection_payload;
 mod sheet;
+mod sheet_entry;
 mod sheet_identity;
 mod sheet_placement;
 mod transform;
@@ -73,6 +74,10 @@ pub use selection_payload::CopiedSelection;
 pub use sheet::{
     blank_port_label_count, exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports,
 };
+pub use sheet_entry::{
+    SHEET_SYMBOL_REACH_MM, child_document_for_symbol, new_sheet_entry, sheet_symbol_at,
+    unused_entry_name,
+};
 pub use sheet_placement::{
     DEFAULT_CHILD_SHEET_STROKE_MM, MIN_CHILD_SHEET_EDGE_MM, child_sheet_from_corners,
     unused_sheet_stem,
@@ -100,6 +105,10 @@ pub struct Engine {
     /// outside that loop, so every other path behaves exactly as before.
     /// See `exec/batch.rs`.
     history_suppressed: bool,
+    /// Full-sheet pre-image clones taken by `execute` (test hook for the
+    /// one-snapshot-per-batch guarantee).
+    #[cfg(test)]
+    pre_image_clones: usize,
     /// Re-drawn from a process-wide counter by every entry point that can
     /// change `document` (and at construction), so an off-thread save can
     /// tell whether the document moved on while it ran, even if the engine
@@ -191,6 +200,8 @@ impl Engine {
             redo_stack: Vec::new(),
             history_evicted: 0,
             history_suppressed: false,
+            #[cfg(test)]
+            pre_image_clones: 0,
             revision: crate::next_revision(),
             base_revision: 0,
             connectivity_revision: crate::next_revision(),
@@ -220,6 +231,8 @@ impl Engine {
             redo_stack: Vec::new(),
             history_evicted: 0,
             history_suppressed: false,
+            #[cfg(test)]
+            pre_image_clones: 0,
             revision: crate::next_revision(),
             base_revision: 0,
             connectivity_revision: crate::next_revision(),
@@ -364,13 +377,28 @@ impl Engine {
         Ok(())
     }
 
+    /// Refuse before any state moves when the sheet, or the document a
+    /// `ReplaceDocument` would install, came from a newer Signex (#1402).
+    /// Derived from the document on every call; undo/redo stay open.
+    fn refuse_if_read_only(&self, incoming: Option<&SchematicSheet>) -> Result<(), EngineError> {
+        if self.document.is_read_only() || incoming.is_some_and(SchematicSheet::is_read_only) {
+            return Err(EngineError::ReadOnly);
+        }
+        Ok(())
+    }
+
     pub fn execute(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
+        let incoming = match &cmd {
+            Command::ReplaceDocument { document } => Some(document),
+            _ => None,
+        };
+        self.refuse_if_read_only(incoming)?;
         // A refusal touches nothing, so it moves no revision.
         if let Some(refusal) = self.locked_symbol_refusal(&cmd) {
             return Err(refusal);
         }
         self.bump_revision();
-        let before = self.document.clone();
+        let before = self.pre_image(&cmd);
 
         let result = match cmd {
             Command::ReplaceDocument { .. }
@@ -379,6 +407,7 @@ impl Engine {
             | Command::SetSymbolRotation { .. }
             | Command::SetSymbolLocked { .. }
             | Command::SetSymbolDnp { .. }
+            | Command::SetSymbolBodyStyle { .. }
             | Command::UpdateSymbolTextSize { .. }
             | Command::UpdateSymbolLibId { .. }
             | Command::UpdateSymbolFootprint { .. }
@@ -398,6 +427,7 @@ impl Engine {
             | Command::RegisterLibSymbol { .. }
             | Command::ReplaceLibSymbol { .. }
             | Command::PlaceChildSheet { .. }
+            | Command::PlaceSheetPin { .. }
             | Command::PlaceWireSegment { .. }
             | Command::PlaceJunction { .. }
             | Command::PlaceNoConnect { .. }
@@ -425,6 +455,22 @@ impl Engine {
         result
     }
 
+    /// The sheet as it stood before `cmd`, for the history entry. While
+    /// history is suppressed (inside a batch, or `execute_unrecorded`) the
+    /// entry is never written, so only a command whose rubber-band guard
+    /// reads the pre-image pays for a clone; the rest get an empty
+    /// placeholder that nothing reads.
+    fn pre_image(&mut self, cmd: &Command) -> SchematicSheet {
+        if self.history_suppressed && !cmd.reads_pre_image() {
+            return SchematicSheet::default();
+        }
+        #[cfg(test)]
+        {
+            self.pre_image_clones += 1;
+        }
+        self.document.clone()
+    }
+
     pub fn document(&self) -> &SchematicSheet {
         &self.document
     }
@@ -437,6 +483,7 @@ impl Engine {
         self.path = path;
     }
 
+    /// Unguarded: installs `document` even over a read-only sheet. Test-only by convention.
     pub fn set_document(&mut self, document: SchematicSheet) {
         self.bump_revision();
         self.bump_connectivity_revision();
@@ -489,6 +536,60 @@ mod tests {
         moved(&engine, "annotate");
         engine.set_document(test_sheet());
         moved(&engine, "set_document");
+    }
+
+    fn read_only_sheet() -> SchematicSheet {
+        let mut sheet = test_sheet();
+        sheet.unknown.newer_minor_source = Some("snxsch/1.7".into());
+        sheet
+    }
+
+    #[test]
+    fn read_only_sheet_refuses_every_mutating_entry_point_and_keeps_its_revision() {
+        use crate::command::AnnotateMode;
+        use signex_types::schematic::AnnotateOrder;
+        let mut engine = Engine::new(read_only_sheet()).unwrap();
+        let revision = engine.revision();
+        let connectivity = engine.connectivity_revision();
+        let set_paper = || Command::SetPaperSize {
+            paper_size: "A3".into(),
+        };
+        assert!(matches!(
+            engine.execute(set_paper()),
+            Err(EngineError::ReadOnly)
+        ));
+        assert!(matches!(
+            engine.execute_unrecorded(set_paper()),
+            Err(EngineError::ReadOnly)
+        ));
+        assert!(matches!(
+            engine.execute_batch([set_paper()]),
+            Err(EngineError::ReadOnly)
+        ));
+        assert!(matches!(
+            engine.annotate_with_seed(
+                AnnotateMode::Incremental,
+                &mut Default::default(),
+                AnnotateOrder::UpThenAcross,
+            ),
+            Err(EngineError::ReadOnly)
+        ));
+        assert_eq!(engine.revision(), revision, "a refusal moves no revision");
+        assert_eq!(engine.connectivity_revision(), connectivity);
+        assert_eq!(engine.document().paper_size, test_sheet().paper_size);
+        assert!(engine.history.is_empty(), "a refusal writes no history");
+    }
+
+    #[test]
+    fn replace_document_cannot_install_a_read_only_sheet() {
+        let mut engine = Engine::new(test_sheet()).unwrap();
+        let revision = engine.revision();
+        let refused = engine.execute(Command::ReplaceDocument {
+            document: read_only_sheet(),
+        });
+        assert!(matches!(refused, Err(EngineError::ReadOnly)));
+        assert_eq!(engine.revision(), revision);
+        assert!(engine.document().unknown.newer_minor_source.is_none());
     }
 
     #[test]
