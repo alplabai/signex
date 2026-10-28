@@ -3,6 +3,7 @@ use std::sync::Arc;
 mod cull;
 
 use crate::polygon_path::polygon_path_and_fill;
+use crate::renderer_scene_canvas::color_from_rgba;
 use crate::scene_generation::next_scene_generation;
 use iced::event::Event;
 use iced::mouse;
@@ -270,10 +271,6 @@ impl PcbCanvas {
     pub fn scene_generation(&self) -> u64 {
         self.scene_generation.get()
     }
-}
-
-fn color_from_rgba(rgba: [f32; 4]) -> Color {
-    Color::from_rgba(rgba[0], rgba[1], rgba[2], rgba[3])
 }
 
 fn world_to_screen(camera: &Camera, bounds: Rectangle, point: [f32; 2]) -> iced::Point {
