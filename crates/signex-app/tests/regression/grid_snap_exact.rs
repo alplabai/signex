@@ -53,6 +53,7 @@ fn move_selected_lands_on_an_exact_nm_multiple() {
     let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
         dx: 127.1,
         dy: 0.0,
+        connections: Default::default(),
     }));
 
     assert_eq!(nm(wire_start(&app, &path, id).x), STEPS_100_NM);
