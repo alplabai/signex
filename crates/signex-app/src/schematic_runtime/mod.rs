@@ -23,6 +23,7 @@ use std::collections::{HashMap, HashSet};
 
 pub mod hit_test;
 pub mod label;
+pub mod lock_indicator;
 pub mod overlay;
 mod scene_cache;
 pub mod selection;
@@ -364,6 +365,8 @@ pub struct SceneOverrides<'a> {
     /// Designators of the placement the tab was opened through (#1151), by
     /// symbol uuid; only those that differ from the symbol's `reference`.
     pub designators: Option<&'a HashMap<uuid::Uuid, String>>,
+    /// Resolves `${TOKEN}` special strings in text notes (#1080).
+    pub special_strings: Option<&'a crate::canvas::SpecialStrings>,
 }
 
 pub fn render_schematic(
@@ -446,6 +449,18 @@ pub(crate) fn build_schematic_scene(
 pub(crate) const SCHEMATIC_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
     signex_gfx::primitive::text::TextSizePolicy::new(6.0, 64.0);
 
+/// The replay options of the schematic CPU path at `transform`.
+fn schematic_draw_options(
+    transform: &ScreenTransform,
+) -> crate::renderer_scene_canvas::SceneDrawOptions {
+    crate::renderer_scene_canvas::SceneDrawOptions {
+        scale_px_per_mm: transform.scale,
+        min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
+        text_min_px: SCHEMATIC_TEXT_SIZE.min_px,
+        text_max_px: SCHEMATIC_TEXT_SIZE.max_px,
+    }
+}
+
 /// Replay a built scene through the live `transform`.
 pub(crate) fn draw_built_scene(
     frame: &mut canvas::Frame,
@@ -456,12 +471,22 @@ pub(crate) fn draw_built_scene(
         frame,
         scene,
         |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
-        crate::renderer_scene_canvas::SceneDrawOptions {
-            scale_px_per_mm: transform.scale,
-            min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
-            text_min_px: SCHEMATIC_TEXT_SIZE.min_px,
-            text_max_px: SCHEMATIC_TEXT_SIZE.max_px,
-        },
+        schematic_draw_options(transform),
+    );
+}
+
+/// The CPU half of a GPU-mounted sheet: only the texts the GPU glyph atlas
+/// cannot rotate, through the same transform and options as the full replay.
+pub(crate) fn draw_rotated_text_fallback(
+    frame: &mut canvas::Frame,
+    scene: &Scene,
+    transform: &ScreenTransform,
+) {
+    crate::renderer_scene_canvas::draw_rotated_texts(
+        frame,
+        scene,
+        |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
+        schematic_draw_options(transform),
     );
 }
 

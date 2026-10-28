@@ -15,7 +15,8 @@ pub use binding::{
     ShortcutBindingAction, ShortcutContext, ShortcutTrigger,
 };
 pub use catalog::{
-    CommandGroup, CommandMetadata, all_command_ids, fallback_label, metadata_for, offered_in,
+    CommandGroup, CommandMetadata, all_command_ids, fallback_label, metadata_for, metadata_for_str,
+    offered_in,
 };
 pub use command::AppCommandId;
 pub use editor::{KeymapEditorModel, KeymapEditorProfile, KeymapEditorRow, KeymapEditorSource};

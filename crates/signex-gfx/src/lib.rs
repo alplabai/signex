@@ -12,6 +12,9 @@ pub use wgpu;
 pub mod camera;
 pub mod color_uniform;
 pub mod context;
+// Dev-only offscreen render passes behind goldens and smoke tests; not part of
+// the shipped build. Enable with `--features debug-pass`.
+#[cfg(any(test, feature = "debug-pass"))]
 pub mod debug_pass;
 pub mod pipeline;
 pub mod primitive;

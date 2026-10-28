@@ -693,6 +693,7 @@ fn closing_the_project_forgets_its_documents_page_setup() {
         id,
         path: tmp.path().join("P.snxprj"),
         data: ProjectData {
+            description: None,
             name: "P".to_string(),
             dir: tmp.path().to_string_lossy().into_owned(),
             schematic_root: Some("page-setup.snxsch".to_string()),
@@ -712,11 +713,13 @@ fn closing_the_project_forgets_its_documents_page_setup() {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.tabs[0].project_id = Some(id);
 

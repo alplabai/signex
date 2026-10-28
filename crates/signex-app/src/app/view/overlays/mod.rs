@@ -257,8 +257,7 @@ impl Signex {
         // lays the input out with, so the dropdown reads as an extension
         // of the input rather than a floating popup that happens to be
         // nearby — including after a resize shrinks the bar.
-        let (ww, _wh) = self.ui_state.window_size;
-        let (card_x, card_w) = super::chrome_search_bar_geometry(ww);
+        let (card_x, card_w) = self.chrome_search_bar_geometry();
         let card = container(column![body, footer])
             .width(card_w)
             .max_height(360.0)
@@ -337,15 +336,16 @@ impl Signex {
         )
         .map(Message::ActiveBar);
         let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
-        // Bar: MENU_BAR_HEIGHT + tabs + 4 top-margin + bar-height ≈ bottom of bar.
-        // Bar-height = 28 button + 6 vertical padding + 2 border = 36, plus 4
-        // top margin = 40. Add a small gap so the dropdown visually touches.
+        // Bar bottom: MENU_BAR_HEIGHT + tabs + top margin + bar height,
+        // plus a small gap so the dropdown visually touches.
         let ab_y: f32 = crate::menu_bar::MENU_BAR_HEIGHT
             + if document.tabs.is_empty() { 0.0 } else { 28.0 }
-            + 40.0;
-        let bar_w: f32 = crate::active_bar::BAR_WIDTH_PX;
+            + crate::active_bar::BAR_TOP_MARGIN_PX
+            + crate::active_bar::BAR_HEIGHT_PX
+            + crate::active_bar::BAR_DROPDOWN_GAP_PX;
         let (ww, _) = ui.window_size;
-        let adjusted_x = x_off + (ww - bar_w) / 2.0;
+        let adjusted_x =
+            x_off + crate::active_bar::bar_left_in_window(interaction.current_tool, ww);
         vec![
             Self::dismiss_layer(Message::ActiveBar(
                 crate::active_bar::ActiveBarMsg::CloseMenus,

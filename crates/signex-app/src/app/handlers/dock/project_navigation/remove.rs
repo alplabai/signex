@@ -1,8 +1,4 @@
 //! Remove-from-project / delete-file flow for the project-navigation dock.
-//!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
 
 use super::*;
 use crate::app::state::library_entry::entry_resolves_to;
@@ -86,7 +82,7 @@ impl Signex {
     /// library lives outside it and belongs to other projects too, so a
     /// refusal is surfaced to the user rather than only logged. This
     /// holds even when the dialog state's `is_outside_project` is wrong.
-    fn delete_project_owned_target(&mut self, state: &crate::app::RemoveDialogState) {
+    fn delete_project_owned_target(&mut self, state: &crate::app::RemoveDialogState) -> bool {
         // F23 — three cases:
         //   1. Regular file (sheets, pcbs, primitives) → remove_file.
         //   2. `.snxlib` directory package → remove_dir_all.
@@ -101,14 +97,17 @@ impl Signex {
             Ok(false) => {
                 // Orphan entry: nothing on disk, but a tab may still hold it (#736).
                 self.drop_deleted_documents(target, fold);
-                return;
+                return true;
             }
             Err(e) => {
                 crate::diagnostics::log_error(
                     "Could not check whether the project file exists",
                     &anyhow::anyhow!("{}: {e}", target.display()),
                 );
-                return;
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                    format!("Could not delete \"{}\": {e}", state.display_name),
+                ));
+                return false;
             }
         }
         let root = self.project_root_for_tree_path(&state.tree_path);
@@ -122,7 +121,7 @@ impl Signex {
                      it was not deleted from disk. It has only been removed from the project.",
                     state.display_name
                 )));
-            return;
+            return true;
         }
         // A write still running for this file would recreate it after the
         // delete; let it finish first (same bounded wait as rename).
@@ -134,7 +133,10 @@ impl Signex {
         };
         match result {
             // The file is gone: forget any document still held for it (#736).
-            Ok(()) => self.drop_deleted_documents(target, fold),
+            Ok(()) => {
+                self.drop_deleted_documents(target, fold);
+                true
+            }
             Err(e) => {
                 crate::diagnostics::log_error(
                     "Failed to delete project file",
@@ -143,6 +145,7 @@ impl Signex {
                 self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
                     format!("Could not delete \"{}\": {e}", state.display_name),
                 ));
+                false
             }
         }
     }
@@ -319,10 +322,19 @@ impl Signex {
             //   3. Orphan entry (file/dir missing on disk) → no-op,
             //      Exclude semantic falls through naturally so the
             //      LibraryEntry / SheetEntry is still pruned below.
-            self.delete_project_owned_target(&state);
-            // Orphan target: silently fall through. The user's intent
-            // ("get this row out of the project") is satisfied by the
-            // in-memory entry pruning below.
+            // A failed disk delete keeps the project entry: pruning it would
+            // hide a file that is still on disk. Orphan targets and the
+            // shared-library refusal fall through to the prune below.
+            // The tabs were already closed above (before the delete), so on
+            // failure they stay closed even though the file is kept; unsaved
+            // edits were gated by the unsaved prompt, so nothing is lost.
+            if !self.delete_project_owned_target(&state) {
+                return if close_tasks.is_empty() {
+                    iced::Task::none()
+                } else {
+                    iced::Task::batch(close_tasks)
+                };
+            }
         }
 
         // Drop the sheet from the *owning* project's in-memory data so

@@ -3,7 +3,8 @@
 //! in-app modal like every other Signex dialog.
 //!
 //! It deliberately does NOT open its own OS window. Signex runs
-//! borderless everywhere (`bootstrap/new.rs` — `decorations: false`),
+//! borderless (`bootstrap/new.rs` — `decorations: false`, except the macOS
+//! native title bar),
 //! so a default `iced::window::open` would arrive wearing a native
 //! title bar that exists nowhere else in the app. Same chrome as
 //! `keyboard_shortcuts_modal`: header strip, close X, centred card.

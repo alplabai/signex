@@ -14,7 +14,6 @@ impl Signex {
     /// set falls back to this machine's preferences (the pre-#1085 behaviour)
     /// and says so once per project open in the Messages panel.
     fn erc_rule_settings(&mut self) -> (RuleOverrides, PinMatrixOverrides) {
-        self.ui_state.erc_run_rule_set = Some(self.current_rule_set_identity());
         let project = self.document_state.active_document_project();
         let Some(rules) = project.and_then(|p| p.data.rules.as_ref()) else {
             let unreadable = project.is_some_and(|p| p.data.has_unreadable_rules());
@@ -93,6 +92,7 @@ impl Signex {
     /// Capture the run's inputs from live state (memory only, no IO), claim a
     /// new generation and flag the run as in flight.
     pub(super) fn begin_erc_run(&mut self) -> (u64, super::erc_job::ErcRunInputs) {
+        let rule_set = self.current_rule_set_identity();
         let (overrides, pin_matrix_overrides) = self.erc_rule_settings();
         let ds = &self.document_state;
         let tab_paths = ds
@@ -119,7 +119,13 @@ impl Signex {
             root,
             project_dir: ds.active_document_project().map(|p| p.dir().to_path_buf()),
             overrides,
+            rule_set,
             config: signex_erc::ErcConfig::with_pin_matrix_overrides(&pin_matrix_overrides),
+            net_waivers: ds
+                .active_document_project()
+                .and_then(|p| p.data.rules.as_ref())
+                .map(|r| r.erc_net_waivers.clone())
+                .unwrap_or_default(),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
         };
 
@@ -147,7 +153,7 @@ impl Signex {
 
     /// Apply a finished run's result - unless a newer run has started since.
     /// Returns whether violations were applied.
-    fn apply_erc_run_result(
+    pub(super) fn apply_erc_run_result(
         &mut self,
         generation: u64,
         result: &Result<super::erc_job::ErcRunOutcome, String>,
@@ -164,6 +170,9 @@ impl Signex {
                 return false;
             }
         };
+        // The rows now in the cache were produced under this rule set; only a
+        // successful, current run may name it in the report header.
+        self.ui_state.erc_run_rule_set = Some(outcome.rule_set.clone());
         for warning in &outcome.warnings {
             crate::diagnostics::log_warning(warning);
         }
@@ -179,6 +188,7 @@ impl Signex {
             .get(self.document_state.active_tab)
             .map(|t| t.path.clone());
         self.ui_state.erc_violations_by_path = outcome.by_path.clone();
+        self.ui_state.erc_waived_hidden = outcome.waived_hidden.clone();
         self.ui_state.erc_focus_global_index = self
             .ui_state
             .erc_violations_by_path
@@ -204,12 +214,20 @@ impl Signex {
             .unwrap_or_default();
         // Only a point in THIS sheet's own coordinates may be drawn here; a
         // child-space or unplaced one would land on empty canvas (#956).
+        // A net-level finding is drawn at its net's representative pin with the
+        // distinct net marker; a No-ERC directive never reaches it.
         self.interaction_state.active_canvas_mut().erc_markers = violations
             .iter()
-            .filter(|v| v.location_space == signex_erc::LocationSpace::ThisSheet)
+            .filter(|v| {
+                matches!(
+                    v.location_space,
+                    signex_erc::LocationSpace::ThisSheet | signex_erc::LocationSpace::Net
+                )
+            })
             .map(|v| crate::canvas::ErcMarker {
                 x: v.location.x,
                 y: v.location.y,
+                net_level: v.location_space == signex_erc::LocationSpace::Net,
                 severity: match v.severity {
                     signex_erc::Severity::Error => crate::canvas::ErcMarkerSeverity::Error,
                     signex_erc::Severity::Warning => crate::canvas::ErcMarkerSeverity::Warning,
@@ -257,7 +275,12 @@ impl Signex {
                         world_x: v.location.x,
                         world_y: v.location.y,
                         select: v.primary,
-                        locatable: v.location_space == signex_erc::LocationSpace::ThisSheet,
+                        locatable: matches!(
+                            v.location_space,
+                            signex_erc::LocationSpace::ThisSheet | signex_erc::LocationSpace::Net
+                        ),
+                        net: v.net.clone(),
+                        rule_id: v.rule_id.to_string(),
                     });
                 }
             }
@@ -333,7 +356,7 @@ impl Signex {
             }
             _ => {
                 self.ui_state.erc_focus_global_index = Some(clamped);
-                self.handle_focus_at(target.world_x, target.world_y, target.select)
+                self.focus_erc_entry(&target)
             }
         }
     }
@@ -357,14 +380,14 @@ impl Signex {
         self.ensure_sheet_open_and_active(&target.sheet_path);
 
         self.ui_state.erc_focus_global_index = Some(clamped);
-        self.handle_focus_at(target.world_x, target.world_y, target.select)
+        self.focus_erc_entry(&target)
     }
 
     /// Open `path` if needed and make it the active sheet. Returns `true`
     /// when it is open and active afterwards; every `false` has already
     /// logged its reason to the Messages panel.
     pub(crate) fn ensure_sheet_open_and_active(&mut self, path: &std::path::Path) -> bool {
-        let path = &self.resolve_held_spelling(path.to_path_buf());
+        let path = &self.resolve_held_spelling_now(path.to_path_buf());
         if let Some(index) = self
             .document_state
             .tabs

@@ -16,8 +16,8 @@
 //! skipping, overlay compositing, draw order and error reporting.
 //!
 //! Mounted by: [`crate::pcb_canvas`] (the PCB editor), via `app/view/mod.rs`.
-//! The schematic and Symbol Editor surfaces are not mounted yet — see #199
-//! and #642.
+//! The schematic is mounted by [`crate::canvas::gpu_mount`]; the Symbol
+//! Editor is not mounted yet — see #642.
 //!
 //! iced's shader `Primitive::draw` composites into the shared render pass over
 //! whatever was already drawn behind the widget (it never clears its own
@@ -38,10 +38,14 @@ use signex_gfx::pipeline::line::LinePipeline;
 use signex_gfx::pipeline::polygon::PolygonPipeline;
 use signex_gfx::pipeline::text::GlyphonTextPipeline;
 use signex_gfx::primitive::text::TextSizePolicy;
-use signex_gfx::scene::{GPU_SCENE_DRAW_ORDER, Scene, SceneBucket};
+use signex_gfx::scene::{
+    DirtyFlags, GPU_SCENE_DRAW_ORDER, Scene, SceneBucket, TextUploadParams, UploadCulling,
+    UploadTracker, apply_dirty_uploads_with_culling,
+};
 use signex_gfx::wgpu;
 
 use crate::app::Message;
+use crate::scene_gpu_upload::{GpuUploadTarget, TextFrame, visible_world_rect};
 
 /// One editor surface that draws its `Scene` on the GPU.
 ///
@@ -52,18 +56,18 @@ use crate::app::Message;
 /// `Arc<RwLock<primitive::Storage>>` on a cloned `Engine` — one map for the
 /// whole process, not one per window. So every widget emitting the same
 /// primitive type shares one instance-buffer set, one camera, and one
-/// `uploaded_generation`.
+/// resident-scene tracker.
 ///
 /// Sharing does not corrupt a frame on its own: `Renderer::draw` runs
 /// `prepare` then `render` over one window's layers and `present` submits that
 /// encoder (`iced_wgpu::lib.rs`), so windows do not interleave — each uploads
 /// its own geometry immediately before drawing it.
 ///
-/// What sharing *does* break is the generation cache. `prepare` skips the
-/// upload when this frame's generation equals the resident one, and two
-/// sources counting independently collide trivially — two freshly-opened
-/// documents are both at generation 0. The second source then skips its upload
-/// and draws the first's geometry.
+/// What sharing *does* break is the generation cache. The resident-scene
+/// tracker skips an upload when this frame's generation equals the resident
+/// one, and two sources counting independently collide trivially — two
+/// freshly-opened documents are both at generation 0. The second source then
+/// skips its upload and draws the first's geometry.
 ///
 /// Making [`ScenePrimitive`] generic over this trait means
 /// `ScenePrimitive<PcbSurface>` and a future `ScenePrimitive<SchematicSurface>`
@@ -119,9 +123,9 @@ impl SceneSurface for PcbSurface {
     /// rest of the app rather than unclamped.
     const TEXT_SIZE: TextSizePolicy = TextSizePolicy::new(6.0, 64.0);
     /// Mirrors the PCB CPU replay's own clamps — `pcb_canvas::draw_lines` and
-    /// `draw_circles` both `.max(0.5)`.
-    const MIN_STROKE_PX: f32 = 0.5;
-    const MIN_RADIUS_PX: f32 = 0.5;
+    /// `draw_circles` both floor via `renderer_scene_canvas::MIN_STROKE_PX`.
+    const MIN_STROKE_PX: f32 = crate::renderer_scene_canvas::MIN_STROKE_PX;
+    const MIN_RADIUS_PX: f32 = crate::renderer_scene_canvas::MIN_RADIUS_PX;
 }
 
 /// The schematic editor's scene surface.
@@ -162,7 +166,7 @@ pub fn world_origin_mm(offset_px: [f32; 2], scale_px_per_mm: f32) -> [f32; 2] {
 /// A dropped frame of text beats panicking the render thread, but a swallowed
 /// failure that never reaches the Messages panel is not reporting either. This
 /// runs once per frame, so it must not log at frame rate.
-fn log_text_error_once(
+pub(crate) fn log_text_error_once(
     flag: &AtomicBool,
     surface: &str,
     stage: &str,
@@ -188,12 +192,11 @@ pub struct ScenePipeline {
     arc: ArcPipeline,
     polygon: PolygonPipeline,
     text: GlyphonTextPipeline,
-    /// Scene generation currently resident in the instance buffers, or `None`
-    /// if geometry has never been uploaded. When a frame's primitive carries
-    /// the same generation, `prepare` skips re-uploading identical geometry and
-    /// refreshes only the camera uniform — so a pure pan/zoom moves ~64 bytes
-    /// instead of the whole board. See [`ScenePrimitive::generation`].
-    uploaded_generation: Option<u64>,
+    /// What is resident in the instance buffers and the window it was culled
+    /// to. Decides, per frame, which categories re-upload: only those that
+    /// changed, and all of them again when the view leaves the culled window.
+    /// A pure pan/zoom inside the window moves ~64 bytes (the camera).
+    tracker: UploadTracker,
     /// First-failure latches for the two glyph-atlas error paths. `AtomicBool`
     /// rather than `bool` because `Primitive::draw` only borrows the pipeline
     /// immutably, and iced requires a `Pipeline` to be `Send + Sync`.
@@ -213,7 +216,7 @@ impl shader::Pipeline for ScenePipeline {
             polygon: PolygonPipeline::new(device, format, layout),
             text: GlyphonTextPipeline::new(device, queue, format),
             camera,
-            uploaded_generation: None,
+            tracker: UploadTracker::default(),
             text_upload_warned: AtomicBool::new(false),
             text_draw_warned: AtomicBool::new(false),
         }
@@ -249,15 +252,34 @@ pub struct ScenePrimitive<S: SceneSurface> {
     /// `Some(g)` comes from a cached source (the PCB `gpu_scene` cache) that
     /// bumps `g` only when the geometry actually changes, so equal generations
     /// across frames mean "same geometry, don't re-upload". `None` marks an
-    /// uncached source that must upload every frame — which is the honest
-    /// answer for any surface whose scene depends on the camera (viewport
-    /// culling or zoom-derived stroke widths), not a missing optimisation.
+    /// uncached source: the tracker compares its scene by value against the
+    /// resident one, so only categories that differ re-upload.
     pub generation: Option<u64>,
     /// Screen-space pan offset in logical pixels.
     pub offset_px: [f32; 2],
     /// Zoom in logical pixels per millimetre.
     pub scale_px_per_mm: f32,
     surface: PhantomData<S>,
+}
+
+impl<S: SceneSurface> ScenePrimitive<S> {
+    /// A primitive for a program that builds its scene inside
+    /// `shader::Program::draw` (the schematic, whose cull bounds only `draw`
+    /// knows) instead of holding one ready-made like [`SceneShaderProgram`].
+    pub fn new(
+        scene: Arc<Scene>,
+        generation: Option<u64>,
+        offset_px: [f32; 2],
+        scale_px_per_mm: f32,
+    ) -> Self {
+        Self {
+            scene,
+            generation,
+            offset_px,
+            scale_px_per_mm,
+            surface: PhantomData,
+        }
+    }
 }
 
 impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
@@ -293,40 +315,14 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
                 .with_min_feature_px(S::MIN_STROKE_PX * dpi, S::MIN_RADIUS_PX * dpi),
         );
 
-        // Skip re-uploading identical geometry. The line/circle/arc/polygon
-        // instances live in *world* space and the camera ortho above applies
-        // pan/zoom on the GPU, so their buffers — which the reused `Pipeline`
-        // keeps resident across frames — only need refreshing when the geometry
-        // itself changes. When this frame's generation already matches what's
-        // resident, a pure pan/zoom moved just the camera uniform. An uncached
-        // source (`generation == None`) never matches and re-uploads.
-        let geometry_is_current = matches!(
-            (self.generation, pipeline.uploaded_generation),
-            (Some(current), Some(resident)) if current == resident
-        );
-        if !geometry_is_current {
-            pipeline.polygon.upload(device, queue, &self.scene.polygons);
-            pipeline.line.upload(device, queue, &self.scene.lines);
-            pipeline.arc.upload(device, queue, &self.scene.arcs);
-            pipeline.circle.upload(device, queue, &self.scene.circles);
-            pipeline
-                .polygon
-                .upload_top(device, queue, &self.scene.top_polygons);
-            // Overlay geometry uploads into each pipeline's dedicated overlay
-            // buffer (never folded into the base buckets above — see
-            // `pcb_canvas::gpu_scene`), so `Self::draw`'s later overlay pass
-            // always composites on top of every base bucket.
-            pipeline
-                .polygon
-                .upload_overlay(device, queue, &self.scene.overlay_polygons);
-            pipeline
-                .line
-                .upload_overlay(device, queue, &self.scene.overlay_lines);
-            pipeline
-                .circle
-                .upload_overlay(device, queue, &self.scene.overlay_circles);
-            pipeline.uploaded_generation = self.generation;
-        }
+        // Upload only what changed, and only what is near the view. The
+        // line/circle/arc/polygon instances live in *world* space and the
+        // camera ortho above applies pan/zoom on the GPU, so their buffers only
+        // need refreshing when the geometry changes or the view leaves the
+        // window they were culled to (visible area plus a margin). The tracker
+        // plans both; `apply_dirty_uploads_with_culling` executes it.
+        let visible = visible_world_rect(bounds, self.offset_px, self.scale_px_per_mm);
+        let plan = pipeline.tracker.plan(&self.scene, self.generation, visible);
 
         // Text is NOT guarded: glyphon rasterises glyphs in screen-pixel space
         // (`size_mm * scale_px_per_mm` plus the pan offset), so it must be
@@ -355,26 +351,45 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         // `(em * scale).clamp(min, max) * dpi`.
         //
         // `upload` stages axis-aligned items only — a glyph atlas cannot
-        // rotate (`TextItem::is_axis_aligned`). Harmless while the PCB is the
-        // only surface here (its scene carries no text), but a surface whose
-        // scene does carry rotated text — the schematic, when #199 mounts it —
-        // owes those items a CPU canvas pass, or they vanish.
+        // rotate (`TextItem::is_axis_aligned`). The PCB scene carries no text; the
+        // schematic's rotated items get their CPU pass from the overlay canvas
+        // in `crate::canvas::gpu_mount`.
         let text_size = TextSizePolicy::new(S::TEXT_SIZE.min_px * dpi, S::TEXT_SIZE.max_px * dpi);
-        let mut font_system = iced::advanced::graphics::text::font_system()
-            .write()
-            .expect("iced font system poisoned");
-        if let Err(error) = pipeline.text.upload(
+        let ScenePipeline {
+            line,
+            circle,
+            arc,
+            polygon,
+            text,
+            text_upload_warned,
+            ..
+        } = pipeline;
+        let mut target = GpuUploadTarget {
             device,
             queue,
-            font_system.raw(),
-            &self.scene.texts,
-            scale_px,
-            text_size,
-            crate::render_config::CANVAS_FONT_FAMILY,
-            [vp_px[0] as u32, vp_px[1] as u32],
-            [self.offset_px[0] * dpi, self.offset_px[1] * dpi],
-        ) {
-            log_text_error_once(&pipeline.text_upload_warned, S::LABEL, "upload", error);
+            line,
+            circle,
+            arc,
+            polygon,
+            text,
+            text_frame: TextFrame {
+                size_policy: text_size,
+                offset_px: [self.offset_px[0] * dpi, self.offset_px[1] * dpi],
+                warned: text_upload_warned,
+                surface_label: S::LABEL,
+            },
+        };
+        let text_params = TextUploadParams::new(scale_px, [vp_px[0] as u32, vp_px[1] as u32]);
+        // Geometry: dirty categories, culled to the tracker's window.
+        // Text: every frame (it is screen-space), never culled - the envelope
+        // is an estimate and a label anchored off-screen can still reach in.
+        // The target reports its own failures and cannot return one.
+        for (dirty, culling) in [
+            (plan.dirty, plan.culling),
+            (DirtyFlags::TEXT, UploadCulling::disabled()),
+        ] {
+            apply_dirty_uploads_with_culling(&self.scene, dirty, &mut target, text_params, culling)
+                .unwrap_or_else(|never| match never {});
         }
     }
 
@@ -456,7 +471,7 @@ impl<S: SceneSurface> SceneShaderProgram<S> {
     /// zoom in logical pixels per millimetre). `generation` identifies the
     /// geometry so the pipeline can skip redundant GPU uploads on pan/zoom:
     /// `Some(g)` from a cached source that bumps `g` only on real geometry
-    /// changes, or `None` for an uncached source that uploads every frame.
+    /// changes, or `None` for an uncached source, compared by value against the resident scene.
     pub fn new(
         scene: Arc<Scene>,
         generation: Option<u64>,
@@ -604,7 +619,7 @@ mod tests {
 
     /// The whole point of the [`SceneSurface`] parameter: iced keys a stored
     /// pipeline by the primitive's `TypeId`, so two surfaces sharing one would
-    /// share its `uploaded_generation` and skip an upload whenever their
+    /// share its resident-scene tracker and skip an upload whenever their
     /// independent counters happened to match. Pins that adding a marker
     /// actually produces a distinct type.
     #[test]

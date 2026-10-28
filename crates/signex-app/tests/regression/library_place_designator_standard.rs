@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use signex_app::app::{LoadedProject, Message, Signex};
+use signex_app::app::{LoadedProject, Message, ProjectMsg, ProjectTabMsg, Signex};
 use signex_app::library::LibraryMessage;
 use signex_app::library::messages::ResolvedPlacement;
 use signex_app::library::place::resolve_placement;
@@ -11,11 +11,13 @@ use signex_types::designator::DesignatorStandard;
 use signex_types::project::{ProjectData, SheetEntry};
 use std::path::PathBuf;
 
-use crate::library_place_symbol::{Fixture, app_with_library, doc, fixture_of_class};
+use crate::library_place_symbol::{
+    Fixture, app_with_library, doc, fixture_of_class, fixture_with_parameters,
+};
 
 const SHEET: &str = "place-364.snxsch";
 
-fn project(
+pub(crate) fn project(
     app: &mut Signex,
     name: &str,
     sheets: &[&str],
@@ -24,6 +26,7 @@ fn project(
     let id = app.document_state.mint_project_id();
     let mut data = ProjectData {
         name: name.to_string(),
+        description: None,
         dir: String::new(),
         schematic_root: None,
         pcb_file: None,
@@ -45,6 +48,7 @@ fn project(
         net_classes: Vec::new(),
         rules: None,
         annotation: None,
+        parameters: Default::default(),
         unknown: Default::default(),
     };
     data.set_designator_standard(standard);
@@ -55,6 +59,7 @@ fn project(
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     id
 }
@@ -70,11 +75,30 @@ fn diode(f: &Fixture) -> Box<ResolvedPlacement> {
 }
 
 fn place_diode(app: &mut Signex, f: &Fixture) -> String {
+    place_resolved(app, f, diode(f))
+}
+
+/// [`place_diode`] where the library row carries `designator_prefix`.
+fn place_diode_with(app: &mut Signex, f: &Fixture, prefix_override: &str) -> String {
+    let resolved = diode(f);
+    assert_eq!(resolved.prefix_override.as_deref(), Some(prefix_override));
+    place_resolved(app, f, resolved)
+}
+
+fn place_resolved(app: &mut Signex, f: &Fixture, resolved: Box<ResolvedPlacement>) -> String {
+    let arm_epoch = app.interaction_state.placement_epoch;
     let _ = app.update(Message::Library(LibraryMessage::LibraryComponentResolved {
         target_sheet: PathBuf::from(SHEET),
+        arm_epoch,
         library_path: f.snxlib.clone(),
-        result: Ok(diode(f)),
+        result: Ok(resolved),
     }));
+    let _ = app.update(Message::CanvasEvent(
+        signex_app::canvas::CanvasEvent::Clicked {
+            world_x: 25.4,
+            world_y: 38.1,
+        },
+    ));
     doc(app).symbols[0].reference.clone()
 }
 
@@ -89,6 +113,39 @@ fn a_diode_under_din_40719_2_is_referenced_v() {
         Some(DesignatorStandard::Din40719_2),
     );
     assert_eq!(place_diode(&mut app, &f), "V1");
+}
+
+#[test]
+fn the_standard_holds_across_several_clicks_on_the_cursor() {
+    let f = fixture_of_class("diode");
+    let mut app = app_with_library(&f);
+    project(
+        &mut app,
+        "P",
+        &[SHEET],
+        Some(DesignatorStandard::Din40719_2),
+    );
+    let arm_epoch = app.interaction_state.placement_epoch;
+    let _ = app.update(Message::Library(LibraryMessage::LibraryComponentResolved {
+        target_sheet: PathBuf::from(SHEET),
+        arm_epoch,
+        library_path: f.snxlib.clone(),
+        result: Ok(diode(&f)),
+    }));
+    for at in [(10.16, 10.16), (30.48, 10.16), (50.8, 10.16)] {
+        let _ = app.update(Message::CanvasEvent(
+            signex_app::canvas::CanvasEvent::Clicked {
+                world_x: at.0,
+                world_y: at.1,
+            },
+        ));
+    }
+    let refs: Vec<_> = doc(&app)
+        .symbols
+        .iter()
+        .map(|s| s.reference.clone())
+        .collect();
+    assert_eq!(refs, ["V1", "V2", "V3"]);
 }
 
 #[test]
@@ -121,22 +178,24 @@ fn a_loose_sheet_keeps_the_symbol_designator() {
     assert_eq!(place_diode(&mut app, &f), "D1");
 }
 
+/// The General section's picker, as the UI sends it, for project 0.
+fn pick_standard(app: &mut Signex, standard: Option<DesignatorStandard>) {
+    let project_id = app.document_state.projects[0].id;
+    let _ = app.update(Message::Project(ProjectMsg::Tab(
+        ProjectTabMsg::DesignatorStandardPicked {
+            project_id,
+            standard,
+        },
+    )));
+}
+
 #[test]
-fn picking_a_standard_in_project_options_sets_it_and_marks_the_project_dirty() {
-    use signex_app::app::{ProjectMsg, ProjectOptionsState};
+fn picking_a_standard_in_the_project_tab_sets_it_and_marks_the_project_dirty() {
     let f = fixture_of_class("diode");
     let mut app = app_with_library(&f);
     project(&mut app, "P", &[SHEET], None);
-    app.ui_state.project_options = Some(ProjectOptionsState {
-        project_idx: 0,
-        name: "P".into(),
-        directory: String::new(),
-        schematic_root: None,
-        pcb_file: None,
-        library_count: 0,
-    });
     let pick = |app: &mut Signex, s| {
-        let _ = app.update(Message::Project(ProjectMsg::DesignatorStandardPicked(s)));
+        pick_standard(app, s);
     };
 
     pick(&mut app, Some(DesignatorStandard::Iec81346_2));
@@ -153,29 +212,90 @@ fn picking_a_standard_in_project_options_sets_it_and_marks_the_project_dirty() {
 
 #[test]
 fn re_picking_library_designator_keeps_an_unreadable_section_and_stays_clean() {
-    use signex_app::app::{ProjectMsg, ProjectOptionsState};
     let f = fixture_of_class("diode");
     let mut app = app_with_library(&f);
     project(&mut app, "P", &[SHEET], None);
     app.document_state.projects[0].data.unknown =
         serde_json::from_str(r#"{"annotation":{"designator_standard":"iso9999"}}"#).unwrap();
-    app.ui_state.project_options = Some(ProjectOptionsState {
-        project_idx: 0,
-        name: "P".into(),
-        directory: String::new(),
-        schematic_root: None,
-        pcb_file: None,
-        library_count: 0,
-    });
-    let _ = app.update(Message::Project(ProjectMsg::DesignatorStandardPicked(None)));
+    pick_standard(&mut app, None);
     let loaded = &app.document_state.projects[0];
     assert!(loaded.data.has_unreadable_annotation());
     assert!(!app.document_state.dirty_paths.contains(&loaded.path));
 
-    let _ = app.update(Message::Project(ProjectMsg::DesignatorStandardPicked(
-        Some(DesignatorStandard::Ieee315),
-    )));
+    pick_standard(&mut app, Some(DesignatorStandard::Ieee315));
     let loaded = &app.document_state.projects[0];
     assert!(!loaded.data.has_unreadable_annotation());
     assert!(app.document_state.dirty_paths.contains(&loaded.path));
+}
+
+#[test]
+fn a_row_override_decides_the_placed_prefix() {
+    use signex_library::{DESIGNATOR_PREFIX_PARAM, ParamMap, ParamValue};
+    let params: ParamMap = [(
+        DESIGNATOR_PREFIX_PARAM.to_owned(),
+        ParamValue::Text("zd".into()),
+    )]
+    .into_iter()
+    .collect();
+    let f = fixture_with_parameters("diode", params);
+    // The override wins over the standard's `V` ...
+    let mut app = app_with_library(&f);
+    project(
+        &mut app,
+        "P",
+        &[SHEET],
+        Some(DesignatorStandard::Din40719_2),
+    );
+    assert_eq!(place_diode_with(&mut app, &f, "zd"), "ZD1");
+    // ... and over the symbol's own `D` when the project follows no standard.
+    let mut app = app_with_library(&f);
+    project(&mut app, "P", &[SHEET], None);
+    assert_eq!(place_diode_with(&mut app, &f, "zd"), "ZD1");
+}
+
+#[test]
+fn legacy_place_resolves_through_resolve_prefix_unchanged() {
+    use signex_app::app::Tool;
+    use signex_app::canvas::CanvasEvent;
+    let f = fixture_of_class("diode");
+    let mut app = app_with_library(&f);
+    project(
+        &mut app,
+        "P",
+        &[SHEET],
+        Some(DesignatorStandard::Din40719_2),
+    );
+    app.interaction_state.current_tool = Tool::Component;
+    app.document_state.panel_ctx.selected_component = Some("Diode:D_1N4148".into());
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::Clicked {
+        world_x: 10.0,
+        world_y: 10.0,
+    }));
+    // No row, no class: the value's letters decide, whatever the standard.
+    assert_eq!(doc(&app).symbols[0].reference, "D1");
+}
+
+#[test]
+fn legacy_place_never_issues_a_hash_or_blank_prefix() {
+    use signex_app::app::Tool;
+    use signex_app::canvas::CanvasEvent;
+    // `power:#GND` and `Device: R` have no leading letters: `U`, as before,
+    // and never a `#` reference on an ordinary (non-power) part.
+    for (lib_id, expected) in [
+        ("power:#GND", "U1"),
+        ("Device: R", "U1"),
+        ("Device:R", "R1"),
+    ] {
+        let f = fixture_of_class("diode");
+        let mut app = app_with_library(&f);
+        app.interaction_state.current_tool = Tool::Component;
+        app.document_state.panel_ctx.selected_component = Some(lib_id.into());
+        let _ = app.update(Message::CanvasEvent(CanvasEvent::Clicked {
+            world_x: 10.0,
+            world_y: 10.0,
+        }));
+        let placed = &doc(&app).symbols[0];
+        assert_eq!(placed.reference, expected, "{lib_id}");
+        assert!(!placed.reference.starts_with('#'), "{lib_id}");
+    }
 }

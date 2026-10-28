@@ -45,9 +45,9 @@ use signex_types::schematic::{
 use uuid::Uuid;
 
 use crate::build::{
-    POWER_PORT_PRIORITY, anchor_point, collect_membership, collect_net_labels, collect_terminals,
-    dedup_net_names, label_priority, merged_sheet_parent, name_outranks, power_name_carriers,
-    pt_key,
+    POWER_PORT_PRIORITY, SegmentIndex, anchor_point, collect_membership, collect_net_labels,
+    collect_terminals, dedup_net_names, label_priority, merged_sheet_parent, name_outranks,
+    power_name_carriers, pt_key,
 };
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
@@ -558,9 +558,10 @@ fn analyze<'a>(sheet: &'a SchematicSheet, path: &InstancePath) -> Analysis<'a> {
     // Anchor every child-sheet pin to the wire it sits on (endpoint or
     // interior), like a label — before sampling any root.
     let wire_pairs: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
+    let wire_index = SegmentIndex::new(&wire_pairs);
     for cs in &sheet.child_sheets {
         for sp in &cs.pins {
-            anchor_point(&mut parent, pt_key(&sp.position), &wire_pairs);
+            anchor_point(&mut parent, pt_key(&sp.position), &wire_index);
         }
     }
 

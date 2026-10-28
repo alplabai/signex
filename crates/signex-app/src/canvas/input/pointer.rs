@@ -31,6 +31,24 @@ impl SchematicCanvas<'_> {
                 return Some(action);
             }
 
+            // A part on the cursor owns every press: it is placed, never a
+            // double-click, a Ctrl-click, a hit-test, a drag-move or a box
+            // select that would edit what is already on the sheet (#1252).
+            let placing = self.prefs.placement.is_some();
+            if placing {
+                state.click_on_selected = false;
+                state.move_origin = None;
+                state.move_dragging = false;
+                state.select_drag_start = None;
+                state.select_drag_end = None;
+                return Some(canvas::Action::publish(Message::CanvasEvent(
+                    CanvasEvent::Clicked {
+                        world_x: wx,
+                        world_y: wy,
+                    },
+                )));
+            }
+
             // Double-click detection (300ms, 5px threshold)
             let now = std::time::Instant::now();
             if let (Some(last_time), Some(last_pos)) =
@@ -234,15 +252,19 @@ impl SchematicCanvas<'_> {
             return Some(canvas::Action::capture());
         }
         if let Some(pos) = cursor.position_in(bounds) {
-            // Active Bar zone: top ~46px, centered (bar 36px + 4 top margin + slack)
-            if pos.y < 46.0 {
+            // Active Bar zone: top margin + bar height + slack, centered.
+            if pos.y < crate::active_bar::BAR_ZONE_HEIGHT_PX {
                 // Calculate which Active Bar button was right-clicked
-                let bar_width: f32 = crate::active_bar::BAR_WIDTH_PX;
-                let bar_x = (bounds.width - bar_width) / 2.0;
+                let tool = self.prefs.current_tool;
+                let bar_width = crate::active_bar::bar_width_for(tool);
+                // The bar is centred on the window; `bounds.x` is this
+                // canvas's window-space left edge.
+                let bar_x =
+                    crate::active_bar::bar_left_in_window(tool, self.prefs.window_width) - bounds.x;
                 let rel_x = pos.x - bar_x;
                 if rel_x >= 0.0
                     && rel_x < bar_width
-                    && let Some(menu) = active_bar_hit(rel_x)
+                    && let Some(menu) = crate::active_bar::menu_at(tool, rel_x)
                 {
                     return Some(canvas::Action::publish(Message::ActiveBar(
                         crate::active_bar::ActiveBarMsg::ToggleMenu(menu),

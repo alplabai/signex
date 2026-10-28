@@ -100,7 +100,7 @@ pub struct ProfileEntities {
 ///
 /// Algorithm:
 /// 1. Build endpoint → list-of-edge adjacency over non-construction
-///    Lines (Arcs / Circles are rejected with the matching error).
+///    Lines and Arcs (Circles are rejected with `CircleInProfile`).
 /// 2. Pick an arbitrary endpoint of `start` as the loop anchor.
 /// 3. Walk: from the current endpoint, find the unique non-visited
 ///    incident edge (excluding the entity we just came from). If

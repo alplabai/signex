@@ -194,6 +194,16 @@ pub(crate) fn path_is_under(path: &Path, root: &Path, fold: CaseFold) -> bool {
     Path::new(&path_key).starts_with(Path::new(&root_key))
 }
 
+/// `path`, which lies [`path_is_under`] `old_root`, moved under `new_root`.
+/// Both are dot-segment resolved first, as the key is, so `W/x/../Foo/a`
+/// under `W/Foo` rebases to `<new_root>/a`. Counting components (not
+/// matching text) also rebases a differently-cased spelling of `old_root`.
+pub(crate) fn rebase_under(path: &Path, old_root: &Path, new_root: &Path) -> PathBuf {
+    let depth = normalize_clamped(old_root).components().count();
+    let rel: PathBuf = normalize_clamped(path).components().skip(depth).collect();
+    new_root.join(rel)
+}
+
 /// Comparison keys for ownership: the lexical [`path_key_with`] key of the
 /// NORMALISED path, replaced by the key of its real (canonical) spelling when
 /// the off-thread resolve could find one.
@@ -433,6 +443,7 @@ mod tests {
             id: ProjectId(id),
             path: PathBuf::from(dir).join("proj.snxprj"),
             data: ProjectData {
+                description: None,
                 name: "proj".to_string(),
                 dir: dir.to_string(),
                 schematic_root: filenames.first().map(|f| (*f).to_string()),
@@ -455,11 +466,13 @@ mod tests {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                parameters: Default::default(),
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         }
     }
 
@@ -908,5 +921,22 @@ mod tests {
             &root,
             CaseFold::PRESERVE
         ));
+    }
+
+    #[test]
+    fn rebase_resolves_dot_segments_before_counting_components() {
+        let w = std::env::temp_dir();
+        let spelled = w
+            .join("x")
+            .join("..")
+            .join("Foo")
+            .join(".")
+            .join("a.snxsch");
+        let old = w.join("Foo");
+        assert!(path_is_under(&spelled, &old, CaseFold::host_default()));
+        assert_eq!(
+            rebase_under(&spelled, &old, &w.join("Bar")),
+            w.join("Bar").join("a.snxsch")
+        );
     }
 }

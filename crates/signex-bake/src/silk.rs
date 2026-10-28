@@ -126,12 +126,11 @@ fn entity_to_graphic(
             if end_deg < 0.0 {
                 end_deg += 360.0;
             }
-            // CW arcs are encoded by start > end (renderer chooses the
-            // short-arc direction otherwise). For now the bake just
-            // records the raw degrees + a swap when sweep_ccw is false
-            // and start < end, matching the FpGraphicKind::Arc
-            // contract used by the v0.13 schematic renderer.
-            if !sweep_ccw && start_deg < end_deg {
+            // `FpGraphicKind::Arc` is always the CCW arc from `start_deg` to
+            // `end_deg` (wrapping through 0 when start > end). A clockwise
+            // arc from A to B is the CCW arc from B to A, so swap the
+            // endpoints whenever the sketch arc is not CCW.
+            if !sweep_ccw {
                 std::mem::swap(&mut start_deg, &mut end_deg);
             }
             Ok(Some(FpGraphic {
@@ -318,5 +317,58 @@ mod tests {
             warnings.iter().any(|w| w.contains("not a silk layer")),
             "expected wrong-layer warning, got {warnings:?}"
         );
+    }
+
+    fn arc_silk(sweep_ccw: bool, start_deg: f64, end_deg: f64) -> (f64, f64) {
+        let (mut data, plane) = empty_sketch();
+        let at = |deg: f64| [deg.to_radians().cos(), deg.to_radians().sin()];
+        let ids = [(0.0, 0.0), at(start_deg).into(), at(end_deg).into()].map(|(x, y)| {
+            let id = SketchEntityId::new();
+            data.entities
+                .push(Entity::new(id, plane, EntityKind::Point { x, y }));
+            id
+        });
+        let mut arc = Entity::new(
+            SketchEntityId::new(),
+            plane,
+            EntityKind::Arc {
+                center: ids[0],
+                start: ids[1],
+                end: ids[2],
+                sweep_ccw,
+            },
+        );
+        arc.silk = Some(SilkAttr {
+            layer: SignexLayer::TopSilk,
+        });
+        data.entities.push(arc);
+        let solved = solve(&data);
+        let (mut silk_f, mut silk_b, mut warnings) = (Vec::new(), Vec::new(), Vec::new());
+        bake_silk(&data, &solved, &mut silk_f, &mut silk_b, &mut warnings).unwrap();
+        match &silk_f[0].kind {
+            FpGraphicKind::Arc {
+                start_deg, end_deg, ..
+            } => (*start_deg, *end_deg),
+            other => panic!("expected Arc graphic, got {other:?}"),
+        }
+    }
+
+    fn assert_deg(actual: (f64, f64), expected: (f64, f64)) {
+        assert!(
+            (actual.0 - expected.0).abs() < 1e-6 && (actual.1 - expected.1).abs() < 1e-6,
+            "got {actual:?}, expected {expected:?}"
+        );
+    }
+
+    #[test]
+    fn bake_silk_cw_arc_is_the_ccw_arc_from_end_to_start() {
+        // CW 10 -> 350 degrees crosses 0: the 20 degree arc 350 -> 10 (CCW).
+        assert_deg(arc_silk(false, 10.0, 350.0), (350.0, 10.0));
+        // CW 350 -> 10 degrees is the long way round: CCW 10 -> 350.
+        // (Before the fix start > end was left alone, baking the 20 degree
+        // complement.)
+        assert_deg(arc_silk(false, 350.0, 10.0), (10.0, 350.0));
+        // CCW arcs are unchanged.
+        assert_deg(arc_silk(true, 350.0, 10.0), (350.0, 10.0));
     }
 }

@@ -14,12 +14,16 @@ mod drag_layers;
 pub(crate) mod drag_preview;
 mod draw;
 mod erc_marker;
+pub(crate) mod gpu_mount;
 pub mod grid;
 mod input;
 mod move_pick;
+pub mod placement_ghost;
 mod shape_preview;
 mod shift_selection;
+mod special_strings;
 
+use gpu_mount::ContentMode;
 use shift_selection::shift_snapshot_for_selection;
 
 use iced::event::Event;
@@ -30,7 +34,9 @@ use iced::{Color, Rectangle, Renderer, Theme};
 pub use camera::Camera;
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 pub use move_pick::MovePick;
+pub use placement_ghost::PlacementGhost;
 pub use shape_preview::ShapePreviewKind;
+pub use special_strings::SpecialStrings;
 
 use crate::schematic_runtime::SchematicSheetExt as _;
 
@@ -78,6 +84,14 @@ pub struct CanvasState {
 
 // ─── CanvasSlot (the Program) ────────────────────────────
 
+/// The inputs `CanvasSlot::designators` is a function of: sheet path, engine
+/// `(instance, revision)` and the shown placement.
+pub type DesignatorsKey = (
+    std::path::PathBuf,
+    Option<(u64, u64)>,
+    Option<signex_types::schematic::InstancePath>,
+);
+
 /// The canvas program that handles input and rendering.
 /// Holds references to app state needed for drawing (theme colors, etc).
 pub struct CanvasSlot {
@@ -93,6 +107,9 @@ pub struct CanvasSlot {
     /// The static layer and lifted items of a move-drag in flight (#1335);
     /// dropped when the drag ends, is cancelled, or the document changes.
     drag_layers: std::cell::RefCell<drag_layers::DragLayers>,
+    /// Published from the GPU overlay's `update` while a move is in flight;
+    /// see [`gpu_mount::DragOnCpu`].
+    drag_on_cpu: gpu_mount::DragOnCpu,
     /// The **sole** home of the schematic pan/zoom camera (ADR-0001 §A1: no
     /// shadow copies of widget state). `RefCell` gives interior mutability so
     /// `canvas::Program::update` — which only borrows `&self` — can mutate it,
@@ -144,11 +161,18 @@ pub struct CanvasSlot {
     /// Border, zone markers and title block for the paper, lowered by the
     /// app with the same lowering the PDF uses (#1079). Drawn in sheet mm.
     pub sheet_frame: Vec<signex_output::template::FramePrimitive>,
+    /// What `${TOKEN}` special strings resolve to in this sheet's text
+    /// notes (#1080); `None` leaves the text as stored.
+    pub special_strings: Option<SpecialStrings>,
     /// Designators of the placement this tab was opened through (#1151), by
     /// symbol uuid, for the symbols whose designator there differs from their
     /// `reference`. Empty for a tab with no recorded placement. Set by the app
     /// from the engine; drawn in place of `reference`.
     pub designators: std::collections::HashMap<uuid::Uuid, String>,
+    /// What `designators` was last computed from (sheet path, engine
+    /// instance and revision, shown placement); `refresh_canvas_designators`
+    /// skips the recompute while it still matches (#1383).
+    pub designators_key: Option<DesignatorsKey>,
     /// ERC violations to highlight on the canvas — Altium-style marker
     /// dots + primary-item halos. Synced from `ui_state.erc_violations`
     /// after each ERC run so the overlay renders without the canvas
@@ -216,6 +240,7 @@ impl CanvasSlot {
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             content_scene: std::cell::RefCell::new(Default::default()),
             drag_layers: std::cell::RefCell::new(Default::default()),
+            drag_on_cpu: Default::default(),
             camera: std::cell::RefCell::new(Camera::default()),
             render_cache: None,
             selected: Vec::new(),
@@ -232,7 +257,9 @@ impl CanvasSlot {
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
             sheet_frame: Vec::new(),
+            special_strings: None,
             designators: std::collections::HashMap::new(),
+            designators_key: None,
             erc_markers: Vec::new(),
             pending_net_color: None,
             lasso_polygon: None,
@@ -275,6 +302,7 @@ impl CanvasSlot {
         self.content_cache.clear();
         self.content_scene.get_mut().invalidate();
         self.drag_layers.get_mut().clear();
+        self.drag_on_cpu.clear();
     }
 
     /// Current pan/zoom as `(offset_x_px, offset_y_px, scale_px_per_mm)`,
@@ -304,6 +332,7 @@ impl CanvasSlot {
     ) {
         self.render_cache = render_cache;
         self.content_scene.get_mut().invalidate();
+        self.drag_on_cpu.clear();
     }
 
     #[cfg(test)]
@@ -317,16 +346,6 @@ impl CanvasSlot {
     /// stand in for a drawn frame).
     pub fn set_viewport(&self, bounds: Rectangle) {
         self.viewport.set(bounds);
-    }
-
-    /// World-space point (mm) under the centre of the last-recorded canvas
-    /// viewport. Used to drop a part that was picked from a list rather than
-    /// aimed at the canvas.
-    pub fn view_centre_world(&self) -> (f64, f64) {
-        let bounds = self.viewport.get();
-        let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
-        let world = self.camera.borrow().screen_to_world(centre, bounds);
-        (f64::from(world.x), f64::from(world.y))
     }
 
     /// View > Zoom In/Out: one `step` notch about the centre; false at the limits.
@@ -400,12 +419,21 @@ pub struct CanvasViewPrefs<'a> {
     /// "Keep wires connected when moving" preference).
     pub move_keeps_wires: bool,
     pub draw_mode: crate::app::DrawMode,
+    /// Active tool; decides whether the Active Bar shows the draw-mode pill,
+    /// which widens the bar the right-click hit-test must centre.
+    pub current_tool: crate::app::Tool,
+    /// Full window width. The Active Bar is centred on the window, not on
+    /// this canvas, so docked side panels do not move it.
+    pub window_width: f32,
     pub wire_color_overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     /// Resolved net-class style per wire and junction, read from app state
     /// so the canvas never reaches into the project. See
     /// [`crate::schematic_runtime::WireStyling`] for the precedence.
     pub wire_class_styles: &'a crate::schematic_runtime::WireClassStyles,
     pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
+    /// Content attached to the cursor, for the window whose document is the
+    /// session's target sheet only (`None` everywhere else).
+    pub placement: Option<&'a PlacementGhost>,
 }
 
 impl CanvasViewPrefs<'_> {
@@ -440,6 +468,9 @@ impl CanvasViewPrefs<'_> {
 pub struct SchematicCanvas<'a> {
     slot: &'a CanvasSlot,
     prefs: CanvasViewPrefs<'a>,
+    /// Whether this canvas draws the whole sheet or only what the GPU shader
+    /// beneath it cannot (#199).
+    mode: ContentMode,
 }
 
 impl<'a> SchematicCanvas<'a> {
@@ -448,6 +479,7 @@ impl<'a> SchematicCanvas<'a> {
         crate::schematic_runtime::SceneOverrides {
             wire_styling: Some(self.prefs.wire_styling()),
             designators: Some(&self.slot.designators),
+            special_strings: self.slot.special_strings.as_ref(),
         }
     }
 
@@ -499,6 +531,15 @@ impl<'a> SchematicCanvas<'a> {
                     cy - oy,
                     self.prefs.snap_enabled,
                     self.prefs.snap_grid_mm,
+                    self.prefs.snap_hotspots.then(|| {
+                        signex_types::schematic::hotspot_capture_radius(
+                            if self.prefs.snap_enabled {
+                                self.prefs.snap_grid_mm
+                            } else {
+                                0.0
+                            },
+                        )
+                    }),
                 )
             })
     }
@@ -528,41 +569,8 @@ impl<'a> SchematicCanvas<'a> {
         drag_preview::ghost_delta(dx, dy, self.prefs.snap_enabled, self.camera().scale)
     }
 
-    pub fn new(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Self {
-        Self { slot, prefs }
-    }
-
-    /// Compute the "focus" uuid set when auto_focus is on — members of
-    /// the current selection. Returns None when auto_focus is off; the
-    /// renderer then draws every item at full alpha.
-    ///
-    /// #631 — lives on the borrowing view, not the slot: `auto_focus` is
-    /// a `UiState` setting read through `prefs`, while `selected` is the
-    /// window's own state reached through `Deref`.
-    fn auto_focus_set(&self) -> Option<std::collections::HashSet<uuid::Uuid>> {
-        if !self.prefs.auto_focus {
-            return None;
-        }
-        let mut set = std::collections::HashSet::new();
-        for item in &self.selected {
-            set.insert(item.uuid);
-        }
-        Some(set)
-    }
-}
-
-impl std::ops::Deref for SchematicCanvas<'_> {
-    type Target = CanvasSlot;
-
-    fn deref(&self) -> &Self::Target {
-        self.slot
-    }
-}
-
-impl canvas::Program<Message> for SchematicCanvas<'_> {
-    type State = CanvasState;
-
-    fn update(
+    /// Route one input event to its handler.
+    fn dispatch_event(
         &self,
         state: &mut CanvasState,
         event: &Event,
@@ -619,6 +627,58 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         }
     }
 
+    pub fn new(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Self {
+        Self {
+            slot,
+            prefs,
+            mode: ContentMode::Cpu,
+        }
+    }
+
+    /// Compute the "focus" uuid set when auto_focus is on — members of
+    /// the current selection. Returns None when auto_focus is off; the
+    /// renderer then draws every item at full alpha.
+    ///
+    /// #631 — lives on the borrowing view, not the slot: `auto_focus` is
+    /// a `UiState` setting read through `prefs`, while `selected` is the
+    /// window's own state reached through `Deref`.
+    fn auto_focus_set(&self) -> Option<std::collections::HashSet<uuid::Uuid>> {
+        if !self.prefs.auto_focus {
+            return None;
+        }
+        let mut set = std::collections::HashSet::new();
+        for item in &self.selected {
+            set.insert(item.uuid);
+        }
+        Some(set)
+    }
+}
+
+impl std::ops::Deref for SchematicCanvas<'_> {
+    type Target = CanvasSlot;
+
+    fn deref(&self) -> &Self::Target {
+        self.slot
+    }
+}
+
+impl canvas::Program<Message> for SchematicCanvas<'_> {
+    type State = CanvasState;
+
+    fn update(
+        &self,
+        state: &mut CanvasState,
+        event: &Event,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Option<canvas::Action<Message>> {
+        let action = self.dispatch_event(state, event, bounds, cursor);
+        if self.mode == ContentMode::GpuOverlay {
+            return self.publish_drag(state, action);
+        }
+        action
+    }
+
     fn draw(
         &self,
         state: &CanvasState,
@@ -629,8 +689,11 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
     ) -> Vec<canvas::Geometry> {
         let mut layers = Vec::with_capacity(4);
 
-        // Layer 1: background (grid + paper)
-        layers.push(self.draw_background(renderer, bounds));
+        // Layer 1: background (grid + paper). A GPU-mounted sheet has the
+        // backdrop canvas for it beneath the shader.
+        if self.mode == ContentMode::Cpu {
+            layers.push(self.draw_background(renderer, bounds));
+        }
 
         let drag_offset = self.drag_delta(state);
 
@@ -706,84 +769,6 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
     }
 }
 
-// ─── Active Bar hit detection for right-click ────────────────
-
-/// Map a relative x position within the Active Bar to a dropdown menu.
-/// Returns None for buttons without dropdowns (Select, Add Component).
-fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
-    use crate::active_bar::ActiveBarMenu;
-    // Each btn=29px (28 cell + 1 spacing), sep=2px, pad=4px.
-    // [Filter][Move] | [Select][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
-    let x = x - 4.0;
-    let b = 29; // button width (cell + spacing)
-    let s = 2; // separator
-    let xi = x as i32;
-    if xi < 0 {
-        return None;
-    }
-    // btn 0: Filter
-    if xi < b {
-        return Some(ActiveBarMenu::Filter);
-    }
-    // btn 1: Move
-    if xi < 2 * b {
-        return Some(ActiveBarMenu::Select);
-    }
-    // sep
-    let off = 2 * b + s;
-    // btn 2: Select
-    if xi >= off && xi < off + b {
-        return Some(ActiveBarMenu::SelectMode);
-    }
-    // btn 3: Align
-    if xi >= off + b && xi < off + 2 * b {
-        return Some(ActiveBarMenu::Align);
-    }
-    // sep
-    let off = off + 2 * b + s;
-    // btn 4: Wire
-    if xi >= off && xi < off + b {
-        return Some(ActiveBarMenu::Wiring);
-    }
-    // btn 5: Power
-    if xi >= off + b && xi < off + 2 * b {
-        return Some(ActiveBarMenu::Power);
-    }
-    // sep
-    let off = off + 2 * b + s;
-    // btn 6: Harness
-    if xi >= off && xi < off + b {
-        return Some(ActiveBarMenu::Harness);
-    }
-    // btn 7: Sheet Symbol
-    if xi >= off + b && xi < off + 2 * b {
-        return Some(ActiveBarMenu::SheetSymbol);
-    }
-    // btn 8: Port
-    if xi >= off + 2 * b && xi < off + 3 * b {
-        return Some(ActiveBarMenu::Port);
-    }
-    // btn 9: Directives
-    if xi >= off + 3 * b && xi < off + 4 * b {
-        return Some(ActiveBarMenu::Directives);
-    }
-    // sep
-    let off = off + 4 * b + s;
-    // btn 10: Text
-    if xi >= off && xi < off + b {
-        return Some(ActiveBarMenu::TextTools);
-    }
-    // btn 11: Shapes
-    if xi >= off + b && xi < off + 2 * b {
-        return Some(ActiveBarMenu::Shapes);
-    }
-    // btn 12: Net Color
-    if xi >= off + 2 * b && xi < off + 3 * b {
-        return Some(ActiveBarMenu::NetColor);
-    }
-    None
-}
-
 // ─── Canvas events sent to the app ────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -834,6 +819,13 @@ pub enum CanvasEvent {
 }
 
 #[cfg(test)]
+mod active_bar_hit;
+#[cfg(test)]
+mod gpu_mount_drag_tests;
+#[cfg(test)]
+mod gpu_mount_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -875,9 +867,12 @@ mod tests {
             zoom_step: 1.1,
             move_keeps_wires: true,
             draw_mode: crate::app::DrawMode::Ortho90,
+            current_tool: crate::app::Tool::Select,
+            window_width: 1400.0,
             wire_color_overrides: overrides,
             wire_class_styles: class_styles,
             selection_filters: filters,
+            placement: None,
         }
     }
 
@@ -919,6 +914,7 @@ mod tests {
             x: 10.0,
             y: 10.0,
             severity: ErcMarkerSeverity::Error,
+            net_level: false,
         });
         let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
         assert!(view.selected.is_empty());

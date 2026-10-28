@@ -33,6 +33,8 @@ impl Signex {
                 Some(Task::none())
             }
             MenuMessage::NextSheet => Some(self.step_schematic_sheet(true)),
+            MenuMessage::NextDocumentTab => Some(self.step_document_tab(true)),
+            MenuMessage::PreviousDocumentTab => Some(self.step_document_tab(false)),
             MenuMessage::PreviousSheet => Some(self.step_schematic_sheet(false)),
             MenuMessage::OpenPreferences => {
                 Some(self.update(Message::Preferences(PreferencesMsg::Open)))
@@ -45,6 +47,7 @@ impl Signex {
                 // close path goes through
                 // `Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)`.
                 self.ui_state.keyboard_shortcuts_open = true;
+                self.ui_state.refresh_shortcut_sections();
                 self.interaction_state.context_menu = None;
                 self.ui_state.panel_list_open = false;
                 Some(Task::none())

@@ -50,7 +50,7 @@ pub(super) fn view_empty_state<'a>(
                 .size(15)
                 .color(text_c),
             Space::new().height(4),
-            text("No categories — Add Component to begin")
+            text("No components — Add Component to begin")
                 .size(12)
                 .color(muted),
             Space::new().height(14),

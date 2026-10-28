@@ -22,6 +22,8 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_symbol_pin_selection,
         draft_zoom_step_percent,
         draft_ui_scale_percent,
+        draft_window_controls_placement,
+        window_controls_restart_note,
         custom_name,
         theme_status,
         ..
@@ -156,6 +158,17 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         ]
         .align_y(iced::Alignment::Center),
     );
+    col = col.push(Space::new().height(20));
+
+    // ── Section: Window controls ──
+    col = col.push(h_sep());
+    col = col.push(Space::new().height(16));
+    col = col.push(section_title("Window controls"));
+    col = col.push(Space::new().height(10));
+    col = col.push(window_controls_row(
+        draft_window_controls_placement,
+        window_controls_restart_note,
+    ));
     col = col.push(Space::new().height(20));
 
     // ── Section: Schematic Editor ──
@@ -464,4 +477,40 @@ fn export_btn<'a>() -> Element<'a, PrefMsg> {
         .on_press(PrefMsg::ExportTheme)
         .style(primary_button_style)
         .into()
+}
+
+/// Where the minimize / maximize / close buttons go, with a restart note
+/// when the drafted choice changes how macOS creates the window.
+fn window_controls_row<'a>(
+    draft: crate::chrome::controls::WindowControlsPlacement,
+    restart_note: bool,
+) -> Element<'a, PrefMsg> {
+    let mut help = column![
+        text("Window buttons").size(12).style(text_primary),
+        text("Where minimize, maximize and close sit. Automatic follows your system.")
+            .size(10)
+            .style(text_muted),
+    ]
+    .spacing(3)
+    .width(200);
+    if restart_note {
+        help = help.push(
+            text("Takes effect after restart.")
+                .size(10)
+                .style(text_muted),
+        );
+    }
+    row![
+        help,
+        Space::new().width(Length::Fill),
+        iced::widget::pick_list(
+            crate::chrome::controls::WindowControlsPlacement::ALL,
+            Some(draft),
+            PrefMsg::DraftWindowControlsPlacement,
+        )
+        .text_size(12)
+        .width(200),
+    ]
+    .align_y(iced::Alignment::Center)
+    .into()
 }

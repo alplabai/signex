@@ -1,0 +1,283 @@
+//! The placement session: a library part attached to the cursor.
+//!
+//! Armed by `handle_library_component_resolved` (library_place.rs), turned
+//! by Space / X / Y, edited from the Tab form, committed by a click and
+//! dropped by Esc, right-click, a tool change, a sheet switch or a document
+//! close. Everything here mutates app state only through `update`; the
+//! commit is ONE engine batch, so a click is one undo step.
+//!
+//! The designator is recomputed from the engine's document at every click,
+//! not carried forward, so the clicks give R1, R2, R3 and an undone part
+//! frees its number. A designator typed in the Tab form is used by the next
+//! click, then stepped with `increment_designator`.
+
+use std::path::Path;
+
+use iced::Task;
+use signex_engine::{MirrorAxis, PlacementPayload};
+use signex_types::schematic::Point;
+
+use crate::app::state::PlacementSession;
+use crate::app::{Message, Signex, Tool};
+use crate::canvas::PlacementGhost;
+
+/// What the Tab form shows for the part on the cursor.
+pub(crate) struct PlacementForm {
+    pub value: String,
+    pub designator: String,
+    pub rotation: f64,
+}
+
+impl Signex {
+    /// Arm a session for `payload` on `target_sheet`. Cancels every other
+    /// armed tool first, so a leftover ghost or half-drawn wire cannot
+    /// survive into the session.
+    pub(crate) fn arm_placement_session(
+        &mut self,
+        payload: PlacementPayload,
+        target_sheet: &Path,
+        prefix: String,
+    ) {
+        // Arming is not a cancel: reads still in flight keep the token they
+        // were issued, so the latest pick can still arm (see
+        // `InteractionState::placement_epoch`).
+        let token = self.interaction_state.placement_epoch;
+        self.clear_transient_schematic_tool_state();
+        self.interaction_state.placement_epoch = token;
+        self.clear_ghost_previews();
+        self.interaction_state.current_tool = Tool::Component;
+        self.interaction_state.placement = Some(PlacementSession::new(
+            payload,
+            target_sheet.to_path_buf(),
+            prefix,
+        ));
+    }
+
+    /// Drop the session, if any, and invalidate every library read still in
+    /// flight. Returns whether a session was armed.
+    pub(crate) fn drop_placement_session(&mut self) -> bool {
+        self.interaction_state.placement_epoch += 1;
+        self.interaction_state.placement.take().is_some()
+    }
+
+    /// [`Self::drop_placement_session`] for the places that also own the
+    /// tool: a session that ends leaves no placement tool behind.
+    pub(crate) fn cancel_placement_session(&mut self) {
+        if self.drop_placement_session() {
+            self.interaction_state.current_tool = Tool::Select;
+            self.interaction_state.active_canvas_mut().tool_preview = None;
+        }
+    }
+
+    /// End the session when the sheet it was armed for no longer has an
+    /// engine (its tab closed clean, its project closed): there is nothing
+    /// left to place into.
+    pub(crate) fn cancel_placement_session_if_sheet_gone(&mut self) {
+        let gone = self
+            .interaction_state
+            .placement
+            .as_ref()
+            .is_some_and(|s| !self.document_state.engines.contains_key(&s.target_sheet));
+        if gone {
+            self.cancel_placement_session();
+        }
+    }
+
+    /// The ghost the window showing `window_id` draws: the session's, when
+    /// that window shows the session's target sheet.
+    pub fn placement_ghost_for_window(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Option<&PlacementGhost> {
+        use crate::app::state::WindowKind;
+        let session = self.interaction_state.placement.as_ref()?;
+        let shown = if self.ui_state.main_window_id == Some(window_id) {
+            self.document_state.active_path.as_deref()?
+        } else {
+            match self.ui_state.windows.get(&window_id)? {
+                WindowKind::UndockedTab { path, .. } => path.as_path(),
+                _ => return None,
+            }
+        };
+        (shown == session.target_sheet).then_some(&session.ghost)
+    }
+
+    /// What the Tab form starts from: the part's value, the designator the
+    /// next click would use, and its rotation.
+    pub(crate) fn placement_form(&self) -> Option<PlacementForm> {
+        let session = self.interaction_state.placement.as_ref()?;
+        let symbol = session.payload.lone_symbol()?;
+        Some(PlacementForm {
+            value: symbol.value.clone(),
+            designator: self.next_placement_reference(session),
+            rotation: symbol.rotation,
+        })
+    }
+
+    fn next_placement_reference(&self, session: &PlacementSession) -> String {
+        match session.reference_override.as_deref() {
+            Some(typed) => self.free_designator_from(&session.target_sheet, typed),
+            None => self.next_designator_in_sheet(&session.target_sheet, &session.prefix),
+        }
+    }
+
+    /// `typed`, or the first designator stepped from it that no symbol on
+    /// `sheet` uses, so a typed `R1` never makes a second `R1`.
+    fn free_designator_from(&self, sheet: &Path, typed: &str) -> String {
+        let Some(engine) = self.document_state.engines.get(sheet) else {
+            return typed.to_owned();
+        };
+        let used: std::collections::HashSet<&str> = engine
+            .document()
+            .symbols
+            .iter()
+            .map(|s| s.reference.as_str())
+            .collect();
+        let mut candidate = typed.to_owned();
+        while used.contains(candidate.as_str()) {
+            match Self::increment_designator(&candidate) {
+                Some(next) => candidate = next,
+                None => break,
+            }
+        }
+        candidate
+    }
+
+    /// Keep the designator the ghost shows equal to the one the next click
+    /// would use: after a Tab override, a commit, or an undo that freed a
+    /// number. Cheap, so it runs after every update.
+    pub(crate) fn refresh_placement_reference(&mut self) {
+        let Some(session) = self.interaction_state.placement.as_ref() else {
+            return;
+        };
+        let next = self.next_placement_reference(session);
+        let stale = session
+            .payload
+            .lone_symbol()
+            .is_some_and(|s| s.reference != next);
+        if stale && let Some(session) = self.interaction_state.placement.as_mut() {
+            let payload = session.payload.map_symbols(|s| s.reference = next.clone());
+            session.set_payload(payload);
+        }
+    }
+
+    /// A click at `(x, y)` (already snapped): place the payload there as one
+    /// undo step and stay armed for the next copy.
+    pub(crate) fn handle_placement_click(&mut self, x: f64, y: f64) -> Task<Message> {
+        self.cancel_placement_session_if_sheet_gone();
+        let Some(session) = self.interaction_state.placement.as_ref() else {
+            return Task::none();
+        };
+        if self.document_state.active_path.as_deref() != Some(session.target_sheet.as_path()) {
+            // A click in another window: the part belongs to the sheet it
+            // was armed for, so nothing lands here and the session stays.
+            let message = format!(
+                "The part on the cursor belongs to {}; click on that sheet to place it.",
+                session.target_sheet.display()
+            );
+            crate::diagnostics::log_warning(message);
+            return Task::none();
+        }
+        let reference = self.next_placement_reference(session);
+        if let Some(typed) = session.reference_override.as_deref()
+            && typed != reference
+        {
+            crate::diagnostics::log_warning(format!(
+                "Designator {typed} is already used on this sheet; the part is placed as {reference}."
+            ));
+        }
+        let placed = session
+            .payload
+            .map_symbols(|s| s.reference = reference.clone())
+            .place_commands(Point::new(x, y));
+        let commands = match placed {
+            Ok(commands) => commands,
+            Err(error) => {
+                self.report_place_failure(&format!("The part could not be placed: {error}"));
+                return Task::none();
+            }
+        };
+        // `false` covers an engine error (logged by the gateway) or an
+        // unchanged result; either way nothing was placed.
+        if !self.apply_engine_commands(commands, false, false) {
+            self.report_place_failure("The part was not placed; see the log for details.");
+            return Task::none();
+        }
+        self.after_placement_commit(&reference);
+        Task::none()
+    }
+
+    /// Step a typed designator and redraw the ghost with the next one.
+    /// `used` is the designator the click placed, which differs from the
+    /// typed one when that was taken.
+    fn after_placement_commit(&mut self, used: &str) {
+        if let Some(session) = self.interaction_state.placement.as_mut() {
+            session.reference_override = session
+                .reference_override
+                .as_ref()
+                .and_then(|_| Self::increment_designator(used));
+        }
+        self.refresh_placement_reference();
+    }
+
+    /// Space: turn the part on the cursor. `false` when none is armed, so
+    /// the caller turns the selection instead.
+    pub(crate) fn rotate_placement(&mut self, clockwise: bool) -> bool {
+        self.turn_placement(|payload| payload.rotate(clockwise))
+    }
+
+    /// X / Y: mirror the part on the cursor.
+    pub(crate) fn mirror_placement(&mut self, axis: MirrorAxis) -> bool {
+        self.turn_placement(|payload| payload.mirror(axis))
+    }
+
+    fn turn_placement(
+        &mut self,
+        turn: impl FnOnce(&PlacementPayload) -> Result<PlacementPayload, signex_engine::EngineError>,
+    ) -> bool {
+        let Some(session) = self.interaction_state.placement.as_mut() else {
+            return false;
+        };
+        match turn(&session.payload) {
+            Ok(payload) => session.set_payload(payload),
+            Err(error) => crate::diagnostics::log_warning(format!(
+                "The part on the cursor could not be turned: {error}"
+            )),
+        }
+        true
+    }
+
+    /// Tab form: the value typed for the next part.
+    pub(crate) fn set_placement_value(&mut self, text: &str) {
+        let value = text.trim();
+        if value.is_empty() {
+            return;
+        }
+        if let Some(session) = self.interaction_state.placement.as_mut() {
+            let payload = session.payload.map_symbols(|s| s.value = value.to_owned());
+            session.set_payload(payload);
+        }
+    }
+
+    /// Tab form: the designator typed for the next part (blank = automatic).
+    pub(crate) fn set_placement_designator(&mut self, text: &str) {
+        if let Some(session) = self.interaction_state.placement.as_mut() {
+            let text = text.trim();
+            session.reference_override = (!text.is_empty()).then(|| text.to_owned());
+        }
+        self.refresh_placement_reference();
+    }
+
+    /// Tab form: the rotation picked for the next part.
+    pub(crate) fn set_placement_rotation(&mut self, degrees: f64) {
+        let Some(session) = self.interaction_state.placement.as_mut() else {
+            return;
+        };
+        match session.payload.with_rotation(degrees) {
+            Ok(payload) => session.set_payload(payload),
+            Err(error) => crate::diagnostics::log_warning(format!(
+                "The part on the cursor could not be rotated: {error}"
+            )),
+        }
+    }
+}
