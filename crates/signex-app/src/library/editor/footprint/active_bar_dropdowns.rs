@@ -28,6 +28,9 @@ use crate::panels::SnapOptionFlag;
 
 use super::state::FootprintEditorState;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Convenience: route a `FootprintEditorMsg` to the editor at `path`.
 fn fp(path: PathBuf, msg: FootprintEditorMsg) -> LibraryMessage {
     LibraryMessage::PrimitiveEditorEvent {
@@ -255,7 +258,7 @@ fn filter_entries(
     // minimal capture affordance. Task 6 — no rename UI yet; captured
     // presets get a default `Filter {n}` name (see filter_presets.rs).
     let mut top_row = iced::widget::Row::new()
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center)
         .push(all_btn);
     for (idx, preset) in footprint_presets.iter().enumerate() {
@@ -291,7 +294,7 @@ fn filter_entries(
     //   row 2: 5 chips (3D Bodies / Keepouts / Tracks / Arcs / Pads)
     //   row 3: 5 chips (Vias / Regions / Fills / Texts / Other)
     let layout = column![
-        container(top_row).padding([4, 8]),
+        container(top_row).padding([SP.s, SP.m]),
         container(
             column![
                 row![
@@ -301,7 +304,7 @@ fn filter_entries(
                     make_chip("Arcs", K::Arcs),
                     make_chip("Pads", K::Pads),
                 ]
-                .spacing(4)
+                .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
                 row![
                     make_chip("Vias", K::Vias),
@@ -310,12 +313,12 @@ fn filter_entries(
                     make_chip("Texts", K::Texts),
                     make_chip("Other", K::Other),
                 ]
-                .spacing(4)
+                .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
             ]
-            .spacing(4),
+            .spacing(SP.s),
         )
-        .padding([4, 8]),
+        .padding([SP.s, SP.m]),
     ]
     .spacing(0)
     .width(Length::Shrink);
