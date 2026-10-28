@@ -20,6 +20,8 @@ impl Signex {
         // this clears what a crashed write stranded beside them. Here, not
         // in `new`, so a test app never touches the real recovery folder.
         let recovery_sweep = app.autosave_startup_sweep();
+        // Before any document opens, so no open races a half-finished move.
+        app.autosave_finish_pending_moves();
         // The installed-font probe walks the system font directories, so it
         // runs off the update thread; until it lands, named families render
         // in the bundled default (#510).
