@@ -32,6 +32,10 @@ pub struct ProjectFsRequest {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProjectFsFacts {
     exists: HashMap<PathBuf, bool>,
+    /// Modification time of each probed path that exists: a closed sheet
+    /// edited outside Signex (a `git pull`) changes it, which sends the
+    /// projects that placed it back through the walk (#1618).
+    mtimes: HashMap<PathBuf, std::time::SystemTime>,
     hierarchies: HashMap<ProjectId, SheetHierarchy>,
 }
 
@@ -84,7 +88,17 @@ pub fn dir_has_git(dir: &Path) -> bool {
 pub fn probe(request: &ProjectFsRequest) -> ProjectFsFacts {
     let mut facts = ProjectFsFacts::default();
     for path in request.exists.iter().collect::<HashSet<_>>() {
-        facts.exists.insert(path.clone(), path.exists());
+        match std::fs::metadata(path) {
+            Ok(meta) => {
+                facts.exists.insert(path.clone(), true);
+                if let Ok(modified) = meta.modified() {
+                    facts.mtimes.insert(path.clone(), modified);
+                }
+            }
+            Err(_) => {
+                facts.exists.insert(path.clone(), false);
+            }
+        }
     }
     facts.hierarchies = walk_hierarchies(&request.hierarchy);
     facts
@@ -259,9 +273,12 @@ impl ProjectFsCache {
             if walked_ids.contains(&id) || !wanted.contains(&id) {
                 continue;
             }
+            // A file the walk placed appeared, went, or was rewritten.
             let flipped = hierarchy.node_paths().into_iter().any(|path| {
-                let before = self.facts.exists.get(path);
-                before.is_some() && before != f.exists.get(path)
+                let known = self.facts.exists.get(path);
+                known.is_some()
+                    && (known != f.exists.get(path)
+                        || self.facts.mtimes.get(path) != f.mtimes.get(path))
             });
             if flipped {
                 self.hierarchy_done.remove(&id);
@@ -269,6 +286,20 @@ impl ProjectFsCache {
             }
             f.hierarchies.insert(id, hierarchy);
         }
+    }
+
+    /// Does the stored hierarchy of `project` describe the project as it is
+    /// now? `None` when the project has no walk wanted (no sheets); otherwise
+    /// false while its job is still to be walked, running, or out of date.
+    pub fn hierarchy_current(&self, project: ProjectId) -> Option<bool> {
+        let wanted = self
+            .wanted
+            .hierarchy
+            .jobs
+            .iter()
+            .find(|job| job.id == project)?;
+        let running = self.hierarchy_inflight.iter().any(|j| j.id == project);
+        Some(self.hierarchy_done.get(&project) == Some(wanted) && !running)
     }
 
     /// True while there is something to probe, i.e. while the poll should
@@ -464,6 +495,41 @@ mod tests {
         let mut created = probe(&request);
         created.exists.insert(PathBuf::from("/p/root.snxsch"), true);
         cache.finish_probe(generation, Ok(created));
+        let (_, request) = cache.begin_probe(false).expect("a re-walk is due");
+        assert_eq!(request.hierarchy.jobs.len(), 1);
+    }
+
+    /// 1618: a closed sheet rewritten outside Signex (a `git pull` adding a
+    /// placing symbol) changes its mtime, which sends its project back
+    /// through the walk although the file existed all along.
+    #[test]
+    fn a_changed_closed_sheet_is_walked_again() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let sheet = tmp.path().join("root.snxsch");
+        std::fs::write(&sheet, "x").expect("write");
+        let mut one = job(ProjectId(1));
+        one.root = sheet.clone();
+        one.pages = vec![sheet.clone()];
+        let mut cache = ProjectFsCache::default();
+        cache.want(ProjectFsRequest {
+            exists: vec![sheet.clone()],
+            hierarchy: HierarchyRequest { jobs: vec![one] },
+        });
+        let (generation, request) = cache.begin_probe(false).unwrap();
+        cache.finish_probe(generation, Ok(probe(&request)));
+        let (generation, request) = cache.begin_probe(true).unwrap();
+        assert!(request.hierarchy.jobs.is_empty(), "unchanged: no walk");
+        cache.finish_probe(generation, Ok(probe(&request)));
+        assert!(cache.begin_probe(false).is_none(), "settled");
+
+        let file = std::fs::File::options()
+            .write(true)
+            .open(&sheet)
+            .expect("open");
+        file.set_modified(std::time::SystemTime::now() + Duration::from_secs(60))
+            .expect("set mtime");
+        let (generation, request) = cache.begin_probe(true).unwrap();
+        cache.finish_probe(generation, Ok(probe(&request)));
         let (_, request) = cache.begin_probe(false).expect("a re-walk is due");
         assert_eq!(request.hierarchy.jobs.len(), 1);
     }

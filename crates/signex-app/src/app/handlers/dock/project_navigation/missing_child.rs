@@ -13,6 +13,9 @@ pub(super) struct MissingChildSheet {
     pub(super) parent: std::path::PathBuf,
     /// Where the symbol's file should be.
     pub(super) child: std::path::PathBuf,
+    /// The parent's row, to open it when it is not the focused sheet.
+    parent_tree_path: Vec<usize>,
+    parent_label: String,
 }
 
 impl Signex {
@@ -25,9 +28,17 @@ impl Signex {
             return None;
         }
         let parent_path = tree_path.split_last()?.1;
+        let parent_label = signex_widgets::tree_view::get_node(
+            self.document_state.panel_ctx.project_tree.as_slice(),
+            parent_path,
+        )?
+        .label
+        .clone();
         Some(MissingChildSheet {
             parent: self.tree_path_to_file_path(parent_path)?,
             child: self.tree_path_to_file_path(tree_path)?,
+            parent_tree_path: parent_path.to_vec(),
+            parent_label,
         })
     }
 
@@ -57,31 +68,54 @@ impl Signex {
     /// Open the Create Sheet dialog (#1275) for the symbol on `missing.parent`
     /// that names `missing.child`.
     ///
-    /// The row was marked missing by an earlier file-status check, so the file
-    /// is looked for again first: one that has appeared since is never offered
-    /// for creation. The dialog's own create path refuses an existing file
-    /// too, and writes without overwriting.
-    pub(super) fn offer_create_child_sheet(&mut self, missing: &MissingChildSheet) {
-        if missing.child.exists() {
-            crate::diagnostics::log_warning(format!(
-                "Sheet {} already exists, so it was not offered for creation; it opens normally                  once the tree refreshes",
-                missing.child.display()
-            ));
-            self.document_state.project_fs.invalidate();
+    /// The dialog acts on the focused sheet, so a parent that is not focused
+    /// is opened first, on a worker like any tree open; the dialog follows
+    /// when it lands ([`Self::resume_create_sheet`]). The file is not looked
+    /// for here: the dialog refuses a name that exists, and its write never
+    /// overwrites.
+    pub(super) fn offer_create_child_sheet(
+        &mut self,
+        missing: &MissingChildSheet,
+    ) -> iced::Task<Message> {
+        self.ui_state.pending_create_sheet = Some((missing.parent.clone(), missing.child.clone()));
+        let opening = self
+            .open_project_tree_document(&missing.parent_tree_path, missing.parent_label.clone());
+        match opening {
+            Ok(task) => {
+                // Focusing a tab that is already open needs no read.
+                self.resume_create_sheet(&missing.parent, false);
+                task
+            }
+            Err(error) => {
+                self.ui_state.pending_create_sheet = None;
+                crate::diagnostics::log_error("Failed to open the parent sheet", &error);
+                iced::Task::none()
+            }
+        }
+    }
+
+    /// The parent sheet a Create Sheet request waits for was opened (or its
+    /// open ended: `settled`). Opens the dialog if it is now focused.
+    pub(crate) fn resume_create_sheet(&mut self, opened: &std::path::Path, settled: bool) {
+        let Some((parent, child)) = self.ui_state.pending_create_sheet.clone() else {
+            return;
+        };
+        if parent != opened {
             return;
         }
-        // The dialog acts on the focused sheet's document, as from the canvas.
-        let parent_focused = self.active_tab_path().as_deref() == Some(missing.parent.as_path())
-            || self.open_or_focus_sheet_path(missing.parent.clone());
-        let symbol = parent_focused
-            .then(|| self.symbol_placing(&missing.child))
-            .flatten();
+        let focused = self.active_tab_path().as_deref() == Some(parent.as_path());
+        if !focused && !settled {
+            return;
+        }
+        self.ui_state.pending_create_sheet = None;
+        let symbol = focused.then(|| self.symbol_placing(&child)).flatten();
         match symbol {
             Some(symbol) => self.open_create_child_sheet_dialog(symbol, true),
             None => crate::diagnostics::log_warning(format!(
-                "Sheet {} cannot be created from the tree: {} could not be opened or no longer                  has a sheet symbol for it",
-                missing.child.display(),
-                missing.parent.display()
+                "Sheet {} cannot be created from the tree: {} could not be opened or no longer \
+                 has a sheet symbol for it",
+                child.display(),
+                parent.display()
             )),
         }
     }

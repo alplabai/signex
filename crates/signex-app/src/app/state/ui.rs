@@ -353,6 +353,9 @@ pub struct UiState {
     pub project_close_confirm: Option<crate::app::ProjectCloseConfirmState>,
     /// "Create the missing sheet?" confirm; `Some` while it is up.
     pub create_child_sheet_confirm: Option<crate::app::contracts::CreateChildSheetConfirmState>,
+    /// A Create Sheet request from the Projects tree waiting for its parent
+    /// sheet to open: `(parent sheet, missing child file)` (#1618).
+    pub pending_create_sheet: Option<(std::path::PathBuf, std::path::PathBuf)>,
     /// "Exit Signex — Unsaved Edits" confirmation modal. `Some` while
     /// the user is being asked to save / discard / cancel an app-exit
     /// request that intersects `dirty_paths`. Cleared on any of the

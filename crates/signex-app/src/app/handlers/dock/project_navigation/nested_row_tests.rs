@@ -127,20 +127,59 @@ fn activating_a_missing_row_opens_the_create_sheet_dialog() {
 }
 
 #[test]
-fn a_missing_row_whose_file_now_exists_is_refused_not_offered() {
+fn a_missing_row_whose_file_now_exists_cannot_be_created_over() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let (mut app, key) = app_with_missing_child(tmp.path(), "later.snxsch");
+    open_dialog_by_double_click(&mut app, &key);
     crate::app::runtime::sheet_tree_tests::write_sheet(tmp.path(), "later.snxsch", &[]);
-    let before = crate::diagnostics::logged_count("later.snxsch already exists");
+    let before = std::fs::read(tmp.path().join("later.snxsch")).expect("read");
 
-    let activated = double_click(&mut app, &key);
+    let created = app.handle_create_child_sheet_answered(true);
 
-    assert_eq!(activated.units(), 0);
-    assert!(app.ui_state.create_child_sheet_confirm.is_none());
+    assert_eq!(created.units(), 0, "nothing is written");
+    let dialog = app
+        .ui_state
+        .create_child_sheet_confirm
+        .as_ref()
+        .expect("the dialog stays open");
+    assert!(dialog.exists, "and offers to open the file instead");
     assert_eq!(
-        crate::diagnostics::logged_count("later.snxsch already exists"),
-        before + 1,
-        "the refusal reaches the Messages panel"
+        std::fs::read(tmp.path().join("later.snxsch")).expect("read"),
+        before,
+        "left untouched"
     );
-    assert!(tmp.path().join("later.snxsch").exists(), "left untouched");
+}
+
+fn open_dialog_by_double_click(app: &mut Signex, key: &TreeKey) {
+    let activated = double_click(app, key);
+    assert_eq!(activated.units(), 0);
+    assert!(app.ui_state.create_child_sheet_confirm.is_some());
+}
+
+#[test]
+fn a_missing_row_under_a_closed_parent_opens_it_first_then_the_dialog() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    crate::app::runtime::sheet_tree_tests::write_sheet(tmp.path(), "top.snxsch", &["ghost.snxsch"]);
+    let dir = tmp.path().to_string_lossy().into_owned();
+    let mut app = app_workspace(&dir, &["top.snxsch"]);
+    settle(&mut app, false);
+    let key = vec![
+        app.document_state.projects[0].id.to_string(),
+        "Source Documents".to_string(),
+        "top.snxsch".to_string(),
+        "ghost.snxsch".to_string(),
+    ];
+
+    let opening = double_click(&mut app, &key);
+
+    assert!(opening.units() > 0, "the parent is read on a worker");
+    assert!(app.ui_state.create_child_sheet_confirm.is_none());
+    crate::app::handlers::menu::export::write::settle(&mut app, opening);
+    let dialog = app
+        .ui_state
+        .create_child_sheet_confirm
+        .as_ref()
+        .expect("the dialog follows the open");
+    assert_eq!(dialog.parent, tmp.path().join("top.snxsch"));
+    assert!(app.ui_state.pending_create_sheet.is_none());
 }

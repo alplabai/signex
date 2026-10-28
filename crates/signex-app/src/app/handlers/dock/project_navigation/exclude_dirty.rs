@@ -19,6 +19,9 @@ pub(crate) enum DiscardBlock {
     /// Another open project has sheets that are not loaded, so whether it
     /// reaches the target cannot be told without reading disk.
     Unknown,
+    /// A sheet symbol still places the target, so excluding it does not take
+    /// it out of the design and its edits would be lost with it still shown.
+    Placed,
 }
 
 impl DiscardBlock {
@@ -28,6 +31,10 @@ impl DiscardBlock {
             Self::Unknown => {
                 "Another open project has sheets that are not loaded, so it cannot be ruled out \
                  that it uses this, and the edits cannot be discarded."
+            }
+            Self::Placed => {
+                "A sheet symbol still places it, so excluding it does not take it out of the \
+                 design, and the edits cannot be discarded."
             }
         }
     }
@@ -39,6 +46,7 @@ impl DiscardBlock {
                 "another open project has sheets that are not loaded, so shared use cannot be \
                  ruled out."
             }
+            Self::Placed => "a sheet symbol still places it.",
         }
     }
 }
@@ -158,6 +166,13 @@ impl Signex {
     /// treated as shared.
     pub(crate) fn discard_block(&self, state: &RemoveDialogState) -> Option<DiscardBlock> {
         let owner = state.tree_path.first().copied()?;
+        if !self
+            .sheet_users(&state.target_path, None)
+            .parents
+            .is_empty()
+        {
+            return Some(DiscardBlock::Placed);
+        }
         let docs = self.unsaved_documents(&state.target_path, self.dialog_fold(state));
         let share_fold = self.shared_use_fold(state);
         let reach = self.document_state.lexical_reach_sets(share_fold);

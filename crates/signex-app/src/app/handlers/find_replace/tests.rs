@@ -794,17 +794,10 @@ fn deleting_a_sheet_mid_flight_refuses_the_replace() {
     let (mut app, _root, child) = placed_twice_on_disk(&dir);
     let (generation, prep) = prepared_child_replace(&mut app);
 
-    app.ui_state.remove_dialog = Some(crate::app::RemoveDialogState {
-        project_id: None,
-        target_path: child.clone(),
-        tree_path: vec![0, 0],
-        display_name: "child.snxsch".into(),
-        is_outside_project: false,
-        unsaved_prompt: false,
-    });
-    let _ = app.update(crate::app::Message::Remove(crate::app::RemoveMsg::Confirm(
-        crate::app::RemoveChoice::DeleteFile,
-    )));
+    // Removed behind the replace's back (the Remove dialog itself now refuses
+    // a sheet that another sheet places, #1618).
+    std::fs::remove_file(&child).unwrap();
+    app.document_state.remove_engine(&child);
     assert!(!child.exists(), "the file was deleted");
     deliver(&mut app, generation, prep);
 

@@ -122,7 +122,7 @@ impl Signex {
         // has nothing to exclude (#1618).
         let blockers = self.remove_blockers(st);
         let mut remove_options = column![].spacing(SP.m);
-        if !st.is_outside_project && blockers.other_parents.is_empty() {
+        if !st.is_outside_project && !blockers.blocks_delete() {
             remove_options = remove_options.push(option_card(
                 "Delete file",
                 "File will be removed from project and permanently deleted.",
@@ -149,6 +149,36 @@ impl Signex {
                     "It is also placed by {}, so it cannot be deleted from here.",
                     blockers.parent_names()
                 ))
+                .size(TS.caption)
+                .color(text_muted),
+            );
+        }
+        if let Some(why) = blockers.unknown.as_deref() {
+            prompt = prompt.push(
+                text(format!(
+                    "It cannot be deleted from here: whether another sheet places it is not \
+                     known yet ({why}). You can exclude it from the project."
+                ))
+                .size(TS.caption)
+                .color(text_muted),
+            );
+        }
+        if !blockers.blocks_delete()
+            && !st.is_outside_project
+            && let Some(parent) = &blockers.own_parent
+        {
+            prompt = prompt.push(
+                text(format!("{} will show it as missing.", parent.display()))
+                    .size(TS.caption)
+                    .color(text_muted),
+            );
+        }
+        if blockers.placed && !blockers.unlisted {
+            prompt = prompt.push(
+                text(
+                    "Excluding it does not take it out of the design: a sheet symbol still \
+                     places it.",
+                )
                 .size(TS.caption)
                 .color(text_muted),
             );

@@ -327,6 +327,7 @@ impl Signex {
                 remove_dialog: None,
                 project_close_confirm: None,
                 create_child_sheet_confirm: None,
+                pending_create_sheet: None,
                 app_quit_confirm: None,
                 enable_version_control: None,
                 grid_properties: None,

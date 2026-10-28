@@ -65,21 +65,39 @@ impl Signex {
         choice: crate::app::RemoveChoice,
     ) -> bool {
         use crate::app::RemoveChoice;
+        use crate::app::state::ErrorNotice;
         let blockers = self.remove_blockers(state);
-        let why = match choice {
-            RemoveChoice::ExcludeFromProject if blockers.unlisted => format!(
-                "\"{}\" is placed by a sheet symbol and is not a page of this project, so                  there is nothing to exclude. Remove or change the sheet symbol instead.",
-                state.display_name
+        let (notice, why): (fn(String) -> ErrorNotice, String) = match choice {
+            RemoveChoice::ExcludeFromProject if blockers.unlisted => (
+                ErrorNotice::exclude_refused,
+                format!(
+                    "\"{}\" is placed by a sheet symbol and is not a page of this project, \
+                     so there is nothing to exclude. Remove or change the sheet symbol instead.",
+                    state.display_name
+                ),
             ),
-            RemoveChoice::DeleteFile if !blockers.other_parents.is_empty() => format!(
-                "\"{}\" was not deleted: it is also placed by {}. Remove those sheet symbols first.",
-                state.display_name,
-                blockers.parent_names()
+            RemoveChoice::DeleteFile if !blockers.other_parents.is_empty() => (
+                ErrorNotice::delete,
+                format!(
+                    "\"{}\" was not deleted: it is also placed by {}. Remove those sheet \
+                     symbols first.",
+                    state.display_name,
+                    blockers.parent_names()
+                ),
+            ),
+            RemoveChoice::DeleteFile if blockers.unknown.is_some() => (
+                ErrorNotice::delete,
+                format!(
+                    "\"{}\" was not deleted: whether another sheet places it cannot be ruled \
+                     out ({}). Try again once the project has been read, or exclude it instead.",
+                    state.display_name,
+                    blockers.unknown.as_deref().unwrap_or_default()
+                ),
             ),
             _ => return false,
         };
         crate::diagnostics::log_warning(&why);
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(why));
+        self.document_state.error_notice = Some(notice(why));
         true
     }
 

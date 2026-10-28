@@ -19,7 +19,7 @@ use crate::app::sheet_hierarchy::{SheetHierarchy, SheetNode, SheetNodeKind};
 use crate::app::state::LoadedProject;
 use crate::app::state::project_fs::ProjectFsFacts;
 use crate::app::state::project_hierarchy::{HierarchyJob, HierarchyRequest};
-use crate::app::state::scope::{CaseFold, path_key_with};
+use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 use crate::panels::SheetInfo;
 
 /// What marks a row: open tab, unsaved edits, the focused tab.
@@ -44,7 +44,12 @@ impl Signex {
                 let mut open_refs: Vec<_> = document
                     .engines
                     .iter()
-                    .filter(|(path, _)| path.starts_with(p.dir()) || pages.contains(path))
+                    .filter(|(path, _)| {
+                        path_is_under(path, p.dir(), p.case_fold)
+                            || pages.iter().any(|page| {
+                                path_key_with(page, p.case_fold) == path_key_with(path, p.case_fold)
+                            })
+                    })
                     .map(|(path, engine)| {
                         let refs = engine
                             .document()

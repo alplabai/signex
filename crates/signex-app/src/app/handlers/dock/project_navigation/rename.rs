@@ -173,18 +173,32 @@ impl Signex {
                 let idx = *state.tree_path.first()?;
                 self.document_state.projects.get(idx).map(|p| p.id)
             });
-            let foreign = self.other_sheet_parents(&state.target_path, None, owner);
-            if !foreign.is_empty() {
-                let names: Vec<String> = foreign.iter().map(|p| p.display().to_string()).collect();
+            let users = self.sheet_users(&state.target_path, owner);
+            let refusal = if !users.parents.is_empty() {
+                let names: Vec<String> = users
+                    .parents
+                    .iter()
+                    .map(|p| p.display().to_string())
+                    .collect();
+                Some(format!(
+                    "Another open project or an open sheet places this sheet and would be left \
+                     pointing at the old name: {}",
+                    names.join(", ")
+                ))
+            } else {
+                users.unknown.map(|why| {
+                    format!(
+                        "Whether another project or open sheet places this sheet cannot be ruled \
+                         out ({why}). Try again once the project has been read."
+                    )
+                })
+            };
+            if let Some(refusal) = refusal {
                 crate::diagnostics::log_warning(format!(
-                    "Rename of {} refused: another open project places it ({}).",
-                    state.target_path.display(),
-                    names.join(", ")
+                    "Rename of {} refused: {refusal}",
+                    state.target_path.display()
                 ));
-                self.set_rename_error(&format!(
-                    "Another open project places this sheet and would be left pointing at the old name: {}",
-                    names.join(", ")
-                ));
+                self.set_rename_error(&refusal);
                 return iced::Task::none();
             }
         }

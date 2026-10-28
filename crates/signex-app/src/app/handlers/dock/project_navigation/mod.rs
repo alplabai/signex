@@ -22,6 +22,8 @@ mod exclude_dirty_tests;
 mod library_row_tests;
 mod missing_child;
 #[cfg(test)]
+mod nested_row_incomplete_tests;
+#[cfg(test)]
 mod nested_row_safety_tests;
 #[cfg(test)]
 mod nested_row_tests;
@@ -128,7 +130,7 @@ impl Signex {
                 if is_double {
                     self.interaction_state.last_tree_click = None;
                     if let Some(missing) = self.missing_child_sheet_at(path) {
-                        self.offer_create_child_sheet(&missing);
+                        follow = self.offer_create_child_sheet(&missing);
                     } else if let Some(node) = selected_node {
                         match self.open_project_tree_document(path, node.label.clone()) {
                             Ok(task) => follow = task,
@@ -188,7 +190,7 @@ impl Signex {
                 Some(path) => path,
                 None => {
                     crate::diagnostics::log_warning(
-                        "Project tree action dropped: its row is gone or moved under another                          sheet since the menu opened. Open the menu again on the row.",
+                        "Project tree action dropped: its row is gone or moved under another sheet since the menu opened. Open the menu again on the row.",
                     );
                     return Task::none();
                 }

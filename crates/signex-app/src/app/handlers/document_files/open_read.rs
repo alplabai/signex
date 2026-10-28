@@ -38,6 +38,18 @@ impl Signex {
         request: ReadRequest,
         result: Result<Box<LoadedDocument>, OpenFailure>,
     ) -> Task<Message> {
+        let path = request.path.clone();
+        let task = self.finish_document_read(request, result);
+        // A Create Sheet request from the Projects tree was waiting on it.
+        self.resume_create_sheet(&path, true);
+        task
+    }
+
+    fn finish_document_read(
+        &mut self,
+        request: ReadRequest,
+        result: Result<Box<LoadedDocument>, OpenFailure>,
+    ) -> Task<Message> {
         if !self
             .document_state
             .pending_opens
