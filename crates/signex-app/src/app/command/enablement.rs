@@ -70,7 +70,7 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         // E edits the selected object in the schematic and in the
         // footprint / symbol editors, whose selections `has_selection`
         // does not read, so a keystroke must not be dropped there.
-        "edit_selected_object_properties" => {
+        "edit_object_properties" | "edit_selected_object_properties" => {
             ctx.has_selection || ctx.has_footprint_editor || ctx.has_symbol_editor
         }
         // The Export menu row is gated on `has_schematic`; without an
@@ -235,6 +235,7 @@ impl Signex {
                 .map_or((false, false), |e| {
                     (!e.history.is_empty(), !e.redo.is_empty())
                 }),
+            Some(TabKind::Project(project_id)) => self.project_tab_history_available(*project_id),
             _ => {
                 let engine = path.and_then(|p| document.engines.get(p));
                 let has_steps = |steps: &std::collections::HashMap<_, Vec<_>>| {
@@ -404,6 +405,7 @@ mod tests {
             id: project,
             path: path.clone(),
             data: signex_types::project::ProjectData {
+                description: None,
                 name: "p".into(),
                 dir: String::new(),
                 schematic_root: None,

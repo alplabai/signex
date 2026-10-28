@@ -16,7 +16,6 @@ pub(in crate::app) use bom::{default_column_width as bom_default_column_width, s
 mod confirms;
 mod erc;
 mod project;
-mod project_options_standard;
 mod widgets;
 
 // ── Modal chrome — single source of truth ───────────────────────────

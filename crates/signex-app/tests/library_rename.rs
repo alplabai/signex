@@ -382,6 +382,52 @@ fn a_destination_that_appeared_is_never_overwritten() {
     assert_eq!(entry_paths(&f.app)[0], PathBuf::from("alpha/alpha.snxlib"));
 }
 
+/// A Project tab save hands the `.snxprj` write to a task that runs only
+/// after `update` returns. A library rename then must be refused before the
+/// folder moves: it rewrites that file directly, and the late write would
+/// put the old path back (#1202).
+#[test]
+fn a_library_rename_while_the_project_file_is_being_written_is_refused_before_moving() {
+    use signex_app::app::{ContextMenuMsg, ProjectTreeAction};
+    let mut f = fixture();
+    f.app.document_state.dirty_paths.insert(f.prj.clone());
+    send(
+        &mut f.app,
+        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            ProjectTreeAction::OpenProjectOptions(vec![0]),
+        )),
+    );
+    let _write_in_flight = f.app.update(Message::File(FileMsg::Save));
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "gamma.snxlib");
+
+    let dialog = f
+        .app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .expect("the dialog stays open with the reason");
+    assert!(
+        dialog
+            .error
+            .as_deref()
+            .is_some_and(|e| e.contains("still being saved")),
+        "{:?}",
+        dialog.error
+    );
+    assert!(f.alpha.exists());
+    assert!(!f.alpha.with_file_name("gamma.snxlib").exists());
+    assert!(
+        !f.app
+            .document_state
+            .panel_ctx
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("renamed back")),
+        "nothing was moved, so nothing was moved back"
+    );
+}
+
 #[test]
 fn closing_the_project_after_a_library_rename_prompts_for_the_unsaved_path() {
     use signex_app::app::{ContextMenuMsg, ProjectMsg, ProjectTreeAction};

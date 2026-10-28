@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use signex_app::app::{LoadedProject, Message, Signex};
+use signex_app::app::{LoadedProject, Message, ProjectMsg, ProjectTabMsg, Signex};
 use signex_app::library::LibraryMessage;
 use signex_app::library::messages::ResolvedPlacement;
 use signex_app::library::place::resolve_placement;
@@ -24,6 +24,7 @@ fn project(
     let id = app.document_state.mint_project_id();
     let mut data = ProjectData {
         name: name.to_string(),
+        description: None,
         dir: String::new(),
         schematic_root: None,
         pcb_file: None,
@@ -121,22 +122,24 @@ fn a_loose_sheet_keeps_the_symbol_designator() {
     assert_eq!(place_diode(&mut app, &f), "D1");
 }
 
+/// The General section's picker, as the UI sends it, for project 0.
+fn pick_standard(app: &mut Signex, standard: Option<DesignatorStandard>) {
+    let project_id = app.document_state.projects[0].id;
+    let _ = app.update(Message::Project(ProjectMsg::Tab(
+        ProjectTabMsg::DesignatorStandardPicked {
+            project_id,
+            standard,
+        },
+    )));
+}
+
 #[test]
-fn picking_a_standard_in_project_options_sets_it_and_marks_the_project_dirty() {
-    use signex_app::app::{ProjectMsg, ProjectOptionsState};
+fn picking_a_standard_in_the_project_tab_sets_it_and_marks_the_project_dirty() {
     let f = fixture_of_class("diode");
     let mut app = app_with_library(&f);
     project(&mut app, "P", &[SHEET], None);
-    app.ui_state.project_options = Some(ProjectOptionsState {
-        project_idx: 0,
-        name: "P".into(),
-        directory: String::new(),
-        schematic_root: None,
-        pcb_file: None,
-        library_count: 0,
-    });
     let pick = |app: &mut Signex, s| {
-        let _ = app.update(Message::Project(ProjectMsg::DesignatorStandardPicked(s)));
+        pick_standard(app, s);
     };
 
     pick(&mut app, Some(DesignatorStandard::Iec81346_2));
@@ -153,28 +156,17 @@ fn picking_a_standard_in_project_options_sets_it_and_marks_the_project_dirty() {
 
 #[test]
 fn re_picking_library_designator_keeps_an_unreadable_section_and_stays_clean() {
-    use signex_app::app::{ProjectMsg, ProjectOptionsState};
     let f = fixture_of_class("diode");
     let mut app = app_with_library(&f);
     project(&mut app, "P", &[SHEET], None);
     app.document_state.projects[0].data.unknown =
         serde_json::from_str(r#"{"annotation":{"designator_standard":"iso9999"}}"#).unwrap();
-    app.ui_state.project_options = Some(ProjectOptionsState {
-        project_idx: 0,
-        name: "P".into(),
-        directory: String::new(),
-        schematic_root: None,
-        pcb_file: None,
-        library_count: 0,
-    });
-    let _ = app.update(Message::Project(ProjectMsg::DesignatorStandardPicked(None)));
+    pick_standard(&mut app, None);
     let loaded = &app.document_state.projects[0];
     assert!(loaded.data.has_unreadable_annotation());
     assert!(!app.document_state.dirty_paths.contains(&loaded.path));
 
-    let _ = app.update(Message::Project(ProjectMsg::DesignatorStandardPicked(
-        Some(DesignatorStandard::Ieee315),
-    )));
+    pick_standard(&mut app, Some(DesignatorStandard::Ieee315));
     let loaded = &app.document_state.projects[0];
     assert!(!loaded.data.has_unreadable_annotation());
     assert!(app.document_state.dirty_paths.contains(&loaded.path));

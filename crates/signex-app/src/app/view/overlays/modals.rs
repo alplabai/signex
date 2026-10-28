@@ -194,13 +194,6 @@ impl Signex {
             .then(|| self.view_app_quit_confirm())
     }
 
-    pub(in crate::app::view) fn project_options_overlay(&self) -> Option<Element<'_, Message>> {
-        self.ui_state
-            .project_options
-            .is_some()
-            .then(|| self.view_project_options_dialog())
-    }
-
     pub(in crate::app::view) fn enable_version_control_overlay(
         &self,
     ) -> Option<Element<'_, Message>> {
