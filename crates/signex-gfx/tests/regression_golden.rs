@@ -13,6 +13,7 @@ use signex_gfx::debug_pass::{
 use signex_gfx::primitive::arc::Arc;
 use signex_gfx::primitive::circle::Circle;
 use signex_gfx::primitive::line::LineSegment;
+use signex_gfx::primitive::ordered::OrderedItem;
 use signex_gfx::primitive::polygon::GpuPolygon;
 use signex_gfx::primitive::text::{TextHAlign, TextItem, TextVAlign};
 use signex_gfx::scene::{
@@ -91,6 +92,7 @@ struct MockUploadTarget {
     uploaded_arcs: usize,
     uploaded_polygons: usize,
     uploaded_top_polygons: usize,
+    uploaded_drawings: usize,
     uploaded_texts: usize,
     uploaded_overlay_lines: usize,
     uploaded_overlay_circles: usize,
@@ -125,6 +127,11 @@ impl SceneUploadTarget for MockUploadTarget {
 
     fn upload_top_polygons(&mut self, polygons: &[GpuPolygon]) {
         self.uploaded_top_polygons = polygons.len();
+    }
+
+    fn upload_drawings(&mut self, drawings: &[OrderedItem]) {
+        self.uploaded_drawings = drawings.len();
+        self.calls.drawing_uploads += 1;
     }
 
     fn upload_texts(

@@ -35,6 +35,7 @@ use signex_gfx::camera::{CameraGpu, CameraUniform};
 use signex_gfx::pipeline::arc::ArcPipeline;
 use signex_gfx::pipeline::circle::CirclePipeline;
 use signex_gfx::pipeline::line::LinePipeline;
+use signex_gfx::pipeline::ordered::{KindPipelines, OrderedPipeline};
 use signex_gfx::pipeline::polygon::PolygonPipeline;
 use signex_gfx::pipeline::text::GlyphonTextPipeline;
 use signex_gfx::primitive::text::TextSizePolicy;
@@ -203,6 +204,8 @@ pub struct ScenePipeline {
     circle: CirclePipeline,
     arc: ArcPipeline,
     polygon: PolygonPipeline,
+    /// Drawings in file paint order; reuses the four pipelines above (#1579).
+    ordered: OrderedPipeline,
     text: GlyphonTextPipeline,
     /// Scene generation currently resident in the instance buffers, or `None`
     /// if geometry has never been uploaded. When a frame's primitive carries
@@ -227,6 +230,7 @@ impl shader::Pipeline for ScenePipeline {
             circle: CirclePipeline::new(device, format, layout),
             arc: ArcPipeline::new(device, format, layout),
             polygon: PolygonPipeline::new(device, format, layout),
+            ordered: OrderedPipeline::new(device),
             text: GlyphonTextPipeline::new(device, queue, format),
             camera,
             uploaded_generation: None,
@@ -342,6 +346,7 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         );
         if !geometry_is_current {
             pipeline.polygon.upload(device, queue, &self.scene.polygons);
+            pipeline.ordered.upload(device, queue, &self.scene.drawings);
             pipeline.line.upload(device, queue, &self.scene.lines);
             pipeline.arc.upload(device, queue, &self.scene.arcs);
             pipeline.circle.upload(device, queue, &self.scene.circles);
@@ -424,6 +429,16 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         for &bucket in GPU_SCENE_DRAW_ORDER {
             match bucket {
                 SceneBucket::Polygons => pipeline.polygon.draw(render_pass, camera),
+                SceneBucket::Drawings => pipeline.ordered.draw_runs(
+                    render_pass,
+                    camera,
+                    &KindPipelines {
+                        line: &pipeline.line,
+                        circle: &pipeline.circle,
+                        arc: &pipeline.arc,
+                        polygon: &pipeline.polygon,
+                    },
+                ),
                 SceneBucket::Lines => pipeline.line.draw(render_pass, camera),
                 SceneBucket::Arcs => pipeline.arc.draw(render_pass, camera),
                 SceneBucket::Circles => pipeline.circle.draw(render_pass, camera),

@@ -611,6 +611,12 @@ impl PolygonPipeline {
         render_pass.draw(0..vertex_count, 0..1);
     }
 
+    /// The render pipeline, for callers that draw sub-ranges of their own
+    /// buffers with it (`pipeline::ordered`).
+    pub(crate) fn render_pipeline(&self) -> &wgpu::RenderPipeline {
+        &self.render_pipeline
+    }
+
     pub fn vertex_count(&self) -> u32 {
         self.vertex_count
     }

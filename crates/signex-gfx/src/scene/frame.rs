@@ -7,6 +7,7 @@
 use crate::primitive::arc::Arc;
 use crate::primitive::circle::Circle;
 use crate::primitive::line::LineSegment;
+use crate::primitive::ordered::OrderedItem;
 use crate::primitive::polygon::GpuPolygon;
 use crate::primitive::text::TextItem;
 
@@ -25,6 +26,10 @@ pub struct Scene {
     /// The PCB emitter puts pads here so a pad lands on top of the traces
     /// and vias that run into it; zone pours stay in `polygons`, under them.
     pub top_polygons: Vec<GpuPolygon>,
+    /// Drawings in file paint order, mixed kinds, drawn as per-kind runs that
+    /// keep that order (#1579). Sits just above `polygons` and under every
+    /// stroke bucket. Covered by [`DirtyFlags::DRAWINGS`].
+    pub drawings: Vec<OrderedItem>,
     pub texts: Vec<TextItem>,
     pub overlay_lines: Vec<LineSegment>,
     pub overlay_circles: Vec<Circle>,
@@ -42,6 +47,7 @@ impl Scene {
         self.arcs.clear();
         self.polygons.clear();
         self.top_polygons.clear();
+        self.drawings.clear();
         self.texts.clear();
         self.overlay_lines.clear();
         self.overlay_circles.clear();
@@ -58,6 +64,7 @@ impl Scene {
             && self.arcs.is_empty()
             && self.polygons.is_empty()
             && self.top_polygons.is_empty()
+            && self.drawings.is_empty()
             && self.texts.is_empty()
             && self.overlay_lines.is_empty()
             && self.overlay_circles.is_empty()

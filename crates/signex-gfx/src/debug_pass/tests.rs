@@ -4,12 +4,15 @@ use super::{
     ARC_READBACK_PX, ARC_READBACK_SCALE, CompositeStage, POLYGON_SQUARE_PX, POLYGON_SQUARE_SCALE,
     run_arc_readback_smoke_pass, run_arc_smoke_pass, run_arc_smoke_pass_with,
     run_grid_overlay_text_composite_smoke_pass, run_grid_smoke_pass, run_grid_smoke_pass_with,
-    run_line_circle_smoke_pass, run_line_readback_smoke_pass, run_polygon_readback_smoke_pass,
-    run_polygon_smoke_pass, run_polygon_smoke_pass_with, run_polygon_square_readback_smoke_pass,
-    run_text_geometry_composite_smoke_pass, run_text_smoke_pass, run_text_smoke_pass_with,
+    run_line_circle_smoke_pass, run_line_readback_smoke_pass, run_ordered_readback_smoke_pass,
+    run_polygon_readback_smoke_pass, run_polygon_smoke_pass, run_polygon_smoke_pass_with,
+    run_polygon_square_readback_smoke_pass, run_text_geometry_composite_smoke_pass,
+    run_text_smoke_pass, run_text_smoke_pass_with,
 };
 use crate::primitive::arc::Arc;
+use crate::primitive::circle::Circle;
 use crate::primitive::line::LineSegment;
+use crate::primitive::ordered::OrderedItem;
 use crate::primitive::polygon::GpuPolygon;
 use crate::primitive::text::{TextHAlign, TextItem, TextVAlign};
 
@@ -817,4 +820,107 @@ fn a_polygon_with_a_hole_joins_the_hole_band_exactly() {
     let samples = join_samples(&hole);
     let outer = vec![[1.5, 1.5], [14.5, 1.5], [14.5, 14.5], [1.5, 14.5]];
     assert_one_layer_at_joins(half_red_stroke(outer, vec![hole]), &samples);
+}
+
+/// World mm at the middle of the 64 px, 4 px/mm readback target, and its pixel.
+const ORDERED_CENTRE_MM: f32 = POLYGON_SQUARE_PX as f32 / POLYGON_SQUARE_SCALE / 2.0;
+const ORDERED_CENTRE_PX: (u32, u32) = (POLYGON_SQUARE_PX / 2, POLYGON_SQUARE_PX / 2);
+
+fn centre_circle(radius_mm: f32, stroke_width: f32, rgba: [f32; 4]) -> OrderedItem {
+    OrderedItem::Circle(Circle {
+        center: [ORDERED_CENTRE_MM; 2],
+        radius: radius_mm,
+        stroke_width,
+        color: rgba,
+    })
+}
+
+/// A rectangle covering the whole target, filled `rgba`.
+fn full_rect(rgba: [f32; 4]) -> OrderedItem {
+    let edge = ORDERED_CENTRE_MM * 2.0;
+    OrderedItem::Polygon(GpuPolygon {
+        vertices: vec![[0.0, 0.0], [edge, 0.0], [edge, edge], [0.0, edge]],
+        fill_color: rgba,
+        ..GpuPolygon::default()
+    })
+}
+
+/// The red channel of one pixel after `source` is blended over a backdrop of
+/// red `backdrop` (alpha blending: `src * a + dst * (1 - a)`).
+fn blended_red(source: f32, alpha: f32, backdrop: f32) -> f32 {
+    source * alpha + backdrop * (1.0 - alpha)
+}
+
+fn centre_red(items: Vec<OrderedItem>) -> u8 {
+    on_gpu(run_ordered_readback_smoke_pass(items, &[ORDERED_CENTRE_PX])).expect("ordered readback")
+        [0]
+}
+
+fn assert_red_near(got: u8, expected: f32) {
+    let expected = (expected * 255.0).round();
+    assert!(
+        (f32::from(got) - expected).abs() <= 3.0,
+        "centre reads red {got}, expected about {expected}"
+    );
+}
+
+/// The reason the bucket exists (#1579): kinds interleave in LIST order, not
+/// in pipeline order. A translucent disc over an opaque rectangle blends with
+/// it; the reversed list leaves the rectangle on top and the disc invisible
+/// at the centre. The two orders must differ, and each must match the blend a
+/// painter would compute.
+#[test]
+fn ordered_drawings_blend_in_list_order_across_kinds() {
+    let rect = [0.8, 0.0, 0.0, 1.0];
+    let disc = [0.2, 0.0, 0.0, 0.5];
+
+    let disc_over_rect = centre_red(vec![full_rect(rect), centre_circle(3.0, 0.0, disc)]);
+    assert_red_near(disc_over_rect, blended_red(0.2, 0.5, 0.8));
+
+    let rect_over_disc = centre_red(vec![centre_circle(3.0, 0.0, disc), full_rect(rect)]);
+    assert_red_near(rect_over_disc, 0.8);
+
+    assert_ne!(disc_over_rect, rect_over_disc);
+}
+
+/// A drawing circle is a fill disc then a ring, as two instances. With a ring
+/// wider than the circle's diameter the centre lies inside the stroke, so it
+/// must read the stroke colour, not the fill (the CPU 40-gon crossover bug
+/// this replaces).
+#[test]
+fn a_ring_wider_than_its_diameter_covers_the_fill_at_the_centre() {
+    let fill = [0.2, 0.0, 0.0, 1.0];
+    let stroke = [1.0, 0.0, 0.0, 1.0];
+    let radius = 0.5;
+    let wider_than_diameter = 4.0 * radius;
+
+    let red = centre_red(vec![
+        centre_circle(radius, 0.0, fill),
+        centre_circle(radius, wider_than_diameter, stroke),
+    ]);
+
+    assert_red_near(red, 1.0);
+}
+
+/// A run that starts past the first instance (`first_instance != 0`) must
+/// draw ITS instances: the circle after the line is instance 1 of the circle
+/// buffer, and it paints over instance 0 at the centre.
+#[test]
+fn a_later_run_draws_its_own_instances_not_the_first() {
+    let far_line = OrderedItem::Line(LineSegment {
+        p0: [1.0, 1.0],
+        p1: [2.0, 1.0],
+        width: 0.2,
+        color: [1.0; 4],
+        style: 0,
+        _pad: 0,
+    });
+
+    let red = centre_red(vec![
+        centre_circle(3.0, 0.0, [0.4, 0.0, 0.0, 1.0]),
+        far_line,
+        centre_circle(3.0, 0.0, [0.9, 0.0, 0.0, 1.0]),
+    ]);
+
+    assert_red_near(red, 0.9);
 }

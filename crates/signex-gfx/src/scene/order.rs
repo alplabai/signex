@@ -56,6 +56,9 @@ pub enum SceneBucket {
     /// Polygons composited above the stroke buckets; PCB pads are its
     /// producer. Maps to `Scene::top_polygons`.
     TopPolygons,
+    /// Mixed-kind drawings in file paint order; sits right after `Polygons`
+    /// so they stay under wires, pins and text. Maps to `Scene::drawings`.
+    Drawings,
     Texts,
     OverlayLines,
     OverlayCircles,
@@ -73,6 +76,7 @@ pub enum SceneBucket {
 /// schematic-only.
 pub const GPU_SCENE_DRAW_ORDER: &[SceneBucket] = &[
     SceneBucket::Polygons,
+    SceneBucket::Drawings,
     SceneBucket::Lines,
     SceneBucket::Arcs,
     SceneBucket::Circles,
@@ -109,6 +113,7 @@ pub const GPU_SCENE_DRAW_ORDER: &[SceneBucket] = &[
 /// depth.
 pub const CPU_SCHEMATIC_DRAW_ORDER: &[SceneBucket] = &[
     SceneBucket::Polygons,
+    SceneBucket::Drawings,
     SceneBucket::Lines,
     SceneBucket::Arcs,
     SceneBucket::Circles,
@@ -156,6 +161,7 @@ mod tests {
     fn gpu_scene_draw_order_is_fills_then_strokes_then_text() {
         let expected: &[SceneBucket] = &[
             SceneBucket::Polygons,
+            SceneBucket::Drawings,
             SceneBucket::Lines,
             SceneBucket::Arcs,
             SceneBucket::Circles,
@@ -233,6 +239,7 @@ mod tests {
     fn cpu_schematic_draw_order_is_base_then_overlays_then_erc() {
         let expected: &[SceneBucket] = &[
             SceneBucket::Polygons,
+            SceneBucket::Drawings,
             SceneBucket::Lines,
             SceneBucket::Arcs,
             SceneBucket::Circles,
@@ -258,6 +265,7 @@ mod tests {
             SceneBucket::Circles,
             SceneBucket::Arcs,
             SceneBucket::Polygons,
+            SceneBucket::Drawings,
             SceneBucket::TopPolygons,
             SceneBucket::Texts,
             SceneBucket::OverlayLines,
@@ -288,6 +296,7 @@ mod tests {
             SceneBucket::Circles,
             SceneBucket::Arcs,
             SceneBucket::Polygons,
+            SceneBucket::Drawings,
             SceneBucket::TopPolygons,
             SceneBucket::Texts,
         ];
@@ -339,7 +348,12 @@ mod tests {
         let gpu_without_unemitted: Vec<SceneBucket> = GPU_SCENE_DRAW_ORDER
             .iter()
             .copied()
-            .filter(|bucket| !matches!(bucket, SceneBucket::Arcs | SceneBucket::Texts))
+            .filter(|bucket| {
+                !matches!(
+                    bucket,
+                    SceneBucket::Arcs | SceneBucket::Texts | SceneBucket::Drawings
+                )
+            })
             .collect();
         let cpu_base: Vec<SceneBucket> = CPU_PCB_DRAW_ORDER
             .iter()
@@ -383,13 +397,32 @@ mod tests {
         }
     }
 
-    /// The GPU path composites arc and text buckets the PCB CPU path never
-    /// emits. Harmless today (PCB scenes carry neither) but a real parity axis:
-    /// if the PCB scene ever grows arcs or text, the CPU renderer must gain the
-    /// buckets too.
+    /// Drawings paint over polygon fills and under every stroke bucket, on
+    /// every path that draws them (#1579).
+    #[test]
+    fn drawings_draw_after_polygons_and_before_lines() {
+        for order in [GPU_SCENE_DRAW_ORDER, CPU_SCHEMATIC_DRAW_ORDER] {
+            let drawings = index_of(order, SceneBucket::Drawings).unwrap();
+            assert_eq!(
+                index_of(order, SceneBucket::Polygons).unwrap() + 1,
+                drawings,
+                "drawings sit right after polygons"
+            );
+            assert_eq!(
+                index_of(order, SceneBucket::Lines).unwrap(),
+                drawings + 1,
+                "lines sit right after drawings"
+            );
+        }
+    }
+
+    /// The GPU path composites arc, text and drawings buckets the PCB CPU path
+    /// never emits. Harmless today (PCB scenes carry none of them) but a real
+    /// parity axis: if the PCB scene ever grows one, the CPU renderer must gain
+    /// the bucket too.
     #[test]
     fn gpu_draws_buckets_the_pcb_cpu_path_omits() {
-        for bucket in [SceneBucket::Arcs, SceneBucket::Texts] {
+        for bucket in [SceneBucket::Arcs, SceneBucket::Texts, SceneBucket::Drawings] {
             assert!(GPU_SCENE_DRAW_ORDER.contains(&bucket));
             assert!(!CPU_PCB_DRAW_ORDER.contains(&bucket));
         }

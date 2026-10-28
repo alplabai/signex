@@ -510,9 +510,11 @@ fn draw_scene(
                 camera,
                 bounds,
             ),
-            // The PCB CPU path emits no arc, text, or ERC buckets. Handled for
-            // exhaustiveness so adding a Scene bucket forces a decision here.
+            // The PCB CPU path emits no arc, drawings, text, or ERC buckets.
+            // Handled for exhaustiveness so adding a Scene bucket forces a
+            // decision here.
             SceneBucket::Arcs
+            | SceneBucket::Drawings
             | SceneBucket::Texts
             | SceneBucket::ErcMarkerLines
             | SceneBucket::ErcMarkerCircles

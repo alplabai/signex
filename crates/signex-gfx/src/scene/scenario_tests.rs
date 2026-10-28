@@ -351,6 +351,7 @@ fn bucket_count(scene: &Scene, bucket: SceneBucket) -> usize {
         SceneBucket::Arcs => scene.arcs.len(),
         SceneBucket::Polygons => scene.polygons.len(),
         SceneBucket::TopPolygons => scene.top_polygons.len(),
+        SceneBucket::Drawings => scene.drawings.len(),
         SceneBucket::Texts => scene.texts.len(),
         SceneBucket::OverlayLines => scene.overlay_lines.len(),
         SceneBucket::OverlayCircles => scene.overlay_circles.len(),
