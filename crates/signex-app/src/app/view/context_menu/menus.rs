@@ -251,7 +251,7 @@ pub(super) fn canvas_menu_entries(
         if drawing_selected {
             v.push(submenu_launcher(
                 tokens,
-                None,
+                Some(ic::icon_dd_align_menu(tid)),
                 "Arrange",
                 ContextSubmenu::Arrange,
                 active_submenu == Some(ContextSubmenu::Arrange),

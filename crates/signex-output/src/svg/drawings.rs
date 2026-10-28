@@ -10,7 +10,22 @@ use super::geometry::{arc_path_commands, circle_path, rect_path};
 use super::*;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
-use signex_types::schematic::{FillType, SchDrawing};
+use signex_types::schematic::{DrawingPlacement, FillType, SchDrawing, SchematicSheet};
+
+/// The drawings of `placement`, in file order.
+pub(super) fn push_placed_drawings(
+    out: &mut Vec<SvgElement>,
+    sheet: &SchematicSheet,
+    placement: DrawingPlacement,
+    xform: &PageTransform,
+    palette: &SchematicPalette,
+) {
+    for drawing in &sheet.drawings {
+        if sheet.drawing_placement(drawing.uuid()) == placement {
+            push_sch_drawing_path(out, drawing, xform, palette);
+        }
+    }
+}
 
 pub(super) fn push_sch_drawing_path(
     out: &mut Vec<SvgElement>,
