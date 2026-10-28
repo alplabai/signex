@@ -592,7 +592,8 @@ pub trait LibraryAdapter: Send + Sync {
     // A `None` base creates the primitive (`Conflict` if it exists). The
     // saved revision comes back so the next save of the same copy can use
     // it. Backends without primitive revisions keep the defaults, which
-    // carry `None` both ways.
+    // carry `None` both ways; such a backend must keep its plain `save_*`
+    // create-only, since the default `None`-base save relies on that.
 
     fn get_symbol_versioned(&self, uuid: Uuid) -> Result<Versioned<Symbol>, LibraryError> {
         self.get_symbol(uuid).map(|value| Versioned {
