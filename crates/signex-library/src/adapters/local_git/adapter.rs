@@ -706,45 +706,7 @@ impl LibraryAdapter for LocalGitAdapter {
         }
         let repo = git2::Repository::open(&self.root_dir)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
-
-        let mut walk = repo
-            .revwalk()
-            .map_err(|e| LibraryError::Backend(format!("git revwalk: {e}")))?;
-        // Topological + time so that on equal-second timestamps (the
-        // common case in tests + back-to-back saves on Windows where
-        // git2 stamps to one-second precision) child commits still
-        // come before parents — matches `git log`'s default visual
-        // order.
-        walk.set_sorting(git2::Sort::TIME | git2::Sort::TOPOLOGICAL)
-            .map_err(|e| LibraryError::Backend(format!("git revwalk sort: {e}")))?;
-
-        // Unborn HEAD (fresh repo, no commits yet) is a legitimate
-        // "no history" answer rather than an error — the editor
-        // should render an empty list, not a red banner.
-        match walk.push_head() {
-            Ok(()) => {}
-            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => return Ok(Vec::new()),
-            Err(e) => return Err(LibraryError::Backend(format!("git push head: {e}"))),
-        }
-
-        let mut entries: Vec<HistoryEntry> = Vec::new();
-        for oid_res in walk {
-            if entries.len() >= MAX_ENTRIES {
-                break;
-            }
-            let oid =
-                oid_res.map_err(|e| LibraryError::Backend(format!("git revwalk oid: {e}")))?;
-            let commit = repo
-                .find_commit(oid)
-                .map_err(|e| LibraryError::Backend(format!("git find commit: {e}")))?;
-
-            if !commit_touches_path(&repo, &commit, &rel_str)? {
-                continue;
-            }
-
-            entries.push(HistoryEntry::from_commit(&commit));
-        }
-        Ok(entries)
+        crate::git_history::path_history(&repo, &rel_str, MAX_ENTRIES)
     }
 }
 

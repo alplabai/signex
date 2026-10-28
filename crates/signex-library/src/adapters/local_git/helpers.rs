@@ -377,46 +377,10 @@ pub(super) fn check_pn_unique(
     Ok(())
 }
 
-/// True if `commit` modified `rel_path` relative to *any* of its
-/// parents (or, for the root commit, if the path exists in its
-/// tree). Mirrors the behaviour of `git log -- <path>` for the simple
-/// non-rename case the scaffold targets.
-pub(super) fn commit_touches_path(
-    repo: &git2::Repository,
-    commit: &git2::Commit<'_>,
-    rel_path: &str,
-) -> Result<bool, LibraryError> {
-    let new_tree = commit
-        .tree()
-        .map_err(|e| LibraryError::Backend(format!("git commit tree: {e}")))?;
-
-    if commit.parent_count() == 0 {
-        // Root commit: include if the path exists in this tree at all.
-        return Ok(new_tree.get_path(Path::new(rel_path)).is_ok());
-    }
-
-    let mut diff_opts = git2::DiffOptions::new();
-    diff_opts.pathspec(rel_path);
-
-    for parent in commit.parents() {
-        let old_tree = parent
-            .tree()
-            .map_err(|e| LibraryError::Backend(format!("git parent tree: {e}")))?;
-        let diff = repo
-            .diff_tree_to_tree(Some(&old_tree), Some(&new_tree), Some(&mut diff_opts))
-            .map_err(|e| LibraryError::Backend(format!("git diff: {e}")))?;
-        if diff.deltas().len() > 0 {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
 pub(super) const LEGACY_ROW_ID_COL: &str = "row_id";
 
 /// Header expected for the v0.9 fixed-schema `[tables.<name>]` blocks
-/// — same column ordering as the pre-refactor `tables/*.tsv` files
-/// so the conversion through [`row_to_record`] / [`record_to_row`]
+/// — same column ordering as the old per-file TSV tables so the conversion through [`row_to_record`] / [`record_to_row`]
 /// stays bit-exact. Stage 12 lifts the fixed-schema constraint.
 pub(super) fn legacy_columns() -> Vec<String> {
     TABLE_HEADER.iter().map(|s| (*s).to_string()).collect()
