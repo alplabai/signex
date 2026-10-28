@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::prefix::placement_prefix;
+use super::prefix::{normalize_prefix_override, placement_prefix};
 
 /// A reference-designation standard a project can follow.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -43,59 +43,104 @@ impl std::fmt::Display for DesignatorStandard {
     }
 }
 
-/// `(ieee315, din40719_2, iec81346_2)` letters for one class key.
-fn class_letters(class_key: &str) -> Option<(&'static str, &'static str, &'static str)> {
-    Some(match class_key {
-        "resistor" => ("R", "R", "R"),
-        "capacitor" => ("C", "C", "C"),
-        "inductor" => ("L", "L", "R"),
-        "diode" => ("D", "V", "R"),
-        "led" => ("DS", "H", "P"),
-        "transistor_bjt" | "transistor_mosfet" | "transistor_jfet" => ("Q", "V", "K"),
-        "opamp" | "comparator" => ("U", "N", "K"),
-        "regulator_linear" | "regulator_switching" => ("U", "N", "T"),
-        "mcu" | "logic" => ("U", "D", "K"),
-        "memory" => ("U", "D", "C"),
-        "connector" => ("J", "X", "X"),
-        "switch" => ("S", "S", "S"),
-        "relay" => ("K", "K", "K"),
-        "crystal" => ("Y", "G", "G"),
-        "transformer" => ("T", "T", "T"),
-        "fuse" => ("F", "F", "F"),
-        "antenna" => ("E", "W", "W"),
-        "display" => ("DS", "H", "P"),
-        "sensor" => ("U", "B", "B"),
-        "motor" => ("B", "M", "M"),
-        "battery" => ("BT", "G", "G"),
-        _ => return None,
-    })
+/// `(ieee315, din40719_2, iec81346_2)` letters for one class key; `None` where
+/// that standard names no letter for the class. Each entry is checked against
+/// the standard text: sources and page numbers are in
+/// `docs/architecture/designator-standards.md`.
+type ClassLetters = (
+    Option<&'static str>,
+    Option<&'static str>,
+    Option<&'static str>,
+);
+
+fn class_letters(class_key: &str) -> Option<ClassLetters> {
+    let all = |ieee, din, iec| Some((Some(ieee), Some(din), Some(iec)));
+    match class_key {
+        "resistor" => all("R", "R", "R"),
+        "capacitor" => all("C", "C", "C"),
+        "inductor" => all("L", "L", "C"),
+        "diode" => all("D", "V", "R"),
+        "led" => all("DS", "H", "P"),
+        "transistor_bjt" | "transistor_mosfet" | "transistor_jfet" => all("Q", "V", "Q"),
+        "opamp" => all("U", "N", "T"),
+        "comparator" => Some((Some("U"), Some("N"), None)),
+        "regulator_linear" => Some((Some("U"), Some("N"), None)),
+        "regulator_switching" => all("U", "U", "T"),
+        "mcu" | "logic" => all("U", "D", "K"),
+        "memory" => all("U", "D", "C"),
+        "connector" => all("J", "X", "X"),
+        "switch" => all("S", "S", "S"),
+        "relay" => all("K", "K", "K"),
+        "crystal" => Some((Some("Y"), Some("G"), None)),
+        "transformer" => all("T", "T", "T"),
+        "fuse" => all("F", "F", "F"),
+        "antenna" => all("E", "W", "T"),
+        "display" => all("DS", "P", "P"),
+        "sensor" => all("U", "B", "B"),
+        "motor" => all("B", "M", "M"),
+        "battery" => all("BT", "G", "G"),
+        _ => None,
+    }
 }
 
 /// Reference letters `standard` assigns to a component class, or `None` for
-/// `"generic"` and any key the table does not know.
+/// `"generic"`, any key the table does not know, and a class the standard
+/// names no letter for.
 pub fn class_prefix(standard: DesignatorStandard, class_key: &str) -> Option<&'static str> {
     let (ieee, din, iec) = class_letters(class_key)?;
-    Some(match standard {
+    match standard {
         DesignatorStandard::Ieee315 => ieee,
         DesignatorStandard::Din40719_2 => din,
         DesignatorStandard::Iec81346_2 => iec,
-    })
+    }
+}
+
+/// Letters an earlier table issued for a class and the current one no longer
+/// does (the corrections of #1428). A part placed under one of them was issued
+/// by the system, so it still counts as issued; a table change adds the
+/// letters it retires here in the same PR.
+fn retired_class_letters(class_key: &str) -> &'static [&'static str] {
+    match class_key {
+        "inductor" => &["R"],
+        "transistor_bjt" | "transistor_mosfet" | "transistor_jfet" => &["K"],
+        "opamp" | "comparator" => &["K"],
+        "regulator_linear" => &["T"],
+        "regulator_switching" => &["N"],
+        "antenna" => &["W"],
+        "display" => &["H"],
+        _ => &[],
+    }
+}
+
+/// Could a table, current or retired, have issued `letters` for this class?
+pub fn class_letters_ever_issued(class_key: &str, letters: &str) -> bool {
+    DesignatorStandard::ALL
+        .iter()
+        .any(|&standard| class_prefix(standard, class_key) == Some(letters))
+        || retired_class_letters(class_key).contains(&letters)
 }
 
 /// The reference prefix a freshly placed part gets.
 ///
 /// A symbol designator starting with `#` (power ports, flags, virtual parts)
 /// always wins: those are net anchors, not designated components, under every
-/// standard. Otherwise the project's standard decides by class; with no
-/// standard, or a class it does not cover, the symbol's own designator letters
-/// apply (the legacy behaviour).
+/// standard and over every row override. Otherwise, in order: the library
+/// row's `row_override` (ignored when [`normalize_prefix_override`] refuses
+/// it), the project standard's table entry for the class, and finally the
+/// symbol's own designator letters (the legacy behaviour). An edit of a
+/// placed reference beats all of these; that is the caller's rule, since it
+/// is not an input here.
 pub fn resolve_prefix(
     standard: Option<DesignatorStandard>,
     class_key: Option<&str>,
+    row_override: Option<&str>,
     symbol_designator: &str,
 ) -> String {
     if symbol_designator.trim().starts_with('#') {
         return placement_prefix(symbol_designator);
+    }
+    if let Some(prefix) = row_override.and_then(|raw| normalize_prefix_override(raw).ok()) {
+        return prefix;
     }
     standard
         .zip(class_key)
@@ -106,6 +151,30 @@ pub fn resolve_prefix(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retired_letters_still_count_as_issued() {
+        for (class, letters) in [
+            ("inductor", "R"),
+            ("transistor_bjt", "K"),
+            ("transistor_mosfet", "K"),
+            ("transistor_jfet", "K"),
+            ("opamp", "K"),
+            ("comparator", "K"),
+            ("regulator_linear", "T"),
+            ("regulator_switching", "N"),
+            ("antenna", "W"),
+            ("display", "H"),
+        ] {
+            assert!(
+                class_letters_ever_issued(class, letters),
+                "{class} {letters}"
+            );
+        }
+        assert!(class_letters_ever_issued("diode", "V"));
+        assert!(!class_letters_ever_issued("diode", "K"));
+        assert!(!class_letters_ever_issued("generic", "R"));
+    }
 
     #[test]
     fn serialized_names_are_pinned() {
@@ -135,7 +204,13 @@ mod tests {
         use DesignatorStandard::*;
         assert_eq!(class_prefix(Ieee315, "led"), Some("DS"));
         assert_eq!(class_prefix(Din40719_2, "diode"), Some("V"));
-        assert_eq!(class_prefix(Iec81346_2, "regulator_linear"), Some("T"));
+        assert_eq!(class_prefix(Iec81346_2, "regulator_switching"), Some("T"));
+        assert_eq!(class_prefix(Iec81346_2, "transistor_mosfet"), Some("Q"));
+        assert_eq!(class_prefix(Iec81346_2, "opamp"), Some("T"));
+        assert_eq!(class_prefix(Iec81346_2, "antenna"), Some("T"));
+        assert_eq!(class_prefix(Iec81346_2, "inductor"), Some("C"));
+        assert_eq!(class_prefix(Din40719_2, "display"), Some("P"));
+        assert_eq!(class_prefix(Din40719_2, "regulator_switching"), Some("U"));
         assert_eq!(class_prefix(Ieee315, "battery"), Some("BT"));
         assert_eq!(class_prefix(Din40719_2, "generic"), None);
         assert_eq!(class_prefix(Ieee315, "no_such_class"), None);
@@ -146,7 +221,7 @@ mod tests {
         for designator in ["U?", "#PWR?", "r1", "?", "#?"] {
             for class in [None, Some("diode"), Some("generic")] {
                 assert_eq!(
-                    resolve_prefix(None, class, designator),
+                    resolve_prefix(None, class, None, designator),
                     placement_prefix(designator)
                 );
             }
@@ -157,8 +232,14 @@ mod tests {
     fn power_and_flag_designators_ignore_every_standard_and_class() {
         for standard in DesignatorStandard::ALL {
             for class in [None, Some("diode"), Some("connector"), Some("generic")] {
-                assert_eq!(resolve_prefix(Some(standard), class, "#PWR?"), "#PWR");
-                assert_eq!(resolve_prefix(Some(standard), class, " #FLG?"), "#FLG");
+                assert_eq!(
+                    resolve_prefix(Some(standard), class, Some("Q"), "#PWR?"),
+                    "#PWR"
+                );
+                assert_eq!(
+                    resolve_prefix(Some(standard), class, Some("Q"), " #FLG?"),
+                    "#FLG"
+                );
             }
         }
     }
@@ -166,14 +247,51 @@ mod tests {
     #[test]
     fn a_standard_and_known_class_override_the_symbol_letter() {
         let din = Some(DesignatorStandard::Din40719_2);
-        assert_eq!(resolve_prefix(din, Some("diode"), "D?"), "V");
+        assert_eq!(resolve_prefix(din, Some("diode"), None, "D?"), "V");
     }
 
     #[test]
     fn generic_and_unknown_classes_fall_back_to_the_symbol_designator() {
         let std = Some(DesignatorStandard::Iec81346_2);
-        assert_eq!(resolve_prefix(std, Some("generic"), "x?"), "X");
-        assert_eq!(resolve_prefix(std, Some("zzz"), "Q?"), "Q");
-        assert_eq!(resolve_prefix(std, None, "Q?"), "Q");
+        assert_eq!(resolve_prefix(std, Some("generic"), None, "x?"), "X");
+        assert_eq!(resolve_prefix(std, Some("zzz"), None, "Q?"), "Q");
+        assert_eq!(resolve_prefix(std, None, None, "Q?"), "Q");
+    }
+
+    #[test]
+    fn row_override_beats_the_standard_table() {
+        let din = Some(DesignatorStandard::Din40719_2);
+        assert_eq!(resolve_prefix(din, Some("diode"), Some("zd"), "D?"), "ZD");
+        // Also over the symbol letters when the standard knows nothing.
+        assert_eq!(resolve_prefix(None, None, Some("TP"), "U?"), "TP");
+        assert_eq!(resolve_prefix(din, Some("generic"), Some("X"), "U?"), "X");
+    }
+
+    #[test]
+    fn row_override_never_touches_hash_designators() {
+        let ieee = Some(DesignatorStandard::Ieee315);
+        assert_eq!(resolve_prefix(ieee, None, Some("TP"), "#PWR?"), "#PWR");
+        assert_eq!(resolve_prefix(None, None, Some("TP"), "#FLG?"), "#FLG");
+    }
+
+    #[test]
+    fn invalid_row_override_falls_back_and_is_reported() {
+        let din = Some(DesignatorStandard::Din40719_2);
+        for bad in ["", "R1", "#X", "a b"] {
+            assert_eq!(resolve_prefix(din, Some("diode"), Some(bad), "D?"), "V");
+            // The caller reports the same refusal in the Messages panel.
+            assert!(normalize_prefix_override(bad).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn a_class_the_standard_does_not_name_keeps_the_symbol_letter() {
+        use DesignatorStandard::*;
+        for class in ["comparator", "regulator_linear", "crystal"] {
+            assert_eq!(class_prefix(Iec81346_2, class), None, "{class}");
+            assert_eq!(resolve_prefix(Some(Iec81346_2), Some(class), "U?"), "U");
+            assert!(class_prefix(Ieee315, class).is_some(), "{class}");
+            assert!(class_prefix(Din40719_2, class).is_some(), "{class}");
+        }
     }
 }

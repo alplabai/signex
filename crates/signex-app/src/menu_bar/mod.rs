@@ -278,13 +278,6 @@ const MENU_LABEL_SIZE: f32 = 12.0;
 const MENU_SHORTCUT_SIZE: f32 = 11.0;
 const MENU_CHEVRON_SIZE: f32 = 18.0;
 
-/// Root menu labels rendered by `view`. Listed here so chrome
-/// layout code can estimate the menu bar's natural width without
-/// re-laying out the actual widgets.
-const MENU_ROOT_LABELS: &[&str] = &[
-    "File", "Edit", "View", "Place", "Design", "Tools", "Window", "Help",
-];
-
 /// Approximate visible width of the menu bar in pixels. Includes the
 /// Signex wordmark on the left, plus the sum of root button widths
 /// (label glyphs at `MENU_LABEL_SIZE` + horizontal padding from
@@ -301,7 +294,7 @@ pub fn approx_menu_bar_width() -> f32 {
     const CHROME_LEFT_PAD: f32 = 8.0;
     // Gap between wordmark and the first menu root button.
     const WORDMARK_TO_MENU_GAP: f32 = 8.0;
-    let labels_total: f32 = MENU_ROOT_LABELS
+    let labels_total: f32 = model::ROOT_TITLES
         .iter()
         .map(|l| l.chars().count() as f32 * PX_PER_CHAR + PER_BTN_PADDING)
         .sum();
@@ -337,9 +330,11 @@ impl MenuColors {
     }
 }
 
+pub mod model;
 mod view;
 
 pub use view::view;
+
 /// Menu-display label for `command_id`, sourced from the command table's
 /// terse `menu_label` (which falls back to the descriptive `label`). The
 /// `fallback` literal covers a command with no catalog entry so the visible
@@ -437,25 +432,6 @@ fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
             }
         })
         .into()
-}
-
-/// Leaf menu item with an action.
-fn leaf(
-    label: &str,
-    shortcut: Option<String>,
-    msg: MenuMessage,
-    mc: MenuColors,
-) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
-    Item::new(menu_item_btn(label, shortcut, Some(msg), mc))
-}
-
-/// Leaf menu item — disabled/stub (no action yet).
-fn leaf_stub(
-    label: &str,
-    shortcut: Option<String>,
-    mc: MenuColors,
-) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
-    Item::new(menu_item_btn(label, shortcut, None, mc))
 }
 
 /// Menu row that acts as a submenu header — label on the left, right
@@ -571,3 +547,6 @@ fn menu_item_btn(
         btn.into()
     }
 }
+
+#[cfg(test)]
+mod golden_tests;

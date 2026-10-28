@@ -545,11 +545,14 @@ impl Signex {
                 placement: self.placement_ghost_for_window(window_id),
                 ..self.canvas_view_prefs()
             };
-            let program = crate::canvas::SchematicCanvas::new(slot, prefs);
-            let base: Element<'_, Message> = canvas(program)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into();
+            let base: Element<'_, Message> = if crate::feature_flags::SCHEMATIC_GPU_RENDER_ENABLED {
+                crate::canvas::gpu_mount::view(slot, prefs)
+            } else {
+                canvas(crate::canvas::SchematicCanvas::new(slot, prefs))
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .into()
+            };
             if is_main {
                 base
             } else {

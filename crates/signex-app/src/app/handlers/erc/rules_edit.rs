@@ -41,24 +41,7 @@ impl Signex {
             );
             return Task::none();
         }
-        let erc = signex_erc::project_rules::seed_from_overrides(
-            &self.ui_state.erc_severity_override,
-            &self.ui_state.pin_matrix_overrides,
-        );
-        // Provenance only when the snapshot is exactly the shipped profile;
-        // a customised machine has no named profile to point at yet.
-        let shipped = signex_erc::project_rules::profile::builtin_profile();
-        let profile = (erc.sha256_hex() == shipped.content_sha256()).then(|| {
-            signex_erc::project_rules::profile::profile_ref(
-                &shipped,
-                signex_erc::project_rules::profile::SOURCE_BUILTIN,
-            )
-        });
-        let rules = ProjectRules {
-            erc,
-            profile,
-            ..ProjectRules::default()
-        };
+        let rules = self.seeded_project_rules();
         self.replace_project_rules(Some(rules), true);
         Task::none()
     }

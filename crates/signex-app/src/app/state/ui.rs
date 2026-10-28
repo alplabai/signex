@@ -337,6 +337,9 @@ pub struct UiState {
     /// entry without rerunning the analysis.
     pub erc_violations_by_path:
         std::collections::HashMap<std::path::PathBuf, Vec<signex_erc::Violation>>,
+    /// Findings each waived (rule id, net) pair hid in the newest run
+    /// (#1581); 0 hidden means the waiver matched nothing (e.g. renamed net).
+    pub erc_waived_hidden: std::collections::BTreeMap<(String, String), usize>,
     /// Global cursor into the flattened ERC diagnostics list spanning all
     /// sheets in `erc_violations_by_path`. Used by next/prev navigation.
     pub erc_focus_global_index: Option<usize>,
@@ -407,6 +410,15 @@ pub struct UiState {
     /// Cached Annotate-dialog preview; loaded off-thread and re-derived in
     /// `update`, never in `view` (#111).
     pub annotate_preview: crate::app::handlers::erc::AnnotatePreviewCache,
+    /// Token of the newest Re-prefix to standard library lookup (#1315); a
+    /// result carrying an older one is dropped.
+    pub reprefix_generation: u64,
+    /// The Re-prefix to standard confirm: the planned changes, awaiting a
+    /// Confirm. `None` when no confirm is open.
+    pub reprefix_confirm: Option<crate::app::handlers::erc::ReprefixConfirm>,
+    /// A confirm was dropped while its detached window was open: the next
+    /// `finish_update` closes that window.
+    pub reprefix_window_close_pending: bool,
     /// Altium-style rubber-band selection mode. Drives how the box
     /// drag classifies hits (Inside / Outside / TouchingLine).
     pub selection_mode: crate::schematic_runtime::hit_test::SelectionMode,

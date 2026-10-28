@@ -525,6 +525,9 @@ pub struct ResolvedPlacement {
     /// The row's component class key (`"diode"`, `"generic"`), for the
     /// project's designator standard (#1232).
     pub class: String,
+    /// The row's raw `designator_prefix` parameter, not yet validated: it
+    /// beats the standard's table entry for `class` (#1315).
+    pub prefix_override: Option<String>,
 }
 
 /// The drawing a placed symbol is switched to, read off-thread: the

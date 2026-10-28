@@ -126,6 +126,13 @@ impl Signex {
             crate::panels::PanelMsg::ErcQuickFix(idx) => {
                 follow = self.handle_erc_quick_fix(*idx);
             }
+            crate::panels::PanelMsg::ErcNetWaiverSet {
+                rule_id,
+                net,
+                waive,
+            } => {
+                follow = self.handle_erc_net_waiver_set(rule_id, net, *waive);
+            }
             crate::panels::PanelMsg::FocusPrevErcDiagnostic => {
                 follow = self.handle_focus_erc_diagnostic_offset(-1);
             }

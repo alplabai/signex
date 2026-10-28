@@ -44,6 +44,7 @@ pub mod pricing;
 pub mod primitive_picker;
 pub mod recovery;
 pub mod refresh;
+pub mod reprefix_lookup;
 pub mod resolve;
 pub mod row_documents;
 pub mod settings;

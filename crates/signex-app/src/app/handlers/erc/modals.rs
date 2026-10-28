@@ -227,6 +227,7 @@ impl Signex {
             ModalId::AnnotateResetConfirm => {
                 Some(Message::Annotate(AnnotateMsg::CloseResetConfirm))
             }
+            ModalId::ReprefixConfirm => Some(Message::Annotate(AnnotateMsg::ReprefixCancelled)),
             ModalId::ErcDialog => Some(Message::Erc(ErcMsg::CloseDialog)),
             ModalId::MoveSelection => Some(Message::MoveSelection(MoveSelectionMsg::Close)),
             ModalId::NetColorPalette => Some(Message::NetColor(NetColorMsg::Close)),
@@ -291,6 +292,7 @@ impl Signex {
             ModalId::AnnotateDialog => iced::Size::new(1100.0, 760.0),
             ModalId::ErcDialog => iced::Size::new(1000.0, 600.0),
             ModalId::AnnotateResetConfirm => iced::Size::new(420.0, 180.0),
+            ModalId::ReprefixConfirm => iced::Size::new(560.0, 520.0),
             ModalId::MoveSelection => iced::Size::new(420.0, 240.0),
             ModalId::NetColorPalette => iced::Size::new(520.0, 480.0),
             ModalId::ParameterManager => iced::Size::new(900.0, 560.0),

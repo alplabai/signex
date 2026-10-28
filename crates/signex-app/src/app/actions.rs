@@ -48,17 +48,20 @@ impl Signex {
             .to_string()
     }
 
-    fn component_prefix_from_lib_id(lib_id: &str) -> String {
+    /// Legacy `lib_id` placements know no component class and no row, so the
+    /// standard has nothing to key on: the value's own leading letters decide,
+    /// through the same resolver as a library-row placement. Only the letters
+    /// are handed over: a value starting with `#` or a space has none, and
+    /// falls back to `U`, because this path never builds a power symbol and a
+    /// `#` reference on an ordinary part would drop it out of annotation.
+    fn component_prefix_from_lib_id(&self, lib_id: &str) -> String {
+        let standard = self
+            .document_state
+            .active_document_project()
+            .and_then(|p| p.data.designator_standard());
         let value = Self::component_value_from_lib_id(lib_id);
-        let prefix: String = value
-            .chars()
-            .take_while(|ch| ch.is_ascii_alphabetic())
-            .collect();
-        if prefix.is_empty() {
-            "U".to_string()
-        } else {
-            prefix.to_ascii_uppercase()
-        }
+        let letters = signex_types::designator::alphabetic_prefix(&value);
+        signex_types::designator::resolve_prefix(standard, None, None, letters)
     }
 
     pub(crate) fn increment_designator(reference: &str) -> Option<String> {
@@ -134,7 +137,7 @@ impl Signex {
             .map(|pp| pp.designator.trim().to_string())
             .filter(|designator| !designator.is_empty())
             .unwrap_or_else(|| {
-                self.next_designator_for_prefix(&Self::component_prefix_from_lib_id(lib_id))
+                self.next_designator_for_prefix(&self.component_prefix_from_lib_id(lib_id))
             });
         Some((value, designator))
     }
@@ -153,7 +156,7 @@ impl Signex {
             .map(|pp| pp.designator.trim().to_string())
             .filter(|designator| !designator.is_empty())
             .unwrap_or_else(|| {
-                self.next_designator_for_prefix(&Self::component_prefix_from_lib_id(&lib_id))
+                self.next_designator_for_prefix(&self.component_prefix_from_lib_id(&lib_id))
             });
         let value = self
             .document_state
@@ -228,7 +231,7 @@ impl Signex {
         self.apply_engine_command(signex_engine::Command::PlaceSymbol { symbol }, false, false);
 
         let next_designator = Self::increment_designator(&reference).unwrap_or_else(|| {
-            self.next_designator_for_prefix(&Self::component_prefix_from_lib_id(&lib_id))
+            self.next_designator_for_prefix(&self.component_prefix_from_lib_id(&lib_id))
         });
 
         if let Some(ref mut pp) = self.document_state.panel_ctx.pre_placement {
