@@ -82,10 +82,18 @@ impl Signex {
         // layer so they cannot pass through to the layers below it in the
         // `Stack`. Testing whether event leakage is what makes this modal
         // inert.
+        let built;
+        let sections = match &ui.shortcut_sections {
+            Some(cached) => cached.as_slice(),
+            None => {
+                built = crate::keyboard_shortcuts_modal::build_sections(&ui.keymap_profiles);
+                built.as_slice()
+            }
+        };
         Some(iced::widget::opaque(crate::keyboard_shortcuts_modal::view(
             &self.document_state.panel_ctx.tokens,
             ui.theme_id,
-            &ui.keymap_profiles,
+            sections,
         )))
     }
 

@@ -2,6 +2,7 @@
 use super::*;
 
 mod bus_members;
+mod index_equivalence;
 mod multiple_names;
 mod pin_contact_and_power;
 mod wire_order;
