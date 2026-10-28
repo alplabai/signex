@@ -44,6 +44,8 @@ mod document_options;
 mod edit_modal_tests;
 mod editor;
 mod external_edits;
+#[cfg(test)]
+mod grid_window_tests;
 mod lifecycle;
 mod new_component;
 mod pricing;
@@ -278,6 +280,14 @@ impl Signex {
                 table,
                 row_id,
             } => self.handle_browser_select_row(library_path, table, row_id),
+            LibraryMessage::BrowserGridScrolled {
+                library_path,
+                offset_y,
+            } => self.handle_browser_grid_scrolled(library_path, offset_y),
+            LibraryMessage::BrowserGridResized {
+                library_path,
+                viewport_h,
+            } => self.handle_browser_grid_resized(library_path, viewport_h),
             LibraryMessage::BrowserAddComponent {
                 library_path,
                 table,

@@ -223,6 +223,9 @@ pub struct LibraryBrowserState {
     /// kept current by `LibraryState::sync_view_caches`; `view` reads it
     /// instead of recomputing every frame.
     pub view_cache: Option<super::browser::BrowserViewCache>,
+    /// Where the grid is scrolled to, as reported by its scrollable. The
+    /// grid builds only the rows in this window (#1355).
+    pub grid_scroll: super::browser::GridScroll,
 }
 
 /// Active sort key + direction for the Library Browser grid.
@@ -251,6 +254,7 @@ impl LibraryBrowserState {
             renaming_table: None,
             rename_error: None,
             view_cache: None,
+            grid_scroll: super::browser::GridScroll::default(),
         }
     }
 
@@ -439,6 +443,9 @@ pub struct LibraryState {
     /// per `TabKind::LibraryBrowser(path)` tab in the main window's
     /// tab bar; insert on tab open, drop on tab close.
     pub library_browsers: HashMap<PathBuf, LibraryBrowserState>,
+    /// The library whose browser tab was showing at the last update, so a
+    /// switch to another tab can be told apart from a repeat of the same one.
+    pub shown_browser: Option<PathBuf>,
     /// Primitive picker modal state — `None` while closed. Opened from
     /// the Component Preview tab's Symbol/Footprint pane, the New
     /// Component modal, and the Edit Component Details modal.
