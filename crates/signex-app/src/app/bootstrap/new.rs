@@ -473,6 +473,9 @@ impl Signex {
                 pending_restores: Default::default(),
                 altium_import_running: None,
                 project_folder_renames: std::collections::HashSet::new(),
+                project_writes: Vec::new(),
+                moved_project_dirs: Vec::new(),
+                deferred_git_commits: Vec::new(),
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,
