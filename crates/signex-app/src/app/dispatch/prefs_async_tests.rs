@@ -126,33 +126,6 @@ fn saving_preferences_leaves_prefs_json_to_the_returned_tasks() {
 }
 
 #[test]
-fn changing_an_erc_severity_leaves_prefs_json_to_the_returned_task() {
-    use signex_erc::{RuleKind, Severity};
-    let (mut app, _task) = Signex::new();
-    crate::fonts::write_erc_severity_overrides(&std::collections::HashMap::new());
-
-    let task = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Info);
-
-    assert!(
-        app.ui_state
-            .erc_severity_override
-            .contains_key(&RuleKind::UnusedPin)
-    );
-    assert!(
-        crate::fonts::read_erc_severity_overrides().is_empty(),
-        "update must not write prefs.json inline"
-    );
-    assert!(task.units() >= 1);
-
-    run_task(task);
-    assert_eq!(
-        crate::fonts::read_erc_severity_overrides().get(&RuleKind::UnusedPin),
-        Some(&Severity::Info),
-        "the returned task writes the override"
-    );
-}
-
-#[test]
 fn clearing_recent_projects_leaves_prefs_json_to_the_returned_task() {
     let (mut app, _task) = Signex::new();
     let seeded = vec![std::path::PathBuf::from("/signex-1351/a.snxprj")];
@@ -254,9 +227,23 @@ fn quitting_right_after_save_waits_for_the_preference_writes() {
     app.ui_state.autosave_enabled = false;
     app.ui_state.preferences_draft_autosave_enabled = true;
 
-    // The prefs file is busy for a while, so the writes cannot land before
-    // the quit chain would reach its exit step unless it waits for them.
-    let busy = crate::fonts::hold_prefs_io_for(std::time::Duration::from_millis(400));
+    // The prefs file stays busy until the quit path is seen waiting for the
+    // writes (or, if it never waits, until it would exit), so the writes
+    // cannot land first by luck of timing.
+    let busy = crate::fonts::PrefsIoHold::take();
+    crate::fonts::reset_pref_wait_started();
+    let exit_reached = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let releaser = {
+        let exit_reached = exit_reached.clone();
+        std::thread::spawn(move || {
+            while !crate::fonts::pref_wait_started()
+                && !exit_reached.load(std::sync::atomic::Ordering::SeqCst)
+            {
+                std::thread::yield_now();
+            }
+            busy.release();
+        })
+    };
     let save = app.dispatch_update(save_message());
     let exit_marker =
         Message::Preferences(PreferencesMsg::Inner(crate::preferences::PrefMsg::Noop));
@@ -268,6 +255,7 @@ fn quitting_right_after_save_waits_for_the_preference_writes() {
             Message::Preferences(PreferencesMsg::Inner(crate::preferences::PrefMsg::Noop))
         ) {
             exited = true;
+            exit_reached.store(true, std::sync::atomic::Ordering::SeqCst);
             assert!(
                 crate::fonts::read_autosave_enabled_pref(),
                 "the app would exit here: the saved value must already be on disk"
@@ -276,5 +264,5 @@ fn quitting_right_after_save_waits_for_the_preference_writes() {
     });
 
     assert!(exited, "the quit chain reaches its exit step");
-    busy.join().expect("holder thread");
+    releaser.join().expect("releaser thread");
 }

@@ -573,8 +573,9 @@ impl LibraryDisplaySettings {
 }
 
 impl Default for LibraryDisplaySettings {
-    /// Same look as [`Self::seeded`], with the preferences read from disk.
-    /// For fixtures that have no model; the app seeds from `LibraryState`.
+    /// Same look as [`Self::seeded`] with the shipped defaults. A placeholder
+    /// for fixtures and the off-thread mount prepare; the app seeds the real
+    /// values from `LibraryState` when the library is mounted.
     fn default() -> Self {
         Self::seeded(&NewLibraryDefaults::default())
     }

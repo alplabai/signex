@@ -434,18 +434,34 @@ pub fn move_prefs_file_aside() -> Result<Option<PathBuf>, std::io::Error> {
     move_prefs_file_aside_at(&prefs_file_path())
 }
 
-/// Test hook: keep the prefs file busy for `hold`, so a background write
-/// started meanwhile cannot finish before then. Returns once the lock is held.
+/// Test hook: keeps the prefs file busy, so a background write started
+/// meanwhile cannot finish, until [`PrefsIoHold::release`]. No timing: the
+/// test decides when the file frees up.
 #[cfg(test)]
-pub(crate) fn hold_prefs_io_for(hold: std::time::Duration) -> std::thread::JoinHandle<()> {
-    let (held_tx, held_rx) = std::sync::mpsc::channel();
-    let handle = std::thread::spawn(move || {
-        let _io = prefs_io_lock();
-        held_tx.send(()).ok();
-        std::thread::sleep(hold);
-    });
-    held_rx.recv().expect("the holder thread took the lock");
-    handle
+pub(crate) struct PrefsIoHold {
+    release: std::sync::mpsc::Sender<()>,
+    handle: std::thread::JoinHandle<()>,
+}
+
+#[cfg(test)]
+impl PrefsIoHold {
+    /// Returns once the lock is held.
+    pub(crate) fn take() -> Self {
+        let (held_tx, held_rx) = std::sync::mpsc::channel();
+        let (release, release_rx) = std::sync::mpsc::channel::<()>();
+        let handle = std::thread::spawn(move || {
+            let _io = prefs_io_lock();
+            held_tx.send(()).ok();
+            release_rx.recv().ok();
+        });
+        held_rx.recv().expect("the holder thread took the lock");
+        Self { release, handle }
+    }
+
+    pub(crate) fn release(self) {
+        self.release.send(()).ok();
+        self.handle.join().expect("holder thread");
+    }
 }
 
 #[cfg(test)]

@@ -17,12 +17,14 @@ pub struct NewLibraryDefaults {
 }
 
 impl Default for NewLibraryDefaults {
-    /// Read once from disk, at startup; `Save` keeps it current afterwards.
+    /// The shipped defaults, with no disk read. Bootstrap replaces them with
+    /// the values it already parsed from `prefs.json`, and `Save` keeps them
+    /// current afterwards.
     fn default() -> Self {
         Self {
-            grid_size_mm: crate::fonts::read_symbol_grid_size_mm_pref(),
-            pin_selection: crate::fonts::read_symbol_pin_selection_pref(),
-            component_classes: crate::fonts::read_component_classes_pref(),
+            grid_size_mm: crate::fonts::read_symbol_grid_size_mm_pref_from(None),
+            pin_selection: crate::fonts::read_symbol_pin_selection_pref_from(None),
+            component_classes: crate::fonts::read_component_classes_pref_from(None),
         }
     }
 }

@@ -736,7 +736,7 @@ mod recent;
 pub mod resolve;
 
 #[cfg(test)]
-pub(crate) use prefs_file::hold_prefs_io_for;
+pub(crate) use prefs_file::PrefsIoHold;
 /// The one read-modify-write every preference writer in this module
 /// tree goes through (#594). Imported here rather than re-exported —
 /// the sibling modules pick it up through their own `use super::*;`.
@@ -757,6 +757,8 @@ pub use dock_layout::*;
 pub use erc::*;
 pub use misc::*;
 pub use ordered_write::{OrderedPrefWrite, background_pref_write, wait_for_pref_writes};
+#[cfg(test)]
+pub(crate) use ordered_write::{pref_wait_started, reset_pref_wait_started};
 pub use presets::*;
 pub use recent::*;
 

@@ -23,6 +23,22 @@ static NEXT_TICKET: AtomicU64 = AtomicU64::new(1);
 /// last preference change is never lost to `iced::exit()` (#1351).
 static IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
 
+/// Test probe: set once a quit-path wait has begun.
+#[cfg(test)]
+static WAIT_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Test hook: clear the probe before the run under test.
+#[cfg(test)]
+pub(crate) fn reset_pref_wait_started() {
+    WAIT_STARTED.store(false, Ordering::SeqCst);
+}
+
+/// Test hook: whether a quit-path wait has begun since the reset.
+#[cfg(test)]
+pub(crate) fn pref_wait_started() -> bool {
+    WAIT_STARTED.load(Ordering::SeqCst)
+}
+
 /// Holds one slot of `IN_FLIGHT`; releases it when the write completes or its
 /// task is dropped without running.
 struct InFlightSlot;
@@ -43,6 +59,8 @@ impl Drop for InFlightSlot {
 /// Block until every ordered write started so far has finished, or `limit`
 /// passes. Returns whether none are left. Call from a blocking worker.
 pub fn wait_for_pref_writes(limit: Duration) -> bool {
+    #[cfg(test)]
+    WAIT_STARTED.store(true, Ordering::SeqCst);
     let deadline = Instant::now() + limit;
     while IN_FLIGHT.load(Ordering::SeqCst) != 0 {
         if Instant::now() >= deadline {
