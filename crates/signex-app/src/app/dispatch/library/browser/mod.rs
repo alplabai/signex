@@ -494,6 +494,17 @@ impl Signex {
                     modal.draft.primary_mpn.mpn = s;
                     modal.error = None;
                 }
+                BrowserEditMsg::SetDescription(s) => {
+                    let s = single_line(&s);
+                    // `'''` ends the table's TOML literal string, so save
+                    // would refuse it; refuse the keystroke instead.
+                    if s.contains("'''") {
+                        modal.error = Some("A description cannot contain '''.".to_string());
+                    } else {
+                        modal.draft.description = s;
+                        modal.error = None;
+                    }
+                }
                 BrowserEditMsg::SetParamValue { key, value } => {
                     let entry = modal
                         .param_buf
@@ -745,4 +756,14 @@ impl Signex {
         self.refresh_panel_ctx();
         Task::none()
     }
+}
+
+/// `s` with each run of control characters replaced by one space: a tab or
+/// newline cannot live in a table cell, so pasted multi-line text stays
+/// readable instead of running together.
+fn single_line(s: &str) -> String {
+    s.split(char::is_control)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
 }

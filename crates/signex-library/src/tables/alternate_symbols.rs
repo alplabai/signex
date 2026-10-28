@@ -50,10 +50,13 @@ pub(super) fn alternate_symbols_from_cell(s: &str) -> Result<Vec<AlternateSymbol
 }
 
 /// Repair for a component table's row that is exactly one cell short of the
-/// 22-column header (a merge artefact): reads as no alternates. Only when
-/// the row is shaped like a legacy 21-cell row, so a dropped middle cell,
+/// 23-column header (a merge artefact): reads as no alternates. Only when
+/// the row is shaped like a full 22-cell row, so a dropped middle cell,
 /// which shifts every later cell left, stays an error whenever the shift
-/// shows. Not repaired: any other table, any other count.
+/// shows. A dropped middle cell with no alternates leaves the last cell
+/// empty and moves the description into the sim_version slot; a sim
+/// version with no sim_ref is refused too. Not repaired: any other table, any
+/// other count.
 pub(crate) fn repair_short_component_row(
     columns: &[String],
     cells: &[&str],
@@ -73,8 +76,29 @@ pub(crate) fn repair_short_component_row(
     // cell is a shift, not a legacy row. `version` may be written empty
     // (the reader maps it to 0.0.1) but is never `true`/`false`.
     let version_ok = is_version_like(row_version) && !matches!(row_version, "true" | "false");
-    if !matches!(released, "true" | "false") || !version_ok || !versions_ok {
+    // A shifted alternates cell lands in the description slot as a
+    // non-empty JSON array (the writer never emits `[]` for it), so `[]`
+    // there is a description.
+    let description_ok = at("description").is_some_and(|i| {
+        !serde_json::from_str::<serde_json::Value>(cells[i])
+            .is_ok_and(|v| v.as_array().is_some_and(|a| !a.is_empty()))
+    });
+    if !matches!(released, "true" | "false") || !version_ok || !versions_ok || !description_ok {
         return None;
+    }
+    // An empty last cell is also what a dropped middle cell leaves (the
+    // empty alternates cell moved up), and the description then sits in the
+    // sim_version slot. A sim version with no sim to pin is that reading:
+    // refuse. (footprint_version is not checked: rows are written with one
+    // and no footprint.)
+    if cells[cells.len() - 1].is_empty() {
+        let pinned_sim_without_ref = matches!(
+            (at("sim_ref"), at("sim_version")),
+            (Some(r), Some(v)) if cells[r].is_empty() && !cells[v].is_empty()
+        );
+        if pinned_sim_without_ref {
+            return None;
+        }
     }
     let mut fixed: Vec<String> = cells.iter().map(|c| (*c).to_string()).collect();
     fixed.push(String::new());
@@ -121,7 +145,36 @@ mod tests {
     #[test]
     fn a_shifted_alternates_cell_in_the_last_slot_is_refused() {
         let mut cells = legacy_cells();
-        cells[20] = r#"[{"label":"IEC"}]"#;
+        cells[21] = r#"[{"label":"IEC"}]"#;
+        assert!(repair_short_component_row(&full_header(), &cells).is_none());
+    }
+
+    #[test]
+    fn a_description_of_empty_brackets_is_a_description() {
+        let mut cells = legacy_cells();
+        cells[21] = "[]";
+        let fixed = repair_short_component_row(&full_header(), &cells).unwrap();
+        assert_eq!(fixed[21], "[]");
+    }
+
+    #[test]
+    fn a_row_with_a_description_is_padded_and_keeps_it() {
+        let mut cells = legacy_cells();
+        cells[21] = "100 nF 50 V";
+        let fixed = repair_short_component_row(&full_header(), &cells).unwrap();
+        assert_eq!(fixed[21], "100 nF 50 V");
+        assert_eq!(fixed[22], "");
+    }
+
+    /// footprint_version dropped from a row with a version-looking
+    /// description and no alternates: the description shifts into the
+    /// sim_version slot and must not be repaired into one.
+    #[test]
+    fn a_dropped_middle_cell_with_a_version_like_description_is_refused() {
+        let mut cells = legacy_cells();
+        cells[19] = "";
+        cells[20] = "BC547";
+        cells[21] = "";
         assert!(repair_short_component_row(&full_header(), &cells).is_none());
     }
 

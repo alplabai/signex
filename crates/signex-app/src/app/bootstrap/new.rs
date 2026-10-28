@@ -46,12 +46,19 @@ impl Signex {
         // The old prefs.json rules become the user's default profile; here,
         // not in `new`, so a test app never writes a profile library.
         let profile_migration = Self::migrate_default_profile_task();
+        let controls_probe = Self::detect_window_controls_task();
         (
             app,
             Task::batch(
-                [boot_task, font_scan, recovery_sweep, profile_migration]
-                    .into_iter()
-                    .chain(opens),
+                [
+                    boot_task,
+                    font_scan,
+                    recovery_sweep,
+                    profile_migration,
+                    controls_probe,
+                ]
+                .into_iter()
+                .chain(opens),
             ),
         )
     }
@@ -129,6 +136,8 @@ impl Signex {
             crate::fonts::read_ui_scale_pref_from(prefs, &crate::fonts::prefs_file_path());
         let annotate_undo = crate::fonts::read_annotate_undo_pref_from(prefs);
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
+        let window_controls_placement =
+            crate::fonts::read_window_controls_placement_pref_from(prefs);
         let autosave_enabled = crate::fonts::read_autosave_enabled_pref_from(prefs);
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
@@ -282,6 +291,12 @@ impl Signex {
                 preferences_draft_annotate_undo: annotate_undo,
                 move_keeps_wires,
                 preferences_draft_move_keeps_wires: move_keeps_wires,
+                window_controls_placement,
+                preferences_draft_window_controls_placement: window_controls_placement,
+                window_controls_placement_at_boot: window_controls_placement,
+                desktop_button_layout: None,
+                main_window_mode: iced::window::Mode::Windowed,
+                main_window_monitor_size: None,
                 autosave_enabled,
                 preferences_draft_autosave_enabled: autosave_enabled,
                 symbol_grid_size_mm,
@@ -502,6 +517,7 @@ impl Signex {
                 paused_git_projects: std::collections::HashSet::new(),
                 pending_opens: Default::default(),
                 pending_restores: Default::default(),
+                dir_case: Default::default(),
                 altium_import_running: None,
                 project_folder_renames: std::collections::HashSet::new(),
                 project_writes: Vec::new(),
@@ -587,20 +603,62 @@ impl Signex {
         // modal off the main window, and Phase 3 will do the same for
         // undocked tabs. The returned Task produces the settled Id once
         // winit confirms the window is mapped.
-        let (main_id, open_task) = iced::window::open(iced::window::Settings {
-            size: iced::Size::new(1400.0, 900.0),
-            icon: super::bundled_window_icon(),
-            // Borderless main window: the custom chrome in
-            // `Signex::view_main_window_chrome` supplies wordmark +
-            // menus + drag zone + search bar + min/max/close. Edge
-            // resize handles inside `view_main_for` add 6 px strips
-            // that call `iced::window::drag_resize` per direction so
-            // the user can still drag-resize the window.
-            decorations: false,
-            ..Default::default()
-        });
+        let (main_id, open_task) = iced::window::open(main_window_settings(
+            crate::chrome::controls::resolve(
+                crate::chrome::controls::ChromePlatform::current(),
+                window_controls_placement,
+                None,
+            )
+            .is_native(),
+        ));
         app.ui_state.main_window_id = Some(main_id);
         let boot_task = open_task.map(|id| Message::Window(WindowMsg::MainWindowOpened(id)));
         (app, boot_task)
+    }
+}
+
+/// Settings for the main window. Every case is borderless (the custom strip
+/// replaces the title bar) except macOS with native traffic lights, where the
+/// OS keeps its title bar, made transparent so the strip draws behind it.
+fn main_window_settings(native_decorations: bool) -> iced::window::Settings {
+    iced::window::Settings {
+        size: iced::Size::new(1400.0, 900.0),
+        icon: super::bundled_window_icon(),
+        // Without native decorations the strip draws the buttons, and the
+        // 6 px strips in `resize_edges_overlay` provide edge resizing.
+        decorations: native_decorations,
+        // Without this winit closes the window on its own and the close
+        // request never reaches the unsaved-changes guard.
+        exit_on_close_request: false,
+        platform_specific: native_title_bar(native_decorations),
+        ..Default::default()
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn native_title_bar(native: bool) -> iced::window::settings::PlatformSpecific {
+    iced::window::settings::PlatformSpecific {
+        title_hidden: native,
+        titlebar_transparent: native,
+        fullsize_content_view: native,
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn native_title_bar(_native: bool) -> iced::window::settings::PlatformSpecific {
+    iced::window::settings::PlatformSpecific::default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::main_window_settings;
+
+    #[test]
+    fn the_main_window_routes_close_requests_through_the_app() {
+        for native in [true, false] {
+            let s = main_window_settings(native);
+            assert!(!s.exit_on_close_request, "native={native}");
+            assert_eq!(s.decorations, native);
+        }
     }
 }

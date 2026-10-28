@@ -47,6 +47,7 @@ fn project_with_sheet(dir: &Path) -> (Signex, PathBuf) {
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
     (app, sheet)

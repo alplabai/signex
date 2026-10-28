@@ -50,6 +50,7 @@ fn fixture_row(internal_pn: &str) -> ComponentRow {
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Released,
         symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
@@ -703,6 +704,34 @@ async fn alternate_symbols_round_trip_through_the_server() {
         .unwrap();
     let got: ComponentRow = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(got.alternate_symbols, row.alternate_symbols);
+}
+
+#[tokio::test]
+async fn description_round_trips_through_the_server() {
+    let app = router_with_state(fresh_state().await);
+    let library_id = Uuid::now_v7();
+    let mut row = fixture_row("R-DESC");
+    row.description = "100 nF 50 V X7R µ".into();
+    post_row_with(&app, library_id, &row).await;
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/tables/resistors/rows/{}?library_id={library_id}",
+                    row.row_id
+                ))
+                .header("authorization", bearer_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let got: ComponentRow = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(got.description, row.description);
 }
 
 async fn post_row_with(app: &axum::Router, library_id: Uuid, row: &ComponentRow) {

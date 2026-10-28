@@ -72,6 +72,7 @@ impl Signex {
         // results check `generation == history.generation` and drop
         // themselves on mismatch.
         let history = self.refresh_history_panel();
+        let dir_probes = self.warm_document_dir_probes();
         // v0.23 — Drain any queued git commits onto the iced task
         // pool so they run off the update thread. The "Saving…" pill
         // in the status bar reads from `inflight_git_commits` until
@@ -88,6 +89,7 @@ impl Signex {
         };
         Task::batch([
             history,
+            dir_probes,
             commits,
             drift,
             annotate_preview,

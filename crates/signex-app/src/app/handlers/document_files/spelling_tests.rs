@@ -22,6 +22,8 @@ fn sheet() -> signex_types::schematic::SchematicSheet {
 fn app_holding_lib() -> (Signex, PathBuf) {
     let mut app = app_workspace("/w/proj", &[]);
     app.document_state.projects[0].case_fold = CaseFold::FOLD;
+    app.document_state.projects[0].case_probed = true;
+    app.document_state.projects[0].case_decided = true;
     let held = PathBuf::from("/w/proj/Lib.snxsch");
     app.open_schematic_tab(held.clone(), "Lib".to_string(), sheet());
     focus_another_tab(&mut app);
@@ -39,6 +41,8 @@ fn app_holding_real_lib() -> (Signex, PathBuf, PathBuf) {
     std::fs::write(&file, text).expect("write sheet");
     let mut app = app_workspace(&dir.to_string_lossy(), &[]);
     app.document_state.projects[0].case_fold = CaseFold::FOLD;
+    app.document_state.projects[0].case_probed = true;
+    app.document_state.projects[0].case_decided = true;
     app.open_schematic_tab(file.clone(), "Lib".to_string(), sheet());
     focus_another_tab(&mut app);
     (app, dir, file)
@@ -85,6 +89,8 @@ fn file_open_under_another_case_reuses_the_tab() {
 fn the_pcb_open_under_another_case_reuses_the_tab() {
     let mut app = app_workspace("/w/proj", &[]);
     app.document_state.projects[0].case_fold = CaseFold::FOLD;
+    app.document_state.projects[0].case_probed = true;
+    app.document_state.projects[0].case_decided = true;
     let held = PathBuf::from("/w/proj/Board.snxpcb");
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "Board".to_string(),
@@ -127,6 +133,8 @@ fn erc_navigation_under_another_case_reuses_the_tab() {
 fn a_primitive_opened_under_another_case_reuses_the_tab() {
     let mut app = app_workspace("/w/proj", &[]);
     app.document_state.projects[0].case_fold = CaseFold::FOLD;
+    app.document_state.projects[0].case_probed = true;
+    app.document_state.projects[0].case_decided = true;
     let held = PathBuf::from("/w/proj/Comp.snxsym");
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "Comp".to_string(),
@@ -146,6 +154,8 @@ fn a_primitive_opened_under_another_case_reuses_the_tab() {
 fn an_open_already_in_flight_under_another_case_is_not_spawned_twice() {
     let mut app = app_workspace("/w/proj", &[]);
     app.document_state.projects[0].case_fold = CaseFold::FOLD;
+    app.document_state.projects[0].case_probed = true;
+    app.document_state.projects[0].case_decided = true;
     let first = PathBuf::from("/w/proj/Lib.snxsch");
     app.document_state.pending_opens.insert(first.clone());
     let _task: iced::Task<Message> =
@@ -175,6 +185,8 @@ fn opening_both_spellings_never_yields_two_documents_for_one_file() {
 fn a_case_sensitive_project_keeps_two_case_variants_as_two_files() {
     let mut app = app_workspace("/w/proj", &[]);
     app.document_state.projects[0].case_fold = CaseFold::PRESERVE;
+    app.document_state.projects[0].case_probed = true;
+    app.document_state.projects[0].case_decided = true;
     app.open_schematic_tab(
         PathBuf::from("/w/proj/Lib.snxsch"),
         "Lib".to_string(),
@@ -191,10 +203,12 @@ fn a_case_sensitive_project_keeps_two_case_variants_as_two_files() {
 fn a_sheet_in_a_subfolder_finds_its_projects_fold() {
     let mut app = app_workspace("/w/proj", &[]);
     app.document_state.projects[0].case_fold = CaseFold::FOLD;
+    app.document_state.projects[0].case_probed = true;
+    app.document_state.projects[0].case_decided = true;
     let held = PathBuf::from("/w/proj/sub/Lib.snxsch");
     app.open_schematic_tab(held.clone(), "Lib".to_string(), sheet());
     assert_eq!(
-        app.fold_for_document_path(Path::new("/w/proj/sub/deeper/lib.snxsch")),
+        app.fold_for_path(Path::new("/w/proj/sub/deeper/lib.snxsch")),
         CaseFold::FOLD,
         "a nested sheet keys under the project's volume rule"
     );
@@ -225,6 +239,8 @@ fn primitive_save_as_onto_another_case_of_an_open_tab_is_refused() {
     use signex_library::{Symbol, SymbolFile};
     let mut app = app_workspace("/w/proj", &[]);
     app.document_state.projects[0].case_fold = CaseFold::FOLD;
+    app.document_state.projects[0].case_probed = true;
+    app.document_state.projects[0].case_decided = true;
     for name in ["Lib.snxsym", "Other.snxsym"] {
         let path = PathBuf::from("/w/proj").join(name);
         let file = SymbolFile::from_symbol(Symbol::empty("sym"));

@@ -51,6 +51,7 @@ fn project_with_two_sheets(dir: &Path) -> Signex {
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     for (name, dirty) in [("X", true), ("Y", false)] {
         let path = dir.join(format!("{name}.snxsch"));
