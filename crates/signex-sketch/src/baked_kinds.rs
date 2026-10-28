@@ -14,6 +14,9 @@ use crate::sketch::SketchData;
 /// One bakeable footprint field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BakedKind {
+    /// Pads and array expansions (always replaced by a bake of a non-empty
+    /// sketch; recorded so that emptying the sketch clears them).
+    Pads,
     SilkF,
     SilkB,
     Courtyard,
@@ -31,6 +34,7 @@ impl BakedKind {
     /// newer build must keep meaning the same thing to an older one.
     pub const fn token(self) -> &'static str {
         match self {
+            Self::Pads => "pads",
             Self::SilkF => "silk_f",
             Self::SilkB => "silk_b",
             Self::Courtyard => "courtyard",
@@ -47,6 +51,7 @@ impl BakedKind {
     /// Name for messages.
     pub const fn label(self) -> &'static str {
         match self {
+            Self::Pads => "pads",
             Self::SilkF => "top silk",
             Self::SilkB => "bottom silk",
             Self::Courtyard => "courtyard",
@@ -65,6 +70,7 @@ impl SketchData {
     /// Whether an entity is tagged for `kind`.
     pub fn tags_kind(&self, kind: BakedKind) -> bool {
         self.entities.iter().any(|e| match kind {
+            BakedKind::Pads => e.pad.is_some(),
             BakedKind::SilkF => e
                 .silk
                 .as_ref()

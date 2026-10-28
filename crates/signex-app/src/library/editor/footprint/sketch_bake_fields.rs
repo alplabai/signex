@@ -26,6 +26,7 @@ impl BakeField for Polygon {
 }
 
 /// One solve's bake of every non-pad kind.
+#[derive(Default)]
 pub(super) struct BakedFields {
     silk_f: Vec<FpGraphic>,
     silk_b: Vec<FpGraphic>,
@@ -47,18 +48,7 @@ impl BakedFields {
         w: &mut Vec<String>,
     ) -> Result<Self, SketchError> {
         use signex_bake as b;
-        let mut f = Self {
-            silk_f: Vec::new(),
-            silk_b: Vec::new(),
-            courtyard: Polygon::default(),
-            mask_openings: Vec::new(),
-            mask_excludes: Vec::new(),
-            paste_apertures: Vec::new(),
-            pours: Vec::new(),
-            keepouts: Vec::new(),
-            cutouts: Vec::new(),
-            v_scores: Vec::new(),
-        };
+        let mut f = Self::default();
         b::bake_silk(sketch, out, &mut f.silk_f, &mut f.silk_b, w)?;
         b::bake_courtyard(sketch, out, &mut f.courtyard, w)?;
         b::bake_mask_openings(sketch, out, &mut f.mask_openings, w)?;
@@ -71,14 +61,30 @@ impl BakedFields {
         Ok(f)
     }
 
+    /// The bake of a sketch with no entities: every owned kind, pads
+    /// included, clears. A sketch that never baked owns nothing, so a
+    /// literal-pad footprint entering Sketch mode is untouched.
+    pub(super) fn clear_owned(fp: &mut Footprint, warnings: &mut Vec<String>) {
+        if let Some(sketch) = fp.sketch.as_mut()
+            && sketch.was_baked(BakedKind::Pads)
+        {
+            if !fp.pads.is_empty() {
+                warnings.push("cleared the footprint's pads: the sketch bakes none".into());
+            }
+            fp.pads.clear();
+            sketch.record_baked(BakedKind::Pads, false);
+        }
+        Self::default().apply(fp, warnings);
+    }
+
     /// Write each kind into `fp`. A non-empty bake replaces the field and
     /// records the kind as baked. An empty bake clears the field only when
     /// the sketch owns the kind, and says so in `warnings`.
     pub(super) fn apply(self, fp: &mut Footprint, warnings: &mut Vec<String>) {
-        let Some(sketch) = fp.sketch.take() else {
+        let Some(mut sketch) = fp.sketch.take() else {
+            debug_assert!(false, "apply is only reached with a sketch");
             return;
         };
-        let mut sketch = sketch;
         macro_rules! settle {
             ($($kind:ident => $field:ident),* $(,)?) => {$(
                 settle(BakedKind::$kind, &mut fp.$field, self.$field, &mut sketch, warnings);

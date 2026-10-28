@@ -105,3 +105,30 @@ fn coincident_after_point_on_line_is_not_flagged() {
         out.redundant_constraints
     );
 }
+
+#[test]
+fn a_coincident_with_one_independent_axis_is_not_flagged() {
+    // A fixed; Horizontal(A,P) and Horizontal(A,Q) fix P.y and Q.y. Then
+    // Coincident(P,Q): its y-row is implied, its x-row is not, so deleting
+    // it would free P.x against Q.x.
+    let mut s = Sketch::new();
+    let a = s.add_point(0.0, 0.0);
+    let p = s.add_point(2.0, 0.1);
+    let q = s.add_point(3.0, -0.1);
+    let (lp, lq) = (s.add_line(a, p), s.add_line(a, q));
+    s.data.constraints.extend([
+        constraint(ConstraintKind::Fixed { point: a }),
+        constraint(ConstraintKind::Horizontal { line: lp }),
+        constraint(ConstraintKind::Horizontal { line: lq }),
+        constraint(ConstraintKind::Coincident { p1: p, p2: q }),
+    ]);
+
+    let out = common::solver()
+        .solve(&s.data, &ResolvedParams::new())
+        .expect("consistent");
+    assert!(
+        out.redundant_constraints.is_empty(),
+        "{:?}",
+        out.redundant_constraints
+    );
+}

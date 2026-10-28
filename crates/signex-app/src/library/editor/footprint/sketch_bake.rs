@@ -13,6 +13,8 @@ use signex_library::primitive::footprint::Footprint;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::{SketchError, SolveError};
 
+use signex_sketch::baked_kinds::BakedKind;
+
 use super::sketch_bake_fields::BakedFields;
 use super::sketch_dispatch::take_unlogged_warnings;
 use super::state::FootprintEditorState;
@@ -55,14 +57,17 @@ pub(super) fn bake_solution(
             &mut baked,
             &mut state.solve_warnings,
         )?;
+        let pads_baked = !baked.is_empty();
         footprint.pads = baked;
 
         // Every other baked field: see `sketch_bake_fields`.
         let fields = BakedFields::bake(sketch, &out, resolved, &mut state.solve_warnings)?;
         fields.apply(footprint, &mut state.solve_warnings);
-        let Some(sketch) = footprint.sketch.as_ref() else {
+        let Some(sketch) = footprint.sketch.as_mut() else {
             return Ok(());
         };
+        sketch.record_baked(BakedKind::Pads, pads_baked);
+        let sketch = &*sketch;
 
         // v0.14.1 — 3D extrude profile from a BodyTop plane
         // enriches the existing body_3d.outline + offset_z_mm.
@@ -125,6 +130,16 @@ pub(super) fn bake_solution(
             super::pad_to_sketch::mirror_solve_to_round_rect_geometry(state, sketch, resolved);
             super::pad_to_sketch::mirror_solve_to_oval_geometry(state, sketch, resolved);
         }
+    } else if !sketch.baked_kinds.is_empty() {
+        // Every entity was deleted after the sketch baked: what it owned
+        // goes with them. (A sketch that never baked owns nothing.)
+        BakedFields::clear_owned(footprint, &mut state.solve_warnings);
+        for warning in
+            take_unlogged_warnings(&state.solve_warnings, &mut state.logged_solve_warnings)
+        {
+            crate::diagnostics::log_warning(format!("Sketch bake: {warning}"));
+        }
+        state.refresh_pads_from_primitive(footprint);
     }
 
     state.last_solve = Some(out);

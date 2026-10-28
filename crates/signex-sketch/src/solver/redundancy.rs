@@ -21,7 +21,7 @@
 //! ([`crate::SolveError::OverConstrained`]), and a constraint still violated
 //! at the solved state is left out here.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::error::SketchError;
 use crate::id::ConstraintId;
@@ -50,7 +50,7 @@ pub fn redundant_constraint_ids(
     // a constraint repeating one is the redundant side.
     let mut rows: Vec<(Option<ConstraintId>, SparseRow)> = arc_closure_rows(state, index, sketch)?
         .into_iter()
-        .map(|row| (None, row))
+        .map(|row| (None, without_zeros(row)))
         .collect();
     for c in sketch
         .constraints
@@ -58,20 +58,33 @@ pub fn redundant_constraint_ids(
         .filter(|c| !violated.contains(&c.id))
     {
         for row in constraint_rows(c, state, index, sketch, params)? {
-            rows.push((Some(c.id), row));
+            rows.push((Some(c.id), without_zeros(row)));
         }
     }
 
-    let mut redundant: HashSet<ConstraintId> = HashSet::new();
+    // A constraint's rows can fall in different blocks, so the verdict is
+    // taken over all of them: (has a gradient, has an independent row).
+    let mut verdicts: HashMap<ConstraintId, (bool, bool)> = HashMap::new();
     for block in blocks(&rows, state.len()) {
-        scan_block(&rows, &block, &mut redundant);
+        scan_block(&rows, &block, &mut verdicts);
     }
     Ok(sketch
         .constraints
         .iter()
         .map(|c| c.id)
-        .filter(|id| redundant.contains(id))
+        .filter(|id| {
+            verdicts
+                .get(id)
+                .is_some_and(|&(grad, indep)| grad && !indep)
+        })
         .collect())
+}
+
+/// Structural zeros (a Horizontal row lists both columns of each point)
+/// would join otherwise independent blocks.
+fn without_zeros(mut row: SparseRow) -> SparseRow {
+    row.retain(|&(_, v)| v != 0.0);
+    row
 }
 
 /// Row indices grouped by shared columns (union-find over the columns).
@@ -106,10 +119,11 @@ fn blocks(rows: &[(Option<ConstraintId>, SparseRow)], n: usize) -> Vec<Vec<usize
 
 /// Reduce one block in order, a constraint at a time: its rows are tested
 /// against the basis of everything before it, then added to that basis.
+/// Each owner's `verdicts` entry is updated with what this block found.
 fn scan_block(
     rows: &[(Option<ConstraintId>, SparseRow)],
     block: &[usize],
-    redundant: &mut HashSet<ConstraintId>,
+    verdicts: &mut HashMap<ConstraintId, (bool, bool)>,
 ) {
     let mut local: HashMap<usize, usize> = HashMap::new();
     for &i in block {
@@ -134,10 +148,11 @@ fn scan_block(
             end += 1;
         }
         let vectors: Vec<Vec<f64>> = block[start..end].iter().map(|&i| dense(i)).collect();
-        if let Some(id) = owner
-            && implied_by(&vectors, &basis)
-        {
-            redundant.insert(id);
+        if let Some(id) = owner {
+            let (grad, indep) = classify(&vectors, &basis);
+            let entry = verdicts.entry(id).or_default();
+            entry.0 |= grad;
+            entry.1 |= indep;
         }
         for v in vectors {
             let before = norm(&v);
@@ -151,22 +166,19 @@ fn scan_block(
     }
 }
 
-/// Whether every row with a gradient lies in the span of `basis`, and at
-/// least one has a gradient (a constraint that is flat at this state says
-/// nothing).
-fn implied_by(rows: &[Vec<f64>], basis: &[Vec<f64>]) -> bool {
-    let mut any = false;
+/// Whether any row has a gradient, and whether any such row lies outside
+/// the span of `basis`. A row with no gradient says nothing.
+fn classify(rows: &[Vec<f64>], basis: &[Vec<f64>]) -> (bool, bool) {
+    let (mut grad, mut indep) = (false, false);
     for v in rows {
         let before = norm(v);
         if before <= RANK_TOL {
             continue;
         }
-        any = true;
-        if norm(&project_out(v.clone(), basis)) > DEPENDENCE_TOL * before {
-            return false;
-        }
+        grad = true;
+        indep |= norm(&project_out(v.clone(), basis)) > DEPENDENCE_TOL * before;
     }
-    any
+    (grad, indep)
 }
 
 /// `v` minus its projection onto the orthonormal `basis`. Two passes keep

@@ -241,3 +241,94 @@ fn deleting_the_courtyard_entity_clears_and_reports_it() {
         state.solve_warnings
     );
 }
+
+/// Select-all + delete: the whole sketch goes in one edit, so no
+/// intermediate bake sees a half-emptied sketch.
+fn delete_all_entities(state: &mut FootprintEditorState, fp: &mut Footprint) {
+    let sketch = fp.sketch.as_mut().unwrap();
+    sketch.entities.clear();
+    sketch.constraints.clear();
+    sketch.arrays.clear();
+    rebuild(state, fp);
+}
+
+#[test]
+fn deleting_every_entity_clears_what_the_sketch_baked_and_drops_the_record() {
+    let (mut fp, edges, _) = square();
+    entity_mut(&mut fp, edges[0]).pour = Some(pour_attr());
+    let mut state = FootprintEditorState::from_footprint(&fp);
+    rebuild(&mut state, &mut fp);
+    assert_eq!(fp.pours.len(), 1);
+
+    delete_all_entities(&mut state, &mut fp);
+    assert!(
+        fp.pours.is_empty(),
+        "stale pour survived select-all + delete"
+    );
+    assert!(fp.sketch.as_ref().unwrap().baked_kinds.is_empty());
+}
+
+#[test]
+fn hand_text_survives_after_the_sketch_was_emptied() {
+    let (mut fp, edges, plane) = square();
+    entity_mut(&mut fp, edges[0]).silk = Some(SilkAttr {
+        layer: SignexLayer::TopSilk,
+    });
+    let mut state = FootprintEditorState::from_footprint(&fp);
+    rebuild(&mut state, &mut fp);
+    assert_eq!(fp.silk_f.len(), 1);
+    delete_all_entities(&mut state, &mut fp);
+    assert!(fp.silk_f.is_empty());
+
+    // Hand text in Pads mode, then any non-silk entity in the sketch.
+    fp.silk_f.push(hand_text());
+    let point = Entity::new(
+        SketchEntityId::new(),
+        plane,
+        EntityKind::Point { x: 1.0, y: 1.0 },
+    );
+    apply_sketch_edit(&mut state, &mut fp, SketchEdit::add_entity(point)).unwrap();
+    assert_eq!(fp.silk_f.len(), 1, "hand text wiped by a stale record");
+}
+
+#[test]
+fn an_emptied_sketch_clears_its_pads_but_a_never_baked_one_keeps_literal_pads() {
+    use signex_library::primitive::footprint::Pad;
+    use signex_sketch::attr::PadAttr;
+
+    // Never baked: literal pads stay on an empty sketch.
+    let (mut fp, _, _) = square();
+    fp.sketch.as_mut().unwrap().entities.clear();
+    fp.pads.push(Pad {
+        number: "L1".into(),
+        ..Pad::default()
+    });
+    let mut state = FootprintEditorState::from_footprint(&fp);
+    rebuild(&mut state, &mut fp);
+    assert_eq!(
+        fp.pads.len(),
+        1,
+        "literal pad of a never-sketched footprint"
+    );
+
+    // Baked pads go when the sketch is emptied.
+    let (mut fp, _, plane) = square();
+    fp.sketch.as_mut().unwrap().entities.clear();
+    let mut pad = Entity::new(
+        SketchEntityId::new(),
+        plane,
+        EntityKind::Point { x: 0.0, y: 0.0 },
+    );
+    pad.pad = Some(PadAttr {
+        number: "1".into(),
+        size_x_expr: "1mm".into(),
+        size_y_expr: "0.5mm".into(),
+        ..PadAttr::default()
+    });
+    let mut state = FootprintEditorState::from_footprint(&fp);
+    apply_sketch_edit(&mut state, &mut fp, SketchEdit::add_entity(pad)).unwrap();
+    assert_eq!(fp.pads.len(), 1);
+    delete_all_entities(&mut state, &mut fp);
+    assert!(fp.pads.is_empty(), "stale pad survived");
+    assert!(state.pads.is_empty());
+}

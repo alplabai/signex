@@ -16,7 +16,14 @@ kind when either holds:
 A non-empty bake replaces the field and records the kind. An empty bake
 clears a field only when the sketch owns the kind, reports the clear in the
 Messages panel, and drops the record so geometry drawn afterwards is safe.
-Pads are always sketch-owned once the sketch has an entity.
+Pads are always sketch-owned once the sketch has an entity, and are
+recorded as `pads` so that deleting every entity clears them too. A sketch
+that never baked has an empty record and owns nothing: entering Sketch mode
+on a footprint with literal pads leaves them alone.
+
+Legacy gap: a footprint saved by an older build whose tagged entity was
+already deleted has no record and keeps that geometry (it cannot be told
+from imported geometry; there is no migration).
 
 A non-empty silk bake still replaces the whole of `silk_f` / `silk_b`,
 hand-drawn entries included: baked entries are not marked by origin.
@@ -27,13 +34,14 @@ hand-drawn entries included: baked entries are not marked by origin.
 read with a default, so a file the sketch never baked saves byte-identical
 and an older file loads. Tokens: `silk_f`, `silk_b`, `courtyard`,
 `mask_openings`, `mask_excludes`, `paste_apertures`, `pours`, `keepouts`,
-`cutouts`, `v_scores`. A token is never renamed or reused for another
+`cutouts`, `v_scores`, `pads`. A token is never renamed or reused for another
 meaning; a token this build does not know is kept as read.
 
 ## Redundant constraints
 
 `FullSolveOutput.redundant_constraints` names consistent constraints whose
-every Jacobian row is implied by the other constraints (and the arc
-closures). They are listed under "Redundant" in the footprint editor's
+every Jacobian row is implied by the EARLIER constraints (and the arc
+closures), so the verdict depends on constraint order and names the later
+duplicate. They are listed under "Redundant" in the footprint editor's
 DOF / Last solve section. Conflicts are reported separately as
 over-constrained.
