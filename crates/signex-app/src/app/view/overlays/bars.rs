@@ -665,31 +665,9 @@ impl Signex {
         let text_muted = crate::styles::ti(document.panel_ctx.tokens.text_secondary);
         let has_sch = document.panel_ctx.has_schematic;
         let has_pcb = document.panel_ctx.has_pcb;
-        // Build a lookup of currently-open panel kinds so each row
-        // can show a ✓ mark. A panel counts as "open" if it lives in
-        // any dock region, floats on top, or owns a detached OS
-        // window.
-        let docked: std::collections::HashSet<crate::panels::PanelKind> = [
-            crate::dock::PanelPosition::Left,
-            crate::dock::PanelPosition::Right,
-            crate::dock::PanelPosition::Bottom,
-        ]
-        .iter()
-        .flat_map(|pos| document.dock.panel_kinds(*pos).to_vec())
-        .collect();
-        let floating: std::collections::HashSet<crate::panels::PanelKind> =
-            document.dock.floating.iter().map(|fp| fp.kind).collect();
-        let detached: std::collections::HashSet<crate::panels::PanelKind> = ui
-            .windows
-            .values()
-            .filter_map(|w| match w {
-                crate::app::state::WindowKind::DetachedPanel(k) => Some(*k),
-                _ => None,
-            })
-            .collect();
-        let is_open = |k: crate::panels::PanelKind| {
-            docked.contains(&k) || floating.contains(&k) || detached.contains(&k)
-        };
+        // A panel counts as "open" if it lives in any dock region,
+        // floats on top, or owns a detached OS window.
+        let is_open = |k: crate::panels::PanelKind| self.is_panel_open(k);
         let panel_items: Vec<Element<'_, Message>> = crate::panels::ALL_PANELS
             .iter()
             .filter(|&&kind| (!kind.needs_schematic() || has_sch) && (!kind.needs_pcb() || has_pcb))
