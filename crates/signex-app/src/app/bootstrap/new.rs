@@ -595,6 +595,9 @@ fn main_window_settings(native_decorations: bool) -> iced::window::Settings {
         // Without native decorations the strip draws the buttons, and the
         // 6 px strips in `resize_edges_overlay` provide edge resizing.
         decorations: native_decorations,
+        // Without this winit closes the window on its own and the close
+        // request never reaches the unsaved-changes guard.
+        exit_on_close_request: false,
         platform_specific: native_title_bar(native_decorations),
         ..Default::default()
     }
@@ -612,4 +615,18 @@ fn native_title_bar(native: bool) -> iced::window::settings::PlatformSpecific {
 #[cfg(not(target_os = "macos"))]
 fn native_title_bar(_native: bool) -> iced::window::settings::PlatformSpecific {
     iced::window::settings::PlatformSpecific::default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::main_window_settings;
+
+    #[test]
+    fn the_main_window_routes_close_requests_through_the_app() {
+        for native in [true, false] {
+            let s = main_window_settings(native);
+            assert!(!s.exit_on_close_request, "native={native}");
+            assert_eq!(s.decorations, native);
+        }
+    }
 }

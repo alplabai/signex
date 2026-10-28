@@ -398,8 +398,8 @@ impl Signex {
                 Task::none()
             }
             WindowMsg::WindowCloseRequested(id) => {
-                // OS close request (Alt+F4 / native close). Daemon mode
-                // does not auto-close, so route the main window through
+                // OS close request (Alt+F4 / native close). Windows are
+                // opened with `exit_on_close_request: false`, so route the main window through
                 // the unsaved-changes guard, a detached modal through its
                 // own close message, and close any other window directly.
                 if self.ui_state.main_window_id == Some(id) {

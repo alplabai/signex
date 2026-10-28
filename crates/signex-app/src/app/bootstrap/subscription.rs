@@ -651,11 +651,10 @@ impl Signex {
         let window_close = iced::window::close_events()
             .map(|id| Message::Window(WindowMsg::SecondaryWindowClosed(id)));
         // OS close requests (native close button, Alt+F4, taskbar close).
-        // In daemon mode iced does NOT auto-close on these, so we route
-        // them explicitly: the main window goes through the unsaved-
-        // changes guard, any other window closes. Without this, an
-        // Alt+F4 on a dirty main window would otherwise be silently
-        // dropped (or, if iced ever auto-closed, lose unsaved edits).
+        // These only reach the app because every window is opened with
+        // `exit_on_close_request: false`; otherwise winit closes the window
+        // itself. The main window goes through the unsaved-changes guard,
+        // any other window closes.
         let window_close_request = iced::window::close_requests()
             .map(|id| Message::Window(WindowMsg::WindowCloseRequested(id)));
         // Window-resize subscription. `iced::event::listen()`'s
