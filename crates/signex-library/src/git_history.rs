@@ -27,12 +27,29 @@ pub(crate) fn head_walk(
             if matches!(
                 e.code(),
                 git2::ErrorCode::UnbornBranch | git2::ErrorCode::NotFound
-            ) || e.class() == git2::ErrorClass::Reference =>
+            ) || (e.class() == git2::ErrorClass::Reference
+                && head_names_missing_branch(repo)) =>
         {
             Ok(None)
         }
         Err(e) => Err(LibraryError::Backend(format!("git push head: {e}"))),
     }
+}
+
+/// True when HEAD is a symbolic ref whose target branch does not exist yet:
+/// the Windows shape of an unborn HEAD. A HEAD that is unreadable or holds
+/// garbage is not this, and must stay an error.
+fn head_names_missing_branch(repo: &git2::Repository) -> bool {
+    let Ok(head) = repo.find_reference("HEAD") else {
+        return false;
+    };
+    let Ok(Some(target)) = head.symbolic_target() else {
+        return false;
+    };
+    matches!(
+        repo.find_reference(target),
+        Err(e) if e.code() == git2::ErrorCode::NotFound
+    )
 }
 
 /// True if `commit` modified `rel_path` relative to *any* of its parents
@@ -92,4 +109,26 @@ pub(crate) fn path_history(
         }
     }
     Ok(entries)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_fresh_repo_has_no_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = git2::Repository::init(dir.path()).unwrap();
+        assert!(head_walk(&repo).unwrap().is_none());
+    }
+
+    #[test]
+    fn a_corrupt_head_is_an_error_not_an_empty_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = git2::Repository::init(dir.path()).unwrap();
+        std::fs::write(dir.path().join(".git/HEAD"), "ref: refs/heads/\0bad\n").unwrap();
+        let repo2 = git2::Repository::open(dir.path()).unwrap();
+        drop(repo);
+        assert!(path_history(&repo2, "a.txt", 10).is_err());
+    }
 }

@@ -261,24 +261,41 @@ fn diff_alternates(a: &[ManufacturerPart], b: &[ManufacturerPart]) -> ListDiff {
     })
 }
 
-/// Diff two lists by identity key. An entry on both sides whose `summary`
-/// differs lands in `changed` instead of vanishing from the diff.
-fn diff_keyed<T>(
+/// Diff two lists by identity key. An entry on both sides whose values
+/// differ lands in `changed` instead of vanishing from the diff; `summary`
+/// only renders the two sides for display. Entries sharing a key are
+/// compared as a group, in order, so duplicates are not collapsed.
+fn diff_keyed<T: PartialEq>(
     a: &[T],
     b: &[T],
     key: impl Fn(&T) -> String,
     summary: impl Fn(&T) -> String,
 ) -> ListDiff {
-    let by_key = |list: &[T]| -> BTreeMap<String, String> {
-        list.iter().map(|t| (key(t), summary(t))).collect()
+    let group = |list: &[T]| -> BTreeMap<String, Vec<usize>> {
+        let mut map: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+        for (i, t) in list.iter().enumerate() {
+            map.entry(key(t)).or_default().push(i);
+        }
+        map
     };
-    let (a_map, b_map) = (by_key(a), by_key(b));
+    let show = |list: &[T], idx: &[usize]| {
+        idx.iter()
+            .map(|&i| summary(&list[i]))
+            .collect::<Vec<_>>()
+            .join("; ")
+    };
+    let (a_map, b_map) = (group(a), group(b));
     let mut out = ListDiff::default();
     for (k, new) in &b_map {
         match a_map.get(k) {
             None => out.added.push(k.clone()),
-            Some(old) if old != new => out.changed.push((k.clone(), old.clone(), new.clone())),
-            Some(_) => {}
+            Some(old) => {
+                let same =
+                    old.len() == new.len() && old.iter().zip(new).all(|(&i, &j)| a[i] == b[j]);
+                if !same {
+                    out.changed.push((k.clone(), show(a, old), show(b, new)));
+                }
+            }
         }
     }
     out.removed = a_map
@@ -460,6 +477,39 @@ mod tests {
         assert!(d.alternates_detail.added.is_empty());
         assert_eq!(d.alternates_detail.changed.len(), 1);
         assert_eq!(d.alternates_detail.changed[0].0, "Acme:ALT");
+    }
+
+    #[test]
+    fn none_and_empty_notes_are_different_values() {
+        let mut a = row();
+        let mut b = row();
+        a.alternates.push(ManufacturerPart::draft("Acme", "ALT"));
+        b.alternates.push(ManufacturerPart {
+            notes: Some(String::new()),
+            ..ManufacturerPart::draft("Acme", "ALT")
+        });
+        assert!(diff_rows(&a, &b).alternates_changed);
+    }
+
+    #[test]
+    fn duplicate_alternate_keys_are_compared_not_collapsed() {
+        use crate::manufacturer::AlternateStatus;
+        let dup = |status| ManufacturerPart {
+            status,
+            ..ManufacturerPart::draft("Acme", "ALT")
+        };
+        let mut a = row();
+        let mut b = row();
+        a.alternates = vec![
+            dup(AlternateStatus::Approved),
+            dup(AlternateStatus::Approved),
+        ];
+        b.alternates = vec![
+            dup(AlternateStatus::Approved),
+            dup(AlternateStatus::Disqualified),
+        ];
+        assert!(diff_rows(&a, &b).alternates_changed);
+        assert!(!diff_rows(&a, &a.clone()).alternates_changed);
     }
 
     #[test]

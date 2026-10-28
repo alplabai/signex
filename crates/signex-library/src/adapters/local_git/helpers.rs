@@ -380,8 +380,8 @@ pub(super) fn check_pn_unique(
 pub(super) const LEGACY_ROW_ID_COL: &str = "row_id";
 
 /// Header expected for the v0.9 fixed-schema `[tables.<name>]` blocks
-/// — same column ordering as the old per-file TSV tables so the conversion through [`row_to_record`] / [`record_to_row`]
-/// stays bit-exact. Stage 12 lifts the fixed-schema constraint.
+/// — same column ordering as the old per-file TSV tables so the conversion
+/// through [`row_to_record`] / [`record_to_row`] stays bit-exact. Stage 12 lifts the fixed-schema constraint.
 pub(super) fn legacy_columns() -> Vec<String> {
     TABLE_HEADER.iter().map(|s| (*s).to_string()).collect()
 }
