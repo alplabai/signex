@@ -97,7 +97,8 @@ impl Signex {
         } {
             let open = open_sheets_snapshot(&self.document_state);
             let assembly = assemble_navigator(&open, request);
-            let _ = self.handle_navigator_assembled(generation, Ok(Box::new(assembly)));
+            // The follow-up it would start is the next loop turn.
+            drop(self.handle_navigator_assembled(generation, Ok(Box::new(assembly))));
         }
     }
 
