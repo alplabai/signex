@@ -10,6 +10,10 @@ use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::super::widgets::section_header;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 impl Signex {
     /// Build the Properties sidebar column (tab strip + active pane) for the
     /// active preview. Returns the sidebar `column` the modal drops into its
@@ -31,8 +35,8 @@ impl Signex {
         // fill that fights the theme.
         let accent_c = crate::styles::ti(tokens.accent);
         let row_pill = |label: String, on: bool, msg: Message| -> Element<'_, Message> {
-            button(text(label).size(11).color(text_c))
-                .padding([4, 10])
+            button(text(label).size(TS.body).color(text_c))
+                .padding([SP.s, 10.0])
                 .on_press(msg)
                 .style(move |_: &Theme, status: button::Status| {
                     let bg = match (on, status) {
@@ -61,7 +65,7 @@ impl Signex {
         };
 
         let grouping_row: Element<'_, Message> = row![
-            text("Grouping:").size(11).color(text_muted),
+            text("Grouping:").size(TS.body).color(text_muted),
             Space::new().width(8),
             row_pill(
                 "Grouped".to_string(),
@@ -85,7 +89,7 @@ impl Signex {
         .into();
 
         let format_row: Element<'_, Message> = row![
-            text("Format:").size(11).color(text_muted),
+            text("Format:").size(TS.body).color(text_muted),
             Space::new().width(8),
             row_pill(
                 "CSV".to_string(),
@@ -137,7 +141,7 @@ impl Signex {
                 .clone()
                 .unwrap_or_else(|| "Base".to_string());
             let mut r = row![
-                text("Variant:").size(11).color(text_muted),
+                text("Variant:").size(TS.body).color(text_muted),
                 Space::new().width(8),
                 row_pill(
                     "Base".to_string(),
@@ -190,8 +194,8 @@ impl Signex {
         let sidebar_tab = preview.sidebar_tab;
         let tab_pill = |label: &'static str, target: BomSidebarTab| -> Element<'_, Message> {
             let on = sidebar_tab == target;
-            button(text(label.to_string()).size(11).color(text_c))
-                .padding([4, 12])
+            button(text(label.to_string()).size(TS.body).color(text_c))
+                .padding([SP.s, SP.l])
                 .on_press(Message::BomPreview(BomPreviewMsg::SetSidebarTab(target)))
                 .style(move |_: &iced::Theme, status: button::Status| {
                     let bg = match (on, status) {
@@ -231,10 +235,10 @@ impl Signex {
                 ]
                 .spacing(0),
             )
-            .padding([8, 12]),
+            .padding([SP.m, SP.l]),
             Space::new().height(8),
             section_header("Export Options", text_muted),
-            container(column![format_row].spacing(0),).padding([8, 12]),
+            container(column![format_row].spacing(0),).padding([SP.m, SP.l]),
         ]
         .spacing(0)
         .into();
@@ -277,13 +281,13 @@ impl Signex {
                 row![
                     pip,
                     Space::new().width(8),
-                    text(label).size(11).color(text_c),
+                    text(label).size(TS.body).color(text_c),
                     Space::new().width(Length::Fill),
                 ]
                 .align_y(iced::Alignment::Center),
             )
             .on_press(Message::BomPreview(BomPreviewMsg::ToggleColumn(col)))
-            .padding([3, 12])
+            .padding([3.0, SP.l])
             .width(Length::Fill)
             .style(move |_: &Theme, status: button::Status| {
                 let bg = match status {
@@ -310,7 +314,7 @@ impl Signex {
             let on = preview.options.columns.iter().any(|c| c == &col);
             list_items = list_items.push(render_col_row(col, key.clone(), on));
         }
-        col_list = col_list.push(container(list_items).padding([4, 0]));
+        col_list = col_list.push(container(list_items).padding([SP.s, 0.0]));
         let columns_pane: Element<'_, Message> = col_list.into();
 
         let sidebar_body: Element<'_, Message> = match sidebar_tab {
@@ -319,8 +323,8 @@ impl Signex {
             BomSidebarTab::Rules => self.bom_rules_pane(),
         };
         let sidebar = column![
-            container(text("Properties").size(13).color(text_c))
-                .padding([10, 12])
+            container(text("Properties").size(TS.title).color(text_c))
+                .padding([10.0, SP.l])
                 .width(Length::Fill),
             container(
                 row![
@@ -332,7 +336,7 @@ impl Signex {
                 ]
                 .align_y(iced::Alignment::Center),
             )
-            .padding([0, 12]),
+            .padding([0.0, SP.l]),
             Space::new().height(8),
             scrollable(sidebar_body)
                 .width(Length::Fill)

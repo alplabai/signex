@@ -20,7 +20,6 @@ mod symbol_editor_properties;
 
 // v0.14.x -- domain modules split out of the former single-file panels module.
 mod color_field;
-mod components;
 mod context;
 mod footprint_context;
 mod library;
@@ -64,7 +63,6 @@ use symbol_editor_properties::view_symbol_editor_properties;
 // -- Re-exports: keep the `crate::panels::*` public surface stable and the
 //    sibling `super::` / `crate::panels::` paths resolving after the split. --
 pub use color_field::{ColorFieldProps, color_field};
-pub(super) use components::view_components;
 pub use context::{PanelContext, SymbolChoiceItem};
 pub use footprint_context::{
     ArrayKindSummary, ArrayParamField, ArraySummary, BgaConfigSummary, CutoutSummary,
@@ -74,12 +72,12 @@ pub use footprint_context::{
     OverConstraintSummary, PadShapeParamSummary, PourSummary, SilkKindGeometry,
     SketchPadAttrSummary, SnapOptionFlag,
 };
-pub use library::{LibraryRowDetail, LibrarySymbolEntry};
+pub use library::LibraryRowDetail;
 pub(super) use library::{view_footprint_library, view_library_row_properties, view_sch_library};
 pub use messages::{PanelMsg, SheetFrameEdit};
 pub use navigator::NavigatorModel;
 pub use net_class_panel::{
-    LabelClassPick, NO_NET_CLASS, NetClassDraft, NetClassField, NetClassMsg, NetClassPanel,
+    LabelClassPick, NetClassChoice, NetClassDraft, NetClassField, NetClassMsg, NetClassPanel,
     net_class_choice, net_class_choices, view_net_classes_section,
 };
 pub use palette::PanelPalette;
@@ -90,7 +88,7 @@ pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind};
 pub(super) use properties::{
     PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_PORTION, PROPERTY_ROW_PAD_X, view_properties,
 };
-pub use status::{ErcDiagnosticEntry, ErcSeverityLite};
+pub use status::{ErcDiagnosticEntry, ErcSeverityLite, ErcWaiverEntry};
 pub(super) use status::{view_erc, view_messages};
 pub use symbol_context::{
     GraphicFieldId, GraphicKindSummary, GraphicSummary, SymbolDisplayOptions,
@@ -235,8 +233,9 @@ pub type CollapsedSections = std::collections::HashSet<String>;
 /// Render a panel's content.
 pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let content = match kind {
-        // Components has its own split scrollables — don't wrap again
-        PanelKind::Components => return view_components(ctx),
+        // The Components panel is drawn by `components_panel::view` (the dock and the
+        // detached window both route it there); nothing to show here.
+        PanelKind::Components => iced::widget::Space::new().into(),
         PanelKind::Projects => view_projects(ctx),
         PanelKind::Navigator => view_navigator(ctx),
         PanelKind::Properties => view_properties(ctx),

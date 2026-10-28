@@ -511,9 +511,12 @@ fn draw_scene(
                 camera,
                 bounds,
             ),
-            // The PCB CPU path emits no arc, text, or ERC buckets. Handled for
-            // exhaustiveness so adding a Scene bucket forces a decision here.
+            // The PCB CPU path emits no arc, drawings, text, or ERC buckets.
+            // Handled for exhaustiveness so adding a Scene bucket forces a
+            // decision here.
             SceneBucket::Arcs
+            | SceneBucket::Drawings
+            | SceneBucket::DrawingsFront
             | SceneBucket::Texts
             | SceneBucket::ErcMarkerLines
             | SceneBucket::ErcMarkerCircles
@@ -931,7 +934,7 @@ mod tests {
 
         // CPU reference: a DRC marker is the one thing an otherwise-empty
         // board contributes to `overlay_polygons`, distinctly coloured by
-        // severity (`ColorSlot::ErcError`) and nothing else lands in the
+        // severity (`ColorSlot::DrcError`) and nothing else lands in the
         // plain `polygons` bucket for an empty board.
         let cpu_scene = canvas.build_scene(&snapshot);
         assert_eq!(

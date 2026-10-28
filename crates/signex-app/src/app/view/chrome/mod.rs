@@ -8,6 +8,10 @@
 
 use super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 mod buttons;
 
 impl Signex {
@@ -86,7 +90,7 @@ impl Signex {
         .on_input(|q| Message::CommandPalette(CommandPaletteMsg::QueryChanged(q)))
         .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
         .padding(iced::Padding::ZERO)
-        .size(11)
+        .size(TS.body)
         .width(Length::Fill)
         .style(
             move |_: &iced::Theme, _status: text_input::Status| text_input::Style {
@@ -108,7 +112,7 @@ impl Signex {
         );
         let search_bar: Element<'_, Message> = container(
             row![search_icon, palette_input]
-                .spacing(8)
+                .spacing(SP.m)
                 .align_y(Alignment::Center),
         )
         .padding(iced::Padding {
@@ -221,7 +225,8 @@ impl Signex {
                 custom_name: ui.custom_theme.as_ref().map(|c| c.name.as_str()),
                 theme_status: &ui.preferences_theme_status,
                 dirty: ui.preferences_dirty,
-                erc_overrides: &ui.preferences_draft_erc_severity,
+                profiles: &ui.profile_manager,
+                default_profile: ui.default_rule_profile.as_deref(),
                 distributor_settings: &self.library.settings,
                 panel_tokens: &self.document_state.panel_ctx.tokens,
                 draft_component_classes: &ui.preferences_draft_component_classes,
@@ -246,6 +251,7 @@ impl Signex {
             ModalId::AnnotateDialog => self.view_annotate_dialog_body(),
             ModalId::ErcDialog => self.view_erc_dialog_body(),
             ModalId::AnnotateResetConfirm => self.view_annotate_reset_confirm_body(),
+            ModalId::ReprefixConfirm => self.view_reprefix_confirm_body(),
             // Stubs — these modals don't yet have extractable bodies; fall
             // back to a placeholder so the window is non-empty until their
             // body helpers land.

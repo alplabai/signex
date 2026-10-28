@@ -6,7 +6,7 @@
 
 /// Circle primitive supporting filled and stroked modes.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Circle {
     pub center: [f32; 2],
     pub radius: f32,

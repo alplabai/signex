@@ -1,0 +1,114 @@
+# path	kind	label	command_id	shortcut	action	enabled[default,full,pcb,symbol,sheets,undocked,footprint,dirty]	gate
+File	menu	File	-	-	-	-	-
+File/New Project	item	New Project	new_document	Ctrl+N	NewProject	11111111	always
+File/Open...	item	Open...	open_document	Ctrl+O	OpenProject	11111111	always
+File/Open Recent	submenu	Open Recent	-	-	-	-	-
+File/---	separator	-	-	-	-	-	-
+File/Save	item	Save	save_document	Ctrl+S	Save	01010011	cmd:save_document
+File/Save As...	item	Save As...	save_document_as	Ctrl+Shift+S	SaveAs	01010010	cmd:save_document_as
+File/---	separator	-	-	-	-	-	-
+File/Library	submenu	Library	-	-	-	-	-
+File/Library/Open Library...	item	Open Library...	-	-	LibraryOpenLibrary	11111111	always
+File/Library/---	separator	-	-	-	-	-	-
+File/Library/Place Component...	item	Place Component...	-	-	LibraryPlaceComponent	01000000	sch
+File/---	separator	-	-	-	-	-	-
+File/Import	submenu	Import	-	-	-	-	-
+File/Import/Altium Project...	item	Altium Project...	-	-	ImportAltium	11111111	always
+File/Export	submenu	Export	-	-	-	-	-
+File/Export/PDF…	item	PDF…	print	Ctrl+P	ExportPdf	01000000	cmd:print
+File/Export/Netlist (Protel .NET)...	item	Netlist (Protel .NET)...	-	-	ExportNetlist	01000000	sch
+File/Export/Bill of Materials…	item	Bill of Materials…	-	-	ExportBom	01000000	sch
+File/Export/ERC Report…	item	ERC Report…	-	-	ExportErcReport	01000000	sch
+File/---	separator	-	-	-	-	-	-
+File/Exit	item	Exit	-	-	Exit	11111111	always
+Edit	menu	Edit	-	-	-	-	-
+Edit/Undo	item	Undo	undo	Ctrl+Z	Undo	01000000	cmd:undo
+Edit/Redo	item	Redo	redo	Ctrl+Y	Redo	01000000	cmd:redo
+Edit/---	separator	-	-	-	-	-	-
+Edit/Cut	item	Cut	cut	Ctrl+X	Cut	01000000	cmd:cut
+Edit/Copy	item	Copy	copy	Ctrl+C	Copy	01000000	cmd:copy
+Edit/Paste	item	Paste	paste	Ctrl+V	Paste	01000000	cmd:paste
+Edit/Paste Special	item	Paste Special	smart_paste	Shift+Ctrl+V	SmartPaste	01000000	cmd:smart_paste
+Edit/Duplicate	item	Duplicate	duplicate	Ctrl+D	Duplicate	01000000	cmd:duplicate
+Edit/Delete	item	Delete	delete_selection	Del	Delete	01000010	cmd:delete_selection
+Edit/Arrange	submenu	Arrange	-	-	-	-	-
+Edit/Arrange/Bring to Front	item	Bring to Front	-	-	BringDrawingsToFront	00000000	cmd:bring_drawings_to_front
+Edit/Arrange/Send to Back	item	Send to Back	-	-	SendDrawingsToBack	00000000	cmd:send_drawings_to_back
+Edit/Arrange/Bring Forward	item	Bring Forward	-	-	BringDrawingsForward	00000000	cmd:bring_drawings_forward
+Edit/Arrange/Send Backward	item	Send Backward	-	-	SendDrawingsBackward	00000000	cmd:send_drawings_backward
+Edit/---	separator	-	-	-	-	-	-
+Edit/Select All	item	Select All	select_all	Ctrl+A	SelectAll	01000000	cmd:select_all
+Edit/---	separator	-	-	-	-	-	-
+Edit/Find	item	Find	find	Ctrl+F	Find	11111111	cmd:find
+Edit/Find and Replace	item	Find and Replace	find_and_replace	Ctrl+H	Replace	11111111	cmd:find_and_replace
+View	menu	View	-	-	-	-	-
+View/Zoom In	stub	Zoom In	zoom_in_at_cursor	Ctrl+=	-	00000000	never
+View/Zoom Out	stub	Zoom Out	zoom_out_at_cursor	Ctrl+-	-	00000000	never
+View/Fit All	item	Fit All	zoom_to_fit	Home	ZoomFit	01100100	cmd:zoom_to_fit
+View/---	separator	-	-	-	-	-	-
+View/Toggle Grid	item	Toggle Grid	toggle_visible_grid	Shift+Ctrl+G	ToggleGrid	11111111	cmd:toggle_visible_grid
+View/Cycle Grid Size	item	Cycle Grid Size	cycle_snap_grid_forward	G	CycleGrid	01100000	cyclegrid
+View/AutoFocus (dim unselected)	item	AutoFocus (dim unselected)	toggle_auto_focus	F9	ToggleAutoFocus	11111111	cmd:toggle_auto_focus
+View/---	separator	-	-	-	-	-	-
+View/Projects	item	Projects	-	-	OpenProjectsPanel	11111111	always
+View/Components	item	Components	-	-	OpenComponentsPanel	11111111	always
+View/Navigator	item	Navigator	-	-	OpenNavigatorPanel	11111111	always
+View/Properties	item	Properties	-	-	OpenPropertiesPanel	11111111	always
+View/ERC	item	ERC	-	-	OpenErcPanel	11111111	always
+View/Messages	item	Messages	-	-	OpenMessagesPanel	11111111	always
+View/Signal	item	Signal	-	-	OpenSignalPanel	11111111	always
+Place	menu	Place	-	-	-	-	-
+Place/Wire	item	Wire	place_wire	W	PlaceWire	01000000	cmd:place_wire
+Place/Bus	item	Bus	place_bus	B	PlaceBus	01000000	cmd:place_bus
+Place/Net Label	item	Net Label	place_net_label	L	PlaceLabel	01000000	cmd:place_net_label
+Place/---	separator	-	-	-	-	-	-
+Place/Component...	item	Component...	open_components_panel	P	PlaceComponent	01000000	cmd:open_components_panel
+Place/Power Port	stub	Power Port	-	-	-	00000000	never
+Place/---	separator	-	-	-	-	-	-
+Place/Text	stub	Text	-	-	-	00000000	never
+Place/No Connect	stub	No Connect	-	-	-	00000000	never
+Place/Sheet Entry	stub	Sheet Entry	-	-	-	00000000	never
+Design	menu	Design	-	-	-	-	-
+Design/Annotation	submenu	Annotation	-	-	-	-	-
+Design/Annotation/Annotate Schematics...	item	Annotate Schematics...	-	-	Annotate	01000000	sch
+Design/Annotation/Reset Schematic Designators...	item	Reset Schematic Designators...	-	-	AnnotateReset	01000000	sch
+Design/Annotation/Reset Duplicate Schematic Designators...	item	Reset Duplicate Schematic Designators...	-	-	AnnotateResetDuplicates	01000000	sch
+Design/Annotation/---	separator	-	-	-	-	-	-
+Design/Annotation/Annotate Schematics Quietly	item	Annotate Schematics Quietly	annotate_schematic_quietly	Alt+A	AnnotateQuietly	01001000	cmd:annotate_schematic_quietly
+Design/Annotation/Force Annotate All Schematics	item	Force Annotate All Schematics	force_annotate_all_schematics	Shift+Alt+A	AnnotateForceAll	01001000	cmd:force_annotate_all_schematics
+Design/Annotation/---	separator	-	-	-	-	-	-
+Design/Annotation/Back Annotate Schematics...	stub	Back Annotate Schematics...	-	-	-	00000000	never
+Design/Annotation/Number Schematic Sheets...	stub	Number Schematic Sheets...	-	-	-	00000000	never
+Design/---	separator	-	-	-	-	-	-
+Design/Electrical Rules Check	item	Electrical Rules Check	run_erc	F8	Erc	01001000	cmd:run_erc
+Design/---	separator	-	-	-	-	-	-
+Design/Generate BOM	stub	Generate BOM	-	-	-	00000000	never
+Tools	menu	Tools	-	-	-	-	-
+Tools/Assign Footprints	stub	Assign Footprints	-	-	-	00000000	never
+Tools/Library Editor	stub	Library Editor	-	-	-	00000000	never
+Tools/---	separator	-	-	-	-	-	-
+Tools/Design Rule Check	stub	Design Rule Check	-	-	-	00000000	never
+Tools/Net Inspector	stub	Net Inspector	-	-	-	00000000	never
+Tools/---	separator	-	-	-	-	-	-
+Tools/Up Hierarchy	item	Up Hierarchy	-	-	AscendToParentSheet	01000000	sch
+Tools/---	separator	-	-	-	-	-	-
+Tools/New Part	item	New Part	-	-	ToolsNewPart	11111111	always
+Tools/Remove Part	item	Remove Part	-	-	ToolsRemovePart	11111111	always
+Tools/---	separator	-	-	-	-	-	-
+Tools/Document Options...	item	Document Options...	-	-	ToolsDocumentOptions	11111111	always
+Tools/---	separator	-	-	-	-	-	-
+Tools/Passive Network Calculator...	item	Passive Network Calculator...	-	-	OpenPassiveCalculator	11111111	always
+Tools/---	separator	-	-	-	-	-	-
+Tools/Preferences...	item	Preferences...	open_preferences	Ctrl+,	OpenPreferences	11111111	always
+Window	menu	Window	-	-	-	-	-
+Window/Tile Horizontally	stub	Tile Horizontally	-	-	-	00000000	never
+Window/Tile Vertically	stub	Tile Vertically	-	-	-	00000000	never
+Window/---	separator	-	-	-	-	-	-
+Window/Close All Documents	stub	Close All Documents	-	-	-	00000000	never
+Help	menu	Help	-	-	-	-	-
+Help/About Signex	item	About Signex	-	-	OpenAbout	11111111	always
+Help/Documentation	item	Documentation	-	-	OpenDocumentation	11111111	always
+Help/Report an Issue	item	Report an Issue	-	-	ReportIssue	11111111	always
+Help/Open Sample Project	item	Open Sample Project	-	-	OpenSampleProject	11111111	always
+Help/---	separator	-	-	-	-	-	-
+Help/Keyboard Shortcuts	item	Keyboard Shortcuts	show_current_command_hotkeys	F1	OpenKeyboardShortcuts	11111111	always

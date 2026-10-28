@@ -126,6 +126,13 @@ impl Signex {
             crate::panels::PanelMsg::ErcQuickFix(idx) => {
                 follow = self.handle_erc_quick_fix(*idx);
             }
+            crate::panels::PanelMsg::ErcNetWaiverSet {
+                rule_id,
+                net,
+                waive,
+            } => {
+                follow = self.handle_erc_net_waiver_set(rule_id, net, *waive);
+            }
             crate::panels::PanelMsg::FocusPrevErcDiagnostic => {
                 follow = self.handle_focus_erc_diagnostic_offset(-1);
             }
@@ -178,11 +185,13 @@ impl Signex {
                 if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_text {
                     g.text = text.clone();
                 }
+                self.set_placement_value(text);
             }
             crate::panels::PanelMsg::SetPrePlacementDesignator(text) => {
                 if let Some(pre_placement) = &mut self.document_state.panel_ctx.pre_placement {
                     pre_placement.designator = text.clone();
                 }
+                self.set_placement_designator(text);
             }
             crate::panels::PanelMsg::SetPrePlacementRotation(rotation) => {
                 if let Some(pre_placement) = &mut self.document_state.panel_ctx.pre_placement {
@@ -197,6 +206,7 @@ impl Signex {
                 if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_text {
                     g.rotation = *rotation;
                 }
+                self.set_placement_rotation(*rotation);
             }
             crate::panels::PanelMsg::SetPrePlacementFont(font) => {
                 if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
@@ -498,12 +508,6 @@ impl Signex {
             crate::panels::PanelMsg::SetSheetColor(color) => {
                 self.document_state.panel_ctx.sheet_color = *color;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
-            }
-            crate::panels::PanelMsg::DragComponentsSplit => {
-                self.interaction_state.dragging = Some(DragTarget::ComponentsSplit);
-                self.interaction_state.drag_start_pos = None;
-                self.interaction_state.drag_start_size =
-                    self.document_state.panel_ctx.components_split;
             }
             crate::panels::PanelMsg::ToggleSelectionFilter(filter) => {
                 follow = self.handle_active_bar_filter_toggle(*filter);

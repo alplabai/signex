@@ -10,7 +10,9 @@ use std::path::{Path, PathBuf};
 
 use iced::Task;
 
-use crate::app::state::project_case::{CaseProbeOutcome, probe_case_outcome, undecided_message};
+use crate::app::state::project_case::{
+    CaseProbeOutcome, probe_case_outcome, undecided_identity_fold, undecided_message,
+};
 use crate::app::state::scope::{CaseFold, path_key_with};
 use crate::app::{FileMsg, Message, Signex};
 
@@ -25,11 +27,11 @@ impl Signex {
             return Some(project.case_fold);
         }
         let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) else {
-            return Some(CaseFold::from_probe(true));
+            return Some(undecided_identity_fold());
         };
         match self.document_state.dir_case.answer(dir)? {
             CaseProbeOutcome::Decided(ignores_case) => Some(CaseFold::from_probe(*ignores_case)),
-            _ => Some(CaseFold::from_probe(true)),
+            _ => Some(undecided_identity_fold()),
         }
     }
 
@@ -39,7 +41,36 @@ impl Signex {
     /// rule, which is [`Self::fold_for_path`].
     pub(crate) fn identity_fold_for(&self, path: &Path) -> CaseFold {
         self.identity_answer(path)
-            .unwrap_or_else(|| CaseFold::from_probe(true))
+            .unwrap_or_else(undecided_identity_fold)
+    }
+
+    /// Store the directory probes a Save All just ran, so the plan's writes
+    /// decide identity through [`Self::identity_fold_for`] like open and
+    /// Ctrl+S. An undecided one is reported once, as open does.
+    pub(crate) fn record_save_all_probes(
+        &mut self,
+        decided: &std::collections::HashMap<PathBuf, bool>,
+        undecided: &[(PathBuf, CaseProbeOutcome)],
+    ) {
+        let answers = decided
+            .iter()
+            .map(|(dir, ignores_case)| (dir, CaseProbeOutcome::Decided(*ignores_case)))
+            .chain(
+                undecided
+                    .iter()
+                    .map(|(dir, outcome)| (dir, outcome.clone())),
+            );
+        for (dir, outcome) in answers {
+            if self.document_state.dir_case.record(dir, outcome.clone())
+                && !matches!(outcome, CaseProbeOutcome::Decided(_))
+            {
+                crate::diagnostics::log_warning(undecided_message(
+                    &outcome,
+                    dir,
+                    undecided_identity_fold(),
+                ));
+            }
+        }
     }
 
     /// Start the probe of `path`'s directory unless its rule is known or a
@@ -151,7 +182,7 @@ impl Signex {
             crate::diagnostics::log_warning(undecided_message(
                 answer,
                 dir,
-                CaseFold::from_probe(true),
+                undecided_identity_fold(),
             ));
         }
         let mut by_file: std::collections::BTreeMap<String, Vec<&Path>> = Default::default();

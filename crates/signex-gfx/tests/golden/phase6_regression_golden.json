@@ -15,7 +15,7 @@
     "overlay_stage_order": ["Grid", "Geometry", "Overlay", "Text"]
   },
   "upload": {
-    "all_dirty_total_updates": 13,
+    "all_dirty_total_updates": 14,
     "core_culling_total_updates": 5,
     "core_visible_lines": 1,
     "core_visible_circles": 1,

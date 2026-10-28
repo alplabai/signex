@@ -44,7 +44,8 @@ impl Signex {
             custom_name: ui.custom_theme.as_ref().map(|c| c.name.as_str()),
             theme_status: &ui.preferences_theme_status,
             dirty: ui.preferences_dirty,
-            erc_overrides: &ui.preferences_draft_erc_severity,
+            profiles: &ui.profile_manager,
+            default_profile: ui.default_rule_profile.as_deref(),
             distributor_settings: &self.library.settings,
             panel_tokens: &document.panel_ctx.tokens,
             draft_component_classes: &ui.preferences_draft_component_classes,
@@ -243,6 +244,12 @@ impl Signex {
         (self.ui_state.annotate_reset_confirm
             && !self.modal_detached(crate::app::state::ModalId::AnnotateResetConfirm))
         .then(|| self.view_annotate_reset_confirm())
+    }
+
+    pub(in crate::app::view) fn reprefix_confirm_overlay(&self) -> Option<Element<'_, Message>> {
+        (self.ui_state.reprefix_confirm.is_some()
+            && !self.modal_detached(crate::app::state::ModalId::ReprefixConfirm))
+        .then(|| self.view_reprefix_confirm())
     }
 
     pub(in crate::app::view) fn erc_dialog_overlay(&self) -> Option<Element<'_, Message>> {

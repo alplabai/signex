@@ -34,6 +34,9 @@ struct OpenOverlays {
     prefs_open: bool,
     annotate_open: bool,
     erc_open: bool,
+    /// The ERC dialog's "Save as profile" form is showing (#1608). Esc
+    /// closes it (or its overwrite question) before the dialog itself.
+    erc_save_profile_open: bool,
     rename_open: bool,
     remove_open: bool,
     enable_vc_open: bool,
@@ -42,6 +45,7 @@ struct OpenOverlays {
     // #514 — the rest of the Esc ladder. Each closes exactly one gap that
     // used to fall through to the `Tool::Select` reset behind the modal.
     annotate_reset_confirm_open: bool,
+    reprefix_confirm_open: bool,
     app_quit_confirm_open: bool,
     project_close_confirm_open: bool,
     grid_properties_open: bool,
@@ -270,7 +274,20 @@ impl OpenOverlays {
             OverlayId::AnnotateResetConfirm => self
                 .annotate_reset_confirm_open
                 .then(|| Message::Annotate(AnnotateMsg::CloseResetConfirm)),
-            OverlayId::ErcDialog => self.erc_open.then(|| Message::Erc(ErcMsg::CloseDialog)),
+            // Child of the annotate dialog like the reset confirm; Esc cancels,
+            // it must never confirm a rewrite of the whole project.
+            OverlayId::ReprefixConfirm => self
+                .reprefix_confirm_open
+                .then(|| Message::Annotate(AnnotateMsg::ReprefixCancelled)),
+            // The Save-as form is a child panel of the dialog: Esc closes it
+            // (or steps back from its overwrite question) and never writes.
+            OverlayId::ErcDialog => self.erc_open.then(|| {
+                if self.erc_save_profile_open {
+                    Message::Erc(ErcMsg::ProfileSaveCancelled)
+                } else {
+                    Message::Erc(ErcMsg::CloseDialog)
+                }
+            }),
 
             // ── Library modals ──────────────────────────────────────
             OverlayId::LibraryPicker => self
@@ -366,6 +383,7 @@ fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
     match modal {
         ModalId::AnnotateDialog => Some(OverlayId::AnnotateDialog),
         ModalId::AnnotateResetConfirm => Some(OverlayId::AnnotateResetConfirm),
+        ModalId::ReprefixConfirm => Some(OverlayId::ReprefixConfirm),
         ModalId::ErcDialog => Some(OverlayId::ErcDialog),
         ModalId::Preferences => Some(OverlayId::Preferences),
         ModalId::FindReplace => Some(OverlayId::FindReplace),
@@ -460,6 +478,7 @@ impl Signex {
                 && !modal_detached(crate::app::state::ModalId::AnnotateDialog),
             erc_open: self.ui_state.erc_dialog_open
                 && !modal_detached(crate::app::state::ModalId::ErcDialog),
+            erc_save_profile_open: self.ui_state.save_profile_dialog.is_some(),
             rename_open: self.ui_state.rename_dialog.is_some(),
             remove_open: self.ui_state.remove_dialog.is_some(),
             enable_vc_open: self.ui_state.enable_version_control.is_some(),
@@ -467,6 +486,8 @@ impl Signex {
             passive_calculator_open: self.ui_state.passive_calculator_open,
             annotate_reset_confirm_open: self.ui_state.annotate_reset_confirm
                 && !modal_detached(crate::app::state::ModalId::AnnotateResetConfirm),
+            reprefix_confirm_open: self.ui_state.reprefix_confirm.is_some()
+                && !modal_detached(crate::app::state::ModalId::ReprefixConfirm),
             app_quit_confirm_open: self.ui_state.app_quit_confirm.is_some(),
             project_close_confirm_open: self.ui_state.project_close_confirm.is_some(),
             grid_properties_open: self.ui_state.grid_properties.is_some(),
@@ -822,6 +843,7 @@ mod tests {
             ModalId::AnnotateDialog,
             ModalId::ErcDialog,
             ModalId::AnnotateResetConfirm,
+            ModalId::ReprefixConfirm,
             ModalId::PrintPreview,
             ModalId::BomPreview,
         ] {
@@ -940,6 +962,10 @@ mod tests {
         assert!(matches!(
             only(|o| o.annotate_reset_confirm_open = true),
             Some(Message::Annotate(AnnotateMsg::CloseResetConfirm))
+        ));
+        assert!(matches!(
+            only(|o| o.reprefix_confirm_open = true),
+            Some(Message::Annotate(AnnotateMsg::ReprefixCancelled))
         ));
         assert!(matches!(
             only(|o| o.app_quit_confirm_open = true),
@@ -1444,12 +1470,14 @@ mod tests {
             prefs_open,
             annotate_open,
             erc_open,
+            erc_save_profile_open,
             rename_open,
             remove_open,
             enable_vc_open,
             library_create_options_open,
             passive_calculator_open,
             annotate_reset_confirm_open,
+            reprefix_confirm_open,
             app_quit_confirm_open,
             project_close_confirm_open,
             grid_properties_open,
@@ -1483,6 +1511,10 @@ mod tests {
                 o.autosave_recovery_open = true
             }),
             ("erc_open", |o| o.erc_open = true),
+            ("erc_save_profile_open", |o| {
+                o.erc_open = true;
+                o.erc_save_profile_open = true
+            }),
             ("annotate_open", |o| o.annotate_open = true),
             ("prefs_open", |o| o.prefs_open = true),
             ("rename_open", |o| o.rename_open = true),
@@ -1497,6 +1529,7 @@ mod tests {
             ("annotate_reset_confirm_open", |o| {
                 o.annotate_reset_confirm_open = true
             }),
+            ("reprefix_confirm_open", |o| o.reprefix_confirm_open = true),
             ("app_quit_confirm_open", |o| o.app_quit_confirm_open = true),
             ("project_close_confirm_open", |o| {
                 o.project_close_confirm_open = true

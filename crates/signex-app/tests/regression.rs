@@ -88,6 +88,8 @@ mod preferences_export_status;
 
 #[path = "regression/preferences_prefs_recovery.rs"]
 mod preferences_prefs_recovery;
+#[path = "regression/rule_profiles_ui.rs"]
+mod rule_profiles_ui;
 
 #[path = "regression/preferences_symbol_drafts.rs"]
 mod preferences_symbol_drafts;
@@ -262,6 +264,12 @@ mod library_update_apply;
 mod non_finite_edits;
 #[path = "regression/numeric_drafts.rs"]
 mod numeric_drafts;
+#[path = "regression/paste_on_cursor.rs"]
+mod paste_on_cursor;
+#[path = "regression/placement_session.rs"]
+mod placement_session;
+#[path = "regression/reprefix_standard.rs"]
+mod reprefix_standard;
 
 #[path = "regression/canvas_editing_correctness.rs"]
 mod canvas_editing_correctness;
@@ -320,6 +328,11 @@ mod pending_open_rename_delete;
 #[path = "regression/bus_entry.rs"]
 mod bus_entry;
 
+// #1404 — the X / Y keys, context-menu Mirror X / Y and the active bar's
+// Flip Along X / Y all flip a symbol the same way.
+#[path = "regression/mirror_axis_entry_points.rs"]
+mod mirror_axis_entry_points;
+
 // #1039 — rotate / mirror act on any selection, about its centre, as one undo step.
 #[path = "regression/rotate_mirror_selection.rs"]
 mod rotate_mirror_selection;
@@ -340,6 +353,8 @@ mod net_classes_panel;
 mod sheet_frame_canvas;
 
 // #1202 — the Project document tab replaces the Project Options modal.
+#[path = "regression/project_parameters.rs"]
+mod project_parameters;
 #[path = "regression/project_tab.rs"]
 mod project_tab;
 #[path = "regression/project_tab_rename.rs"]
@@ -348,3 +363,6 @@ mod project_tab_rename;
 mod project_tab_saves;
 #[path = "regression/project_tab_support.rs"]
 mod project_tab_support;
+
+#[path = "regression/navigator_async.rs"]
+mod navigator_async;

@@ -28,6 +28,18 @@ pub struct ErcDiagnosticEntry {
     pub locatable: bool,
     /// For a net-level finding: the net to highlight and fit on click.
     pub net: Option<signex_erc::NetFinding>,
+    /// Stable rule id (`builtin::..` / `user::..`), the waiver key's rule half.
+    pub rule_id: String,
+}
+
+/// One stored net waiver, shown under the ERC results with a Restore button.
+#[derive(Debug, Clone)]
+pub struct ErcWaiverEntry {
+    pub rule_id: String,
+    pub net: String,
+    /// Findings the newest run hid for it; 0 when it matched nothing (the
+    /// net was renamed or no longer fails the rule).
+    pub hidden: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,7 +95,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .size(9)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         );
-        return col.into();
+        return col.push(waived_section(ctx)).into();
     }
 
     let errors = ctx
@@ -218,12 +230,86 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .padding([2, 8])
                 .on_press(PanelMsg::ErcQuickFix(v.global_index))
                 .style(crate::styles::menu_item(&ctx.tokens)),
+                waive_chip(v, &ctx.tokens),
             ]
             .align_y(iced::Alignment::Center)
             .width(Length::Fill),
         );
     }
 
+    col.push(waived_section(ctx)).into()
+}
+
+/// "Waive net" chip for a net-level finding on a named net; nothing for any
+/// other row (a pin No-ERC marker is the waiver for those).
+fn waive_chip<'a>(
+    v: &ErcDiagnosticEntry,
+    tokens: &'a signex_types::theme::ThemeTokens,
+) -> Element<'a, PanelMsg> {
+    let Some(net) = v.net.as_ref().filter(|n| !n.name.is_empty()) else {
+        return Space::new().width(0).height(0).into();
+    };
+    row![
+        Space::new().width(6).height(Length::Shrink),
+        iced::widget::button(
+            text("Waive net")
+                .size(9)
+                .color(theme_ext::text_primary(tokens))
+        )
+        .padding([2, 8])
+        .on_press(PanelMsg::ErcNetWaiverSet {
+            rule_id: v.rule_id.clone(),
+            net: net.name.clone(),
+            waive: true,
+        })
+        .style(crate::styles::menu_item(tokens)),
+    ]
+    .into()
+}
+
+/// The project's net waivers, dimmed, each with a Restore button. Shown even
+/// when every finding is waived, so a waiver is never invisible.
+fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    let muted = theme_ext::text_secondary(&ctx.tokens);
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(2).width(Length::Fill);
+    if ctx.erc_waivers.is_empty() {
+        return col.into();
+    }
+    col = col.push(separator(&ctx.tokens));
+    col = col.push(
+        text(format!("{} waived", ctx.erc_waivers.len()))
+            .size(10)
+            .color(muted),
+    );
+    for w in &ctx.erc_waivers {
+        let note = match w.hidden {
+            0 => "matches no finding".to_string(),
+            1 => "1 finding hidden".to_string(),
+            n => format!("{n} findings hidden"),
+        };
+        col = col.push(
+            row![
+                text(format!("{}  net {}  ({note})", w.rule_id, w.net))
+                    .size(9)
+                    .color(muted),
+                Space::new().width(Length::Fill).height(Length::Shrink),
+                iced::widget::button(
+                    text("Restore")
+                        .size(9)
+                        .color(theme_ext::text_primary(&ctx.tokens)),
+                )
+                .padding([2, 8])
+                .on_press(PanelMsg::ErcNetWaiverSet {
+                    rule_id: w.rule_id.clone(),
+                    net: w.net.clone(),
+                    waive: false,
+                })
+                .style(crate::styles::menu_item(&ctx.tokens)),
+            ]
+            .align_y(iced::Alignment::Center)
+            .width(Length::Fill),
+        );
+    }
     col.into()
 }
 

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -10,7 +11,7 @@ mod annotation;
 mod rule_profile;
 mod rules;
 mod unknown;
-pub use annotation::AnnotationSettings;
+pub use annotation::{AnnotationSettings, AnnotationState};
 pub use rule_profile::{
     RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
 };
@@ -184,6 +185,15 @@ pub struct ProjectData {
     /// re-saves without an `annotation` key. Top level, not under `rules`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub annotation: Option<AnnotationSettings>,
+    /// Project parameters (#1080): title-block values every sheet inherits
+    /// (`title`, `document_number`, `rev`, `date`, `company`, `drawn_by`,
+    /// `checked_by`, `approved_by`, `comment1`-`comment4`, the keys of a
+    /// sheet's `title_block`) plus user-defined name/value pairs, all usable
+    /// as `${NAME}` special strings. A sheet's own non-empty `title_block`
+    /// value overrides the project's. Skipped on save when empty, so an
+    /// untouched file re-saves without a `parameters` key.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub parameters: BTreeMap<String, String>,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -226,6 +236,8 @@ impl ProjectData {
 mod description_tests;
 #[cfg(test)]
 mod net_class_tests;
+#[cfg(test)]
+mod parameters_tests;
 #[cfg(test)]
 mod unknown_tests;
 
@@ -413,6 +425,7 @@ mod tests {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         };
         let local = LibraryEntry {
@@ -443,6 +456,7 @@ mod tests {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         };
         let shared = LibraryEntry {
@@ -640,6 +654,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         net_classes: Vec::new(),
         rules: None,
         annotation: None,
+        parameters: Default::default(),
         unknown: UnknownJson::default(),
     })
 }

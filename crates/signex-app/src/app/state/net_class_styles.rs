@@ -110,10 +110,11 @@ pub struct ResolvedStyles {
 }
 
 /// A background resolution that never produced an answer (its task panicked),
-/// and the projects it was asked about, so only their requests are forgotten.
+/// and each project with the key it was asked to resolve, so only a request
+/// for that very key is forgotten.
 #[derive(Debug)]
 pub struct ResolveFailed {
-    pub projects: Vec<ProjectId>,
+    pub projects: Vec<(ProjectId, ProjectKey)>,
     pub reason: String,
 }
 
@@ -134,8 +135,15 @@ pub struct NetClassStyleCache {
     /// The key each project was last asked to resolve for: the answer in
     /// flight, or the one already stored.
     wanted: HashMap<ProjectId, ProjectKey>,
+    /// The key whose resolution failed for each project. It is not asked for
+    /// again until the project's key moves, so a task that fails every time
+    /// reports once instead of on every click.
+    failed: HashMap<ProjectId, ProjectKey>,
     projects: HashMap<ProjectId, ProjectEntry>,
     merged: HashMap<Uuid, NetClassStyle>,
+    /// Counts rebuilds of `merged`, so a consumer that caches something drawn
+    /// from the map can tell it changed without comparing it entry by entry.
+    revision: u64,
 }
 
 impl NetClassStyleCache {
@@ -144,6 +152,20 @@ impl NetClassStyleCache {
     #[must_use]
     pub fn styles(&self) -> &HashMap<Uuid, NetClassStyle> {
         &self.merged
+    }
+
+    /// Moves at least whenever [`Self::styles`] changes (it may also move on a
+    /// rebuild that left the map as it was), so the scene cache compares one
+    /// number per frame instead of the whole map.
+    #[must_use]
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// The key `project` was last asked to resolve for, if any.
+    #[must_use]
+    pub fn wanted_key(&self, project: ProjectId) -> Option<&ProjectKey> {
+        self.wanted.get(&project)
     }
 
     /// `true` when no element carries a class style, so a caller with no
@@ -201,6 +223,10 @@ impl NetClassStyleCache {
     /// has it in flight. A project moving back to a key the cache already
     /// holds cancels the answer in flight for the key it left.
     pub fn want(&mut self, project: ProjectId, key: &ProjectKey) -> bool {
+        if self.failed.get(&project) == Some(key) {
+            return false;
+        }
+        self.failed.remove(&project);
         let held = self
             .projects
             .get(&project)
@@ -225,16 +251,29 @@ impl NetClassStyleCache {
         dropped
     }
 
-    /// A background resolution failed, so no answer is coming for `failed`'s
-    /// projects: forget their requests still in flight, so the next gate
-    /// opening asks again. Other projects' requests are left alone.
-    pub fn give_up(&mut self, failed: &[ProjectId]) {
-        self.forget_pending(|id| failed.contains(id));
+    /// A background resolution failed, so no answer is coming for the keys it
+    /// ran: forget a request still in flight for such a key and remember it as
+    /// failed, so it is not retried (and not reported again) until the
+    /// project's key moves. A project whose wanted key has moved on since, and
+    /// other projects, are left alone.
+    pub fn give_up(&mut self, failed: &[(ProjectId, ProjectKey)]) {
+        for (id, key) in failed {
+            if self.wanted.get(id) != Some(key) {
+                continue;
+            }
+            if self.projects.get(id).is_none_or(|entry| entry.key != *key) {
+                self.failed.insert(*id, key.clone());
+                self.wanted.remove(id);
+            }
+        }
     }
 
-    /// [`Self::give_up`] for every project, for a caller that lost its tasks.
+    /// Forget every request in flight and every recorded failure, and reopen
+    /// the gate, for a caller that lost its tasks.
     pub fn give_up_pending(&mut self) {
         self.forget_pending(|_| true);
+        self.failed.clear();
+        self.reopen_gate();
     }
 
     fn forget_pending(&mut self, forget: impl Fn(&ProjectId) -> bool) {
@@ -282,6 +321,7 @@ impl NetClassStyleCache {
     }
 
     fn rebuild_merged(&mut self) {
+        self.revision += 1;
         self.merged = self
             .projects
             .values()

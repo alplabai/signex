@@ -561,7 +561,7 @@ impl Signex {
         if active_idx == self.document_state.active_tab {
             self.discard_state_of_replaced_engine();
         }
-        self.document_state.engines.remove(path);
+        self.document_state.remove_engine(path);
         self.set_reloaded_dirty(path, active_idx, false);
         self.report_restore_failure(restore_reload_card(path, why, unreadable));
     }

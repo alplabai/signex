@@ -1,0 +1,12 @@
+# Open Recent children per recent_projects state; enabled is a single bit.
+# path	kind	label	command_id	shortcut	action	enabled
+@variant empty
+File/Open Recent/No recent projects	stub	No recent projects	-	-	-	0
+File/Open Recent/---	separator	-	-	-	-	-
+File/Open Recent/Clear Recent	item	Clear Recent	-	-	ClearRecentProjects	0
+@variant paths=/tmp/alpha/alpha.snxprj,/tmp/beta.snxprj,/
+File/Open Recent/alpha.snxprj	item	alpha.snxprj	-	-	OpenRecentProject("/tmp/alpha/alpha.snxprj")	1
+File/Open Recent/beta.snxprj	item	beta.snxprj	-	-	OpenRecentProject("/tmp/beta.snxprj")	1
+File/Open Recent//	item	/	-	-	OpenRecentProject("/")	1
+File/Open Recent/---	separator	-	-	-	-	-
+File/Open Recent/Clear Recent	item	Clear Recent	-	-	ClearRecentProjects	1

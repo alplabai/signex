@@ -189,11 +189,12 @@ impl Signex {
         // Altium's "click the object to reference" convention.
         if let Some(picker) = self.ui_state.reorder_picker {
             if let Some(snapshot) = self.active_render_snapshot() {
-                let hit = crate::schematic_runtime::hit_test::hit_test(
+                let hit = crate::schematic_runtime::hit_test::hit_test_styled(
                     snapshot,
                     &self.interaction_state.active_canvas().designators,
                     world_x,
                     world_y,
+                    self.ui_state.net_class_styles.styles(),
                 );
                 if let Some(reference) = hit {
                     let direction = match picker {
@@ -263,6 +264,11 @@ impl Signex {
         } else {
             self.snap_to_grid(world_x, world_y)
         };
+
+        // A part on the cursor: the click places it, whatever tool is shown.
+        if self.interaction_state.placement.is_some() {
+            return self.handle_placement_click(wx, wy);
+        }
 
         match self.interaction_state.current_tool {
             Tool::Wire => {

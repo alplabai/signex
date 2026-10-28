@@ -74,6 +74,20 @@ pub enum AnnotateMsg {
         generation: u64,
         result: std::sync::Arc<Result<crate::app::handlers::erc::AnnotatePreviewLoad, String>>,
     },
+    /// "Re-prefix to standard" was pressed (#1315): ask the mounted libraries
+    /// for the class and prefix override of the project's placed parts.
+    ReprefixPressed,
+    /// The libraries answered the Re-prefix lookup. `generation` is the
+    /// request's token; a result a newer request replaced is dropped.
+    ReprefixRowsResolved {
+        generation: u64,
+        result: std::sync::Arc<Result<crate::library::reprefix_lookup::ReprefixLookup, String>>,
+    },
+    /// Confirm on the Re-prefix list: re-plan against the state of now and
+    /// apply it as one undo step.
+    ReprefixConfirmed,
+    /// Cancel (or Esc) on the Re-prefix list: nothing changes.
+    ReprefixCancelled,
 }
 
 /// ERC dialog message family (ADR-0001 D3). Namespaced under
@@ -95,16 +109,34 @@ pub enum ErcMsg {
     /// Copy this machine's ERC preferences into the active project's
     /// `.snxprj` rule set (written on the next explicit save, #1085).
     StoreRulesInProject,
-    /// "Save as profile": write the project's stored ERC rules to the user's
-    /// profile library as a new file under `name` (a taken name gets a
-    /// numeric suffix; an existing profile is never replaced).
-    ProfileSaveRequested { name: String },
-    /// The profile file was written (or why it was not). On success the
+    /// "Save as profile": open the dialog that asks for a name and version
+    /// (#1608). Writes nothing.
+    ProfileSaveDialogOpened,
+    /// The Save-as dialog's name field changed.
+    ProfileSaveNameChanged(String),
+    /// The Save-as dialog's version field changed.
+    ProfileSaveVersionChanged(String),
+    /// Save in the Save-as dialog: validate, then write unless the name
+    /// exists (then ask first).
+    ProfileSaveSubmitted,
+    /// The user agreed to replace the existing profile of that name.
+    ProfileSaveOverwriteConfirmed,
+    /// Go back from the overwrite question, or close the Save-as dialog.
+    ProfileSaveCancelled,
+    /// The profile file was written, found taken, or failed. On success the
     /// project records the written profile as its provenance.
     ProfileSaved {
         project: crate::app::state::ProjectId,
-        result: std::sync::Arc<Result<crate::rule_profiles::SavedProfile, String>>,
+        result: std::sync::Arc<Result<crate::rule_profiles::SaveOutcome, String>>,
     },
+    /// The `User Default` profile (the machine's rules) was read at launch.
+    /// `Ok(None)`: the machine has none yet.
+    UserDefaultLoaded(std::sync::Arc<Result<Option<signex_types::project::RuleProfile>, String>>),
+    /// A queued profile file write finished; the next one may start. Carries
+    /// the profile the file now holds, for an edit of a library profile.
+    ProfileWriteFinished(std::sync::Arc<Result<crate::app::rule_profile_ui::WriteOutcome, String>>),
+    /// The quit path ran the writes still queued.
+    ProfileWritesFlushed(std::sync::Arc<Result<(), String>>),
     /// "Update from profile": look up the profile the project was seeded
     /// from and show what applying it would change.
     ProfileUpdateRequested,
@@ -507,6 +539,12 @@ pub enum ProjectMsg {
         u64,
         Result<Box<crate::app::state::project_fs::ProjectFsFacts>, String>,
     ),
+    /// The off-thread Navigator hierarchy assembly finished (#1470); `Err`
+    /// is a worker that died. Applied only while its generation is the latest.
+    NavigatorAssembled(
+        u64,
+        Result<Box<crate::app::state::navigator_job::NavigatorAssembly>, String>,
+    ),
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex
     /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.
@@ -643,6 +681,9 @@ pub enum EditMsg {
     SmartPaste,
     /// Duplicate the current selection in place.
     Duplicate,
+    /// Reorder the selected drawings within the sheet's drawing list; the
+    /// selection's circuit elements are ignored (#1583).
+    ArrangeDrawings(signex_engine::DrawingArrange),
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of
@@ -671,4 +712,7 @@ pub enum DrawingFieldEdit {
     ArcEndAngle(f64),
     /// Override the stroke colour; `None` restores the theme default.
     StrokeColor(Option<signex_types::schematic::StrokeColor>),
+    /// Put the drawing behind or above the circuit (#1583). Not a field of
+    /// the drawing itself: it is stored per sheet.
+    Placement(signex_types::schematic::DrawingPlacement),
 }
