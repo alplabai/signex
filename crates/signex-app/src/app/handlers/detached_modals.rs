@@ -7,7 +7,7 @@ use crate::app::Message;
 use crate::app::state::{ModalId, Signex, WindowKind};
 
 /// Dialogs whose window follows their open state, whatever code flips it.
-const FOLLOWED: [ModalId; 10] = [
+const FOLLOWED: [ModalId; 11] = [
     ModalId::FindReplace,
     ModalId::RenameDialog,
     ModalId::RemoveDialog,
@@ -18,14 +18,16 @@ const FOLLOWED: [ModalId; 10] = [
     ModalId::KeyboardShortcuts,
     ModalId::PassiveCalculator,
     ModalId::FirstRunTour,
+    ModalId::CreateChildSheet,
 ];
 
 /// Confirm-class dialogs among the detached ones: while one is open the
 /// main window takes no input.
-const LOCKING: [ModalId; 3] = [
+const LOCKING: [ModalId; 4] = [
     ModalId::RenameDialog,
     ModalId::RemoveDialog,
     ModalId::AnnotateResetConfirm,
+    ModalId::CreateChildSheet,
 ];
 
 impl Signex {
@@ -44,6 +46,7 @@ impl Signex {
             ModalId::KeyboardShortcuts => ui.keyboard_shortcuts_open,
             ModalId::PassiveCalculator => ui.passive_calculator_open,
             ModalId::FirstRunTour => ui.first_run_tour_open,
+            ModalId::CreateChildSheet => ui.create_child_sheet_confirm.is_some(),
             ModalId::AnnotateDialog
             | ModalId::AnnotateResetConfirm
             | ModalId::ErcDialog
@@ -59,9 +62,9 @@ impl Signex {
     /// Open the window of every followed dialog that has just opened and
     /// close the window of every one that has just closed. Runs after each
     /// `update`, so the many places that flip these flags need no wiring.
-    pub(crate) fn sync_detached_modals(&mut self) -> Task<Message> {
-        if self.ui_state.main_window_id.is_none() {
-            return Task::none();
+    pub(crate) fn sync_detached_modals(&mut self) -> Option<Task<Message>> {
+        if !self.ui_state.main_window_opened {
+            return None;
         }
         let mut tasks = Vec::new();
         for modal in FOLLOWED {
@@ -74,7 +77,7 @@ impl Signex {
                 (true, true) | (false, false) => {}
             }
         }
-        Task::batch(tasks)
+        (!tasks.is_empty()).then(|| Task::batch(tasks))
     }
 
     /// The window of the open confirm dialog that locks the main window, if
@@ -103,6 +106,7 @@ mod tests {
         let (mut app, _task) = Signex::new();
         let main = iced::window::Id::unique();
         app.ui_state.main_window_id = Some(main);
+        app.ui_state.main_window_opened = true;
         app.ui_state.first_run_tour_open = false;
         (app, main)
     }
@@ -175,6 +179,18 @@ mod tests {
             ModalId::KeyboardShortcuts => ui.keyboard_shortcuts_open = true,
             ModalId::PassiveCalculator => ui.passive_calculator_open = true,
             ModalId::FirstRunTour => ui.first_run_tour_open = true,
+            ModalId::CreateChildSheet => {
+                ui.create_child_sheet_confirm =
+                    Some(crate::app::contracts::CreateChildSheetConfirmState {
+                        symbol: uuid::Uuid::nil(),
+                        name: "s".into(),
+                        parent: "p.snxsch".into(),
+                        project_dir: ".".into(),
+                        path_text: "s.snxsch".into(),
+                        error: None,
+                        exists: false,
+                    })
+            }
             other => panic!("{other:?} is not followed"),
         }
     }

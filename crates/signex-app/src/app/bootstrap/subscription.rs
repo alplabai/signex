@@ -402,6 +402,7 @@ fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
         ModalId::KeyboardShortcuts => Some(OverlayId::KeyboardShortcuts),
         ModalId::PassiveCalculator => Some(OverlayId::PassiveCalculator),
         ModalId::FirstRunTour => Some(OverlayId::FirstRunTour),
+        ModalId::CreateChildSheet => Some(OverlayId::CreateChildSheetConfirm),
         ModalId::MoveSelection | ModalId::NetColorPalette | ModalId::ParameterManager => None,
     }
 }

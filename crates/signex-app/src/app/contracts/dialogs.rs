@@ -548,8 +548,17 @@ pub enum ProjectMsg {
         path: std::path::PathBuf,
         result: Result<(), String>,
     },
-    /// The "create the missing sheet?" dialog was answered.
+    /// The Create Sheet dialog's path field was edited.
+    CreateChildSheetPathChanged(String),
+    /// "Browse..." in the Create Sheet dialog.
+    CreateChildSheetBrowse,
+    /// The native save dialog of "Browse..." answered (`None`: cancelled).
+    CreateChildSheetBrowsed(Option<std::path::PathBuf>),
+    /// The Create Sheet dialog was answered: Create, or Later (`create:
+    /// false`, which also closes the window).
     CreateChildSheetAnswered { create: bool },
+    /// "Open it" in the Create Sheet dialog, for a path that already exists.
+    CreateChildSheetOpenExisting,
     /// The off-thread write of a child sheet created from a symbol finished.
     /// `project_id` is the project owning the parent sheet, if any.
     ChildSheetCreated {

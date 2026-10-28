@@ -256,6 +256,11 @@ impl Signex {
                 Some(Message::Overlay(OverlayMsg::ClosePassiveCalculator))
             }
             ModalId::FirstRunTour => Some(Message::Overlay(OverlayMsg::DismissFirstRunTour)),
+            ModalId::CreateChildSheet => {
+                Some(Message::Project(ProjectMsg::CreateChildSheetAnswered {
+                    create: false,
+                }))
+            }
         }
     }
 
@@ -321,6 +326,7 @@ impl Signex {
             ModalId::KeyboardShortcuts => iced::Size::new(520.0, 600.0),
             ModalId::PassiveCalculator => iced::Size::new(640.0, 520.0),
             ModalId::FirstRunTour => iced::Size::new(360.0, 170.0),
+            ModalId::CreateChildSheet => iced::Size::new(560.0, 260.0),
         };
 
         let (id, open_task) = iced::window::open(detached_modal_settings(size));

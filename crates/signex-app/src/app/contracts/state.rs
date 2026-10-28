@@ -161,19 +161,26 @@ pub enum ChildSheetWriteError {
     Failed(String),
 }
 
-/// "Create the missing sheet?" confirm, opened by descending through a sheet
-/// symbol whose file does not exist. Held by symbol id: the sheet may change
-/// while the dialog is up, and the answer looks the symbol up again.
+/// The "Create Sheet" dialog: the file a sheet symbol points at does not
+/// exist, and the user picks where to write it. Held by the parent sheet's
+/// path and the symbol's id, so the answer acts on THAT document whatever tab
+/// is active by then.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateChildSheetConfirmState {
     pub symbol: uuid::Uuid,
     /// The symbol's name, for the dialog text.
     pub name: String,
-    /// Where the file would be written.
-    pub path: std::path::PathBuf,
-    /// The sheet that carries the symbol: the answer plans against it, not
-    /// against whichever tab is active by then.
+    /// The sheet that carries the symbol.
     pub parent: std::path::PathBuf,
+    /// The project folder the file must stay inside (the parent's folder for
+    /// a loose sheet).
+    pub project_dir: std::path::PathBuf,
+    /// The editable file path: relative to the parent's folder, or absolute.
+    pub path_text: String,
+    /// Why Create refused, shown under the field.
+    pub error: Option<String>,
+    /// The typed path names a file that already exists: offer to open it.
+    pub exists: bool,
 }
 
 /// State for the "Exit Signex — Unsaved Edits" confirmation modal.

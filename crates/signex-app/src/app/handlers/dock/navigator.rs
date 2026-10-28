@@ -48,22 +48,38 @@ impl Signex {
             .hierarchy
             .as_ref()
             .and_then(|hierarchy| hierarchy.placement_at(path));
-        let (sheet_path, kind, label, detail) = (
+        let (sheet_path, kind, label, detail, symbol) = (
             node.path.clone(),
             node.kind,
             node.name.clone(),
             node.detail.clone(),
+            node.placed_as,
         );
+        // The sheet that carries this row's symbol: one level up the tree.
+        let parent_path = path
+            .split_last()
+            .filter(|(_, up)| !up.is_empty())
+            .and_then(|(_, up)| navigator.node_at(up))
+            .map(|parent| parent.path.clone());
         navigator.selected = Some(path.to_vec());
         if !navigator.register_click(path, std::time::Instant::now()) {
             return;
         }
         match kind {
             SheetNodeKind::Present => self.open_sheet_with_placement(sheet_path, placement),
-            SheetNodeKind::Missing => crate::diagnostics::log_warning(format!(
-                "Sheet '{label}' cannot be opened: {} is missing",
-                sheet_path.display()
-            )),
+            SheetNodeKind::Missing => {
+                crate::diagnostics::log_warning(format!(
+                    "Sheet '{label}' cannot be opened: {} is missing",
+                    sheet_path.display()
+                ));
+                // Offer to create it, as the canvas does.
+                if let (Some(symbol), Some(parent)) = (symbol, parent_path)
+                    && (self.active_tab_path().as_deref() == Some(parent.as_path())
+                        || self.open_or_focus_sheet_path(parent))
+                {
+                    self.open_create_child_sheet_dialog(symbol, true);
+                }
+            }
             SheetNodeKind::Unreadable => crate::diagnostics::log_warning(format!(
                 "Sheet '{label}' cannot be opened: {} is unreadable ({})",
                 sheet_path.display(),

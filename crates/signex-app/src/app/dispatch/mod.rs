@@ -137,6 +137,7 @@ impl Signex {
             }
             WindowMsg::MainWindowOpened(id) => {
                 self.ui_state.main_window_id = Some(id);
+                self.ui_state.main_window_opened = true;
                 // winit's default menu exists now; ours replaces it on the
                 // sync that ends this update.
                 #[cfg(target_os = "macos")]
@@ -230,6 +231,9 @@ impl Signex {
                                 self.ui_state.passive_calculator_open = false
                             }
                             ModalId::FirstRunTour => self.ui_state.first_run_tour_open = false,
+                            ModalId::CreateChildSheet => {
+                                self.ui_state.create_child_sheet_confirm = None
+                            }
                         },
                         // Closing an undocked-tab window is the reattach
                         // gesture — the tab itself stays in

@@ -153,6 +153,9 @@ pub struct UiState {
     /// The window that has keyboard focus, `None` while none of ours does.
     /// The system menu bar acts on it (docs/MENU_BAR.md, "Native macOS menu").
     pub focused_window: Option<iced::window::Id>,
+    /// The main window has opened (`MainWindowOpened`): dialogs may open
+    /// their own windows from here on.
+    pub main_window_opened: bool,
     /// Logical size of the monitor holding the main window, when known.
     pub main_window_monitor_size: Option<iced::Size>,
     /// Opt-in autosave of recovery copies (#104). Off by default.

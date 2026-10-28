@@ -79,7 +79,7 @@ impl Signex {
         }
         let before = self.active_tab_path();
         let mut tasks = vec![self.dispatch_update(message)];
-        tasks.push(self.sync_detached_modals());
+        tasks.extend(self.sync_detached_modals());
         #[cfg(target_os = "macos")]
         self.sync_native_menu();
         // Any activation path (select, open, close-neighbour, Ctrl+Tab)

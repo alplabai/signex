@@ -281,6 +281,7 @@ impl Signex {
                 self.ui_state.theme_id,
                 &self.ui_state.passive_calculator,
             ),
+            ModalId::CreateChildSheet => self.view_create_child_sheet_body(),
             ModalId::FirstRunTour => {
                 crate::first_run_tour::window_view(&self.document_state.panel_ctx.tokens)
             }

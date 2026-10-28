@@ -6,27 +6,35 @@ entry; the netlist stitches the two by name.
 
 ## Creating the child sheet {#creating-the-child-sheet}
 
-- **Where.** Right-click a sheet symbol, then "Create Sheet From Sheet Symbol".
-  The file is written beside the PARENT sheet, at the path descending resolves
-  (`resolve_child_sheet_path`), so the next double-click opens what was made.
-- **What.** A blank sheet plus one Hierarchical label per entry, with the
-  entry's name and direction (`signex_engine::child_document_for_symbol`).
-- **Registered.** The file is added to the project's sheet list, relative to
-  the project folder, and the `.snxprj` is marked changed; it is saved with
-  the project like any other Add New. The Projects tree shows it at once. A
-  file outside the project folder is created but not listed, and the Messages
-  panel says so.
-- **Never overwrites.** The write is a temp file, fsync and a no-clobber
-  rename on a worker thread. If the file already exists the sheet is just
-  opened.
-- **Not undone.** Writing the file is like Save: it is not an edit, so Undo
-  does not remove it; the Messages panel records "Created child sheet ...".
-- **Double-click without a file.** Descending through a symbol whose file is
-  missing (double-click, Enter, "Open Child Sheet") asks whether to create it
-  instead of doing nothing. If the parent sheet is not saved there is no folder
-  to create it in, and a notice says to save the parent first. The dialog is a
-  confirm dialog: it locks the macOS system menu bar like the other confirms
-  (docs/MENU_BAR.md).
+A sheet symbol whose file does not exist opens the **Create Sheet** dialog:
+
+- **When.** Right after the Place Sheet tool commits a symbol, and when the
+  symbol is descended into without a file (double-click, Enter, "Open Child
+  Sheet", the context menu's "Create Sheet From Sheet Symbol"). The Navigator's
+  missing rows ask the same way.
+- **Where.** The field is the file path, relative to the PARENT sheet's folder
+  (default: the symbol's file name, so beside the parent). A sub-folder path
+  such as `power/regulator.snxsch` is fine; "Browse..." opens the native save
+  dialog in the parent's folder. The path must end in `.snxsch` and resolve
+  inside the project folder (`..` and absolute paths that leave it are refused
+  with an inline error and nothing is written). Missing sub-folders are created.
+- **Create.** Writes a blank sheet plus one Hierarchical label per entry on
+  the symbol (`signex_engine::child_document_for_symbol`), on a worker thread
+  with a temp file, fsync and a no-clobber rename. A file that already exists is
+  never overwritten: the dialog offers "Open it" instead. The file is listed
+  in the project's `sheets` with its project-relative path (`.snxprj` marked
+  changed, saved with the project), the symbol's File field is set to the path
+  relative to the parent sheet, and the child opens with the placement recorded.
+- **Later.** Keeps the symbol, writes nothing, and says so in the Messages panel.
+- **Which document.** The dialog holds the parent sheet's path and the symbol's
+  id and acts on that document, whatever tab is active when it is answered.
+  If the symbol has vanished, the Messages panel says so. An unsaved parent
+  sheet (no file) gets a notice instead of the dialog.
+- **Undo.** Writing the file is like Save: it is not an edit and is not undone;
+  the Messages panel records it. The File-field change is one undo step, as is
+  each sheet-entry placement.
+- **Window.** It is a confirm-class dialog: it opens in its own window and locks
+  the main window and the native menu (docs/DETACHED_MODALS.md).
 
 ## Sheet Entry tool {#sheet-entry-tool}
 

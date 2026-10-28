@@ -26,6 +26,7 @@ pub(crate) fn detached_modal_title(modal: ModalId) -> &'static str {
         ModalId::KeyboardShortcuts => "Keyboard Shortcuts",
         ModalId::PassiveCalculator => "Passive Network Calculator",
         ModalId::FirstRunTour => "Welcome to Signex",
+        ModalId::CreateChildSheet => "Create Sheet",
     }
 }
 

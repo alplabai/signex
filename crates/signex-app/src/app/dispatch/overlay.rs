@@ -113,8 +113,18 @@ impl Signex {
                 self.handle_add_new_schematic_written(project_id, path, result);
                 Task::none()
             }
+            ProjectMsg::CreateChildSheetPathChanged(text) => {
+                self.handle_create_child_sheet_path_changed(text)
+            }
+            ProjectMsg::CreateChildSheetBrowse => self.handle_create_child_sheet_browse(),
+            ProjectMsg::CreateChildSheetBrowsed(picked) => {
+                self.handle_create_child_sheet_browsed(picked)
+            }
             ProjectMsg::CreateChildSheetAnswered { create } => {
                 self.handle_create_child_sheet_answered(create)
+            }
+            ProjectMsg::CreateChildSheetOpenExisting => {
+                self.handle_create_child_sheet_open_existing()
             }
             ProjectMsg::ChildSheetCreated {
                 project_id,

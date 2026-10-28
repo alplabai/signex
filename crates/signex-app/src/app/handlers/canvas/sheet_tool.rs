@@ -32,11 +32,15 @@ impl Signex {
         let stem = self.unused_child_sheet_stem();
         match signex_engine::child_sheet_from_corners(anchor, corner, &stem) {
             Some(child_sheet) => {
+                let symbol = child_sheet.uuid;
                 self.apply_engine_command(
                     signex_engine::Command::PlaceChildSheet { child_sheet },
                     false,
                     true,
                 );
+                // Ask where the new sheet's file goes (Later keeps the symbol
+                // alone).
+                self.open_create_child_sheet_dialog(symbol, false);
             }
             None => crate::diagnostics::log_warning(format!(
                 "Sheet not placed: each edge must be at least {} mm",

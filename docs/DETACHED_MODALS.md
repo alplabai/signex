@@ -21,7 +21,7 @@ backstop; Esc typed in the window resolves through the Esc ladder.
 
 **Followed dialogs.** For Find / Replace, Rename, Remove, Enable Version
 Control, Grid Properties, Custom Selection Filter, About, Keyboard Shortcuts,
-the Passive Calculator and the first-run tour, `sync_detached_modals`
+the Passive Calculator, the first-run tour and Create Sheet, `sync_detached_modals`
 (`app/handlers/detached_modals.rs`) runs after every `update` and opens or
 closes the window to match the dialog's open state. Whatever code flips the
 flag (a menu row, F1, Esc, a handler) needs no wiring.
@@ -33,9 +33,9 @@ window.
 
 Confirm and warning dialogs lock the main window; tool windows do not.
 
-- **Locking:** Rename, Remove and the annotate-reset confirm (detached), plus
-  the in-window confirms (quit, project close, error notice, netlist prompt,
-  recovery prompts, create-sheet confirm, library confirms). The one predicate
+- **Locking:** Rename, Remove, Create Sheet and the annotate-reset confirm
+  (detached), plus the in-window confirms (quit, project close, error notice,
+  netlist prompt, recovery prompts, library confirms). The one predicate
   is `Signex::has_locking_confirm_modal` (read by the macOS menu bar), and
   `locking_confirm_window` names a locking dialog that has its own window.
 - **While a detached confirm is open:** the main window and undocked tabs take
@@ -53,6 +53,6 @@ Confirm and warning dialogs lock the main window; tool windows do not.
 Command palette, context menus, dropdown pickers, Active Bar menus, the grid
 picker, the panel list, text edit and drag ghosts stay in the main window.
 Not yet detached: the error notice, netlist-incomplete prompt, custom net
-colour, autosave recovery, project-close and app-quit confirms, the
-create-sheet confirm and the library modals. The confirms need the same lock
+colour, autosave recovery, project-close and app-quit confirms and the
+library modals. The confirms need the same lock
 treatment once detached; the library modals are tool windows.

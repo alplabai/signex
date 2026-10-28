@@ -297,6 +297,7 @@ impl Signex {
                 desktop_button_layout: None,
                 main_window_mode: iced::window::Mode::Windowed,
                 focused_window: None,
+                main_window_opened: false,
                 main_window_monitor_size: None,
                 autosave_enabled,
                 preferences_draft_autosave_enabled: autosave_enabled,

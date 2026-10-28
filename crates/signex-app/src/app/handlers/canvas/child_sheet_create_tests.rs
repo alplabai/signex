@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use super::super::dock::project_navigation::add_io;
 use crate::app::handlers::menu::export::tests::app_workspace;
-use crate::app::{Message, ProjectMsg, Signex, TabInfo, TabKind};
+use crate::app::{Signex, TabInfo, TabKind};
 
 /// An app with `top.snxsch` open (and written) in a project, holding one sheet
 /// symbol `sheet1` -> `sheet1.snxsch` with two entries.
@@ -55,16 +55,52 @@ fn parent_with_symbol(dir: &Path) -> (Signex, PathBuf, Uuid) {
     (app, top, id)
 }
 
+/// Open the dialog for the fixture's symbol and type `text` in its field.
+fn dialog_with(app: &mut Signex, id: Uuid, text: &str) {
+    app.open_create_child_sheet_dialog(id, false);
+    let _ = app.handle_create_child_sheet_path_changed(text.to_owned());
+}
+
+fn confirm(app: &Signex) -> crate::app::contracts::CreateChildSheetConfirmState {
+    app.ui_state
+        .create_child_sheet_confirm
+        .clone()
+        .expect("the dialog is up")
+}
+
+fn file_field(app: &Signex, top: &Path) -> String {
+    app.document_state.engines[top].document().child_sheets[0]
+        .filename
+        .clone()
+}
+
 #[test]
-fn the_child_is_written_beside_the_parent_with_one_port_per_entry_and_registered() {
+fn the_dialog_shows_the_default_path_beside_the_parent() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, top, id) = parent_with_symbol(dir.path());
-    let plan = app
-        .plan_child_sheet_creation(&top, id, None)
-        .expect("a plan");
-    let child = dir.path().join("sheet1.snxsch");
+    app.open_create_child_sheet_dialog(id, false);
+    let c = confirm(&app);
+    assert_eq!(c.path_text, "sheet1.snxsch");
+    assert_eq!((c.parent.as_path(), c.symbol), (top.as_path(), id));
+    assert_eq!(c.project_dir, dir.path());
+    assert!(
+        !dir.path().join("sheet1.snxsch").exists(),
+        "nothing written yet"
+    );
+}
+
+#[test]
+fn a_sub_folder_path_creates_the_folder_and_file_registers_and_links_the_symbol() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, id) = parent_with_symbol(dir.path());
+    dialog_with(&mut app, id, "power/regulator.snxsch");
+    let plan = app.plan_child_sheet_from_dialog().expect("a plan");
+    let child = dir.path().join("power").join("regulator.snxsch");
     assert_eq!(plan.path, child);
-    assert!(!child.exists(), "planning writes nothing");
+    assert!(
+        !dir.path().join("power").exists(),
+        "planning writes nothing"
+    );
 
     add_io::write_new_schematic(&plan.path, plan.document).expect("written");
     let text = std::fs::read_to_string(&child).expect("file");
@@ -83,56 +119,170 @@ fn the_child_is_written_beside_the_parent_with_one_port_per_entry_and_registered
             .data
             .sheets
             .iter()
-            .any(|s| s.filename == "sheet1.snxsch")
+            .any(|s| s.filename == "power/regulator.snxsch")
     );
-    assert!(
-        app.document_state.dirty_paths.contains(&project.path),
-        "the project is marked changed"
+    assert!(app.document_state.dirty_paths.contains(&project.path));
+    assert_eq!(
+        file_field(&app, &top),
+        "power/regulator.snxsch",
+        "the File field follows"
     );
 }
 
 #[test]
-fn an_existing_child_file_is_never_overwritten() {
+fn the_file_field_change_is_one_undo_step() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, id) = parent_with_symbol(dir.path());
+    dialog_with(&mut app, id, "power/regulator.snxsch");
+    let plan = app.plan_child_sheet_from_dialog().expect("a plan");
+    add_io::write_new_schematic(&plan.path, plan.document).expect("written");
+    let _ = app.handle_child_sheet_created(plan.project_id, &top, id, plan.path, Ok(()));
+    assert_eq!(file_field(&app, &top), "power/regulator.snxsch");
+    // The child opened in the active tab; undo the parent's own history.
+    app.document_state
+        .engines
+        .get_mut(&top)
+        .expect("parent engine")
+        .undo()
+        .expect("undo")
+        .expect("one step");
+    assert_eq!(file_field(&app, &top), "sheet1.snxsch");
+}
+
+#[test]
+fn a_path_outside_the_project_is_refused_and_nothing_is_written() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let project = dir.path().join("proj");
+    std::fs::create_dir(&project).expect("project dir");
+    let (mut app, _top, id) = parent_with_symbol(&project);
+    for text in [
+        "../escape.snxsch",
+        "/tmp/elsewhere.snxsch",
+        "../../escape.snxsch",
+    ] {
+        dialog_with(&mut app, id, text);
+        assert!(app.plan_child_sheet_from_dialog().is_none(), "{text}");
+        let c = confirm(&app);
+        assert!(c.error.is_some(), "{text}: an inline error");
+        assert!(!c.exists);
+    }
+    assert!(!dir.path().join("escape.snxsch").exists());
+    assert!(app.document_state.project_writes.is_empty());
+    // A bad extension is refused too.
+    dialog_with(&mut app, id, "x.txt");
+    assert!(app.plan_child_sheet_from_dialog().is_none());
+}
+
+#[test]
+fn an_existing_file_is_never_overwritten_and_can_be_opened_instead() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, top, id) = parent_with_symbol(dir.path());
     let child = dir.path().join("sheet1.snxsch");
     std::fs::write(&child, "mine").expect("existing");
+    dialog_with(&mut app, id, "sheet1.snxsch");
     assert!(
-        app.plan_child_sheet_creation(&top, id, None).is_none(),
+        app.plan_child_sheet_from_dialog().is_none(),
         "nothing to write"
     );
+    let c = confirm(&app);
+    assert!(c.exists && c.error.is_some(), "offers Open it");
     let err = add_io::write_new_schematic(&child, SchematicSheet::default()).unwrap_err();
     assert_eq!(err, add_io::ChildSheetWriteError::AlreadyExists);
     assert_eq!(std::fs::read_to_string(&child).expect("read"), "mine");
+    // Open it: the dialog closes, the file is untouched, the symbol links to it.
+    let _ = app.handle_create_child_sheet_open_existing();
+    assert!(app.ui_state.create_child_sheet_confirm.is_none());
+    assert_eq!(std::fs::read_to_string(&child).expect("read"), "mine");
+    assert_eq!(file_field(&app, &top), "sheet1.snxsch");
 }
 
 #[test]
-fn descending_through_a_symbol_without_a_file_asks_instead_of_doing_nothing() {
+fn later_keeps_the_symbol_and_writes_nothing() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, id) = parent_with_symbol(dir.path());
+    app.open_create_child_sheet_dialog(id, false);
+    let _ = app.handle_create_child_sheet_answered(false);
+    assert!(app.ui_state.create_child_sheet_confirm.is_none());
+    assert!(!dir.path().join("sheet1.snxsch").exists());
+    assert_eq!(file_field(&app, &top), "sheet1.snxsch");
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("was left without a file"))
+    );
+}
+
+#[test]
+fn a_tab_switch_while_the_dialog_is_open_still_targets_the_original_parent() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, id) = parent_with_symbol(dir.path());
+    dialog_with(&mut app, id, "kid.snxsch");
+    switch_to_other_sheet_with_same_symbol(&mut app, dir.path(), id);
+    let plan = app
+        .plan_child_sheet_from_dialog()
+        .expect("a plan for the original sheet");
+    assert_eq!(plan.parent, top);
+    assert_eq!(plan.path, dir.path().join("kid.snxsch"));
+    assert!(!dir.path().join("sub").join("kid.snxsch").exists());
+}
+
+#[test]
+fn a_symbol_that_is_gone_is_logged_not_ignored() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _top, id) = parent_with_symbol(dir.path());
+    dialog_with(&mut app, id, "kid.snxsch");
+    app.ui_state
+        .create_child_sheet_confirm
+        .as_mut()
+        .expect("dialog")
+        .symbol = Uuid::new_v4();
+    assert!(app.plan_child_sheet_from_dialog().is_none());
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("is no longer in"))
+    );
+}
+
+#[test]
+fn committing_the_place_sheet_tool_opens_the_dialog_with_the_default_name() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _top, _id) = parent_with_symbol(dir.path());
+    app.place_sheet_click(10.0, 10.0);
+    assert!(
+        app.ui_state.create_child_sheet_confirm.is_none(),
+        "first corner only"
+    );
+    app.place_sheet_click(40.0, 40.0);
+    let c = confirm(&app);
+    assert_eq!(c.path_text, "sheet2.snxsch");
+    assert_eq!(
+        app.document_state.engines[&c.parent]
+            .document()
+            .child_sheets
+            .len(),
+        2
+    );
+}
+
+#[test]
+fn descending_through_a_symbol_without_a_file_opens_the_dialog() {
     let _ = crate::diagnostics::init_logging();
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _top, id) = parent_with_symbol(dir.path());
     app.descend_through_sheet_symbol(id, "sheet1.snxsch");
-    let confirm = app
-        .ui_state
-        .create_child_sheet_confirm
-        .as_ref()
-        .expect("the dialog is up");
-    assert_eq!(confirm.symbol, id);
-    assert_eq!(confirm.path, dir.path().join("sheet1.snxsch"));
+    assert_eq!(confirm(&app).symbol, id);
     assert!(
         app.has_locking_confirm_modal(),
-        "a confirm dialog locks the native menu"
+        "a confirm locks the native menu"
     );
     assert!(
         crate::diagnostics::recent_entries()
             .iter()
             .any(|e| e.message.contains("Sheet 'sheet1' has no file yet"))
     );
-    // Declining writes nothing.
-    let _ = app.update(Message::Project(ProjectMsg::CreateChildSheetAnswered {
-        create: false,
-    }));
-    assert!(app.ui_state.create_child_sheet_confirm.is_none());
     assert!(!dir.path().join("sheet1.snxsch").exists());
 }
 
@@ -148,7 +298,23 @@ fn an_unsaved_parent_says_so_and_offers_nothing() {
         card.detail.contains("Save the parent sheet first"),
         "{card:?}"
     );
-    assert!(app.plan_child_sheet_creation(&top, id, None).is_none());
+}
+
+#[test]
+fn a_project_closed_during_the_write_is_logged() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, id) = parent_with_symbol(dir.path());
+    dialog_with(&mut app, id, "kid.snxsch");
+    let plan = app.plan_child_sheet_from_dialog().expect("plan");
+    add_io::write_new_schematic(&plan.path, plan.document).expect("written");
+    app.document_state.projects.clear();
+    let _ = app.handle_child_sheet_created(plan.project_id, &top, id, plan.path, Ok(()));
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("its project was closed first"))
+    );
 }
 
 #[test]
@@ -220,68 +386,6 @@ fn switch_to_other_sheet_with_same_symbol(app: &mut Signex, dir: &Path, id: Uuid
 }
 
 #[test]
-fn the_answer_plans_against_the_sheet_that_was_asked_not_the_active_tab() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let (mut app, top, id) = parent_with_symbol(dir.path());
-    app.descend_through_sheet_symbol(id, "sheet1.snxsch");
-    let shown = app
-        .ui_state
-        .create_child_sheet_confirm
-        .as_ref()
-        .expect("dialog")
-        .path
-        .clone();
-    switch_to_other_sheet_with_same_symbol(&mut app, dir.path(), id);
-
-    let confirm = app
-        .ui_state
-        .create_child_sheet_confirm
-        .clone()
-        .expect("dialog");
-    assert_eq!(confirm.parent, top);
-    let plan = app
-        .plan_child_sheet_creation(&confirm.parent, id, Some(&confirm.path))
-        .expect("a plan for the original sheet");
-    assert_eq!(plan.path, shown, "written where the dialog said");
-    assert!(!dir.path().join("sub").join("sheet1.snxsch").exists());
-}
-
-#[test]
-fn a_path_other_than_the_one_shown_is_refused_with_a_log_line() {
-    let _ = crate::diagnostics::init_logging();
-    let dir = tempfile::tempdir().expect("tempdir");
-    let (mut app, top, id) = parent_with_symbol(dir.path());
-    let wrong = dir.path().join("elsewhere.snxsch");
-    assert!(
-        app.plan_child_sheet_creation(&top, id, Some(&wrong))
-            .is_none()
-    );
-    assert!(
-        crate::diagnostics::recent_entries()
-            .iter()
-            .any(|e| e.message.contains("not the file you were asked about"))
-    );
-    assert!(app.document_state.project_writes.is_empty());
-    assert!(!dir.path().join("sheet1.snxsch").exists());
-}
-
-#[test]
-fn a_symbol_that_is_gone_is_logged_not_ignored() {
-    let _ = crate::diagnostics::init_logging();
-    let dir = tempfile::tempdir().expect("tempdir");
-    let (mut app, top, _id) = parent_with_symbol(dir.path());
-    assert!(
-        app.plan_child_sheet_creation(&top, Uuid::new_v4(), None)
-            .is_none()
-    );
-    assert!(
-        crate::diagnostics::recent_entries()
-            .iter()
-            .any(|e| e.message.contains("is no longer in"))
-    );
-}
-
-#[test]
 fn a_case_variant_of_a_listed_sheet_is_not_listed_twice() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _top, _id) = parent_with_symbol(dir.path());
@@ -298,20 +402,4 @@ fn a_case_variant_of_a_listed_sheet_is_not_listed_twice() {
         !super::super::dock::project_navigation::register_sheet_entry(project, "sheet1.snxsch")
     );
     assert_eq!(project.data.sheets.len(), 1);
-}
-
-#[test]
-fn a_project_closed_during_the_write_is_logged() {
-    let _ = crate::diagnostics::init_logging();
-    let dir = tempfile::tempdir().expect("tempdir");
-    let (mut app, top, id) = parent_with_symbol(dir.path());
-    let plan = app.plan_child_sheet_creation(&top, id, None).expect("plan");
-    add_io::write_new_schematic(&plan.path, plan.document).expect("written");
-    app.document_state.projects.clear();
-    let _ = app.handle_child_sheet_created(plan.project_id, &top, id, plan.path, Ok(()));
-    assert!(
-        crate::diagnostics::recent_entries()
-            .iter()
-            .any(|e| e.message.contains("its project was closed first"))
-    );
 }

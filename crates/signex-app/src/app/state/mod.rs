@@ -385,6 +385,9 @@ pub enum ModalId {
     PassiveCalculator,
     /// The first-run onboarding tour.
     FirstRunTour,
+    /// "Create Sheet": where to write the file of a sheet symbol (confirm
+    /// class).
+    CreateChildSheet,
 }
 
 pub use signex_types::schematic::AnnotateOrder;

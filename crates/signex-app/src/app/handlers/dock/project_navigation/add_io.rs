@@ -134,6 +134,13 @@ pub(crate) fn write_new_schematic(
     let text = signex_types::format::SnxSchematic::new(sheet)
         .write_string()
         .map_err(|e| ChildSheetWriteError::Failed(format!("serialise sheet: {e}")))?;
+    // The path was checked to sit inside the project; a sub-folder it names
+    // may not exist yet.
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| {
+            ChildSheetWriteError::Failed(format!("create folder {}: {e}", dir.display()))
+        })?;
+    }
     create_noclobber(path, |f| std::io::Write::write_all(f, text.as_bytes())).map_err(|e| {
         if e.kind() == std::io::ErrorKind::AlreadyExists {
             ChildSheetWriteError::AlreadyExists
