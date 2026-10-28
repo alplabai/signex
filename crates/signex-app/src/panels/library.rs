@@ -8,15 +8,6 @@ use iced::widget::column;
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// Context passed to panels — owned data to avoid lifetime issues.
-#[derive(Debug, Clone)]
-pub struct LibrarySymbolEntry {
-    pub lib_id: String,
-    pub symbol_name: String,
-    pub library_name: String,
-    pub pin_count: usize,
-}
-
 /// Detail for the row currently selected in the active Library
 /// Browser tab. Surfaces in the right-edge Properties panel so
 /// primitive binding (Pick Symbol / Pick Footprint) lives next to

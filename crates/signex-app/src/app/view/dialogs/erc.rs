@@ -16,6 +16,9 @@ use super::widgets::{
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 impl Signex {
     pub(in crate::app::view) fn view_erc_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_erc_dialog_body_inner(true);
@@ -114,17 +117,17 @@ impl Signex {
         // Editing the machine's rules while they are loading, or while the
         // User Default file cannot be read or written: say so here, not only
         // in the log.
-        let mut scope = column![text(scope_note).size(10).color(text_muted)].spacing(2);
+        let mut scope = column![text(scope_note).size(TS.caption).color(text_muted)].spacing(SP.xs);
         if stored.is_none()
             && let Some(notice) = self.machine_rules_notice()
         {
             scope = scope.push(
                 text(notice)
-                    .size(10)
+                    .size(TS.caption)
                     .color(Color::from_rgb(0.9, 0.35, 0.35)),
             );
         }
-        let mut footer = row![scope].spacing(8).align_y(iced::Alignment::Center);
+        let mut footer = row![scope].spacing(SP.m).align_y(iced::Alignment::Center);
         // A rule set from a newer Signex sits unread in the file; storing
         // would replace it on save, so the action is not offered.
         if has_project && stored.is_none() && !unreadable {
@@ -242,9 +245,9 @@ impl Signex {
                 lines.len()
             )
         };
-        let mut list = column![text(heading).size(11).color(text_c)].spacing(2);
+        let mut list = column![text(heading).size(TS.body).color(text_c)].spacing(SP.xs);
         for line in lines {
-            list = list.push(text(line).size(10).color(text_muted));
+            list = list.push(text(line).size(TS.caption).color(text_muted));
         }
         let buttons = row![
             primary_button(
@@ -259,7 +262,7 @@ impl Signex {
                 border_c,
             ),
         ]
-        .spacing(8);
+        .spacing(SP.m);
         container(
             column![
                 container(iced::widget::scrollable(list)).max_height(120),
@@ -287,7 +290,7 @@ impl Signex {
         };
         let mut panel = column![
             text("Save the project's ERC rules as a profile")
-                .size(11)
+                .size(TS.body)
                 .color(text_c)
         ]
         .spacing(6);
@@ -300,7 +303,7 @@ impl Signex {
                          rules and version; projects that took their rules from it will show \
                          the change as an update."
                     ))
-                    .size(10)
+                    .size(TS.caption)
                     .color(text_muted),
                 )
                 .push(
@@ -318,13 +321,15 @@ impl Signex {
                             border_c,
                         ),
                     ]
-                    .spacing(8),
+                    .spacing(SP.m),
                 );
         } else {
             let submit = || Message::Erc(ErcMsg::ProfileSaveSubmitted);
             let editable = !dialog.busy;
-            let mut name_input = text_input("Profile name", &dialog.name).size(11);
-            let mut version_input = text_input("Version", &dialog.version).size(11).width(90);
+            let mut name_input = text_input("Profile name", &dialog.name).size(TS.body);
+            let mut version_input = text_input("Version", &dialog.version)
+                .size(TS.body)
+                .width(90);
             if editable {
                 name_input = name_input
                     .on_input(|v| Message::Erc(ErcMsg::ProfileSaveNameChanged(v)))
@@ -335,18 +340,18 @@ impl Signex {
             }
             panel = panel.push(
                 row![
-                    text("Name").size(10).color(text_muted),
+                    text("Name").size(TS.caption).color(text_muted),
                     name_input,
-                    text("Version").size(10).color(text_muted),
+                    text("Version").size(TS.caption).color(text_muted),
                     version_input,
                 ]
-                .spacing(8)
+                .spacing(SP.m)
                 .align_y(iced::Alignment::Center),
             );
             if let Some(error) = &dialog.error {
                 panel = panel.push(
                     text(error.clone())
-                        .size(10)
+                        .size(TS.caption)
                         .color(Color::from_rgb(0.9, 0.35, 0.35)),
                 );
             }
@@ -360,7 +365,7 @@ impl Signex {
                         border_c,
                     ),
                 ]
-                .spacing(8),
+                .spacing(SP.m),
             );
         }
         container(panel).padding([8, 14]).width(Length::Fill).into()

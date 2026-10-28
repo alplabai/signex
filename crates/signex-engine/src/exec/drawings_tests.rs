@@ -1,6 +1,6 @@
 use crate::test_support::test_sheet;
 use crate::*;
-use signex_types::schematic::{DrawingPlacement, Point, SchDrawing};
+use signex_types::schematic::{DrawingPlacement, Point, SchDrawing, SelectedKind, Wire};
 use uuid::Uuid;
 
 fn line(n: u128) -> SchDrawing {
@@ -154,4 +154,53 @@ fn a_placement_for_an_unknown_drawing_is_ignored() {
         .unwrap();
     assert!(!result.changed);
     assert!(engine.document().drawing_placements.is_empty());
+}
+
+fn reorder(engine: &mut Engine, items: Vec<SelectedItem>, direction: ReorderDirection) {
+    engine
+        .execute(Command::ReorderObjects { items, direction })
+        .unwrap();
+}
+
+#[test]
+fn active_bar_reorder_moves_a_selected_drawing_and_undo_restores_it() {
+    let mut engine = engine_with(3);
+    let item = SelectedItem::new(id(1), SelectedKind::Drawing);
+    reorder(&mut engine, vec![item], ReorderDirection::ToFront);
+    assert_eq!(order(&engine), [2, 3, 1]);
+
+    reorder(&mut engine, vec![item], ReorderDirection::ToBack);
+    assert_eq!(order(&engine), [1, 2, 3]);
+
+    reorder(&mut engine, vec![item], ReorderDirection::ToFront);
+    engine.undo().unwrap().expect("undo");
+    assert_eq!(order(&engine), [1, 2, 3]);
+}
+
+#[test]
+fn active_bar_reorder_of_a_mixed_selection_is_one_history_step() {
+    let mut sheet = test_sheet();
+    sheet.drawings = (1..=3).map(line).collect();
+    sheet.wires = [100, 101]
+        .map(|n| Wire {
+            uuid: id(n),
+            ..Default::default()
+        })
+        .to_vec();
+    let mut engine = Engine::new(sheet).unwrap();
+    reorder(
+        &mut engine,
+        vec![
+            SelectedItem::new(id(100), SelectedKind::Wire),
+            SelectedItem::new(id(1), SelectedKind::Drawing),
+        ],
+        ReorderDirection::ToFront,
+    );
+    assert_eq!(order(&engine), [2, 3, 1]);
+    assert_eq!(engine.document().wires[1].uuid, id(100));
+
+    engine.undo().unwrap().expect("one undo reverts both");
+    assert_eq!(order(&engine), [1, 2, 3]);
+    assert_eq!(engine.document().wires[0].uuid, id(100));
+    assert!(!engine.can_undo());
 }

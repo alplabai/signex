@@ -141,8 +141,8 @@ impl std::fmt::Debug for PreparedMountCell {
 /// [`LibraryError`] is not — the same reason `read_and_parse_schematic`
 /// returns `Result<_, String>`.
 ///
-/// Always writable: the read-only stock library mounts synchronously
-/// through [`LibraryState::open_library_read_only`], not this path.
+/// Always prepared writable; [`LibraryState::mount_prepared`] mounts the
+/// bundled stock library read-only whatever prepared it.
 pub fn prepare_mount(path: &Path) -> Result<PreparedMount, String> {
     let adapter = LocalGitAdapter::open(path).map_err(|e: LibraryError| e.to_string())?;
     let manifest = adapter.manifest();
@@ -265,7 +265,17 @@ impl LibraryState {
         // library sharing a `library_id` at different paths both mount
         // fine, by design (`adapters/library_set.rs`, "Resolution
         // semantics").
-        self.set.mount(prepared.adapter)?;
+        // The bundled stock library is always read-only, whichever request
+        // (global entry, project library, Add Library) mounts it first.
+        let stock = self.is_stock_root(&prepared.entry.root);
+        if stock {
+            self.set.mount_read_only(prepared.adapter)?;
+        } else {
+            self.set.mount(prepared.adapter)?;
+        }
+        if stock {
+            self.stock_library = Some(prepared.entry.root.clone());
+        }
         self.open_libraries.push(prepared.entry);
         self.touch_data();
         self.sweep_dangling_refs();

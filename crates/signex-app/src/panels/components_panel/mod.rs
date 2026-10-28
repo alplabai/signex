@@ -9,8 +9,8 @@
 //! 2. **Installed** — session-scoped, opened via the "+ Add Library…"
 //!    button on the Installed section header. Wiped on app close.
 //! 3. **Global** — persisted across launches via
-//!    `<config_dir>/signex/global_libraries.toml`. Loaded + mounted at
-//!    startup by [`global_prefs::load_and_mount_all`].
+//!    `<config_dir>/signex/global_libraries.toml`. Loaded at startup by
+//!    [`global_prefs::load`] and mounted off the UI thread.
 //!
 //! All three sources read from the same `LibraryState::open_libraries`
 //! Vec — `LibraryState::mount_source_for` does the bucketing at view

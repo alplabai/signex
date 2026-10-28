@@ -509,12 +509,6 @@ impl Signex {
                 self.document_state.panel_ctx.sheet_color = *color;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
             }
-            crate::panels::PanelMsg::DragComponentsSplit => {
-                self.interaction_state.dragging = Some(DragTarget::ComponentsSplit);
-                self.interaction_state.drag_start_pos = None;
-                self.interaction_state.drag_start_size =
-                    self.document_state.panel_ctx.components_split;
-            }
             crate::panels::PanelMsg::ToggleSelectionFilter(filter) => {
                 follow = self.handle_active_bar_filter_toggle(*filter);
             }
