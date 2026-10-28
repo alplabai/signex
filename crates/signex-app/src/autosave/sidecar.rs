@@ -22,6 +22,10 @@ use super::pending_move;
 /// Extension that marks a file as a recovery sidecar.
 pub const SIDECAR_EXTENSION: &str = "recovery";
 
+/// Extension appended to a copy that a newer copy of the same document
+/// displaced; it is kept on disk but never offered.
+const SUPERSEDED_EXTENSION: &str = "older";
+
 /// FNV-1a over the path text. Stable across Rust versions and platforms
 /// (unlike `DefaultHasher`), which is what a name that must be found again
 /// on the next launch needs.
@@ -47,7 +51,8 @@ fn legacy_path_hash(path: &Path) -> u64 {
 /// Move a copy written under the pre-#1510 key of `document` to its current
 /// key, so an upgrade (or a dot-segment spelling) does not strand it. Nothing
 /// happens when the keys agree, when no old-key copy exists, or when a copy
-/// already sits at the current key (that one wins; the old one is kept).
+/// already sits at the current key and is the newer (the old one is kept; if
+/// the old one is newer, the current copy is set aside and the old one adopted).
 pub fn adopt_legacy(recovery_dir: &Path, document: &Path) -> Result<(), String> {
     let current = sidecar_path(recovery_dir, document);
     let legacy = key_path(recovery_dir, document, legacy_path_hash(document));
@@ -55,13 +60,39 @@ pub fn adopt_legacy(recovery_dir: &Path, document: &Path) -> Result<(), String> 
         return Ok(());
     }
     if current.exists() {
-        crate::diagnostics::log_warning(format!(
-            "The recovery copy {} (an older key of {}) was left on disk: a copy already sits \
-             under the current key.",
-            legacy.display(),
-            document.display()
-        ));
-        return Ok(());
+        let newer = |a: &Path, b: &Path| match (
+            std::fs::metadata(a).and_then(|m| m.modified()),
+            std::fs::metadata(b).and_then(|m| m.modified()),
+        ) {
+            (Ok(a), Ok(b)) => a > b,
+            _ => false,
+        };
+        // Only the newest of the two is offered. The other is never deleted:
+        // it stays on disk under a name no scan offers, and is logged.
+        if newer(&legacy, &current) {
+            let mut aside = current.clone().into_os_string();
+            aside.push(".");
+            aside.push(SUPERSEDED_EXTENSION);
+            let aside = PathBuf::from(aside);
+            if std::fs::rename(&current, &aside).is_ok() {
+                crate::diagnostics::log_warning(format!(
+                    "The recovery copy {} of {} was older than {}; it was kept as {}.",
+                    current.display(),
+                    document.display(),
+                    legacy.display(),
+                    aside.display()
+                ));
+            } else {
+                return Ok(());
+            }
+        } else {
+            crate::diagnostics::log_warning(format!(
+                "The recovery copy {} (an older key of {}) was left on disk: a copy already                  sits under the current key.",
+                legacy.display(),
+                document.display()
+            ));
+            return Ok(());
+        }
     }
     std::fs::rename(&legacy, &current).map_err(|e| {
         format!(
@@ -183,6 +214,25 @@ mod tests {
         remove(&rec, &doc).unwrap();
         remove(&rec, &doc).unwrap();
         assert!(!sidecar_path(&rec, &doc).exists());
+    }
+
+    #[test]
+    fn the_newest_of_two_copies_is_offered_and_the_other_is_kept() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let doc = tmp.path().join("w/../main.snxsch");
+        let current = sidecar_path(&rec, &doc);
+        let legacy = key_path(&rec, &doc, legacy_path_hash(&doc));
+        assert_ne!(current, legacy);
+        std::fs::create_dir_all(&rec).unwrap();
+        std::fs::write(&current, b"old").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::fs::write(&legacy, b"new").unwrap();
+        adopt_legacy(&rec, &doc).unwrap();
+        assert_eq!(std::fs::read(&current).unwrap(), b"new");
+        let aside = format!("{}.{SUPERSEDED_EXTENSION}", current.display());
+        assert_eq!(std::fs::read(aside).unwrap(), b"old");
+        assert!(!legacy.exists());
     }
 
     #[test]
