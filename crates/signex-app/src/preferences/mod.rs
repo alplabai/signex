@@ -62,7 +62,7 @@ pub enum PrefNav {
     /// `prefs.json::component_classes`; defaults seed from
     /// `fonts::default_component_classes` on a fresh install.
     ComponentClasses,
-    // Future: Editor, Shortcuts, ...
+    // Future: Editor, ...
 }
 
 impl PrefNav {
@@ -110,6 +110,8 @@ impl PrefNav {
 
 #[derive(Debug, Clone)]
 pub enum PrefMsg {
+    /// Inert message: handled by doing nothing.
+    Noop,
     /// Navigate to a category.
     Nav(PrefNav),
     /// Close without saving (only if not dirty; app ignores if dirty).
@@ -226,13 +228,6 @@ pub enum PrefMsg {
     /// `preferences_keymap_status`, where the serialization failure at
     /// the same call site already reported.
     KeymapExportFinished(Result<std::path::PathBuf, String>),
-    /// Direct text edit of a binding's trigger (kept for API parity;
-    /// the recorder is the primary edit path).
-    KeymapBindingChanged {
-        command: crate::keymap::AppCommandId,
-        context: crate::keymap::ShortcutContext,
-        trigger: String,
-    },
     /// Open the chord recorder for a specific binding.
     KeymapRecorderOpen {
         command: crate::keymap::AppCommandId,

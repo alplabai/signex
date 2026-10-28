@@ -173,6 +173,10 @@ pub enum PcbAppEvent {
 const FAMILIES_TRACE_EDITED: &[PcbSliceFamily] =
     &[PcbSliceFamily::Traces, PcbSliceFamily::Ratsnest];
 const FAMILIES_VIA_EDITED: &[PcbSliceFamily] = &[PcbSliceFamily::Vias, PcbSliceFamily::Traces];
+// Traces stay in the set on purpose: a pad edit (size, shape, net) changes
+// where attached trace ends terminate and how they are net-coloured, and
+// the table feeds real `DirtyFlags` (Traces -> LINES), not just an
+// is-empty check. Pads alone would leave stale trace lines on screen.
 const FAMILIES_PAD_EDITED: &[PcbSliceFamily] = &[PcbSliceFamily::Pads, PcbSliceFamily::Traces];
 const FAMILIES_FOOTPRINT_MOVED: &[PcbSliceFamily] = &[PcbSliceFamily::Pads, PcbSliceFamily::Traces];
 const FAMILIES_ZONE_REFILLED: &[PcbSliceFamily] = &[PcbSliceFamily::Zones];

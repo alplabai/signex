@@ -36,7 +36,7 @@ fn empty_sheet() -> SchematicSheet {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
+        lib_symbols: Default::default(),
         net_colors: HashMap::new(),
         frame: Default::default(),
         font_family: None,

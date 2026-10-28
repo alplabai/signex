@@ -1,3 +1,4 @@
+// Standalone binary: mutates process-wide env vars (USER, GIT_AUTHOR_*), which must not leak into other tests.
 //! Issue #141 — no git entry point may author a commit as a generic
 //! Signex identity. Real git2 repos in temp dirs.
 //!
