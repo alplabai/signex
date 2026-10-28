@@ -311,6 +311,8 @@ pub struct UiState {
     /// close request that intersects `dirty_paths`. Cleared on any
     /// of the three button choices.
     pub project_close_confirm: Option<crate::app::ProjectCloseConfirmState>,
+    /// "Create the missing sheet?" confirm; `Some` while it is up.
+    pub create_child_sheet_confirm: Option<crate::app::contracts::CreateChildSheetConfirmState>,
     /// "Exit Signex — Unsaved Edits" confirmation modal. `Some` while
     /// the user is being asked to save / discard / cancel an app-exit
     /// request that intersects `dirty_paths`. Cleared on any of the

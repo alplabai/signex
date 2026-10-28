@@ -548,6 +548,17 @@ pub enum ProjectMsg {
         path: std::path::PathBuf,
         result: Result<(), String>,
     },
+    /// The "create the missing sheet?" dialog was answered.
+    CreateChildSheetAnswered { create: bool },
+    /// The off-thread write of a child sheet created from a symbol finished.
+    /// `project_id` is the project owning the parent sheet, if any.
+    ChildSheetCreated {
+        project_id: Option<crate::app::state::ProjectId>,
+        parent: std::path::PathBuf,
+        symbol: uuid::Uuid,
+        path: std::path::PathBuf,
+        result: Result<(), String>,
+    },
     /// v0.23 — Async project-git commit completed. The dispatcher
     /// removes the `(project_root, rel_path)` entry from
     /// `inflight_git_commits` and logs success/failure. `result.Ok`

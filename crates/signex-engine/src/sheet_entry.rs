@@ -52,17 +52,19 @@ pub fn sheet_symbol_at(sheet: &SchematicSheet, p: Point) -> Option<&ChildSheet> 
 }
 
 /// A new, hand-placed entry on `symbol`: `cursor` snapped to the nearest
-/// edge (kept off the corners), with the rotation that edge needs.
+/// edge (kept off the corners), with the rotation that edge needs. `None`
+/// takes the direction the edge suggests: input on the left, output on the
+/// right, bidirectional on top and bottom.
 pub fn new_sheet_entry(
     symbol: &ChildSheet,
     cursor: Point,
     name: &str,
-    direction: &str,
+    direction: Option<&str>,
 ) -> SheetPin {
     let mut pin = SheetPin {
         uuid: Uuid::new_v4(),
         name: name.trim().to_string(),
-        direction: normalize_sheet_pin_direction(direction).to_string(),
+        direction: String::new(),
         position: cursor,
         rotation: 0.0,
         auto_generated: false,
@@ -77,7 +79,27 @@ pub fn new_sheet_entry(
         symbol.size.0,
         symbol.size.1,
     );
+    pin.direction = match direction {
+        Some(direction) => normalize_sheet_pin_direction(direction),
+        None if pin.rotation == 0.0 => "input",
+        None if pin.rotation == 180.0 => "output",
+        None => "bidirectional",
+    }
+    .to_string();
     pin
+}
+
+/// `P1`, `P2`, ... : the first name no entry of `symbol` uses yet.
+pub fn unused_entry_name(symbol: &ChildSheet) -> String {
+    (1..)
+        .map(|n| format!("P{n}"))
+        .find(|name| {
+            !symbol
+                .pins
+                .iter()
+                .any(|pin| normalize_port_name(&pin.name) == Some(name.as_str()))
+        })
+        .expect("an unbounded range has an unused name")
 }
 
 /// `Command::PlaceSheetPin`'s rule: a named entry, once per name on a symbol.
@@ -149,22 +171,47 @@ mod tests {
     #[test]
     fn an_entry_snaps_to_the_nearest_edge_with_that_edges_rotation() {
         let s = symbol();
-        let left = new_sheet_entry(&s, Point::new(98.0, 60.0), "A", "input");
+        let left = new_sheet_entry(&s, Point::new(98.0, 60.0), "A", Some("input"));
         assert_eq!((left.position.x, left.rotation), (100.0, 0.0));
-        let right = new_sheet_entry(&s, Point::new(133.0, 60.0), "B", "output");
+        let right = new_sheet_entry(&s, Point::new(133.0, 60.0), "B", Some("output"));
         assert_eq!((right.position.x, right.rotation), (130.0, 180.0));
-        let top = new_sheet_entry(&s, Point::new(115.0, 48.0), "C", "passive");
+        let top = new_sheet_entry(&s, Point::new(115.0, 48.0), "C", Some("passive"));
         assert_eq!((top.position.y, top.rotation), (50.0, 270.0));
-        let bottom = new_sheet_entry(&s, Point::new(115.0, 83.0), "D", "bogus");
+        let bottom = new_sheet_entry(&s, Point::new(115.0, 83.0), "D", Some("bogus"));
         assert_eq!((bottom.position.y, bottom.rotation), (80.0, 90.0));
         assert_eq!(bottom.direction, "bidirectional", "unknown direction");
         assert!(!left.auto_generated);
     }
 
     #[test]
+    fn the_default_direction_follows_the_edge_and_names_are_unused() {
+        let mut s = symbol();
+        assert_eq!(
+            new_sheet_entry(&s, Point::new(98.0, 60.0), "A", None).direction,
+            "input"
+        );
+        assert_eq!(
+            new_sheet_entry(&s, Point::new(133.0, 60.0), "A", None).direction,
+            "output"
+        );
+        assert_eq!(
+            new_sheet_entry(&s, Point::new(115.0, 48.0), "A", None).direction,
+            "bidirectional"
+        );
+        assert_eq!(unused_entry_name(&s), "P1");
+        s.pins.push(new_sheet_entry(
+            &s.clone(),
+            Point::new(98.0, 60.0),
+            "P1",
+            None,
+        ));
+        assert_eq!(unused_entry_name(&s), "P2");
+    }
+
+    #[test]
     fn an_entry_stays_off_the_corners() {
         let s = symbol();
-        let pin = new_sheet_entry(&s, Point::new(100.0, 50.0), "A", "input");
+        let pin = new_sheet_entry(&s, Point::new(100.0, 50.0), "A", Some("input"));
         assert!(pin.position.y >= 50.0 + GRID_MM);
     }
 
@@ -195,12 +242,12 @@ mod tests {
         let s = symbol();
         let id = s.uuid;
         let mut engine = Engine::new(sheet_with(s.clone())).expect("engine");
-        let pin = new_sheet_entry(&s, Point::new(98.0, 60.0), "CLK", "input");
+        let pin = new_sheet_entry(&s, Point::new(98.0, 60.0), "CLK", Some("input"));
         engine
             .execute(Command::PlaceSheetPin { sheet_id: id, pin })
             .expect("placed");
         assert_eq!(engine.document().child_sheets[0].pins.len(), 1);
-        let again = new_sheet_entry(&s, Point::new(98.0, 66.0), " CLK ", "input");
+        let again = new_sheet_entry(&s, Point::new(98.0, 66.0), " CLK ", Some("input"));
         let err = engine
             .execute(Command::PlaceSheetPin {
                 sheet_id: id,
@@ -208,7 +255,7 @@ mod tests {
             })
             .unwrap_err();
         assert!(matches!(err, EngineError::DuplicateSheetEntryName(_)));
-        let blank = new_sheet_entry(&s, Point::new(98.0, 66.0), "  ", "input");
+        let blank = new_sheet_entry(&s, Point::new(98.0, 66.0), "  ", Some("input"));
         assert!(matches!(
             engine.execute(Command::PlaceSheetPin {
                 sheet_id: id,
@@ -227,13 +274,13 @@ mod tests {
             &s.clone(),
             Point::new(98.0, 60.0),
             "CLK",
-            "input",
+            Some("input"),
         ));
         s.pins.push(new_sheet_entry(
             &s.clone(),
             Point::new(133.0, 60.0),
             "OUT",
-            "output",
+            Some("output"),
         ));
         let child = child_document_for_symbol(SchematicSheet::default(), &s);
         let ports = crate::exposed_sheet_ports(&child);

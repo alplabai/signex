@@ -44,6 +44,7 @@ struct OpenOverlays {
     annotate_reset_confirm_open: bool,
     app_quit_confirm_open: bool,
     project_close_confirm_open: bool,
+    create_child_sheet_confirm_open: bool,
     grid_properties_open: bool,
     selection_filter_custom_open: bool,
     library_picker_open: bool,
@@ -157,6 +158,7 @@ impl OpenOverlays {
             || self.netlist_incomplete_prompt_open
             || self.app_quit_confirm_open
             || self.project_close_confirm_open
+            || self.create_child_sheet_confirm_open
             || self.rename_open
             || self.remove_open
             || self.annotate_reset_confirm_open
@@ -263,6 +265,9 @@ impl OpenOverlays {
             OverlayId::ProjectCloseConfirm => self
                 .project_close_confirm_open
                 .then(|| Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::Cancel))),
+            OverlayId::CreateChildSheetConfirm => self
+                .create_child_sheet_confirm_open
+                .then(|| Message::Project(ProjectMsg::CreateChildSheetAnswered { create: false })),
             OverlayId::AppQuitConfirm => self
                 .app_quit_confirm_open
                 .then(|| Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::Cancel))),
@@ -498,6 +503,7 @@ impl Signex {
                 && !modal_detached(crate::app::state::ModalId::AnnotateResetConfirm),
             app_quit_confirm_open: self.ui_state.app_quit_confirm.is_some(),
             project_close_confirm_open: self.ui_state.project_close_confirm.is_some(),
+            create_child_sheet_confirm_open: self.ui_state.create_child_sheet_confirm.is_some(),
             grid_properties_open: self.ui_state.grid_properties.is_some(),
             selection_filter_custom_open: self.ui_state.selection_filter_custom.is_some(),
             library_picker_open: self.library.picker.is_some(),
@@ -1510,6 +1516,7 @@ mod tests {
             annotate_reset_confirm_open,
             app_quit_confirm_open,
             project_close_confirm_open,
+            create_child_sheet_confirm_open,
             grid_properties_open,
             selection_filter_custom_open,
             library_picker_open,
@@ -1558,6 +1565,9 @@ mod tests {
             ("app_quit_confirm_open", |o| o.app_quit_confirm_open = true),
             ("project_close_confirm_open", |o| {
                 o.project_close_confirm_open = true
+            }),
+            ("create_child_sheet_confirm_open", |o| {
+                o.create_child_sheet_confirm_open = true
             }),
             ("grid_properties_open", |o| o.grid_properties_open = true),
             ("selection_filter_custom_open", |o| {

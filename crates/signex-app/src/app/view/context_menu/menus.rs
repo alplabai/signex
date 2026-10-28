@@ -262,6 +262,12 @@ pub(super) fn canvas_menu_entries(
         ));
         v.push(dd_kb(
             None,
+            "Create Sheet From Sheet Symbol",
+            "",
+            ContextAction::CreateChildSheet,
+        ));
+        v.push(dd_kb(
+            None,
             "Sync Sheet Pins",
             "",
             ContextAction::SyncSheetPins,

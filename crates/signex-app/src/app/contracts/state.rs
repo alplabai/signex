@@ -15,6 +15,9 @@ pub enum ContextAction {
     Paste,
     SmartPaste,
     OpenChildSheet,
+    /// Write the missing child file of the selected sheet symbol, with one
+    /// port per entry, then open it.
+    CreateChildSheet,
     /// Reconcile the selected sheet symbol's pins with the child schematic's
     /// hierarchical / global labels (#359). Gated like `OpenChildSheet`.
     SyncSheetPins,
@@ -148,6 +151,18 @@ pub struct ProjectCloseConfirmState {
     /// Save All / Discard All paths reuse them for the engine sweep instead
     /// of reading the disk again.
     pub sheet_refs: crate::app::state::sheet_refs::SheetRefs,
+}
+
+/// "Create the missing sheet?" confirm, opened by descending through a sheet
+/// symbol whose file does not exist. Held by symbol id: the sheet may change
+/// while the dialog is up, and the answer looks the symbol up again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateChildSheetConfirmState {
+    pub symbol: uuid::Uuid,
+    /// The symbol's name, for the dialog text.
+    pub name: String,
+    /// Where the file would be written.
+    pub path: std::path::PathBuf,
 }
 
 /// State for the "Exit Signex — Unsaved Edits" confirmation modal.

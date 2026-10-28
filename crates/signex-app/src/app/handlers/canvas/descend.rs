@@ -16,6 +16,11 @@ impl Signex {
         let Some(path) = self.resolve_child_sheet_path(filename) else {
             return;
         };
+        if !path.exists() {
+            // No silent no-op: offer to create the file (#1275).
+            self.offer_child_sheet_creation(sheet_symbol, path);
+            return;
+        }
         let placement = self
             .focused_sheet_placement()
             .map(|placement| placement.child(sheet_symbol));

@@ -67,6 +67,7 @@ pub use sheet::{
 };
 pub use sheet_entry::{
     SHEET_SYMBOL_REACH_MM, child_document_for_symbol, new_sheet_entry, sheet_symbol_at,
+    unused_entry_name,
 };
 pub use sheet_placement::{
     DEFAULT_CHILD_SHEET_STROKE_MM, MIN_CHILD_SHEET_EDGE_MM, child_sheet_from_corners,

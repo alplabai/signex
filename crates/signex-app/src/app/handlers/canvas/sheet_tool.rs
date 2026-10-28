@@ -45,6 +45,34 @@ impl Signex {
         }
     }
 
+    /// One click while `Tool::SheetEntry` is active: put an entry on the border
+    /// of the sheet symbol under the cursor, snapped to its nearest edge. The
+    /// name (`P1`, `P2`, ...) and the direction (by edge) are defaults the user
+    /// edits afterwards; the rules live in `signex_engine`.
+    pub(super) fn place_sheet_entry_click(&mut self, world_x: f64, world_y: f64) {
+        let cursor = Point::new(world_x, world_y);
+        let Some(engine) = self.document_state.active_engine() else {
+            return;
+        };
+        let Some(symbol) = signex_engine::sheet_symbol_at(engine.document(), cursor) else {
+            crate::diagnostics::log_info(
+                "Sheet entry not placed: click on or next to a sheet symbol",
+            );
+            return;
+        };
+        let pin = signex_engine::new_sheet_entry(
+            symbol,
+            cursor,
+            &signex_engine::unused_entry_name(symbol),
+            None,
+        );
+        let command = signex_engine::Command::PlaceSheetPin {
+            sheet_id: symbol.uuid,
+            pin,
+        };
+        self.apply_engine_command(command, false, true);
+    }
+
     /// `sheetN` not used as a name or file by the children of any open sheet
     /// in the active document's project, by any sheet the project lists, or
     /// by a `.snxsch` already sitting in the sheet's or the project's folder

@@ -359,6 +359,7 @@ impl Signex {
                     Tool::Rectangle => Some("Rectangle".to_string()),
                     Tool::Circle => Some("Circle".to_string()),
                     Tool::Sheet => Some("Sheet".to_string()),
+                    Tool::SheetEntry => Some("Sheet Entry".to_string()),
                     _ => None,
                 };
                 // Clear every cursor-following ghost so a leftover from a

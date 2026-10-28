@@ -197,6 +197,15 @@ impl Signex {
             .then(|| self.view_project_close_confirm())
     }
 
+    pub(in crate::app::view) fn create_child_sheet_confirm_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .create_child_sheet_confirm
+            .is_some()
+            .then(|| self.view_create_child_sheet_confirm())
+    }
+
     pub(in crate::app::view) fn app_quit_confirm_overlay(&self) -> Option<Element<'_, Message>> {
         self.ui_state
             .app_quit_confirm
