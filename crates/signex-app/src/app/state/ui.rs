@@ -337,6 +337,9 @@ pub struct UiState {
     /// entry without rerunning the analysis.
     pub erc_violations_by_path:
         std::collections::HashMap<std::path::PathBuf, Vec<signex_erc::Violation>>,
+    /// Findings each waived (rule id, net) pair hid in the newest run
+    /// (#1581); 0 hidden means the waiver matched nothing (e.g. renamed net).
+    pub erc_waived_hidden: std::collections::BTreeMap<(String, String), usize>,
     /// Global cursor into the flattened ERC diagnostics list spanning all
     /// sheets in `erc_violations_by_path`. Used by next/prev navigation.
     pub erc_focus_global_index: Option<usize>,

@@ -18,7 +18,7 @@
 //! in the project's `unknown` keys, where it is written back untouched and
 //! not applied (#1180).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -43,6 +43,14 @@ pub struct ProjectRules {
     /// Electrical rule check settings.
     #[serde(default, skip_serializing_if = "ErcRules::is_empty")]
     pub erc: ErcRules,
+    /// Net-level ERC findings the designer accepted: rule id -> names of the
+    /// nets waived for that rule. Keyed by net *name*, not by pin, so moving
+    /// pins keeps a waiver; renaming a net ends it (the old name no longer
+    /// matches any net, and the entry stays listed until restored). Kept
+    /// beside `erc`, not inside it, so waiving a finding never changes the
+    /// rule set's hash or its profile provenance.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub erc_net_waivers: BTreeMap<String, BTreeSet<String>>,
     /// Keys written by a newer build (`drc`, `annotation`, ...); kept so a
     /// save does not drop them.
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -55,6 +63,7 @@ impl Default for ProjectRules {
             schema: Some(RULES_SCHEMA_V1),
             profile: None,
             erc: ErcRules::default(),
+            erc_net_waivers: BTreeMap::new(),
             unknown: UnknownJson::default(),
         }
     }
