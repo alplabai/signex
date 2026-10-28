@@ -5,6 +5,11 @@ use iced::widget::{Column, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::super::{FootprintEditorPanelContext, PanelMsg};
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// v0.18.14.3 — Altium "Snapping" 3-segment toggle. `All Layers` is
 /// the default behaviour (current pre-v0.18.14 functionality);
@@ -30,11 +35,11 @@ pub(super) fn render_snapping_mode_row<'a>(
         move |label: &'static str, target: M, active: bool| -> Element<'static, PanelMsg> {
             iced::widget::button(
                 text(label)
-                    .size(10)
+                    .size(TS.caption)
                     .color(if active { primary } else { muted })
                     .align_x(iced::alignment::Horizontal::Center),
             )
-            .padding([3, 12])
+            .padding([3.0, SP.l])
             .on_press(PanelMsg::FpEditorSetSnappingMode(target))
             .style(move |_: &Theme, status: iced::widget::button::Status| {
                 let bg = match status {
@@ -60,8 +65,8 @@ pub(super) fn render_snapping_mode_row<'a>(
             .into()
         };
     col = col.push(
-        container(text("Snap layers").size(10).color(muted))
-            .padding([4, 8])
+        container(text("Snap layers").size(TS.caption).color(muted))
+            .padding([SP.s, SP.m])
             .width(Length::Fill),
     );
     col = col.push(
@@ -71,10 +76,10 @@ pub(super) fn render_snapping_mode_row<'a>(
                 mk_pill("Current Layer", M::CurrentLayer, current == M::CurrentLayer),
                 mk_pill("Off", M::Off, current == M::Off),
             ]
-            .spacing(4)
+            .spacing(SP.s)
             .align_y(iced::Alignment::Center),
         )
-        .padding([2, 8])
+        .padding([SP.xs, SP.m])
         .width(Length::Fill),
     );
     col
