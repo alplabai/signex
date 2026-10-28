@@ -61,9 +61,9 @@ pub(crate) fn carry_closed_copies(
 ) {
     use crate::autosave::sidecar::{rename, sidecar_path};
     let owed = crate::autosave::pending_move::owed(recovery);
-    for (old, new) in closed_documents(new_dir, old_dir, new_dir, open) {
+    for (old, new, alt) in closed_documents(new_dir, old_dir, new_dir, open) {
         let dst = sidecar_path(recovery, &new);
-        let Some(spelled) = find_copy(recovery, &old, fold, &owed) else {
+        let Some(spelled) = find_copy(recovery, &old, &alt, fold, &owed) else {
             continue;
         };
         let src = sidecar_path(recovery, &spelled);
@@ -97,8 +97,8 @@ pub(crate) fn journal_closed_copies(
 ) -> Vec<Journalled> {
     let mut journalled = Vec::new();
     let owed = crate::autosave::pending_move::owed(recovery);
-    for (old, new) in closed_documents(old_dir, old_dir, new_dir, open) {
-        let Some(spelled) = find_copy(recovery, &old, fold, &owed) else {
+    for (old, new, alt) in closed_documents(old_dir, old_dir, new_dir, open) {
+        let Some(spelled) = find_copy(recovery, &old, &alt, fold, &owed) else {
             continue;
         };
         let key = crate::autosave::sidecar::sidecar_path(recovery, &spelled);
@@ -150,11 +150,16 @@ pub(crate) fn unjournal_closed_copies(recovery: &Path, journalled: &[Journalled]
 fn find_copy(
     recovery: &Path,
     old: &Path,
+    alt: &Path,
     fold: CaseFold,
     owed: &[(PathBuf, PathBuf)],
 ) -> Option<PathBuf> {
     use crate::autosave::sidecar::{adopt_legacy, sidecar_path};
-    let direct = copy_sources(old, fold).into_iter().find(|s| {
+    let mut sources = copy_sources(old, fold);
+    if alt != old {
+        sources.push(alt.to_path_buf());
+    }
+    let direct = sources.into_iter().find(|s| {
         if let Err(why) = adopt_legacy(recovery, s) {
             crate::diagnostics::log_warning(why);
         }
@@ -171,14 +176,14 @@ fn find_copy(
 }
 
 /// The autosaved documents found by walking `root` (the old folder before the
-/// move, the new one after), as (path under `old_dir`, path under `new_dir`),
-/// leaving out the open ones.
+/// move, the new one after), as (path under `old_dir`, path under `new_dir`,
+/// the `old_dir` path spelled with `/` below it), leaving out the open ones.
 fn closed_documents(
     root: &Path,
     old_dir: &Path,
     new_dir: &Path,
     open: &HashSet<PathBuf>,
-) -> Vec<(PathBuf, PathBuf)> {
+) -> Vec<(PathBuf, PathBuf, PathBuf)> {
     let mut found = Vec::new();
     let mut dirs = vec![PathBuf::new()];
     while let Some(rel_dir) = dirs.pop() {
@@ -199,7 +204,8 @@ fn closed_documents(
             }
             let old = old_dir.join(&rel);
             if is_autosaved_document(&rel) && !open.contains(&old) {
-                found.push((old, new_dir.join(&rel)));
+                let alt = forward_slash_spelling(old_dir, &rel, cfg!(windows));
+                found.push((old, new_dir.join(&rel), alt));
             }
         }
     }
@@ -217,6 +223,17 @@ fn copy_sources(old: &Path, fold: CaseFold) -> Vec<PathBuf> {
         spellings.push(keyed);
     }
     spellings
+}
+
+/// `old_dir` joined with `rel` spelled with `/`: how a tab path is built from
+/// a project's sheet list (`dir.join("sub/b.snxsch")`), so a copy written for
+/// the open sheet is keyed by it on a host where `\` separates (`backslash`).
+/// A build before #1510 hashed that mixed spelling as it was.
+pub(super) fn forward_slash_spelling(old_dir: &Path, rel: &Path, backslash: bool) -> PathBuf {
+    if !backslash {
+        return old_dir.join(rel);
+    }
+    old_dir.join(rel.to_string_lossy().replace('\\', "/"))
 }
 
 /// The documents autosave keeps a recovery copy of.

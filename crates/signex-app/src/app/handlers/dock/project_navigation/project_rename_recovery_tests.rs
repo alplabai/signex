@@ -256,7 +256,15 @@ fn a_copy_under_the_pre_1510_key_is_offered_and_carried() {
     let root = tempfile::tempdir().expect("tempdir");
     let m = moved(root.path());
     // A build before #1510 keyed the copy by the spelling, dots and all.
-    let spelled = root.path().join("x").join("..").join("Foo/sub/b.snxsch");
+    // Built component by component, the way the pre-#1510 carry built `old`
+    // (`old_dir.join(rel)`), so the raw text matches on every platform.
+    let spelled = root
+        .path()
+        .join("x")
+        .join("..")
+        .join("Foo")
+        .join("sub")
+        .join("b.snxsch");
     std::fs::create_dir_all(&m.recovery).expect("recovery");
     let legacy = m.recovery.join(format!(
         "b.snxsch-{:016x}.recovery",
@@ -477,4 +485,18 @@ fn offered_without_startup(recovery_dir: &Path, document: &Path) -> bool {
         recovery::reconcile(recovery_dir, document, SystemTime::now()),
         Ok(Some(_))
     )
+}
+
+#[test]
+fn a_host_where_backslash_separates_also_tries_the_forward_slash_sheet_spelling() {
+    // A tab path is `dir.join("sub/b.snxsch")`: on Windows that text mixes
+    // `\` and `/`, and a pre-#1510 build keyed the copy by it.
+    let dir = Path::new("proj");
+    let rel = Path::new("sub").join("b.snxsch");
+    let alt = super::project_rename_fs::forward_slash_spelling(dir, &rel, true);
+    assert_eq!(alt, dir.join("sub/b.snxsch"));
+    assert_eq!(
+        super::project_rename_fs::forward_slash_spelling(dir, Path::new("sub\\b.snxsch"), true),
+        dir.join("sub/b.snxsch")
+    );
 }
