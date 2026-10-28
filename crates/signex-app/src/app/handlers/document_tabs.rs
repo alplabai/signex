@@ -212,9 +212,10 @@ impl Signex {
         // Park dirty engines: when the file is in `dirty_paths`, keep its
         // engine entry alive so reopening the tab restores the in-memory
         // edits. Drop the engine only when the file is clean.
+        self.document_state.note_documents_changed();
         if !self.document_state.dirty_paths.contains(&closing_path) {
             self.forget_net_colors_of(&closing_path);
-            self.document_state.engines.remove(&closing_path);
+            self.document_state.remove_engine(&closing_path);
         }
         if self.document_state.active_path.as_ref() == Some(&closing_path) {
             self.document_state.active_path = None;
