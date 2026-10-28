@@ -147,6 +147,9 @@ pub struct PanelContext {
     /// The active sheet's title-block fields (#1080), keyed as stored in
     /// `SchematicSheet::title_block`.
     pub title_block: std::collections::BTreeMap<String, String>,
+    /// The parameters of the project that owns the active sheet (#1080): the
+    /// values a field falls back to while the sheet leaves it empty.
+    pub project_parameters: std::collections::BTreeMap<String, String>,
     /// Half-typed title-block fields, one per (sheet, field), each
     /// committed on Enter. Moving to another field keeps the first one's
     /// draft; switching sheets hides a sheet's drafts until it is active

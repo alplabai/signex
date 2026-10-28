@@ -351,6 +351,8 @@ mod net_classes_panel;
 mod sheet_frame_canvas;
 
 // #1202 — the Project document tab replaces the Project Options modal.
+#[path = "regression/project_parameters.rs"]
+mod project_parameters;
 #[path = "regression/project_tab.rs"]
 mod project_tab;
 #[path = "regression/project_tab_rename.rs"]

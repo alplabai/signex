@@ -500,6 +500,7 @@ fn a_paste_into_a_sheet_of_another_project_brings_the_body() {
             path: PathBuf::from(format!("{name}.snxprj")),
             data: ProjectData {
                 name: name.to_owned(),
+                description: None,
                 dir: String::new(),
                 schematic_root: Some(file.to_owned()),
                 pcb_file: None,
@@ -518,11 +519,13 @@ fn a_paste_into_a_sheet_of_another_project_brings_the_body() {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                parameters: Default::default(),
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         });
     }
     show(&mut app, &other_name);
