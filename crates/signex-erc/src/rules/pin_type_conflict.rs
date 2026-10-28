@@ -180,6 +180,7 @@ mod tests {
             symbol,
             occurrence,
             reference: "U1".into(),
+            number: "1".into(),
             position: Point::new(0.0, 0.0),
             direction: PinDirection::Output,
             is_power_flag: false,
