@@ -78,6 +78,9 @@ pub struct PanelContext {
     pub components_split: f32,
     /// Persistent project tree — toggle state survives across renders.
     pub project_tree: Vec<TreeNode>,
+    /// How many times `project_tree` has been rebuilt; `refresh_panel_ctx`
+    /// rebuilds it only when `projects` changed (#1383).
+    pub project_tree_builds: u32,
     /// Path of the currently single-clicked tree row, used to drive
     /// the row highlight independently of which document is active.
     /// Set on `TreeMsg::Select`, cleared when the tree resets.

@@ -37,6 +37,16 @@ pub struct UiState {
     /// semantics — mutated as the user edits, copied back into
     /// `component_classes` + persisted on Save.
     pub preferences_draft_component_classes: Vec<crate::fonts::ComponentClassEntry>,
+    /// Draft of `erc_severity_override` for Preferences ▸ Electrical Rules:
+    /// edited by the chips, committed + persisted on Save, re-seeded from
+    /// the committed map on Discard.
+    pub preferences_draft_erc_severity:
+        std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    /// What the draft was seeded from. Dirty and Save work on the delta
+    /// between draft and this snapshot, so a change the ERC dialog commits
+    /// while Preferences is open is neither "unsaved" nor reverted by Save.
+    pub preferences_seed_erc_severity:
+        std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     /// Loaded keyboard-shortcut profiles (bundled Altium / Classic
     /// built-ins plus any user profile in the OS config dir). Drives
     /// shortcut dispatch and the Help ▸ Keyboard Shortcuts reference.
@@ -85,6 +95,13 @@ pub struct UiState {
     /// active keyboard-shortcut profile. Toggled from the Help menu
     /// and from F1.
     pub keyboard_shortcuts_open: bool,
+    /// Pre-grouped rows for the shortcuts modal, built by
+    /// [`Self::refresh_shortcut_sections`] when the modal opens and again
+    /// whenever `keymap_profiles` is replaced, so `view` does not rebuild
+    /// the editor model every frame (#1380). `None` means "not built":
+    /// the view then computes the sections inline, so a stale cache is
+    /// impossible by construction.
+    pub shortcut_sections: Option<Vec<crate::keyboard_shortcuts_modal::ShortcutSection>>,
     /// Help ▸ About Signex dialog.
     pub about_open: bool,
     /// File ▸ Open Recent — loaded from `prefs.json` at boot, updated on
@@ -281,9 +298,6 @@ pub struct UiState {
     /// request that intersects `dirty_paths`. Cleared on any of the
     /// three button choices.
     pub app_quit_confirm: Option<crate::app::AppQuitConfirmState>,
-    /// v0.9 read-only Project Options metadata modal — `Some` while
-    /// the user has the right-click → Project Options… popup open.
-    pub project_options: Option<crate::app::ProjectOptionsState>,
     /// v0.11 Enable Version Control modal — opened from the
     /// project root context menu when the project dir has no
     /// `.git/` yet.
@@ -324,11 +338,9 @@ pub struct UiState {
     /// Per-rule severity override — if empty, the rule's default is used.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    /// Net-color overrides keyed by net-label text. Superseded by the
-    /// per-wire `wire_color_overrides` map below which the Active-Bar
-    /// net-colour flood populates; kept here so a future net-name
-    /// palette (maybe the F5 dialog) can cross-reference it without
-    /// another round-trip through state plumbing.
+    /// Net-color overrides keyed by net-label text. Drives the Active-Bar
+    /// net-colour menu state and the net-color modal; the canvas paints
+    /// from the per-wire `wire_color_overrides` map below.
     pub net_colors: std::collections::HashMap<String, signex_types::theme::Color>,
     /// AutoFocus mode — when true, non-selected items dim on the canvas.
     pub auto_focus: bool,
@@ -442,6 +454,22 @@ pub struct UiState {
 }
 
 impl UiState {
+    /// Replace the loaded profile set and rebuild the shortcuts-modal
+    /// cache from it, so the cache can never outlive the profiles it was
+    /// built from. (Callers recompile `active_keymap` themselves.)
+    pub fn set_keymap_profiles(&mut self, profiles: crate::keymap::ShortcutProfileSet) {
+        self.keymap_profiles = profiles;
+        self.refresh_shortcut_sections();
+    }
+
+    /// Rebuild the shortcuts-modal cache: built while the modal is open,
+    /// dropped otherwise (the next open rebuilds it).
+    pub fn refresh_shortcut_sections(&mut self) {
+        self.shortcut_sections = self
+            .keyboard_shortcuts_open
+            .then(|| crate::keyboard_shortcuts_modal::build_sections(&self.keymap_profiles));
+    }
+
     /// Per-wheel-notch zoom factor every canvas uses. Reads the DRAFT, like
     /// `grid_style`: it carries the live preview while Preferences is open
     /// and equals the saved value otherwise (Discard re-seeds the draft).
@@ -480,6 +508,7 @@ impl UiState {
             || self.preferences_draft_ui_scale_percent
                 != crate::ui_scale::scale_to_percent(self.ui_scale)
             || self.preferences_draft_component_classes != self.component_classes
+            || self.preferences_draft_erc_severity != self.preferences_seed_erc_severity
             || self
                 .preferences_keymap_editor
                 .differs_from(&self.keymap_profiles)

@@ -216,7 +216,7 @@ impl Signex {
         .map(Message::ActiveBar);
         Some(
             column![
-                iced::widget::Space::new().height(y_offset + 4.0),
+                iced::widget::Space::new().height(y_offset + crate::active_bar::BAR_TOP_MARGIN_PX),
                 container(bar)
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
@@ -255,7 +255,7 @@ impl Signex {
         let bar = signex_widgets::active_bar::view(bar_items, tokens).map(Message::Library);
         out.push(
             column![
-                iced::widget::Space::new().height(y_offset + 4.0),
+                iced::widget::Space::new().height(y_offset + crate::active_bar::BAR_TOP_MARGIN_PX),
                 container(bar)
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),

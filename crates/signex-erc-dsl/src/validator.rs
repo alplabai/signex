@@ -75,7 +75,15 @@ const METHOD_ACCESS: &[(&str, &str, &[TargetKind])] = &[
 
 pub fn validate(rules: &[RuleAst]) -> Vec<DslError> {
     let mut errors = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     for rule in rules {
+        if !seen.insert(rule.id.as_str()) {
+            errors.push(DslError::DuplicateRuleId {
+                rule: rule.id.clone(),
+                start: rule.span.start,
+                end: rule.span.end,
+            });
+        }
         errors.extend(unsupported_features(rule));
         validate_expr(&rule.id, rule.target, &rule.when, &mut errors);
     }
@@ -300,6 +308,33 @@ mod tests {
             // `compile()` alone, without the validator, rejects it too.
             assert!(compile(&parse(src).unwrap()).is_err(), "{src}");
         }
+    }
+
+    /// #1364: two rules sharing an id are rejected, pointing at the second.
+    #[test]
+    fn duplicate_rule_id_is_rejected_at_second_definition() {
+        let src = "rule dup on net when has_driver() then error \"a\"\nrule dup on net when has_pullup() then error \"b\"";
+        let Err(errors) = parse_validate_compile(src) else {
+            panic!("duplicate ids must be rejected");
+        };
+        let second = src.rfind("dup").unwrap();
+        assert!(
+            errors.iter().any(|e| matches!(e,
+                crate::DslError::DuplicateRuleId { rule, start, end }
+                    if rule == "dup" && *start == second && *end == second + 3)),
+            "{errors:?}"
+        );
+        assert_eq!(errors.len(), 1, "{errors:?}");
+    }
+
+    /// #1364: the parse error carries the real span end, not start twice.
+    #[test]
+    fn parse_error_span_end_is_real() {
+        let errors = parse("rule r on bogus when has_driver() then error \"x\"").unwrap_err();
+        let any_wide = errors
+            .iter()
+            .any(|e| matches!(e, crate::DslError::Parse(s, en, _) if en > s));
+        assert!(any_wide, "{errors:?}");
     }
 
     /// The default and an explicit `scope sheet` are what the engine does.

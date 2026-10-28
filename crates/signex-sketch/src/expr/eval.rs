@@ -58,6 +58,32 @@ pub struct EvalContext {
     pub array_index: Option<(usize, usize)>,
 }
 
+impl EvalContext {
+    /// This context with every unitless (count) parameter read as
+    /// millimetres: the lenient convention for an expression that must be a
+    /// length, shared by the solver's dimension targets and signex-bake.
+    #[must_use]
+    pub fn with_unitless_as_mm(&self) -> Self {
+        let params = self
+            .params
+            .iter()
+            .map(|(name, node)| {
+                let node = match node {
+                    ExprNode::Literal(q) if q.unit == crate::unit::Unit::Dimensionless => {
+                        ExprNode::Literal(crate::unit::Quantity::length(q.value))
+                    }
+                    other => other.clone(),
+                };
+                (name.clone(), node)
+            })
+            .collect();
+        Self {
+            params,
+            array_index: self.array_index,
+        }
+    }
+}
+
 /// Walk `node` and produce a [`Quantity`].
 ///
 /// Recursive interpreter; each binary op is type-checked by family

@@ -2,7 +2,7 @@
 //!
 //! Per `v0.9-refactor-2-plan.md` §2.1, a "component" is no longer a file
 //! holding a chain of revisions. It's a single row inside a category table
-//! (`tables/<name>.tsv` for LocalGit; one record in `component_rows` for the
+//! (a `[tables.<name>]` block in the `.snxlib` for LocalGit; one record in `component_rows` for the
 //! database backend). Symbols, footprints, and sim models stay as standalone
 //! editable primitive files referenced by `(library_id, uuid)` tuples.
 //!

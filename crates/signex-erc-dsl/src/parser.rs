@@ -44,6 +44,7 @@ use chumsky::prelude::*;
 use chumsky::text::ascii;
 
 use crate::ast::*;
+use crate::error::Span;
 
 type Err<'src> = extra::Err<Simple<'src, char>>;
 
@@ -52,8 +53,8 @@ type Err<'src> = extra::Err<Simple<'src, char>>;
 // ---------------------------------------------------------------------------
 
 /// Parse DSL source text into a list of rule declarations.
-/// Returns the list of parse errors (byte offsets) on failure.
-pub fn parse(src: &str) -> Result<Vec<RuleAst>, Vec<(usize, String)>> {
+/// Returns the list of parse errors (byte start, byte end, message) on failure.
+pub fn parse(src: &str) -> Result<Vec<RuleAst>, Vec<(usize, usize, String)>> {
     let (rules, errs) = program_parser().parse(src).into_output_errors();
     if errs.is_empty() {
         Ok(rules.unwrap_or_default())
@@ -62,7 +63,7 @@ pub fn parse(src: &str) -> Result<Vec<RuleAst>, Vec<(usize, String)>> {
             .into_iter()
             .map(|e| {
                 let span = e.span();
-                (span.start, format!("{e}"))
+                (span.start, span.end, format!("{e}"))
             })
             .collect();
         Err(msgs)
@@ -88,7 +89,12 @@ fn program_parser<'src>() -> impl Parser<'src, &'src str, Vec<RuleAst>, Err<'src
 fn rule_parser<'src>() -> impl Parser<'src, &'src str, RuleAst, Err<'src>> {
     let kw = |s: &'static str| ascii::keyword(s).padded();
 
-    let id = ascii::ident().padded().map(str::to_string);
+    let id = ascii::ident()
+        .map_with(|id: &str, e| {
+            let span: SimpleSpan = e.span();
+            (id.to_string(), Span::new(span.start, span.end))
+        })
+        .padded();
     let str_lit = string_lit_parser();
 
     let applicability = choice((
@@ -132,8 +138,9 @@ fn rule_parser<'src>() -> impl Parser<'src, &'src str, RuleAst, Err<'src>> {
         .then(kw("when").ignore_then(expr))
         .then(kw("then").ignore_then(severity).then(str_lit))
         .map(
-            |(((((id, app), target), scope), when), (severity, message))| RuleAst {
+            |((((((id, span), app), target), scope), when), (severity, message))| RuleAst {
                 id,
+                span,
                 applicability: app.unwrap_or(ApplicabilityAst::All),
                 target,
                 scope: scope.unwrap_or(ScopeKind::Sheet),
