@@ -127,7 +127,15 @@ impl Signex {
     fn commit_erc_severity_draft(&mut self) {
         let ui = &mut self.ui_state;
         let mut changed = false;
-        for rule in signex_erc::RuleKind::ALL {
+        // Walk the maps' own keys, not `RuleKind::ALL`, so a rule missing
+        // from that list can never have its edit dropped.
+        let rules: std::collections::HashSet<signex_erc::RuleKind> = ui
+            .preferences_draft_erc_severity
+            .keys()
+            .chain(ui.preferences_seed_erc_severity.keys())
+            .copied()
+            .collect();
+        for rule in rules {
             let draft = ui.preferences_draft_erc_severity.get(&rule).copied();
             if draft == ui.preferences_seed_erc_severity.get(&rule).copied() {
                 continue;
@@ -176,7 +184,7 @@ impl Signex {
     /// never assign `preferences_dirty` from an ad-hoc comparison; that
     /// drift class is exactly what let imperative edits be clobbered back
     /// to "clean" (review #308 finding 1).
-    fn recompute_preferences_dirty(&mut self) {
+    pub(crate) fn recompute_preferences_dirty(&mut self) {
         self.ui_state.preferences_dirty = self.ui_state.preferences_has_unsaved_changes();
     }
 

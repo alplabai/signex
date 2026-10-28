@@ -630,3 +630,31 @@ fn preferences_and_erc_dialog_edits_to_different_rules_both_survive_save() {
     assert_eq!(disk.get(&x), Some(&off_x));
     assert_eq!(disk.get(&y), Some(&off_y));
 }
+
+/// #1504 review — the ERC dialog committing the same value a pending
+/// Preferences edit holds leaves nothing unsaved, so the footer clears.
+#[test]
+fn erc_dialog_matching_a_pending_preferences_edit_clears_dirty() {
+    use signex_app::app::ErcMsg;
+    use signex_erc::{RuleKind, Severity};
+
+    // Arrange
+    let _serial = serial();
+    let _guard = PrefsPathGuard::capture();
+    let rule = RuleKind::UnusedPin;
+    let (mut app, _t) = Signex::new();
+    app.ui_state.erc_severity_override.clear();
+    signex_app::fonts::write_erc_severity_overrides(&app.ui_state.erc_severity_override);
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+    let _ = app.update(inner(PrefMsg::DraftErcSeverity(rule, Severity::Off)));
+    assert!(app.ui_state.preferences_dirty);
+
+    // Act
+    let _ = app.update(Message::Erc(ErcMsg::SeverityChanged(rule, Severity::Off)));
+
+    // Assert
+    assert!(
+        !app.ui_state.preferences_dirty,
+        "draft and seed now agree; Save would change nothing"
+    );
+}
