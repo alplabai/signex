@@ -9,12 +9,14 @@
 use super::*;
 use crate::library::edit_row_modal::short_uuid;
 
+#[derive(Debug, Clone)]
 pub(super) struct GridColumn {
     pub(super) label: String,
     pub(super) kind: ColumnKind,
     pub(super) width: f32,
 }
 
+#[derive(Debug, Clone)]
 pub(super) enum ColumnKind {
     InternalPn,
     Manufacturer,

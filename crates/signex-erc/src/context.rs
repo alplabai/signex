@@ -383,7 +383,7 @@ impl ErcContext {
             .symbols
             .iter()
             .filter_map(|sym| {
-                let lib_sym = snapshot.lib_symbols.get(&sym.lib_id)?;
+                let lib_sym = snapshot.resolve_lib_symbol(sym)?;
                 let pins = lib_sym
                     .pins
                     .iter()
@@ -568,6 +568,8 @@ fn summarize_nets(
         PinDirection::OpenDrainHigh,
     ];
 
+    let mut all_roots: Vec<(i64, i64)> = all_roots.into_iter().collect();
+    all_roots.sort_unstable();
     all_roots
         .into_iter()
         .map(|root| {

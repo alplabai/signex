@@ -16,6 +16,7 @@ mod param_commit;
 mod tables;
 
 use super::*;
+use crate::library::refresh::RefreshFollowUp;
 
 impl Signex {
     /// Open `.snxlib` at `path` as a Library Browser tab.
@@ -44,6 +45,15 @@ impl Signex {
             already_mounted = self.library.library_at(&path).is_some(),
             "open_library_browser: enter"
         );
+        // A mount of a library in a project whose folder is moving would
+        // read a path about to vanish.
+        if self.refuse_with_notice_while_project_moves(
+            &path,
+            "open",
+            crate::app::state::ErrorNotice::open,
+        ) {
+            return Task::none();
+        }
         match self
             .library
             .request_mount(&path, MountIntent::OpenBrowserTab)
@@ -359,14 +369,7 @@ impl Signex {
                     row = %row_id,
                     "browser delete: row removed"
                 );
-                if let Err(e) = self.library.refresh_components(&library_path) {
-                    tracing::warn!(
-                        target: "signex::library",
-                        path = %library_path.display(),
-                        error = %e,
-                        "browser delete: refresh_components failed"
-                    );
-                }
+                let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                     if state.selected_row == Some(row_id) {
                         state.selected_row = None;
@@ -375,6 +378,7 @@ impl Signex {
                     // Drop any cached cell-edit buffers for the gone row.
                     state.cell_edit.retain(|(rid, _), _| *rid != row_id);
                 }
+                refresh
             }
             Err(e) => {
                 crate::diagnostics::log_warning(format!(
@@ -383,20 +387,14 @@ impl Signex {
                 ));
                 // The cache holds the revision the refusal was based on, so
                 // a retry would be refused again: re-read the rows.
-                if let Err(e) = self.library.refresh_components(&library_path) {
-                    tracing::warn!(
-                        target: "signex::library",
-                        error = %e,
-                        "browser delete: refresh_components failed"
-                    );
-                }
+                let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
                 self.sync_diagnostics_panel_ctx();
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                     state.delete_confirm = None;
                 }
+                refresh
             }
         }
-        Task::none()
     }
 
     /// Open the Edit Component Details modal for a row. Loads the row
@@ -468,6 +466,11 @@ impl Signex {
                     modal.draft.state = state_v;
                     modal.error = None;
                 }
+                BrowserEditMsg::SetDatasheetUrl(_)
+                    if !matches!(
+                        modal.draft.datasheet,
+                        signex_library::DatasheetRef::Url { .. }
+                    ) => {}
                 BrowserEditMsg::SetDatasheetUrl(s) => {
                     // The modal shows no label: the primary keeps its
                     // label while it points where it did when the modal
@@ -553,6 +556,21 @@ impl Signex {
                     )));
                 }
                 BrowserEditMsg::Save => {
+                    // Typed-but-not-Entered parameter edits live only in
+                    // `param_buf`; commit them before the draft snapshot,
+                    // and refuse the save if one is invalid.
+                    match param_commit::uncommitted_param_edits(
+                        &modal.draft.parameters,
+                        &modal.param_buf,
+                    ) {
+                        Ok(edits) => modal.draft.parameters.extend(edits),
+                        Err(key) => {
+                            modal.error = Some(format!(
+                                "Parameter \"{key}\" has an invalid value; fix it before saving."
+                            ));
+                            return Task::none();
+                        }
+                    }
                     // Flush the tags buffer to `parameters["tags"]`
                     // before snapshotting the draft. Empty buffer drops
                     // the entry so we don't keep a dangling empty
@@ -584,6 +602,7 @@ impl Signex {
         if let Some(address) = reload_address {
             self.reload_edit_modal_from_server(&library_path, address);
         }
+        let mut refresh = Task::none();
         if let Some((address, mut draft)) = save_request {
             // Refresh content_hash before saving.
             match signex_library::hash_row_content(&draft) {
@@ -611,20 +630,15 @@ impl Signex {
             };
             match result {
                 Ok(_) => {
-                    if let Err(e) = self.library.refresh_components(&address.library_path) {
-                        tracing::warn!(
-                            target: "signex::library",
-                            path = %address.library_path.display(),
-                            error = %e,
-                            "browser edit: refresh_components failed"
-                        );
-                    }
+                    refresh = self.refresh_library_task(
+                        &address.library_path,
+                        RefreshFollowUp::CleanEditors(vec![address.row_id]),
+                    );
                     if let Some(state) =
                         self.library.library_browsers.get_mut(&address.library_path)
                     {
                         state.edit_modal = None;
                     }
-                    self.refresh_clean_editors(&address.library_path, &[address.row_id]);
                 }
                 Err(e) => {
                     if let Some(state) = self.library.library_browsers.get_mut(&library_path)
@@ -637,7 +651,7 @@ impl Signex {
                 }
             }
         }
-        next.unwrap_or_else(Task::none)
+        Task::batch([refresh, next.unwrap_or_else(Task::none)])
     }
 
     /// Open the Component Preview tab for `(library_path, table, row_id)`.

@@ -49,7 +49,7 @@ fn bus_entry_is_stroked_in_its_own_colour() {
     };
     let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);
     let svg =
-        SvgRenderContext::from_sheet(&sheet, &opts, w_mm, h_mm, 72.0 / 25.4, None).svg_document;
+        SvgRenderContext::from_sheet(&sheet, &opts, w_mm, h_mm, 72.0 / 25.4, None).svg_document();
 
     assert!(
         svg.contains(&css(palette.bus_entry)),

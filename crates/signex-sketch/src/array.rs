@@ -73,6 +73,15 @@ pub enum ArrayKind {
 }
 
 impl ArrayKind {
+    /// The entity every instance is replicated from.
+    pub fn source(&self) -> SketchEntityId {
+        match self {
+            Self::Linear { source, .. }
+            | Self::Grid { source, .. }
+            | Self::Polar { source, .. } => *source,
+        }
+    }
+
     /// Every entity this array names: its source, plus the centre of a
     /// polar array.
     pub fn entity_refs(&self) -> Vec<SketchEntityId> {
@@ -145,6 +154,20 @@ fn default_start_col() -> u32 {
     1
 }
 
+/// The BGA row alphabet: IPC-7351 (I/O/Q/S/X/Z skipped) or the full one.
+fn bga_row_alphabet(skip_letters: bool) -> &'static str {
+    if skip_letters {
+        "ABCDEFGHJKLMNPRTUVWY"
+    } else {
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    }
+}
+
+/// `true` when `start_row` is in the BGA row alphabet for `skip_letters`.
+pub fn is_valid_bga_start_row(skip_letters: bool, start_row: char) -> bool {
+    bga_row_alphabet(skip_letters).contains(start_row)
+}
+
 /// IPC-7351 BGA letter sequence. With `skip_letters` true, the alphabet
 /// is `ABCDEFGHJKLMNPRTUVWY` (I/O/Q/S/X/Z skipped). Excel-style
 /// extension produces `AA, AB, …` after the single-letter range.
@@ -152,11 +175,7 @@ fn default_start_col() -> u32 {
 /// A `start_row` that is not in the alphabet (for example `'I'` with
 /// `skip_letters` true, or a lowercase letter) falls back to `'A'`.
 pub fn bga_row_letter(row_index: u32, skip_letters: bool, start_row: char) -> String {
-    let alphabet: Vec<char> = if skip_letters {
-        "ABCDEFGHJKLMNPRTUVWY".chars().collect()
-    } else {
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect()
-    };
+    let alphabet: Vec<char> = bga_row_alphabet(skip_letters).chars().collect();
     let start_idx = alphabet.iter().position(|&c| c == start_row).unwrap_or(0);
     let n = alphabet.len() as u64;
     // u64 so `start_idx + row_index` cannot overflow for any `row_index`.

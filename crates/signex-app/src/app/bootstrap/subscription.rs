@@ -74,6 +74,9 @@ struct OpenOverlays {
     /// `Subscription::with` as a `Copy` type, which is why this modal was
     /// the one documented hole in the ladder (#514, #526).
     delete_confirm: Option<std::path::PathBuf>,
+    /// The `.snxlib` whose Library Browser has the Edit Component
+    /// Details modal open, if any. Per-library, like `delete_confirm`.
+    edit_row_modal: Option<std::path::PathBuf>,
 }
 
 // `KeyContext` used to live here — the slice of modal state the
@@ -277,10 +280,13 @@ impl OpenOverlays {
             OverlayId::LibraryPicker => self
                 .library_picker_open
                 .then(|| Message::Library(crate::library::messages::LibraryMessage::ClosePicker)),
-            // The Edit Component Details modal is gated dead behind
-            // `EDIT_MODAL_ENABLED = false` — it needs a rung the day it is
-            // re-enabled, not before.
-            OverlayId::EditRowModal => None,
+            // Addressed to ONE library, like `DeleteConfirm`.
+            OverlayId::EditRowModal => self.edit_row_modal.clone().map(|library_path| {
+                Message::Library(crate::library::messages::LibraryMessage::BrowserEdit {
+                    library_path,
+                    msg: crate::library::messages::BrowserEditMsg::Cancel,
+                })
+            }),
             // The one rung carrying owned data, and the reason the ladder
             // moved out of the subscription in part 1: this Cancel is
             // addressed to ONE library, and a `PathBuf` could not ride
@@ -515,6 +521,14 @@ impl Signex {
                 .iter()
                 .find(|(_, browser)| browser.delete_confirm.is_some())
                 .map(|(path, _)| path.clone()),
+            // MUST mirror `edit_row_modal_overlay`'s pick: first browser
+            // with an open edit modal.
+            edit_row_modal: self
+                .library
+                .library_browsers
+                .iter()
+                .find(|(_, browser)| browser.edit_modal.is_some())
+                .map(|(path, _)| path.clone()),
         }
     }
 
@@ -701,8 +715,11 @@ impl Signex {
         .map(Message::Library);
 
         // Opt-in autosave timer (#104); empty while the preference is off.
-        let autosave_tick =
-            crate::autosave::subscription(self.ui_state.autosave_enabled).map(Message::Autosave);
+        let autosave_tick = crate::autosave::subscription(
+            self.ui_state.autosave_enabled,
+            self.document_state.autosave.has_owed_moves(),
+        )
+        .map(Message::Autosave);
 
         Subscription::batch([
             kbd,
@@ -868,10 +885,9 @@ mod tests {
     /// forces that. Documented modals that are deliberately NOT fields —
     /// so NOT covered by this test — are: the command palette and the
     /// keymap chord recorder (`palette_and_keymap_recorder_are_not_on_the_ladder`,
-    /// both swallow input earlier), the Edit Component Details modal
-    /// (dead behind `EDIT_MODAL_ENABLED = false`), and the per-browser
-    /// delete-confirm modal (its Cancel message needs a `library_path`
-    /// this `Copy` struct can't carry).
+    /// both swallow input earlier). The per-library rungs (`delete_confirm`,
+    /// `edit_row_modal`) carry an owned `library_path` and are covered by
+    /// `every_ladder_field_claims_escape` and the ranking tests instead.
     #[test]
     fn every_modal_claims_escape() {
         assert!(matches!(
@@ -1461,6 +1477,7 @@ mod tests {
             bom_preview_open,
             net_color_custom_open,
             delete_confirm,
+            edit_row_modal,
         ];
 
         type EscapeSetter = fn(&mut OpenOverlays);
@@ -1533,6 +1550,9 @@ mod tests {
             // message the rung resolves to, not on the path's value.
             ("delete_confirm", |o| {
                 o.delete_confirm = Some(std::path::PathBuf::from("fixture.snxlib"))
+            }),
+            ("edit_row_modal", |o| {
+                o.edit_row_modal = Some(std::path::PathBuf::from("fixture.snxlib"))
             }),
         ];
 

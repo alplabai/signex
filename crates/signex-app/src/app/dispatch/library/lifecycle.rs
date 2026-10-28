@@ -96,11 +96,18 @@ impl Signex {
         };
         match result {
             Ok(prepared) => {
+                let library_id = prepared.entry.library_id;
+                let newly_mounted = self.library.library_at(&prepared.entry.root).is_none();
                 if let Err(e) = self.library.mount_prepared(prepared) {
                     report(&path, &e.to_string());
                     return Task::none();
                 }
                 self.library.drift.check_pending = true;
+                // Sheets opened before this library mounted skipped its
+                // symbols; scan them now (#1449).
+                if newly_mounted {
+                    self.rescan_library_updates_after_mount(library_id);
+                }
             }
             Err(e) => {
                 report(&path, &e);

@@ -1,0 +1,556 @@
+//! Integration tests for the primitive routes
+//! (`/symbols` / `/footprints` / `/sims`).
+//!
+//! Each test exercises a `POST` → `GET` round-trip via `tower::ServiceExt`
+//! against the in-memory test harness, exactly mirroring the flow that the
+//! `LibraryAdapter` will use in production. Auth is the same fixture bearer
+//! token used by `tests/integration_db.rs`.
+
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use signex_library::primitive::{Footprint, SimKind, SimModel, Symbol};
+use signex_library_server::db::{AppState, PrimitiveSummary};
+use signex_library_server::router_with_state;
+use signex_sketch::SketchData;
+use signex_sketch::entity::{Entity, EntityKind};
+use signex_sketch::id::SketchEntityId;
+use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+use tower::ServiceExt;
+use uuid::Uuid;
+
+use crate::common::{TEST_BEARER, install_test_token};
+
+fn bearer_header() -> String {
+    format!("Bearer {TEST_BEARER}")
+}
+
+async fn fresh_state() -> AppState {
+    install_test_token();
+    let state = AppState::new_sqlite_memory()
+        .await
+        .expect("sqlite memory state");
+    state.migrate().await.expect("migrations apply");
+    state
+}
+
+#[tokio::test]
+async fn primitives_migration_creates_tables() {
+    // 004_primitives.sql must land all three primitive tables alongside the
+    // pre-existing component tables. Without this the rest of the suite
+    // returns "no such table".
+    let state = fresh_state().await;
+    let tables: Vec<String> =
+        sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            .fetch_all(state.pool().sqlite().expect("sqlite pool"))
+            .await
+            .unwrap();
+    for required in ["symbols", "footprints", "sims"] {
+        assert!(
+            tables.iter().any(|t| t == required),
+            "missing table {required}; have {tables:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn post_then_get_symbol_round_trip() {
+    let state = fresh_state().await;
+    let app = router_with_state(state);
+
+    let library_id = Uuid::now_v7();
+    let mut sym = Symbol::empty("OPAMP-DUAL-8");
+    // Replace the random uuid with a stable one we can assert on by URL.
+    sym.uuid = Uuid::now_v7();
+
+    let body = serde_json::json!({
+        "library_id": library_id,
+        "uuid": sym.uuid,
+        "name": sym.name,
+        "anchor": sym.anchor,
+        "pins": sym.pins,
+        "graphics": sym.graphics,
+        "schematic_params": sym.schematic_params,
+        "created": sym.created,
+        "updated": sym.updated,
+    });
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/symbols")
+                .header("content-type", "application/json")
+                .header("authorization", bearer_header())
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/symbols/{}?library_id={}", sym.uuid, library_id))
+                .header("authorization", bearer_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let got: Symbol = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(got.uuid, sym.uuid);
+    assert_eq!(got.name, sym.name);
+    assert_eq!(got.pins.len(), sym.pins.len());
+}
+
+#[tokio::test]
+async fn list_symbols_filters_by_library_id() {
+    // Two libraries, two symbols each. `?library_id=` must scope the result.
+    let state = fresh_state().await;
+    let app = router_with_state(state);
+
+    let lib_a = Uuid::now_v7();
+    let lib_b = Uuid::now_v7();
+
+    for (lib, name) in [
+        (lib_a, "RES-2T"),
+        (lib_a, "CAP-2T"),
+        (lib_b, "OPAMP-8"),
+        (lib_b, "MCU-100"),
+    ] {
+        let mut sym = Symbol::empty(name);
+        sym.uuid = Uuid::now_v7();
+        let body = serde_json::json!({
+            "library_id": lib,
+            "uuid": sym.uuid,
+            "name": sym.name,
+            "anchor": sym.anchor,
+            "pins": sym.pins,
+            "graphics": sym.graphics,
+            "schematic_params": sym.schematic_params,
+            "created": sym.created,
+            "updated": sym.updated,
+        });
+        let r = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/symbols")
+                    .header("content-type", "application/json")
+                    .header("authorization", bearer_header())
+                    .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(r.status(), StatusCode::CREATED);
+    }
+
+    let r = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/symbols?library_id={lib_a}"))
+                .header("authorization", bearer_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap();
+    let got: Vec<PrimitiveSummary> = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(got.len(), 2);
+    assert!(got.iter().all(|s| s.library_id == lib_a));
+}
+
+#[tokio::test]
+async fn post_then_get_footprint_round_trip() {
+    let state = fresh_state().await;
+    let app = router_with_state(state);
+
+    let library_id = Uuid::now_v7();
+    let mut fp = Footprint::empty("SOIC-8");
+    fp.uuid = Uuid::now_v7();
+
+    // Footprint has many serde-default fields — embed it via flatten.
+    let mut body = serde_json::to_value(&fp).unwrap();
+    body.as_object_mut()
+        .unwrap()
+        .insert("library_id".into(), serde_json::json!(library_id));
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/footprints")
+                .header("content-type", "application/json")
+                .header("authorization", bearer_header())
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/footprints/{}?library_id={}", fp.uuid, library_id))
+                .header("authorization", bearer_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let got: Footprint = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(got.uuid, fp.uuid);
+    assert_eq!(got.name, fp.name);
+    // Body3D defaults round-trip cleanly.
+    assert_eq!(got.body_3d, fp.body_3d);
+}
+
+/// A footprint whose sketch holds an arc about (2, 3) with start (7, 3) and an
+/// end point at (2, 10): off the radius-5 circle, as an older row stored it.
+/// Returns the footprint plus the ids of the centre and end points.
+fn off_circle_footprint() -> (Footprint, SketchEntityId, SketchEntityId) {
+    let plane = Plane {
+        id: PlaneId::new(),
+        kind: PlaneKind::BoardTop,
+    };
+    let pid = plane.id;
+    let mut sketch = SketchData::default();
+    sketch.planes.push(plane);
+    let mut point = |x, y| {
+        let id = SketchEntityId::new();
+        sketch
+            .entities
+            .push(Entity::new(id, pid, EntityKind::Point { x, y }));
+        id
+    };
+    let (c, s, e) = (point(2.0, 3.0), point(7.0, 3.0), point(2.0, 10.0));
+    sketch.entities.push(Entity::new(
+        SketchEntityId::new(),
+        pid,
+        EntityKind::Arc {
+            center: c,
+            start: s,
+            end: e,
+            sweep_ccw: true,
+        },
+    ));
+    let mut fp = Footprint::empty("arc");
+    fp.uuid = Uuid::now_v7();
+    fp.sketch = Some(sketch);
+    (fp, c, e)
+}
+
+#[tokio::test]
+async fn fetch_footprint_repairs_an_off_circle_arc_end_stored_in_the_row() {
+    let state = fresh_state().await;
+    let library_id = Uuid::now_v7();
+    let (fp, c, e) = off_circle_footprint();
+    // `insert_footprint` stores the sketch exactly as given, off circle.
+    state.insert_footprint(library_id, &fp).await.unwrap();
+
+    let got = state
+        .fetch_footprint(library_id, fp.uuid)
+        .await
+        .unwrap()
+        .expect("row exists");
+
+    let sketch = got.0.sketch.expect("sketch survives");
+    let at = |id| {
+        sketch
+            .entities
+            .iter()
+            .find_map(|en| match en.kind {
+                EntityKind::Point { x, y } if en.id == id => Some((x, y)),
+                _ => None,
+            })
+            .expect("point")
+    };
+    let (cx, cy) = at(c);
+    let (ex, ey) = at(e);
+    assert!(((ex - cx).hypot(ey - cy) - 5.0).abs() < 1e-9);
+}
+
+#[tokio::test]
+async fn post_then_get_sim_round_trip() {
+    let state = fresh_state().await;
+    let app = router_with_state(state);
+
+    let library_id = Uuid::now_v7();
+    let mut sm = SimModel::empty("LM358", SimKind::Spice3);
+    sm.uuid = Uuid::now_v7();
+    sm.body = ".SUBCKT LM358 IN OUT VCC GND\n.ENDS".into();
+
+    let mut body = serde_json::to_value(&sm).unwrap();
+    body.as_object_mut()
+        .unwrap()
+        .insert("library_id".into(), serde_json::json!(library_id));
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/sims")
+                .header("content-type", "application/json")
+                .header("authorization", bearer_header())
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/sims/{}?library_id={}", sm.uuid, library_id))
+                .header("authorization", bearer_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let got: SimModel = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(got.uuid, sm.uuid);
+    assert_eq!(got.name, sm.name);
+    assert_eq!(got.body, sm.body);
+    assert_eq!(got.kind, sm.kind);
+}
+
+#[tokio::test]
+async fn get_symbol_404_when_unknown() {
+    // Round-trip the not-found path so future refactors don't regress the
+    // `Option<…>` → 404 conversion.
+    let state = fresh_state().await;
+    let app = router_with_state(state);
+
+    let library_id = Uuid::now_v7();
+    let unknown = Uuid::now_v7();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/symbols/{unknown}?library_id={library_id}"))
+                .header("authorization", bearer_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn get_symbol_400_without_library_id() {
+    // The route requires `?library_id=` to disambiguate primitives that share
+    // a uuid across libraries. Missing it is a client bug, surfaced as 400.
+    let state = fresh_state().await;
+    let app = router_with_state(state);
+
+    let unknown = Uuid::now_v7();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/symbols/{unknown}"))
+                .header("authorization", bearer_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+/// The three primitive routes, so every concurrency test runs on each.
+#[derive(Clone, Copy, Debug)]
+enum Kind {
+    Symbol,
+    Footprint,
+    Sim,
+}
+
+impl Kind {
+    const ALL: [Kind; 3] = [Kind::Symbol, Kind::Footprint, Kind::Sim];
+
+    fn collection(self) -> &'static str {
+        match self {
+            Kind::Symbol => "symbols",
+            Kind::Footprint => "footprints",
+            Kind::Sim => "sims",
+        }
+    }
+
+    fn noun(self) -> &'static str {
+        match self {
+            Kind::Symbol => "symbol",
+            Kind::Footprint => "footprint",
+            Kind::Sim => "sim",
+        }
+    }
+
+    /// A primitive of this kind as a write body for library `lib`.
+    fn body(self, lib: Uuid, uuid: Uuid, name: &str) -> serde_json::Value {
+        let mut body = match self {
+            Kind::Symbol => {
+                let mut sym = Symbol::empty(name);
+                sym.uuid = uuid;
+                serde_json::to_value(sym)
+            }
+            Kind::Footprint => {
+                let mut fp = Footprint::empty(name);
+                fp.uuid = uuid;
+                serde_json::to_value(fp)
+            }
+            Kind::Sim => {
+                let mut sm = SimModel::empty(name, SimKind::Spice3);
+                sm.uuid = uuid;
+                serde_json::to_value(sm)
+            }
+        }
+        .unwrap();
+        body["library_id"] = serde_json::json!(lib);
+        body
+    }
+}
+
+async fn send(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    if_match: Option<&str>,
+    body: Option<&serde_json::Value>,
+) -> axum::response::Response {
+    let mut req = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("content-type", "application/json")
+        .header("authorization", bearer_header());
+    if let Some(v) = if_match {
+        req = req.header("if-match", v);
+    }
+    let body = body.map_or_else(Body::empty, |b| Body::from(serde_json::to_vec(b).unwrap()));
+    app.clone().oneshot(req.body(body).unwrap()).await.unwrap()
+}
+
+async fn json_of(resp: axum::response::Response) -> serde_json::Value {
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    serde_json::from_slice(&bytes).unwrap_or_default()
+}
+
+#[tokio::test]
+async fn post_of_an_existing_primitive_is_refused_and_the_stored_one_unchanged() {
+    for kind in Kind::ALL {
+        let app = router_with_state(fresh_state().await);
+        let lib = Uuid::now_v7();
+        let uuid = Uuid::now_v7();
+        let coll = kind.collection();
+
+        let first = kind.body(lib, uuid, "FIRST");
+        let r = send(&app, "POST", &format!("/{coll}"), None, Some(&first)).await;
+        assert_eq!(r.status(), StatusCode::CREATED, "{kind:?}");
+        assert_eq!(r.headers()["etag"], "\"1\"", "{kind:?}");
+
+        let second = kind.body(lib, uuid, "SECOND");
+        let r = send(&app, "POST", &format!("/{coll}"), None, Some(&second)).await;
+        assert_eq!(r.status(), StatusCode::CONFLICT, "{kind:?}");
+
+        let r = send(
+            &app,
+            "GET",
+            &format!("/{coll}/{uuid}?library_id={lib}"),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(r.headers()["etag"], "\"1\"", "{kind:?}");
+        assert_eq!(json_of(r).await["name"], "FIRST", "{kind:?}");
+    }
+}
+
+#[tokio::test]
+async fn put_needs_the_current_revision() {
+    for kind in Kind::ALL {
+        put_needs_the_current_revision_for(kind).await;
+    }
+}
+
+async fn put_needs_the_current_revision_for(kind: Kind) {
+    let app = router_with_state(fresh_state().await);
+    let lib = Uuid::now_v7();
+    let uuid = Uuid::now_v7();
+    let coll = kind.collection();
+    let uri = format!("/{coll}/{uuid}");
+    let created = kind.body(lib, uuid, "V1");
+    send(&app, "POST", &format!("/{coll}"), None, Some(&created)).await;
+    let body = kind.body(lib, uuid, "V2");
+
+    // No precondition: refused in the primitive's own words, nothing written.
+    let r = send(&app, "PUT", &uri, None, Some(&body)).await;
+    assert_eq!(r.status(), StatusCode::PRECONDITION_REQUIRED, "{kind:?}");
+    let error = json_of(r).await["error"].as_str().unwrap().to_string();
+    assert!(error.contains(kind.noun()), "{kind:?}: {error}");
+    assert!(!error.contains("row"), "{kind:?}: {error}");
+
+    // Fresh: applied, revision bumps.
+    let r = send(&app, "PUT", &uri, Some("\"1\""), Some(&body)).await;
+    assert_eq!(r.status(), StatusCode::OK, "{kind:?}");
+    assert_eq!(r.headers()["etag"], "\"2\"", "{kind:?}");
+
+    // Stale: refused with the current revision, stored value kept.
+    let stale = kind.body(lib, uuid, "STALE");
+    let r = send(&app, "PUT", &uri, Some("\"1\""), Some(&stale)).await;
+    assert_eq!(r.status(), StatusCode::CONFLICT, "{kind:?}");
+    assert_eq!(json_of(r).await["current_revision"], 2, "{kind:?}");
+    let r = send(&app, "GET", &format!("{uri}?library_id={lib}"), None, None).await;
+    assert_eq!(json_of(r).await["name"], "V2", "{kind:?}");
+
+    // Malformed If-Match: 400.
+    let r = send(&app, "PUT", &uri, Some("W/\"2\""), Some(&body)).await;
+    assert_eq!(r.status(), StatusCode::BAD_REQUEST, "{kind:?}");
+
+    // Body naming another uuid: 400; unknown primitive: 404 naming its kind.
+    let other = Uuid::now_v7();
+    let r = send(
+        &app,
+        "PUT",
+        &format!("/{coll}/{other}"),
+        Some("\"1\""),
+        Some(&body),
+    )
+    .await;
+    assert_eq!(r.status(), StatusCode::BAD_REQUEST, "{kind:?}");
+    let ghost = kind.body(lib, other, "GHOST");
+    let r = send(
+        &app,
+        "PUT",
+        &format!("/{coll}/{other}"),
+        Some("\"1\""),
+        Some(&ghost),
+    )
+    .await;
+    assert_eq!(r.status(), StatusCode::NOT_FOUND, "{kind:?}");
+    let error = json_of(r).await["error"].as_str().unwrap().to_string();
+    assert!(error.starts_with(kind.noun()), "{kind:?}: {error}");
+}

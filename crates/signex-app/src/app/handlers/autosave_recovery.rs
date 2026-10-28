@@ -1,5 +1,5 @@
 //! Recovery of a sidecar an earlier run left behind (#1164, #1185): the check
-//! when a schematic, symbol or footprint opens, the Restore / Discard prompt, and the startup
+//! when a schematic, PCB, symbol or footprint opens, the Restore / Discard prompt, and the startup
 //! sweep. All disk work runs in `spawn_blocking`; the pure decisions are in
 //! `crate::autosave::recovery`.
 
@@ -17,12 +17,21 @@ use crate::autosave::{
 };
 
 impl Signex {
-    /// A schematic tab just opened from disk: look, off the UI thread, for
-    /// a recovery copy that differs from its file. A copy byte-identical to
-    /// the file is removed by the same task; a differing copy is offered
-    /// whatever its mtime, so a prompt is only ever shown for edits the
-    /// file lacks.
+    /// A document just opened from disk (a symbol or footprint editor):
+    /// hold autosave back and start the recovery check. Held until the
+    /// check reports, so no autosave write lands first and a rename waits
+    /// for it (#1323).
     pub(crate) fn autosave_check_recovery(&mut self, path: &Path) -> Task<Message> {
+        self.document_state.autosave.begin_check(path);
+        self.start_recovery_check(path)
+    }
+
+    /// Look, off the UI thread, for a recovery copy of `path` that differs
+    /// from its file; the caller already holds the check. A copy
+    /// byte-identical to the file is removed by the same task; a differing
+    /// copy is offered whatever its mtime, so a prompt is only ever shown
+    /// for edits the file lacks.
+    fn start_recovery_check(&mut self, path: &Path) -> Task<Message> {
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             // Nothing can be on disk without a recovery folder.
             self.document_state.autosave.finish_check(path);
@@ -39,7 +48,7 @@ impl Signex {
             return Task::none();
         }
         let due = std::mem::take(&mut self.document_state.recovery_check_due);
-        Task::batch(due.iter().map(|path| self.autosave_check_recovery(path)))
+        Task::batch(due.iter().map(|path| self.start_recovery_check(path)))
     }
 
     /// Startup: remove temp files a crashed write stranded in the
@@ -137,6 +146,19 @@ impl Signex {
                     }
                     return Task::none();
                 }
+                // After a rename the copy may still sit under the old name.
+                if self.document_state.autosave.move_owed(&offer.path) {
+                    let name = file_label(&offer.path);
+                    self.document_state.autosave.offer(offer);
+                    self.report_recovery_failure(format!(
+                        "The recovery copy of {name} is still being moved to the file's new \
+                         name. It was kept; choose Restore again in a moment."
+                    ));
+                    // Start the move now rather than on the next tick, which
+                    // never comes while autosave is off.
+                    return self.autosave_flush_moves();
+                }
+                self.document_state.autosave.begin_restore(&offer.path);
                 // The copy is read off-thread; no write may replace it
                 // meanwhile, and none may if the restore is then refused.
                 self.document_state.autosave.defer(&offer.path);
@@ -151,9 +173,25 @@ impl Signex {
     pub(super) fn restore_loaded(&mut self, loaded: RestoreLoaded) -> Task<Message> {
         let RestoreLoaded {
             path,
-            offer,
+            mut offer,
             result,
         } = loaded;
+        let current = self.document_state.autosave.finish_restore(&path);
+        if current != path {
+            // Renamed while the copy was read: the copy moves to the new
+            // path, so a read that missed it says nothing about it.
+            offer.path = current.clone();
+            if result.is_err() {
+                let name = file_label(&current);
+                self.document_state.autosave.offer(offer);
+                self.report_recovery_failure(format!(
+                    "{name} was renamed while its recovery copy was being read. The copy was \
+                     kept and is offered again."
+                ));
+                return Task::none();
+            }
+        }
+        let path = current;
         let restored = match result {
             Ok(restored) => restored,
             Err(LoadError::Invalid(reason)) => {
@@ -191,6 +229,7 @@ impl Signex {
             RestoredDocument::Footprint(_) => {
                 self.document_state.footprint_editors.contains_key(&path)
             }
+            RestoredDocument::Pcb(_) => self.is_open_pcb(&path),
         };
         if !is_open {
             // Closed while the copy was read; the copy stays for the next open.
@@ -198,7 +237,9 @@ impl Signex {
             self.report_restore_target_closed(&path);
             return Task::none();
         }
-        if self.document_state.dirty_paths.contains(&path) || self.is_dirty_primitive_editor(&path)
+        if self.document_state.dirty_paths.contains(&path)
+            || self.is_dirty_primitive_editor(&path)
+            || self.is_dirty_pcb(&path)
         {
             // Both versions are worth keeping: the edits live in the open
             // document, the earlier ones in the copy. Autosave stays off for
@@ -236,6 +277,9 @@ impl Signex {
                 self.restore_footprint_copy(&path, *file);
                 self.sync_editor_dirty_paths();
             }
+            RestoredDocument::Pcb(board) => {
+                self.restore_pcb_copy(&path, *board);
+            }
         }
         // The copy is still on disk and now describes the open document:
         // track it so the next save removes it.
@@ -252,6 +296,7 @@ impl Signex {
     fn is_open_document(&self, path: &Path) -> bool {
         let docs = &self.document_state;
         docs.engines.contains_key(path)
+            || self.is_open_pcb(path)
             || docs.symbol_editors.contains_key(path)
             || docs.footprint_editors.contains_key(path)
     }
