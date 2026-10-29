@@ -6,6 +6,8 @@ use super::*;
 #[derive(Debug, Clone, Default)]
 pub struct PickerState {
     pub filter: String,
+    /// Range filters on parameter columns of the list (#1572).
+    pub range_filters: crate::library::range_filter::RangeFilters,
     pub selected: Option<(PathBuf, ComponentSummary)>,
     /// The list the picker draws; kept current by `sync_view_caches`.
     pub rows: PickerRows,
