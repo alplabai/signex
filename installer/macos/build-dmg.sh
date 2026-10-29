@@ -30,9 +30,14 @@ mkdir -p "$MACOS" "$RESOURCES"
 cp "$BINARY_PATH" "$MACOS/signex"
 chmod +x "$MACOS/signex"
 
-# Info.plist with version substituted.
+# Info.plist with version substituted. Apple specifies both
+# CFBundleShortVersionString and CFBundleVersion as period-separated integers,
+# so both get the numeric X.Y.Z (a pre-release suffix such as -rc.1 is
+# stripped); the full version stays in the DMG file name and `signex --version`.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-sed "s/__VERSION__/$VERSION/g" "$SCRIPT_DIR/Info.plist" > "$CONTENTS/Info.plist"
+SHORT_VERSION="${VERSION%%-*}"
+sed -e "s/__SHORT_VERSION__/$SHORT_VERSION/g" -e "s/__VERSION__/$VERSION/g" \
+    "$SCRIPT_DIR/Info.plist" > "$CONTENTS/Info.plist"
 
 # Optional icon — drop a Signex.icns next to build-dmg.sh to include it.
 if [[ -f "$SCRIPT_DIR/Signex.icns" ]]; then
