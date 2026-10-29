@@ -788,7 +788,7 @@ mod tests {
         app.interaction_state.active_canvas_mut().polyline_points = pts;
         app.interaction_state.active_canvas_mut().selected.push(
             signex_types::schematic::SelectedItem::new(
-                uuid::Uuid::new_v4(),
+                uuid::Uuid::now_v7(),
                 signex_types::schematic::SelectedKind::Wire,
             ),
         );

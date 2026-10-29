@@ -90,8 +90,7 @@ pub fn mpn_key(mpn: &str) -> String {
     mpn.trim().to_uppercase()
 }
 
-/// The custom fields an MPN is read from, in order.
-pub const MPN_FIELDS: [&str; 3] = ["MPN", "Manufacturer Part Number", "Part Number"];
+pub use signex_types::schematic::MPN_FIELDS;
 
 fn row_mpn(row: &BomRow) -> Option<&str> {
     MPN_FIELDS.iter().find_map(|wanted| {

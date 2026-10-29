@@ -65,7 +65,7 @@ fn sheet(
 ) -> (signex_types::schematic::SchematicSheet, Uuid) {
     let mut sheet = test_sheet();
     sheet.lib_symbols.insert(ID.into(), lib_symbol(pins));
-    let uuid = Uuid::new_v4();
+    let uuid = Uuid::now_v7();
     sheet.symbols.push(Symbol {
         uuid,
         lib_id: ID.into(),

@@ -173,7 +173,7 @@ mod tests {
     }
 
     fn reference() -> PrimitiveRef {
-        PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4())
+        PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7())
     }
 
     #[test]

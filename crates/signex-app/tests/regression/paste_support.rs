@@ -135,7 +135,7 @@ pub(crate) mod sheet {
 
     pub(crate) fn part(reference: &str, lib: &str, unit: u32, at: (f64, f64)) -> Symbol {
         Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             lib_id: lib.to_owned(),
             reference: reference.to_owned(),
             position: Point::new(at.0, at.1),
@@ -146,7 +146,7 @@ pub(crate) mod sheet {
 
     pub(crate) fn net_label(text: &str, at: (f64, f64)) -> Label {
         Label {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             text: text.to_owned(),
             position: Point::new(at.0, at.1),
             rotation: 0.0,
@@ -192,7 +192,7 @@ pub(crate) mod sheet {
 
     pub(crate) fn empty_sheet() -> SchematicSheet {
         SchematicSheet {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             paper_size: "A4".to_owned(),
             ..Default::default()
         }

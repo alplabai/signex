@@ -314,7 +314,7 @@ mod tests {
         let project_path = dir.path().join("proj.snxprj");
         std::fs::write(&project_path, b"").unwrap();
         let sheet = signex_types::schematic::SchematicSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             paper_size: "A4".to_string(),
             ..Default::default()
         };
@@ -416,7 +416,7 @@ mod tests {
         let project_path = dir.path().join("proj.snxprj");
         std::fs::write(&project_path, b"").unwrap();
         let sheet = signex_types::schematic::SchematicSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             paper_size: "A4".to_string(),
             ..Default::default()
         };

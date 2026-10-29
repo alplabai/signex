@@ -11,7 +11,7 @@ use std::path::PathBuf;
 fn wire(a: (f64, f64), b: (f64, f64)) -> Wire {
     Wire {
         unknown_columns: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
         stroke_width: 0.0,
@@ -22,7 +22,7 @@ fn wire(a: (f64, f64), b: (f64, f64)) -> Wire {
 /// An app on the Altium keymap holding `wires`, 1 mm grid, nothing selected.
 fn app_with(wires: Vec<Wire>) -> Signex {
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         wires,
         ..Default::default()

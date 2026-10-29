@@ -75,9 +75,9 @@ mod tests {
     /// `y` keeps each test's log lines distinct: the diagnostics ring is shared.
     fn app_with_wire_at(y: f64) -> (Signex, uuid::Uuid) {
         let _ = crate::diagnostics::init_logging();
-        let id = uuid::Uuid::new_v4();
+        let id = uuid::Uuid::now_v7();
         let sheet = SchematicSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             wires: vec![Wire {
                 uuid: id,
                 start: Point::new(0.0, y),

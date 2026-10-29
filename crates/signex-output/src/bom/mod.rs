@@ -662,7 +662,7 @@ mod tests {
 
     fn test_symbol() -> Symbol {
         Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             lib_id: "Device:R".to_string(),
             reference: "R1".to_string(),
             value: "10k".to_string(),
@@ -1347,7 +1347,7 @@ mod tests {
         use crate::{ProjectMetadata, SheetSnapshot};
         use signex_types::schematic::SchematicSheet;
         let schematic = SchematicSheet {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             paper_size: "A4".to_string(),
             symbols,
             ..Default::default()

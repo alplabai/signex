@@ -113,7 +113,7 @@ fn new_component_on_a_library_without_a_table_says_why() {
     app.library.open_libraries.push(OpenLibrary {
         root: PathBuf::from("unmounted.snxlib"),
         display_name: "Unmounted".into(),
-        library_id: Uuid::new_v4(),
+        library_id: Uuid::now_v7(),
         tables: HashMap::new(),
         cached_components: Vec::new(),
         cached_symbols: Vec::new(),

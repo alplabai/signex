@@ -429,7 +429,7 @@ mod tests {
 
     fn symbol(lib_id: &str, x: f64, y: f64) -> Symbol {
         Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             lib_id: lib_id.into(),
             reference: "U1".into(),
             ref_text: Some(TextProp {
@@ -448,7 +448,7 @@ mod tests {
 
     fn wire(x0: f64, y0: f64, x1: f64, y1: f64) -> Wire {
         Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(x0, y0),
             end: Point::new(x1, y1),
             ..Wire::default()
@@ -457,7 +457,7 @@ mod tests {
 
     fn label(x: f64, y: f64) -> signex_types::schematic::Label {
         serde_json::from_value(serde_json::json!({
-            "uuid": Uuid::new_v4(),
+            "uuid": Uuid::now_v7(),
             "text": "N",
             "position": { "x": x, "y": y },
             "label_type": "net",
@@ -476,19 +476,19 @@ mod tests {
         let moved_wire = wire(0.0, 0.0, 10.0, 0.0);
         let still_wire = wire(0.0, 20.0, 10.0, 20.0);
         let moved_junction = Junction {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             position: Point::new(5.0, 0.0),
             ..Junction::default()
         };
         let still_junction = Junction {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             position: Point::new(5.0, 20.0),
             ..Junction::default()
         };
         let moved_label = label(2.0, 2.0);
         let still_label = label(2.0, 22.0);
         let drawing = SchDrawing::Line {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(0.0, 30.0),
             end: Point::new(5.0, 31.0),
             width: 0.0,
@@ -773,7 +773,7 @@ mod tests {
             offset_y: 0.0,
             scale,
         };
-        let skip: HashSet<Uuid> = HashSet::from([Uuid::new_v4()]);
+        let skip: HashSet<Uuid> = HashSet::from([Uuid::now_v7()]);
         let mut layers = DragLayers::default();
         let stale =
             |layers: &mut DragLayers, t: &ScreenTransform, rev: u64, skip: &HashSet<Uuid>| {

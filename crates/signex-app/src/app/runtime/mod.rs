@@ -612,7 +612,7 @@ mod tests {
     fn wire_colour_overrides_are_read_from_ui_state() {
         // Arrange
         let (mut app, _t) = Signex::new();
-        let uuid = uuid::Uuid::new_v4();
+        let uuid = uuid::Uuid::now_v7();
         let color = signex_types::theme::Color {
             r: 1,
             g: 2,

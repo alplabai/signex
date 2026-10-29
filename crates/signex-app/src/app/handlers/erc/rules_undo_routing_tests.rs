@@ -16,16 +16,16 @@ use crate::keymap::AppCommandId;
 /// A project over a fresh directory whose root sheet is open with one
 /// symbol, so the sheet has an undo history to protect.
 fn app_with_sheet() -> (Signex, uuid::Uuid) {
-    let dir = std::env::temp_dir().join(format!("signex-erc-route-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-erc-route-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
     // `Signex::new` loads the machine preferences, which other tests write;
     // Store seeds from them, and an edit that matches the seed is a no-op.
     app.ui_state.erc_severity_override.clear();
     app.ui_state.pin_matrix_overrides.clear();
     let path = dir.join("a_root.snxsch");
-    let symbol = uuid::Uuid::new_v4();
+    let symbol = uuid::Uuid::now_v7();
     let sheet = signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols: vec![Symbol {
             uuid: symbol,

@@ -121,3 +121,86 @@ fn same_file_name_in_two_directories_gets_distinct_sheet_keys() {
     assert_eq!(rows[0].sheet_name, rows[1].sheet_name);
     assert_ne!(rows[0].sheet_key, rows[1].sheet_key);
 }
+
+#[test]
+fn html_report_from_the_panel_rows_escapes_net_names() {
+    let mut app = app_with_erc();
+    app.ui_state.erc_violations_by_path.insert(
+        PathBuf::from("c.snxsch"),
+        vec![violation(
+            RuleKind::SinglePinNet,
+            Severity::Warning,
+            "Net '<script>x()</script>' connects only one pin, R1.1",
+            7.0,
+        )],
+    );
+    let opts = app.erc_report_options(ErcReportFormat::Html);
+    let ctx = ExportContext {
+        sheets: Vec::new(),
+        metadata: ProjectMetadata::default(),
+        netlist: None,
+        netlist_sheets: Vec::new(),
+        current_sheet: None,
+        netlist_placements: Vec::new(),
+    };
+    let html = String::from_utf8(ErcReportExporter.export(&ctx, &opts).expect("html").bytes)
+        .expect("utf-8");
+    assert!(!html.contains("<script"));
+    assert!(html.contains("Net &#39;&lt;script&gt;x()&lt;/script&gt;&#39;"));
+    assert!(html.contains("c.snxsch"));
+}
+
+#[test]
+fn waivers_map_into_the_report_with_their_status() {
+    use crate::panels::{ErcViolationWaiverEntry, ErcWaiverStatus};
+    let entry = ErcViolationWaiverEntry {
+        rule_id: "builtin::unused_pin".into(),
+        objects: vec!["u".into()],
+        message: "Pin on TP1 is not connected".into(),
+        reason: "test point".into(),
+        author: "A. Designer".into(),
+        date: "2026-10-29".into(),
+        status: ErcWaiverStatus::Lapsed,
+        severity: Some(ErcSeverityLite::Warning),
+    };
+    let w = report_waiver(&entry);
+    assert_eq!(w.status, ErcReportWaiverStatus::Lapsed);
+    assert_eq!((w.reason.as_str(), w.waived_count), ("test point", 0));
+    assert_eq!(w.severity, Some(ErcReportSeverity::Warning));
+    let net = report_net_waiver(&crate::panels::ErcWaiverEntry {
+        rule_id: "user::r".into(),
+        net: "VBUS".into(),
+        hidden: 2,
+    });
+    assert_eq!(net.kind, ErcReportWaiverKind::PerNet);
+    assert_eq!(net.waived_count, 2);
+}
+
+#[test]
+fn report_sheet_paths_are_relative_to_the_project_folder() {
+    let dir = std::path::Path::new("/home/me/proj");
+    assert_eq!(
+        report_sheet_path(&dir.join("sheets").join("power.snxsch"), Some(dir)),
+        std::path::Path::new("sheets")
+            .join("power.snxsch")
+            .display()
+            .to_string()
+    );
+    let outside = std::path::Path::new("/elsewhere/x.snxsch");
+    assert_eq!(
+        report_sheet_path(outside, Some(dir)),
+        outside.display().to_string()
+    );
+}
+
+#[test]
+fn the_report_is_formatted_and_written_off_the_update_thread() {
+    let mut app = app_with_erc();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("erc.html");
+    let task = app.handle_erc_report_path_chosen(Ok(path.clone()));
+    assert!(!path.exists(), "nothing is written inside update");
+    crate::app::handlers::menu::export::write::settle(&mut app, task);
+    let html = std::fs::read_to_string(&path).expect("written");
+    assert!(html.starts_with("<!DOCTYPE html>"));
+}

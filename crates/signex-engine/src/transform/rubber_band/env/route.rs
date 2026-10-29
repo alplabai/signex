@@ -206,7 +206,7 @@ impl Env {
                     unknown_columns: Default::default(),
                     locked: false,
                 });
-                wire.uuid = Uuid::new_v4();
+                wire.uuid = Uuid::now_v7();
                 // A new leg is a fresh wire; a lock stays on the wire it was set on.
                 wire.locked = false;
                 wire.start = a;

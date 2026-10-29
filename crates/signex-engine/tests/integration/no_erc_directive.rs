@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 fn directive_at(x: f64, y: f64) -> NoConnect {
     NoConnect {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         position: Point::new(x, y),
     }
 }
@@ -121,7 +121,7 @@ fn erc_clears_the_dangling_wire_row_under_a_placed_directive() {
     let sheet = SchematicSheet {
         paper_size: "A4".to_string(),
         wires: vec![Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(0.0, 0.0),
             end: Point::new(10.0, 0.0),
             ..Default::default()

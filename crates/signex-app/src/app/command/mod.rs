@@ -189,7 +189,7 @@ mod tests {
 
         let (mut app, _task) = Signex::new();
         app.interaction_state.active_canvas_mut().selected =
-            vec![SelectedItem::new(uuid::Uuid::new_v4(), SelectedKind::Wire)];
+            vec![SelectedItem::new(uuid::Uuid::now_v7(), SelectedKind::Wire)];
 
         let command = AppCommandId::new("unselect_all").unwrap();
         let _ = app.dispatch_command(&command, CommandArgs::none(), None);

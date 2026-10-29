@@ -283,38 +283,38 @@ impl PlacementPayload {
             .map(|lib_symbol| Command::RegisterLibSymbol { lib_symbol })
             .collect();
         commands.extend(f.symbols.iter().cloned().map(|mut symbol| {
-            symbol.uuid = Uuid::new_v4();
+            symbol.uuid = Uuid::now_v7();
             // A placed copy is a new part: its designators come from its own
             // `reference`, never the original's per-placement entries (#1138).
             symbol.instances.clear();
             Command::PlaceSymbol { symbol }
         }));
         commands.extend(f.wires.iter().cloned().map(|mut wire| {
-            wire.uuid = Uuid::new_v4();
+            wire.uuid = Uuid::now_v7();
             Command::PlaceWireSegmentAsIs { wire }
         }));
         commands.extend(f.buses.iter().cloned().map(|mut bus| {
-            bus.uuid = Uuid::new_v4();
+            bus.uuid = Uuid::now_v7();
             Command::PlaceBus { bus }
         }));
         commands.extend(f.bus_entries.iter().cloned().map(|mut bus_entry| {
-            bus_entry.uuid = Uuid::new_v4();
+            bus_entry.uuid = Uuid::now_v7();
             Command::PlaceBusEntry { bus_entry }
         }));
         commands.extend(f.junctions.iter().cloned().map(|mut junction| {
-            junction.uuid = Uuid::new_v4();
+            junction.uuid = Uuid::now_v7();
             Command::PlaceJunction { junction }
         }));
         commands.extend(f.no_connects.iter().cloned().map(|mut no_connect| {
-            no_connect.uuid = Uuid::new_v4();
+            no_connect.uuid = Uuid::now_v7();
             Command::PlaceNoConnect { no_connect }
         }));
         commands.extend(f.labels.iter().cloned().map(|mut label| {
-            label.uuid = Uuid::new_v4();
+            label.uuid = Uuid::now_v7();
             Command::PlaceLabel { label }
         }));
         commands.extend(f.text_notes.iter().cloned().map(|mut text_note| {
-            text_note.uuid = Uuid::new_v4();
+            text_note.uuid = Uuid::now_v7();
             Command::PlaceTextNote { text_note }
         }));
         commands
@@ -381,7 +381,7 @@ mod tests {
         let lib: LibSymbol = serde_json::from_str(r#"{"id":"lib:r"}"#).unwrap();
         sheet.lib_symbols.insert(lib.id.clone(), lib);
         sheet.symbols.push(Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             lib_id: "lib:r".to_owned(),
             reference: "R1".to_owned(),
             position: Point::new(0.0, 0.0),
@@ -468,14 +468,14 @@ mod tests {
     fn group_with_locked_items() -> PlacementPayload {
         let mut sheet = SchematicSheet::default();
         sheet.wires.push(Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(0.0, 0.0),
             end: Point::new(10.0, 0.0),
             locked: true,
             ..Default::default()
         });
         sheet.drawings.push(SchDrawing::Line {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(0.0, 5.0),
             end: Point::new(10.0, 5.0),
             width: 0.2,
@@ -483,14 +483,14 @@ mod tests {
             locked: true,
         });
         sheet.symbols.push(Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             position: Point::new(20.0, 0.0),
             unit: 1,
             locked: true,
             ..Default::default()
         });
         sheet.labels.push(signex_types::schematic::Label {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             text: "N".into(),
             position: Point::new(5.0, 3.0),
             rotation: 0.0,
@@ -504,7 +504,7 @@ mod tests {
             unknown_columns: Default::default(),
         });
         sheet.text_notes.push(signex_types::schematic::TextNote {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             text: "t".into(),
             position: Point::new(6.0, 4.0),
             rotation: 0.0,
@@ -547,7 +547,7 @@ mod tests {
         let mut sheet = SchematicSheet::default();
         for (a, b) in [(0.0, 5.0), (5.0, 10.0)] {
             sheet.wires.push(Wire {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 start: Point::new(a, 0.0),
                 end: Point::new(b, 0.0),
                 ..Default::default()

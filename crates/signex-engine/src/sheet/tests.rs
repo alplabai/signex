@@ -8,7 +8,7 @@ use crate::test_support::test_sheet;
 fn label(text: &str, label_type: LabelType, shape: &str) -> Label {
     Label {
         unknown_columns: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         text: text.to_string(),
         position: Point::new(10.0, 10.0),
         rotation: 0.0,
@@ -24,7 +24,7 @@ fn label(text: &str, label_type: LabelType, shape: &str) -> Label {
 
 fn pin(name: &str, direction: &str) -> SheetPin {
     SheetPin {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         name: name.to_string(),
         direction: direction.to_string(),
         position: Point::new(100.0, 102.0),
@@ -36,7 +36,7 @@ fn pin(name: &str, direction: &str) -> SheetPin {
 
 fn symbol(filename: &str, pins: Vec<SheetPin>) -> ChildSheet {
     ChildSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         name: "Child".to_string(),
         filename: filename.to_string(),
         position: Point::new(100.0, 100.0),

@@ -13,7 +13,7 @@ fn a_listed_page_with_no_file_is_not_diagnosed_as_a_graph_problem() {
     // hierarchy that is fine. It is also dropped from the exported page set,
     // so the PDF comes out a page short; saying so is the only warning the
     // user gets for that.
-    let dir = std::env::temp_dir().join(format!("signex-export-nofile-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-export-nofile-{}", Uuid::now_v7()));
     let dir_str = dir.to_string_lossy().to_string();
     let mut ds = workspace(&dir_str, &["a.snxsch", "b.snxsch"]);
     let a = dir.join("a.snxsch");

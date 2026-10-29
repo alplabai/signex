@@ -365,7 +365,7 @@ mod special_string_tests {
         schematic
             .text_notes
             .push(signex_types::schematic::TextNote {
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 text: NOTE.into(),
                 position: signex_types::schematic::Point::new(10.0, 10.0),
                 rotation: 0.0,

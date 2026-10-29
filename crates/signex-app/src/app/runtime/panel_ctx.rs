@@ -539,6 +539,7 @@ impl Signex {
         let sheet_color = self.document_state.panel_ctx.sheet_color;
         let erc_diagnostics = self.build_erc_diagnostic_entries();
         let erc_waivers = self.erc_waiver_entries();
+        let erc_violation_waivers = self.erc_violation_waiver_entries();
 
         let net_classes = self.net_class_panel_state();
 
@@ -636,6 +637,8 @@ impl Signex {
             pre_placement,
             erc_diagnostics,
             erc_waivers,
+            erc_violation_waivers,
+            erc_waive_draft: self.ui_state.erc_waive_draft.clone(),
             erc_focus_index: self.ui_state.erc_focus_global_index,
             erc_running: self.ui_state.erc_running,
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),

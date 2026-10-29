@@ -38,7 +38,7 @@ fn lib_pin(number: &str, x: f64) -> LibPin {
 /// `R1` at (50, 50), pins at (45, 50) and (55, 50), one wire into each.
 fn app_with_resistor() -> (Signex, PathBuf, Uuid) {
     let mut sheet = SchematicSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };
@@ -64,7 +64,7 @@ fn app_with_resistor() -> (Signex, PathBuf, Uuid) {
             pin_name_offset: 0.0,
         },
     );
-    let symbol = Uuid::new_v4();
+    let symbol = Uuid::now_v7();
     sheet.symbols.push(Symbol {
         uuid: symbol,
         lib_id: "R".to_string(),
@@ -74,7 +74,7 @@ fn app_with_resistor() -> (Signex, PathBuf, Uuid) {
     });
     for (a, b) in [((30.0, 50.0), (45.0, 50.0)), ((55.0, 50.0), (75.0, 50.0))] {
         sheet.wires.push(Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(a.0, a.1),
             end: Point::new(b.0, b.1),
             ..Default::default()
@@ -205,7 +205,7 @@ fn align_is_one_command_and_one_undo_step() {
     {
         let engine = app.document_state.engines.get_mut(&path).unwrap();
         let mut sheet = engine.document().clone();
-        let id = Uuid::new_v4();
+        let id = Uuid::now_v7();
         let mut second = sheet.symbols[0].clone();
         second.uuid = id;
         second.reference = "R2".to_string();
@@ -250,7 +250,7 @@ fn a_pin_that_cannot_be_kept_connected_reaches_the_messages_panel() {
         let mut sheet = engine.document().clone();
         for (a, b) in [((45.0, 55.0), (45.0, 58.0)), ((30.0, 55.0), (30.0, 58.0))] {
             sheet.wires.push(Wire {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 start: Point::new(a.0, a.1),
                 end: Point::new(b.0, b.1),
                 ..Default::default()

@@ -21,7 +21,7 @@ fn label(id: Uuid) -> Label {
 }
 
 fn engine_with_label() -> (Engine, Uuid) {
-    let id = Uuid::new_v4();
+    let id = Uuid::now_v7();
     let mut sheet = test_sheet();
     sheet.labels.push(label(id));
     (Engine::new(sheet).unwrap(), id)
@@ -72,13 +72,13 @@ fn a_blank_family_clears_instead_of_storing_an_empty_name() {
 #[test]
 fn a_missing_target_changes_nothing_and_records_no_history() {
     let (mut engine, _) = engine_with_label();
-    assert!(!set(&mut engine, Uuid::new_v4(), Some("X")).changed);
+    assert!(!set(&mut engine, Uuid::now_v7(), Some("X")).changed);
     assert!(!engine.can_undo());
 }
 
 #[test]
 fn a_symbol_field_family_lives_on_its_text_prop() {
-    let id = Uuid::new_v4();
+    let id = Uuid::now_v7();
     let mut sheet = test_sheet();
     sheet.symbols.push(Symbol {
         uuid: id,

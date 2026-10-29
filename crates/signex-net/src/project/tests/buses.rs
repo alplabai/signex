@@ -21,7 +21,7 @@ fn bus_sheet(
 ) -> SchematicSheet {
     let mut sheet = empty_sheet();
     sheet.buses.push(Bus {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: pt(0.0, 0.0),
         end: pt(0.0, 40.0),
     });
@@ -32,7 +32,7 @@ fn bus_sheet(
     for (i, (member, reference)) in members.iter().enumerate() {
         let y = 5.0 + 10.0 * i as f64;
         sheet.bus_entries.push(BusEntry {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             position: pt(0.0, y),
             size: (2.54, 2.54),
         });
@@ -175,12 +175,12 @@ fn a_width_mismatch_narrows_the_join_at_each_level_of_a_two_level_hierarchy() {
     );
     // A second bus, far from the first, goes down to the leaf through a pin.
     mid.buses.push(Bus {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: pt(100.0, 0.0),
         end: pt(100.0, 40.0),
     });
     mid.bus_entries.push(BusEntry {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         position: pt(100.0, 5.0),
         size: (2.54, 2.54),
     });

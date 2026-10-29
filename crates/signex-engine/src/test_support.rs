@@ -11,7 +11,7 @@ use signex_types::schematic::SchematicSheet;
 /// An empty A4 sheet: no symbols, no wires, no graphics, no title block.
 pub(crate) fn test_sheet() -> SchematicSheet {
     SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     }

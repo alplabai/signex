@@ -7,7 +7,7 @@ const TEXT: &str = "SYSTEM_RESET_REQUEST_N";
 
 fn label(label_type: LabelType, family: Option<&str>) -> Label {
     Label {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         text: TEXT.into(),
         position: Point::new(20.0, 30.0),
         rotation: 0.0,

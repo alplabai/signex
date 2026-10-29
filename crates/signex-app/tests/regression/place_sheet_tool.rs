@@ -15,7 +15,7 @@ use tempfile::TempDir;
 
 pub(crate) fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         version: 0,
         generator: String::new(),
         generator_version: String::new(),

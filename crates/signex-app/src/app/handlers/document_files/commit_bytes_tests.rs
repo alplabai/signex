@@ -51,7 +51,7 @@ fn sheet_fixture(stem: &str) -> (tempfile::TempDir, PathBuf, Signex) {
     let mut app = open_tab(dir.path(), &path, TabKind::Schematic);
     app.document_state.tabs.clear();
     let engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         ..Default::default()
     })
     .expect("engine");

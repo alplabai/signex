@@ -719,7 +719,7 @@ fn note_ctx(notes: &[(&str, f64, signex_types::schematic::HAlign)]) -> ExportCon
     let mut ctx = sample_ctx(1);
     for (text, rotation, justify_h) in notes {
         ctx.sheets[0].schematic.text_notes.push(TextNote {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             text: (*text).into(),
             position: Point::new(40.0, 40.0),
             rotation: *rotation,

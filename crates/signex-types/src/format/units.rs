@@ -37,6 +37,15 @@ pub(in crate::format) fn mm_to_nm(mm: f64, field: &'static str) -> Result<i64, N
     Ok(scaled as i64)
 }
 
+/// `mm` as the integer nanometres the file stores, or `None` for a value
+/// the file cannot hold. Two lengths that save to the same nm compare
+/// equal here, which raw `f64` mm do not after a save + load (3.81 reads
+/// back as 3.8099999999999996): use this to compare or hash geometry
+/// across a save.
+pub fn mm_as_stored_nm(mm: f64) -> Option<i64> {
+    mm_to_nm(mm, "length").ok()
+}
+
 pub(in crate::format) fn nm_to_mm(nm: i64) -> f64 {
     (nm as f64) * MM_PER_NM
 }

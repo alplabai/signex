@@ -23,6 +23,7 @@ mod symbol_editor_properties;
 // v0.14.x -- domain modules split out of the former single-file panels module.
 mod color_field;
 mod context;
+mod erc_waivers;
 mod footprint_context;
 mod library;
 mod messages;
@@ -73,6 +74,7 @@ use symbol_editor_properties::view_symbol_editor_properties;
 //    sibling `super::` / `crate::panels::` paths resolving after the split. --
 pub use color_field::{ColorFieldProps, color_field};
 pub use context::{PanelContext, SymbolChoiceItem};
+pub use erc_waivers::{ErcViolationWaiverEntry, ErcWaiveDraft, ErcWaiverMsg, ErcWaiverStatus};
 pub use footprint_context::{
     ArrayKindSummary, ArrayParamField, ArraySummary, BgaConfigSummary, CutoutSummary,
     FootprintEditorPanelContext, FootprintLibInternalRow, FootprintLibSibling, FootprintModeKind,

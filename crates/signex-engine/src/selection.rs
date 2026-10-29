@@ -724,10 +724,10 @@ mod tests {
     #[test]
     fn sheet_pin_direction_is_shown_without_debug_quoting() {
         use signex_types::schematic::{ChildSheet, FillType, Point, SchematicSheet, SheetPin};
-        let pin_uuid = uuid::Uuid::new_v4();
+        let pin_uuid = uuid::Uuid::now_v7();
         let sheet = SchematicSheet {
             child_sheets: vec![ChildSheet {
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 name: "Child".into(),
                 filename: "child.snxsch".into(),
                 position: Point::new(0.0, 0.0),

@@ -126,6 +126,11 @@ impl Signex {
                 .and_then(|p| p.data.rules.as_ref())
                 .map(|r| r.erc_net_waivers.clone())
                 .unwrap_or_default(),
+            violation_waivers: ds
+                .active_document_project()
+                .and_then(|p| p.data.rules.as_ref())
+                .map(|r| r.erc_waivers.clone())
+                .unwrap_or_default(),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
         };
 
@@ -189,6 +194,8 @@ impl Signex {
             .map(|t| t.path.clone());
         self.ui_state.erc_violations_by_path = outcome.by_path.clone();
         self.ui_state.erc_waived_hidden = outcome.waived_hidden.clone();
+        self.ui_state.erc_waived_findings = outcome.waived_findings.clone();
+        self.ui_state.erc_lapsed_waivers = outcome.lapsed_waivers.clone();
         self.ui_state.erc_focus_global_index = self
             .ui_state
             .erc_violations_by_path
@@ -281,6 +288,7 @@ impl Signex {
                         ),
                         net: v.net.clone(),
                         rule_id: v.rule_id.to_string(),
+                        waiver_key: v.waiver_key.clone(),
                     });
                 }
             }
@@ -337,7 +345,7 @@ impl Signex {
         match target.rule_kind {
             Some(signex_erc::RuleKind::UnusedPin) => {
                 let nc = signex_types::schematic::NoConnect {
-                    uuid: uuid::Uuid::new_v4(),
+                    uuid: uuid::Uuid::now_v7(),
                     position: signex_types::schematic::Point::new(target.world_x, target.world_y),
                 };
                 self.apply_engine_command(

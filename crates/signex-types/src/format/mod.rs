@@ -77,7 +77,7 @@ mod version_tests;
 pub use pcb_rows::{PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow};
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use tsv::{parse_tsv_block, write_tsv_block};
-pub use units::NonFiniteField;
+pub use units::{NonFiniteField, mm_as_stored_nm};
 pub use unknown::{BoardUnknown, SheetUnknown, UnknownFields};
 pub use unknown_columns::{MAX_FOREIGN_COLUMN_NAME_BYTES, MAX_FOREIGN_COLUMNS, UnknownColumns};
 

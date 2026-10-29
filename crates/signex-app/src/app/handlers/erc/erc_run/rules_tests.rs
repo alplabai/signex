@@ -17,7 +17,7 @@ fn project_rules(severity: &[(&str, &str)]) -> signex_types::project::ProjectRul
 
 #[test]
 fn a_project_rule_set_overrides_the_machine_preferences() {
-    let dir = std::env::temp_dir().join(format!("signex-erc-rules-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-erc-rules-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
     app.document_state.projects[0].data.rules = Some(project_rules(&[
         ("dangling_wire", "off"),
@@ -49,7 +49,7 @@ fn a_project_rule_set_overrides_the_machine_preferences() {
 
 #[test]
 fn a_project_without_rules_still_uses_the_machine_preferences() {
-    let dir = std::env::temp_dir().join(format!("signex-erc-norules-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-erc-norules-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
     assert!(app.document_state.projects[0].data.rules.is_none());
     app.ui_state
@@ -61,7 +61,7 @@ fn a_project_without_rules_still_uses_the_machine_preferences() {
 
 #[test]
 fn the_preferences_fallback_note_is_logged_once_per_project_open() {
-    let dir = std::env::temp_dir().join(format!("signex-erc-once-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-erc-once-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
     let id = app.document_state.projects[0].id;
     assert!(app.document_state.erc_fallback_noted.is_empty());
@@ -76,7 +76,7 @@ fn the_preferences_fallback_note_is_logged_once_per_project_open() {
 /// section stays with the project for re-save.
 #[test]
 fn an_unreadable_project_rule_set_falls_back_to_the_machine_preferences() {
-    let dir = std::env::temp_dir().join(format!("signex-erc-newer-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-erc-newer-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("newer.snxprj");

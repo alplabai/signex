@@ -117,7 +117,7 @@ fn an_edit_in_each_document_kind_reaches_every_reader() {
     edit_footprint(&mut app, &footprint, "renamed");
     assert_dirty_everywhere(&mut app, &footprint, "a footprint edit");
 
-    let moved = uuid::Uuid::new_v4();
+    let moved = uuid::Uuid::now_v7();
     let (mut app, sheet) =
         crate::dirty_paths_gateway::app_with(vec![crate::dirty_paths_gateway::symbol(
             moved, "R1", 50.0,

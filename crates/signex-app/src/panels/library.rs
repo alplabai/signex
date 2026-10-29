@@ -525,12 +525,7 @@ pub fn view_library_row_properties<'a>(
     border_c: iced::Color,
     warning: iced::Color,
 ) -> Element<'a, PanelMsg> {
-    // Truncate the row UUID to its first 8 hex chars for a
-    // human-scannable identity line.
-    let row_id_short = {
-        let s = d.row_id.simple().to_string();
-        if s.len() >= 8 { s[..8].to_string() } else { s }
-    };
+    let row_id_short = signex_types::object_id::short_id(&d.row_id);
     let pn_text = if d.internal_pn.is_empty() {
         "(unnamed row)".to_string()
     } else {

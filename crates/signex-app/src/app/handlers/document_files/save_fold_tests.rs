@@ -35,7 +35,7 @@ impl DocumentSink for Recorder {
 
 fn engine_at(path: &Path, paper: &str) -> signex_engine::Engine {
     let sheet = signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: paper.to_string(),
         ..Default::default()
     };

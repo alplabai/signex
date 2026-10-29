@@ -39,6 +39,16 @@ impl RuleId {
             RuleKind::BusLabelOnWire => "builtin::bus_label_on_a_wire",
             RuleKind::NetMultipleNames => "builtin::net_has_multiple_names",
             RuleKind::LocalLabelNameOnOtherSheets => "builtin::local_label_name_on_other_sheets",
+            RuleKind::PartWithoutFootprint => "builtin::part_without_footprint",
+            RuleKind::PartWithoutValue => "builtin::part_without_value",
+            RuleKind::PartWithoutMpn => "builtin::part_without_mpn",
+            RuleKind::UnannotatedDesignator => "builtin::unannotated_designator",
+            RuleKind::SinglePinNet => "builtin::single_pin_net",
+            RuleKind::NetWithNoDriver => "builtin::net_with_no_driver",
+            RuleKind::PowerInputNotDriven => "builtin::power_input_not_driven",
+            RuleKind::UnitsNotPlaced => "builtin::part_units_not_placed",
+            RuleKind::OffGrid => "builtin::off_grid_pin_or_wire",
+            RuleKind::LabelsOnlyNet => "builtin::net_carries_only_labels",
         };
         RuleId(id.to_string())
     }
@@ -156,7 +166,7 @@ mod tests {
 
     /// Every built-in id string is persisted in saved profiles and project
     /// rule sets, so it must never follow a label rewording.
-    const PINNED_IDS: [(RuleKind, &str); 21] = [
+    const PINNED_IDS: [(RuleKind, &str); 31] = [
         (RuleKind::UnusedPin, "builtin::unused_pin"),
         (
             RuleKind::DuplicateRefDesignator,
@@ -211,6 +221,25 @@ mod tests {
             RuleKind::LocalLabelNameOnOtherSheets,
             "builtin::local_label_name_on_other_sheets",
         ),
+        (
+            RuleKind::PartWithoutFootprint,
+            "builtin::part_without_footprint",
+        ),
+        (RuleKind::PartWithoutValue, "builtin::part_without_value"),
+        (RuleKind::PartWithoutMpn, "builtin::part_without_mpn"),
+        (
+            RuleKind::UnannotatedDesignator,
+            "builtin::unannotated_designator",
+        ),
+        (RuleKind::SinglePinNet, "builtin::single_pin_net"),
+        (RuleKind::NetWithNoDriver, "builtin::net_with_no_driver"),
+        (
+            RuleKind::PowerInputNotDriven,
+            "builtin::power_input_not_driven",
+        ),
+        (RuleKind::UnitsNotPlaced, "builtin::part_units_not_placed"),
+        (RuleKind::OffGrid, "builtin::off_grid_pin_or_wire"),
+        (RuleKind::LabelsOnlyNet, "builtin::net_carries_only_labels"),
     ];
 
     #[test]

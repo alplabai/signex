@@ -88,8 +88,8 @@ mod tests {
     /// asserted on while other tests write to it. Kept short: the panel
     /// compacts a record to 160 characters and the path has to survive.
     fn unique_dir(tag: &str) -> PathBuf {
-        let id = uuid::Uuid::new_v4().simple().to_string();
-        std::env::temp_dir().join(format!("snx-{tag}-{}", &id[..8]))
+        let id = signex_types::object_id::short_id(&uuid::Uuid::now_v7());
+        std::env::temp_dir().join(format!("snx-{tag}-{id}"))
     }
 
     fn records_mentioning(marker: &str) -> Vec<crate::diagnostics::DiagnosticEntry> {

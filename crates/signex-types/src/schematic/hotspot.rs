@@ -116,7 +116,7 @@ mod tests {
         let mut sheet = SchematicSheet::default();
         sheet.wires.push(Wire {
             unknown_columns: Default::default(),
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             start: Point::new(start.0, start.1),
             end: Point::new(end.0, end.1),
             stroke_width: 0.0,

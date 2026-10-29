@@ -23,7 +23,7 @@ fn named_wire(text: &str, label_type: LabelType) -> SchematicSheet {
     });
     sheet.labels.push(Label {
         unknown_columns: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         text: text.to_string(),
         position: Point::new(0.0, 0.0),
         rotation: 0.0,
@@ -55,7 +55,7 @@ fn an_erc_run_reports_a_net_named_differently_on_two_sheets() {
     );
     let mut root = named_wire("I2C_SDA", LabelType::Global);
     root.child_sheets.push(ChildSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         name: "charger".to_string(),
         filename: "child.snxsch".to_string(),
         position: Point::new(0.0, 0.0),
@@ -66,7 +66,7 @@ fn an_erc_run_reports_a_net_named_differently_on_two_sheets() {
         fill_color: None,
         fields_autoplaced: false,
         pins: vec![SheetPin {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             name: "SDA".to_string(),
             direction: String::new(),
             position: Point::new(0.0, 0.0),

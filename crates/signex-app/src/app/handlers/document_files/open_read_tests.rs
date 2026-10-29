@@ -10,7 +10,7 @@ use crate::app::{Message, ProjectTreeAction, Signex, TabKind};
 
 fn write_schematic(path: &Path) {
     let text = signex_types::format::SnxSchematic::new(signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         ..Default::default()
     })
     .write_string()

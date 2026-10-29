@@ -32,6 +32,7 @@ mod overrides;
 pub mod pin_matrix;
 mod project_names;
 pub mod project_rules;
+mod project_units;
 pub mod rule;
 mod rules;
 pub mod waivers;
@@ -43,6 +44,7 @@ pub use net_finding::{NetFinding, NetFindingPin};
 pub use overrides::apply_overrides;
 pub use pin_matrix::{ErcConfig, PinAxis, PinMatrix};
 pub use project_names::{ProjectNetNames, project_net_multiple_names};
+pub use project_units::project_units_not_placed;
 pub use rule::{AnalysisScope, Applicability, RuleDefinition, RuleId, RuleTarget};
 
 /// What kind of violation this is. Stable identifier that maps to a severity
@@ -109,6 +111,27 @@ pub enum RuleKind {
     /// sheet and no Port or power name joins them. Net labels never cross
     /// sheets (ADR-0002 D8), so these are separate nets.
     LocalLabelNameOnOtherSheets,
+    /// A part placed on the board has no footprint assigned.
+    PartWithoutFootprint,
+    /// A part has an empty value.
+    PartWithoutValue,
+    /// A part carries no manufacturer part number field.
+    PartWithoutMpn,
+    /// A part's designator is empty or still unannotated (`R?`).
+    UnannotatedDesignator,
+    /// A net connects exactly one pin and goes nowhere else.
+    SinglePinNet,
+    /// A net with input pins has no pin that can drive it.
+    NetWithNoDriver,
+    /// A power input pin sits on a net with no power source: no power output
+    /// pin, power port or power flag.
+    PowerInputNotDriven,
+    /// A multi-unit part has units that are placed on no sheet.
+    UnitsNotPlaced,
+    /// A pin or wire endpoint is off the 1.27 mm (50 mil) connection grid.
+    OffGrid,
+    /// A net carries labels and wires but no pin.
+    LabelsOnlyNet,
 }
 
 impl RuleKind {
@@ -136,6 +159,16 @@ impl RuleKind {
             RuleKind::BusLabelOnWire => "Bus label on a wire",
             RuleKind::NetMultipleNames => "Net has multiple names",
             RuleKind::LocalLabelNameOnOtherSheets => "Local label name on other sheets",
+            RuleKind::PartWithoutFootprint => "Part without footprint",
+            RuleKind::PartWithoutValue => "Part without value",
+            RuleKind::PartWithoutMpn => "Part without MPN",
+            RuleKind::UnannotatedDesignator => "Unannotated designator",
+            RuleKind::SinglePinNet => "Single-pin net",
+            RuleKind::NetWithNoDriver => "Net with no driver",
+            RuleKind::PowerInputNotDriven => "Power input not driven",
+            RuleKind::UnitsNotPlaced => "Part units not placed",
+            RuleKind::OffGrid => "Off-grid pin or wire",
+            RuleKind::LabelsOnlyNet => "Net carries only labels",
         }
     }
 
@@ -159,7 +192,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 21] = [
+    pub const ALL: [RuleKind; 31] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -181,13 +214,25 @@ impl RuleKind {
         RuleKind::BusLabelOnWire,
         RuleKind::NetMultipleNames,
         RuleKind::LocalLabelNameOnOtherSheets,
+        RuleKind::PartWithoutFootprint,
+        RuleKind::PartWithoutValue,
+        RuleKind::PartWithoutMpn,
+        RuleKind::UnannotatedDesignator,
+        RuleKind::SinglePinNet,
+        RuleKind::NetWithNoDriver,
+        RuleKind::PowerInputNotDriven,
+        RuleKind::UnitsNotPlaced,
+        RuleKind::OffGrid,
+        RuleKind::LabelsOnlyNet,
     ];
 
     /// The one source of truth for a rule's severity: [`Diagnostic::new`]
     /// stamps it on every diagnostic and the ERC dialog highlights it.
     /// `BadHierSheetPin` is the sole rule that grades individual findings
     /// below this level. Users override per rule via
-    /// `ui_state.erc_severity_override`; see [`apply_overrides`].
+    /// `ui_state.erc_severity_override`; see [`apply_overrides`]. The
+    /// completeness rules (#1286) default low so existing projects are not
+    /// flooded: see `docs/ERC_RULES.md`, "Completeness rules".
     pub fn default_severity(self) -> Severity {
         match self {
             RuleKind::DuplicateRefDesignator
@@ -207,9 +252,19 @@ impl RuleKind {
             | RuleKind::BusUnnamed
             | RuleKind::BusNameConflict
             | RuleKind::BusLabelOnWire
-            | RuleKind::LocalLabelNameOnOtherSheets => Severity::Warning,
+            | RuleKind::LocalLabelNameOnOtherSheets
+            | RuleKind::UnannotatedDesignator
+            | RuleKind::SinglePinNet
+            | RuleKind::NetWithNoDriver
+            | RuleKind::PowerInputNotDriven
+            | RuleKind::UnitsNotPlaced
+            | RuleKind::LabelsOnlyNet => Severity::Warning,
             RuleKind::NetMultipleNames => Severity::Info,
             RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
+            RuleKind::PartWithoutFootprint | RuleKind::PartWithoutValue | RuleKind::OffGrid => {
+                Severity::Info
+            }
+            RuleKind::PartWithoutMpn => Severity::Off,
         }
     }
 }
@@ -256,6 +311,17 @@ pub struct Violation {
     /// For a net-level finding: the net it is about. Such a finding is
     /// waived per net, never by a No-ERC directive on one of its pins.
     pub net: Option<NetFinding>,
+    /// Number of the pin a pin-anchored finding sits on (see
+    /// [`Diagnostic::anchor_pin`]).
+    pub anchor_pin: Option<String>,
+    /// Which of a rule's distinct findings on the same objects this is (see
+    /// [`Diagnostic::tag`]).
+    pub tag: Option<String>,
+    /// The key a per-finding waiver matches (#1285). Filled by the caller
+    /// that knows the sheet the finding is filed under
+    /// ([`waivers::violation::stamp_keys`]); `None` until then, or when the
+    /// finding names no object on that sheet.
+    pub waiver_key: Option<waivers::violation::WaiverKey>,
 }
 
 impl Violation {
@@ -280,6 +346,9 @@ impl Violation {
             primary: None,
             peer: None,
             net: None,
+            anchor_pin: None,
+            tag: None,
+            waiver_key: None,
         }
     }
 

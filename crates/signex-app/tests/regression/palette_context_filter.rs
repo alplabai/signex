@@ -54,7 +54,7 @@ const SCHEMATIC_ONLY: &[&str] = &[
 
 fn open_schematic_tab(app: &mut Signex) {
     let sheet = signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         version: 1,
         generator: "signex-test".into(),
         generator_version: "0.9".into(),

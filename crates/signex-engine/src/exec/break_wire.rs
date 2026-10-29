@@ -41,7 +41,7 @@ impl Engine {
 
         let first = &mut self.document.wires[index];
         let mut second = first.clone();
-        second.uuid = Uuid::new_v4();
+        second.uuid = Uuid::now_v7();
         second.start = cut;
         first.end = cut;
         let items = [

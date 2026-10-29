@@ -17,7 +17,7 @@ use super::test_adapters::CountingAdapter;
 
 #[test]
 fn library_views_trigger_no_adapter_call() {
-    let library_id = Uuid::new_v4();
+    let library_id = Uuid::now_v7();
     let (adapter, calls) = CountingAdapter::new(library_id);
     let root = PathBuf::from("/tmp/purity/Purity.snxlib");
 

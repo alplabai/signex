@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 fn app_with_sheet(paper: &str) -> Signex {
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         version: 0,
         generator: String::new(),
         generator_version: String::new(),

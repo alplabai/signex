@@ -61,7 +61,7 @@ impl Signex {
                 self.interaction_state.active_canvas_mut().ghost_label =
                     Some(signex_types::schematic::Label {
                         unknown_columns: Default::default(),
-                        uuid: uuid::Uuid::new_v4(),
+                        uuid: uuid::Uuid::now_v7(),
                         text: "PORT".to_string(),
                         position: signex_types::schematic::Point::new(0.0, 0.0),
                         rotation: 0.0,
@@ -83,7 +83,7 @@ impl Signex {
                 self.interaction_state.active_canvas_mut().ghost_label =
                     Some(signex_types::schematic::Label {
                         unknown_columns: Default::default(),
-                        uuid: uuid::Uuid::new_v4(),
+                        uuid: uuid::Uuid::now_v7(),
                         text: "SHEET".to_string(),
                         position: signex_types::schematic::Point::new(0.0, 0.0),
                         rotation: 0.0,
@@ -230,7 +230,7 @@ impl Signex {
             Some(signex_types::schematic::Symbol {
                 unknown_columns: Default::default(),
                 unknown: Default::default(),
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 lib_id: lib_id.to_string(),
                 reference: String::new(),
                 value: net_name.to_string(),

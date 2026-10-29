@@ -484,9 +484,8 @@ pub fn validate_table(
     }
 
     if options.is_enabled(BomRule::MissingMpn) {
-        const MPN_KEYS: &[&str] = &["MPN", "Manufacturer Part Number", "Part Number"];
         for component in &ctx.components {
-            if !has_populated_field(component, MPN_KEYS) {
+            if !has_populated_field(component, &MPN_FIELDS) {
                 issues.push(BomValidationIssue {
                     rule: BomRule::MissingMpn,
                     severity: BomIssueSeverity::Warning,

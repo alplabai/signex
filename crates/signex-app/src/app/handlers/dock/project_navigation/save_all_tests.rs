@@ -24,7 +24,7 @@ fn app_with_two_dirty_documents(dir: &Path) -> (Signex, PathBuf, PathBuf) {
 
     let sheet_path = dir.join("Sheet.snxsch");
     let mut engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     })
