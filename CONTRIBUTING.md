@@ -390,9 +390,10 @@ them, so the rest is on the author.
   state changes, and IO is returned as a `Task`, never run inline (the
   bounded `SaveBarrier` wait in ADR-0003 D2 is the sanctioned exception). No
   process-global app state. Message routers are exhaustive, with no `_` arm.
-- **Messages:** the root `Message` gets no new flat variant; a new message
-  goes into its surface's namespaced enum. Name messages as past-tense events
-  (imperative names are the house style only inside `OverlayMsg`).
+- **Messages:** contributors do not add `Message` variants. If a change needs
+  a new message, open an issue that describes the event and the maintainers
+  add it. The message tree is shared by every surface, so its shape is decided
+  in one place.
 - **Domain logic in domain crates:** the app calls them and never re-derives
   them. Connectivity comes only from `signex-net`
   ([ADR-0002](docs/architecture/adr-0002-netlist-single-derivation.md)),
