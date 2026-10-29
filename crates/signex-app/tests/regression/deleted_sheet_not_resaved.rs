@@ -110,9 +110,10 @@ fn deleting_a_dirty_sheet_is_not_resurrected_by_save_all_on_quit() {
         is_outside_project: false,
         unsaved_prompt: false,
     });
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::DeleteFile,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+    );
     assert!(!sheet.exists(), "Delete File must remove the file");
 
     // A second dirty sheet keeps the quit prompt alive so Save All really runs.
@@ -212,9 +213,10 @@ fn delete_file(app: &mut Signex, target: &Path) {
         is_outside_project: false,
         unsaved_prompt: false,
     });
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::DeleteFile,
-    )));
+    crate::settle_support::settle(
+        app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+    );
 }
 
 #[test]
@@ -1359,9 +1361,10 @@ fn failed_disk_delete_keeps_the_project_entry() {
         is_outside_project: false,
         unsaved_prompt: false,
     });
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::DeleteFile,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+    );
 
     assert!(sheet.exists());
     assert_eq!(app.document_state.projects[0].data.sheets.len(), 1);

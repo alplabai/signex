@@ -186,9 +186,11 @@ fn delete_on_second_library_row_leaves_the_first_untouched() {
 
     let key = row_key(&app, &SECOND_ROW);
     tree_action(&mut app, ProjectTreeAction::OpenRemoveDialog(key));
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::DeleteFile,
-    )));
+    // The delete runs on a worker (#859); settle drives its completion.
+    crate::settle_support::settle(
+        &mut app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+    );
 
     assert_eq!(
         fs::read(&first_lib).expect("the first library must survive"),

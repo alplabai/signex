@@ -13,28 +13,7 @@ use crate::app::project_sheets::{assemble_project_sheets, project_root_sheet_pat
 use crate::app::state::library_entry::with_new_leaf;
 use crate::app::state::scope::path_key_with;
 
-/// One parent-sheet reference to re-point: `parent` holds a child entry whose
-/// `filename` is currently `from` and must become `to`.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(super) struct ReferenceRewrite {
-    pub(super) parent: PathBuf,
-    pub(super) from: String,
-    pub(super) to: String,
-}
-
-/// What a rename has to do to the rest of the project, planned before the
-/// file moves.
-#[derive(Debug, Default)]
-pub(super) struct ReferencePlan {
-    pub(super) rewrites: Vec<ReferenceRewrite>,
-    /// Project sheets that could not be read or parsed, so whether they
-    /// reference the renamed file is unknown. Reported, never skipped silently.
-    pub(super) unchecked: Vec<String>,
-    /// Parents of a rewrite that are read-only (written by a newer Signex),
-    /// so the engine would refuse the re-point. The rename must not start
-    /// when this is non-empty: the file would move and the reference stay.
-    pub(super) read_only_parents: Vec<PathBuf>,
-}
+pub(super) use crate::app::path_ops::{ParentSheets, ReferencePlan, ReferenceRewrite};
 
 /// The refusal text for a rename whose parents cannot be re-pointed.
 pub(super) fn read_only_parents_detail(parents: &[PathBuf]) -> String {
@@ -166,10 +145,14 @@ impl Signex {
     /// parent dirty. A parent that is not open is loaded into an engine (no
     /// tab) so Save All can persist it. Returns the parents that could not be
     /// updated and those that could not be checked; each is also logged.
-    pub(super) fn apply_reference_rewrites(&mut self, plan: &ReferencePlan) -> RewriteOutcome {
+    pub(super) fn apply_reference_rewrites(
+        &mut self,
+        plan: &ReferencePlan,
+        mut parents: ParentSheets,
+    ) -> RewriteOutcome {
         let mut failures = Vec::new();
         for rewrite in &plan.rewrites {
-            if let Err(why) = self.apply_one_rewrite(rewrite) {
+            if let Err(why) = self.apply_one_rewrite(rewrite, &mut parents) {
                 failures.push(format!("{} — {why}", rewrite.parent.display()));
             }
         }
@@ -187,16 +170,39 @@ impl Signex {
         }
     }
 
-    fn apply_one_rewrite(&mut self, rewrite: &ReferenceRewrite) -> Result<(), String> {
+    /// The parents a plan will rewrite that no engine holds open: the rename
+    /// worker reads them so the completion never touches the disk.
+    pub(super) fn unopened_rewrite_parents(&self, plan: &ReferencePlan) -> Vec<PathBuf> {
+        let mut parents: Vec<PathBuf> = plan
+            .rewrites
+            .iter()
+            .map(|rewrite| rewrite.parent.clone())
+            .filter(|parent| !self.document_state.engines.contains_key(parent))
+            .collect();
+        parents.sort();
+        parents.dedup();
+        parents
+    }
+
+    fn apply_one_rewrite(
+        &mut self,
+        rewrite: &ReferenceRewrite,
+        parents: &mut ParentSheets,
+    ) -> Result<(), String> {
         let parent = &rewrite.parent;
         let loaded_here = !self.document_state.engines.contains_key(parent);
         if loaded_here {
-            let text =
-                std::fs::read_to_string(parent).map_err(|e| format!("could not be read: {e}"))?;
-            let sheet = signex_types::format::SnxSchematic::parse(&text)
-                .map_err(|e| format!("could not be parsed: {e}"))?
-                .sheet;
-            let engine = signex_engine::Engine::new_with_path(sheet, Some(parent.clone()))
+            // An open of this parent that started before the rename is still
+            // in flight and would replace the rewritten engine.
+            if self.document_state.pending_opens.contains(parent) {
+                return Err("is still opening, so its reference was not updated".to_string());
+            }
+            // Read by the rename worker; a parent that was not in the plan's
+            // read list (an engine closed meanwhile) is reported, not read here.
+            let sheet = parents
+                .remove(parent)
+                .ok_or_else(|| "was not read before the rename".to_string())??;
+            let engine = signex_engine::Engine::new_with_path(*sheet, Some(parent.clone()))
                 .map_err(|e| format!("could not be loaded: {e}"))?;
             self.document_state.insert_engine(parent.clone(), engine);
             self.adopt_net_colors_of(parent);
@@ -282,11 +288,22 @@ mod tests {
         std::fs::write(&parent, text).expect("write parent");
         let (mut app, _boot) = Signex::new();
 
-        let outcome = app.apply_one_rewrite(&ReferenceRewrite {
-            parent: parent.clone(),
-            from: "Missing.snxsch".to_string(),
-            to: "Other.snxsch".to_string(),
-        });
+        // The rename worker reads the parent; the completion only consumes it.
+        let sheet = signex_types::format::SnxSchematic::parse(
+            &std::fs::read_to_string(&parent).expect("read parent"),
+        )
+        .expect("parse parent")
+        .sheet;
+        let mut parents = std::collections::HashMap::from([(parent.clone(), Ok(Box::new(sheet)))]);
+
+        let outcome = app.apply_one_rewrite(
+            &ReferenceRewrite {
+                parent: parent.clone(),
+                from: "Missing.snxsch".to_string(),
+                to: "Other.snxsch".to_string(),
+            },
+            &mut parents,
+        );
 
         assert!(outcome.is_ok());
         assert!(
@@ -350,15 +367,18 @@ mod tests {
         sheet.unknown.newer_minor_source = Some("snxsch/1.7".into());
         let (mut app, _boot) = Signex::new();
         fx::open_with(&mut app.document_state, &parent, sheet);
-        let outcome = app.apply_reference_rewrites(&super::ReferencePlan {
-            rewrites: vec![ReferenceRewrite {
-                parent: parent.clone(),
-                from: "child.snxsch".to_string(),
-                to: "renamed.snxsch".to_string(),
-            }],
-            unchecked: Vec::new(),
-            read_only_parents: Vec::new(),
-        });
+        let outcome = app.apply_reference_rewrites(
+            &super::ReferencePlan {
+                rewrites: vec![ReferenceRewrite {
+                    parent: parent.clone(),
+                    from: "child.snxsch".to_string(),
+                    to: "renamed.snxsch".to_string(),
+                }],
+                unchecked: Vec::new(),
+                read_only_parents: Vec::new(),
+            },
+            Default::default(),
+        );
         assert_eq!(outcome.failed.len(), 1, "{outcome:?}");
         assert!(!app.document_state.is_document_dirty(&parent));
     }

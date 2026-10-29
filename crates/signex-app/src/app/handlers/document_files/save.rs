@@ -69,7 +69,10 @@ pub(crate) fn log_foreign_column_offenders(error: &anyhow::Error) {
 impl Signex {
     pub(crate) fn save_active_document(&mut self) -> Result<iced::Task<Message>> {
         if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab) {
-            self.refuse_save_while_restoring(&tab.path.clone())?;
+            // Refused before any branch below could ask for a Save As dialog
+            // for a path that is only missing because it is being renamed.
+            self.refuse_while_path_op(&tab.path, "saved")?;
+            self.refuse_save_while_restoring(&tab.path)?;
         }
         // Standalone `.snxsym` / `.snxfpt` document tabs route Ctrl+S
         // through `save_primitive_tab_at` so JSON persistence happens
@@ -301,6 +304,8 @@ impl Signex {
         from_path: &std::path::Path,
         picked_path: &std::path::Path,
     ) -> Result<iced::Task<Message>> {
+        self.refuse_while_path_op(from_path, "saved")?;
+        self.refuse_while_path_op(picked_path, "saved")?;
         // The OS dialog only confirmed overwriting the name the user
         // typed. When we append the extension the target is a different
         // file the user was never asked about, so refuse if it exists.

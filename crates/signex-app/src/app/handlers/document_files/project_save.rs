@@ -186,6 +186,8 @@ impl Signex {
             .map(|project| project.path.clone())
             .with_context(|| format!("project {project_id:?} is no longer loaded"))?;
         self.refuse_while_project_moves(&project_path, "save")?;
+        self.refuse_while_path_op(&project_path, "saved")?;
+        self.refuse_project_while_delete_pending(project_id, "saved")?;
         if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
             tab.general_history.close_run();
         }

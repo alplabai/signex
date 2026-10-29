@@ -1,6 +1,12 @@
 //! Remove-from-project / delete-file flow for the project-navigation dock.
+//!
+//! The delete itself runs on a worker (#859, `path_op_jobs::DeleteJob`); the
+//! completion forgets the documents of what it removed. While it runs the path
+//! is registered in `pending_path_ops`.
 
 use super::*;
+use crate::app::path_op_jobs::{DeleteJob, run_blocking};
+use crate::app::path_ops::{DeleteDone, DeleteIo, DeleteRequest, PathOpKind};
 use crate::app::state::library_entry::entry_resolves_to;
 use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 
@@ -132,77 +138,114 @@ impl Signex {
             )
     }
 
-    /// Delete the dialog's target from disk, but only if it is provably
-    /// inside the owning project's folder (#139). A Shared / Global
-    /// library lives outside it and belongs to other projects too, so a
-    /// refusal is surfaced to the user rather than only logged. This
-    /// holds even when the dialog state's `is_outside_project` is wrong.
-    fn delete_project_owned_target(&mut self, state: &crate::app::RemoveDialogState) -> bool {
-        // F23 — three cases:
+    /// Start deleting the dialog's target from disk. The worker deletes it
+    /// only if it is provably inside the owning project's folder (#139); a
+    /// Shared / Global library lives outside it and belongs to other
+    /// projects too, so a refusal is surfaced to the user rather than only
+    /// logged. This holds even when the dialog state's `is_outside_project`
+    /// is wrong.
+    ///
+    /// Nothing is touched here: the checks that stat or canonicalise the path
+    /// run on the worker, and [`Self::handle_path_deleted`] forgets the
+    /// documents once it reports back.
+    fn begin_delete(
+        &mut self,
+        state: &crate::app::RemoveDialogState,
+        fold: CaseFold,
+    ) -> iced::Task<Message> {
+        // F23 — three cases, decided on the worker:
         //   1. Regular file (sheets, pcbs, primitives) → remove_file.
         //   2. `.snxlib` directory package → remove_dir_all.
         //   3. Orphan entry (missing on disk) → no-op; the caller still
         //      prunes the in-memory entry.
-        let target = &state.target_path;
-        let fold = state.project_id.map_or_else(CaseFold::host_default, |id| {
-            self.document_state.fold_for_project(id)
-        });
-        match target.try_exists() {
-            Ok(true) => {}
-            Ok(false) => {
-                // Orphan entry: nothing on disk, but a tab may still hold it (#736).
-                self.drop_deleted_documents(target, fold);
-                return true;
-            }
-            Err(e) => {
-                crate::diagnostics::log_error(
-                    "Could not check whether the project file exists",
-                    &anyhow::anyhow!("{}: {e}", target.display()),
-                );
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
-                    format!("Could not delete \"{}\": {e}", state.display_name),
-                ));
-                return false;
-            }
-        }
-        let root = self.project_root_for_tree_path(&state.tree_path);
-        let contained = root
-            .as_deref()
-            .is_some_and(|r| super::remove_guard::is_inside_project_root(target, r));
-        if !contained || self.is_shared_library_target(&state.tree_path, target) {
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::delete(format!(
-                    "\"{}\" is a shared library or lives outside this project's folder, so \
-                     it was not deleted from disk. It has only been removed from the project.",
-                    state.display_name
-                )));
-            return true;
-        }
-        // A write still running for this file would recreate it after the
-        // delete; let it finish first (same bounded wait as rename).
-        self.document_state.document_saves.barrier().wait();
-        let result = if target.is_dir() {
-            std::fs::remove_dir_all(target)
-        } else {
-            std::fs::remove_file(target)
+        let shared_libraries = state
+            .tree_path
+            .first()
+            .and_then(|i| self.document_state.projects.get(*i))
+            .map(|p| {
+                p.data
+                    .libraries
+                    .iter()
+                    .filter(|e| e.kind != signex_types::project::LibraryEntryKind::ProjectLocal)
+                    .map(|e| p.data.resolve_library_path(e))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let id = self.document_state.pending_path_ops.begin(
+            PathOpKind::Delete,
+            vec![state.target_path.clone()],
+            fold,
+        );
+        // A background read of the file (project Replace) is out of date.
+        self.document_state.note_documents_changed();
+        let job = DeleteJob {
+            target: state.target_path.clone(),
+            project_root: self.project_root_for_tree_path(&state.tree_path),
+            shared_libraries,
+            saves: self.document_state.document_saves.barrier(),
         };
-        match result {
-            // The file is gone: forget any document still held for it (#736).
-            Ok(()) => {
-                self.drop_deleted_documents(target, fold);
-                true
+        let request = DeleteRequest {
+            id,
+            target: state.target_path.clone(),
+            display_name: state.display_name.clone(),
+            fold,
+            dialog: state.clone(),
+        };
+        iced::Task::perform(run_blocking(move || job.run()), move |joined| {
+            let io = joined.unwrap_or_else(DeleteIo::Failed);
+            Message::Remove(RemoveMsg::Deleted(Box::new(DeleteDone { request, io })))
+        })
+    }
+
+    /// The delete worker finished. A file that is gone (or was never there)
+    /// takes every document held for it with it, and its project entry goes
+    /// too; a failure keeps the entry, since pruning it would hide a file that
+    /// is still on disk, and says why. A refusal (shared library, outside the
+    /// project) removes the entry only.
+    pub(crate) fn handle_path_deleted(&mut self, done: DeleteDone) -> iced::Task<Message> {
+        let DeleteDone { request, io } = done;
+        self.document_state.pending_path_ops.finish(request.id);
+        let target = request.target.as_path();
+        let mut tasks = Vec::new();
+        match io {
+            // A tab may still hold the target (#736), and one opened by a
+            // route that does not consult the pending set must not outlive
+            // the file.
+            DeleteIo::Orphan | DeleteIo::Deleted => {
+                tasks = self.close_tabs_of_removed(target, true, request.fold);
+                self.drop_deleted_documents(target, request.fold);
+                self.prune_removed_entry(&request.dialog);
             }
-            Err(e) => {
+            DeleteIo::Refused => {
+                self.prune_removed_entry(&request.dialog);
+                self.document_state.error_notice =
+                    Some(crate::app::state::ErrorNotice::delete(format!(
+                        "\"{}\" is a shared library or lives outside this project's folder, so \
+                         it was not deleted from disk. It has only been removed from the project.",
+                        request.display_name
+                    )));
+            }
+            DeleteIo::Failed(e) => {
                 crate::diagnostics::log_error(
                     "Failed to delete project file",
                     &anyhow::anyhow!("{}: {e}", target.display()),
                 );
                 self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
-                    format!("Could not delete \"{}\": {e}", state.display_name),
+                    format!("Could not delete \"{}\": {e}", request.display_name),
                 ));
-                false
+            }
+            DeleteIo::CheckFailed(e) => {
+                crate::diagnostics::log_error(
+                    "Could not check whether the project file exists",
+                    &anyhow::anyhow!("{}: {e}", target.display()),
+                );
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                    format!("Could not delete \"{}\": {e}", request.display_name),
+                ));
             }
         }
+        self.refresh_panel_ctx();
+        iced::Task::batch(tasks)
     }
 
     /// Close the tabs of the file being removed. A delete also closes tabs
@@ -378,35 +421,66 @@ impl Signex {
             return iced::Task::none();
         }
 
+        let is_delete = matches!(choice, RemoveChoice::DeleteFile);
+        // A move or delete still running for this path (or one inside it)
+        // owns it: refuse before closing anything.
+        if let Err(refusal) = self.refuse_start_while_path_op(&state.target_path, "deleted") {
+            crate::diagnostics::log_warning(refusal.to_string());
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
+            return iced::Task::none();
+        }
+
+        // A "Commit now" or a stock copy writing into this library on a worker
+        // would recreate it, or fail, once the folder is gone.
+        if is_delete
+            && self.library_background_write_running(&state.target_path, self.dialog_fold(&state))
+        {
+            let refusal = crate::app::dispatch::library::LIBRARY_BACKGROUND_WRITE_REFUSAL;
+            crate::diagnostics::log_warning(format!("[delete] refused: {refusal}"));
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
+            return iced::Task::none();
+        }
+
+        // A project folder being renamed would move the file from under the
+        // delete worker.
+        if is_delete
+            && let Err(refusal) = self.refuse_while_project_moves(&state.target_path, "delete")
+        {
+            crate::diagnostics::log_warning(refusal.to_string());
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
+            return iced::Task::none();
+        }
+
         // Close any tab backed by this file before we touch disk or
         // drop it from the project's in-memory list — otherwise the
         // tab would keep referring to a file that no longer exists.
-        let is_delete = matches!(choice, RemoveChoice::DeleteFile);
         let fold = self.dialog_fold(&state);
-        let close_tasks = self.close_tabs_of_removed(&state.target_path, is_delete, fold);
+        let mut tasks = self.close_tabs_of_removed(&state.target_path, is_delete, fold);
 
-        if matches!(choice, RemoveChoice::DeleteFile) {
-            // F23 — handle three cases:
-            //   1. Regular file (sheets, pcbs, primitives) → remove_file.
-            //   2. `.snxlib` directory package → remove_dir_all.
-            //   3. Orphan entry (file/dir missing on disk) → no-op,
-            //      Exclude semantic falls through naturally so the
-            //      LibraryEntry / SheetEntry is still pruned below.
-            // A failed disk delete keeps the project entry: pruning it would
-            // hide a file that is still on disk. Orphan targets and the
-            // shared-library refusal fall through to the prune below.
-            // The tabs were already closed above (before the delete), so on
-            // failure they stay closed even though the file is kept; unsaved
-            // edits were gated by the unsaved prompt, so nothing is lost.
-            if !self.delete_project_owned_target(&state) {
-                return if close_tasks.is_empty() {
-                    iced::Task::none()
-                } else {
-                    iced::Task::batch(close_tasks)
-                };
-            }
+        if is_delete {
+            // The worker reports back; the completion drops what is held for
+            // the file and prunes the project entry, or keeps the entry when
+            // the delete failed (the tabs stay closed; unsaved edits were
+            // gated by the unsaved prompt, so nothing is lost).
+            tasks.push(self.begin_delete(&state, fold));
+            return iced::Task::batch(tasks);
         }
+        self.prune_removed_entry(&state);
+        self.refresh_panel_ctx();
+        iced::Task::batch(tasks)
+    }
 
+    /// Drop the removed file from its owning project's in-memory lists (page
+    /// list, root, PCB, libraries, pending registrations) and dirty the
+    /// project. Re-resolves the dialog's project first: it may have moved or
+    /// closed while a delete worker ran.
+    fn prune_removed_entry(&mut self, dialog: &crate::app::RemoveDialogState) {
+        let Some(state) = self.repointed_dialog(dialog) else {
+            return;
+        };
         // Drop the sheet from the *owning* project's in-memory data so
         // the tree rebuild reflects the removal. Resolves project via
         // the dialog's `tree_path[0]` so removing a sheet of project B
@@ -484,13 +558,6 @@ impl Signex {
             // the dirty bit only tracks the project's *list* of
             // children, which lives in the .snxprj.
             self.document_state.mark_document_dirty(&p);
-        }
-
-        self.refresh_panel_ctx();
-        if close_tasks.is_empty() {
-            iced::Task::none()
-        } else {
-            iced::Task::batch(close_tasks)
         }
     }
 }

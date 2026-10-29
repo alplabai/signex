@@ -126,8 +126,11 @@ fn a_corrupt_sheet_can_be_deleted_but_blocks_deleting_others_with_its_name() {
     let corrupt = key(&app, &["corrupt.snxsch"]);
     let opened = app.handle_project_tree_action(ProjectTreeAction::OpenRemoveDialog(corrupt));
     assert_eq!(opened.units(), 0);
-    let confirmed = app.handle_remove_confirm(RemoveChoice::DeleteFile);
-    assert_eq!(confirmed.units(), 0);
+    // The delete runs on a worker (#859); settle drives its completion.
+    crate::app::path_ops::settle(
+        &mut app,
+        crate::app::Message::Remove(crate::app::RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+    );
     assert!(!tmp.path().join("corrupt.snxsch").exists(), "deleted");
 }
 

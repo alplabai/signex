@@ -159,6 +159,8 @@ impl Signex {
         path: &std::path::Path,
         mode: ContainerWrite,
     ) -> anyhow::Result<(PrimitiveWrite, u64, crate::persist::InFlight)> {
+        // A rename or delete still moving this file would recreate it (#859).
+        self.refuse_while_path_op(path, "saved")?;
         self.refuse_save_while_restoring(path)?;
         // A write into a project whose folder is being renamed races the
         // move: it can land in the old folder before the re-key and never

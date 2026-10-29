@@ -42,6 +42,11 @@ impl LibraryState {
         self.uncommitted.committing.contains(root)
     }
 
+    /// The library roots with a "Commit now" running.
+    pub fn committing_roots(&self) -> impl Iterator<Item = &Path> {
+        self.uncommitted.committing.iter().map(PathBuf::as_path)
+    }
+
     /// Re-read every mounted library's uncommitted state from its adapter.
     /// One short lock per library; no IO.
     pub fn sync_uncommitted(&mut self) {

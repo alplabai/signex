@@ -60,6 +60,8 @@ mod recovery;
 mod recovery_read_only_tests;
 mod refresh;
 mod registration;
+mod rename_guard;
+pub(crate) use rename_guard::LIBRARY_BACKGROUND_WRITE_REFUSAL;
 mod settings;
 #[cfg(test)]
 mod settings_tests;
@@ -85,6 +87,12 @@ impl Signex {
     /// edits) cannot queue a commit, so it only does the cheap diagnostics
     /// republish instead of the full `finish_update`.
     pub(crate) fn dispatch_library_message(&mut self, msg: LibraryMessage) -> Task<Message> {
+        if let Some(refusal) = self.library_write_refusal(&msg) {
+            crate::diagnostics::log_warning(&refusal);
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::library_change(refusal));
+            return self.finish_update();
+        }
         let per_event = matches!(
             &msg,
             LibraryMessage::EditorEvent { .. }

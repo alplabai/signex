@@ -1,7 +1,12 @@
-//! Rename flows for the project-navigation dock — file rename and project rename.
+//! Rename flows for the project-navigation dock: the dialog, the checks that
+//! need only in-memory state, and the start of the move.
+//!
+//! The `fs::rename` runs on a worker (#859); `rename_apply` re-keys what knew
+//! the old path when it reports back. Until then the path is registered in
+//! `pending_path_ops`, which refuses saves, opens and second moves of it.
 
 use super::*;
-use crate::app::state::library_entry::{entry_resolves_to, with_new_leaf};
+use crate::app::state::scope::CaseFold;
 
 impl Signex {
     pub(super) fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {
@@ -111,8 +116,12 @@ impl Signex {
             self.ui_state.rename_dialog = None;
             return iced::Task::none();
         }
-        if new_path.exists() {
-            self.set_rename_error("A file with that name already exists.");
+        if let Err(error) = self.refuse_while_project_moves(&state.target_path, "rename") {
+            self.set_rename_error(&error.to_string());
+            return iced::Task::none();
+        }
+        if let Err(refusal) = self.refuse_rename_overlap(&state.target_path, &new_path) {
+            self.set_rename_error(&refusal);
             return iced::Task::none();
         }
         // An open still reading this file would land on the old path after
@@ -217,204 +226,86 @@ impl Signex {
             return iced::Task::none();
         }
 
-        // A write still running for this sheet would recreate the old file
-        // (or land after the move); let it finish first. Same bounded wait
-        // as Save All's `try_save_dirty_path`.
-        self.document_state.document_saves.barrier().wait();
-        if let Err(e) = std::fs::rename(&state.target_path, &new_path) {
-            self.set_rename_error(&format!("Rename failed: {e}"));
-            return iced::Task::none();
-        }
-
-        // Update in-memory project data (page list + schematic root);
-        // parent-sheet references are re-pointed through the engine
-        // below. Nothing besides the rename itself is written to disk:
-        // the touched documents are marked dirty for the user to save.
-        // Mutate the *owning* project's data via the dialog's
-        // tree_path[0], not the active project — renaming a sheet of
-        // project B while project A is active should still touch B.
-        // Entries match by resolved path and keep their directory prefix
-        // (`sub/Power.snxsch` becomes `sub/Power2.snxsch`, #1367). (#54)
-        let owner_idx = state.tree_path.first().copied();
-        let mut dirtied_project_file = None;
-        if let Some(idx) = owner_idx
-            && let Some(loaded) = self.document_state.projects.get_mut(idx)
-        {
-            let fold = loaded.case_fold;
-            let dir = loaded.dir().to_path_buf();
-            let renamed_from = |entry: &str| {
-                entry_resolves_to(&dir, entry, &state.target_path, fold)
-                    .then(|| with_new_leaf(entry, new_name))
-            };
-            let mut changed = false;
-            for entry in loaded.data.sheets.iter_mut() {
-                if let Some(new_entry) = renamed_from(&entry.filename) {
-                    entry.filename = new_entry;
-                    changed = true;
-                }
-            }
-            if let Some(new_entry) = loaded.data.pcb_file.as_deref().and_then(renamed_from) {
-                loaded.data.pcb_file = Some(new_entry);
-                changed = true;
-            }
-            if let Some(new_entry) = loaded.data.schematic_root.as_deref().and_then(renamed_from) {
-                loaded.data.schematic_root = Some(new_entry);
-                changed = true;
-            }
-            // The sheet list changed in memory; without the dirty bit
-            // `save_active_project_if_dirty` never writes the .snxprj and
-            // a reopened project points at a file that no longer exists.
-            // A rename that touched neither (a footprint, say) leaves the
-            // project file as it was and must not dirty it.
-            if changed {
-                dirtied_project_file = Some(loaded.path.clone());
-            }
-        }
-        if let Some(project_file) = dirtied_project_file {
-            self.document_state.mark_document_dirty(&project_file);
-        }
-
-        // Update any open tabs + engine-map keys that pointed at the
-        // old path. Do this before `refresh_panel_ctx` so the tree
-        // rebuild sees the new filenames.
-        self.rekey_open_document(&state.target_path, &new_path);
-
-        let outcome = self.apply_reference_rewrites(&plan);
-        if !outcome.is_clean() {
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::rename(
-                super::sheet_references::rename_incomplete_detail(
-                    &outcome.failed,
-                    &outcome.unchecked,
-                ),
-            ));
-        }
-
-        self.ui_state.rename_dialog = None;
-        self.refresh_panel_ctx();
-        self.autosave_flush_moves()
-    }
-
-    /// Move every path-keyed record of an open document from `old_path`
-    /// to `new_path` after its file was renamed on disk: tab, engine map
-    /// and the engine's own save target, active path, dirty marker, the
-    /// symbol/footprint editor maps and any undocked window. Missing one
-    /// leaves a key no engine backs, so closing the tab drops unsaved
-    /// edits and Save All fails on the stale path.
-    pub(crate) fn rekey_open_document(
-        &mut self,
-        old_path: &std::path::Path,
-        new_path: &std::path::Path,
-    ) {
-        let new_title = new_path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .map(str::to_string);
-        for tab in self.document_state.tabs.iter_mut() {
-            if tab.path != old_path {
-                continue;
-            }
-            tab.path = new_path.to_path_buf();
-            if tab.kind.as_project().is_some() {
-                tab.title = crate::app::project_tab::project_tab_title(new_path);
-            } else if let Some(title) = &new_title {
-                tab.title = title.clone();
-            }
-            match &mut tab.kind {
-                crate::app::TabKind::SymbolEditor(p) | crate::app::TabKind::FootprintEditor(p) => {
-                    *p = new_path.to_path_buf();
-                }
-                _ => {}
-            }
-        }
-        if let Some(mut engine) = self.document_state.remove_engine(old_path) {
-            // `Engine::save` writes to its own path; leaving the old one
-            // would write the renamed sheet back under its old filename.
-            engine.set_path(Some(new_path.to_path_buf()));
-            self.document_state
-                .engines
-                .insert(new_path.to_path_buf(), engine);
-        }
-        if let Some(mut editor) = self.document_state.symbol_editors.remove(old_path) {
-            editor.path = new_path.to_path_buf();
-            self.document_state
-                .symbol_editors
-                .insert(new_path.to_path_buf(), editor);
-        }
-        if let Some(mut editor) = self.document_state.footprint_editors.remove(old_path) {
-            editor.path = new_path.to_path_buf();
-            self.document_state
-                .footprint_editors
-                .insert(new_path.to_path_buf(), editor);
-        }
-        if self.document_state.active_path.as_deref() == Some(old_path) {
-            self.document_state.active_path = Some(new_path.to_path_buf());
-        }
-        self.document_state.rekey_document_dirty(old_path, new_path);
-        // A queued save names the file by its old path; a recorded failure
-        // follows the document so its Save Failed card is not lost.
-        let failure = self
-            .document_state
-            .document_saves
-            .failure(old_path)
-            .map(str::to_owned);
-        self.document_state
-            .document_saves
-            .forget_where(|p| p == old_path);
-        if let Some(reason) = failure {
-            self.document_state
-                .document_saves
-                .record_failure(new_path.to_path_buf(), reason);
-        }
-        // A PCB's save revision is keyed by path (#1040); without the move
-        // every later save would compare against a missing key.
-        if let Some(revision) = self.document_state.pcb_revisions.remove(old_path) {
-            self.document_state
-                .pcb_revisions
-                .insert(new_path.to_path_buf(), revision);
-        }
-        self.document_state.autosave.rekey(old_path, new_path);
-        self.rekey_page_setup(old_path, new_path);
-        // Renaming does not rewrite the parents' sheet symbols, so the
-        // placement no longer reaches this file.
-        self.document_state.tab_placements.forget(old_path);
-        self.rekey_undocked_windows(old_path, new_path);
-    }
-
-    /// Carry the remembered PDF page setup (and an open preview's source)
-    /// over to the document's new path.
-    pub(crate) fn rekey_page_setup(
-        &mut self,
-        old_path: &std::path::Path,
-        new_path: &std::path::Path,
-    ) {
-        crate::app::state::rekey_page_setup(
-            &mut self.document_state.page_setup_memory,
-            self.document_state.preview.as_mut(),
-            old_path,
+        let new_name = new_name.to_string();
+        self.start_file_rename(
+            &state,
             new_path,
-        );
+            new_name,
+            crate::app::path_ops::FileRenameKind::Document(plan),
+        )
     }
 
-    /// Point undocked-tab windows at the renamed path so the window keeps
-    /// rendering its sheet instead of going blank.
-    pub(crate) fn rekey_undocked_windows(
+    /// Refuse a rename whose source or destination collides with a move or
+    /// delete still running. The text leads with the cause.
+    pub(super) fn refuse_rename_overlap(
+        &self,
+        from: &std::path::Path,
+        to: &std::path::Path,
+    ) -> Result<(), String> {
+        self.refuse_start_while_path_op(from, "renamed")
+            .and_then(|()| self.refuse_start_while_path_op(to, "renamed"))
+            .map_err(|e| e.to_string())
+    }
+
+    /// Register the move and return the task that runs it. Nothing on disk or
+    /// in memory has changed yet: the dialog stays open and `rename_apply`
+    /// finishes the job.
+    fn start_file_rename(
         &mut self,
-        old_path: &std::path::Path,
-        new_path: &std::path::Path,
-    ) {
-        // A part on the cursor follows its sheet to the new path.
-        if let Some(session) = self.interaction_state.placement.as_mut()
-            && session.target_sheet == old_path
-        {
-            session.target_sheet = new_path.to_path_buf();
-        }
-        for kind in self.ui_state.windows.values_mut() {
-            if let crate::app::state::WindowKind::UndockedTab { path, .. } = kind
-                && path == old_path
-            {
-                *path = new_path.to_path_buf();
-            }
-        }
+        state: &crate::app::RenameDialogState,
+        new_path: std::path::PathBuf,
+        new_name: String,
+        kind: crate::app::path_ops::FileRenameKind,
+    ) -> iced::Task<Message> {
+        use crate::app::path_ops::{FileRenameDone, FileRenameRequest, PathOpKind, RenameIoError};
+        let owner = self
+            .document_state
+            .projects
+            .get(state.tree_path.first().copied().unwrap_or(usize::MAX))
+            .map(|p| p.id);
+        let fold = owner.map_or_else(CaseFold::host_default, |id| {
+            self.document_state.fold_for_project(id)
+        });
+        let from = state.target_path.clone();
+        let crate::app::path_ops::FileRenameKind::Document(plan) = &kind;
+        let parents_to_read = self.unopened_rewrite_parents(plan);
+        // The unopened parents the worker reads are registered too, so
+        // opening one meanwhile is refused instead of being replaced by the
+        // rewritten copy (or replacing it).
+        let id = self.document_state.pending_path_ops.begin_with_dependents(
+            PathOpKind::Rename,
+            vec![from.clone(), new_path.clone()],
+            parents_to_read.clone(),
+            fold,
+        );
+        // A background read of the old file (project Replace) is out of date.
+        self.document_state.note_documents_changed();
+        let job = crate::app::path_op_jobs::RenameJob {
+            from: from.clone(),
+            to: new_path.clone(),
+            saves: self.document_state.document_saves.barrier(),
+            parents_to_read,
+        };
+        let request = FileRenameRequest {
+            id,
+            from,
+            to: new_path,
+            new_name,
+            owner,
+            kind,
+        };
+        iced::Task::perform(
+            crate::app::path_op_jobs::run_blocking(move || job.run()),
+            move |joined| {
+                let (result, parents) =
+                    joined.unwrap_or_else(|e| (Err(RenameIoError::Os(e)), Default::default()));
+                Message::Rename(RenameMsg::FileRenamed(Box::new(FileRenameDone {
+                    request,
+                    result,
+                    parents,
+                })))
+            },
+        )
     }
 
     /// A file at or under `target` whose recovery check has not reported:

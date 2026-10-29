@@ -82,6 +82,30 @@ impl ErrorNotice {
         }
     }
 
+    /// A quit was held because a rename or delete is still running.
+    pub fn quit_held(detail: impl Into<String>) -> Self {
+        Self {
+            title: "App Not Closed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A project Replace was refused before anything changed.
+    pub fn replace(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Replace Refused".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A library edit was refused while that library is being moved.
+    pub fn library_change(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Library Change Not Applied".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A recovery copy could not be restored; the copy is kept.
     pub fn recovery(detail: impl Into<String>) -> Self {
         Self {

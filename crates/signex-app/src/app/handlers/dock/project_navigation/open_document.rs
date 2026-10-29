@@ -144,6 +144,10 @@ impl Signex {
         // reuses that tab (#1149).
         let file_path = self.resolve_held_spelling_now(file_path);
 
+        // A rename or delete still moving this file would leave the new tab
+        // on a path that is about to vanish (#859).
+        self.refuse_start_while_path_op(&file_path, "opened")?;
+
         // F23 — orphan `.snxlib` entries (registered on the project but
         // missing on disk) still flow through to the Library Browser
         // tab so the user sees a "Library not mounted" message and

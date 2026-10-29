@@ -99,6 +99,10 @@ impl Signex {
             crate::diagnostics::log_warning("Replace: there is no project to replace in.");
             return Task::none();
         };
+        let wanted = sheets_of(&matches);
+        if self.refuse_replace_while_path_op(&inputs, &wanted) {
+            return Task::none();
+        }
         let epoch = self.document_state.documents_epoch;
         let child_sheets = self.child_sheet_signature();
         let find = &mut self.ui_state.find_replace;
@@ -113,7 +117,6 @@ impl Signex {
             replacement: find.replacement.clone(),
             matches: matches.clone(),
         });
-        let wanted = sheets_of(&matches);
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || prepare(&inputs, &wanted))
@@ -127,6 +130,38 @@ impl Signex {
                 })
             },
         )
+    }
+
+    /// Refuse the Replace up front while a rename, delete or project-folder
+    /// move holds a sheet it would read (`wanted`, the root or a declared
+    /// page): the read bytes would be installed at a path that no longer
+    /// exists (#859). Open sheets of other projects are not read, so they do
+    /// not refuse it. True when refused.
+    fn refuse_replace_while_path_op(
+        &mut self,
+        inputs: &super::project_scan::ScanInputs,
+        wanted: &[PathBuf],
+    ) -> bool {
+        let sheets: Vec<&Path> = wanted
+            .iter()
+            .chain(&inputs.pages)
+            .chain(std::iter::once(&inputs.root))
+            .map(PathBuf::as_path)
+            .collect();
+        let refusal = match sheets.iter().find(|p| self.path_is_in_moving_project(p)) {
+            Some(path) => format!(
+                "{} is in a project whose folder is being renamed. Try again once it finishes.",
+                path.display()
+            ),
+            None => match self.refuse_project_wide_while_path_op(sheets, "read") {
+                Ok(()) => return false,
+                Err(e) => e.to_string(),
+            },
+        };
+        let detail = format!("Replace was not run: {refusal}");
+        crate::diagnostics::log_warning(&detail);
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::replace(detail));
+        true
     }
 
     /// Run the disk half on the calling thread - tests only. The job it

@@ -32,6 +32,12 @@ impl Signex {
         let Some(project_id) = self.document_state.projects.get(project_idx).map(|p| p.id) else {
             return Task::none();
         };
+        if let Err(refusal) = self.refuse_project_while_delete_pending(project_id, "closed") {
+            crate::diagnostics::log_warning(refusal.to_string());
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
+            return Task::none();
+        }
         self.spawn_close_refs_resolve(project_id)
     }
 
@@ -179,6 +185,13 @@ impl Signex {
             return Task::none();
         };
         let target_id = project_id;
+        if let Err(refusal) = self.refuse_project_while_delete_pending(project_id, "closed") {
+            crate::diagnostics::log_warning(refusal.to_string());
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
+            self.refresh_panel_ctx();
+            return Task::none();
+        }
 
         // Reads and restores still running for this project's files must not
         // open or rewrite anything once it is gone (#859).
@@ -456,6 +469,7 @@ impl Signex {
     fn save_held_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
         use anyhow::Context as _;
         // Reported as this file's failure; the rest of the batch still saves.
+        self.refuse_while_path_op(path, "saved")?;
         self.refuse_save_while_restoring(path)?;
         // A write still running for this sheet could land after the one
         // below and put older content on disk; let it finish first.
@@ -652,6 +666,9 @@ impl Signex {
     /// the main window, which the daemon turns into process exit via
     /// `SecondaryWindowClosed`.
     pub(crate) fn handle_app_quit_requested(&mut self) -> Task<Message> {
+        if self.hold_quit_while_path_op() {
+            return Task::none();
+        }
         // Guard against a second close request stacking a duplicate
         // modal while the first is still up.
         if self.ui_state.app_quit_confirm.is_some() {
@@ -692,6 +709,20 @@ impl Signex {
         self.flush_quit_writes_then(close)
     }
 
+    /// Quitting between a file move and its completion would leave the
+    /// project naming the old file with no prompt, so a quit is held (and
+    /// says why) while a rename or delete runs.
+    fn hold_quit_while_path_op(&mut self) -> bool {
+        if self.document_state.pending_path_ops.is_empty() {
+            return false;
+        }
+        let detail = "A rename or delete is still running, so the app was not closed. \
+                      Try again once it finishes.";
+        crate::diagnostics::log_warning(detail);
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::quit_held(detail));
+        true
+    }
+
     /// Resolve the user's Save All / Discard All / Cancel choice on the
     /// app-quit confirmation modal.
     pub(crate) fn handle_app_quit_confirm(
@@ -699,6 +730,11 @@ impl Signex {
         choice: crate::app::ProjectCloseChoice,
     ) -> Task<Message> {
         use crate::app::ProjectCloseChoice;
+        // A move may have started behind a prompt that was already open; the
+        // prompt stays up so the choice can be made again.
+        if !matches!(choice, ProjectCloseChoice::Cancel) && self.hold_quit_while_path_op() {
+            return Task::none();
+        }
         let Some(state) = self.ui_state.app_quit_confirm.take() else {
             return Task::none();
         };

@@ -333,7 +333,7 @@ fn renaming_the_child_file_drops_its_placement_without_a_warning() {
         is_project_rename: false,
     });
 
-    let _ = app.update(Message::Rename(RenameMsg::Submit));
+    crate::app::path_ops::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
     assert!(renamed.exists(), "the file moved");
     assert_eq!(app.document_state.tab_placements.get(&child), None);

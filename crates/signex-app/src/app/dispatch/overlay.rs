@@ -630,6 +630,11 @@ impl Signex {
                 self.ui_state.rename_dialog = None;
                 Task::none()
             }
+            RenameMsg::FileRenamed(done) => self.handle_file_renamed(*done),
+            RenameMsg::LibraryRenamed(done) => self.handle_library_renamed(*done),
+            RenameMsg::LibraryRenameRolledBack(done) => {
+                self.handle_library_rename_rolled_back(*done)
+            }
         }
     }
 
@@ -642,6 +647,7 @@ impl Signex {
                 self.ui_state.remove_dialog = None;
                 Task::none()
             }
+            RemoveMsg::Deleted(done) => self.handle_path_deleted(*done),
         }
     }
 
