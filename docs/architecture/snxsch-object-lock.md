@@ -53,7 +53,9 @@ On purpose, as for symbols:
   display choice, as it is for a locked symbol's text.
 - `ReorderObjects`, `ArrangeDrawings` and `SetDrawingPlacement` on a locked
   drawing: they change only paint order (front/back, above/behind the
-  circuit), never geometry or content.
+  circuit), never geometry or content. `ReorderObjects` also applies to
+  wires, labels and symbols, and wire order decides which wire survives a
+  merge and which one `wire_to_break_at` picks.
 
 Everything that moves, turns, mirrors, deletes or edits the content of a locked
 object is refused (or skipped, for a group edit) by `Engine::execute` and

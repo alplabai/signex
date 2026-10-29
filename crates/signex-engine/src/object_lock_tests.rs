@@ -507,3 +507,60 @@ fn the_skip_and_refuse_paths_agree_on_a_locked_elbow_leg() {
     assert!(pruned.is_some(), "the move is kept whole");
     assert!(skipped.is_empty());
 }
+
+/// R1 at (50, 50), pin 1 at (45, 50). W1 (30,50)-(45,50); locked L hangs from
+/// W1's far end, (30,50)-(30,70). Moving R1 by (-15, +5) with the wires
+/// following brings W1 onto L.
+fn wire_lands_on_a_locked_one(l_end_y: f64) -> (Engine, Uuid, crate::rubber_band_tests::NetShape) {
+    use crate::rubber_band_tests::{add_resistor, add_wire, net_shape};
+    let mut sheet = SchematicSheet::default();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (30.0, l_end_y));
+    sheet.wires[1].locked = true;
+    let before = net_shape(&sheet);
+    (Engine::new(sheet).expect("engine"), r1, before)
+}
+
+fn overlapping_pairs(engine: &Engine) -> usize {
+    let wires = &engine.document().wires;
+    let mut n = 0;
+    for (i, a) in wires.iter().enumerate() {
+        for b in &wires[i + 1..] {
+            n += usize::from(crate::transform::rubber_band::wires_overlap(a, b));
+        }
+    }
+    n
+}
+
+/// The trimmed-remainder control is in `overlap::tests`: a plan that would
+/// overlap a shorter locked wire is not taken by the pass, so no move
+/// reaches that case.
+#[test]
+fn a_wire_dragged_onto_a_locked_one_leaves_no_overlap_and_the_same_nets() {
+    let l_end_y = 70.0;
+    {
+        let (mut engine, r1, before) = wire_lands_on_a_locked_one(l_end_y);
+        let locked_before = engine.document().wires[1].clone();
+        engine
+            .execute(Command::MoveSelection {
+                items: vec![item(r1.as_u128(), SelectedKind::Symbol)],
+                dx: -15.0,
+                dy: 5.0,
+                keep_wires: true,
+            })
+            .unwrap();
+        let doc = engine.document();
+        assert_eq!(
+            doc.wires.iter().find(|w| w.uuid == locked_before.uuid),
+            Some(&locked_before),
+            "L is unchanged (L to {l_end_y})"
+        );
+        assert_eq!(overlapping_pairs(&engine), 0, "L to {l_end_y}");
+        assert_eq!(
+            crate::rubber_band_tests::net_shape(doc),
+            before,
+            "L to {l_end_y}"
+        );
+    }
+}

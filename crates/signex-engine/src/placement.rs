@@ -482,6 +482,38 @@ mod tests {
             stroke_color: None,
             locked: true,
         });
+        sheet.symbols.push(Symbol {
+            uuid: Uuid::new_v4(),
+            position: Point::new(20.0, 0.0),
+            unit: 1,
+            locked: true,
+            ..Default::default()
+        });
+        sheet.labels.push(signex_types::schematic::Label {
+            uuid: Uuid::new_v4(),
+            text: "N".into(),
+            position: Point::new(5.0, 3.0),
+            rotation: 0.0,
+            label_type: signex_types::schematic::LabelType::Net,
+            shape: String::new(),
+            font_size: 1.27,
+            font_family: None,
+            justify: Default::default(),
+            justify_v: signex_types::schematic::VAlign::Bottom,
+            locked: true,
+            unknown_columns: Default::default(),
+        });
+        sheet.text_notes.push(signex_types::schematic::TextNote {
+            uuid: Uuid::new_v4(),
+            text: "t".into(),
+            position: Point::new(6.0, 4.0),
+            rotation: 0.0,
+            font_size: 1.27,
+            font_family: None,
+            justify_h: Default::default(),
+            justify_v: Default::default(),
+            locked: true,
+        });
         PlacementPayload::new(sheet)
     }
 
@@ -498,6 +530,7 @@ mod tests {
         ] {
             let f = turned.fragment();
             assert!(f.wires[0].locked && f.drawings[0].is_locked());
+            assert!(f.symbols[0].locked && f.labels[0].locked && f.text_notes[0].locked);
         }
         let turned = payload.rotate(false).unwrap();
         assert_ne!(

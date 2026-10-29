@@ -21,9 +21,10 @@ impl Env {
                     continue;
                 }
                 for (j, other) in self.live() {
-                    // A locked wire is never re-cut: an overlap with one stays.
+                    // A locked wire is never edited (defence in depth: the pass
+                    // only edits free wires); an overlap with one is trimmed
+                    // off the other wire below.
                     if j != i
-                        && !other.locked
                         && !self.wires[i].locked
                         && overlap_span(&self.wires[i], other).is_some()
                     {
@@ -33,6 +34,10 @@ impl Env {
                 }
             }
             let Some((i, j)) = found else { return };
+            if self.wires[j].locked {
+                self.trim_off_locked(i, j, out);
+                continue;
+            }
             let (survivor, loser) = match (self.edited.contains(&i), self.edited.contains(&j)) {
                 (true, false) => (j, i),
                 (false, true) => (i, j),
@@ -67,6 +72,76 @@ impl Env {
                 ));
             }
         }
+    }
+}
+
+impl Env {
+    /// `free` overlaps the locked wire `locked`: cut `free` back to the parts
+    /// outside the locked span (the locked wire is never touched), or drop it
+    /// when nothing is left. The locked wire still carries every point the
+    /// dropped stretch did, so no end is left dangling.
+    fn trim_off_locked(&mut self, free: usize, locked: usize, out: &mut Follow) {
+        let (u, l) = (self.wires[free].clone(), self.wires[locked].clone());
+        let horizontal = key(&u.start).1 == key(&u.end).1;
+        let vertical = key(&u.start).0 == key(&u.end).0;
+        let mut pieces: Vec<(Point, Point)> = Vec::new();
+        if horizontal || vertical {
+            let at = |p: &Point| {
+                let k = key(p);
+                if horizontal { k.0 } else { k.1 }
+            };
+            let ordered = |w: &Wire| {
+                if at(&w.start) <= at(&w.end) {
+                    (w.start, w.end)
+                } else {
+                    (w.end, w.start)
+                }
+            };
+            let ((ulo, uhi), (llo, lhi)) = (ordered(&u), ordered(&l));
+            if at(&ulo) < at(&llo) {
+                pieces.push((ulo, llo));
+            }
+            if at(&uhi) > at(&lhi) {
+                pieces.push((lhi, uhi));
+            }
+        }
+        // A pin tip that rested on the end of `free` and now falls inside the
+        // locked span would be left on the side of the locked wire.
+        if horizontal || vertical {
+            let at = |p: &Point| {
+                let k = key(p);
+                if horizontal { k.0 } else { k.1 }
+            };
+            let (a, b) = (at(&l.start).min(at(&l.end)), at(&l.start).max(at(&l.end)));
+            for end in [u.start, u.end] {
+                let inside = at(&end) > a && at(&end) < b;
+                if inside && self.tips.iter().any(|(_, k)| *k == key(&end)) {
+                    out.dots.push(end);
+                }
+            }
+        }
+        let oriented = key(&u.start) <= key(&u.end);
+        let mut pieces = pieces.into_iter();
+        match pieces.next() {
+            Some((lo, hi)) => {
+                let wire = &mut self.wires[free];
+                (wire.start, wire.end) = if oriented { (lo, hi) } else { (hi, lo) };
+            }
+            None => {
+                self.removed.insert(free);
+            }
+        }
+        for (lo, hi) in pieces {
+            let mut wire = u.clone();
+            wire.uuid = Uuid::new_v4();
+            (wire.start, wire.end) = if oriented { (lo, hi) } else { (hi, lo) };
+            out.touched
+                .push(SelectedItem::new(wire.uuid, SelectedKind::Wire));
+            self.wires.push(wire);
+            self.edited.insert(self.wires.len() - 1);
+        }
+        out.touched
+            .push(SelectedItem::new(u.uuid, SelectedKind::Wire));
     }
 }
 
@@ -149,13 +224,35 @@ mod tests {
     }
 
     #[test]
-    fn a_locked_wire_is_never_re_cut_by_an_overlap() {
+    fn a_locked_wire_is_never_re_cut_and_the_free_wire_is_trimmed_off_it() {
         let mut env = env_over(true);
-        let before = env.wires.clone();
-        let mut out = Follow::default();
-        env.merge_overlaps(&mut out);
-        assert_eq!(env.wires, before, "no wire changed and none was minted");
+        let locked_before = env.wires[1].clone();
+        env.merge_overlaps(&mut Follow::default());
+        assert_eq!(env.wires[1], locked_before, "the locked wire is untouched");
+        let free = &env.wires[0];
+        assert_eq!(
+            (free.start.x, free.end.x),
+            (10.0, 15.0),
+            "5..15 keeps 10..15"
+        );
         assert!(env.removed.is_empty());
-        assert!(out.touched.is_empty());
+    }
+
+    #[test]
+    fn a_free_wire_inside_a_locked_one_is_dropped() {
+        let sheet = SchematicSheet {
+            wires: vec![horizontal(2.0, 4.0, false), horizontal(0.0, 10.0, true)],
+            ..Default::default()
+        };
+        let mut env = Env::new(
+            &sheet,
+            HashSet::new(),
+            HashSet::new(),
+            HashSet::new(),
+            Policy::default(),
+        );
+        env.edited.insert(0);
+        env.merge_overlaps(&mut Follow::default());
+        assert!(env.removed.contains(&0));
     }
 }
