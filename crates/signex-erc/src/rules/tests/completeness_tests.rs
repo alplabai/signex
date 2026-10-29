@@ -412,7 +412,13 @@ fn units_are_grouped_by_placement_designator() {
 
 #[test]
 fn two_power_pins_of_one_part_on_two_unnamed_nets_are_two_waiver_identities() {
-    let mut u1 = pin_at("U1", pt(0.0, 0.0), PinDirection::PowerInput);
+    // Fixed uuids: the pin a net finding is reported at is chosen by uuid,
+    // so U1 (lowest) must be the one reported on both nets.
+    let with_id = |mut s: ErcSymbol, n: u128| {
+        s.uuid = Uuid::from_u128(n);
+        s
+    };
+    let mut u1 = with_id(pin_at("U1", pt(0.0, 0.0), PinDirection::PowerInput), 1);
     u1.pins.push(ErcPin {
         world_pos: pt(0.0, 12.7),
         local_pos: pt(0.0, 12.7),
@@ -430,8 +436,8 @@ fn two_power_pins_of_one_part_on_two_unnamed_nets_are_two_waiver_identities() {
         vec![],
         vec![
             u1,
-            pin_at("U2", pt(12.7, 0.0), PinDirection::PowerInput),
-            pin_at("U3", pt(12.7, 12.7), PinDirection::PowerInput),
+            with_id(pin_at("U2", pt(12.7, 0.0), PinDirection::PowerInput), 2),
+            with_id(pin_at("U3", pt(12.7, 12.7), PinDirection::PowerInput), 3),
         ],
     );
     let out: Vec<crate::Violation> = found(&c, RuleKind::PowerInputNotDriven)

@@ -170,7 +170,7 @@ impl Signex {
         self.handle_run_erc()
     }
 
-    /// `key` with its fingerprint recomputed from the open sheet `path` the
+    /// `key` checked against the open sheet `path` the
     /// finding is filed under (only that sheet: another sheet's finding may
     /// share nothing but a rule). `Err` (user-facing) when the newest run no
     /// longer reports the finding there, or an object it names is gone. A
@@ -198,9 +198,16 @@ impl Signex {
         let Some(engine) = self.document_state.engines.get(path) else {
             return Ok(key.clone());
         };
-        signex_erc::waivers::violation::waiver_key(violation, engine.document())
+        let fresh = signex_erc::waivers::violation::waiver_key(violation, engine.document())
             .filter(same)
-            .ok_or_else(|| "an object the finding names is no longer on its sheet".to_string())
+            .ok_or_else(|| "an object the finding names is no longer on its sheet".to_string())?;
+        // The row was drawn from the last run. Waiving what the user has not
+        // seen (an edit since that run) is refused rather than accepted
+        // unseen.
+        if fresh.fingerprint != key.fingerprint {
+            return Err("the sheet changed since the last ERC run; re-run ERC".to_string());
+        }
+        Ok(fresh)
     }
 
     fn remove_erc_waiver(&mut self, rule_id: &str, objects: &[String]) -> Task<Message> {

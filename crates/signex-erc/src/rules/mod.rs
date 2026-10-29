@@ -381,7 +381,7 @@ pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     }
 
     for wire in &ctx.wires {
-        for endpoint in [wire.start, wire.end] {
+        for (end, endpoint) in [("start", wire.start), ("end", wire.end)] {
             let touches_other_wire = wire_ends.near(&endpoint).any(|id| id != wire.uuid);
             if touches_other_wire || non_wire.near(&endpoint).next().is_some() {
                 continue;
@@ -392,7 +392,10 @@ pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                     "Wire endpoint is not connected",
                     endpoint,
                 )
-                .with_primary(sel(wire.uuid, SelectedKind::Wire)),
+                .with_primary(sel(wire.uuid, SelectedKind::Wire))
+                // Each end is its own finding: a waived stub at one end must
+                // not hide a later dangle at the other.
+                .tagged(end),
             );
         }
     }

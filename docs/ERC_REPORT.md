@@ -90,3 +90,19 @@ with a minimum severity lists only findings and waivers at or above it, and
 or unmatched waiver.
 
 For CI, a non-zero `summary.errors` is the usual failure condition.
+
+**`unmatched` does not mean fixed.** It means the stored waiver's identity
+matched no finding in this run. That happens when the problem was fixed, but
+also when the finding is still there under a different identity:
+
+- a library pin was moved or renumbered (the pin anchor is the pin's number
+  and its position in the symbol);
+- a part placed several times (a reused sheet) was re-annotated, so its
+  designator tag changed;
+- a part joined or left an unnamed net (an unnamed net is identified by its
+  pin set);
+- the object the waiver names was deleted and re-created with a new UUID.
+
+In those cases the finding itself is reported again (in `groups`), so a CI
+gate on `summary` stays correct; treat `unmatched` waivers as stale entries to
+review, and `lapsed` ones as findings to re-check.

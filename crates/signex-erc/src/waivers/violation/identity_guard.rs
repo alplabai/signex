@@ -1,5 +1,6 @@
 //! Guard: no two findings of one rule on one sheet may share a waiver
 //! identity, or one waiver would hide both (and any later one of that shape).
+//! There is no exception: even the two dangling ends of one wire are two.
 //! Runs the full engine over every rule's fixture and over one sheet built to
 //! trip many rules at once.
 
@@ -13,23 +14,11 @@ use crate::context::{ErcChildSheet, ErcContext, ErcNet, ErcNetPin, ErcPin, ErcSy
 use crate::fixtures::{context_for, empty, label, symbol, wire};
 use crate::{RuleKind, Violation, engine};
 
-/// Rules whose findings may share an identity on purpose.
-const SHARED_ON_PURPOSE: &[RuleKind] = &[
-    // The two dangling ends of one wire are one problem with one fix (draw
-    // or delete the wire): one waiver accepts both.
-    RuleKind::DanglingWire,
-];
-
 /// `(rule id, identity)` groups holding more than one finding.
 fn shared_identities(ctx: &ErcContext) -> Vec<(String, Vec<String>, usize)> {
     let sheet = SchematicSheet::default();
     let mut groups: BTreeMap<(String, Vec<String>), usize> = BTreeMap::new();
     for v in engine::run_all(ctx).into_iter().map(Violation::from) {
-        if v.builtin_kind()
-            .is_some_and(|k| SHARED_ON_PURPOSE.contains(&k))
-        {
-            continue;
-        }
         let identity = identity_objects(&v, &sheet);
         if identity.is_empty() {
             continue; // not waivable at all

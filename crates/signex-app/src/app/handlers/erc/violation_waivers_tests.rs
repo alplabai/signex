@@ -227,7 +227,8 @@ fn a_waiver_still_holds_after_the_sheet_is_saved_and_reloaded() {
             && e.select.is_some_and(|s| s.uuid == wire)
     });
     app.run_erc_blocking();
-    assert_eq!(dangling_on(&app, wire), 0);
+    // Each end of a wire is its own finding: waiving one leaves the other.
+    assert_eq!(dangling_on(&app, wire), 1, "only the waived end is hidden");
 
     let text = SnxSchematic::new(sheet.clone())
         .write_string()
@@ -246,10 +247,10 @@ fn a_waiver_still_holds_after_the_sheet_is_saved_and_reloaded() {
     );
     open_with(&mut app.document_state, &top_path, reloaded);
     app.run_erc_blocking();
-    assert_eq!(dangling_on(&app, wire), 0, "no edit, so the waiver holds");
+    assert_eq!(dangling_on(&app, wire), 1, "no edit, so the waiver holds");
     assert_eq!(
         app.erc_violation_waiver_entries()[0].status,
-        ErcWaiverStatus::Waiving(2)
+        ErcWaiverStatus::Waiving(1)
     );
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -282,7 +283,7 @@ fn a_part_joining_a_waived_net_lapses_it_in_the_panel_and_the_report() {
 }
 
 #[test]
-fn confirm_fingerprints_the_sheet_as_it_is_now() {
+fn confirm_refuses_a_finding_whose_objects_changed_since_the_run() {
     let (mut app, dir, top) = app_with_two_failing_nets();
     let top_path = dir.join("top.snxsch");
     let (sheet, wire) = top_with_drifting_wire(&top);
@@ -301,7 +302,7 @@ fn confirm_fingerprints_the_sheet_as_it_is_now() {
             sheet: entry.sheet_path.clone(),
         },
     );
-    // The wire moves after the row was drawn, before Confirm.
+    // The wire moves after the run that drew the row, before Confirm.
     let mut moved = sheet.clone();
     if let Some(w) = moved.wires.iter_mut().find(|w| w.uuid == wire) {
         w.end.x = 50.8;
@@ -310,11 +311,22 @@ fn confirm_fingerprints_the_sheet_as_it_is_now() {
     send(&mut app, ErcWaiverMsg::ReasonChanged("ok".into()));
     send(&mut app, ErcWaiverMsg::AuthorChanged("me".into()));
     send(&mut app, ErcWaiverMsg::Confirmed);
-    app.run_erc_blocking();
-    assert_eq!(
-        dangling_on(&app, wire),
-        0,
-        "waived as it is now, not lapsed"
+    let draft = app
+        .ui_state
+        .erc_waive_draft
+        .as_ref()
+        .expect("editor stays open");
+    assert!(
+        draft
+            .error
+            .as_deref()
+            .is_some_and(|e| e.contains("changed since the last ERC run")),
+        "{:?}",
+        draft.error
+    );
+    assert!(
+        app.erc_violation_waiver_entries().is_empty(),
+        "nothing stored"
     );
 
     // A wire deleted before Confirm is refused, with the editor kept open.

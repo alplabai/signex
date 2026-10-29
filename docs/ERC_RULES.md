@@ -148,14 +148,17 @@ waiver with its reason, author, date and status (waiving N findings, lapsed,
 matches no finding, or ignored as incomplete), each with a Restore button, and
 the ERC report lists them in its waivers section.
 
-The fingerprint is taken when the waiver is confirmed, from the open sheet the
-row belongs to as it is then (the Waive action carries that sheet), so an edit between the panel showing the row and Confirm does not
-make the new waiver lapse at once. If the newest run no longer reports the
-finding, or an object it names is gone, Confirm is refused with a line in the
-Messages panel.
+Confirm checks the finding against the open sheet the row belongs to (the
+Waive action carries that sheet and the fingerprint the row was drawn with).
+If the newest run no longer reports the finding, an object it names is gone,
+or the sheet changed since that run (the fingerprint differs), Confirm is
+refused with a line in the Messages panel and the editor stays open: re-run
+ERC and waive what is shown. A waiver therefore never accepts an edit the
+user has not seen.
 
-No two findings of one rule on one sheet share an identity, except the two
-dangling ends of one wire (one problem, one waiver), and identities do not
+No two findings of one rule on one sheet share an identity (the two dangling
+ends of one wire are tagged `start` / `end`, so a waived stub at one end
+never hides a later dangle at the other), and identities do not
 depend on the order of symbols in the document: which part of a pair is the
 primary, and which pin a net finding is reported at, are chosen by UUID. A
 guard test runs the
@@ -163,8 +166,7 @@ engine over every rule's fixture and over a sheet built to trip many rules at
 once (two pin-type conflicts between one pair of parts on different nets, two
 touching pin pairs, a part placed twice, two multi-pin power ports shorted
 on two separate nets, two unnumbered pins sharing a name) and also re-runs
-every case with the symbols reversed and fails on any other shared
-identity (`waivers/violation/identity_guard.rs`).
+every case with the symbols reversed and fails on any shared identity (`waivers/violation/identity_guard.rs`).
 
 Limits: a finding that names neither an object nor a net with a name or
 pins, or whose objects are not on the sheet it is filed under, cannot be
