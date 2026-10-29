@@ -777,8 +777,8 @@ pub trait LibraryAdapter: Send + Sync {
     /// it is. Returns whether the file was written. A written file is
     /// committed with `commit_message` before the lock is released, so
     /// another process cannot replace it while git reads it. A failed
-    /// commit is logged, not returned: the file is already saved, and the
-    /// next commit picks it up.
+    /// commit is not returned: the file is already saved. It is listed by
+    /// [`Self::uncommitted_changes`] and the next commit picks it up (#858).
     ///
     /// The default has no lock to take and no version control, and only
     /// does the read and write; see [`rewrite_file`].
@@ -810,8 +810,25 @@ pub trait LibraryAdapter: Send + Sync {
         &self,
         _abs_path: &std::path::Path,
         _message: &str,
-    ) -> Result<(), LibraryError> {
-        Ok(())
+    ) -> Result<CommitOutcome, LibraryError> {
+        Ok(CommitOutcome::NothingToCommit)
+    }
+
+    /// Changes that are saved on disk but not in version control: a save
+    /// whose file write succeeded and whose git commit then failed (#858).
+    /// `None` when nothing is waiting, and always for a backend without
+    /// version control. The next successful commit of this library, or
+    /// [`Self::commit_pending`], records them.
+    fn uncommitted_changes(&self) -> Option<UncommittedChanges> {
+        None
+    }
+
+    /// Commit every change [`Self::uncommitted_changes`] lists, in one
+    /// commit with `message` (a default when empty). A failed commit is not
+    /// an error: it is [`CommitOutcome::NotCommitted`] and the changes stay
+    /// listed. The explicit retry behind the "Commit now" action.
+    fn commit_pending(&self, _message: &str) -> Result<CommitOutcome, LibraryError> {
+        Ok(CommitOutcome::NothingToCommit)
     }
 
     /// Per-primitive git history.
@@ -835,6 +852,41 @@ pub trait LibraryAdapter: Send + Sync {
             "history not implemented for this adapter".into(),
         ))
     }
+}
+
+/// What the version-control step of a save did. A save whose file write
+/// succeeded is a successful save whatever this says (#858): a failed commit
+/// is [`Self::NotCommitted`], never an error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommitOutcome {
+    /// A commit was made.
+    Committed,
+    /// Nothing needed committing: no version control, or the tree already
+    /// matched HEAD.
+    NothingToCommit,
+    /// The file is saved but the commit failed; the change stays listed in
+    /// [`LibraryAdapter::uncommitted_changes`] until a commit lands.
+    NotCommitted {
+        /// Why git refused, without the file name (the same cause reads the
+        /// same for every file).
+        reason: String,
+    },
+}
+
+impl CommitOutcome {
+    /// Whether the change is in version control (or needs no commit).
+    pub fn is_recorded(&self) -> bool {
+        !matches!(self, Self::NotCommitted { .. })
+    }
+}
+
+/// Saved changes of a library that no commit holds yet (#858).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UncommittedChanges {
+    /// Library-relative paths, forward slashes, sorted.
+    pub paths: Vec<String>,
+    /// Why the latest commit attempt failed.
+    pub reason: String,
 }
 
 /// The edit of [`LibraryAdapter::update_rows`]: changes the row it is given

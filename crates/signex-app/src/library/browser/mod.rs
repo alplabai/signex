@@ -32,6 +32,7 @@ mod price;
 mod sidebar;
 mod size_sensor;
 mod sort;
+mod uncommitted;
 mod view_cache;
 mod window;
 
@@ -40,6 +41,7 @@ use empty_state::view_empty_state;
 use grid::view_grid;
 use header::view_header;
 use sidebar::view_table_sidebar;
+use uncommitted::view_uncommitted_banner;
 pub use view_cache::BrowserViewCache;
 use view_cache::active_table;
 pub use window::{GridScroll, grid_scroll_id, reveal_row_offset, visible_rows};
@@ -104,7 +106,13 @@ pub fn view<'a>(
 
     // Empty library — no tables yet. Show a centred CTA card.
     if lib.tables.is_empty() {
-        return view_empty_state(library_path, lib, tokens, read_only);
+        return column![
+            view_uncommitted_banner(library_path, library_state, tokens),
+            view_empty_state(library_path, lib, tokens, read_only),
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
     }
 
     // Master-detail layout: left pane lists tables (vertical), right
@@ -214,7 +222,8 @@ pub fn view<'a>(
     )
     .map(|bar| container(bar).padding([4, 10]));
 
-    let mut right = column![header].spacing(0);
+    let banner = view_uncommitted_banner(library_path, library_state, tokens);
+    let mut right = column![header, banner].spacing(0);
     if let Some(bar) = range_bar {
         right = right.push(bar);
     }
