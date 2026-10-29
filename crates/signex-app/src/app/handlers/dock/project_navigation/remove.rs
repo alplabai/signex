@@ -431,6 +431,22 @@ impl Signex {
             return iced::Task::none();
         }
 
+        // A "Commit now" or a stock copy writing into this library on a worker
+        // would recreate it, or fail, once the folder is gone.
+        if is_delete && self.library_background_write_running(&state.target_path) {
+            let refusal = format!(
+                "{} is still being saved; try again in a moment.",
+                state
+                    .target_path
+                    .file_name()
+                    .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+            );
+            crate::diagnostics::log_warning(format!("[delete] refused: {refusal}"));
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::delete(refusal));
+            return iced::Task::none();
+        }
+
         // A project folder being renamed would move the file from under the
         // delete worker.
         if is_delete

@@ -39,7 +39,7 @@ fn app_with_open_project(project_path: &Path) -> Signex {
 /// A corrupt project file makes `retarget_library_entry` fail (it parses
 /// before it writes), which is how the reverse patch fails here.
 #[test]
-fn a_failed_reverse_patch_reports_the_stale_project_without_dirtying_it() {
+fn a_failed_reverse_patch_dirties_the_stale_project_once_the_file_is_back() {
     let tmp = tempfile::TempDir::new().unwrap();
     let project_path = tmp.path().join("proj.snxprj");
     std::fs::write(&project_path, b"{ not json").unwrap();
@@ -54,19 +54,17 @@ fn a_failed_reverse_patch_reports_the_stale_project_without_dirtying_it() {
     assert!(moved_back.is_ok(), "the file still moves back");
     assert!(old_path.exists() && !new_path.exists());
 
-    // The completion dirties the project only once the file is back.
+    // The file is back, so the project is dirtied: a save then writes the
+    // old-path entry the saved file no longer lists.
     let mut app = app_with_open_project(&project_path);
     app.report_library_rollback(
         &old_path,
         &new_path,
         "r",
-        Err("gone".to_string()),
+        moved_back,
         Some((project_path.clone(), suffix)),
     );
-    assert!(
-        !app.document_state.has_dirty_documents(),
-        "dirtying waits until the file is back at the old path"
-    );
+    assert!(app.document_state.is_document_dirty(&project_path));
 }
 
 #[test]

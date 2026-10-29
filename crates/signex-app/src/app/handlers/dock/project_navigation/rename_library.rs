@@ -85,6 +85,12 @@ impl Signex {
             self.refuse_rename_while_library_saving(&saving);
             return iced::Task::none();
         }
+        // A "Commit now" or a stock copy writes into the library on a worker
+        // through its old path; moving the folder would strand that work.
+        if self.library_background_write_running(&old_path) {
+            self.refuse_rename_while_library_saving(&old_path);
+            return iced::Task::none();
+        }
         let id = self.document_state.pending_path_ops.begin_with_dependents(
             PathOpKind::RenameLibrary,
             vec![old_path.clone(), new_path.clone()],

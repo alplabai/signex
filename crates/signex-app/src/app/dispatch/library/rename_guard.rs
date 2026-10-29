@@ -8,6 +8,7 @@
 //! go through (dropping a completion would strand its state).
 
 use super::*;
+use crate::library::stock_copy::StockCopyMsg;
 
 impl Signex {
     /// Why `msg` cannot run now, or `None` when it can. The cause leads: the
@@ -30,6 +31,18 @@ impl Signex {
                 .to_string(),
         )
     }
+
+    /// Git or copy work running off the update loop that writes into the
+    /// library at `root`: a "Commit now", or a stock copy (its target is not
+    /// tracked, so any copy counts). Moving or deleting the library under it
+    /// would strand that work in a folder the app no longer mounts.
+    pub(crate) fn library_background_write_running(&self, root: &std::path::Path) -> bool {
+        let is_library = root
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("snxlib"));
+        is_library
+            && (self.library.is_committing(root) || !self.library.stock_copies_in_flight.is_empty())
+    }
 }
 
 /// The library a message addresses, when it carries its path.
@@ -43,7 +56,14 @@ fn library_named_by(msg: &LibraryMessage) -> Option<&std::path::Path> {
         | L::BrowserDeleteRowConfirm { library_path, .. }
         | L::BrowserCellCommit { library_path, .. }
         | L::BrowserEdit { library_path, .. }
+        | L::BrowserCommitPending { library_path }
         | L::ComponentsPanelPromoteToGlobal(library_path) => Some(library_path),
+        // A copy into a library, or Copy Again of a copy inside one. A new
+        // library's chosen path may still gain its extension, so it names
+        // none and waits for any library rename.
+        L::StockCopy(StockCopyMsg::TargetPicked(path) | StockCopyMsg::CopyAgainRequested(path)) => {
+            Some(path)
+        }
         _ => None,
     }
 }
@@ -63,7 +83,13 @@ fn writes_through_adapter(msg: &LibraryMessage) -> bool {
         | L::DocumentOptionsApply
         | L::PrimitivePicker(PrimitivePickerMsg::Pick(_))
         | L::CloseLibraryConfirm(_)
-        | L::ComponentsPanelPromoteToGlobal(_) => true,
+        | L::ComponentsPanelPromoteToGlobal(_)
+        | L::BrowserCommitPending { .. }
+        | L::StockCopy(
+            StockCopyMsg::TargetPicked(_)
+            | StockCopyMsg::NewLibraryPathChosen(Some(_))
+            | StockCopyMsg::CopyAgainRequested(_),
+        ) => true,
         L::BrowserEdit { msg, .. } => matches!(msg, BrowserEditMsg::Save),
         _ => false,
     }
@@ -156,6 +182,44 @@ mod tests {
             signex_library::PrimitiveRef::new(uuid::Uuid::nil(), uuid::Uuid::nil()),
         ));
         assert!(app.library_write_refusal(&pick).is_some());
+    }
+
+    /// "Commit now" and Copy to Library write into the library on a worker
+    /// through its old path; their completions still go through.
+    #[test]
+    fn commit_now_and_stock_copies_are_refused_while_their_library_moves() {
+        let app = app_with_library_rename();
+        let refused = |msg: LibraryMessage| app.library_write_refusal(&msg).is_some();
+        assert!(refused(LibraryMessage::BrowserCommitPending {
+            library_path: "/w/a.snxlib".into(),
+        }));
+        assert!(refused(LibraryMessage::StockCopy(
+            StockCopyMsg::TargetPicked("/w/a.snxlib".into())
+        )));
+        assert!(refused(LibraryMessage::StockCopy(
+            StockCopyMsg::CopyAgainRequested("/w/a.snxlib/symbols/r.snxsym".into())
+        )));
+        assert!(refused(LibraryMessage::StockCopy(
+            StockCopyMsg::NewLibraryPathChosen(Some("/w/new".into()))
+        )));
+        assert!(!refused(LibraryMessage::StockCopy(
+            StockCopyMsg::TargetPicked("/w/other.snxlib".into())
+        )));
+        assert!(!refused(LibraryMessage::BrowserCommitPendingDone {
+            library_path: "/w/a.snxlib".into(),
+            result: Err("x".into()),
+        }));
+    }
+
+    #[test]
+    fn a_stock_copy_in_flight_holds_any_library_but_not_a_plain_file() {
+        let (mut app, _task) = Signex::new();
+        assert!(!app.library_background_write_running(std::path::Path::new("/w/a.snxlib")));
+        app.library
+            .stock_copies_in_flight
+            .insert("/stock/r.snxsym".into());
+        assert!(app.library_background_write_running(std::path::Path::new("/w/a.snxlib")));
+        assert!(!app.library_background_write_running(std::path::Path::new("/w/a.snxsch")));
     }
 
     #[test]
