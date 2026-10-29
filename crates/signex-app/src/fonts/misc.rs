@@ -258,6 +258,50 @@ pub fn write_drag_direction_select_pref_at(path: &Path, enabled: bool) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Increment step and designators on paste
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read the "Increment step" (#1253). A missing, non-numeric or zero value is
+/// the default; one outside the allowed range is clamped.
+pub fn read_increment_step_pref_from(json: Option<&serde_json::Value>) -> i32 {
+    json.and_then(|json| json["increment_step"].as_i64())
+        .map(signex_types::text_increment::clamp_step)
+        .unwrap_or(signex_types::text_increment::STEP_DEFAULT)
+}
+
+pub fn write_increment_step_pref(step: i32) {
+    write_increment_step_pref_at(&prefs_path(), step)
+}
+
+pub fn write_increment_step_pref_at(path: &Path, step: i32) {
+    update_prefs_json(path, "increment_step", |prefs| {
+        prefs.insert("increment_step".to_string(), serde_json::json!(step));
+    })
+}
+
+/// Read "Designators on paste" (#1263). A missing or unknown value is Keep.
+pub fn read_paste_designators_pref_from(
+    json: Option<&serde_json::Value>,
+) -> crate::paste_prefs::PasteDesignators {
+    json.and_then(|json| json["paste_designators"].as_str())
+        .map(crate::paste_prefs::PasteDesignators::from_token)
+        .unwrap_or_default()
+}
+
+pub fn write_paste_designators_pref(mode: crate::paste_prefs::PasteDesignators) {
+    write_paste_designators_pref_at(&prefs_path(), mode)
+}
+
+pub fn write_paste_designators_pref_at(path: &Path, mode: crate::paste_prefs::PasteDesignators) {
+    update_prefs_json(path, "paste_designators", |prefs| {
+        prefs.insert(
+            "paste_designators".to_string(),
+            serde_json::Value::String(mode.token().to_string()),
+        );
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Window controls placement
 // ──────────────────────────────────────────────────────────────────────────
 

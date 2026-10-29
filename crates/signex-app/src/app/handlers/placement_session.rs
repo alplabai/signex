@@ -124,18 +124,11 @@ impl Signex {
         })
     }
 
-    /// `typed`, or the first designator stepped from it that no symbol on
-    /// `sheet` uses, so a typed `R1` never makes a second `R1`.
-    fn free_designator_from(&self, sheet: &Path, typed: &str) -> String {
-        let Some(engine) = self.document_state.engines.get(sheet) else {
-            return typed.to_owned();
-        };
-        let used: std::collections::HashSet<&str> = engine
-            .document()
-            .symbols
-            .iter()
-            .map(|s| s.reference.as_str())
-            .collect();
+    /// `typed`, or the first designator stepped from it that no symbol in
+    /// `sheet`'s project uses, so a typed `R1` never makes a second `R1`.
+    pub(crate) fn free_designator_from(&self, sheet: &Path, typed: &str) -> String {
+        let used: std::collections::HashSet<&str> =
+            self.used_designators(sheet).into_iter().collect();
         let mut candidate = typed.to_owned();
         while used.contains(candidate.as_str()) {
             match Self::increment_designator(&candidate) {
@@ -191,11 +184,12 @@ impl Signex {
                 "Designator {typed} is already used on this sheet; the part is placed as {used}."
             ));
         }
+        let target = session.target_sheet.clone();
         let payload = match &reference {
             Some(reference) => session
                 .payload
                 .map_symbols(|s| s.reference = reference.clone()),
-            None => session.payload.clone(),
+            None => self.paste_numbering(&target).apply(&session.payload),
         };
         let placed = payload.place_commands(Point::new(x, y));
         let commands = match placed {
@@ -222,7 +216,7 @@ impl Signex {
         let Some(session) = self.interaction_state.placement.as_mut() else {
             return;
         };
-        if session.kind.is_paste() {
+        if session.kind.ends_after_click() {
             self.cancel_placement_session();
             return;
         }

@@ -13,6 +13,7 @@
 //!
 //! Left open on purpose (full list: `docs/architecture/snxsch-object-lock.md`):
 //! `SetSymbolLocked` and `SetItemLocked` (the way out), `SetSymbolDnp`,
+//! `SetSymbolFlag`,
 //! font family, library-symbol replacement and annotation (which has its
 //! own designator lock, `scope.locked`).
 
@@ -154,6 +155,8 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         Command::SetSymbolLocked { .. }
         | Command::SetItemLocked { .. }
         | Command::SetSymbolDnp { .. }
+        | Command::SetSymbolFlag { .. }
+        | Command::SetWireWidth { .. }
         | Command::SetTextFontFamily { .. }
         | Command::ReplaceLibSymbol { .. }
         | Command::AnnotateAll { .. }

@@ -132,9 +132,9 @@ pub(super) fn on_no_net() -> String {
     "Connect it to a wire or pin, then highlight again; that object is on no net.".to_string()
 }
 
-pub(super) fn highlighted(name: &str, sheets: usize) -> String {
+pub(super) fn highlighted(name: &str, places: usize, sheets: usize) -> String {
     cap(format!(
-        "Step through it or run Clear net highlighting; net '{}' is highlighted on {sheets} sheet(s).",
+        "Step through it or run Clear net highlighting; net '{}' is on {places} place(s) on {sheets} sheet(s).",
         clip(name, NAME_CLIP)
     ))
 }
@@ -228,7 +228,7 @@ mod tests {
             project_closed(),
             nothing_pointed_at(),
             on_no_net(),
-            highlighted(&l, 12),
+            highlighted(&l, 12, 5),
             nothing_highlighted(),
             highlight_gone(),
             command_dropped_left(),

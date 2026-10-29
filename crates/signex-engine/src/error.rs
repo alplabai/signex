@@ -57,6 +57,8 @@ pub enum EngineError {
     SelectionTransformUnsupported { what: String },
     #[error("the selection holds a coordinate that is not a finite number; it was not copied")]
     NonFiniteCoordinate,
+    #[error("a wire width must be a finite number of at least 0 mm, got {0}")]
+    InvalidWireWidth(f64),
     #[error("{}", locked_message(references, action))]
     ItemLocked {
         references: Vec<String>,
@@ -66,6 +68,8 @@ pub enum EngineError {
     UnrecordedEditRefused,
     #[error("this sheet was written by a newer Signex and is read-only; edit it in that version")]
     ReadOnly,
+    #[error("the clipboard fragment could not be converted: {0}")]
+    ClipboardFragment(String),
 }
 
 fn locked_message(references: &[String], action: &str) -> String {

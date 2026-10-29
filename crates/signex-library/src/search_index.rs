@@ -16,6 +16,9 @@
 //! - **`param_<key>`** f64  INDEXED | STORED | FAST  (one per well-known
 //!   numeric parameter key — see [`NUMERIC_PARAM_KEYS`]; supports `RangeQuery`)
 //!
+//! Measurement parameters are indexed in base units (`indexed_number`), so
+//! facet bounds are base-unit numbers.
+//!
 //! Tantivy 0.22 does **not** support range queries on JSON-field subpaths via
 //! the QueryParser, so each numeric parameter key gets its own typed f64
 //! column in the schema. Adding a new numeric param key requires extending
@@ -350,11 +353,7 @@ impl TantivySearchIndex {
                 continue;
             }
             if let Some(field) = self.fields.numeric_params.get(k) {
-                let n = match v {
-                    ParamValue::Number(n) => Some(*n),
-                    ParamValue::Measurement { value, .. } => Some(*value),
-                    _ => None,
-                };
+                let n = indexed_number(v);
                 if let Some(n) = n {
                     doc.add_f64(*field, n);
                     continue;
@@ -365,7 +364,9 @@ impl TantivySearchIndex {
                 ParamValue::Text(s) => OwnedValue::Str(s.clone()),
                 ParamValue::Number(n) => OwnedValue::F64(*n),
                 ParamValue::Bool(b) => OwnedValue::Bool(*b),
-                ParamValue::Measurement { value, .. } => OwnedValue::F64(*value),
+                ParamValue::Measurement { value, .. } => {
+                    OwnedValue::F64(indexed_number(v).unwrap_or(*value))
+                }
             };
             json_blob.insert(k.clone(), owned);
         }
@@ -548,24 +549,22 @@ impl TantivySearchIndex {
         facet: &Facet,
     ) -> Result<Box<dyn Query>, TantivyIndexError> {
         let n = parse_f64(facet)?;
+        let at = || Term::from_field_f64(field, n);
         match facet.op {
             FacetOp::Eq => {
                 // f64 equality via a single-value [n, n] inclusive range to
                 // avoid bit-pattern comparison surprises with `TermQuery`.
-                Ok(Box::new(RangeQuery::new_f64_bounds(
-                    self.field_name_owned(field),
-                    Bound::Included(n),
-                    Bound::Included(n),
+                Ok(Box::new(RangeQuery::new(
+                    Bound::Included(at()),
+                    Bound::Included(at()),
                 )))
             }
-            FacetOp::Lt => Ok(Box::new(RangeQuery::new_f64_bounds(
-                self.field_name_owned(field),
+            FacetOp::Lt => Ok(Box::new(RangeQuery::new(
                 Bound::Unbounded,
-                Bound::Excluded(n),
+                Bound::Excluded(at()),
             ))),
-            FacetOp::Gt => Ok(Box::new(RangeQuery::new_f64_bounds(
-                self.field_name_owned(field),
-                Bound::Excluded(n),
+            FacetOp::Gt => Ok(Box::new(RangeQuery::new(
+                Bound::Excluded(at()),
                 Bound::Unbounded,
             ))),
             FacetOp::Contains => Err(TantivyIndexError::InvalidFacetValue {
@@ -612,10 +611,6 @@ impl TantivySearchIndex {
                 value: facet.value.clone(),
                 reason: e.to_string(),
             })
-    }
-
-    fn field_name_owned(&self, field: Field) -> String {
-        self.index.schema().get_field_name(field).to_string()
     }
 
     fn doc_to_summary(&self, doc: &TantivyDocument) -> Option<ComponentSummary> {
@@ -692,7 +687,7 @@ impl SearchIndex for TantivySearchIndex {
             }
         };
 
-        let top = match searcher.search(&query, &TopDocs::with_limit(limit)) {
+        let top = match searcher.search(&query, &TopDocs::with_limit(limit).order_by_score()) {
             Ok(t) => t,
             Err(e) => {
                 tracing::warn!(
@@ -839,6 +834,17 @@ fn parse_lifecycle_token(s: &str) -> Option<LifecycleState> {
     })
 }
 
+/// The number a parameter is indexed and compared as. A measurement is
+/// indexed in base units, so facet bounds are base-unit numbers and a
+/// legacy `{4.7, "kΩ"}` is found at 4700 like `{4700, "ohm"}` (#1572).
+fn indexed_number(v: &ParamValue) -> Option<f64> {
+    match v {
+        ParamValue::Number(n) => Some(*n),
+        ParamValue::Measurement { .. } => v.as_quantity().map(|q| q.base()),
+        _ => None,
+    }
+}
+
 fn read_text(doc: &TantivyDocument, field: Field) -> Option<String> {
     doc.get_first(field)
         .and_then(|v| v.as_str())
@@ -860,6 +866,21 @@ mod tests {
 
     fn read_error(what: &str) -> TantivyError {
         TantivyError::InvalidArgument(what.to_string())
+    }
+
+    #[test]
+    fn measurements_are_indexed_in_base_units() {
+        let legacy = ParamValue::Measurement {
+            value: 4.7,
+            unit: "kΩ".into(),
+        };
+        let canonical = ParamValue::Measurement {
+            value: 4700.0,
+            unit: "ohm".into(),
+        };
+        assert_eq!(indexed_number(&legacy), Some(4700.0));
+        assert_eq!(indexed_number(&canonical), Some(4700.0));
+        assert_eq!(indexed_number(&ParamValue::Text("4.7k".into())), None);
     }
 
     #[test]

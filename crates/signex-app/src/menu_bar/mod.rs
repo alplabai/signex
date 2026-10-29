@@ -191,6 +191,8 @@ pub enum MenuMessage {
     PlaceText,
     /// Place ▸ No Connect — the no-connect tool.
     PlaceNoConnect,
+    /// Place ▸ Junction — the junction tool.
+    PlaceJunction,
     // Design
     Annotate,
     AnnotateQuietly,
@@ -238,6 +240,22 @@ pub enum MenuMessage {
     PreviousSheet,
 }
 
+impl MenuMessage {
+    /// Whether this is a View-menu panel row, which carries a check mark.
+    pub(crate) fn is_panel_row(&self) -> bool {
+        matches!(
+            self,
+            Self::OpenProjectsPanel
+                | Self::OpenComponentsPanel
+                | Self::OpenNavigatorPanel
+                | Self::OpenPropertiesPanel
+                | Self::OpenErcPanel
+                | Self::OpenMessagesPanel
+                | Self::OpenSignalPanel
+        )
+    }
+}
+
 /// Context passed into `view` so each menu leaf can decide whether to
 /// render as an active link or a disabled item. Keeps the menu
 /// context-aware — e.g. Annotate / ERC / Save are unclickable when no
@@ -262,6 +280,9 @@ pub struct MenuContext<'a> {
     pub active_keymap: Option<std::sync::Arc<CompiledKeymap>>,
     /// File ▸ Open Recent entries, most recent first.
     pub recent_projects: &'a [std::path::PathBuf],
+    /// Panels open somewhere (docked, floating or detached): the View
+    /// menu's panel rows show a check mark for these (#103).
+    pub(crate) open_panels: Vec<crate::panels::PanelKind>,
 }
 
 impl Default for MenuContext<'_> {
@@ -272,6 +293,7 @@ impl Default for MenuContext<'_> {
             scale_factor: 1.0,
             active_keymap: None,
             recent_projects: &[],
+            open_panels: Vec::new(),
         }
     }
 }
@@ -347,6 +369,8 @@ pub mod model;
 pub(crate) mod native;
 mod view;
 
+#[cfg(test)]
+pub(crate) mod panel_check_tests;
 #[cfg(test)]
 mod planned_tests;
 
@@ -509,6 +533,7 @@ fn separator(mc: MenuColors) -> Item<'static, MenuMessage, Theme, iced::Renderer
 /// Build a single menu item button with label + shortcut text.
 fn menu_item_btn(
     label: &str,
+    checked: Option<bool>,
     shortcut: Option<String>,
     msg: Option<MenuMessage>,
     mc: MenuColors,
@@ -517,15 +542,27 @@ fn menu_item_btn(
     let text_c = if enabled { mc.text } else { mc.text_disabled };
 
     let label = label.to_owned();
-    let mut r = row![
+    // A toggle row reserves the mark column whether or not it is checked,
+    // so the labels of a group line up.
+    let mark = checked.map(|on| {
+        text(if on { "\u{2713}" } else { "" })
+            .size(MENU_LABEL_SIZE)
+            .color(text_c)
+            .width(Length::Fixed(14.0))
+    });
+    let mut r = iced::widget::Row::new()
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center)
+        .width(Length::Fill);
+    if let Some(mark) = mark {
+        r = r.push(mark);
+    }
+    r = r.push(
         text(label)
             .size(MENU_LABEL_SIZE)
             .color(text_c)
             .wrapping(iced::widget::text::Wrapping::None),
-    ]
-    .spacing(SP.m)
-    .align_y(iced::Alignment::Center)
-    .width(Length::Fill);
+    );
 
     if let Some(sc) = shortcut {
         r = r.push(iced::widget::Space::new().width(Length::Fill));

@@ -207,6 +207,14 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         result: Result<Box<ResolvedPlacement>, String>,
     },
+    /// The off-thread designator scan of a project finished; `generation`
+    /// is the request it answers, an older one is dropped.
+    DesignatorsScanned {
+        generation: u64,
+        result: std::sync::Arc<
+            Result<std::sync::Arc<crate::app::designator_scan::DesignatorScan>, String>,
+        >,
+    },
     /// Completion of the off-thread read behind a placed symbol's switch
     /// to another drawing of its row (#1230). `target_sheet` is the sheet
     /// that was active when the switch started.
@@ -285,6 +293,11 @@ pub enum LibraryMessage {
     BrowserSearchChanged {
         library_path: PathBuf,
         value: String,
+    },
+    /// A range filter on a parameter column of this Library Browser tab.
+    BrowserRangeFilter {
+        library_path: PathBuf,
+        msg: super::RangeFilterMsg,
     },
     /// Column-header click — toggles sort direction on the matching
     /// key, or sets ascending sort if a different column is clicked.

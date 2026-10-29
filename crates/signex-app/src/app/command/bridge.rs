@@ -55,6 +55,7 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
             action,
         )))
     };
+    let text_edit = |target| Message::TextEdit(TextEditMsg::Requested(target));
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
         "annotate_schematic_quietly" => {
@@ -175,6 +176,9 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "open_preferences" | "open_schematic_preferences" => {
             Message::Preferences(PreferencesMsg::Open)
         }
+        "repeat_last_item" => Message::Edit(EditMsg::RepeatLastItem),
+        "rubber_stamp_copy" => Message::Edit(EditMsg::RubberStampCopy),
+        "paste_array" => Message::Edit(EditMsg::PasteArrayRequested),
         "paste" => Message::Edit(EditMsg::Paste),
         "paste_special" | "smart_paste" => Message::Edit(EditMsg::SmartPaste),
         "place_bus" => Message::Tool(ToolMessage::SelectTool(Tool::Bus)),
@@ -238,6 +242,12 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
             net_nav(NetNavMsg::HighlightStepRequested { forward: false })
         }
         "clear_net_highlighting" => net_nav(NetNavMsg::HighlightClearRequested),
+        // In-place field edits (#1255, #1670): the object under the cursor,
+        // else the single selection; Messages says so when there is none.
+        "edit_value" => text_edit(TextEditTarget::Value),
+        "edit_reference_designator" => text_edit(TextEditTarget::Designator),
+        "edit_footprint_field" => text_edit(TextEditTarget::FootprintField),
+        "edit_text_in_place" => text_edit(TextEditTarget::Text),
         // BRIDGE_ARMS_END — `tests::match_block` scans for command-id
         // literals up to this marker and no further. Everything below is
         // fallthrough machinery whose own string literals must not be
@@ -409,7 +419,7 @@ mod tests {
     /// The ids listed there are a mix, and the distinction decides the fix:
     /// - **unimplemented** — the catalog entry and the binding are the only
     ///   occurrences in the tree (`place_junction`,
-    ///   `repeat_last_item`, `rubber_stamp_copy`). A feature, not an arm.
+    ///   `repeat_last_item`). A feature, not an arm.
     ///   This is most of what is left. It also covers ids whose obvious
     ///   target turns out to be a STUB, where an arm would trade a logged
     ///   warning for a silent no-op. Read the handler body, not just its
@@ -434,16 +444,11 @@ mod tests {
         "autoplace_fields", "center_on_cursor",
         "close_active_document", "copy_attributes_or_add_vertex", "cycle_fast_grid",
         "cycle_wiring_mode",
-        "edit_footprint_field",
-        "edit_reference_designator",
-        "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2",
+        "fast_grid_1", "fast_grid_2",
         "import_graphics",
         "place_design_block",
-        // No junction tool exists: junctions are derived from wire topology
-        // and the engine's PlaceJunction command has no UI tool (#1666).
-        "place_junction",
-        "refresh_view", "repeat_last_item",
-        "reset_local_coordinates", "rubber_stamp_copy", "select_expand_connection",
+        "refresh_view",
+        "reset_local_coordinates", "select_expand_connection",
         "select_node_or_connection_item",
         "switch_segment_posture", "toggle_cross_select_mode", "toggle_floating_panels",
         "toggle_search_panel",
@@ -541,6 +546,13 @@ mod tests {
                 crate::active_bar::ActiveBarAction::PlaceOffSheetConnector
             ))
         ));
+        // The key reaches the Active Bar button, which arms Tool::Junction.
+        assert!(matches!(
+            resolve("place_junction"),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::PlaceJunction
+            ))
+        ));
         assert!(matches!(
             resolve("place_wire_to_bus_entry"),
             Message::Tool(ToolMessage::SelectTool(Tool::BusEntry))
@@ -580,6 +592,28 @@ mod tests {
             action("edit_selected_symbol_in_symbol_editor"),
             PlacedPartAction::EditSymbol
         );
+    }
+
+    /// #1670: the in-place edit ids ask the in-place editor for their field.
+    #[test]
+    fn the_field_edit_ids_request_their_target() {
+        let target = |id: &str| {
+            let command = AppCommandId::new(id).expect("a catalog id is a valid AppCommandId");
+            match core_to_message(&command) {
+                Some(Message::TextEdit(TextEditMsg::Requested(target))) => target,
+                other => panic!("'{id}' resolved to {other:?}"),
+            }
+        };
+        assert_eq!(target("edit_value"), TextEditTarget::Value);
+        assert_eq!(
+            target("edit_reference_designator"),
+            TextEditTarget::Designator
+        );
+        assert_eq!(
+            target("edit_footprint_field"),
+            TextEditTarget::FootprintField
+        );
+        assert_eq!(target("edit_text_in_place"), TextEditTarget::Text);
     }
 
     /// #103 - the cheap shortcuts that used to be dead keys now reach
@@ -847,15 +881,15 @@ mod tests {
     fn an_unmapped_command_reports_that_it_is_not_available_yet() {
         let _guard = serial();
         let _ = crate::diagnostics::init_logging();
-        let command = AppCommandId::new("rubber_stamp_copy").unwrap();
+        let command = AppCommandId::new("center_on_cursor").unwrap();
 
         assert!(core_to_message(&command).is_none());
 
         assert!(crate::diagnostics::recent_entries().iter().any(|entry| {
-            entry.message.contains("command 'rubber_stamp_copy'")
+            entry.message.contains("command 'center_on_cursor'")
                 && entry
                     .message
-                    .contains("Rubber-stamp copy / repeated paste is not available yet")
+                    .contains("Center on cursor is not available yet")
         }));
     }
 

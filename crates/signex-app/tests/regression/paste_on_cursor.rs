@@ -5,6 +5,7 @@
 
 use std::path::PathBuf;
 
+use crate::paste_support::{paste, smart_paste};
 use signex_app::app::{EditMsg, Message, Signex};
 use signex_app::canvas::CanvasEvent;
 use signex_app::canvas::placement_ghost::ghost_anchor;
@@ -61,7 +62,7 @@ fn paste_into_other_sheet_registers_lib_symbol() {
     let other_name = other.to_string_lossy().into_owned();
     show(&mut app, &other_name);
 
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste(&mut app);
     click(&mut app, PLACE_AT);
 
     let sheet = doc(&app);
@@ -77,7 +78,7 @@ fn paste_into_other_sheet_registers_lib_symbol() {
 fn paste_is_one_undo_step_and_single_shot() {
     let (mut app, _other) = app_with_copied_part();
 
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste(&mut app);
     assert!(
         app.interaction_state.placement.is_some(),
         "the copy is on the cursor"
@@ -112,7 +113,7 @@ fn paste_lands_where_the_ghost_was_drawn() {
     let relative = copied.payload.fragment().symbols[0].position;
     let cursor = (60.3, 45.1);
 
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste(&mut app);
     click(&mut app, cursor);
 
     let grid = signex_app::canvas::grid::pitch_mm_exact(app.ui_state.grid_size_mm);
@@ -146,7 +147,7 @@ fn space_x_y_turn_a_pasted_group() {
         SelectedItem::new(wire_id, SelectedKind::Wire),
     ];
     let _ = app.update(Message::Edit(EditMsg::Copy));
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste(&mut app);
     let fragment = |app: &Signex| {
         app.interaction_state
             .placement
@@ -198,7 +199,7 @@ fn a_large_paste_draws_only_its_bounding_box() {
     let limit = signex_app::canvas::placement_ghost::MAX_GHOST_SCENE_ITEMS;
 
     app.interaction_state.clipboard = Some(many(limit + 1));
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste(&mut app);
     let ghost = &app
         .interaction_state
         .placement
@@ -208,7 +209,7 @@ fn a_large_paste_draws_only_its_bounding_box() {
     assert!(ghost.is_bounding_box_only());
 
     app.interaction_state.clipboard = Some(many(limit));
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste(&mut app);
     let ghost = &app
         .interaction_state
         .placement
@@ -228,7 +229,7 @@ fn smart_paste_keeps_its_fixed_offset_from_the_original() {
     let clipboard_min_x = original.x - 5.08;
     let expect_dx = (content.max_x - clipboard_min_x) + margin;
 
-    let _ = app.update(Message::Edit(EditMsg::SmartPaste));
+    smart_paste(&mut app);
 
     assert!(
         app.interaction_state.placement.is_none(),
@@ -250,7 +251,7 @@ fn cut_then_paste_still_works() {
     let _ = app.update(Message::Edit(EditMsg::Cut));
     assert!(doc(&app).symbols.is_empty(), "removed at cut time");
 
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste(&mut app);
     let _ = app.update(Message::CanvasEvent(CanvasEvent::Clicked {
         world_x: original.position.x,
         world_y: original.position.y,
@@ -273,7 +274,7 @@ fn paste_is_refused_on_a_newer_minor_sheet() {
     }
     show(&mut app, &other_name);
 
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste(&mut app);
 
     assert!(app.interaction_state.placement.is_none());
     let notice = app.document_state.error_notice.as_ref().expect("says why");
@@ -312,7 +313,7 @@ fn a_body_conflict_warns_and_the_ghost_shows_the_sheets_copy() {
     let _ = signex_app::diagnostics::init_logging();
     let before = signex_app::diagnostics::newest_entry_id().unwrap_or(0);
 
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste(&mut app);
 
     let warned = signex_app::diagnostics::recent_entries().iter().any(|e| {
         e.id > before
@@ -377,7 +378,7 @@ fn a_paste_replaces_a_library_read_still_in_flight() {
         },
     ));
 
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste(&mut app);
     for message in crate::library_place_symbol::run(task) {
         let _ = app.update(message);
     }
@@ -412,7 +413,7 @@ fn smart_paste_measures_from_ref_and_value_text_when_they_stick_out() {
     );
     let expect_dx = (content.max_x - text_min_x) + margin;
 
-    let _ = app.update(Message::Edit(EditMsg::SmartPaste));
+    smart_paste(&mut app);
 
     let pasted = &doc(&app).symbols[1];
     assert!((pasted.position.x - (part.position.x + expect_dx)).abs() < 1e-9);
@@ -446,7 +447,7 @@ fn duplicate_registers_the_body_offsets_by_5_08_and_is_one_undo_step() {
 fn two_pastes_from_one_copy_place_two_parts_in_two_undo_steps() {
     let (mut app, _other) = app_with_copied_part();
     for at in [(50.8, 50.8), (76.2, 50.8)] {
-        let _ = app.update(Message::Edit(EditMsg::Paste));
+        paste(&mut app);
         click(&mut app, at);
     }
     assert_eq!(doc(&app).symbols.len(), 3);
@@ -460,7 +461,7 @@ fn two_pastes_from_one_copy_place_two_parts_in_two_undo_steps() {
 #[test]
 fn esc_during_a_paste_leaves_nothing_placed() {
     let (mut app, _other) = app_with_copied_part();
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste(&mut app);
     let _ = app.update(Message::Tool(signex_app::toolbar::ToolMessage::SelectTool(
         signex_app::app::Tool::Select,
     )));
@@ -474,7 +475,7 @@ fn a_tab_switch_during_a_paste_leaves_nothing_placed() {
     let (mut app, other) = app_with_copied_part();
     let window = iced::window::Id::unique();
     app.ui_state.main_window_id = Some(window);
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste(&mut app);
 
     let _ = app.update(Message::Tab {
         window_id: window,
@@ -533,7 +534,7 @@ fn a_paste_into_a_sheet_of_another_project_brings_the_body() {
     }
     show(&mut app, &other_name);
 
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste(&mut app);
     click(&mut app, PLACE_AT);
 
     let sheet = doc(&app);
@@ -549,7 +550,7 @@ fn a_press_drag_on_a_selected_original_with_a_paste_on_the_cursor_moves_nothing(
 
     let (mut app, _other) = app_with_copied_part();
     app.ui_state.snap_enabled = false;
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste(&mut app);
     assert!(app.interaction_state.placement.is_some());
     assert!(
         !app.interaction_state.active_canvas().selected.is_empty(),

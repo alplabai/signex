@@ -28,6 +28,20 @@ pub fn format_length_mm(mm: f64, unit: Unit) -> String {
     format!("{:.*} {unit}", decimals(unit), mm / mm_per(unit))
 }
 
+/// The bare number of a length in `unit`, as an edit field shows it
+/// (`2.540`, no unit suffix).
+pub fn length_field_text(mm: f64, unit: Unit) -> String {
+    format!("{:.*}", decimals(unit), mm / mm_per(unit))
+}
+
+/// The millimetres a length typed in `unit` stands for. `None` when `text`
+/// is not a finite number.
+pub fn parse_length_field_mm(text: &str, unit: Unit) -> Option<f64> {
+    let value: f64 = text.trim().parse().ok()?;
+    let mm = value * mm_per(unit);
+    mm.is_finite().then_some(mm)
+}
+
 /// The offset between two points, in millimetres.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Measurement {
@@ -77,6 +91,17 @@ mod tests {
             m.describe(Unit::Micrometer),
             "dx 3000.0 um  dy 4000.0 um  dist 5000.0 um"
         );
+    }
+
+    #[test]
+    fn a_length_field_round_trips_through_its_unit() {
+        assert_eq!(length_field_text(2.54, Unit::Mil), "100.00");
+        let mil = parse_length_field_mm(" 100 ", Unit::Mil).unwrap();
+        assert!((mil - 2.54).abs() < 1e-12);
+        assert_eq!(parse_length_field_mm("1", Unit::Inch), Some(25.4));
+        for bad in ["", "abc", "inf", "NaN", "1e999"] {
+            assert_eq!(parse_length_field_mm(bad, Unit::Mm), None, "{bad:?}");
+        }
     }
 
     #[test]

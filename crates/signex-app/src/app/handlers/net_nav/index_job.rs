@@ -6,7 +6,7 @@ use std::sync::Arc;
 use iced::Task;
 
 use crate::app::project_sheets::{self, OpenSheets};
-use crate::app::runtime::net_class_styles::plan_projects;
+use crate::app::runtime::net_class_styles::{PlannedProject, plan_projects};
 use crate::app::state::ProjectId;
 use crate::app::state::net_class_styles::ProjectKey;
 use crate::app::state::net_nav::{IndexOutcome, Pending, PendingNetAction, ProjectNetData, Stored};
@@ -89,14 +89,19 @@ impl Signex {
                 IndexLookup::Unavailable
             });
         }
+        Ok(self.job_for(planned))
+    }
+
+    /// The build for a planned project: a snapshot of its open sheets.
+    fn job_for(&self, planned: PlannedProject) -> NetIndexJob {
         let open =
             project_sheets::open_sheets_snapshot_of(&self.document_state, &planned.open_paths);
-        Ok(NetIndexJob {
+        NetIndexJob {
             open: Arc::new(open),
-            project,
+            project: planned.project,
             key: planned.key,
             project_dir: planned.project_dir,
-        })
+        }
     }
 
     /// The index of `project` for its current content, starting a build when
@@ -260,15 +265,30 @@ impl Signex {
         reported.settle(outcome.project, &outcome.warnings);
     }
 
-    /// Keep a highlighted net's index fresh through edits, so what stays
-    /// bright follows the document, and let go of what a closed project held.
+    /// Keep what the index holds in step with the projects, and a highlighted
+    /// net's index fresh through edits so what stays bright follows the
+    /// document. Does nothing on an update that changed no open sheet, project
+    /// list, root or sheet list.
     pub(crate) fn refresh_net_nav(&mut self) -> Task<Message> {
-        let build = self.refresh_highlight_index();
+        let build = self.refresh_net_index();
         self.sync_net_highlight_to_canvases();
         build
     }
 
-    fn refresh_highlight_index(&mut self) -> Task<Message> {
+    fn refresh_net_index(&mut self) -> Task<Message> {
+        let stamp = self.net_nav_stamp();
+        if self.document_state.net_nav.refresh_stamp == Some(stamp) {
+            return Task::none();
+        }
+        self.document_state.net_nav.refresh_stamp = Some(stamp);
+        // A project that closed releases its index and its warning claims,
+        // highlight or not.
+        let open: Vec<ProjectId> = plan_projects(&self.document_state)
+            .iter()
+            .map(|p| p.project)
+            .collect();
+        self.document_state.net_nav.index.retain_projects(&open);
+        self.document_state.net_nav.reported.retain_projects(&open);
         let Some(project) = self
             .document_state
             .net_nav
@@ -278,17 +298,6 @@ impl Signex {
         else {
             return Task::none();
         };
-        let stamp = self.net_nav_stamp();
-        if self.document_state.net_nav.refresh_stamp == Some(stamp) {
-            return Task::none();
-        }
-        self.document_state.net_nav.refresh_stamp = Some(stamp);
-        let open: Vec<ProjectId> = plan_projects(&self.document_state)
-            .iter()
-            .map(|p| p.project)
-            .collect();
-        self.document_state.net_nav.index.retain_projects(&open);
-        self.document_state.net_nav.reported.retain_projects(&open);
         if self.document_state.project_by_id(project).is_none() {
             self.document_state.net_nav.highlight = None;
             crate::diagnostics::log_info(messages::project_closed());
@@ -301,7 +310,7 @@ impl Signex {
     }
 
     /// A stamp over what the net index depends on: the open sheets'
-    /// connectivity, and each project's root, sheet list and class table.
+    /// connectivity, and each project's root and sheet list.
     fn net_nav_stamp(&self) -> u64 {
         use std::hash::{Hash, Hasher};
         let document = &self.document_state;
@@ -313,7 +322,6 @@ impl Signex {
             for sheet in &project.data.sheets {
                 sheet.filename.hash(&mut hasher);
             }
-            format!("{:?}", project.data.net_classes).hash(&mut hasher);
         }
         hasher.finish()
     }
@@ -330,12 +338,22 @@ impl Signex {
         else {
             return;
         };
-        // The update that came before planned a task this test never ran.
-        self.document_state.net_nav.index.forget_pending();
-        if let Ok(job) = self.plan_net_index_job(project) {
-            let outcome = job.run();
-            let _follow_up = self.apply_net_index(&outcome);
+        // The update that came before planned a task this test never ran:
+        // build it here, whether or not the cache thinks one is in flight.
+        let Some(planned) = plan_projects(&self.document_state)
+            .into_iter()
+            .find(|p| p.project == project)
+        else {
+            return;
+        };
+        let cache = &mut self.document_state.net_nav.index;
+        if cache.fresh(project, &planned.key).is_some() {
+            return;
         }
+        cache.want(project, &planned.key);
+        let job = self.job_for(planned);
+        let outcome = job.run();
+        let _follow_up = self.apply_net_index(&outcome);
     }
 }
 

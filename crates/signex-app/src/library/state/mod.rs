@@ -169,6 +169,10 @@ pub struct LibraryBrowserState {
     /// clicking a class row in the left sidebar — clicking the
     /// same row twice clears the filter.
     pub class_filter: Option<String>,
+    /// Range filters on this tab's measurement columns, by parameter key
+    /// (#1572). Cleared when the active table changes: the columns are
+    /// the table's.
+    pub range_filters: crate::library::range_filter::RangeFilters,
     /// Edit Component Details modal — opened by double-clicking a row
     /// in the grid. `None` while closed.
     pub edit_modal: Option<EditRowModalState>,
@@ -243,6 +247,7 @@ impl LibraryBrowserState {
             search: String::new(),
             lifecycle_filter: LifecycleFilter::default(),
             class_filter: None,
+            range_filters: Default::default(),
             edit_modal: None,
             cell_edit: HashMap::new(),
             delete_confirm: None,
@@ -292,12 +297,20 @@ pub struct EditRowModalState {
     /// by parameter name. Mirrors the `params_edit_buf` pattern used
     /// in the Component Preview tab.
     pub param_buf: HashMap<String, (String, String)>,
+    /// The SI prefix shown next to a measurement's number, by parameter
+    /// name. Seeded with the prefix the stored value displays; a
+    /// parameter without an entry (or with a unit that takes no prefix)
+    /// has none.
+    pub param_prefix: HashMap<String, signex_types::quantity::SiPrefix>,
     /// Live edit buffer for the comma-separated tags row (Stage 18).
     /// Persisted to `parameters["tags"]` as `ParamValue::Text` on Save.
     /// Seeded from the existing `parameters["tags"]` value at modal open.
     pub tags_buf: String,
     /// Inline error text — surfaced if the save fails.
     pub error: Option<String>,
+    /// A neutral one-line notice (not a refusal), e.g. that a unit change
+    /// reinterprets the value. Cleared by the next commit.
+    pub note: Option<String>,
     /// The last save was refused because the row changed on the server.
     pub stale_base: bool,
     /// "Reload saved version" awaits the user's confirmation to discard the
@@ -310,8 +323,22 @@ pub struct EditRowModalState {
 }
 
 impl EditRowModalState {
+    /// The prefix a stored measurement opens with in the picker; `None`
+    /// for anything that is not a measurement in a known unit.
+    pub fn param_prefix_seed(
+        v: &signex_library::ParamValue,
+    ) -> Option<signex_types::quantity::SiPrefix> {
+        v.measurement_parts().map(|p| p.prefix)
+    }
+
     /// The `(value, unit)` edit-buffer text a stored parameter opens with.
+    /// A measurement in a known unit opens as the number the picker's
+    /// prefix applies to and the canonical unit token (`4.7`, `ohm` for a
+    /// legacy `{4.7, "kΩ"}`); an unknown unit keeps its raw text.
     pub fn param_buf_entry(v: &signex_library::ParamValue) -> (String, String) {
+        if let Some(parts) = v.measurement_parts() {
+            return (parts.mantissa, parts.unit.token().to_string());
+        }
         match v {
             signex_library::ParamValue::Text(s) => (s.clone(), String::new()),
             signex_library::ParamValue::Number(n) => (n.to_string(), String::new()),
@@ -328,6 +355,11 @@ impl EditRowModalState {
             .iter()
             .map(|(k, v)| (k.clone(), Self::param_buf_entry(v)))
             .collect();
+        let param_prefix = draft
+            .parameters
+            .iter()
+            .filter_map(|(k, v)| Some((k.clone(), Self::param_prefix_seed(v)?)))
+            .collect();
         // Seed the tags buffer from `parameters["tags"]` if present;
         // tags live as a free-form `ParamValue::Text` keyed by "tags"
         // (plan §6).
@@ -341,8 +373,10 @@ impl EditRowModalState {
             address,
             draft,
             param_buf,
+            param_prefix,
             tags_buf,
             error: None,
+            note: None,
             stale_base: false,
             reload_confirming: false,
             opened_primary,

@@ -51,6 +51,18 @@ impl Engine {
                     .insert(symbol.lib_id.clone(), body.clone());
             }
         }
+        CopiedSelection::from_fragment(fragment, grid_mm)
+    }
+}
+
+impl CopiedSelection {
+    /// A copy of `fragment`, whose items sit at their absolute positions on
+    /// the sheet they came from. `None` when it holds nothing placeable;
+    /// `grid_mm` snaps the anchor as in [`Engine::copy_selection`].
+    pub fn from_fragment(
+        fragment: SchematicSheet,
+        grid_mm: f64,
+    ) -> Result<Option<Self>, EngineError> {
         let absolute = PlacementPayload::new(fragment);
         if absolute.coordinates().iter().any(|v| !v.is_finite()) {
             return Err(EngineError::NonFiniteCoordinate);
@@ -70,7 +82,7 @@ impl Engine {
         } else {
             centre
         };
-        Ok(Some(CopiedSelection {
+        Ok(Some(Self {
             payload: absolute.translated(-origin.x, -origin.y),
             bounds: Some(bounds),
             origin,

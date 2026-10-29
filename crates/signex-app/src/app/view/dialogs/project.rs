@@ -357,32 +357,18 @@ impl Signex {
 
         let mk_input = |placeholder: &'static str,
                         value: &str,
-                        on_input: fn(String) -> Message,
-                        enabled: bool|
+                        on_input: fn(String) -> Message|
          -> Element<'_, Message> {
-            let mut input = text_input(placeholder, value)
+            text_input(placeholder, value)
                 .size(TS.label)
                 .padding(6)
-                .width(Length::Fixed(140.0));
-            if enabled {
-                input = input
-                    .on_input(on_input)
-                    .on_submit(Message::GridProperties(GridPropertiesMsg::Apply));
-            }
-            input.into()
+                .width(Length::Fixed(140.0))
+                .on_input(on_input)
+                .on_submit(Message::GridProperties(GridPropertiesMsg::Apply))
+                .into()
         };
 
-        let link_label = if st.link_xy {
-            "🔗 Linked"
-        } else {
-            "🔓 Unlinked"
-        };
-
-        // v0.18.12.1 — when linked (the default), the Step Y input
-        // is disabled to make the "Y mirrors X" semantics visible
-        // instead of accepting input that Apply would silently
-        // discard. Toggle the chain icon to enable it.
-        // v0.18.19 — display style + multiplier rows.
+        // Display style + multiplier rows.
         use crate::library::editor::footprint::state::GridDisplay as Gd;
         let mk_display_row =
             |label: &'static str, current: Gd, setter: fn(Gd) -> Message| -> Element<'_, Message> {
@@ -457,30 +443,11 @@ impl Signex {
 
         let body = column![
             row![
-                container(text("Step X").size(TS.body).color(text_muted))
-                    .width(Length::Fixed(80.0)),
-                mk_input(
-                    "0.127",
-                    &st.step_x_mm,
-                    |v| Message::GridProperties(GridPropertiesMsg::SetStepX(v)),
-                    true,
-                ),
-                Space::new().width(8),
-                iced::widget::button(text(link_label).size(TS.body).color(text_c))
-                    .padding([SP.s, 10.0])
-                    .on_press(Message::GridProperties(GridPropertiesMsg::ToggleLink)),
-            ]
-            .spacing(SP.m)
-            .align_y(iced::Alignment::Center),
-            row![
-                container(text("Step Y").size(TS.body).color(text_muted))
-                    .width(Length::Fixed(80.0)),
-                mk_input(
-                    "0.127",
-                    &st.step_y_mm,
-                    |v| Message::GridProperties(GridPropertiesMsg::SetStepY(v)),
-                    !st.link_xy,
-                ),
+                container(text("Step").size(TS.body).color(text_muted)).width(Length::Fixed(80.0)),
+                mk_input("0.127", &st.step_mm, |v| Message::GridProperties(
+                    GridPropertiesMsg::SetStep(v)
+                )),
+                text("mm, both axes").size(TS.caption).color(text_muted),
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center),
@@ -492,8 +459,8 @@ impl Signex {
             }),
             mk_mult_row(st.multiplier),
             text(
-                "Step Y mirrors Step X (single-axis storage). Toggle the chain to edit Y independently. \
-                 Display: Lines / Dots / Hidden — Lines is the v0.18.16 behaviour; Dots and Hidden land here. \
+                "The step applies to both axes (one grid step per footprint editor). \
+                 Display: Lines / Dots / Hidden. \
                  Multiplier sets the coarse-grid stride (5× / 10× are typical Altium defaults)."
             )
             .size(TS.caption)

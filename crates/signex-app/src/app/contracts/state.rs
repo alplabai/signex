@@ -56,6 +56,14 @@ pub enum ContextSubmenu {
     AddNewToProject,
 }
 
+/// Widget id of the in-place editor, so opening it can focus it.
+pub static TEXT_EDIT_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::widget::Id::new("signex.text_edit"));
+
+/// The in-place editor. `kind` says which text of `uuid` it edits: a label
+/// or text note, a part's designator (`SymbolRefField`) or value
+/// (`SymbolValField`), or, as `Symbol`, the part's footprint, which has no
+/// text on the canvas.
 #[derive(Debug, Clone)]
 pub struct TextEditState {
     pub uuid: uuid::Uuid,
@@ -66,6 +74,11 @@ pub struct TextEditState {
     /// screen coords at render time so the inline editor tracks pan/zoom.
     pub world_x: f64,
     pub world_y: f64,
+    /// The sheet the editor opened on and, for a designator, the placement
+    /// it showed. A commit that finds either changed is refused: it would
+    /// write to a different copy than the one the user typed into.
+    pub sheet: Option<std::path::PathBuf>,
+    pub placement: Option<signex_types::schematic::InstancePath>,
 }
 
 #[derive(Debug, Clone)]
@@ -92,9 +105,8 @@ pub struct GridPickerState {
 /// v0.18.19 added Fine / Coarse display + Multiplier draft fields.
 #[derive(Debug, Clone)]
 pub struct GridPropertiesState {
-    pub step_x_mm: String,
-    pub step_y_mm: String,
-    pub link_xy: bool,
+    /// Grid step in mm; one value drives both axes.
+    pub step_mm: String,
     pub fine_display: crate::library::editor::footprint::state::GridDisplay,
     pub coarse_display: crate::library::editor::footprint::state::GridDisplay,
     pub multiplier: u32,
@@ -364,23 +376,23 @@ pub enum ProjectTreeAction {
     /// indices are ignored so the action is safe to fire from any node
     /// underneath a project root.
     CloseProject(signex_widgets::tree_view::TreeKey),
-    /// v0.9 project-root: run ERC across the project. Promotes the
+    /// Project root: run ERC across the project. Promotes the
     /// project to active, opens its `schematic_root` if no schematic
     /// from this project is currently active, then dispatches the
     /// existing ERC dialog.
     ValidateProject(signex_widgets::tree_view::TreeKey),
-    /// v0.9 project-root: open the rename modal seeded with the
+    /// Project root: open the rename modal seeded with the
     /// project name (the `.snxprj` stem). Submit renames the trio
     /// `<old>.snxprj` / `<old>.snxsch` / `<old>.snxpcb` in lockstep.
     OpenProjectRenameDialog(signex_widgets::tree_view::TreeKey),
     /// Project root: Project Options… opens (or focuses) the project's
     /// Project tab (#1202).
     OpenProjectOptions(signex_widgets::tree_view::TreeKey),
-    /// v0.9 project-root: open a file dialog and add the picked file
+    /// Project root: open a file dialog and add the picked file
     /// to the project. Files outside the project directory are copied
     /// in; files already inside just trigger a tree refresh.
     AddExistingToProject(signex_widgets::tree_view::TreeKey),
-    /// v0.9 project-root → Add New ▸ Schematic. Spawns a Save-As
+    /// Project root → Add New ▸ Schematic. Spawns a Save-As
     /// dialog scoped to the project directory; the result writes a
     /// blank `.snxsch`, registers it as a SheetEntry, marks the
     /// project dirty, and refreshes the tree (no tab opens).

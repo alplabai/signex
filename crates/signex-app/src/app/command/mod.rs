@@ -1,10 +1,11 @@
-//! Home of the Command Registry (#278). Slice 1 landed the
-//! id→[`crate::app::Message`] bridge (`bridge.rs`). Slice 2 adds the
-//! registry's dispatch entry point ([`Signex::dispatch_command`]) and
-//! its argument type ([`CommandArgs`]). Slice 3 gates it on
-//! [`enablement::is_enabled`], which the menu bar reads too; rewiring
-//! menus/palette onto the registry (slice 4) is not done yet; the
-//! palette still calls `bridge::core_to_message` directly.
+//! Home of the Command Registry (#278): the id->[`crate::app::Message`] bridge
+//! (`bridge.rs`), the dispatch entry point ([`Signex::dispatch_command`]) and
+//! its argument type ([`CommandArgs`]), and the enablement gate
+//! ([`enablement::is_enabled`]) the menu bar reads too. The palette and the
+//! keymap run commands through [`Signex::dispatch_command`]. Of the menu items
+//! only Undo and Redo reach it, and only from an undocked window's menu or the
+//! native menu; the main window's menu emits its own `Message` variants
+//! (`handlers/menu/editing.rs`).
 
 pub(crate) mod active_bar;
 mod args;
@@ -162,17 +163,17 @@ mod tests {
         assert_eq!(task.units(), 0);
     }
 
-    /// `rubber_stamp_copy` is a real catalog entry
+    /// `center_on_cursor` is a real catalog entry
     /// (`keymap/catalog`) with no arm in `core_to_message`
     /// yet — it must resolve to a no-op too, not panic.
     #[test]
     fn catalog_id_with_no_bridge_arm_is_a_no_op_and_does_not_panic() {
         let (mut app, _task) = Signex::new();
 
-        let command = AppCommandId::new("rubber_stamp_copy").unwrap();
+        let command = AppCommandId::new("center_on_cursor").unwrap();
         assert!(
             crate::keymap::metadata_for(&command).is_some(),
-            "test fixture drifted: rubber_stamp_copy is no longer a catalog id"
+            "test fixture drifted: center_on_cursor is no longer a catalog id"
         );
 
         let task = app.dispatch_command(&command, CommandArgs::none(), None);

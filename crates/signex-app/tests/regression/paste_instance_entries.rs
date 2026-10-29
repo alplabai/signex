@@ -3,7 +3,8 @@
 //! placement (`Symbol::designator_in`), so a copy that kept them printed and
 //! netlisted the original's designators whatever its own `reference` said.
 
-use signex_app::app::{EditMsg, Message, Signex};
+use crate::paste_support::paste;
+use signex_app::app::{Message, Signex};
 use signex_types::schematic::{Point, SchematicSheet, Symbol, SymbolInstance};
 use std::path::PathBuf;
 
@@ -58,7 +59,7 @@ fn a_pasted_symbol_does_not_inherit_the_originals_instance_entries() {
     });
 
     // Paste attaches the copy to the cursor; the click places it.
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste(&mut app);
     let _ = app.update(Message::CanvasEvent(
         signex_app::canvas::CanvasEvent::Clicked {
             world_x: 10.16,

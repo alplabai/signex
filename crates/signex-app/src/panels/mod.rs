@@ -26,6 +26,7 @@ mod context;
 mod footprint_context;
 mod library;
 mod messages;
+mod multi_selection;
 mod navigator;
 mod net_class_panel;
 mod numeric_draft;
@@ -83,6 +84,7 @@ pub use footprint_context::{
 pub use library::LibraryRowDetail;
 pub(super) use library::{view_footprint_library, view_library_row_properties, view_sch_library};
 pub use messages::{PanelMsg, SheetFrameEdit};
+pub use multi_selection::{MultiEditMsg, MultiField, edit_from_text as multi_edit_from_text};
 pub use navigator::NavigatorModel;
 pub use net_class_panel::{
     LabelClassPick, NetClassChoice, NetClassDraft, NetClassField, NetClassMsg, NetClassPanel,
@@ -92,7 +94,7 @@ pub use palette::PanelPalette;
 pub use paper::{PageFormatMode, PageOrigin, SheetColor, paper_dimensions, paper_size_options};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(super) use projects::{view_navigator, view_projects};
-pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind};
+pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind, PrePlacementStyle};
 pub(super) use properties::{
     PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_PORTION, PROPERTY_ROW_PAD_X, view_properties,
 };

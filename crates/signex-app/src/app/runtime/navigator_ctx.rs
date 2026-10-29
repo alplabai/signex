@@ -133,10 +133,16 @@ impl Signex {
             Ok(_) => return self.start_navigator_assembly().unwrap_or_else(Task::none),
             Err(reason) => {
                 crate::diagnostics::log_warning(format!(
-                    "Navigator: the sheet hierarchy could not be built ({reason});\
-                     it keeps its previous state"
+                    "Navigator: the sheet hierarchy could not be built ({reason}); \
+                     it keeps its previous state until it is retried"
                 ));
-                return Task::none();
+                if self.document_state.navigator_job.is_exhausted() {
+                    crate::diagnostics::log_warning(
+                        "Navigator: giving up on rebuilding the sheet hierarchy after repeated \
+                         failures; it stays as it was until the project changes",
+                    );
+                }
+                return self.start_navigator_assembly().unwrap_or_else(Task::none);
             }
         };
         // Said once per rebuild, not per refresh: the reason a sheet that

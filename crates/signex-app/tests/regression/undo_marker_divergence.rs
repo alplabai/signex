@@ -35,6 +35,7 @@
 //! now without having been touched. The others are `modals.rs:325` and
 //! `erc/annotate.rs:77,268,296`.
 
+use crate::paste_support::paste;
 use signex_app::app::{EditMsg, Message, MoveSelectionMsg, Signex};
 use signex_types::schematic::{
     NoConnect, Point, SchematicSheet, SelectedItem, SelectedKind, Symbol,
@@ -464,7 +465,7 @@ fn set_clipboard_no_connects(app: &mut Signex) {
 
 /// Paste attaches the copy to the cursor; a click places it.
 fn paste_and_click(app: &mut Signex) {
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste(app);
     let _ = app.update(Message::CanvasEvent(
         signex_app::canvas::CanvasEvent::Clicked {
             world_x: 5.08,

@@ -12,6 +12,8 @@ mod break_wire_tool;
 mod clicked;
 mod descend;
 mod double_clicked;
+mod field_edit;
+pub(crate) use field_edit::editor_placeholder;
 pub(crate) mod fit_view;
 mod layout_drag;
 mod measure_tool;

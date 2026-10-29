@@ -208,9 +208,17 @@ fn highlight_elements_cover_every_sheet_the_net_reaches() {
     let idx = two_sheet_vcc();
     let net = idx.nets_of(&key("root.sch"), id(100))[0];
     let sets = idx.highlight_elements(net);
-    assert!(sets[&key("root.sch")].contains(&id(300)), "the wire");
-    assert!(sets[&key("root.sch")].contains(&id(100)), "the symbol");
-    assert!(sets[&key("a.sch")].contains(&id(2)), "the far label");
+    let at = |sheet: &str, occ: &InstancePath| sets[&(key(sheet), occ.clone())].clone();
+    let via_a = InstancePath::from_chain(vec![id(500)]);
+    assert!(
+        at("root.sch", &InstancePath::root()).contains(&id(300)),
+        "the wire"
+    );
+    assert!(
+        at("root.sch", &InstancePath::root()).contains(&id(100)),
+        "the symbol"
+    );
+    assert!(at("a.sch", &via_a).contains(&id(2)), "the far label");
 }
 
 #[test]
@@ -260,10 +268,10 @@ fn pin_near_finds_the_pin_tip_under_a_point_on_its_own_sheet_only() {
 #[test]
 fn resolve_follows_a_net_by_name_or_anchor_after_a_rebuild() {
     let idx = two_sheet_vcc();
-    let anchor = (key("root.sch"), id(1));
+    let anchor = NetAnchor::new(key("root.sch"), id(1), InstancePath::root());
     let found = idx.resolve("VCC", &anchor).expect("by anchor");
     assert_eq!(idx.net(found).map(|n| n.name.as_str()), Some("VCC"));
-    let gone = (key("root.sch"), id(404));
+    let gone = NetAnchor::new(key("root.sch"), id(404), InstancePath::root());
     assert_eq!(idx.resolve("VCC", &gone), Some(found), "by name");
     assert_eq!(idx.resolve("NOPE", &gone), None);
 }
@@ -343,7 +351,7 @@ fn an_auto_name_is_never_trusted_to_find_a_net_again() {
     let net = idx.nets_of(&key("root.sch"), id(1))[0];
     let anchor = idx.anchor_of(net).expect("an anchor");
     assert_eq!(idx.resolve("VCC", &anchor), Some(net));
-    let gone = (key("root.sch"), id(404));
+    let gone = NetAnchor::new(key("root.sch"), id(404), InstancePath::root());
     assert_eq!(idx.resolve("N$1", &gone), None);
 }
 
@@ -386,7 +394,7 @@ fn a_live_anchor_beats_an_unrelated_net_that_now_carries_the_name() {
     ]);
     let net1 = before.nets_of(&key("p1"), id(100))[0];
     assert_eq!(before.net(net1).map(|n| n.name.as_str()), Some("EN"));
-    let anchor = (key("p1"), id(100));
+    let anchor = NetAnchor::new(key("p1"), id(100), InstancePath::root());
 
     // Page 1 loses its label: its net is auto-named and page 2's net is `EN`.
     let after = indexed_flat(&[
@@ -461,7 +469,7 @@ fn a_suffixed_name_is_positional_only_when_its_base_name_exists() {
             .push(labelled(text, pt(0.0, 0.0), LabelType::Net, wire + 1));
         s
     };
-    let gone = (key("p1"), id(404));
+    let gone = NetAnchor::new(key("p1"), id(404), InstancePath::root());
     let lone = indexed_flat(&[("p1", named(100, "DATA_1"))]);
     assert!(
         lone.resolve("DATA_1", &gone).is_some(),
@@ -472,4 +480,83 @@ fn a_suffixed_name_is_positional_only_when_its_base_name_exists() {
         dup.resolve("EN_2", &gone).is_none(),
         "EN exists: EN_2 is a dedup suffix"
     );
+}
+
+#[test]
+fn an_anchor_stays_on_its_own_placements_net_even_when_the_name_changes() {
+    let mut root = empty_sheet();
+    for (n, name, y) in [(500u128, "A", 20.0), (501, "B", 40.0)] {
+        let mut cs = child_sheet(name, "c.sch", vec![entry("SIG", pt(0.0, y), 600 + n)]);
+        cs.uuid = id(n);
+        root.child_sheets.push(cs);
+        root.wires.push(wire(pt(0.0, y), pt(5.0, y)));
+    }
+    let mut c = empty_sheet();
+    c.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    c.labels
+        .push(labelled("SIG", pt(0.0, 0.0), LabelType::Hierarchical, 21));
+    let idx = indexed(&root, &[("c.sch", c)]);
+    let via_b = InstancePath::from_chain(vec![id(501)]);
+    let b_net = idx.nets_in(&key("c.sch"), id(21), Some(&via_b))[0];
+    let anchor = idx.anchor_in(b_net, &key("c.sch"), id(21)).expect("anchor");
+    assert_eq!(anchor.occurrence, via_b);
+    // Whatever the net is called now, B's anchor reads B's net, never A's.
+    assert_eq!(idx.resolve("renamed", &anchor), Some(b_net));
+    let sets = idx.highlight_elements(b_net);
+    assert!(sets.contains_key(&(key("c.sch"), via_b.clone())));
+    assert!(!sets.contains_key(&(key("c.sch"), InstancePath::from_chain(vec![id(500)]))));
+    assert_eq!(
+        idx.placements(&key("c.sch")),
+        [InstancePath::from_chain(vec![id(500)]), via_b],
+        "both placements, in walk order, even before any member names them"
+    );
+}
+
+/// U1 with pin 1 and pin 2, each wired to its own resistor, plus optionally an
+/// unrelated net far to the left that sorts first.
+fn u1_sheet(extra_net_first: bool) -> SchematicSheet {
+    let mut s = empty_sheet();
+    add_lib(&mut s, "R");
+    add_lib(&mut s, "U");
+    s.lib_symbols
+        .get_mut("U")
+        .unwrap()
+        .pins
+        .push(lib_pin("2", pt(0.0, -10.0)));
+    place(&mut s, "U1", "U", pt(0.0, 0.0));
+    s.symbols[0].uuid = id(900);
+    for (y, name) in [(0.0, "R1"), (10.0, "R2")] {
+        place(&mut s, name, "R", pt(5.0, y));
+        s.wires.push(wire(pt(0.0, y), pt(5.0, y)));
+        s.wires.last_mut().unwrap().uuid = id(910 + y as u128);
+    }
+    if extra_net_first {
+        place(&mut s, "R9", "R", pt(-45.0, 0.0));
+        s.wires.push(wire(pt(-50.0, 0.0), pt(-45.0, 0.0)));
+        s.wires.last_mut().unwrap().uuid = id(999);
+    }
+    s
+}
+
+#[test]
+fn a_symbol_anchor_stays_on_its_own_pins_net_when_auto_names_renumber() {
+    let before = indexed_flat(&[("p", u1_sheet(false))]);
+    let pin2_net = before
+        .pin_near(&key("p"), pt(0.0, 10.0), 0.5, None)
+        .expect("pin 2")
+        .0;
+    let name = before.net(pin2_net).unwrap().name.clone();
+    assert!(is_auto_name(&name));
+    let anchor = before
+        .anchor_in(pin2_net, &key("p"), id(900))
+        .expect("anchor");
+
+    // An unrelated net sorts first: every auto name shifts by one.
+    let after = indexed_flat(&[("p", u1_sheet(true))]);
+    let now = after
+        .pin_near(&key("p"), pt(0.0, 10.0), 0.5, None)
+        .expect("pin 2")
+        .0;
+    assert_ne!(after.net(now).unwrap().name, name, "the name moved");
+    assert_eq!(after.resolve(&name, &anchor), Some(now));
 }

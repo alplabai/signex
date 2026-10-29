@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use iced::Task;
 use signex_net::NetMemberKind;
-use signex_types::schematic::SelectedItem;
+use signex_types::schematic::{InstancePath, SelectedItem};
 
 use crate::app::state::net_nav::{NetHighlight, PendingNetAction, ProjectNetData};
 use crate::app::state::{ProjectId, WindowKind};
@@ -19,15 +19,20 @@ use super::messages;
 use super::navigate::{describe_member, selected_kind_of};
 use super::target::{NetTarget, net_of_target};
 
-/// The elements of net `net` on each sheet file, for what stays bright.
+/// What stays bright for net `net`, per sheet placement.
 fn bright_elements(
     data: &ProjectNetData,
     net: usize,
-) -> HashMap<PathBuf, Arc<HashSet<uuid::Uuid>>> {
+) -> HashMap<(PathBuf, InstancePath), Arc<HashSet<uuid::Uuid>>> {
     data.index
         .highlight_elements(net)
         .into_iter()
-        .filter_map(|(key, ids)| Some((data.path_of(&key)?.to_path_buf(), Arc::new(ids))))
+        .filter_map(|((key, placement), ids)| {
+            Some((
+                (data.path_of(&key)?.to_path_buf(), placement),
+                Arc::new(ids),
+            ))
+        })
         .collect()
 }
 
@@ -49,7 +54,7 @@ impl Signex {
         self.highlight_target(target, PendingNetAction::HighlightRelated, true)
     }
 
-    fn highlight_target(
+    pub(super) fn highlight_target(
         &mut self,
         target: Option<NetTarget>,
         action: PendingNetAction,
@@ -63,6 +68,7 @@ impl Signex {
             crate::diagnostics::log_info(messages::no_project("net highlight"));
             return Task::none();
         };
+        self.document_state.net_nav.index.clear_failed(project);
         match self.net_index_lookup(project) {
             IndexLookup::Ready(data) => {
                 self.highlight_with(project, &data, &target, select_here);
@@ -83,9 +89,9 @@ impl Signex {
         target: &NetTarget,
         select_here: bool,
     ) {
+        let placement = self.net_occurrence(data, &target.sheet);
         let net = data.key_of(&target.sheet).and_then(|key| {
-            let occurrence = target.occurrence.as_ref();
-            let net = net_of_target(data, &key, &target.item, target.at, occurrence)?;
+            let net = net_of_target(data, &key, &target.item, target.at, placement.as_ref())?;
             Some((key, net))
         });
         let Some((key, net)) = net else {
@@ -98,19 +104,32 @@ impl Signex {
             .map(|n| n.name.clone())
             .unwrap_or_default();
         let elements = bright_elements(data, net);
-        let sheets = elements.len();
+        let places = elements.len();
+        let sheets = elements
+            .keys()
+            .map(|(path, _)| path)
+            .collect::<HashSet<_>>()
+            .len();
+        let anchor = data
+            .index
+            .anchor_in(net, &key, target.item.uuid)
+            .or_else(|| data.index.anchor_of(net));
+        let Some(anchor) = anchor else {
+            crate::diagnostics::log_info(messages::on_no_net());
+            return;
+        };
         self.document_state.net_nav.highlight = Some(NetHighlight {
             project,
             name: name.clone(),
-            anchor: (key.clone(), target.item.uuid),
+            anchor,
             cursor: None,
             elements,
         });
         if select_here {
-            self.select_net_members_here(data, &key, net, target.occurrence.as_ref());
+            self.select_net_members_here(data, &key, net, placement.as_ref());
         }
         self.sync_net_highlight_to_canvases();
-        crate::diagnostics::log_info(messages::highlighted(&name, sheets));
+        crate::diagnostics::log_info(messages::highlighted(&name, places, sheets));
     }
 
     /// Select the members of `net` that sit on the focused sheet.
@@ -153,6 +172,7 @@ impl Signex {
             crate::diagnostics::log_info(messages::nothing_highlighted());
             return Task::none();
         };
+        self.document_state.net_nav.index.clear_failed(project);
         match self.net_index_lookup(project) {
             IndexLookup::Ready(data) => self.step_with(&data, forward),
             IndexLookup::Building(build) => {
@@ -191,7 +211,7 @@ impl Signex {
             crate::diagnostics::log_warning(messages::net_sheet_has_no_file(&name, &sheet));
             return Task::none();
         };
-        let Some(task) = self.go_to_member(&path, &member) else {
+        let Some(task) = self.go_to_member(data, &path, &member) else {
             return Task::none();
         };
         let kind = match member.kind {
@@ -262,8 +282,17 @@ impl Signex {
         let bright = |path: Option<&std::path::Path>| {
             let highlight = highlight?;
             let path = path?;
-            (self.project_of_sheet(path) == Some(highlight.project))
-                .then(|| highlight.bright_on(path))
+            if self.project_of_sheet(path) != Some(highlight.project) {
+                return None;
+            }
+            // The placement is read once, as hover, jumps and the target read it.
+            let data = self
+                .document_state
+                .net_nav
+                .index
+                .latest(highlight.project)?;
+            let placement = self.net_occurrence(&data, path);
+            Some(highlight.bright_on(path, placement.as_ref()))
         };
         let main = bright(main_path.as_deref());
         let windows: Vec<_> = per_window

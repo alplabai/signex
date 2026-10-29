@@ -236,26 +236,7 @@ impl Signex {
         // and returns to normal selection — same convention as most
         // IDEs (Escape cancels, click elsewhere confirms).
         if let Some(state) = self.interaction_state.editing_text.take() {
-            if state.text != state.original_text {
-                let cmd = match state.kind {
-                    signex_types::schematic::SelectedKind::Label => {
-                        Some(signex_engine::Command::UpdateText {
-                            target: signex_engine::TextTarget::Label(state.uuid),
-                            value: state.text,
-                        })
-                    }
-                    signex_types::schematic::SelectedKind::TextNote => {
-                        Some(signex_engine::Command::UpdateText {
-                            target: signex_engine::TextTarget::TextNote(state.uuid),
-                            value: state.text,
-                        })
-                    }
-                    _ => None,
-                };
-                if let Some(cmd) = cmd {
-                    self.apply_engine_command(cmd, false, true);
-                }
-            }
+            self.commit_text_edit(state);
             return Task::none();
         }
         let (wx, wy) = if self.interaction_state.current_tool == Tool::Wire {
@@ -387,6 +368,34 @@ impl Signex {
                     false,
                     false,
                 );
+            }
+            // Placed where clicked, like the other one-click placements. The
+            // net builder accepts a dot anywhere; one off a wire joins nothing.
+            Tool::Junction => {
+                // A second dot on the same point (the net builder's 1 um key)
+                // joins nothing new and would only stack in the file.
+                let at = signex_types::schematic::Point::new(wx, wy);
+                let already_there = self.document_state.active_engine().is_some_and(|engine| {
+                    engine
+                        .document()
+                        .junctions
+                        .iter()
+                        .any(|j| signex_net::pt_key(&j.position) == signex_net::pt_key(&at))
+                });
+                if !already_there {
+                    let junction = signex_types::schematic::Junction {
+                        uuid: uuid::Uuid::new_v4(),
+                        position: signex_types::schematic::Point::new(wx, wy),
+                        diameter: 0.0,
+                        minted: false,
+                        unknown_columns: Default::default(),
+                    };
+                    self.apply_engine_command(
+                        signex_engine::Command::PlaceJunction { junction },
+                        false,
+                        false,
+                    );
+                }
             }
             Tool::NoErcDirective => {
                 let directive = signex_types::schematic::NoConnect {
@@ -600,7 +609,7 @@ impl Signex {
                     .unwrap_or_else(|| "Text".to_string());
                 let tn = signex_types::schematic::TextNote {
                     uuid: uuid::Uuid::new_v4(),
-                    text: note_text,
+                    text: note_text.clone(),
                     position: signex_types::schematic::Point::new(wx, wy),
                     rotation: 0.0,
                     font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
@@ -609,11 +618,13 @@ impl Signex {
                     font_family: None,
                     locked: false,
                 };
-                self.apply_engine_command(
+                if self.apply_engine_command(
                     signex_engine::Command::PlaceTextNote { text_note: tn },
                     false,
                     false,
-                );
+                ) {
+                    self.text_note_placed(&note_text);
+                }
                 self.interaction_state.current_tool = Tool::Select;
             }
             Tool::Label => {
@@ -664,6 +675,7 @@ impl Signex {
                         signex_types::schematic::HAlign::Left,
                         signex_types::schematic::VAlign::Bottom,
                     ));
+                let placed_text = text.clone();
                 let label = signex_types::schematic::Label {
                     unknown_columns: Default::default(),
                     uuid: uuid::Uuid::new_v4(),
@@ -678,11 +690,13 @@ impl Signex {
                     font_family: None,
                     locked: false,
                 };
-                self.apply_engine_command(
+                if self.apply_engine_command(
                     signex_engine::Command::PlaceLabel { label },
                     false,
                     false,
-                );
+                ) {
+                    self.label_placed(&placed_text);
+                }
             }
             _ => {
                 return self.handle_selection_request(selection_request::SelectionRequest::HitAt {

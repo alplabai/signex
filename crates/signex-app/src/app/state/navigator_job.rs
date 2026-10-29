@@ -30,13 +30,19 @@ pub struct NavigatorAssembly {
     pub unreadable: Vec<(PathBuf, String)>,
 }
 
+/// How many times a failing assembly is tried for one fingerprint. `update`
+/// asks again after every message, so an unbounded retry of a build that
+/// always fails would spin.
+const MAX_ATTEMPTS: u8 = 3;
+
 #[derive(Debug, Default)]
 pub struct NavigatorJob {
     wanted: Option<NavigatorRequest>,
     /// Generation and fingerprint of the running assembly.
     in_flight: Option<(u64, String)>,
-    /// Fingerprint whose worker died; not retried until the inputs change.
-    failed: Option<String>,
+    /// Fingerprint whose worker died, and how many times in a row; retried
+    /// up to [`MAX_ATTEMPTS`], then left until the inputs change.
+    failed: Option<(String, u8)>,
     generation: u64,
 }
 
@@ -60,12 +66,21 @@ impl NavigatorJob {
             self.in_flight = None;
             return None;
         }
-        if self.failed.as_deref() == Some(wanted.fingerprint.as_str()) || self.in_flight.is_some() {
+        if self.is_exhausted() || self.in_flight.is_some() {
             return None;
         }
         self.generation += 1;
         self.in_flight = Some((self.generation, wanted.fingerprint.clone()));
         Some((self.generation, wanted.clone()))
+    }
+
+    /// True when the wanted state failed [`MAX_ATTEMPTS`] times in a row and
+    /// will not be tried again until the inputs change.
+    pub fn is_exhausted(&self) -> bool {
+        let wanted = self.wanted_fingerprint();
+        self.failed
+            .as_ref()
+            .is_some_and(|(fp, attempts)| Some(fp.as_str()) == wanted && *attempts >= MAX_ATTEMPTS)
     }
 
     /// Forget the running assembly, so the next [`begin`](Self::begin) starts
@@ -101,7 +116,10 @@ impl NavigatorJob {
     pub fn finish(&mut self, generation: u64, fingerprint: Option<&str>, ok: bool) -> bool {
         match self.in_flight.take() {
             Some((g, fp)) if g == generation => {
-                self.failed = (!ok).then(|| fp.clone());
+                self.failed = (!ok).then(|| match self.failed.take() {
+                    Some((failed, attempts)) if failed == fp => (fp, attempts.saturating_add(1)),
+                    _ => (fp, 1),
+                });
                 ok && fingerprint.is_none_or(|f| Some(f) == self.wanted_fingerprint())
             }
             other => {
@@ -173,12 +191,15 @@ mod tests {
     }
 
     #[test]
-    fn a_failed_fingerprint_is_not_retried_until_inputs_change() {
+    fn a_failed_fingerprint_is_retried_a_few_times_then_left_until_inputs_change() {
         let mut job = NavigatorJob::default();
         job.want(Some(req("a")));
-        let (g, _) = job.begin("").unwrap();
-        assert!(!job.finish(g, None, false));
-        assert!(job.begin("").is_none());
+        for attempt in 1..=3 {
+            let (g, _) = job.begin("").expect("retried while attempts remain");
+            assert!(!job.finish(g, None, false), "attempt {attempt} failed");
+        }
+        assert!(job.begin("").is_none(), "gives up rather than spinning");
+        assert!(job.is_exhausted(), "the stuck state can be reported");
         job.want(Some(req("b")));
         assert!(job.begin("").is_some());
     }

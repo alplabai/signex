@@ -107,6 +107,8 @@ impl Signex {
         self.ui_state.preferences_draft_move_keeps_wires = self.ui_state.move_keeps_wires;
         self.ui_state.preferences_draft_net_hover_enabled = self.ui_state.net_hover_enabled;
         self.ui_state.preferences_draft_drag_direction_select = self.ui_state.drag_direction_select;
+        self.ui_state.preferences_draft_increment_step = self.ui_state.increment_step;
+        self.ui_state.preferences_draft_paste_designators = self.ui_state.paste_designators;
         self.ui_state.preferences_draft_window_controls_placement =
             self.ui_state.window_controls_placement;
         self.ui_state.preferences_draft_autosave_enabled = self.ui_state.autosave_enabled;
@@ -312,6 +314,8 @@ impl Signex {
                 self.ui_state.net_hover_enabled = self.ui_state.preferences_draft_net_hover_enabled;
                 self.ui_state.drag_direction_select =
                     self.ui_state.preferences_draft_drag_direction_select;
+                self.ui_state.increment_step = self.ui_state.preferences_draft_increment_step;
+                self.ui_state.paste_designators = self.ui_state.preferences_draft_paste_designators;
                 self.ui_state.window_controls_placement =
                     self.ui_state.preferences_draft_window_controls_placement;
                 self.ui_state.autosave_enabled = self.ui_state.preferences_draft_autosave_enabled;
@@ -523,6 +527,20 @@ impl Signex {
             }
             PrefMsg::DraftNetHoverEnabled(enabled) => {
                 self.ui_state.preferences_draft_net_hover_enabled = enabled;
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftIncrementStep(step) => {
+                // Zero would stamp one text forever: it keeps the direction
+                // the slider came from instead of landing on it.
+                let previous = self.ui_state.preferences_draft_increment_step;
+                self.ui_state.preferences_draft_increment_step = match step {
+                    0 if previous < 0 => -1,
+                    step => signex_types::text_increment::clamp_step(i64::from(step)),
+                };
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftPasteDesignators(mode) => {
+                self.ui_state.preferences_draft_paste_designators = mode;
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftMoveKeepsWires(enabled) => {

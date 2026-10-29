@@ -43,6 +43,68 @@ pub struct PrePlacementData {
     pub shape_fill: signex_types::schematic::FillType,
 }
 
+/// The look of the text a pre-placement form configures; what Repeat last
+/// item carries over to the next copy.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PrePlacementStyle {
+    pub rotation: f64,
+    pub font: String,
+    pub font_size_pt: u32,
+    pub justify_h: signex_types::schematic::HAlign,
+    pub justify_v: signex_types::schematic::VAlign,
+}
+
+impl PrePlacementData {
+    /// Pre-placement data with the one set of defaults every placement tool
+    /// starts from.
+    pub fn new(
+        tool_name: String,
+        kind: PrePlacementKind,
+        label_text: String,
+        cursor_x_mm: f64,
+        cursor_y_mm: f64,
+    ) -> Self {
+        Self {
+            tool_name,
+            kind,
+            label_text,
+            designator: String::new(),
+            rotation: 0.0,
+            font: "Iosevka".to_string(),
+            font_size_pt: 10,
+            justify_h: signex_types::schematic::HAlign::Left,
+            justify_v: Default::default(),
+            bold: false,
+            italic: false,
+            underline: false,
+            cursor_x_mm,
+            cursor_y_mm,
+            shape_width_mm: 0.0,
+            shape_fill: signex_types::schematic::FillType::None,
+        }
+    }
+
+    /// The text look this data configures.
+    pub fn style(&self) -> PrePlacementStyle {
+        PrePlacementStyle {
+            rotation: self.rotation,
+            font: self.font.clone(),
+            font_size_pt: self.font_size_pt,
+            justify_h: self.justify_h,
+            justify_v: self.justify_v,
+        }
+    }
+
+    /// Take over `style`.
+    pub fn set_style(&mut self, style: PrePlacementStyle) {
+        self.rotation = style.rotation;
+        self.font = style.font;
+        self.font_size_pt = style.font_size_pt;
+        self.justify_h = style.justify_h;
+        self.justify_v = style.justify_v;
+    }
+}
+
 /// Stable identifiers for every numeric drawing-field editor so the
 /// panel keeps a transient string buffer per field across rerenders.
 /// Erasing a text_input leaves an empty string in the buffer until
@@ -193,41 +255,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         return view_selected_element_properties(ctx, muted, primary, border_c);
     }
     if ctx.selection_count > 1 {
-        let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
-        col = col.push(
-            container(text("Multi-Selection").size(TS.body).color(primary))
-                .padding([6.0, SP.m])
-                .width(Length::Fill),
-        );
-        col = col.push(thin_sep(border_c));
-        col = col.push(
-            container(
-                text(format!("{} objects selected", ctx.selection_count))
-                    .size(TS.caption)
-                    .color(muted),
-            )
-            .padding([SP.s, SP.m]),
-        );
-        for (key, value) in &ctx.selection_info {
-            col = col.push(
-                container(
-                    row![
-                        text(key)
-                            .size(TS.caption)
-                            .color(muted)
-                            .width(Length::FillPortion(2)),
-                        text(value)
-                            .size(TS.caption)
-                            .color(primary)
-                            .width(Length::FillPortion(3)),
-                    ]
-                    .spacing(SP.s),
-                )
-                .padding([3.0, SP.m])
-                .width(Length::Fill),
-            );
-        }
-        return scrollable(col).width(Length::Fill).into();
+        return super::multi_selection::view_multi_selection(ctx, muted, primary, border_c);
     }
 
     // ── Nothing selected: show Document Options (Altium default) ──

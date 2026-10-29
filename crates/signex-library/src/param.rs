@@ -37,9 +37,8 @@ impl ParamValue {
     /// 4700 Ω; an unknown unit string is kept as written. `None` for other
     /// variants and for a non-finite value. New sort, filter, diff and
     /// grouping code should read the value through this, never the raw
-    /// `value`. The browser sort reads it; the search index
-    /// (`search_index.rs`) and the filter paths still read the raw `value`
-    /// until the range-filter phase.
+    /// `value`. The browser sort, the range filter and the search index
+    /// read it.
     pub fn as_quantity(&self) -> Option<Quantity> {
         match self {
             ParamValue::Measurement { value, unit } => quantity_from_stored(*value, unit),

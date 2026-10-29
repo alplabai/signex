@@ -35,6 +35,8 @@ impl Signex {
             draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
             draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,
             draft_drag_direction_select: ui.preferences_draft_drag_direction_select,
+            draft_increment_step: ui.preferences_draft_increment_step,
+            draft_paste_designators: ui.preferences_draft_paste_designators,
             draft_window_controls_placement: ui.preferences_draft_window_controls_placement,
             window_controls_restart_note: self.window_controls_needs_restart(),
             draft_autosave_enabled: ui.preferences_draft_autosave_enabled,
@@ -87,6 +89,15 @@ impl Signex {
                     crate::app::selection_request::SelectionRequest::FindSimilar(msg),
                 )
             }),
+        )
+    }
+
+    /// Paste Array dialog (#1264). In-window only: it has no detached form.
+    pub(in crate::app::view) fn paste_array_overlay(&self) -> Option<Element<'_, Message>> {
+        let state = self.ui_state.paste_array.as_ref()?;
+        Some(
+            crate::paste_array::view(state, &self.document_state.panel_ctx.tokens)
+                .map(|msg| Message::Edit(crate::app::EditMsg::PasteArray(msg))),
         )
     }
 
@@ -371,8 +382,11 @@ impl Signex {
             ModalId::LibraryEditRow => {
                 let (path, edit) = self.browser_modal(owner, |b| b.edit_modal.as_ref())?;
                 let classes = self.row_classes_for(path);
-                crate::library::edit_row_modal::view(path, edit, tokens, windowed, classes)
-                    .map(Message::Library)
+                let template = lib.row_template(path, edit.draft.class.as_str());
+                crate::library::edit_row_modal::view(
+                    path, edit, tokens, windowed, classes, template,
+                )
+                .map(Message::Library)
             }
             ModalId::LibraryDeleteConfirm => {
                 let (path, confirm) = self.browser_modal(owner, |b| b.delete_confirm.as_ref())?;

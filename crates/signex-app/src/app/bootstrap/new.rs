@@ -141,6 +141,8 @@ impl Signex {
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
         let net_hover_enabled = crate::fonts::read_net_hover_pref_from(prefs);
         let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
+        let increment_step = crate::fonts::read_increment_step_pref_from(prefs);
+        let paste_designators = crate::fonts::read_paste_designators_pref_from(prefs);
         let window_controls_placement =
             crate::fonts::read_window_controls_placement_pref_from(prefs);
         let autosave_enabled = crate::fonts::read_autosave_enabled_pref_from(prefs);
@@ -291,6 +293,10 @@ impl Signex {
                 preferences_draft_net_hover_enabled: net_hover_enabled,
                 drag_direction_select,
                 preferences_draft_drag_direction_select: drag_direction_select,
+                increment_step,
+                preferences_draft_increment_step: increment_step,
+                paste_designators,
+                preferences_draft_paste_designators: paste_designators,
                 window_controls_placement,
                 preferences_draft_window_controls_placement: window_controls_placement,
                 window_controls_placement_at_boot: window_controls_placement,
@@ -340,6 +346,7 @@ impl Signex {
                 grid_properties: None,
                 find_similar: None,
                 find_similar_generation: 0,
+                paste_array: None,
                 selection_filter_custom: None,
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),
@@ -430,6 +437,7 @@ impl Signex {
                 next_project_id: 0,
                 next_undo_group: 0,
                 documents_epoch: 0,
+                designator_cache: Default::default(),
                 next_pcb_revision: 0,
                 pcb_revisions: std::collections::HashMap::new(),
                 undo_groups: std::collections::HashMap::new(),
@@ -476,6 +484,8 @@ impl Signex {
                     selected_uuid: None,
                     selected_kind: None,
                     selection_info: vec![],
+                    multi_groups: Default::default(),
+                    multi_draft: None,
                     symbol_choices: vec![],
                     drawing_edit_buf: std::collections::HashMap::new(),
                     drawing_edit_buf_for: None,
@@ -586,6 +596,8 @@ impl Signex {
                 last_tool: std::collections::HashMap::new(),
                 pending_power: None,
                 placement: None,
+                last_placement: None,
+                paste_counters: None,
                 placement_epoch: 0,
                 pending_port: None,
                 bus_entry_size: signex_types::schematic::SCHEMATIC_BUS_ENTRY_DEFAULT_SIZE,
