@@ -53,6 +53,13 @@ fn disabled_of(entries: &[DropdownEntry<Message>], label: &str) -> bool {
         .unwrap_or_else(|| panic!("missing row {label:?}"))
 }
 
+fn selected() -> CanvasSelection {
+    CanvasSelection {
+        has_selection: true,
+        ..Default::default()
+    }
+}
+
 fn shortcuts() -> CanvasShortcuts {
     CanvasShortcuts {
         find: "Ctrl+F".into(),
@@ -189,6 +196,7 @@ fn canvas_menu_grows_and_gates_on_selection() {
             has_selection: true,
             child_sheet_selected: false,
             drawing_selected: false,
+            placed_part_selected: false,
         },
         None,
         None,
@@ -201,6 +209,7 @@ fn canvas_menu_grows_and_gates_on_selection() {
             has_selection: false,
             child_sheet_selected: false,
             drawing_selected: false,
+            placed_part_selected: false,
         },
         None,
         None,
@@ -263,6 +272,7 @@ fn canvas_project_options_is_greyed_without_a_project_and_says_nothing_planned()
             has_selection: false,
             child_sheet_selected: false,
             drawing_selected: false,
+            placed_part_selected: false,
         },
         None,
         None,
@@ -285,6 +295,7 @@ fn canvas_child_sheet_adds_open_row() {
             has_selection: false,
             child_sheet_selected: false,
             drawing_selected: false,
+            placed_part_selected: false,
         },
         None,
         None,
@@ -297,6 +308,7 @@ fn canvas_child_sheet_adds_open_row() {
             has_selection: false,
             child_sheet_selected: true,
             drawing_selected: false,
+            placed_part_selected: false,
         },
         None,
         None,
@@ -536,6 +548,7 @@ fn canvas_row_text_is_byte_identical_to_the_old_literals() {
             has_selection: true,
             child_sheet_selected: true,
             drawing_selected: false,
+            placed_part_selected: false,
         },
         None,
         None,
@@ -577,6 +590,7 @@ fn shared_command_ids_read_the_same_label_on_every_surface() {
             has_selection: true,
             child_sheet_selected: true,
             drawing_selected: false,
+            placed_part_selected: false,
         },
         None,
         None,
@@ -659,6 +673,7 @@ fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
             has_selection: true,
             child_sheet_selected: false,
             drawing_selected: true,
+            placed_part_selected: false,
         },
         None,
         None,
@@ -671,6 +686,7 @@ fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
             has_selection: true,
             child_sheet_selected: false,
             drawing_selected: false,
+            placed_part_selected: false,
         },
         None,
         None,
@@ -687,4 +703,44 @@ fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
     ] {
         assert!(has_row(&rows, label), "missing {label}");
     }
+}
+
+/// The placed-part actions (#1301, #1262, #1260) show for one selected
+/// non-power symbol only, under exactly these labels, and each row carries
+/// its own action.
+#[test]
+fn canvas_menu_offers_the_placed_part_actions_for_a_placed_part_only() {
+    use crate::library::PlacedPartAction as A;
+    let tokens = theme_tokens(TID);
+    let sc = shortcuts();
+    let part = CanvasSelection {
+        placed_part_selected: true,
+        ..selected()
+    };
+    let with = canvas_menu_entries(TID, &tokens, part, None, None, &sc);
+    let without = canvas_menu_entries(TID, &tokens, selected(), None, None, &sc);
+
+    for (label, action) in [
+        ("Open Datasheet", A::OpenDatasheet),
+        ("Edit Symbol", A::EditSymbol),
+        ("Change Component\u{2026}", A::ChangeComponent),
+    ] {
+        assert!(!has_row(&without, label), "{label} without a placed part");
+        let message = with
+            .iter()
+            .find_map(|e| match e {
+                DropdownEntry::Item(it) if it.label == label => it.on_press.clone(),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("missing or inert row {label:?}"));
+        assert!(
+            matches!(
+                message,
+                Message::ContextMenu(ContextMenuMsg::Action(ContextAction::PlacedPart(a))) if a == action
+            ),
+            "{label} sent the wrong message"
+        );
+    }
+    // Nothing else moved: the rest of the menu is identical.
+    assert_eq!(labels(&with).len(), labels(&without).len() + 3);
 }

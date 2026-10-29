@@ -26,6 +26,11 @@ pub enum EngineError {
         parts.join(", ")
     )]
     LibSymbolUnitRemoved { lib_id: String, parts: Vec<String> },
+    #[error(
+        "component change refused, the new part has no drawing for: {}; pick a part that has those units",
+        parts.join(", ")
+    )]
+    ChangeComponentUnitMissing { parts: Vec<String> },
     #[error("a sheet symbol needs a name")]
     EmptyChildSheetName,
     #[error("sheet file '{0}' must end in .snxsch")]

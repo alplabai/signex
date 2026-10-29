@@ -51,6 +51,10 @@ pub use command::{
     SelectionTransform, SheetPort, SymbolTextField, TextTarget,
 };
 pub use error::EngineError;
+pub use exec::change_component::{
+    ComponentChangePreview, ComponentReplacement, DataChange, change_component_preview,
+    placed_unit_ids,
+};
 pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
 pub use find::{
     DesignatorScope, FindHit, FindKind, designator_commands, replace_all_ci, replace_commands,
@@ -430,6 +434,7 @@ impl Engine {
             | Command::PlaceSymbol { .. }
             | Command::RegisterLibSymbol { .. }
             | Command::ReplaceLibSymbol { .. }
+            | Command::ChangeComponent { .. }
             | Command::PlaceChildSheet { .. }
             | Command::PlaceSheetPin { .. }
             | Command::PlaceWireSegment { .. }

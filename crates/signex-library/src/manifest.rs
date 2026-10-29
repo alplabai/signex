@@ -2,9 +2,9 @@
 //! and `v0.9-refactor-2-plan.md` §3 (Altium DBLib model).
 //!
 //! Adds the `[[tables]]` config section per `v0.9-refactor-2-plan.md` §6
-//! step 1.5: a class with no override gets its own table (`<class>s.tsv`).
-//! Explicit overrides let multiple classes share a table or rename the
-//! filename.
+//! step 1.5: a class with no override gets its own table (`<class>s`).
+//! Explicit overrides let multiple classes share a table or rename it. A table
+//! is a `[tables.<name>]` block inside the `.snxlib` file.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -34,6 +34,65 @@ pub struct LibraryMeta {
 /// Manifest `auth` prefix that names an OS-keychain item instead of a token.
 pub(crate) const KEYCHAIN_SIGIL: &str = "@signex-keychain:";
 
+/// A manifest `auth` of the form `${env:NAME}` names an environment
+/// variable that holds the token, so the token itself never reaches the
+/// manifest. Read when the library connects.
+///
+/// Only variables whose name starts with `SIGNEX_` (upper-case letters,
+/// digits and `_`, for example `SIGNEX_DB_TOKEN`) can be named. A `.snxlib`
+/// comes from a shared repository and also sets the server `url`, so letting
+/// it name any variable would let a tampered manifest send `GITHUB_TOKEN` or
+/// a cloud secret to its own server as the bearer token.
+const ENV_REFERENCE_PREFIX: &str = "${env:";
+
+/// Variable names a manifest may reference.
+const ENV_NAME_PREFIX: &str = "SIGNEX_";
+
+/// The variable name in an `auth` of the form `${env:NAME}`, whatever the
+/// name (it may still be refused by [`resolve_auth`]).
+pub(crate) fn env_reference(auth: &str) -> Option<&str> {
+    auth.strip_prefix(ENV_REFERENCE_PREFIX)?.strip_suffix('}')
+}
+
+fn env_name_is_allowed(name: &str) -> bool {
+    name.strip_prefix(ENV_NAME_PREFIX).is_some_and(|rest| {
+        !rest.is_empty()
+            && rest
+                .bytes()
+                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
+    })
+}
+
+/// True when `auth` is a hand-written token: not empty, not a keychain
+/// reference and not an `${env:NAME}` reference. Saving one stores it in
+/// plain text.
+pub fn auth_is_plain_token(auth: &str) -> bool {
+    !auth.is_empty() && !auth.starts_with(KEYCHAIN_SIGIL) && env_reference(auth).is_none()
+}
+
+/// Turn a manifest `auth` into the bearer token to send. An `${env:NAME}`
+/// reference is read through `lookup` (the process environment in
+/// production) only when its name starts with `SIGNEX_`; any other name is
+/// refused without calling `lookup`. Anything else is the token itself.
+/// Empty means no auth.
+pub(crate) fn resolve_auth(
+    auth: &str,
+    lookup: impl Fn(&str) -> Option<String>,
+) -> Result<String, String> {
+    match env_reference(auth) {
+        None => Ok(auth.to_string()),
+        Some(name) if !env_name_is_allowed(name) => Err(format!(
+            "library auth names environment variable {name:?}; only SIGNEX_ followed by upper-case \
+             letters, digits or _ is allowed, so a shared library file cannot read other secrets"
+        )),
+        Some(name) => lookup(name)
+            .filter(|token| !token.is_empty())
+            .ok_or_else(|| {
+                format!("library auth names environment variable {name}, which is not set")
+            }),
+    }
+}
+
 #[derive(Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LibraryMode {
@@ -41,11 +100,14 @@ pub enum LibraryMode {
     LocalGit,
     Database {
         url: String,
-        /// Empty (no auth), a `@signex-keychain:` reference, or a raw
-        /// token. The database adapter cannot resolve keychain
-        /// references yet (#976), so a raw token is the only value that
-        /// works today and is still written back, with a warning, so the
-        /// manifest stays saveable. `Debug` never prints a raw token.
+        /// Empty (no auth), an `${env:SIGNEX_NAME}` reference to an
+        /// environment variable holding the token (the name must start with
+        /// `SIGNEX_`), a `@signex-keychain:` reference, or
+        /// a raw token. The database adapter cannot resolve keychain
+        /// references yet (#976). A raw token is written back as is so the
+        /// manifest stays saveable; the library adapter warns once per
+        /// session that it is stored in plain text. `Debug` never prints a
+        /// raw token.
         #[serde(serialize_with = "serialize_auth_reference")]
         auth: String,
     },
@@ -53,18 +115,12 @@ pub enum LibraryMode {
 
 /// Write the `auth` value as is. A raw token is written back because the
 /// keychain alternative does not work yet (#976); refusing would leave a
-/// working manifest unsaveable. Move it to a `@signex-keychain:` reference
-/// once #976 lands.
+/// working manifest unsaveable. Serialising is not the moment to warn (it
+/// runs for every encode); the adapter that saves the library does, once.
 fn serialize_auth_reference<S: serde::Serializer>(
     auth: &str,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
-    if !auth.is_empty() && !auth.starts_with(KEYCHAIN_SIGIL) {
-        tracing::warn!(
-            "writing a raw auth token into the library manifest; keychain references are not \
-             usable until #976"
-        );
-    }
     serializer.serialize_str(auth)
 }
 
@@ -87,10 +143,10 @@ impl std::fmt::Debug for LibraryMode {
         match self {
             Self::LocalGit => f.write_str("LocalGit"),
             Self::Database { url, auth } => {
-                let shown = if auth.is_empty() || auth.starts_with(KEYCHAIN_SIGIL) {
-                    auth.as_str()
-                } else {
+                let shown = if auth_is_plain_token(auth) {
                     "<redacted>"
+                } else {
+                    auth.as_str()
                 };
                 f.debug_struct("Database")
                     .field("url", &redact_url_userinfo(url))
@@ -214,16 +270,16 @@ pub struct UserEntry {
 /// Optional `[[tables]]` override block — Altium DBLib parity.
 ///
 /// Per `v0.9-refactor-2-plan.md` §3:
-/// - The default is class → `<class>s.tsv` (mechanical pluralisation).
+/// - The default is class → `<class>s` (mechanical pluralisation).
 /// - An explicit override lets multiple classes share one table
-///   (e.g. resistors + capacitors both rolled into `Discrete_Passives.tsv`),
-///   or rename the file for non-English / domain-specific layouts.
+///   (e.g. resistors + capacitors both rolled into `Discrete_Passives`),
+///   or rename it for non-English / domain-specific layouts.
 ///
-/// `name` is the filename stem (no extension); the file lives at
-/// `tables/<name>.tsv`.
+/// `name` is the table name; the rows live in the `.snxlib` file's
+/// `[tables.<name>]` block.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TableConfig {
-    /// Filename stem (no extension). Becomes `tables/<name>.tsv`.
+    /// Table name. Becomes the `[tables.<name>]` block in the `.snxlib`.
     pub name: String,
     /// Class names that route into this table.
     #[serde(default)]
@@ -244,7 +300,7 @@ impl Manifest {
         &self.tables
     }
 
-    /// Resolve a class name to its table filename stem.
+    /// Resolve a class name to its table name.
     ///
     /// 1. If any `[[tables]]` override lists `class` in its `classes` array,
     ///    return that override's `name`.
@@ -458,5 +514,47 @@ classes = ["connector"]
         assert_eq!(m.table_for_class("resistor"), "resistors");
         // Irregulars are NOT special-cased — that's the documented contract.
         assert_eq!(m.table_for_class("ic"), "ics");
+    }
+
+    #[test]
+    fn env_references_are_not_plain_tokens_and_resolve_through_the_lookup() {
+        assert!(auth_is_plain_token("s3cr3t"));
+        assert!(!auth_is_plain_token(""));
+        assert!(!auth_is_plain_token("@signex-keychain:lab"));
+        assert!(!auth_is_plain_token("${env:SIGNEX_DB_TOKEN}"));
+        assert!(!auth_is_plain_token("${env:}"), "refused, not sent as text");
+
+        let lookup = |name: &str| (name == "SIGNEX_DB_TOKEN").then(|| "tok".to_string());
+        assert_eq!(
+            resolve_auth("${env:SIGNEX_DB_TOKEN}", lookup).unwrap(),
+            "tok"
+        );
+        assert_eq!(resolve_auth("raw", lookup).unwrap(), "raw");
+        assert_eq!(resolve_auth("", lookup).unwrap(), "");
+        let err = resolve_auth("${env:SIGNEX_OTHER}", lookup).unwrap_err();
+        assert!(
+            err.contains("SIGNEX_OTHER") && err.contains("not set"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn only_signex_prefixed_variables_can_be_read_and_the_lookup_is_never_called() {
+        let lookup = |name: &str| -> Option<String> {
+            panic!("the environment was read for {name}");
+        };
+        for auth in [
+            "${env:HOME}",
+            "${env:AWS_SECRET_ACCESS_KEY}",
+            "${env:GITHUB_TOKEN}",
+            "${env:signex_db_token}",
+            "${env:SIGNEX_db}",
+            "${env:SIGNEX_}",
+            "${env:}",
+            "${env: SIGNEX_DB_TOKEN}",
+        ] {
+            let err = resolve_auth(auth, lookup).unwrap_err();
+            assert!(err.contains("SIGNEX_"), "{auth}: {err}");
+        }
     }
 }

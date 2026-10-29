@@ -5,17 +5,9 @@
 
 use crate::SchematicSheet;
 use signex_net::{ConnectedPoints, connected_points, point_on_segment, pt_key};
-use signex_types::schematic::{LibPin, LibSymbol, Point, Symbol, SymbolTransform, instance_pins};
-
-/// A pin's identity across two versions of one symbol: its number, else
-/// its name (the same rule the netlist uses for terminals).
-pub(super) fn pin_key(lp: &LibPin) -> &str {
-    if lp.pin.number.is_empty() {
-        &lp.pin.name
-    } else {
-        &lp.pin.number
-    }
-}
+use signex_types::schematic::{
+    LibPin, LibSymbol, Point, Symbol, SymbolTransform, instance_pins, pin_key,
+};
 
 /// Whether anything electrical sits on `at`: the netlist's own connection
 /// set (wire endpoints, junctions, labels, no-connects) or a wire passing

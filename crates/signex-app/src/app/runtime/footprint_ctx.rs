@@ -1,5 +1,6 @@
 use super::footprint_summaries::{
-    build_over_constraint_summaries, build_sketch_entity_summary, footprint_pad_kind_label,
+    build_over_constraint_summaries, build_redundant_constraint_summaries,
+    build_rejected_conflict_summaries, build_sketch_entity_summary, footprint_pad_kind_label,
     footprint_pad_shape_label,
 };
 
@@ -38,6 +39,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
             final_residual_norm: out.result.final_residual_norm,
             over_constraint_count: out.over_constraints.len(),
             over_constraints,
+            redundant_constraints: build_redundant_constraint_summaries(editor.primitive(), out),
         }
     });
 
@@ -588,6 +590,10 @@ pub(super) fn build_footprint_editor_panel_ctx(
         sketch_entity_count,
         sketch_constraint_count,
         last_solve,
+        rejected_conflicts: build_rejected_conflict_summaries(
+            editor.primitive(),
+            &editor.state.conflict,
+        ),
         selected_pad,
         selected_pad_count: editor
             .state

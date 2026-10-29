@@ -42,11 +42,8 @@ pub fn write_custom_filter_presets(presets: &[crate::active_bar::CustomFilterPre
 /// Capped to `CUSTOM_FILTER_PRESET_LIMIT` entries on read so a hand-
 /// edited file with too many slots still loads cleanly. Parallel to
 /// `read_custom_filter_presets` (schematic), but keyed on
-/// `FootprintFilterPreset` (Task 6).
-pub fn read_footprint_filter_presets() -> Vec<crate::active_bar::FootprintFilterPreset> {
-    read_footprint_filter_presets_from(load_prefs_json().as_ref())
-}
-
+/// `FootprintFilterPreset` (Task 6). Startup-only: handlers take the list
+/// from `interaction_state`, never from the disk.
 pub fn read_footprint_filter_presets_from(
     json: Option<&serde_json::Value>,
 ) -> Vec<crate::active_bar::FootprintFilterPreset> {

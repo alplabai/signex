@@ -115,7 +115,7 @@ impl PinPadOverride {
 /// PLM-reserved fields. Inert until v3.0.
 ///
 /// **TSV persistence note:** as of v0.9, `PlmReserved` is dropped at write
-/// time — only `PlmReserved::default()` round-trips through `tables::write_table`.
+/// time — only `PlmReserved::default()` round-trips through the table cell encoding.
 /// Non-default payloads cause `LibraryError::Backend("...")`. v3.0 will add
 /// dedicated columns and full round-trip.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

@@ -34,6 +34,42 @@ fn keychain_sigil_is_rejected_with_the_sigil_error() {
     assert!(err.to_string().contains("not resolved"), "{err}");
 }
 
+fn manifest_with_auth(auth: &str) -> Manifest {
+    Manifest {
+        library: LibraryMeta {
+            name: "remote".into(),
+            library_id: Uuid::nil(),
+            description: None,
+        },
+        mode: LibraryMode::Database {
+            url: "https://lib.example.com".into(),
+            auth: auth.into(),
+        },
+        workflow: Default::default(),
+        users: Default::default(),
+        tables: Vec::new(),
+    }
+}
+
+#[test]
+fn an_unset_signex_variable_is_an_error_naming_it() {
+    let err = DatabaseAdapter::new(manifest_with_auth("${env:SIGNEX_TEST_UNSET_VAR_9F3A}"))
+        .err()
+        .expect("an unset variable must refuse the connection");
+    assert!(
+        err.to_string().contains("SIGNEX_TEST_UNSET_VAR_9F3A"),
+        "{err}"
+    );
+}
+
+#[test]
+fn a_variable_outside_the_signex_prefix_is_refused_before_it_is_read() {
+    let err = DatabaseAdapter::new(manifest_with_auth("${env:HOME}"))
+        .err()
+        .expect("HOME must not be readable from a manifest");
+    assert!(err.to_string().contains("SIGNEX_"), "{err}");
+}
+
 #[test]
 fn redirect_downgrade_to_cleartext_is_refused() {
     let u = |s: &str| url::Url::parse(s).unwrap();

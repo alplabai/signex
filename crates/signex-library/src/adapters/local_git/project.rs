@@ -238,39 +238,9 @@ impl LocalGitProjectAdapter {
         }
         let repo = git2::Repository::open(&self.project_root)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
-        // Fresh `git init` with no commits — head() reports either
-        // `UnbornBranch` (the branch ref doesn't yet exist) OR
-        // `NotFound` (no `refs/heads/*` at all). Both are legitimate
-        // "no history" cases, not errors.
-        match repo.head() {
-            Ok(_) => {}
-            Err(e)
-                if matches!(
-                    e.code(),
-                    git2::ErrorCode::UnbornBranch | git2::ErrorCode::NotFound
-                ) =>
-            {
-                return Ok(Vec::new());
-            }
-            Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
-        }
-        let mut walk = repo
-            .revwalk()
-            .map_err(|e| LibraryError::Backend(format!("git revwalk: {e}")))?;
-        walk.set_sorting(git2::Sort::TIME | git2::Sort::TOPOLOGICAL)
-            .map_err(|e| LibraryError::Backend(format!("git revwalk sort: {e}")))?;
-        match walk.push_head() {
-            Ok(()) => {}
-            Err(e)
-                if matches!(
-                    e.code(),
-                    git2::ErrorCode::UnbornBranch | git2::ErrorCode::NotFound
-                ) =>
-            {
-                return Ok(Vec::new());
-            }
-            Err(e) => return Err(LibraryError::Backend(format!("git push head: {e}"))),
-        }
+        let Some(walk) = crate::git_history::head_walk(&repo)? else {
+            return Ok(Vec::new());
+        };
 
         let rel_str = rel_path.to_string_lossy().replace('\\', "/");
         let mut entries: Vec<HistoryEntry> = Vec::new();

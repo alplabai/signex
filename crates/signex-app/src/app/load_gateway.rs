@@ -691,26 +691,18 @@ impl Signex {
         self.document_state.panel_ctx.has_schematic = self.has_active_schematic();
         self.document_state.panel_ctx.has_pcb = self.has_active_pcb();
 
-        let document_summary = if let Some(snapshot) = self.active_render_snapshot() {
+        // Counts and paper label for whichever document is visible; the
+        // per-row symbol lists come from the same builder `refresh_panel_ctx`
+        // uses, so the two paths cannot disagree about what a row holds.
+        let (counts, paper_size) = if let Some(snapshot) = self.active_render_snapshot() {
             (
-                snapshot.symbols.len(),
-                snapshot.wires.len(),
-                snapshot.labels.len(),
-                snapshot.junctions.len(),
-                snapshot.lib_symbols.len(),
-                snapshot.lib_symbols.keys().cloned().collect(),
-                snapshot
-                    .symbols
-                    .iter()
-                    .map(|symbol| {
-                        (
-                            symbol.reference.clone(),
-                            symbol.value.clone(),
-                            symbol.footprint.clone(),
-                            symbol.lib_id.clone(),
-                        )
-                    })
-                    .collect(),
+                (
+                    snapshot.symbols.len(),
+                    snapshot.wires.len(),
+                    snapshot.labels.len(),
+                    snapshot.junctions.len(),
+                    snapshot.lib_symbols.len(),
+                ),
                 // Older documents may carry an empty paper_size (serde
                 // default); normalize so the Page Options selector and the
                 // drawn sheet agree on the effective A4 fallback.
@@ -718,38 +710,29 @@ impl Signex {
             )
         } else if let Some(snapshot) = self.active_pcb_snapshot() {
             (
-                snapshot.footprints.len(),
-                snapshot.segments.len(),
-                snapshot.texts.len(),
-                snapshot.vias.len(),
-                0,
-                Vec::new(),
-                snapshot
-                    .footprints
-                    .iter()
-                    .map(|footprint| {
-                        (
-                            footprint.reference.clone(),
-                            footprint.value.clone(),
-                            footprint.footprint_id.clone(),
-                            footprint.layer.clone(),
-                        )
-                    })
-                    .collect(),
+                (
+                    snapshot.footprints.len(),
+                    snapshot.segments.len(),
+                    snapshot.texts.len(),
+                    snapshot.vias.len(),
+                    0,
+                ),
                 format!("PCB • {} layers", snapshot.layers.len()),
             )
         } else {
-            (0, 0, 0, 0, 0, Vec::new(), Vec::new(), "A4".to_string())
+            ((0, 0, 0, 0, 0), "A4".to_string())
         };
 
-        self.document_state.panel_ctx.sym_count = document_summary.0;
-        self.document_state.panel_ctx.wire_count = document_summary.1;
-        self.document_state.panel_ctx.label_count = document_summary.2;
-        self.document_state.panel_ctx.junction_count = document_summary.3;
-        self.document_state.panel_ctx.lib_symbol_count = document_summary.4;
-        self.document_state.panel_ctx.lib_symbol_names = document_summary.5;
-        self.document_state.panel_ctx.placed_symbols = document_summary.6;
-        self.document_state.panel_ctx.paper_size = document_summary.7;
+        {
+            let ctx = &mut self.document_state.panel_ctx;
+            ctx.sym_count = counts.0;
+            ctx.wire_count = counts.1;
+            ctx.label_count = counts.2;
+            ctx.junction_count = counts.3;
+            ctx.lib_symbol_count = counts.4;
+            ctx.paper_size = paper_size;
+        }
+        self.fill_symbol_lists(None);
         // Written outside `fill_symbol_lists`; the next refresh must rebuild.
         self.document_state.panel_ctx.symbol_lists_key = None;
 

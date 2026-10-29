@@ -11,13 +11,12 @@
 //! Each footprint authors a single `BoardTopPlane`, parameterises the
 //! interesting dimensions through `SketchData::parameters`, and lays
 //! down one Point per pad with the per-pad delta carried on
-//! `offset_x_expr` / `offset_y_expr`. The bake walker (signex-app's
-//! `apply_sketch_edit`) is the consumer; here we only emit the
-//! authored sketch — the bake fires the first time the user opens the
-//! file in the footprint editor.
+//! `offset_x_expr` / `offset_y_expr`. The generator then runs the same
+//! bake the footprint editor runs (`bake_pads`, `bake_silk`) so the file
+//! carries its pads and silkscreen for consumers that never open the editor.
 //!
 //! Apache-clean: industry-standard footprint dimensions (JEDEC
-//! SOIC-8 / QFN-16 / IPC-7351 R0805) only. No third-party EDA-tool
+//! SOIC-8 / QFN-16 / IPC-7351 0805 chip) only. No third-party EDA-tool
 //! source / file-format docs / wikis consulted.
 
 pub mod ids;
@@ -29,12 +28,17 @@ use std::error::Error;
 use std::path::Path;
 
 use chrono::{DateTime, TimeZone, Utc};
-use signex_library::primitive::footprint::{Footprint, FootprintFile};
+use signex_library::primitive::footprint::{
+    Footprint, FootprintFile, FpGraphic, FpGraphicKind, Polygon,
+};
 use signex_sketch::SketchData;
-use signex_sketch::attr::{DrillSpec, PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern};
+use signex_sketch::attr::{
+    DrillSpec, PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern, SilkAttr,
+};
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+use signex_types::layer::SignexLayer;
 
 use ids::{STOCK_IDS, StockIds, StockKind};
 
@@ -54,15 +58,44 @@ fn next_id(ids: &mut impl Iterator<Item = SketchEntityId>) -> SketchEntityId {
         .expect("stock id table lists one entity id per sketch entity")
 }
 
-/// Author the footprint named by one id-table row.
+/// Author the footprint named by one id-table row, then bake the sketch
+/// into `pads` and `silk_f` so a consumer that never opens the footprint
+/// editor (the only other place that bakes) still sees the pads and the
+/// polarity mark.
 fn build(ids: &StockIds) -> Footprint {
-    match ids.kind {
+    let mut fp = match ids.kind {
         StockKind::Soic8 => build_soic8(ids),
         StockKind::Qfn16 => build_qfn16(ids),
-        StockKind::R0805 => build_r0805(ids),
+        StockKind::Chip0805 => build_chip_0805(ids),
+        StockKind::Chip0805Polarised => build_chip_0805_polarised(ids),
         StockKind::MountingHole3p2 => build_mounting_hole_3p2(ids),
         StockKind::Fiducial1mm => build_fiducial_1mm(ids),
-    }
+    };
+    bake_sketch(&mut fp);
+    fp
+}
+
+/// The same bake the footprint editor runs on a solved sketch.
+fn bake_sketch(fp: &mut Footprint) {
+    let sketch = fp
+        .sketch
+        .as_ref()
+        .expect("every stock footprint is a sketch");
+    let resolved = signex_sketch::parameter::resolve(&sketch.parameters)
+        .expect("stock footprint parameters resolve");
+    let solved = signex_sketch::solver::Solver::default()
+        .solve(sketch, &resolved)
+        .expect("stock footprint sketch solves");
+    let mut warnings = Vec::new();
+    let (mut pads, mut silk_f, mut silk_b) = (Vec::new(), Vec::new(), Vec::new());
+    signex_bake::bake_pads(sketch, &solved, &resolved, &mut pads, &mut warnings)
+        .expect("stock pads bake");
+    signex_bake::bake_silk(sketch, &solved, &mut silk_f, &mut silk_b, &mut warnings)
+        .expect("stock silkscreen bakes");
+    assert!(warnings.is_empty(), "stock bake warnings: {warnings:?}");
+    fp.pads = pads;
+    fp.silk_f = silk_f;
+    fp.silk_b = silk_b;
 }
 
 /// One rendered stock file: its name, serialised text and pad count.
@@ -401,12 +434,31 @@ fn build_qfn16(ids: &StockIds) -> Footprint {
     fp
 }
 
-// ───────────────────── R0805 ─────────────────────
+// ───────────────────── Chip-0805 ─────────────────────
 
-/// IPC-7351 R0805 chip resistor: 2 SMD pads, centre-to-centre 2.0 mm,
-/// pad copper 1.0 × 1.25 mm. Body sits between the pads (~2.0 × 1.25 mm).
-fn build_r0805(ids: &StockIds) -> Footprint {
-    let mut fp = Footprint::with_identity("R0805", ids.footprint_uuid(), stock_timestamp());
+/// Generic symmetric 0805 chip land (resistor, capacitor, inductor, fuse):
+/// 2 SMD pads, centre-to-centre 2.0 mm, pad copper 1.0 × 1.25 mm. Body sits
+/// between the pads (~2.0 × 1.25 mm). No polarity mark: either way round is
+/// electrically identical.
+fn build_chip_0805(ids: &StockIds) -> Footprint {
+    chip_0805(ids, "Chip-0805", false)
+}
+
+/// The same land as [`build_chip_0805`] with a cathode mark: pad 1 (left,
+/// x = -1.0 mm) is the cathode, matching pin 1 = cathode on the diode and
+/// LED symbols. Silkscreen is a 0.12 mm bar (the bake's default silkscreen stroke) across the outer end of pad 1
+/// at x = -1.7 mm (0.2 mm from the 1.5 mm copper edge, 0.14 mm after the stroke), y = ±0.7 mm,
+/// the courtyard is the rectangle ±1.9 × ±0.9 mm, which holds the copper
+/// plus the bar, and the fab layer carries the 2.0 × 1.25 mm body outline
+/// with a cathode line at x = -0.7 mm. The sketch is the source; the bake derives
+/// `silk_f` from it when the footprint is opened; the courtyard and the fab
+/// outline are written directly.
+fn build_chip_0805_polarised(ids: &StockIds) -> Footprint {
+    chip_0805(ids, "Chip-0805-Polarised", true)
+}
+
+fn chip_0805(ids: &StockIds, name: &str, polarised: bool) -> Footprint {
+    let mut fp = Footprint::with_identity(name, ids.footprint_uuid(), stock_timestamp());
     let plane = ids.plane_id();
     let mut eids = ids.entity_ids();
     let mut sketch = SketchData {
@@ -441,6 +493,43 @@ fn build_r0805(ids: &StockIds) -> Footprint {
             Some("0mm"),
         );
         sketch.entities.push(e);
+    }
+
+    if polarised {
+        // Cathode bar: the sketch is the source for the silkscreen line.
+        let mut point = |x: f64, y: f64| {
+            let id = next_id(&mut eids);
+            sketch
+                .entities
+                .push(Entity::new(id, plane, EntityKind::Point { x, y }));
+            id
+        };
+        let (start, end) = (point(-1.7, -0.7), point(-1.7, 0.7));
+        let mut bar = Entity::new(next_id(&mut eids), plane, EntityKind::Line { start, end });
+        bar.silk = Some(SilkAttr {
+            layer: SignexLayer::TopSilk,
+        });
+        sketch.entities.push(bar);
+
+        // Courtyard and fab outline are plain footprint fields: the
+        // sketch courtyard tag (a unit struct) cannot be written as TOML.
+        fp.courtyard = Polygon::new(vec![[-1.9, -0.9], [1.9, -0.9], [1.9, 0.9], [-1.9, 0.9]]);
+        let fab = |kind| FpGraphic {
+            kind,
+            stroke_width: 0.1,
+            filled: false,
+        };
+        fp.fab_f = vec![
+            // Body outline, then the cathode line inside the pad-1 end.
+            fab(FpGraphicKind::Rectangle {
+                from: [-1.0, -0.625],
+                to: [1.0, 0.625],
+            }),
+            fab(FpGraphicKind::Line {
+                from: [-0.7, -0.625],
+                to: [-0.7, 0.625],
+            }),
+        ];
     }
 
     fp.sketch = Some(sketch);

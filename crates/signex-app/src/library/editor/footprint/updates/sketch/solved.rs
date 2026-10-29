@@ -20,6 +20,7 @@ use crate::library::editor::footprint::sketch_dispatch::report_solve_failure;
 use crate::library::editor::footprint::sketch_solve_task::{
     SolveOutcome, UnsolvedEdits, run_solve, snapshot_request,
 };
+use crate::library::editor::footprint::state::conflict::name_conflict;
 use crate::library::messages::FootprintEditorMsg;
 
 pub(in crate::library::editor::footprint::updates) fn apply(
@@ -180,20 +181,10 @@ fn reject_conflicting_edit(
     editor.with_parts(|state, primitive| {
         // Read the named constraints' entities now: a rejected edit's own
         // constraint disappears with the revert below.
-        let named_entities = primitive
-            .sketch
-            .as_ref()
-            .map(|s| {
-                s.constraints
-                    .iter()
-                    .filter(|c| ids.contains(&c.id))
-                    .flat_map(|c| c.kind.entity_refs())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+        let (rows, named_entities) = name_conflict(&ids, primitive.sketch.as_ref());
         primitive.sketch = unsolved.revert_to.take();
         drop_dangling_selection(state, primitive);
-        state.conflict.record_rejection(ids, named_entities);
+        state.conflict.record_rejection(ids, rows, named_entities);
         state.sketch_solve.resolve_after_revert();
         report_solve_failure(state, &error);
     });

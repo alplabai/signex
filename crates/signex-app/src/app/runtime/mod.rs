@@ -13,6 +13,9 @@ mod net_class_styles;
 mod panel_ctx;
 mod primitive_dirty;
 mod sheet_frame;
+mod sheet_tree;
+#[cfg(test)]
+pub(crate) mod sheet_tree_tests;
 mod symbol_ctx;
 
 impl Signex {

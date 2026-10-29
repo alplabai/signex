@@ -38,21 +38,23 @@ struct StockRow {
     footprint: Option<StockKind>,
 }
 
-/// Rows in panel order. The `R0805` chip footprint is the generic
-/// two-terminal 0805 land pattern, shared by every two-pin passive and
-/// discrete here; `SOIC-8` pairs with the 8-pin generic IC.
+/// Rows in panel order. The `Chip-0805` footprint is the generic symmetric
+/// two-pad 0805 land shared by R, C, L, Ferrite and Fuse; the diodes and
+/// the LED (pin 1 = cathode) pair with `Chip-0805-Polarised`, whose pad 1
+/// is the cathode and carries the silkscreen mark; `SOIC-8` pairs with the
+/// 8-pin generic IC.
 const STOCK_ROWS: &[StockRow] = &[
     StockRow {
         symbol: "R",
         row_id: "01a18461-b555-75c3-995a-0a8a51e590a4",
         class: "resistor",
-        footprint: Some(StockKind::R0805),
+        footprint: Some(StockKind::Chip0805),
     },
     StockRow {
         symbol: "C",
         row_id: "01a18461-b55e-7523-b9c9-d63b68daae2d",
         class: "capacitor",
-        footprint: Some(StockKind::R0805),
+        footprint: Some(StockKind::Chip0805),
     },
     StockRow {
         symbol: "C_Polarized",
@@ -64,43 +66,43 @@ const STOCK_ROWS: &[StockRow] = &[
         symbol: "L",
         row_id: "01a18461-b564-7742-8d1f-5970e27e2659",
         class: "inductor",
-        footprint: Some(StockKind::R0805),
+        footprint: Some(StockKind::Chip0805),
     },
     StockRow {
         symbol: "Ferrite",
         row_id: "01a18461-b567-7294-9054-dcaef701f93b",
         class: "inductor",
-        footprint: Some(StockKind::R0805),
+        footprint: Some(StockKind::Chip0805),
     },
     StockRow {
         symbol: "Fuse",
         row_id: "01a18461-b56a-71bb-9548-4f548c72ca99",
         class: "generic",
-        footprint: Some(StockKind::R0805),
+        footprint: Some(StockKind::Chip0805),
     },
     StockRow {
         symbol: "D",
         row_id: "01a18461-b56d-76ce-96b5-09c429eacb1e",
         class: "diode",
-        footprint: Some(StockKind::R0805),
+        footprint: Some(StockKind::Chip0805Polarised),
     },
     StockRow {
         symbol: "D_Schottky",
         row_id: "01a18461-b570-7585-ac70-cf199f9c6e3e",
         class: "diode",
-        footprint: Some(StockKind::R0805),
+        footprint: Some(StockKind::Chip0805Polarised),
     },
     StockRow {
         symbol: "D_Zener",
         row_id: "01a18461-b573-721f-92d5-ee2658a6d058",
         class: "diode",
-        footprint: Some(StockKind::R0805),
+        footprint: Some(StockKind::Chip0805Polarised),
     },
     StockRow {
         symbol: "LED",
         row_id: "01a18461-b577-73e1-8726-372141f949af",
         class: "led",
-        footprint: Some(StockKind::R0805),
+        footprint: Some(StockKind::Chip0805Polarised),
     },
     StockRow {
         symbol: "Q_NPN",
