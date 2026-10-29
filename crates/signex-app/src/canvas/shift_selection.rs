@@ -191,6 +191,7 @@ mod tests {
                 end: Point::new(o + 3.0, 21.0),
                 width: 0.0,
                 stroke_color: None,
+                locked: false,
             };
             if n == 0 {
                 let SchDrawing::Line { uuid, .. } = &drawing else {

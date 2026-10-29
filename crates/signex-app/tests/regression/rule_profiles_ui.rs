@@ -550,7 +550,7 @@ fn opening_a_project_reports_a_changed_profile_without_touching_the_project() {
         "rules are not overwritten"
     );
     assert!(
-        !app.document_state.dirty_paths.contains(&project),
+        !app.document_state.is_document_dirty(&project),
         "the project is not dirtied by the check"
     );
 }

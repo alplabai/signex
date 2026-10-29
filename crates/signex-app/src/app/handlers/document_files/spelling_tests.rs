@@ -60,7 +60,6 @@ fn focus_another_tab(app: &mut Signex) {
         title: "Other".to_string(),
         path: PathBuf::from("/w/proj/Other.snxsch"),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -96,7 +95,6 @@ fn the_pcb_open_under_another_case_reuses_the_tab() {
         title: "Board".to_string(),
         path: held.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: crate::app::TabKind::Pcb,
     });
@@ -140,7 +138,6 @@ fn a_primitive_opened_under_another_case_reuses_the_tab() {
         title: "Comp".to_string(),
         path: held.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: crate::app::TabKind::SymbolEditor(held.clone()),
     });
@@ -252,7 +249,6 @@ fn primitive_save_as_onto_another_case_of_an_open_tab_is_refused() {
             title: name.to_string(),
             path: path.clone(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind: crate::app::TabKind::SymbolEditor(path),
         });

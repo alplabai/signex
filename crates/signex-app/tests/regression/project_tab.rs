@@ -320,7 +320,7 @@ fn ctrl_s_in_a_dirty_sheet_with_project_tab_edits_writes_both_and_returns() {
             on_disk(&f.prj).description.as_deref(),
             Some("from the sheet")
         );
-        assert!(f.app.document_state.dirty_paths.is_empty());
+        assert!(!f.app.document_state.has_dirty_documents());
     });
 }
 
@@ -338,7 +338,7 @@ fn quit_save_all_with_a_dirty_sheet_and_project_tab_edits_writes_both_and_return
         );
         assert!(sheet.exists());
         assert_eq!(on_disk(&f.prj).description.as_deref(), Some("at quit"));
-        assert!(f.app.document_state.dirty_paths.is_empty());
+        assert!(!f.app.document_state.has_dirty_documents());
     });
 }
 

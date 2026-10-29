@@ -259,10 +259,14 @@ impl PlacementPayload {
             .collect();
         let mut shielded = self.fragment.clone();
         shielded.junctions.iter_mut().for_each(|j| j.minted = false);
+        // The scratch engine is only a turning tool: a locked item of the
+        // copy must turn with the rest, and keep its lock on the result.
+        let locks = take_locks(&mut shielded);
         let mut scratch = Engine::new(shielded)?;
         let command = build(&self.fragment, self.items());
         scratch.execute(command)?;
         let mut turned = scratch.document().clone();
+        restore_locks(&mut turned, &locks);
         turned.junctions.retain(|j| minted.contains_key(&j.uuid));
         for j in &mut turned.junctions {
             j.minted = minted[&j.uuid];
@@ -287,7 +291,7 @@ impl PlacementPayload {
         }));
         commands.extend(f.wires.iter().cloned().map(|mut wire| {
             wire.uuid = Uuid::now_v7();
-            Command::PlaceWireSegment { wire }
+            Command::PlaceWireSegmentAsIs { wire }
         }));
         commands.extend(f.buses.iter().cloned().map(|mut bus| {
             bus.uuid = Uuid::now_v7();
@@ -314,6 +318,55 @@ impl PlacementPayload {
             Command::PlaceTextNote { text_note }
         }));
         commands
+    }
+}
+
+/// Clear every lock of `sheet` and return the ids that held one.
+fn take_locks(sheet: &mut SchematicSheet) -> std::collections::HashSet<Uuid> {
+    let mut locked = std::collections::HashSet::new();
+    for s in sheet.symbols.iter_mut().filter(|s| s.locked) {
+        s.locked = false;
+        locked.insert(s.uuid);
+    }
+    for w in sheet.wires.iter_mut().filter(|w| w.locked) {
+        w.locked = false;
+        locked.insert(w.uuid);
+    }
+    for l in sheet.labels.iter_mut().filter(|l| l.locked) {
+        l.locked = false;
+        locked.insert(l.uuid);
+    }
+    for n in sheet.text_notes.iter_mut().filter(|n| n.locked) {
+        n.locked = false;
+        locked.insert(n.uuid);
+    }
+    for d in sheet.drawings.iter_mut().filter(|d| d.is_locked()) {
+        d.set_locked(false);
+        locked.insert(d.uuid());
+    }
+    locked
+}
+
+/// Put back the locks [`take_locks`] cleared.
+fn restore_locks(sheet: &mut SchematicSheet, locked: &std::collections::HashSet<Uuid>) {
+    sheet
+        .symbols
+        .iter_mut()
+        .for_each(|s| s.locked = locked.contains(&s.uuid));
+    sheet
+        .wires
+        .iter_mut()
+        .for_each(|w| w.locked = locked.contains(&w.uuid));
+    sheet
+        .labels
+        .iter_mut()
+        .for_each(|l| l.locked = locked.contains(&l.uuid));
+    sheet
+        .text_notes
+        .iter_mut()
+        .for_each(|n| n.locked = locked.contains(&n.uuid));
+    for d in &mut sheet.drawings {
+        d.set_locked(locked.contains(&d.uuid()));
     }
 }
 
@@ -408,5 +461,103 @@ mod tests {
     fn an_empty_fragment_places_nothing() {
         let payload = PlacementPayload::new(test_sheet());
         assert!(payload.is_empty());
+    }
+
+    use signex_types::schematic::{SchDrawing, Wire};
+
+    fn group_with_locked_items() -> PlacementPayload {
+        let mut sheet = SchematicSheet::default();
+        sheet.wires.push(Wire {
+            uuid: Uuid::now_v7(),
+            start: Point::new(0.0, 0.0),
+            end: Point::new(10.0, 0.0),
+            locked: true,
+            ..Default::default()
+        });
+        sheet.drawings.push(SchDrawing::Line {
+            uuid: Uuid::now_v7(),
+            start: Point::new(0.0, 5.0),
+            end: Point::new(10.0, 5.0),
+            width: 0.2,
+            stroke_color: None,
+            locked: true,
+        });
+        sheet.symbols.push(Symbol {
+            uuid: Uuid::now_v7(),
+            position: Point::new(20.0, 0.0),
+            unit: 1,
+            locked: true,
+            ..Default::default()
+        });
+        sheet.labels.push(signex_types::schematic::Label {
+            uuid: Uuid::now_v7(),
+            text: "N".into(),
+            position: Point::new(5.0, 3.0),
+            rotation: 0.0,
+            label_type: signex_types::schematic::LabelType::Net,
+            shape: String::new(),
+            font_size: 1.27,
+            font_family: None,
+            justify: Default::default(),
+            justify_v: signex_types::schematic::VAlign::Bottom,
+            locked: true,
+            unknown_columns: Default::default(),
+        });
+        sheet.text_notes.push(signex_types::schematic::TextNote {
+            uuid: Uuid::now_v7(),
+            text: "t".into(),
+            position: Point::new(6.0, 4.0),
+            rotation: 0.0,
+            font_size: 1.27,
+            font_family: None,
+            justify_h: Default::default(),
+            justify_v: Default::default(),
+            locked: true,
+        });
+        PlacementPayload::new(sheet)
+    }
+
+    /// Space, X and Y turn the pasted group; a locked item turns with it and
+    /// stays locked in the result.
+    #[test]
+    fn a_pasted_group_with_locked_items_still_turns_and_keeps_its_locks() {
+        let payload = group_with_locked_items();
+        for turned in [
+            payload.rotate(false).unwrap(),
+            payload.rotate(true).unwrap(),
+            payload.mirror(MirrorAxis::Vertical).unwrap(),
+            payload.mirror(MirrorAxis::Horizontal).unwrap(),
+        ] {
+            let f = turned.fragment();
+            assert!(f.wires[0].locked && f.drawings[0].is_locked());
+            assert!(f.symbols[0].locked && f.labels[0].locked && f.text_notes[0].locked);
+        }
+        let turned = payload.rotate(false).unwrap();
+        assert_ne!(
+            turned.fragment().wires[0].end,
+            payload.fragment().wires[0].end,
+            "it turned"
+        );
+    }
+
+    /// A pasted wire is placed as copied: two collinear halves, as a Break Wire
+    /// cut leaves them, do not fold back into one.
+    #[test]
+    fn a_pasted_split_wire_is_not_folded() {
+        let mut sheet = SchematicSheet::default();
+        for (a, b) in [(0.0, 5.0), (5.0, 10.0)] {
+            sheet.wires.push(Wire {
+                uuid: Uuid::now_v7(),
+                start: Point::new(a, 0.0),
+                end: Point::new(b, 0.0),
+                ..Default::default()
+            });
+        }
+        let payload = PlacementPayload::new(sheet);
+        let mut engine = Engine::new(SchematicSheet::default()).unwrap();
+        engine
+            .execute_batch(payload.place_commands(Point::new(20.0, 20.0)).unwrap())
+            .unwrap();
+        assert_eq!(engine.document().wires.len(), 2);
     }
 }

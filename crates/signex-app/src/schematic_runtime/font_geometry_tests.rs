@@ -18,6 +18,7 @@ fn label(label_type: LabelType, family: Option<&str>) -> Label {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 

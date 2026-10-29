@@ -15,6 +15,7 @@ fn wire(a: (f64, f64), b: (f64, f64)) -> Wire {
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
         stroke_width: 0.0,
+        locked: false,
     }
 }
 
@@ -43,7 +44,6 @@ fn app_with(wires: Vec<Wire>) -> Signex {
         title: "measure-and-zoom".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -123,7 +123,10 @@ fn two_clicks_measure_dx_dy_and_distance_without_touching_the_document() {
     let engine = app.document_state.active_engine().unwrap();
     assert_eq!(engine.document().wires.len(), before.wires.len());
     assert!(!engine.can_undo(), "measuring must not add an undo entry");
-    assert!(!app.document_state.tabs[0].dirty);
+    assert!(
+        !app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
 }
 
 #[test]

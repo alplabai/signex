@@ -85,11 +85,10 @@ fn open_dirty_sheet(app: &mut Signex, path: &Path, project: ProjectId) {
         title: path.file_stem().unwrap().to_string_lossy().into_owned(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: true,
         project_id: Some(project),
         kind: TabKind::Schematic,
     });
-    app.document_state.dirty_paths.insert(path.to_path_buf());
+    app.document_state.mark_document_dirty(path);
 }
 
 use crate::close_support::close_first_project;
@@ -134,7 +133,7 @@ fn deleting_a_dirty_sheet_is_not_resurrected_by_save_all_on_quit() {
 
     assert!(other.exists(), "Save All must still save the live sheet");
     assert!(!sheet.exists(), "Save All on quit must not recreate it");
-    assert!(!app.document_state.dirty_paths.contains(&sheet));
+    assert!(!app.document_state.is_document_dirty(&sheet));
     assert!(!app.document_state.engines.contains_key(&sheet));
 }
 
@@ -155,7 +154,7 @@ fn closing_a_project_keeps_a_nested_projects_dirty_sheet() {
         app.ui_state.project_close_confirm.is_none(),
         "A has no dirty documents of its own, so closing it must not prompt",
     );
-    assert!(app.document_state.dirty_paths.contains(&b_sheet));
+    assert!(app.document_state.is_document_dirty(&b_sheet));
     assert!(app.document_state.engines.contains_key(&b_sheet));
     assert_eq!(app.document_state.projects.len(), 1);
 }
@@ -183,8 +182,8 @@ fn discard_all_does_not_touch_a_sibling_projects_dirty_sheet() {
         ProjectCloseChoice::DiscardAll,
     )));
 
-    assert!(!app.document_state.dirty_paths.contains(&a_sheet));
-    assert!(app.document_state.dirty_paths.contains(&b_sheet));
+    assert!(!app.document_state.is_document_dirty(&a_sheet));
+    assert!(app.document_state.is_document_dirty(&b_sheet));
     assert!(app.document_state.engines.contains_key(&b_sheet));
     assert!(app.document_state.tabs.iter().any(|t| t.path == b_sheet));
 }
@@ -197,7 +196,7 @@ fn closing_a_clean_project_keeps_a_sibling_projects_clean_engine() {
     let b = add_project(&mut app, &tmp.path().join("B.snxprj"), "b.snxsch");
     let b_sheet = tmp.path().join("b.snxsch");
     open_dirty_sheet(&mut app, &b_sheet, b);
-    app.document_state.dirty_paths.clear();
+    app.document_state.mark_documents_clean_where(|_| true);
 
     close_first_project(&mut app);
 
@@ -250,7 +249,7 @@ fn deleting_a_missing_file_still_drops_its_parked_dirty_engine() {
 
     delete_file(&mut app, &sheet);
 
-    assert!(!app.document_state.dirty_paths.contains(&sheet));
+    assert!(!app.document_state.is_document_dirty(&sheet));
     assert!(!app.document_state.engines.contains_key(&sheet));
 }
 
@@ -277,7 +276,7 @@ fn a_failed_delete_keeps_the_dirty_sheet_and_its_state() {
     restore().expect("restore");
 
     assert!(sheet.exists(), "the delete must have failed");
-    assert!(app.document_state.dirty_paths.contains(&sheet));
+    assert!(app.document_state.is_document_dirty(&sheet));
     assert!(app.document_state.engines.contains_key(&sheet));
 }
 
@@ -300,17 +299,16 @@ fn deleting_a_library_directory_drops_the_editors_and_tabs_inside_it() {
         title: "fp".into(),
         path: fp.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::FootprintEditor(fp.clone()),
     });
-    app.document_state.dirty_paths.insert(fp.clone());
+    app.document_state.mark_document_dirty(&fp);
 
     delete_file(&mut app, &lib);
 
     assert!(!lib.exists());
     assert!(app.document_state.footprint_editors.is_empty());
-    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(!app.document_state.has_dirty_documents());
     assert!(
         app.document_state.tabs.is_empty(),
         "no tab may outlive its file"
@@ -352,7 +350,7 @@ fn closing_a_project_keeps_a_same_directory_projects_dirty_child_sheet() {
         app.ui_state.project_close_confirm.is_none(),
         "B's child sheet is not A's, so closing A must not prompt",
     );
-    assert!(app.document_state.dirty_paths.contains(&child));
+    assert!(app.document_state.is_document_dirty(&child));
     assert!(app.document_state.engines.contains_key(&child));
 }
 
@@ -399,7 +397,7 @@ fn closing_a_project_keeps_a_sibling_child_whose_parent_sheet_is_unloaded() {
         app.ui_state.project_close_confirm.is_none(),
         "b_child belongs to B, so closing A must not prompt for it",
     );
-    assert!(app.document_state.dirty_paths.contains(&child));
+    assert!(app.document_state.is_document_dirty(&child));
     assert!(app.document_state.engines.contains_key(&child));
 }
 
@@ -426,7 +424,7 @@ fn discard_all_keeps_a_sibling_child_whose_parent_sheet_is_unloaded() {
         ProjectCloseChoice::DiscardAll,
     )));
 
-    assert!(app.document_state.dirty_paths.contains(&child));
+    assert!(app.document_state.is_document_dirty(&child));
     assert!(app.document_state.engines.contains_key(&child));
     assert!(app.document_state.tabs.iter().any(|t| t.path == child));
 }
@@ -474,7 +472,7 @@ fn closing_a_project_collects_a_sheet_it_lists_outside_its_directory() {
         app.ui_state.project_close_confirm.is_none(),
         "x is B's, so closing A must not prompt for it",
     );
-    assert!(app.document_state.dirty_paths.contains(&orphan));
+    assert!(app.document_state.is_document_dirty(&orphan));
 
     close_first_project(&mut app);
     let modal = app
@@ -522,7 +520,7 @@ fn closing_a_project_keeps_a_child_shared_by_two_projects_outside_both_directori
         ProjectCloseChoice::DiscardAll,
     )));
 
-    assert!(app.document_state.dirty_paths.contains(&shared));
+    assert!(app.document_state.is_document_dirty(&shared));
     assert!(app.document_state.engines.contains_key(&shared));
 }
 
@@ -571,8 +569,8 @@ fn an_unreadable_sheet_disables_discard_all_and_a_forced_discard_is_refused() {
     )));
 
     assert!(app.ui_state.project_close_confirm.is_some(), "modal stays");
-    assert!(app.document_state.dirty_paths.contains(&a_sheet));
-    assert!(app.document_state.dirty_paths.contains(&unknown));
+    assert!(app.document_state.is_document_dirty(&a_sheet));
+    assert!(app.document_state.is_document_dirty(&unknown));
     assert!(app.document_state.engines.contains_key(&unknown));
     assert_eq!(app.document_state.projects.len(), 2, "A is still open");
     assert!(
@@ -660,13 +658,13 @@ fn assert_discard_all_keeps_the_kept_sheet(mut app: Signex, a_sheet: &Path, g: &
         ProjectCloseChoice::DiscardAll,
     )));
 
-    assert!(app.document_state.dirty_paths.contains(g));
+    assert!(app.document_state.is_document_dirty(g));
     assert!(app.document_state.engines.contains_key(g));
     assert!(
         app.document_state.tabs.iter().any(|t| t.path == g),
         "the kept sheet's tab must stay open, never orphaned",
     );
-    assert!(!app.document_state.dirty_paths.contains(a_sheet));
+    assert!(!app.document_state.is_document_dirty(a_sheet));
     assert_eq!(app.document_state.projects.len(), 1, "A itself is closed");
 }
 
@@ -705,7 +703,7 @@ fn every_dirty_document_of_the_closing_project_is_saved_or_kept_and_named() {
     open_dirty_sheet(&mut app, &x, a);
     open_dirty_sheet(&mut app, &g, a);
     open_dirty_sheet(&mut app, &b_sheet, b);
-    app.document_state.dirty_paths.insert(draft.clone());
+    app.document_state.mark_document_dirty(&draft);
 
     close_first_project(&mut app);
 
@@ -761,7 +759,7 @@ fn a_library_draft_and_a_tab_only_file_under_the_closing_projects_folder_are_kep
     let draft = a_dir.join("lib.snxlib").join("symbols").join("d.snxsym");
     open_dirty_sheet(&mut app, &a_sheet, a);
     open_dirty_sheet(&mut app, &tab_only, a);
-    app.document_state.dirty_paths.insert(draft.clone());
+    app.document_state.mark_document_dirty(&draft);
 
     close_first_project(&mut app);
 
@@ -787,9 +785,9 @@ fn a_library_draft_and_a_tab_only_file_under_the_closing_projects_folder_are_kep
         ProjectCloseChoice::DiscardAll,
     )));
 
-    assert!(!app.document_state.dirty_paths.contains(&a_sheet));
-    assert!(app.document_state.dirty_paths.contains(&tab_only));
-    assert!(app.document_state.dirty_paths.contains(&draft));
+    assert!(!app.document_state.is_document_dirty(&a_sheet));
+    assert!(app.document_state.is_document_dirty(&tab_only));
+    assert!(app.document_state.is_document_dirty(&draft));
     assert!(
         app.document_state.tabs.iter().any(|t| t.path == tab_only),
         "a kept file's tab stays open",
@@ -810,7 +808,7 @@ fn save_all_under_an_unreadable_sheet_saves_only_what_the_closing_project_reache
     let a_sheet = a_dir.join("a.snxsch");
     let g = a_dir.join("g.snxsch");
     open_dirty_sheet(&mut app, &a_sheet, a);
-    app.document_state.dirty_paths.insert(g.clone());
+    app.document_state.mark_document_dirty(&g);
 
     close_first_project(&mut app);
 
@@ -826,8 +824,8 @@ fn save_all_under_an_unreadable_sheet_saves_only_what_the_closing_project_reache
         Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::SaveAll)),
     );
     assert!(a_sheet.exists(), "Save All writes what A reaches");
-    assert!(!app.document_state.dirty_paths.contains(&a_sheet));
-    assert!(app.document_state.dirty_paths.contains(&g), "g is kept");
+    assert!(!app.document_state.is_document_dirty(&a_sheet));
+    assert!(app.document_state.is_document_dirty(&g), "g is kept");
     assert_eq!(app.document_state.projects.len(), 1, "A is closed");
 }
 
@@ -880,7 +878,7 @@ fn an_engine_opened_through_a_raw_dotdot_path_still_marks_its_children_as_the_si
     let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
         ProjectCloseChoice::DiscardAll,
     )));
-    assert!(app.document_state.dirty_paths.contains(&c));
+    assert!(app.document_state.is_document_dirty(&c));
     assert!(app.document_state.engines.contains_key(&c));
 }
 
@@ -920,7 +918,7 @@ fn confirm_aborts_with_a_log_line_when_the_project_is_gone() {
     )));
 
     assert!(
-        app.document_state.dirty_paths.contains(&a_sheet),
+        app.document_state.is_document_dirty(&a_sheet),
         "nothing discarded",
     );
     assert!(
@@ -970,7 +968,7 @@ fn confirm_re_resolves_when_a_project_was_opened_since_the_refs_were_read() {
         "the old prompt is taken until the re-resolve lands"
     );
     assert!(
-        app.document_state.dirty_paths.contains(&a_sheet),
+        app.document_state.is_document_dirty(&a_sheet),
         "nothing discarded yet",
     );
     assert_eq!(app.document_state.projects.len(), 2, "A is still open");
@@ -1184,7 +1182,7 @@ fn an_engine_edit_made_while_the_modal_is_up_re_prompts_instead_of_discarding() 
     )));
 
     assert!(
-        app.document_state.dirty_paths.contains(&c),
+        app.document_state.is_document_dirty(&c),
         "c is not discarded"
     );
     assert!(app.document_state.engines.contains_key(&c));

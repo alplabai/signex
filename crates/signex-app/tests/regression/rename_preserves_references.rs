@@ -145,7 +145,7 @@ fn renaming_a_child_sheet_updates_the_unopened_parents_reference() {
     assert!(f.child.with_file_name("renamed.snxsch").exists());
     assert_eq!(child_refs(&f.app, &f.root), vec!["renamed.snxsch"]);
     assert!(
-        f.app.document_state.dirty_paths.contains(&f.root),
+        f.app.document_state.is_document_dirty(&f.root),
         "the parent must be marked dirty for the user to save"
     );
     assert_eq!(
@@ -154,7 +154,7 @@ fn renaming_a_child_sheet_updates_the_unopened_parents_reference() {
         "the parent is NOT silently written"
     );
     assert!(
-        f.app.document_state.dirty_paths.contains(&f.prj),
+        f.app.document_state.is_document_dirty(&f.prj),
         "the project's sheet list changed in memory"
     );
     let data = &f.app.document_state.projects[0].data;
@@ -174,7 +174,6 @@ fn renaming_a_child_sheet_updates_an_open_parents_reference() {
         title: "root".to_string(),
         path: f.root.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -182,8 +181,13 @@ fn renaming_a_child_sheet_updates_an_open_parents_reference() {
     submit_rename(&mut f.app, &f.child, "renamed.snxsch");
 
     assert_eq!(child_refs(&f.app, &f.root), vec!["renamed.snxsch"]);
-    assert!(f.app.document_state.tabs[0].dirty, "open tab shows dirty");
-    assert!(f.app.document_state.dirty_paths.contains(&f.root));
+    assert!(
+        f.app
+            .document_state
+            .is_document_dirty(&f.app.document_state.tabs[0].path),
+        "open tab shows dirty"
+    );
+    assert!(f.app.document_state.is_document_dirty(&f.root));
 }
 
 #[test]
@@ -208,7 +212,7 @@ fn rename_cannot_drop_or_change_the_native_extension() {
             !f.app.document_state.engines.contains_key(&f.root),
             "`{bad}`: no references touched"
         );
-        assert!(f.app.document_state.dirty_paths.is_empty());
+        assert!(!f.app.document_state.has_dirty_documents());
     }
 }
 
@@ -227,7 +231,7 @@ fn renaming_the_pcb_repoints_the_projects_pcb_file() {
         f.app.document_state.projects[0].data.pcb_file.as_deref(),
         Some("board2.snxpcb")
     );
-    assert!(f.app.document_state.dirty_paths.contains(&f.prj));
+    assert!(f.app.document_state.is_document_dirty(&f.prj));
 }
 
 #[test]
@@ -256,7 +260,7 @@ fn a_project_library_rename_repoints_the_entry_in_memory_and_in_the_saved_projec
     assert!(f.app.ui_state.rename_dialog.is_none());
     assert!(!lib.exists());
     assert!(f.prj.with_file_name("other.snxlib").exists());
-    assert!(!f.app.document_state.dirty_paths.contains(&f.prj));
+    assert!(!f.app.document_state.is_document_dirty(&f.prj));
     let saved = signex_types::project::parse_project(&f.prj).expect("saved project");
     assert_eq!(saved.libraries[0].path, PathBuf::from("other.snxlib"));
     assert_eq!(
@@ -298,7 +302,7 @@ fn save_all_after_renaming_a_child_persists_parent_and_project_references() {
         "Save All must not report a failure: {:?}",
         f.app.document_state.error_notice
     );
-    assert!(f.app.document_state.dirty_paths.is_empty());
+    assert!(!f.app.document_state.has_dirty_documents());
 
     let text = fs::read_to_string(&f.root).expect("read root");
     let root = signex_types::format::SnxSchematic::parse(&text)
@@ -328,9 +332,9 @@ fn renaming_an_unrelated_file_leaves_dirty_paths_empty() {
     assert!(f.app.ui_state.rename_dialog.is_none(), "rename succeeded");
     assert!(f.prj.with_file_name("pad2.snxfpt").exists());
     assert!(
-        f.app.document_state.dirty_paths.is_empty(),
+        !f.app.document_state.has_dirty_documents(),
         "an unrelated rename must not dirty the project: {:?}",
-        f.app.document_state.dirty_paths
+        f.app.document_state.dirty_document_paths()
     );
 }
 
@@ -421,7 +425,7 @@ fn closing_the_project_after_a_rename_keeps_the_prompt_and_strands_no_engine() {
         f.app.document_state.engines.is_empty(),
         "no engine entry survives the project"
     );
-    assert!(f.app.document_state.dirty_paths.is_empty());
+    assert!(!f.app.document_state.has_dirty_documents());
 }
 
 /// The extension check is deliberately exact and case-sensitive: the native

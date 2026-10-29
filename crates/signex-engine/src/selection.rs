@@ -607,6 +607,12 @@ impl Engine {
             }
         }
 
+        // A symbol lists its own `Locked` row above; the other lockable kinds
+        // list theirs here (#1573), for the Properties "Locked" checkbox.
+        if let Some(locked) = self.item_locked(item) {
+            info.push(("Locked".into(), if locked { "Yes" } else { "No" }.into()));
+        }
+
         Some(SelectionDetails {
             selected_uuid: item.uuid,
             selected_kind: item.kind,

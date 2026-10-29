@@ -38,7 +38,6 @@ fn app_with_buses(buses: &[BusEnds]) -> (Signex, TempDir) {
         title: "root".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

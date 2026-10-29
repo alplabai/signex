@@ -155,6 +155,7 @@ pub(crate) mod sheet {
             justify: Default::default(),
             justify_v: Default::default(),
             unknown_columns: Default::default(),
+            locked: false,
         }
     }
 
@@ -179,7 +180,6 @@ pub(crate) mod sheet {
             title: "paste-1263".to_owned(),
             path: path.clone(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind: TabKind::Schematic,
         });

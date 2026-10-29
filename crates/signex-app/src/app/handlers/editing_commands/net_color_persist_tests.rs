@@ -43,7 +43,6 @@ fn app_with(sheet: SchematicSheet) -> Signex {
         title: NAME.to_string(),
         path: path(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -53,13 +52,15 @@ fn app_with(sheet: SchematicSheet) -> Signex {
 }
 
 fn is_dirty(app: &Signex) -> bool {
-    app.document_state.tabs.iter().any(|t| t.dirty)
-        && app.document_state.dirty_paths.contains(&path())
+    app.document_state.has_dirty_documents() && app.document_state.is_document_dirty(&path())
 }
 
 fn make_clean(app: &mut Signex) {
-    app.document_state.tabs[0].dirty = false;
-    app.document_state.dirty_paths.clear();
+    {
+        let path = app.document_state.tabs[0].path.clone();
+        app.document_state.mark_document_clean(&path);
+    }
+    app.document_state.mark_documents_clean_where(|_| true);
 }
 
 #[test]

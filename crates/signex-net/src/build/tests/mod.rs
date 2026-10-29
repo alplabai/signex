@@ -50,6 +50,7 @@ fn label(text: &str, pos: Point, ty: LabelType) -> Label {
         justify: signex_types::schematic::HAlign::Left,
         justify_v: signex_types::schematic::VAlign::Bottom,
         font_family: None,
+        locked: false,
     }
 }
 

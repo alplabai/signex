@@ -43,7 +43,6 @@ fn fixture(stem: &str, count: usize) -> (Signex, PathBuf, TempDir) {
         title: stem.into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -431,7 +430,6 @@ fn sketched_pad_fixture(stem: &str, size_mm: (f64, f64)) -> (Signex, PathBuf) {
         title: stem.into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -546,7 +544,6 @@ fn sketch_edge_drag_resizes_a_rotated_pad() {
         title: "rotated-line-drag".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

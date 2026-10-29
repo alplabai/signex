@@ -35,7 +35,6 @@ impl Signex {
                     title: project_tab_title(&path),
                     path,
                     cached_document: None,
-                    dirty: false,
                     project_id: Some(id),
                     kind: TabKind::Project(id),
                 });

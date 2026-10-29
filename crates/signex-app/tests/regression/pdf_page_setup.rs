@@ -46,7 +46,6 @@ fn app_with_sheet(paper: &str) -> Signex {
         title: "page-setup".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -649,7 +648,6 @@ fn closing_another_tab_keeps_the_page_setup() {
         title: "other".to_string(),
         path: PathBuf::from("other.snxsch"),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -739,8 +737,7 @@ fn a_dirty_tab_parked_on_close_keeps_its_page_setup() {
     let mut app = app_with_sheet("A4");
     remember_a3_setup(&mut app);
     app.document_state
-        .dirty_paths
-        .insert(PathBuf::from("page-setup.snxsch"));
+        .mark_document_dirty(&PathBuf::from("page-setup.snxsch"));
 
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
         TabContextAction::Close(0),
@@ -760,7 +757,6 @@ fn closing_one_of_two_tabs_on_a_path_keeps_the_page_setup() {
         title: "page-setup twin".to_string(),
         path: PathBuf::from("page-setup.snxsch"),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

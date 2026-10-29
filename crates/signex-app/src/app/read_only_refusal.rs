@@ -72,7 +72,6 @@ mod tests {
             title: "top".to_string(),
             path: top(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });
@@ -107,8 +106,7 @@ mod tests {
     }
 
     fn is_dirty(app: &Signex) -> bool {
-        app.document_state.tabs.iter().any(|t| t.dirty)
-            || app.document_state.dirty_paths.contains(&top())
+        app.document_state.has_dirty_documents() || app.document_state.is_document_dirty(&top())
     }
 
     #[test]

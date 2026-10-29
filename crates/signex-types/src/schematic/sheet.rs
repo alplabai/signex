@@ -13,6 +13,9 @@ pub struct Wire {
     /// Stroke width in mm. 0.0 = use schematic default (~0.15mm).
     #[serde(default)]
     pub stroke_width: f64,
+    /// Frozen against every edit until unlocked (#1573); see `Symbol::locked`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub locked: bool,
     /// TSV columns this build does not recognise, kept per row so a
     /// save re-emits them (see [`UnknownColumns`]).
     #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
@@ -63,6 +66,9 @@ pub struct Label {
     pub justify: HAlign,
     #[serde(default = "default_label_v_align")]
     pub justify_v: VAlign,
+    /// Frozen against every edit until unlocked (#1573); see `Symbol::locked`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub locked: bool,
     /// TSV columns this build does not recognise, kept per row so a
     /// save re-emits them (see [`UnknownColumns`]).
     #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
@@ -124,6 +130,9 @@ pub struct TextNote {
     pub justify_h: HAlign,
     #[serde(default)]
     pub justify_v: VAlign,
+    /// Frozen against every edit until unlocked (#1573); see `Symbol::locked`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub locked: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -213,6 +222,8 @@ pub enum SchDrawing {
         width: f64,
         #[serde(default)]
         stroke_color: Option<StrokeColor>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        locked: bool,
     },
     Rect {
         uuid: Uuid,
@@ -224,6 +235,8 @@ pub enum SchDrawing {
         fill: FillType,
         #[serde(default)]
         stroke_color: Option<StrokeColor>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        locked: bool,
     },
     Circle {
         uuid: Uuid,
@@ -235,6 +248,8 @@ pub enum SchDrawing {
         fill: FillType,
         #[serde(default)]
         stroke_color: Option<StrokeColor>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        locked: bool,
     },
     Arc {
         uuid: Uuid,
@@ -247,6 +262,8 @@ pub enum SchDrawing {
         fill: FillType,
         #[serde(default)]
         stroke_color: Option<StrokeColor>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        locked: bool,
     },
     Polyline {
         uuid: Uuid,
@@ -257,6 +274,8 @@ pub enum SchDrawing {
         fill: FillType,
         #[serde(default)]
         stroke_color: Option<StrokeColor>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        locked: bool,
     },
 }
 
@@ -317,6 +336,34 @@ impl SchDrawing {
             | Self::Polyline { uuid, .. } => *uuid,
         }
     }
+
+    /// Whether the drawing is locked (#1573), whichever shape it is.
+    pub fn is_locked(&self) -> bool {
+        match self {
+            Self::Line { locked, .. }
+            | Self::Rect { locked, .. }
+            | Self::Circle { locked, .. }
+            | Self::Arc { locked, .. }
+            | Self::Polyline { locked, .. } => *locked,
+        }
+    }
+
+    /// Set the lock, whichever shape the drawing is.
+    pub fn set_locked(&mut self, value: bool) {
+        match self {
+            Self::Line { locked, .. }
+            | Self::Rect { locked, .. }
+            | Self::Circle { locked, .. }
+            | Self::Arc { locked, .. }
+            | Self::Polyline { locked, .. } => *locked = value,
+        }
+    }
+}
+
+/// `skip_serializing_if` predicate: a lock is written only when set, so an
+/// untouched file re-saves byte-identical.
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// Whether a drawing paints under the circuit or over it (#1583).
@@ -461,6 +508,7 @@ impl Default for Wire {
             start: Point::default(),
             end: Point::default(),
             stroke_width: 0.0,
+            locked: false,
             unknown_columns: UnknownColumns::default(),
         }
     }

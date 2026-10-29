@@ -410,7 +410,8 @@ fn a_quit_confirm_stays_answerable_while_a_detached_confirm_is_open() {
     open(&mut app, ModalId::RenameDialog);
     let _ = app.sync_detached_modals();
     assert!(app.locking_confirm_window().is_some());
-    app.document_state.dirty_paths.insert("/p/a.snxsch".into());
+    app.document_state
+        .mark_document_dirty(std::path::Path::new("/p/a.snxsch"));
     let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
     assert!(
         app.ui_state.app_quit_confirm.is_some(),

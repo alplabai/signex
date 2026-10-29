@@ -18,6 +18,7 @@ fn line(n: u128, width: f64) -> SchDrawing {
         end: Point::new(50.0, 10.0 + n as f64),
         width,
         stroke_color: None,
+        locked: false,
     }
 }
 

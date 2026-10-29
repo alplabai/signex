@@ -173,6 +173,7 @@ fn label(text: &str, x: f64, y: f64, rotation: f64) -> Label {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
@@ -186,6 +187,7 @@ pub(super) fn fixture() -> SchematicSheet {
         end: Point::new(20.0, 5.0),
         stroke_width: 0.25,
         unknown_columns: Default::default(),
+        locked: false,
     });
     // A second wire a drag leaves alone.
     sheet.wires.push(Wire {
@@ -194,6 +196,7 @@ pub(super) fn fixture() -> SchematicSheet {
         end: Point::new(20.0, 8.0),
         stroke_width: 0.25,
         unknown_columns: Default::default(),
+        locked: false,
     });
     // A rectangle drawing, a polygon of ordinary size.
     sheet.drawings.push(SchDrawing::Rect {
@@ -203,6 +206,7 @@ pub(super) fn fixture() -> SchematicSheet {
         width: 0.25,
         fill: FillType::None,
         stroke_color: None,
+        locked: false,
     });
     // A drawing circle, in the polygon bucket, far below the radius floor.
     sheet.drawings.push(SchDrawing::Circle {
@@ -212,6 +216,7 @@ pub(super) fn fixture() -> SchematicSheet {
         width: 0.01,
         fill: FillType::None,
         stroke_color: None,
+        locked: false,
     });
     sheet.drawings.push(SchDrawing::Arc {
         uuid: uuid::Uuid::now_v7(),
@@ -221,6 +226,7 @@ pub(super) fn fixture() -> SchematicSheet {
         width: 0.25,
         fill: FillType::None,
         stroke_color: None,
+        locked: false,
     });
     // A junction dot, in the circle bucket, far below the radius floor.
     sheet.junctions.push(Junction {

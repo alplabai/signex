@@ -310,6 +310,14 @@ pub(in crate::format) struct SheetExtras {
     /// are gone after the next save.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(in crate::format) drawing_placements: BTreeMap<String, String>,
+    /// Uuids of the locked text notes and drawings (#1573). Kept beside the
+    /// objects, not in them, for the reason [`Self::note_font_families`] is:
+    /// a build that predates the lock drops unknown keys nested in the typed
+    /// arrays but keeps unknown keys of this table. Omitted when empty so a
+    /// sheet with nothing locked re-saves byte-identical. Format:
+    /// `docs/architecture/snxsch-object-lock.md`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(in crate::format) locked_objects: Vec<String>,
     /// Frame settings (`[extras.sheet.frame]`); omitted at the default so a
     /// sheet that never changed them re-saves byte-identical.
     #[serde(default, skip_serializing_if = "FrameExtras::is_default")]
@@ -334,6 +342,7 @@ impl SheetExtras {
             && self.font_family.is_none()
             && self.note_font_families.is_empty()
             && self.drawing_placements.is_empty()
+            && self.locked_objects.is_empty()
             && self.frame.is_default()
             && self.unknown.is_empty()
     }
@@ -348,12 +357,21 @@ impl SheetExtras {
                 .cloned()
                 .map(|mut note| {
                     note.font_family = None;
+                    note.locked = false;
                     note
                 })
                 .collect(),
             buses: s.buses.clone(),
             bus_entries: s.bus_entries.clone(),
-            drawings: s.drawings.clone(),
+            drawings: s
+                .drawings
+                .iter()
+                .cloned()
+                .map(|mut drawing| {
+                    drawing.set_locked(false);
+                    drawing
+                })
+                .collect(),
             no_erc_directives: s.no_erc_directives.clone(),
             title_block: s
                 .title_block
@@ -382,6 +400,19 @@ impl SheetExtras {
                 .filter(|(_, placement)| **placement == crate::schematic::DrawingPlacement::Above)
                 .filter(|(id, _)| s.drawings.iter().any(|d| d.uuid() == **id))
                 .map(|(id, _)| (id.to_string(), "above".to_string()))
+                .collect(),
+            locked_objects: s
+                .text_notes
+                .iter()
+                .filter(|note| note.locked)
+                .map(|note| note.uuid)
+                .chain(
+                    s.drawings
+                        .iter()
+                        .filter(|d| d.is_locked())
+                        .map(|d| d.uuid()),
+                )
+                .map(|id| id.to_string())
                 .collect(),
             frame: FrameExtras {
                 settings: s.frame,

@@ -31,6 +31,7 @@ fn parent_with_a_far_child_label() -> (Signex, PathBuf) {
         justify: HAlign::default(),
         justify_v: VAlign::default(),
         font_family: None,
+        locked: false,
     });
     let text = SnxSchematic::new(child).write_string().expect("serialize");
     std::fs::write(dir.join("child.snxsch"), text).expect("write child");
@@ -253,7 +254,7 @@ fn erc_navigation_keeps_the_dirty_engine_of_a_tab_less_sheet() {
         &path,
         sheet_with_net("R_EDIT", "EDITED_NET", &[]),
     );
-    app.document_state.dirty_paths.insert(path.clone());
+    app.document_state.mark_document_dirty(&path);
     assert!(app.document_state.tabs.is_empty());
 
     app.ensure_sheet_open_and_active(&path);

@@ -238,6 +238,7 @@ mod tests {
                 end: signex_types::schematic::Point::new(30.0, 10.0),
                 stroke_width: 0.0,
                 unknown_columns: Default::default(),
+                locked: false,
             }],
             junctions: Vec::new(),
             labels: Vec::new(),

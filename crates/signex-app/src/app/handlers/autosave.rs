@@ -45,7 +45,7 @@ impl Signex {
 
     fn is_dirty_schematic(&self, path: &Path) -> bool {
         self.document_state.engines.contains_key(path)
-            && self.document_state.dirty_paths.contains(path)
+            && self.document_state.is_document_dirty(path)
     }
 
     /// Does `path` hold edits a recovery copy should protect: a dirty

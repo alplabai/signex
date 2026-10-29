@@ -92,7 +92,6 @@ fn app_with(symbols: Vec<Symbol>) -> (Signex, PathBuf) {
         title: "dead-controls".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -308,7 +307,6 @@ fn add_second_sheet(app: &mut Signex) -> PathBuf {
         title: "dead-controls-other".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

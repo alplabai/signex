@@ -88,6 +88,7 @@ pub(crate) fn sheet_with_net(reference: &str, net_name: &str, children: &[&str])
         justify: HAlign::default(),
         justify_v: VAlign::default(),
         font_family: None,
+        locked: false,
     });
     sheet.lib_symbols.insert(
         "Device:R".to_string(),

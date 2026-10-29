@@ -314,6 +314,7 @@ mod tests {
                 font_family: family.map(str::to_string),
                 justify_h: Default::default(),
                 justify_v: Default::default(),
+                locked: false,
             });
         let opts = PdfOptions::default();
         let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);

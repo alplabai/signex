@@ -20,7 +20,7 @@ fn a_failed_reverse_patch_reports_the_stale_project_without_dirtying_it() {
 
     assert!(suffix.contains("Save the project"), "got: {suffix}");
     assert!(
-        app.document_state.dirty_paths.is_empty(),
+        !app.document_state.has_dirty_documents(),
         "dirtying waits until the file is back at the old path"
     );
 }
@@ -36,17 +36,17 @@ fn the_stale_project_is_dirtied_only_when_the_file_moves_back() {
 
     app.undo_library_file_rename(&old_path, &new_path, "r", Some(&project_path));
     assert!(old_path.exists());
-    assert!(app.document_state.dirty_paths.contains(&project_path));
+    assert!(app.document_state.is_document_dirty(&project_path));
 
     // Move-back fails (source missing): the project stays clean.
-    app.document_state.dirty_paths.clear();
+    app.document_state.mark_documents_clean_where(|_| true);
     app.undo_library_file_rename(
         &old_path,
         &tmp.path().join("gone.snxlib"),
         "r",
         Some(&project_path),
     );
-    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(!app.document_state.has_dirty_documents());
 }
 
 #[test]
@@ -61,5 +61,5 @@ fn a_successful_reverse_patch_leaves_the_project_clean() {
         app.undo_project_patch(&project_path, &old_path, &new_path)
             .is_ok()
     );
-    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(!app.document_state.has_dirty_documents());
 }

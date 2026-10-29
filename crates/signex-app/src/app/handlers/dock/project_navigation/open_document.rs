@@ -175,9 +175,9 @@ impl Signex {
             // If we parked an engine for this file (closed while dirty),
             // restore it instead of reparsing — Altium parity. Re-parsing
             // would silently discard the user's in-memory edits, which is
-            // exactly what `dirty_paths` was built to prevent.
+            // exactly what the dirty mark exists to prevent.
             if self.document_state.engines.contains_key(&file_path)
-                && self.document_state.dirty_paths.contains(&file_path)
+                && self.document_state.is_document_dirty(&file_path)
             {
                 self.attach_parked_schematic_tab(file_path, title);
                 return Ok(Task::none());
@@ -284,7 +284,6 @@ mod tests {
             title: "Top".to_string(),
             path: held.clone(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });
@@ -292,7 +291,6 @@ mod tests {
             title: "Other".to_string(),
             path: dir.path().join("Other.snxsch"),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });

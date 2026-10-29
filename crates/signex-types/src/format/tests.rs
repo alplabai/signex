@@ -105,6 +105,7 @@ fn label_with_text(text: &str) -> Label {
         justify: Default::default(),
         justify_v: Default::default(),
         font_family: None,
+        locked: false,
     }
 }
 
@@ -332,6 +333,7 @@ fn snxsch_round_trip_with_data() {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         font_family: None,
+        locked: false,
     });
 
     let snx = SnxSchematic::new(sheet.clone());

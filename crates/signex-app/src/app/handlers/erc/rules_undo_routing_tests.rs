@@ -40,7 +40,6 @@ fn app_with_sheet() -> (Signex, uuid::Uuid) {
         title: "a_root.snxsch".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -193,7 +192,7 @@ fn clicking_the_selected_severity_records_nothing_and_stays_clean() {
     let _ = app.handle_store_erc_rules_in_project();
     let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Info);
     let path = app.document_state.projects[0].path.clone();
-    app.document_state.dirty_paths.clear();
+    app.document_state.mark_documents_clean_where(|_| true);
     let steps = |app: &Signex| {
         let history = &app.document_state.rules_history[&app.document_state.projects[0].id];
         (history.can_undo(), history.can_redo())
@@ -202,7 +201,7 @@ fn clicking_the_selected_severity_records_nothing_and_stays_clean() {
 
     let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Info);
 
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.is_document_dirty(&path));
     assert_eq!(steps(&app), before);
     // One undo returns to the seeded set: the no-op added no step of its own.
     assert!(app.undo_project_rules());

@@ -52,7 +52,7 @@ fn idle_cursor_move_refreshes_the_history_dirty_bit() {
     let (mut app, _t) = Signex::new();
     let p = std::path::PathBuf::from("history-dirty.snxsch");
     app.document_state.history.active_path = Some(p.clone());
-    app.document_state.dirty_paths.insert(p);
+    app.document_state.mark_document_dirty(&p);
     idle_move(&mut app);
     assert!(app.document_state.panel_ctx.history.dirty);
 }

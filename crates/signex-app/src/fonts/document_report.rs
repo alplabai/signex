@@ -149,6 +149,7 @@ mod tests {
             justify: HAlign::Left,
             justify_v: VAlign::Bottom,
             unknown_columns: Default::default(),
+            locked: false,
         }
     }
 
@@ -162,6 +163,7 @@ mod tests {
             font_family: family.map(str::to_string),
             justify_h: HAlign::Left,
             justify_v: VAlign::Bottom,
+            locked: false,
         }
     }
 

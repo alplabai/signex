@@ -33,6 +33,10 @@ mod annotation_tests;
 
 #[cfg(test)]
 mod lock_tests;
+#[cfg(test)]
+mod object_lock_tests;
+#[cfg(test)]
+mod wire_merge_tests;
 
 #[cfg(test)]
 mod history_tests;
@@ -99,6 +103,7 @@ pub use sheet_placement::{
     unused_sheet_stem,
 };
 use signex_types::schematic::{SchematicSheet, SelectedItem};
+pub(crate) use transform::TouchingPairs;
 pub use transform::rubber_band::{
     BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, before_nets, follow_moved_pins,
     moved_pin_tips,
@@ -150,6 +155,10 @@ pub struct Engine {
     unkept_pins: Vec<String>,
     /// Pre-move nets computed ahead of time (drag previews).
     preset_before: Option<BeforeNets>,
+    /// Net colour of each wire the app has painted, by wire uuid. The engine
+    /// never changes it; a merge reads it so two wires of different colours
+    /// are not folded into one (see `transform::merge`).
+    wire_colors: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
 }
 
 /// Process-wide revision source: values are never reused across engines.
@@ -225,6 +234,7 @@ impl Engine {
             warnings: Vec::new(),
             unkept_pins: Vec::new(),
             preset_before: None,
+            wire_colors: std::collections::HashMap::new(),
         })
     }
 
@@ -256,7 +266,17 @@ impl Engine {
             warnings: Vec::new(),
             unkept_pins: Vec::new(),
             preset_before: None,
+            wire_colors: std::collections::HashMap::new(),
         })
+    }
+
+    /// Tell the engine the wires' net colours before a command, so a merge
+    /// keeps wires of different colours apart.
+    pub fn set_wire_colors(
+        &mut self,
+        colors: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    ) {
+        self.wire_colors = colors;
     }
 
     /// The pins the last commands could not keep connected (drained).
@@ -410,7 +430,7 @@ impl Engine {
         };
         self.refuse_if_read_only(incoming)?;
         // A refusal touches nothing, so it moves no revision.
-        if let Some(refusal) = self.locked_symbol_refusal(&cmd) {
+        if let Some(refusal) = self.locked_item_refusal(&cmd) {
             return Err(refusal);
         }
         self.bump_revision();
@@ -422,6 +442,7 @@ impl Engine {
             | Command::UpdateLabelProps { .. }
             | Command::SetSymbolRotation { .. }
             | Command::SetSymbolLocked { .. }
+            | Command::SetItemLocked { .. }
             | Command::SetSymbolDnp { .. }
             | Command::SetSymbolFlag { .. }
             | Command::SetWireWidth { .. }
@@ -448,6 +469,8 @@ impl Engine {
             | Command::PlaceChildSheet { .. }
             | Command::PlaceSheetPin { .. }
             | Command::PlaceWireSegment { .. }
+            | Command::BreakWire { .. }
+            | Command::PlaceWireSegmentAsIs { .. }
             | Command::PlaceJunction { .. }
             | Command::PlaceNoConnect { .. }
             | Command::PlaceNoErcDirective { .. }
@@ -679,6 +702,7 @@ mod tests {
             justify: signex_types::schematic::HAlign::Left,
             justify_v: signex_types::schematic::VAlign::Bottom,
             font_family: None,
+            locked: false,
         });
         document.labels.push(Label {
             unknown_columns: Default::default(),
@@ -692,6 +716,7 @@ mod tests {
             justify: signex_types::schematic::HAlign::Left,
             justify_v: signex_types::schematic::VAlign::Bottom,
             font_family: None,
+            locked: false,
         });
 
         let engine = Engine::new(document).unwrap();

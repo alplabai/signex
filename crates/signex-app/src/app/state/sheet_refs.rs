@@ -481,7 +481,7 @@ pub(crate) fn file_label(path: &Path) -> String {
 impl DocumentState {
     /// Snapshot what [`SheetRefInputs::resolve`] needs; cheap, no IO.
     pub(crate) fn sheet_ref_inputs(&self) -> SheetRefInputs {
-        let mut extra: Vec<PathBuf> = self.dirty_paths.iter().cloned().collect();
+        let mut extra: Vec<PathBuf> = self.dirty_document_paths().into_iter().collect();
         for project in &self.projects {
             extra.push(project.path.clone());
             extra.extend(
@@ -572,7 +572,7 @@ impl DocumentState {
             causes.push(StaleRefs::ProjectsChanged);
         }
         if !self
-            .dirty_paths
+            .dirty_document_paths()
             .iter()
             .all(|path| sheet_refs.keys.knows(path))
         {
@@ -615,7 +615,8 @@ impl DocumentState {
         let reach = self.reach_sets(sheet_refs);
         let project_file = keys.key(&project.path);
         let mut scan = CloseScan::default();
-        for path in &self.dirty_paths {
+        let dirty = self.dirty_document_paths();
+        for path in &dirty {
             let reached = reach.reached_by(closing, path);
             let is_project_file = keys.key(path) == project_file;
             let backs_tab = self
@@ -952,7 +953,7 @@ mod tests {
         docs.projects.push(loaded_project(1, &a_dir, "S.snxsch"));
         docs.projects.push(loaded_project(2, &b_dir, "b.snxsch"));
         let shared = a_dir.join("S.snxsch");
-        docs.dirty_paths.insert(shared.clone());
+        docs.mark_document_dirty(&shared);
 
         let refs = docs.sheet_ref_inputs().resolve(|_| true);
         let scan = docs.close_scan(&refs, 0, &[]);
@@ -979,7 +980,7 @@ mod tests {
             "top.snxsch",
         ));
         let dirty = PathBuf::from("nonexistent-694/A/Top.snxsch");
-        docs.dirty_paths.insert(dirty.clone());
+        docs.mark_document_dirty(&dirty);
 
         let refs = docs.sheet_ref_inputs().resolve(|_| false);
         let scan = docs.close_scan(&refs, 0, &[]);
@@ -1018,7 +1019,7 @@ mod tests {
         docs.projects[0].case_fold = CaseFold::from_probe(true);
         docs.projects.push(loaded_project(2, &b_dir, "b.snxsch"));
         let unsaved = b_dir.join("X.snxsch");
-        docs.dirty_paths.insert(unsaved.clone());
+        docs.mark_document_dirty(&unsaved);
 
         let refs = docs.sheet_ref_inputs().resolve(|_| false);
         let scan = docs.close_scan(&refs, 0, &[]);
@@ -1042,7 +1043,7 @@ mod tests {
         let docs = &mut app.document_state;
         docs.projects.push(loaded_project(1, &a_dir, "N.snxsch"));
         docs.projects.push(loaded_project(2, &b_dir, "b.snxsch"));
-        docs.dirty_paths.insert(a_dir.join("N.snxsch"));
+        docs.mark_document_dirty(&a_dir.join("N.snxsch"));
 
         let refs = docs.sheet_ref_inputs().resolve(ignores_case);
         docs.close_scan(&refs, 0, &[])
@@ -1100,7 +1101,7 @@ mod tests {
         let (mut app, _task) = crate::app::Signex::new();
         let docs = &mut app.document_state;
         docs.projects.push(loaded_project(1, &a_dir, "a.snxsch"));
-        docs.dirty_paths.insert(other);
+        docs.mark_document_dirty(&other);
 
         let refs = docs.sheet_ref_inputs().resolve(|_| false);
 
@@ -1597,10 +1598,10 @@ mod tests {
         let refs = docs.sheet_ref_inputs().resolve(|_| false);
         assert!(docs.stale_causes(&refs).is_empty());
 
-        docs.dirty_paths.insert(dir.join("fresh.snxsch"));
+        docs.mark_document_dirty(&dir.join("fresh.snxsch"));
         assert_eq!(docs.stale_causes(&refs), vec![StaleRefs::NewDirtyDocument]);
 
-        docs.dirty_paths.clear();
+        docs.mark_documents_clean_where(|_| true);
         docs.projects.push(loaded_project(2, &dir, "a.snxsch"));
         assert_eq!(docs.stale_causes(&refs), vec![StaleRefs::ProjectsChanged]);
         assert_eq!(

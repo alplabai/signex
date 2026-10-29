@@ -88,6 +88,7 @@ fn vcc_sheet() -> SchematicSheet {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         unknown_columns: Default::default(),
+        locked: false,
     });
     sheet
 }

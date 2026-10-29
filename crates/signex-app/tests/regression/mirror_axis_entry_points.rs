@@ -43,7 +43,6 @@ fn app_with_selected_symbol() -> Signex {
         title: "mirror-axis-entry-points".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

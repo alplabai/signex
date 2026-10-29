@@ -42,6 +42,7 @@ fn mixed_sheet() -> (SchematicSheet, Vec<SelectedItem>) {
             end: Point::new(o + 3.0, 9.0),
             width: 0.0,
             stroke_color: None,
+            locked: false,
         };
         if n % 2 == 0 {
             selected.extend([

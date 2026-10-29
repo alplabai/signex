@@ -81,6 +81,7 @@ mod flows {
                 justify: HAlign::default(),
                 justify_v: VAlign::default(),
                 font_family: None,
+                locked: false,
             });
             s
         };

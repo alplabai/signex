@@ -106,7 +106,7 @@ mod tests {
             &mut editor,
             SymbolEditorMsg::SelectionBodyAssigned(BODY_NORMAL),
         );
-        assert!(!editor.dirty);
+        assert!(!editor.is_dirty());
     }
 
     #[test]

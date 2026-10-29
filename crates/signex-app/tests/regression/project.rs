@@ -26,7 +26,7 @@ fn signex_new_constructs_with_default_state() {
     assert!(app.document_state.projects.is_empty());
     assert_eq!(app.document_state.active_project, None);
     assert!(app.document_state.tabs.is_empty());
-    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(!app.document_state.has_dirty_documents());
     // Modals all closed.
     assert!(app.ui_state.rename_dialog.is_none());
     assert!(app.ui_state.remove_dialog.is_none());
@@ -477,14 +477,14 @@ fn f10_save_clears_dirty_paths_and_refreshes_panel_ctx() {
 
     // Mark the project dirty (matches what `Add Existing` / project
     // metadata mutations would do).
-    app.document_state.dirty_paths.insert(prj_path.clone());
-    assert!(app.document_state.dirty_paths.contains(&prj_path));
+    app.document_state.mark_document_dirty(&prj_path);
+    assert!(app.document_state.is_document_dirty(&prj_path));
 
     let _ = app.update(Message::File(FileMsg::Save));
 
     // Title strip: dirty_paths empty → "(N unsaved)" suffix gone.
     assert!(
-        !app.document_state.dirty_paths.contains(&prj_path),
+        !app.document_state.is_document_dirty(&prj_path),
         "save must remove the project from dirty_paths"
     );
 
@@ -513,7 +513,7 @@ fn f10_save_persists_snxprj_as_valid_json() {
         proj.data.variant_definitions = vec!["Production".into(), "Prototype".into()];
         proj.data.active_variant = Some("Production".into());
     }
-    app.document_state.dirty_paths.insert(prj_path.clone());
+    app.document_state.mark_document_dirty(&prj_path);
 
     let _ = app.update(Message::File(FileMsg::Save));
 
@@ -612,18 +612,18 @@ fn project_rename_migrates_dirty_paths_to_new_path() {
     let (mut app, tmp, old_prj) = fixture_project_with_companions("Kilo");
 
     // Project dirty before rename.
-    app.document_state.dirty_paths.insert(old_prj.clone());
+    app.document_state.mark_document_dirty(&old_prj);
 
     arm_project_rename(&mut app, &old_prj, "Lima");
     let _ = app.update(Message::Rename(RenameMsg::Submit));
 
     let new_prj = tmp.path().join("Lima.snxprj");
     assert!(
-        !app.document_state.dirty_paths.contains(&old_prj),
+        !app.document_state.is_document_dirty(&old_prj),
         "old path no longer in dirty_paths"
     );
     assert!(
-        app.document_state.dirty_paths.contains(&new_prj),
+        app.document_state.is_document_dirty(&new_prj),
         "new path migrated into dirty_paths"
     );
 }
@@ -663,7 +663,7 @@ fn add_new_schematic_writes_blank_snxsch_marks_project_dirty_no_tab_open() {
         "new sheet appears in the project's sheets list"
     );
     assert!(
-        app.document_state.dirty_paths.contains(&prj_path),
+        app.document_state.is_document_dirty(&prj_path),
         "project marked dirty so user knows to Save"
     );
 
@@ -690,7 +690,7 @@ fn add_new_schematic_cancelled_picker_is_a_clean_noop() {
         "cancellation makes no project mutations"
     );
     assert!(
-        !app.document_state.dirty_paths.contains(&prj_path),
+        !app.document_state.is_document_dirty(&prj_path),
         "cancellation does not flip the dirty bit"
     );
     assert!(app.document_state.tabs.is_empty());
@@ -947,7 +947,7 @@ fn commit_save_to_project_git_enqueues_when_enable_git_on() {
 #[test]
 fn app_exit_with_no_dirty_paths_does_not_open_confirm_modal() {
     let (mut app, _t) = Signex::new();
-    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(!app.document_state.has_dirty_documents());
 
     // Clean workspace: exit request must not raise the guard modal.
     let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
@@ -961,7 +961,7 @@ fn app_exit_with_no_dirty_paths_does_not_open_confirm_modal() {
 fn app_exit_with_dirty_paths_opens_confirm_modal_instead_of_exiting() {
     let (mut app, _t) = Signex::new();
     let dirty = PathBuf::from("/tmp/does-not-matter/board.snxsch");
-    app.document_state.dirty_paths.insert(dirty.clone());
+    app.document_state.mark_document_dirty(&dirty);
 
     let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
 
@@ -976,7 +976,7 @@ fn app_exit_with_dirty_paths_opens_confirm_modal_instead_of_exiting() {
     );
     // Data-loss guard: the dirty entry must still be present — nothing
     // was discarded by merely asking to exit.
-    assert!(app.document_state.dirty_paths.contains(&dirty));
+    assert!(app.document_state.is_document_dirty(&dirty));
 }
 
 /// Every window opens with `exit_on_close_request: false`, so an OS close of
@@ -987,7 +987,7 @@ fn os_close_of_the_main_window_with_dirty_paths_asks_before_quitting() {
     let main = iced::window::Id::unique();
     app.ui_state.main_window_id = Some(main);
     let dirty = PathBuf::from("/tmp/does-not-matter/board.snxsch");
-    app.document_state.dirty_paths.insert(dirty.clone());
+    app.document_state.mark_document_dirty(&dirty);
 
     let task = app.update(Message::Window(WindowMsg::WindowCloseRequested(main)));
 
@@ -997,7 +997,7 @@ fn os_close_of_the_main_window_with_dirty_paths_asks_before_quitting() {
         .as_ref()
         .expect("an OS close with unsaved edits must open the quit confirm modal");
     assert!(modal.dirty_paths.contains(&dirty));
-    assert!(app.document_state.dirty_paths.contains(&dirty));
+    assert!(app.document_state.is_document_dirty(&dirty));
     assert_eq!(
         task.units(),
         0,
@@ -1010,7 +1010,7 @@ fn os_close_of_the_main_window_with_no_dirty_paths_closes_it() {
     let (mut app, _t) = Signex::new();
     let main = iced::window::Id::unique();
     app.ui_state.main_window_id = Some(main);
-    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(!app.document_state.has_dirty_documents());
 
     let task = app.update(Message::Window(WindowMsg::WindowCloseRequested(main)));
 
@@ -1022,7 +1022,7 @@ fn os_close_of_the_main_window_with_no_dirty_paths_closes_it() {
 fn app_exit_confirm_cancel_dismisses_modal_and_keeps_dirty_state() {
     let (mut app, _t) = Signex::new();
     let dirty = PathBuf::from("/tmp/does-not-matter/board.snxsch");
-    app.document_state.dirty_paths.insert(dirty.clone());
+    app.document_state.mark_document_dirty(&dirty);
     let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
     assert!(app.ui_state.app_quit_confirm.is_some());
 
@@ -1034,7 +1034,7 @@ fn app_exit_confirm_cancel_dismisses_modal_and_keeps_dirty_state() {
         "Cancel must dismiss the modal"
     );
     assert!(
-        app.document_state.dirty_paths.contains(&dirty),
+        app.document_state.is_document_dirty(&dirty),
         "Cancel must not touch the dirty state"
     );
 }
@@ -1043,8 +1043,7 @@ fn app_exit_confirm_cancel_dismisses_modal_and_keeps_dirty_state() {
 fn app_exit_confirm_discard_all_clears_modal() {
     let (mut app, _t) = Signex::new();
     app.document_state
-        .dirty_paths
-        .insert(PathBuf::from("/tmp/does-not-matter/board.snxsch"));
+        .mark_document_dirty(&PathBuf::from("/tmp/does-not-matter/board.snxsch"));
     let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
     assert!(app.ui_state.app_quit_confirm.is_some());
 
@@ -1065,7 +1064,7 @@ fn app_exit_save_all_never_loses_an_unsaveable_file() {
     // NOT exit and lose it — it keeps the app open and surfaces it.
     let (mut app, _t) = Signex::new();
     let dirty = PathBuf::from("/tmp/does-not-matter/proj.snxprj");
-    app.document_state.dirty_paths.insert(dirty.clone());
+    app.document_state.mark_document_dirty(&dirty);
     let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
     assert!(app.ui_state.app_quit_confirm.is_some());
 
@@ -1081,7 +1080,7 @@ fn app_exit_save_all_never_loses_an_unsaveable_file() {
         "Save All must report files it could not save"
     );
     assert!(
-        app.document_state.dirty_paths.contains(&dirty),
+        app.document_state.is_document_dirty(&dirty),
         "an unsaveable dirty file must be kept, never silently dropped"
     );
 }
@@ -1435,7 +1434,6 @@ fn fixture_schematic_with_symbol_and_child_sheet()
         title: "cut-gating".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -1498,8 +1496,8 @@ fn cut_leaves_non_cuttable_child_sheet_in_place_and_selected() {
 fn save_all_writes_dirty_snxprj_and_clears_dirty_marker() {
     let (mut app, _tmp, prj_path) = fixture_project_with_companions("SaveAllProj");
 
-    app.document_state.dirty_paths.insert(prj_path.clone());
-    assert!(app.document_state.dirty_paths.contains(&prj_path));
+    app.document_state.mark_document_dirty(&prj_path);
+    assert!(app.document_state.is_document_dirty(&prj_path));
 
     // Raise the app-quit confirm modal (dirty workspace).
     let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
@@ -1522,7 +1520,7 @@ fn save_all_writes_dirty_snxprj_and_clears_dirty_marker() {
         "the real project's .snxprj is saveable — Save All must not report a failure"
     );
     assert!(
-        !app.document_state.dirty_paths.contains(&prj_path),
+        !app.document_state.is_document_dirty(&prj_path),
         "Save All must clear the dirty marker once the .snxprj is written"
     );
 
@@ -1643,7 +1641,7 @@ fn remove_dialog_follows_its_project_when_another_is_opened_before_it() {
     )));
 
     assert!(has_sheet(&app, 0, "Shared.snxsch"), "Other keeps its sheet");
-    assert!(!app.document_state.dirty_paths.contains(&other_prj));
+    assert!(!app.document_state.is_document_dirty(&other_prj));
     assert!(
         !has_sheet(&app, 1, "Shared.snxsch"),
         "Mine's sheet is removed"
@@ -1666,7 +1664,7 @@ fn remove_dialog_is_cancelled_when_its_project_was_closed() {
     )));
 
     assert!(has_sheet(&app, 0, "Shared.snxsch"), "Other keeps its sheet");
-    assert!(!app.document_state.dirty_paths.contains(&other_prj));
+    assert!(!app.document_state.is_document_dirty(&other_prj));
     assert!(app.ui_state.remove_dialog.is_none());
 }
 
@@ -1808,7 +1806,6 @@ fn project_git_commit_done_reloads_history_of_the_shown_file() {
         title: "Golf".to_string(),
         path: tab_path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

@@ -98,7 +98,7 @@ fn delete_silk_f(editor: &mut crate::app::FootprintDocument) {
         let primitive = editor.primitive_mut();
         if idx < primitive.silk_f.len() {
             primitive.silk_f.remove(idx);
-            editor.dirty = true;
+            editor.mark_dirty();
         }
         // HI-25: shared selection-adjustment helper — keep
         // `selected_silk_f` valid against the new vec length
@@ -122,7 +122,7 @@ fn move_pad(editor: &mut crate::app::FootprintDocument, idx: usize, x_mm: f64, y
         FootprintEditorState::sync_pads_to_primitive(state, primitive);
     });
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 fn cursor_at(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
@@ -241,7 +241,7 @@ fn delete_selected(editor: &mut crate::app::FootprintDocument) {
     });
     if did_delete {
         editor.canvas_cache.clear();
-        editor.dirty = true;
+        editor.mark_dirty();
     }
 }
 

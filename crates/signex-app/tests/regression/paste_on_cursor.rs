@@ -133,6 +133,7 @@ fn space_x_y_turn_a_pasted_group() {
         end: Point::new(25.4, 20.32),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     };
     let wire_id = wire.uuid;
     let part = doc(&app).symbols[0].uuid;
@@ -187,6 +188,7 @@ fn a_large_paste_draws_only_its_bounding_box() {
                     end: Point::new(i as f64 * 1.27, 1.27),
                     stroke_width: 0.0,
                     unknown_columns: Default::default(),
+                    locked: false,
                 })
                 .collect(),
             ..Default::default()
@@ -341,6 +343,7 @@ fn cut_aborts_and_deletes_nothing_when_the_copy_fails() {
         end: Point::new(f64::NAN, 10.16),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     };
     let id = wire.uuid;
     app.document_state

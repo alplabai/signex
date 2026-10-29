@@ -239,6 +239,7 @@ mod follow_tests {
             end: Point::new(12.54, 12.54),
             stroke_width: 0.0,
             unknown_columns: Default::default(),
+            locked: false,
         });
         (
             Engine::new(s).expect("engine"),

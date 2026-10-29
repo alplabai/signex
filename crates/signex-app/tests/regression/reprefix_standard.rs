@@ -96,7 +96,6 @@ fn world(f: Fixture, root: Vec<Symbol>, child: Vec<Symbol>, child_read_only: boo
                 title: "child".to_string(),
                 path,
                 cached_document: None,
-                dirty: false,
                 project_id: None,
                 kind: TabKind::Schematic,
             });
@@ -390,8 +389,7 @@ fn reprefix_overflow_does_not_split_a_part() {
     assert!(
         !w.app
             .document_state
-            .dirty_paths
-            .contains(&PathBuf::from(CHILD))
+            .is_document_dirty(&PathBuf::from(CHILD))
     );
     // Rolled back, not undone: Ctrl+Y must not bring half of the run back.
     let child = &w.app.document_state.engines[&PathBuf::from(CHILD)];
@@ -508,7 +506,7 @@ fn reprefix_unopened_sheets_stay_dirty_unsaved_and_undo_as_one() {
     );
     let parked = &w.app.document_state.engines[&child_path];
     assert!(parked.document().symbols[0].reference.starts_with('V'));
-    assert!(w.app.document_state.dirty_paths.contains(&child_path));
+    assert!(w.app.document_state.is_document_dirty(&child_path));
     assert!(
         w.app.document_state.engines[&root_path].document().symbols[0]
             .reference
@@ -520,7 +518,7 @@ fn reprefix_unopened_sheets_stay_dirty_unsaved_and_undo_as_one() {
     assert_eq!(engines[&root_path].document().symbols[0].reference, "D1");
     // Back at what is on disk: nothing to save, no unsaved-edits prompt, and
     // no tabless engine left to shadow the file.
-    assert!(!w.app.document_state.dirty_paths.contains(&child_path));
+    assert!(!w.app.document_state.is_document_dirty(&child_path));
     assert!(!engines.contains_key(&child_path));
 
     // Redo is refused whole: re-applying the open sheet alone would split
@@ -643,7 +641,7 @@ fn closing_the_annotate_dialog_drops_an_open_reprefix_confirm() {
 fn undo_during_a_save_of_a_parked_sheet_keeps_it_dirty() {
     let (mut w, _dir, _root_path, child_path, _bytes) = disk_world();
     reprefix(&mut w);
-    assert!(w.app.document_state.dirty_paths.contains(&child_path));
+    assert!(w.app.document_state.is_document_dirty(&child_path));
 
     // The save of the re-prefixed bytes is in flight when Undo is pressed.
     let _job = w
@@ -658,7 +656,7 @@ fn undo_during_a_save_of_a_parked_sheet_keeps_it_dirty() {
         "D2"
     );
     assert!(
-        w.app.document_state.dirty_paths.contains(&child_path),
+        w.app.document_state.is_document_dirty(&child_path),
         "the landing save would write the re-prefixed bytes; the sheet must stay dirty"
     );
 }

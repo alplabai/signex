@@ -196,7 +196,7 @@ fn active_bar_rotate_selection(editor: &mut crate::app::FootprintDocument) {
             FootprintEditorState::sync_pads_to_primitive(state, primitive);
         });
         editor.canvas_cache.clear();
-        editor.dirty = true;
+        editor.mark_dirty();
     }
     editor.state.active_bar_menu = None;
 }
@@ -229,7 +229,7 @@ fn active_bar_flip_selection(editor: &mut crate::app::FootprintDocument) {
             FootprintEditorState::sync_pads_to_primitive(state, primitive);
         });
         editor.canvas_cache.clear();
-        editor.dirty = true;
+        editor.mark_dirty();
     }
     editor.state.active_bar_menu = None;
 }
@@ -381,7 +381,7 @@ fn align_confirm(editor: &mut crate::app::FootprintDocument) {
             FootprintEditorState::sync_pads_to_primitive(state, primitive);
         });
         editor.canvas_cache.clear();
-        editor.dirty = true;
+        editor.mark_dirty();
     }
     editor.state.align_modal = None;
 }
@@ -414,7 +414,7 @@ fn active_bar_align_selection_to_grid(editor: &mut crate::app::FootprintDocument
             FootprintEditorState::sync_pads_to_primitive(state, primitive);
         });
         editor.canvas_cache.clear();
-        editor.dirty = true;
+        editor.mark_dirty();
     }
     editor.state.active_bar_menu = None;
 }
@@ -441,7 +441,7 @@ fn active_bar_move_origin_to_grid(editor: &mut crate::app::FootprintDocument) {
             FootprintEditorState::sync_pads_to_primitive(state, primitive);
         });
         editor.canvas_cache.clear();
-        editor.dirty = true;
+        editor.mark_dirty();
     }
     editor.state.active_bar_menu = None;
 }

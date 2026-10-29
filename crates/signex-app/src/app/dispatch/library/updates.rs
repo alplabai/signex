@@ -619,12 +619,7 @@ impl Signex {
                         // as in the mutation gateway.
                         self.ui_state.net_color_redo.remove(sheet);
                     }
-                    self.document_state.dirty_paths.insert(sheet.to_path_buf());
-                    for tab in &mut self.document_state.tabs {
-                        if tab.path == sheet {
-                            tab.dirty = true;
-                        }
-                    }
+                    self.document_state.mark_document_dirty(sheet);
                     self.refresh_panel_ctx();
                 }
                 false

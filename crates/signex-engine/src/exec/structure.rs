@@ -28,7 +28,10 @@ impl Engine {
                         | SchDrawing::Polyline { uuid, .. } => *uuid,
                     };
                     if u == target_uuid {
+                        // An edit never changes the lock; `SetItemLocked` does.
+                        let locked = d.is_locked();
                         *d = drawing.clone();
+                        d.set_locked(locked);
                         changed = true;
                         break;
                     }

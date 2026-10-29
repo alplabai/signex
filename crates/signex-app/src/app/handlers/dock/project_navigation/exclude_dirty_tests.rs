@@ -27,7 +27,7 @@ fn folding_project_with_dirty_lowercase_sheet() -> (Signex, tempfile::TempDir, P
         .expect("engine");
     engine.set_path(Some(held.clone()));
     app.document_state.engines.insert(held.clone(), engine);
-    app.document_state.dirty_paths.insert(held.clone());
+    app.document_state.mark_document_dirty(&held);
     app.ui_state.remove_dialog = Some(RemoveDialogState {
         target_path: tmp.path().join("X.snxsch"),
         tree_path: vec![0, 0],
@@ -68,7 +68,7 @@ fn save_finds_a_dirty_sheet_under_a_case_variant_on_a_folding_volume() {
     exclude_then(&mut app, ExcludeDirtyChoice::Save);
 
     assert_ne!(std::fs::read(&held).unwrap(), ORIGINAL, "Save must write");
-    assert!(!app.document_state.dirty_paths.contains(&held));
+    assert!(!app.document_state.is_document_dirty(&held));
     assert!(app.ui_state.remove_dialog.is_none());
     assert!(!project_lists_sheet(&app));
 }
@@ -81,7 +81,7 @@ fn discard_drops_a_dirty_sheet_under_a_case_variant_on_a_folding_volume() {
     exclude_then(&mut app, ExcludeDirtyChoice::Discard);
 
     assert_eq!(std::fs::read(&held).unwrap(), ORIGINAL, "must not write");
-    assert!(!app.document_state.dirty_paths.contains(&held));
+    assert!(!app.document_state.is_document_dirty(&held));
     assert!(!app.document_state.engines.contains_key(Path::new(&held)));
     assert!(!project_lists_sheet(&app));
 }
@@ -145,7 +145,7 @@ fn two_folding_projects_sharing_one_sheet() -> (Signex, tempfile::TempDir, PathB
         engine.set_path(Some(sheet.clone()));
         app.document_state.engines.insert(sheet.clone(), engine);
     }
-    app.document_state.dirty_paths.insert(a_sheet.clone());
+    app.document_state.mark_document_dirty(&a_sheet);
     app.ui_state.remove_dialog = Some(RemoveDialogState {
         target_path: a_sheet.clone(),
         tree_path: vec![0, 0],
@@ -179,7 +179,7 @@ fn discard_is_withheld_when_a_folding_project_reaches_the_sheet_under_another_sp
         app.document_state.engines.contains_key(&b_sheet),
         "the other project's engine must survive a refused Discard"
     );
-    assert!(app.document_state.dirty_paths.contains(&a_sheet));
+    assert!(app.document_state.is_document_dirty(&a_sheet));
 }
 
 /// The prompt names the owner by the project's current index, so closing an
@@ -203,7 +203,7 @@ fn prompt_follows_its_project_when_an_earlier_project_closes() {
         .expect("engine");
     engine.set_path(Some(sheet.clone()));
     app.document_state.engines.insert(sheet.clone(), engine);
-    app.document_state.dirty_paths.insert(sheet.clone());
+    app.document_state.mark_document_dirty(&sheet);
     let state = RemoveDialogState {
         target_path: sheet,
         tree_path: vec![1, 0],
@@ -232,7 +232,7 @@ fn hold_differing_case_variants(app: &mut Signex, dir: &Path) -> (PathBuf, PathB
         let mut engine = signex_engine::Engine::new(sheet).expect("engine");
         engine.set_path(Some(path.clone()));
         app.document_state.engines.insert(path.clone(), engine);
-        app.document_state.dirty_paths.insert(path.clone());
+        app.document_state.mark_document_dirty(path);
     }
     (upper, lower)
 }
@@ -253,8 +253,8 @@ fn save_all_refuses_differing_variants_on_a_folding_project_and_keeps_markers() 
 
     assert!(result.is_err(), "differing variants must be refused");
     assert_eq!(std::fs::read(&upper).unwrap(), ORIGINAL, "nothing written");
-    assert!(app.document_state.dirty_paths.contains(&upper));
-    assert!(app.document_state.dirty_paths.contains(&lower));
+    assert!(app.document_state.is_document_dirty(&upper));
+    assert!(app.document_state.is_document_dirty(&lower));
 }
 
 /// #1447 — a loose document in a folder no probe answered is treated as one
@@ -269,7 +269,7 @@ fn save_all_treats_an_unprobed_loose_document_as_one_file() {
     let result = app.try_save_dirty_path(&upper);
 
     assert!(result.is_err(), "unknown folds: variants are one file");
-    assert!(app.document_state.dirty_paths.contains(&lower));
+    assert!(app.document_state.is_document_dirty(&lower));
 }
 
 /// #1447 — a project whose probe DECIDED case-sensitive keeps the spellings
@@ -289,7 +289,7 @@ fn a_decided_case_sensitive_project_saves_each_spelling_on_its_own() {
     app.try_save_dirty_path(&lower)
         .expect("second spelling saves");
 
-    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(!app.document_state.has_dirty_documents());
 }
 
 /// #1447 — in a folder whose case rule is unknown, the Exclude save writes
@@ -309,7 +309,7 @@ fn an_exclude_save_in_an_undecided_folder_names_the_kept_spelling() {
                 .expect("engine");
         engine.set_path(Some(path.clone()));
         app.document_state.engines.insert(path.clone(), engine);
-        app.document_state.dirty_paths.insert(path.clone());
+        app.document_state.mark_document_dirty(path);
     }
     app.ui_state.remove_dialog = Some(RemoveDialogState {
         target_path: upper.clone(),
@@ -366,9 +366,9 @@ fn an_exclude_save_in_an_undecided_folder_names_the_kept_spelling() {
     // apart, the retry excludes `Lib` without writing `lib`: its marker and
     // engine survive, and Quit and Save All still catch it.
     if CaseFold::host_default().fold_case {
-        assert!(!app.document_state.dirty_paths.contains(&lower));
+        assert!(!app.document_state.is_document_dirty(&lower));
     } else {
-        assert!(app.document_state.dirty_paths.contains(&lower));
+        assert!(app.document_state.is_document_dirty(&lower));
         assert!(app.document_state.engines.contains_key(&lower));
     }
 }
@@ -390,13 +390,13 @@ fn save_all_follows_the_projects_rule_not_the_hosts() {
 
     if project_folds {
         assert!(result.is_err(), "folding project: variants are one file");
-        assert!(app.document_state.dirty_paths.contains(&upper));
-        assert!(app.document_state.dirty_paths.contains(&lower));
+        assert!(app.document_state.is_document_dirty(&upper));
+        assert!(app.document_state.is_document_dirty(&lower));
     } else {
         assert!(result.is_ok(), "case-preserving project: {result:?}");
         app.try_save_dirty_path(&lower)
             .expect("save second spelling");
-        assert!(app.document_state.dirty_paths.is_empty());
+        assert!(!app.document_state.has_dirty_documents());
     }
 }
 
@@ -423,8 +423,8 @@ fn save_all_uses_the_innermost_projects_rule_for_nested_projects() {
     let result = app.try_save_dirty_path(&upper);
 
     assert!(result.is_err(), "the inner folding volume decides");
-    assert!(app.document_state.dirty_paths.contains(&upper));
-    assert!(app.document_state.dirty_paths.contains(&lower));
+    assert!(app.document_state.is_document_dirty(&upper));
+    assert!(app.document_state.is_document_dirty(&lower));
 }
 
 /// #1077 — a project with an empty dir must not claim every file.

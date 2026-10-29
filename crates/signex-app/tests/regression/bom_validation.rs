@@ -37,7 +37,6 @@ pub(crate) fn app_with_faulty_bom() -> Signex {
         title: "bom-validation".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

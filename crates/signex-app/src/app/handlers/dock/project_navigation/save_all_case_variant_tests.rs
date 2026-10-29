@@ -12,7 +12,7 @@ use crate::persist::run_task::outputs;
 /// `Lib` is clean, `lib` is the only edited spelling.
 fn only_lower_dirty(dir: &Path, differ: bool) -> (Signex, PathBuf, PathBuf) {
     let (mut app, upper, lower) = app_with_two_engine_variants(dir, differ);
-    app.document_state.dirty_paths.remove(&upper);
+    app.document_state.mark_document_clean(&upper);
     (app, upper, lower)
 }
 
@@ -32,7 +32,7 @@ fn a_refused_save_keeps_the_dirty_spelling_dirty_and_blocks_quit() {
     let task = save_all(&mut app, std::slice::from_ref(&lower));
     let after = feed_then_settle(&mut app, outputs(task));
 
-    assert!(app.document_state.dirty_paths.contains(&lower));
+    assert!(app.document_state.is_document_dirty(&lower));
     assert_eq!(std::fs::read(&upper).expect("read"), b"on-disk");
     assert_quit_held_open(&app, &after, "lib.snxsch");
 }
@@ -46,8 +46,8 @@ fn both_spellings_dirty_and_differing_are_refused_and_both_stay_dirty() {
     let task = save_all(&mut app, &[upper.clone(), lower.clone()]);
     let after = feed_then_settle(&mut app, outputs(task));
 
-    assert!(app.document_state.dirty_paths.contains(&upper));
-    assert!(app.document_state.dirty_paths.contains(&lower));
+    assert!(app.document_state.is_document_dirty(&upper));
+    assert!(app.document_state.is_document_dirty(&lower));
     assert_quit_held_open(&app, &after, "snxsch");
 }
 
@@ -61,8 +61,8 @@ fn the_only_dirty_spelling_is_the_one_written_and_both_markers_clear() {
     feed(&mut app, outputs(task));
 
     assert_eq!(*sink.0.lock().unwrap(), vec![lower.clone()]);
-    assert!(!app.document_state.dirty_paths.contains(&upper));
-    assert!(!app.document_state.dirty_paths.contains(&lower));
+    assert!(!app.document_state.is_document_dirty(&upper));
+    assert!(!app.document_state.is_document_dirty(&lower));
     assert!(app.document_state.error_notice.is_none());
 }
 
@@ -78,7 +78,7 @@ fn edit_engine(app: &mut Signex, path: &Path) {
         .expect("engine")
         .execute(signex_engine::Command::ReplaceDocument { document })
         .expect("edit");
-    app.document_state.dirty_paths.insert(path.to_path_buf());
+    app.document_state.mark_document_dirty(path);
 }
 
 #[test]
@@ -90,8 +90,8 @@ fn a_spelling_edited_during_the_write_stays_dirty_and_blocks_quit() {
     edit_engine(&mut app, &upper);
     let after = feed_then_settle(&mut app, outputs(task));
 
-    assert!(!app.document_state.dirty_paths.contains(&lower));
-    assert!(app.document_state.dirty_paths.contains(&upper));
+    assert!(!app.document_state.is_document_dirty(&lower));
+    assert!(app.document_state.is_document_dirty(&upper));
     assert_eq!(after.units(), 0, "Signex must not close over the edit");
     let modal = app.ui_state.app_quit_confirm.as_ref().expect("quit gate");
     assert_eq!(modal.dirty_paths, vec![upper]);
@@ -130,8 +130,8 @@ fn three_spellings_with_two_dirty_stay_dirty_when_the_write_fails() {
         app.document_state.document_saves.failure(&upper).is_some(),
         "the first dirty spelling was really written, and that write failed"
     );
-    assert!(app.document_state.dirty_paths.contains(&upper));
-    assert!(app.document_state.dirty_paths.contains(&lower));
+    assert!(app.document_state.is_document_dirty(&upper));
+    assert!(app.document_state.is_document_dirty(&lower));
     assert_eq!(after.units(), 0, "Signex must not close over unsaved edits");
 }
 
@@ -144,7 +144,7 @@ fn a_net_colour_edit_during_the_write_keeps_the_other_spelling_dirty() {
     app.mark_net_colors_dirty(&upper);
     let after = feed_then_settle(&mut app, outputs(task));
 
-    assert!(app.document_state.dirty_paths.contains(&upper));
+    assert!(app.document_state.is_document_dirty(&upper));
     assert_eq!(after.units(), 0, "Signex must not close over the colour");
     let modal = app.ui_state.app_quit_confirm.as_ref().expect("quit gate");
     assert_eq!(modal.dirty_paths, vec![upper]);

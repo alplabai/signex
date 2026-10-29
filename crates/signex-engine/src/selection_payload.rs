@@ -185,6 +185,7 @@ mod tests {
             end: Point::new(38.1, 25.4),
             stroke_width: 0.0,
             unknown_columns: Default::default(),
+            locked: false,
         };
         let items = vec![
             SelectedItem::new(part.uuid, SelectedKind::Symbol),
@@ -266,6 +267,7 @@ mod tests {
             end: Point::new(10.16, 10.16),
             stroke_width: 0.0,
             unknown_columns: Default::default(),
+            locked: false,
         };
         let dot = Junction {
             uuid: Uuid::now_v7(),

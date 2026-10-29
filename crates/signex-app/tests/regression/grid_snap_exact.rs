@@ -24,6 +24,7 @@ fn wire_at(x: f64) -> (Wire, uuid::Uuid) {
         start: Point::new(x, 0.0),
         end: Point::new(x, 0.0),
         stroke_width: 0.0,
+        locked: false,
     };
     (wire, uuid)
 }

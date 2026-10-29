@@ -65,6 +65,7 @@ fn conflicting_nets_sheet() -> SchematicSheet {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         font_family: None,
+        locked: false,
     };
     let mut wires = Vec::new();
     let mut labels = Vec::new();

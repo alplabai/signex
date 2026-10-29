@@ -47,13 +47,12 @@ fn app_with_over_cap_sheet(
         title: "Merged".into(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::Schematic,
     });
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(path.to_path_buf());
-    app.document_state.dirty_paths.insert(path.to_path_buf());
+    app.document_state.mark_document_dirty(path);
     app
 }
 
@@ -82,7 +81,7 @@ fn over_cap_save_names_the_offending_objects_in_messages() {
     let _ = app.update(Message::File(FileMsg::Save));
 
     assert!(!path.exists(), "a refused save writes nothing");
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.is_document_dirty(&path));
     // Only the second junction holds a column past the cap (c256..c399).
     assert!(names(second), "Messages must name the object to delete");
     assert!(
@@ -108,7 +107,7 @@ fn save_all_on_exit_names_the_offending_objects_in_messages() {
     );
 
     assert!(!path.exists(), "a refused save writes nothing");
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.is_document_dirty(&path));
     assert!(names(second), "Save All must name the object to delete");
     assert!(
         !mentions(first),

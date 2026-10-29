@@ -239,26 +239,26 @@ fn dirty_dot_diameter(font_size: f32) -> f32 {
     font_size * DIRTY_DOT_EM
 }
 
-/// Whether `tab` has unsaved changes: its own flag, or its path is in
-/// `dirty_paths`. A Component Preview tab has a synthetic path that is
-/// never in the app-wide set, so callers pass the set from
-/// [`dirty_tab_paths`], which adds those tabs.
+/// Whether `tab` has unsaved changes: its path is in `dirty`, the set from
+/// [`dirty_tab_paths`] (which also holds Component Preview tabs, whose
+/// synthetic path is never a document path).
 pub(crate) fn tab_is_dirty(
     tab: &TabInfo,
-    dirty_paths: &std::collections::HashSet<std::path::PathBuf>,
+    dirty: &std::collections::HashSet<std::path::PathBuf>,
 ) -> bool {
-    tab.dirty || dirty_paths.contains(&tab.path)
+    dirty.contains(&tab.path)
 }
 
-/// The app-wide dirty set plus the paths of Component Preview tabs whose
-/// editor (in `library.editors`) has unsaved edits. Those tabs are keyed
-/// by row, not file, so only the library state knows they are dirty.
+/// `dirty` (every dirty document path, `DocumentState::dirty_document_paths`)
+/// plus the paths of Component Preview tabs whose editor (in
+/// `library.editors`) has unsaved edits. Those tabs are keyed by row, not
+/// file, so only the library state knows they are dirty.
 pub(crate) fn dirty_tab_paths(
     tabs: &[TabInfo],
-    dirty_paths: &std::collections::HashSet<std::path::PathBuf>,
+    dirty: std::collections::HashSet<std::path::PathBuf>,
     library: &crate::library::state::LibraryState,
 ) -> std::collections::HashSet<std::path::PathBuf> {
-    let mut out = dirty_paths.clone();
+    let mut out = dirty;
     for tab in tabs {
         if let crate::app::TabKind::ComponentEditor(ce) = &tab.kind {
             let address = crate::library::state::EditorAddress::new(
@@ -373,12 +373,11 @@ mod tests {
         assert_eq!(strip.as_widget().size().height, fixed);
     }
 
-    fn tab(path: &str, dirty: bool) -> TabInfo {
+    fn tab(path: &str) -> TabInfo {
         TabInfo {
             title: path.to_owned(),
             path: PathBuf::from(path),
             cached_document: None,
-            dirty,
             project_id: None,
             kind: TabKind::Schematic,
         }
@@ -399,21 +398,16 @@ mod tests {
             ),
         ]);
         // `none.snxsch` has no engine (a library editor tab, say).
-        let tabs = [
-            tab("new.snxsch", false),
-            tab("cur.snxsch", false),
-            tab("none.snxsch", false),
-        ];
+        let tabs = [tab("new.snxsch"), tab("cur.snxsch"), tab("none.snxsch")];
         let got = read_only_tab_paths(&tabs, &engines);
         assert_eq!(got, HashSet::from([PathBuf::from("new.snxsch")]));
     }
 
     #[test]
-    fn a_tab_is_dirty_when_its_path_is_in_dirty_paths_or_its_flag_is_set() {
+    fn a_tab_is_dirty_when_its_path_is_in_the_dirty_set() {
         let dirty: HashSet<PathBuf> = [PathBuf::from("a.snxsch")].into();
-        assert!(tab_is_dirty(&tab("a.snxsch", false), &dirty));
-        assert!(tab_is_dirty(&tab("b.snxsch", true), &dirty));
-        assert!(!tab_is_dirty(&tab("b.snxsch", false), &dirty));
+        assert!(tab_is_dirty(&tab("a.snxsch"), &dirty));
+        assert!(!tab_is_dirty(&tab("b.snxsch"), &dirty));
     }
 
     fn preview(lib: &std::path::Path) -> crate::library::state::ComponentPreviewState {
@@ -465,7 +459,7 @@ mod tests {
         let lib = PathBuf::from("lib.snxlib");
         let editor = preview(&lib);
         let row_id = signex_library::RowId(editor.row.row_id);
-        let mut t = tab("lib.snxlib/parts.tsv#row", false);
+        let mut t = tab("lib.snxlib/parts.tsv#row");
         t.kind = TabKind::ComponentEditor(ComponentEditorTab {
             library_path: lib.clone(),
             table: "parts".to_owned(),
@@ -474,11 +468,10 @@ mod tests {
         let mut library = LibraryState::default();
         let address = EditorAddress::new(lib, "parts".to_owned(), row_id);
         library.editors.insert(address.clone(), editor);
-        let none = HashSet::new();
-        let clean = dirty_tab_paths(std::slice::from_ref(&t), &none, &library);
+        let clean = dirty_tab_paths(std::slice::from_ref(&t), HashSet::new(), &library);
         assert!(!tab_is_dirty(&t, &clean));
         library.editors.get_mut(&address).unwrap().mark_dirty();
-        let dirty = dirty_tab_paths(std::slice::from_ref(&t), &none, &library);
+        let dirty = dirty_tab_paths(std::slice::from_ref(&t), HashSet::new(), &library);
         assert!(tab_is_dirty(&t, &dirty));
     }
 

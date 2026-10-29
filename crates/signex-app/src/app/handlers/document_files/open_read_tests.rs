@@ -81,7 +81,7 @@ fn a_tree_schematic_opens_only_when_its_read_completes() {
     let tab = &app.document_state.tabs[app.document_state.active_tab];
     assert_eq!(tab.title, "a");
     assert!(matches!(tab.kind, TabKind::Schematic));
-    assert!(!tab.dirty);
+    assert!(!app.document_state.is_document_dirty(&path));
     assert!(app.document_state.engines.contains_key(&path));
     assert!(!app.document_state.pending_opens.contains(&path));
     assert!(app.document_state.error_notice.is_none());

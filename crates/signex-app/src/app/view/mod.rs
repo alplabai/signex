@@ -359,8 +359,11 @@ impl Signex {
                     None
                 }
             });
-            let dirty_paths =
-                tab_bar::dirty_tab_paths(&document.tabs, &document.dirty_paths, &self.library);
+            let dirty_paths = tab_bar::dirty_tab_paths(
+                &document.tabs,
+                document.dirty_document_paths(),
+                &self.library,
+            );
             let read_only_paths = tab_bar::read_only_tab_paths(&document.tabs, &document.engines);
             main = main.push(
                 tab_bar::view(
