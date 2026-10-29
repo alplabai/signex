@@ -85,6 +85,8 @@ keys they do not know.
 
 The app exports every finding, so no severity filter applies. A report made
 with a minimum severity lists only findings and waivers at or above it, and
-`summary.waived` counts only the waivers listed.
+`summary.waived` counts only the waivers listed. A waiver whose severity is
+`null` is always listed, so a filtered report never hides a per-net, lapsed
+or unmatched waiver.
 
 For CI, a non-zero `summary.errors` is the usual failure condition.

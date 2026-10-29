@@ -118,6 +118,17 @@ impl ErcSymbol {
     }
 }
 
+/// True when one of the No-ERC directive `positions` sits at `p`, compared in
+/// the 1 µm key space (`pt_key`). The one test both the per-sheet context and
+/// the project-wide units pass use.
+pub(crate) fn no_erc_directive_at<'a>(
+    positions: impl IntoIterator<Item = &'a Point>,
+    p: &Point,
+) -> bool {
+    let k = pt_key(p);
+    positions.into_iter().any(|d| pt_key(d) == k)
+}
+
 /// The designator of each placement of `symbol`: its instance entries'
 /// designators (#829, the ones `designator_in` resolves to), or `reference`
 /// when it has none. A sheet's run does not know which placements exist, so
@@ -294,10 +305,7 @@ impl ErcContext {
     /// True when a No-ERC directive sits at `p`, compared in the 1 µm key
     /// space (`pt_key`) like every other point test in this crate.
     pub fn has_no_erc_directive_at(&self, p: &Point) -> bool {
-        let k = pt_key(p);
-        self.no_erc_directives
-            .iter()
-            .any(|d| pt_key(&d.position) == k)
+        no_erc_directive_at(self.no_erc_directives.iter().map(|d| &d.position), p)
     }
 
     pub fn from_snapshot(snapshot: &SchematicSheet) -> Self {

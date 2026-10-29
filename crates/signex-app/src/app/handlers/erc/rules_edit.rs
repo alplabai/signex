@@ -68,8 +68,6 @@ impl Signex {
         true
     }
 
-    /// Step the active project's rule set back. False when there is nothing
-    /// to undo.
     /// After an undo or redo of the rule set: re-run ERC so the results and
     /// waivers shown match the rules again, when there are results to
     /// refresh.
@@ -81,6 +79,8 @@ impl Signex {
         }
     }
 
+    /// Step the active project's rule set back. False when there is nothing
+    /// to undo.
     pub(crate) fn undo_project_rules(&mut self) -> bool {
         self.step_project_rules(RulesHistory::undo)
     }

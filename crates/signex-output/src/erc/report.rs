@@ -134,7 +134,9 @@ pub fn build(rows: &[&ErcReportRow], opts: &ErcReportOptions) -> ErcReport {
         .filter(|w| match (opts.min_severity, w.severity) {
             (None, _) => true,
             (Some(min), Some(sev)) => sev >= min,
-            (Some(_), None) => false,
+            // Severity unknown (per-net, lapsed or unmatched): keep it, so a
+            // filtered report never under-states what was waived.
+            (Some(_), None) => true,
         })
         .cloned()
         .collect();

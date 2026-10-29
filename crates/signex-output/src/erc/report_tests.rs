@@ -159,7 +159,7 @@ fn the_format_follows_the_extension() {
 }
 
 #[test]
-fn a_severity_filter_applies_to_waivers_and_the_waived_count_alike() {
+fn a_severity_filter_drops_lower_waivers_but_keeps_ones_of_unknown_severity() {
     let mut opts = options(ErcReportFormat::Json);
     opts.waivers.push(ErcReportWaiver {
         kind: ErcReportWaiverKind::PerNet,
@@ -177,5 +177,7 @@ fn a_severity_filter_applies_to_waivers_and_the_waived_count_alike() {
     opts.min_severity = Some(ErcReportSeverity::Error);
     let errors = report::build(&select_rows(&opts).expect("rows"), &opts);
     assert_eq!(errors.summary.total, 2);
-    assert_eq!((errors.waivers.len(), errors.summary.waived), (0, 0));
+    // The Warning-level waiver drops out; the per-net one, whose severity is
+    // unknown, stays listed and counted.
+    assert_eq!((errors.waivers.len(), errors.summary.waived), (1, 2));
 }

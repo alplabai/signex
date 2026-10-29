@@ -6,7 +6,7 @@
 use signex_types::schematic::SchematicSheet;
 
 use crate::Violation;
-use crate::context::placement_designators;
+use crate::context::{no_erc_directive_at, placement_designators};
 use crate::rules::{PlacedUnit, missing_units, units_finding};
 
 /// Every units-not-placed finding across `sheets`, each filed under the sheet
@@ -49,9 +49,5 @@ pub fn project_units_not_placed<K: Clone>(sheets: &[(K, &SchematicSheet)]) -> Ve
 }
 
 fn has_no_erc_directive_at(sheet: &SchematicSheet, at: &signex_types::schematic::Point) -> bool {
-    let k = signex_net::pt_key(at);
-    sheet
-        .no_erc_directives
-        .iter()
-        .any(|d| signex_net::pt_key(&d.position) == k)
+    no_erc_directive_at(sheet.no_erc_directives.iter().map(|d| &d.position), at)
 }
