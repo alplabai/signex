@@ -20,7 +20,7 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
-use super::keys::{KeyForm, all_keys, key_for};
+use super::keys::{KeyForm, all_keys, has_case_variant, key_for};
 use super::sidecar::sidecar_path;
 
 /// Most entries one startup pass finishes. The pass is synchronous on the
@@ -251,13 +251,30 @@ fn run_one(recovery_dir: &Path, file: &Path, entry: &Entry, report: &mut Finishe
             crate::diagnostics::log_warning(format!("{e}: could not clear {}", file.display()));
         }
     };
-    let found: Vec<(KeyForm, PathBuf)> = all_keys(recovery_dir, &entry.old, false)
+    let mut found: Vec<(KeyForm, PathBuf)> = all_keys(recovery_dir, &entry.old, false)
         .into_iter()
         .filter(|(form, key)| {
             // A form whose key text is the new document's own is not "old".
             key_for(recovery_dir, &entry.new, *form) != *key && key.is_file()
         })
         .collect();
+    // A copy under a case-merging key may belong to another file whose name
+    // differs only in case: it is not carried while such a file exists. It
+    // stays where it is, and its own file is offered it when it opens.
+    if found.iter().any(|(form, _)| form.merges_spellings()) && has_case_variant(&entry.old) {
+        found.retain(|(form, key)| {
+            let keep = !form.merges_spellings();
+            if !keep {
+                crate::diagnostics::log_warning(format!(
+                    "The recovery copy {} may belong to a file that differs from {} only in \
+                     case; it was not moved.",
+                    key.display(),
+                    entry.old.display()
+                ));
+            }
+            keep
+        });
+    }
     if found.is_empty() {
         // No copy left under any key of the old document: already moved, or
         // never existed.
@@ -377,5 +394,31 @@ mod tests {
         // Two seeds leave different entries behind: the pass does not always
         // skip the same tail, so entries past the cap are reached in time.
         assert_ne!(left_after(0), left_after(3));
+    }
+
+    #[test]
+    fn a_replayed_move_never_takes_the_copy_of_a_case_variant_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let dir = tmp.path().join("w");
+        std::fs::create_dir_all(&dir).unwrap();
+        let (a, b, main) = (
+            dir.join("Sheet.snxsch"),
+            dir.join("sheet.snxsch"),
+            dir.join("Main.snxsch"),
+        );
+        std::fs::write(&b, b"b").unwrap();
+        std::fs::write(&a, b"a").unwrap();
+        if std::fs::read(&b).unwrap() != b"b" {
+            return; // a case-insensitive folder cannot hold both
+        }
+        super::super::sidecar::write(&rec, &b, b"b's edits").unwrap();
+        let copy = super::super::sidecar::sidecar_path(&rec, &b);
+        // A is renamed to Main and the move of "its" copy is owed.
+        std::fs::rename(&a, &main).unwrap();
+        record(&rec, &a, &main).unwrap();
+        finish_all(&rec);
+        assert_eq!(std::fs::read(&copy).unwrap(), b"b's edits");
+        assert!(!super::super::sidecar::sidecar_path(&rec, &main).exists());
     }
 }

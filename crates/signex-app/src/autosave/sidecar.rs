@@ -126,6 +126,17 @@ pub(super) fn move_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
 
 fn adopt_one(current: &Path, legacy: &Path, document: &Path) -> Result<(), String> {
     let (current, legacy) = (current.to_path_buf(), legacy.to_path_buf());
+    // Both names of one file (a move that stopped between linking and
+    // unlinking): drop the stale name, the content is kept under the other.
+    if current.exists() && same_file::is_same_file(&legacy, &current).unwrap_or(false) {
+        return std::fs::remove_file(&legacy).map_err(|e| {
+            format!(
+                "{e}: could not drop the second name {} of recovery copy {}",
+                legacy.display(),
+                current.display()
+            )
+        });
+    }
     if current.exists() {
         let newer = |a: &Path, b: &Path| match (
             std::fs::metadata(a).and_then(|m| m.modified()),
@@ -279,10 +290,9 @@ pub fn rename(recovery_dir: &Path, from: &Path, to: &Path) -> Result<(), String>
         }
         return Err(why);
     }
-    let src = keys::all_keys(recovery_dir, from, keys::stable_ignores_case(from))
-        .into_iter()
-        .map(|(_, key)| key)
-        .find(|key| key.is_file());
+    // Only the current key: a copy `adopt_legacy` left under a case-merging
+    // key because it may belong to another file is not this document's to move.
+    let src = Some(sidecar_path(recovery_dir, from)).filter(|key| key.is_file());
     let dst = sidecar_path(recovery_dir, to);
     let Some(src) = src.filter(|src| *src != dst) else {
         // Nothing to move: an entry for `from` would only mislead.
@@ -293,7 +303,7 @@ pub fn rename(recovery_dir: &Path, from: &Path, to: &Path) -> Result<(), String>
     if let Err(reason) = pending_move::record(recovery_dir, from, to) {
         crate::diagnostics::log_warning(reason);
     }
-    match std::fs::rename(&src, &dst) {
+    match move_no_replace(&src, &dst) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => {
@@ -674,6 +684,79 @@ mod tests {
                 .any(|(o, n)| *o == old && *n == new)
         );
         assert_eq!(std::fs::read(&alt).unwrap(), b"new");
+    }
+
+    #[test]
+    fn renaming_one_of_two_case_variant_files_never_takes_the_others_copy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let dir = tmp.path().join("w");
+        std::fs::create_dir_all(&dir).unwrap();
+        let (a, b, main) = (
+            dir.join("Sheet.snxsch"),
+            dir.join("sheet.snxsch"),
+            dir.join("Main.snxsch"),
+        );
+        std::fs::write(&a, b"a").unwrap();
+        std::fs::write(&b, b"b").unwrap();
+        if std::fs::read(&a).unwrap() != b"a" {
+            return; // a case-insensitive folder cannot hold both
+        }
+        write(&rec, &b, b"b's edits").unwrap();
+        let copy = sidecar_path(&rec, &b);
+        rename(&rec, &a, &main).unwrap();
+        assert_eq!(
+            std::fs::read(&copy).unwrap(),
+            b"b's edits",
+            "B keeps its copy"
+        );
+        assert!(
+            !sidecar_path(&rec, &main).exists(),
+            "Main is offered nothing"
+        );
+    }
+
+    #[test]
+    fn a_folded_key_copy_is_not_moved_by_a_rename_while_a_case_variant_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let dir = tmp.path().join("w");
+        std::fs::create_dir_all(&dir).unwrap();
+        let (a, b) = (dir.join("Sheet.snxsch"), dir.join("sheet.snxsch"));
+        std::fs::write(&a, b"a").unwrap();
+        std::fs::write(&b, b"b").unwrap();
+        if std::fs::read(&a).unwrap() != b"a" {
+            return;
+        }
+        // B's copy sits under the folded key, which A's lookups also reach.
+        let folded = key(&rec, &b, KeyForm::Keyed(INSENSITIVE));
+        put(&folded, b"b's edits");
+        rename(&rec, &a, &dir.join("Main.snxsch")).unwrap();
+        assert!(folded.is_file());
+        assert!(!sidecar_path(&rec, &dir.join("Main.snxsch")).exists());
+    }
+
+    #[test]
+    fn a_second_name_of_the_same_copy_is_dropped_not_adopted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let doc = tmp.path().join("Sheet.snxsch");
+        let current = sidecar_path_with(&rec, &doc, SENSITIVE);
+        let legacy = key(&rec, &doc, KeyForm::Raw);
+        let legacy = if legacy == current {
+            key(&rec, &doc, KeyForm::FoldedRaw)
+        } else {
+            legacy
+        };
+        if legacy == current {
+            return;
+        }
+        put(&current, b"edits");
+        std::fs::hard_link(&current, &legacy).unwrap();
+        adopt_legacy_with(&rec, &doc, SENSITIVE).unwrap();
+        assert!(!legacy.exists());
+        assert_eq!(std::fs::read(&current).unwrap(), b"edits");
+        assert!(!Path::new(&format!("{}.{SUPERSEDED_EXTENSION}", current.display())).exists());
     }
 
     #[test]
