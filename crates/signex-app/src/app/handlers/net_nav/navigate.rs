@@ -9,6 +9,7 @@ use crate::app::state::net_nav::{PendingNetAction, ProjectNetData};
 
 use super::super::super::*;
 use super::index_job::IndexLookup;
+use super::messages;
 use super::target::NetTarget;
 
 /// The selection kind a net member is picked as on its sheet.
@@ -41,15 +42,11 @@ impl Signex {
     /// cycling when there are several.
     pub(crate) fn jump_to_partner(&mut self) -> Task<Message> {
         let Some(target) = self.port_target() else {
-            crate::diagnostics::log_info(
-                "Select or point at a port, global label, hierarchical label or sheet entry, then run Go to net partner.",
-            );
+            crate::diagnostics::log_info(messages::no_port_selected());
             return Task::none();
         };
         let Some(project) = self.project_of_sheet(&target.sheet) else {
-            crate::diagnostics::log_info(
-                "Go to net partner needs the sheet to belong to an open project; open its .snxprj.",
-            );
+            crate::diagnostics::log_info(messages::no_project("Go to net partner"));
             return Task::none();
         };
         match self.net_index_lookup(project) {
@@ -58,9 +55,7 @@ impl Signex {
                 self.wait_for_net_index(PendingNetAction::JumpToPartner, build)
             }
             IndexLookup::Unavailable => {
-                crate::diagnostics::log_warning(
-                    "Net navigation is unavailable for this project; see the earlier message.",
-                );
+                crate::diagnostics::log_warning(messages::index_unavailable());
                 Task::none()
             }
         }
@@ -78,27 +73,19 @@ impl Signex {
 
     fn jump_with(&mut self, data: &ProjectNetData, target: &NetTarget) -> Task<Message> {
         let Some(key) = data.key_of(&target.sheet) else {
-            crate::diagnostics::log_warning(
-                "Go to net partner: this sheet is not in the project's hierarchy; add it to the project.",
-            );
+            crate::diagnostics::log_warning(messages::sheet_not_in_project());
             return Task::none();
         };
-        let Some(source) = data
-            .index
-            .member(&key, target.item.uuid)
-            .filter(|m| m.is_port())
-        else {
-            crate::diagnostics::log_info(
-                "That label is not a port. Use a global label, hierarchical label or sheet entry.",
-            );
+        let member = data.index.member(&key, target.item.uuid);
+        let Some(source) = member.filter(|m| m.is_port()) else {
+            let name = member.map(describe_member).unwrap_or_default();
+            crate::diagnostics::log_info(messages::not_a_port(&name));
             return Task::none();
         };
         let name = describe_member(source);
         let partners = data.index.partners(&key, target.item.uuid);
         let Some(first) = partners.first().copied() else {
-            crate::diagnostics::log_info(format!(
-                "No partner for '{name}' on another sheet. Add a matching global label or sheet entry."
-            ));
+            crate::diagnostics::log_info(messages::no_partner(&name));
             return Task::none();
         };
         let total = partners.len();
@@ -107,17 +94,13 @@ impl Signex {
             .path_of(&member.sheet)
             .map(std::path::Path::to_path_buf)
         else {
-            crate::diagnostics::log_warning(format!(
-                "Partner of '{name}' is on '{sheet}', which has no file. Check the project's sheet list."
-            ));
+            crate::diagnostics::log_warning(messages::partner_has_no_file(&name, &sheet));
             return Task::none();
         };
         let Some(task) = self.go_to_member(&path, &member) else {
             return Task::none();
         };
-        crate::diagnostics::log_info(format!(
-            "'{name}': partner 1 of {total} on {sheet}. Run Go to net partner again for the next."
-        ));
+        crate::diagnostics::log_info(messages::jumped(&name, total, &sheet));
         task
     }
 
@@ -134,10 +117,7 @@ impl Signex {
         }
         let opened = self.resolve_held_spelling(path.to_path_buf());
         if self.document_state.active_path.as_deref() != Some(opened.as_path()) {
-            crate::diagnostics::log_warning(format!(
-                "Could not open {}. Check that the file exists and is a valid sheet.",
-                path.display()
-            ));
+            crate::diagnostics::log_warning(messages::cannot_open(path));
             return None;
         }
         let item = SelectedItem::new(member.id, selected_kind_of(member));
@@ -155,19 +135,13 @@ impl Signex {
                 history.back()
             };
             let Some(path) = step else {
-                let edge = if forward { "later" } else { "earlier" };
-                crate::diagnostics::log_info(format!(
-                    "No {edge} sheet in the history. Open or jump to another sheet first."
-                ));
+                crate::diagnostics::log_info(messages::no_history(forward));
                 return Task::none();
             };
             if self.open_or_focus_sheet_path(path.clone()) {
                 return Task::none();
             }
-            crate::diagnostics::log_warning(format!(
-                "Sheet history skipped {}: it cannot be opened.",
-                path.display()
-            ));
+            crate::diagnostics::log_warning(messages::history_skipped(&path));
         }
     }
 
@@ -181,5 +155,7 @@ impl Signex {
             self.document_state.net_nav.history.visit(&path);
         }
         self.sync_net_highlight_to_canvases();
+        // A card read on the sheet just left is stale.
+        self.document_state.net_nav.hover = Default::default();
     }
 }

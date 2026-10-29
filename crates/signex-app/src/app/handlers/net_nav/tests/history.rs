@@ -30,7 +30,7 @@ fn back_at_the_oldest_sheet_stays_and_says_there_is_nothing_earlier() {
     p.send(NetNavMsg::SheetBackRequested);
 
     assert_eq!(p.active(), Some(p.third.clone()));
-    assert!(logged(&["No earlier sheet"]));
+    assert!(logged(&["no earlier sheet"]));
 }
 
 #[test]

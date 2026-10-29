@@ -15,6 +15,7 @@ use crate::app::state::net_nav::PendingNetAction;
 mod highlight;
 mod hover;
 mod index_job;
+mod messages;
 mod navigate;
 mod target;
 

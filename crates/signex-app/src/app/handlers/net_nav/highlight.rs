@@ -15,6 +15,7 @@ use crate::app::state::{ProjectId, WindowKind};
 
 use super::super::super::*;
 use super::index_job::IndexLookup;
+use super::messages;
 use super::navigate::{describe_member, selected_kind_of};
 use super::target::{NetTarget, net_of_target};
 
@@ -55,15 +56,11 @@ impl Signex {
         select_here: bool,
     ) -> Task<Message> {
         let Some(target) = target else {
-            crate::diagnostics::log_info(
-                "Point at a wire, pin, label or sheet entry first, then highlight its net.",
-            );
+            crate::diagnostics::log_info(messages::nothing_pointed_at());
             return Task::none();
         };
         let Some(project) = self.project_of_sheet(&target.sheet) else {
-            crate::diagnostics::log_info(
-                "Net highlight needs the sheet to belong to an open project; open its .snxprj.",
-            );
+            crate::diagnostics::log_info(messages::no_project("net highlight"));
             return Task::none();
         };
         match self.net_index_lookup(project) {
@@ -73,9 +70,7 @@ impl Signex {
             }
             IndexLookup::Building(build) => self.wait_for_net_index(action, build),
             IndexLookup::Unavailable => {
-                crate::diagnostics::log_warning(
-                    "Net highlight is unavailable for this project; see the earlier message.",
-                );
+                crate::diagnostics::log_warning(messages::index_unavailable());
                 Task::none()
             }
         }
@@ -93,9 +88,7 @@ impl Signex {
             Some((key, net))
         });
         let Some((key, net)) = net else {
-            crate::diagnostics::log_info(
-                "That object is on no net. Connect it to a wire or pin, then highlight again.",
-            );
+            crate::diagnostics::log_info(messages::on_no_net());
             return;
         };
         let name = data
@@ -116,9 +109,7 @@ impl Signex {
             self.select_net_members_here(data, &key, net);
         }
         self.sync_net_highlight_to_canvases();
-        crate::diagnostics::log_info(format!(
-            "Net '{name}' highlighted on {sheets} sheet(s). Step through it, or run Clear net highlighting."
-        ));
+        crate::diagnostics::log_info(messages::highlighted(&name, sheets));
     }
 
     /// Select the members of `net` that sit on the focused sheet.
@@ -154,9 +145,7 @@ impl Signex {
             .as_ref()
             .map(|h| h.project)
         else {
-            crate::diagnostics::log_info(
-                "No net is highlighted. Highlight the net under the cursor first, then step through it.",
-            );
+            crate::diagnostics::log_info(messages::nothing_highlighted());
             return Task::none();
         };
         match self.net_index_lookup(project) {
@@ -165,9 +154,7 @@ impl Signex {
                 self.wait_for_net_index(PendingNetAction::StepHighlight { forward }, build)
             }
             IndexLookup::Unavailable => {
-                crate::diagnostics::log_warning(
-                    "Net highlight is unavailable for this project; see the earlier message.",
-                );
+                crate::diagnostics::log_warning(messages::index_unavailable());
                 Task::none()
             }
         }
@@ -180,14 +167,12 @@ impl Signex {
         let Some(net) = data.index.resolve(&highlight.name, &highlight.anchor) else {
             self.document_state.net_nav.highlight = None;
             self.sync_net_highlight_to_canvases();
-            crate::diagnostics::log_info(
-                "The highlighted net no longer exists, so its highlight was cleared.",
-            );
+            crate::diagnostics::log_info(messages::highlight_gone());
             return Task::none();
         };
         let steps = data.index.steps(net);
         let Some(at) = highlight.step(steps.len(), forward) else {
-            crate::diagnostics::log_info("The highlighted net has no pins or labels to step to.");
+            crate::diagnostics::log_info(messages::net_has_no_members());
             return Task::none();
         };
         let (name, total) = (highlight.name.clone(), steps.len());
@@ -198,9 +183,7 @@ impl Signex {
             .path_of(&member.sheet)
             .map(std::path::Path::to_path_buf)
         else {
-            crate::diagnostics::log_warning(format!(
-                "Net '{name}' reaches '{sheet}', which has no file. Check the project's sheet list."
-            ));
+            crate::diagnostics::log_warning(messages::net_sheet_has_no_file(&name, &sheet));
             return Task::none();
         };
         let Some(task) = self.go_to_member(&path, &member) else {
@@ -212,21 +195,18 @@ impl Signex {
             NetMemberKind::SheetPin { .. } => "sheet entry",
             _ => "item",
         };
-        crate::diagnostics::log_info(format!(
-            "Net '{name}': {kind} {what} on {sheet}, item {} of {total}.",
-            at + 1
-        ));
+        crate::diagnostics::log_info(messages::stepped(&name, kind, &what, &sheet, at + 1, total));
         task
     }
 
     /// Remove the net highlight.
     pub(crate) fn clear_net_highlight(&mut self) -> Task<Message> {
         if self.document_state.net_nav.highlight.take().is_none() {
-            crate::diagnostics::log_info("No net is highlighted, so there is nothing to clear.");
+            crate::diagnostics::log_info(messages::nothing_to_clear());
             return Task::none();
         }
         self.sync_net_highlight_to_canvases();
-        crate::diagnostics::log_info("Net highlight cleared.");
+        crate::diagnostics::log_info(messages::cleared());
         Task::none()
     }
 
@@ -249,9 +229,7 @@ impl Signex {
             }
             None => {
                 self.document_state.net_nav.highlight = None;
-                crate::diagnostics::log_info(
-                    "The highlighted net no longer exists, so its highlight was cleared.",
-                );
+                crate::diagnostics::log_info(messages::highlight_gone());
             }
         }
         self.sync_net_highlight_to_canvases();

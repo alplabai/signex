@@ -106,9 +106,9 @@ fn clearing_removes_the_highlight_from_the_model_and_every_canvas() {
 fn stepping_with_nothing_highlighted_says_how_to_start() {
     let mut p = project();
     p.send(NetNavMsg::HighlightStepRequested { forward: true });
-    assert!(logged(&["No net is highlighted"]));
+    assert!(logged(&["none is highlighted"]));
     p.send(NetNavMsg::HighlightClearRequested);
-    assert!(logged(&["nothing to clear"]));
+    assert!(logged(&["Nothing to clear"]));
 }
 
 #[test]

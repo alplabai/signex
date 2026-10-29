@@ -12,6 +12,7 @@ use crate::app::state::net_class_styles::ProjectKey;
 use crate::app::state::net_nav::{IndexOutcome, PendingNetAction, ProjectNetData, Stored};
 
 use super::super::super::*;
+use super::messages;
 
 /// What a caller gets when it needs a project's index.
 pub(super) enum IndexLookup {
@@ -137,15 +138,10 @@ impl Signex {
             Stored::Stale => Task::none(),
             Stored::Failed(reason) => {
                 self.document_state.net_nav.pending = None;
-                crate::diagnostics::log_warning(format!(
-                    "Net navigation unavailable: {reason}. Check the project's root sheet."
-                ));
+                crate::diagnostics::log_warning(messages::index_failed(&reason));
                 Task::none()
             }
             Stored::Fresh(data) => {
-                for warning in &outcome.warnings {
-                    crate::diagnostics::log_warning(warning);
-                }
                 self.refresh_highlight_from(outcome.project, &data);
                 match self.document_state.net_nav.pending.take() {
                     Some(action) => self.run_pending_net_action(action),

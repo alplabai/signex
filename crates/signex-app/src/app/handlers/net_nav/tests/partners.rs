@@ -55,7 +55,7 @@ fn a_port_with_no_partner_stays_put_and_says_what_to_do() {
     p.send_settled(NetNavMsg::PartnerJumpRequested);
 
     assert_eq!(p.active(), Some(p.mid.clone()));
-    assert!(logged(&["No partner", "ALONE"]));
+    assert!(logged(&["has no partner", "ALONE"]));
 }
 
 #[test]
@@ -66,5 +66,5 @@ fn a_wire_is_not_a_port_and_the_jump_says_so() {
     p.send_settled(NetNavMsg::PartnerJumpRequested);
 
     assert_eq!(p.active(), Some(p.root.clone()));
-    assert!(logged(&["Select or point at a port"]));
+    assert!(logged(&["Select a port, label or sheet entry"]));
 }
