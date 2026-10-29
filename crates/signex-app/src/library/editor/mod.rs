@@ -23,6 +23,7 @@ pub mod alternate_symbols;
 pub mod datasheet_picker;
 pub mod footprint;
 pub mod inert;
+mod measurement_cell;
 pub mod params;
 pub mod preview;
 pub mod sim;

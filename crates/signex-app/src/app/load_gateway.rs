@@ -312,6 +312,9 @@ impl Signex {
         match edit.kind {
             SelectedKind::Label => sheet.labels.iter().any(|l| l.uuid == edit.uuid),
             SelectedKind::TextNote => sheet.text_notes.iter().any(|t| t.uuid == edit.uuid),
+            SelectedKind::SymbolRefField | SelectedKind::SymbolValField | SelectedKind::Symbol => {
+                sheet.symbols.iter().any(|s| s.uuid == edit.uuid)
+            }
             _ => false,
         }
     }

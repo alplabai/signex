@@ -31,6 +31,7 @@ pub mod lifecycle;
 pub mod manifest;
 pub mod manufacturer;
 pub mod param;
+pub mod param_edit;
 pub mod pricing;
 pub mod pricing_refresh;
 pub mod primitive;
@@ -98,6 +99,10 @@ pub use manifest::{
 };
 pub use manufacturer::{AlternateStatus, DistributorListing, ManufacturerPart};
 pub use param::{ParamMap, ParamValue};
+pub use param_edit::{
+    MeasurementParts, commit_measurement, commit_slot_measurement, slot_field_seed, slot_problem,
+    slot_unit, violation_words,
+};
 pub use pricing::{
     CachedPricing, DroppedUpdate, PricingError, PricingUpdate, RowPricing, StoreOutcome, age_label,
     current_pricing, distributor_key, format_price,
@@ -119,7 +124,9 @@ pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]
 pub use search_index::{TantivyIndexError, TantivySearchIndex};
 pub use tables::{ALTERNATE_SYMBOLS_COLUMN, TABLE_HEADER, TableSchema};
-pub use templates::{ParamKind, ParamSlot, ParameterTemplate, TemplateRegistry, TemplateViolation};
+pub use templates::{
+    ParamKind, ParamSlot, ParameterTemplate, TemplateRegistry, TemplateViolation, slot_violations,
+};
 pub use validate::validate_row_for_write;
 pub use where_used::{UseSite, WhereUsedIndex};
 

@@ -118,6 +118,19 @@ impl LibraryState {
         Some(lib.root_dir()?.join(dir).join(format!("{}.{ext}", r.uuid)))
     }
 
+    /// The parameter template of `class` in the open library at `path`.
+    pub fn row_template(
+        &self,
+        path: &Path,
+        class: &str,
+    ) -> Option<&signex_library::ParameterTemplate> {
+        if class.trim().is_empty() {
+            return None;
+        }
+        let library_id = self.library_at(path)?.library_id;
+        self.template_registry.resolve(library_id, class)
+    }
+
     pub fn library_at_mut(&mut self, path: &Path) -> Option<&mut OpenLibrary> {
         self.open_libraries.iter_mut().find(|lib| lib.root == path)
     }

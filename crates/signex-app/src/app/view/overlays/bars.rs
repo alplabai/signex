@@ -587,6 +587,7 @@ impl Signex {
         }
         let edit_state = interaction.editing_text.as_ref()?;
         let text = edit_state.text.clone();
+        let placeholder = crate::app::handlers::canvas::editor_placeholder(edit_state.kind);
         // Convert object world position → window-absolute screen position.
         // The canvas Program publishes its latest camera into this Cell each
         // frame — that's the only way to read it from outside the Program.
@@ -624,7 +625,8 @@ impl Signex {
                 row![
                     iced::widget::Space::new().width(abs_x.max(0.0)),
                     container(
-                        iced::widget::text_input("", &text)
+                        iced::widget::text_input(placeholder, &text)
+                            .id(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone())
                             .on_input(|t| Message::TextEdit(TextEditMsg::Changed(t)))
                             .on_submit(Message::TextEdit(TextEditMsg::Submit))
                             .size(font_px)

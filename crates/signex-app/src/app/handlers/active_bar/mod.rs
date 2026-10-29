@@ -46,7 +46,8 @@ impl Signex {
             ActiveBarAction::DrawWire
             | ActiveBarAction::DrawBus
             | ActiveBarAction::PlaceBusEntry
-            | ActiveBarAction::PlaceNetLabel => Some("wiring"),
+            | ActiveBarAction::PlaceNetLabel
+            | ActiveBarAction::PlaceJunction => Some("wiring"),
             ActiveBarAction::PlacePowerGND
             | ActiveBarAction::PlacePowerVCC
             | ActiveBarAction::PlacePowerPlus12

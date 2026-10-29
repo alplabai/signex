@@ -255,41 +255,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         return view_selected_element_properties(ctx, muted, primary, border_c);
     }
     if ctx.selection_count > 1 {
-        let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
-        col = col.push(
-            container(text("Multi-Selection").size(TS.body).color(primary))
-                .padding([6.0, SP.m])
-                .width(Length::Fill),
-        );
-        col = col.push(thin_sep(border_c));
-        col = col.push(
-            container(
-                text(format!("{} objects selected", ctx.selection_count))
-                    .size(TS.caption)
-                    .color(muted),
-            )
-            .padding([SP.s, SP.m]),
-        );
-        for (key, value) in &ctx.selection_info {
-            col = col.push(
-                container(
-                    row![
-                        text(key)
-                            .size(TS.caption)
-                            .color(muted)
-                            .width(Length::FillPortion(2)),
-                        text(value)
-                            .size(TS.caption)
-                            .color(primary)
-                            .width(Length::FillPortion(3)),
-                    ]
-                    .spacing(SP.s),
-                )
-                .padding([3.0, SP.m])
-                .width(Length::Fill),
-            );
-        }
-        return scrollable(col).width(Length::Fill).into();
+        return super::multi_selection::view_multi_selection(ctx, muted, primary, border_c);
     }
 
     // ── Nothing selected: show Document Options (Altium default) ──
