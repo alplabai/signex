@@ -225,6 +225,8 @@ impl Signex {
                 draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
                 draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,
                 draft_drag_direction_select: ui.preferences_draft_drag_direction_select,
+                draft_increment_step: ui.preferences_draft_increment_step,
+                draft_paste_designators: ui.preferences_draft_paste_designators,
                 draft_window_controls_placement: ui.preferences_draft_window_controls_placement,
                 window_controls_restart_note: self.window_controls_needs_restart(),
                 draft_autosave_enabled: ui.preferences_draft_autosave_enabled,

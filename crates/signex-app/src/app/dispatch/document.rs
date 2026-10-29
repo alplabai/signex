@@ -66,21 +66,24 @@ impl Signex {
             }
             EditMsg::Cut => self.handle_selection_cut_requested(),
             EditMsg::Copy => {
-                self.handle_selection_copy_requested();
-                self.finish_update()
+                let write = if self.handle_selection_copy_requested() {
+                    self.clipboard_write_task()
+                } else {
+                    Task::none()
+                };
+                Task::batch([write, self.finish_update()])
             }
-            EditMsg::Paste => {
-                self.handle_clipboard_paste_requested();
-                self.finish_update()
+            EditMsg::Paste => self.request_paste(PasteIntent::Paste),
+            EditMsg::SmartPaste => self.request_paste(PasteIntent::SmartPaste),
+            EditMsg::PasteArrayRequested => self.request_paste(PasteIntent::Array),
+            EditMsg::PasteTextRead { request, text } => self.handle_paste_text_read(request, text),
+            EditMsg::PasteCountersSeeded { request, seed } => {
+                self.handle_paste_counters_seeded(request, &seed)
             }
-            EditMsg::SmartPaste => {
-                self.handle_clipboard_smart_paste_requested();
-                self.finish_update()
-            }
-            EditMsg::Duplicate => {
-                self.handle_selection_duplicate_requested();
-                self.finish_update()
-            }
+            EditMsg::PasteArray(msg) => self.handle_paste_array_message(msg),
+            EditMsg::RubberStampCopy => self.handle_rubber_stamp_requested(),
+            EditMsg::Duplicate => self.handle_selection_duplicate_requested(),
+            EditMsg::RepeatLastItem => self.handle_repeat_last_item_requested(),
             EditMsg::ArrangeDrawings(arrange) => {
                 self.handle_drawings_arrange_requested(arrange);
                 self.finish_update()

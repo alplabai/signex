@@ -92,7 +92,7 @@ pub use palette::PanelPalette;
 pub use paper::{PageFormatMode, PageOrigin, SheetColor, paper_dimensions, paper_size_options};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(super) use projects::{view_navigator, view_projects};
-pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind};
+pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind, PrePlacementStyle};
 pub(super) use properties::{
     PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_PORTION, PROPERTY_ROW_PAD_X, view_properties,
 };
