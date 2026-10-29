@@ -274,6 +274,11 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
             cmd("place_power_symbol", "Power Port", "P"),
             MenuMessage::PlacePowerPort,
         ),
+        cmd_item_gated(
+            ctx,
+            cmd("place_junction", "Junction", "J"),
+            MenuMessage::PlaceJunction,
+        ),
         SEP,
         item_if("Text", MenuMessage::PlaceText, ctx.commands.has_schematic),
         item_if(

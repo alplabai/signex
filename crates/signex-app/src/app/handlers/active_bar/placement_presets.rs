@@ -98,6 +98,9 @@ impl Signex {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::BusEntry)));
                 self.interaction_state.pending_power = None;
             }
+            ActiveBarAction::PlaceJunction => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Junction)));
+            }
             ActiveBarAction::PlaceNoERC => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::NoErcDirective)));
             }
