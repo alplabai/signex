@@ -47,14 +47,17 @@ pub(super) fn net_of_target(
 ) -> Option<usize> {
     let nets = data.index.nets_in(sheet, item.uuid, occurrence);
     match item.kind {
-        SelectedKind::Symbol => data
-            .index
-            .pin_near(sheet, at, PIN_TOLERANCE_MM, occurrence)
-            .map(|(net, _)| net)
-            .or_else(|| match nets.as_slice() {
+        SelectedKind::Symbol => {
+            let by_pin = data
+                .index
+                .pin_near(sheet, at, PIN_TOLERANCE_MM, occurrence)
+                .map(|(net, _)| net);
+            let only = match nets.as_slice() {
                 [only] => Some(*only),
                 _ => None,
-            }),
+            };
+            by_pin.or(only)
+        }
         kind if is_net_kind(kind) => nets.first().copied(),
         _ => None,
     }
