@@ -777,8 +777,20 @@ pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     }
 
     for (_, ports) in roots {
-        let [(a, tip), (b, _), rest @ ..] = ports.as_slice() else {
+        let [(a, tip), (b, b_tip), rest @ ..] = ports.as_slice() else {
             continue;
+        };
+        // Which rails collide, and at which port pins: a multi-pin port pair
+        // shorting two separate nets is two findings, never one waiver.
+        let mut rails: Vec<&str> = ports.iter().map(|(p, _)| p.value.as_str()).collect();
+        rails.sort_unstable();
+        rails.dedup();
+        let pin_at = |port: &crate::context::ErcSymbol, at: &Point| {
+            port.pins
+                .iter()
+                .find(|p| pt_key(&p.world_pos) == pt_key(at))
+                .map(|p| p.number.clone())
+                .unwrap_or_default()
         };
         let mut names = format!("'{}' and '{}'", a.value, b.value);
         if !rest.is_empty() {
@@ -795,7 +807,9 @@ pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                 *tip,
             )
             .with_primary(sel(a.uuid, SelectedKind::Symbol))
-            .with_peer(sel(b.uuid, SelectedKind::Symbol)),
+            .with_peer(sel(b.uuid, SelectedKind::Symbol))
+            .at_pin_number(format!("{}/{}", pin_at(a, tip), pin_at(b, b_tip)))
+            .tagged(format!("nets:{}", rails.join(","))),
         );
     }
 }

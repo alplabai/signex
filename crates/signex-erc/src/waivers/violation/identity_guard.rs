@@ -127,7 +127,21 @@ fn many_rules_at_once() -> ErcContext {
     // footprint, value or MPN.
     let mut r1 = symbol("R?", p(76.2, 0.0));
     r1.instance_designators = vec!["R7".into(), "R107".into()];
-    c.symbols.extend([u1, u2, u3, u4, r1]);
+    // Two two-pin power ports, +3V3 and +5V, shorted on two separate nets.
+    let mut p33 = symbol("#PWR1", p(127.0, 0.0));
+    let mut p5 = symbol("#PWR2", p(152.4, 0.0));
+    for (port, value) in [(&mut p33, "+3V3"), (&mut p5, "+5V")] {
+        port.is_power = true;
+        port.value = value.into();
+    }
+    for (n, y) in [("1", 0.0), ("2", 25.4)] {
+        p33.pins
+            .push(pin(n, p(127.0, y), PinDirection::PowerInput, true));
+        p5.pins
+            .push(pin(n, p(152.4, y), PinDirection::PowerInput, true));
+        c.wires.push(wire(p(127.0, y), p(152.4, y)));
+    }
+    c.symbols.extend([u1, u2, u3, u4, r1, p33, p5]);
     // A sheet symbol with no pins whose file did not load.
     c.child_sheets.push(ErcChildSheet {
         uuid: Uuid::new_v4(),
@@ -155,6 +169,7 @@ fn a_sheet_tripping_many_rules_gives_each_finding_its_own_identity() {
         .count();
     assert_eq!(r1, 2, "{found:?}");
     assert!(count(RuleKind::BadHierSheetPin) >= 2, "{found:?}");
+    assert_eq!(count(RuleKind::PowerPortShort), 2, "{found:?}");
     let shared = shared_identities(&c);
     assert!(shared.is_empty(), "{shared:?}");
 }
