@@ -5665,6 +5665,8 @@ name = "signex-erc"
 version = "0.15.0"
 dependencies = [
  "serde",
+ "serde_json",
+ "sha2",
  "signex-net",
  "signex-types",
  "uuid",
@@ -5679,6 +5681,7 @@ dependencies = [
  "signex-erc",
  "signex-types",
  "thiserror 2.0.18",
+ "uuid",
 ]
 
 [[package]]

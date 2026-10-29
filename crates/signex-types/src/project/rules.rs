@@ -51,6 +51,12 @@ pub struct ProjectRules {
     /// rule set's hash or its profile provenance.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub erc_net_waivers: BTreeMap<String, BTreeSet<String>>,
+    /// Per-finding ERC waivers with a reason (#1285): rule id + the involved
+    /// objects' UUIDs + a content fingerprint, so a waiver lapses when one of
+    /// those objects changes. Beside `erc` for the same reason as
+    /// `erc_net_waivers`. Older builds keep the key verbatim in `unknown`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub erc_waivers: Vec<super::ErcWaiver>,
     /// Keys written by a newer build (`drc`, `annotation`, ...); kept so a
     /// save does not drop them.
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -64,6 +70,7 @@ impl Default for ProjectRules {
             profile: None,
             erc: ErcRules::default(),
             erc_net_waivers: BTreeMap::new(),
+            erc_waivers: Vec::new(),
             unknown: UnknownJson::default(),
         }
     }

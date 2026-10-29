@@ -7,4 +7,5 @@ mod no_erc_directives;
 mod output_order;
 mod pin_type_conflict;
 mod project_multiple_names;
+mod units_not_placed;
 mod wire_order_determinism;

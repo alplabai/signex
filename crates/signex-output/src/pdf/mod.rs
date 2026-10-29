@@ -34,6 +34,7 @@ mod page_setup;
 pub mod palette;
 mod subset;
 mod surface;
+pub(crate) mod text_document;
 
 pub use page_setup::{
     MAX_PAGE_EDGE_MM, MAX_SCALE_PERCENT, MIN_CUSTOM_EDGE_MM, MIN_PRINTABLE_MM, MarginEdge,

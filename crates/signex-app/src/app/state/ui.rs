@@ -418,6 +418,12 @@ pub struct UiState {
     /// Findings each waived (rule id, net) pair hid in the newest run
     /// (#1581); 0 hidden means the waiver matched nothing (e.g. renamed net).
     pub erc_waived_hidden: std::collections::BTreeMap<(String, String), usize>,
+    /// Findings a per-finding waiver hid in the newest run (#1285).
+    pub erc_waived_findings: Vec<crate::app::handlers::erc::WaivedFinding>,
+    /// (rule id, objects) of waivers that lapsed in the newest run.
+    pub erc_lapsed_waivers: std::collections::BTreeSet<(String, Vec<String>)>,
+    /// The waiver being written in the ERC panel, if any (#1285).
+    pub erc_waive_draft: Option<crate::panels::ErcWaiveDraft>,
     /// Global cursor into the flattened ERC diagnostics list spanning all
     /// sheets in `erc_violations_by_path`. Used by next/prev navigation.
     pub erc_focus_global_index: Option<usize>,

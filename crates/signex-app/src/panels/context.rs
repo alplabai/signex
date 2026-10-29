@@ -164,6 +164,10 @@ pub struct PanelContext {
     pub erc_diagnostics: Vec<ErcDiagnosticEntry>,
     /// Net waivers stored in the active project (#1581).
     pub erc_waivers: Vec<super::ErcWaiverEntry>,
+    /// Per-finding waivers stored in the active project (#1285).
+    pub erc_violation_waivers: Vec<super::ErcViolationWaiverEntry>,
+    /// The waiver being written in the panel.
+    pub erc_waive_draft: Option<super::ErcWaiveDraft>,
     /// Focused ERC diagnostic index used by prev/next navigation arrows.
     pub erc_focus_index: Option<usize>,
     /// An ERC run is in flight (the panel shows "Running…").

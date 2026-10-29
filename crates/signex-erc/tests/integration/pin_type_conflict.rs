@@ -104,11 +104,15 @@ fn two_outputs_on_one_net_emit_one_locatable_conflict() {
     assert_eq!(found.len(), 1, "{found:?}");
     let v = &found[0];
     assert_eq!(v.severity, Severity::Error, "Output/Output baseline cell");
-    assert_eq!((v.location.x, v.location.y), (0.0, 0.0));
     let primary = v.primary.as_ref().expect("primary symbol");
     let peer = v.peer.as_ref().expect("peer symbol");
-    assert_eq!((primary.uuid, primary.kind), (u1, SelectedKind::Symbol));
-    assert_eq!((peer.uuid, peer.kind), (u2, SelectedKind::Symbol));
+    // Which part is primary is canonical (by uuid), not document order; the
+    // marker sits on the primary's pin.
+    let (first, second) = if u1 < u2 { (u1, u2) } else { (u2, u1) };
+    assert_eq!((primary.uuid, primary.kind), (first, SelectedKind::Symbol));
+    assert_eq!((peer.uuid, peer.kind), (second, SelectedKind::Symbol));
+    let expected = if first == u1 { (0.0, 0.0) } else { (10.0, 0.0) };
+    assert_eq!((v.location.x, v.location.y), expected);
 }
 
 #[test]
