@@ -13,9 +13,10 @@
 
 use super::*;
 
-use super::items::{dd_disabled, dd_kb, dd_msg, dd_planned, submenu_launcher};
+use super::items::{
+    dd_cmd, dd_cmd_action, dd_cmd_disabled, dd_disabled, dd_msg, dd_planned, submenu_launcher,
+};
 use crate::icons as ic;
-use crate::menu_bar::cmd_label;
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
@@ -23,20 +24,55 @@ use signex_widgets::active_bar_dropdown::DropdownEntry;
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-/// Keyboard-shortcut hints for the canvas menu, resolved from the active
-/// keymap profile (empty when the profile does not bind the command) before
-/// the pure builder runs.
-pub(super) struct CanvasShortcuts {
-    pub find: String,
-    pub find_similar: String,
-    pub cut: String,
-    pub copy: String,
-    pub paste: String,
-    pub smart_paste: String,
-    pub rotate: String,
-    pub mirror_x: String,
-    pub mirror_y: String,
-    pub delete: String,
+/// Command ids whose keyboard hint the canvas menu shows.
+pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
+    "find",
+    "find_similar_objects",
+    "cut",
+    "copy",
+    "paste",
+    "smart_paste",
+    "rotate_counterclockwise",
+    "mirror_x",
+    "mirror_y",
+    "delete_selection",
+    "open_child_sheet",
+    "create_sheet_from_sheet_symbol",
+    "sync_sheet_pins",
+    "open_preferences",
+    "open_datasheet",
+    "edit_selected_symbol_in_symbol_editor",
+    "edit_selected_object_properties",
+    "change_component",
+    "open_project_options",
+];
+
+/// Keyboard-shortcut hints for the canvas menu, keyed by command id and
+/// resolved from the active keymap profile (empty when the profile does not
+/// bind the command) before the pure builder runs.
+#[derive(Debug, Clone, Default)]
+pub(super) struct CanvasShortcuts(std::collections::HashMap<&'static str, String>);
+
+impl CanvasShortcuts {
+    /// Hints for every id in [`CANVAS_SHORTCUT_IDS`], looked up with `label_of`.
+    pub(super) fn resolve(label_of: impl Fn(&str) -> String) -> Self {
+        Self(
+            CANVAS_SHORTCUT_IDS
+                .iter()
+                .map(|id| (*id, label_of(id)))
+                .collect(),
+        )
+    }
+
+    /// The hint for `command_id`; empty when unbound.
+    pub(super) fn of(&self, command_id: &str) -> &str {
+        self.0.get(command_id).map_or("", String::as_str)
+    }
+
+    #[cfg(test)]
+    pub(super) fn set(&mut self, command_id: &'static str, hint: &str) {
+        self.0.insert(command_id, hint.to_string());
+    }
 }
 
 impl Signex {
@@ -144,18 +180,7 @@ impl Signex {
         let active_submenu = self.interaction_state.context_submenu;
         // Shortcut hints read from the active keymap profile; a command
         // it does not bind has none.
-        let sc = CanvasShortcuts {
-            find: self.keymap_shortcut_label("find"),
-            find_similar: self.keymap_shortcut_label("find_similar_objects"),
-            cut: self.keymap_shortcut_label("cut"),
-            copy: self.keymap_shortcut_label("copy"),
-            paste: self.keymap_shortcut_label("paste"),
-            smart_paste: self.keymap_shortcut_label("smart_paste"),
-            rotate: self.keymap_shortcut_label("rotate_counterclockwise"),
-            mirror_x: self.keymap_shortcut_label("mirror_x"),
-            mirror_y: self.keymap_shortcut_label("mirror_y"),
-            delete: self.keymap_shortcut_label("delete_selection"),
-        };
+        let sc = CanvasShortcuts::resolve(|id| self.keymap_shortcut_label(id));
         let tokens = &self.document_state.panel_ctx.tokens;
         // The project row's tree key, the same one the project tree's own
         // menu sends, so the action follows the project if rows reorder.
@@ -226,16 +251,16 @@ pub(super) fn canvas_menu_entries(
     } = selection;
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(24);
 
-    v.push(dd_kb(
+    v.push(dd_cmd_action(
         Some(ic::icon_dd_find_similar(tid)),
-        "Find Similar Objects...",
-        &sc.find_similar,
+        "find_similar_objects",
+        sc.of("find_similar_objects"),
         ContextAction::FindSimilar,
     ));
-    v.push(dd_msg(
+    v.push(dd_cmd(
         Some(ic::icon_chrome_search(tid)),
-        "Find Text...",
-        &sc.find,
+        "find",
+        sc.of("find"),
         Message::Overlay(OverlayMsg::OpenFind),
     ));
     v.push(dd_planned(
@@ -297,22 +322,22 @@ pub(super) fn canvas_menu_entries(
     }
 
     if child_sheet_selected {
-        v.push(dd_kb(
+        v.push(dd_cmd_action(
             Some(ic::icon_dd_open_child_sheet(tid)),
-            "Open Child Sheet",
-            "Enter",
+            "open_child_sheet",
+            sc.of("open_child_sheet"),
             ContextAction::OpenChildSheet,
         ));
-        v.push(dd_kb(
+        v.push(dd_cmd_action(
             None,
-            "Create Sheet From Sheet Symbol",
-            "",
+            "create_sheet_from_sheet_symbol",
+            sc.of("create_sheet_from_sheet_symbol"),
             ContextAction::CreateChildSheet,
         ));
-        v.push(dd_kb(
+        v.push(dd_cmd_action(
             None,
-            "Sync Sheet Pins",
-            "",
+            "sync_sheet_pins",
+            sc.of("sync_sheet_pins"),
             ContextAction::SyncSheetPins,
         ));
         v.push(DropdownEntry::Separator);
@@ -324,55 +349,55 @@ pub(super) fn canvas_menu_entries(
         None,
     ));
     v.push(DropdownEntry::Separator);
-    v.push(dd_kb(
+    v.push(dd_cmd_action(
         Some(ic::icon_dd_cut(tid)),
-        &cmd_label("cut", "Cut"),
-        &sc.cut,
+        "cut",
+        sc.of("cut"),
         ContextAction::Cut,
     ));
-    v.push(dd_kb(
+    v.push(dd_cmd_action(
         Some(ic::icon_dd_copy(tid)),
-        &cmd_label("copy", "Copy"),
-        &sc.copy,
+        "copy",
+        sc.of("copy"),
         ContextAction::Copy,
     ));
-    v.push(dd_kb(
+    v.push(dd_cmd_action(
         Some(ic::icon_dd_paste(tid)),
-        &cmd_label("paste", "Paste"),
-        &sc.paste,
+        "paste",
+        sc.of("paste"),
         ContextAction::Paste,
     ));
-    v.push(dd_kb(
+    v.push(dd_cmd_action(
         Some(ic::icon_dd_smart_paste(tid)),
-        &cmd_label("smart_paste", "Paste Special"),
-        &sc.smart_paste,
+        "smart_paste",
+        sc.of("smart_paste"),
         ContextAction::SmartPaste,
     ));
     v.push(DropdownEntry::Separator);
 
     if has_selection {
-        v.push(dd_kb(
+        v.push(dd_cmd_action(
             Some(ic::icon_dd_rotate(tid)),
-            "Rotate",
-            &sc.rotate,
+            "rotate_counterclockwise",
+            sc.of("rotate_counterclockwise"),
             ContextAction::RotateSelected,
         ));
-        v.push(dd_kb(
+        v.push(dd_cmd_action(
             Some(ic::icon_dd_flip_x(tid)),
-            &cmd_label("mirror_x", "Mirror X"),
-            &sc.mirror_x,
+            "mirror_x",
+            sc.of("mirror_x"),
             ContextAction::MirrorX,
         ));
-        v.push(dd_kb(
+        v.push(dd_cmd_action(
             Some(ic::icon_dd_flip_y(tid)),
-            &cmd_label("mirror_y", "Mirror Y"),
-            &sc.mirror_y,
+            "mirror_y",
+            sc.of("mirror_y"),
             ContextAction::MirrorY,
         ));
-        v.push(dd_kb(
+        v.push(dd_cmd_action(
             Some(ic::icon_dd_delete(tid)),
-            &cmd_label("delete_selection", "Delete"),
-            &sc.delete,
+            "delete_selection",
+            sc.of("delete_selection"),
             ContextAction::Delete,
         ));
         v.push(DropdownEntry::Separator);
@@ -392,44 +417,41 @@ pub(super) fn canvas_menu_entries(
     // way the project tree's own menu addresses it. No project: greyed, no
     // tooltip (the feature exists, there is just nothing to open it for).
     v.push(match project_key {
-        Some(key) => dd_msg(
+        Some(key) => dd_cmd(
             Some(ic::icon_dd_project_options(tid)),
-            "Project Options...",
-            "",
+            "open_project_options",
+            sc.of("open_project_options"),
             Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
                 crate::app::ProjectTreeAction::OpenProjectOptions(key),
             )),
         ),
-        None => dd_disabled(
+        None => dd_cmd_disabled(
             Some(ic::icon_dd_project_options(tid)),
-            "Project Options...",
-            None,
+            "open_project_options",
+            sc.of("open_project_options"),
         ),
     });
-    v.push(dd_msg(
+    v.push(dd_cmd(
         Some(ic::icon_dd_preferences(tid)),
-        &cmd_label("open_preferences", "Preferences..."),
-        "",
+        "open_preferences",
+        sc.of("open_preferences"),
         Message::Preferences(PreferencesMsg::Open),
     ));
 
     if placed_part_selected {
         use crate::library::PlacedPartAction as A;
-        // Labels come from the catalog where the action has a command id, so
-        // the menu and the command palette cannot drift. Change Component
-        // has no command id yet.
-        for (label, action) in [
-            (
-                cmd_label("open_datasheet", "Open Datasheet"),
-                A::OpenDatasheet,
-            ),
-            (
-                cmd_label("edit_selected_symbol_in_symbol_editor", "Edit Symbol"),
-                A::EditSymbol,
-            ),
-            ("Change Component\u{2026}".to_string(), A::ChangeComponent),
+        // The placed-part actions, all catalog commands.
+        for (command_id, action) in [
+            ("open_datasheet", A::OpenDatasheet),
+            ("edit_selected_symbol_in_symbol_editor", A::EditSymbol),
+            ("change_component", A::ChangeComponent),
         ] {
-            v.push(dd_kb(None, &label, "", ContextAction::PlacedPart(action)));
+            v.push(dd_cmd_action(
+                None,
+                command_id,
+                sc.of(command_id),
+                ContextAction::PlacedPart(action),
+            ));
         }
     }
     if has_selection {
@@ -441,10 +463,10 @@ pub(super) fn canvas_menu_entries(
         // Properties → ensure the Properties panel is visible; it already
         // tracks the current selection, so it populates with the
         // right-clicked item's fields once shown.
-        v.push(dd_msg(
+        v.push(dd_cmd(
             Some(ic::icon_dd_properties(tid)),
-            &cmd_label("edit_selected_object_properties", "Properties..."),
-            "F11",
+            "edit_selected_object_properties",
+            sc.of("edit_selected_object_properties"),
             Message::Menu(menu_bar::MenuMessage::OpenPropertiesPanel),
         ));
     }

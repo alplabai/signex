@@ -73,7 +73,70 @@ pub(super) fn dd_disabled(
         disabled: true,
         on_press: None,
         tooltip: None,
+        command_id: None,
     })
+}
+
+/// Catalog menu text for `command_id`. An id missing from the catalog shows
+/// the bare id, which the catalog-agreement test turns into a failure.
+pub(super) fn command_text(command_id: &str) -> String {
+    crate::keymap::metadata_for_str(command_id)
+        .map_or(command_id, |meta| meta.menu_label())
+        .to_string()
+}
+
+/// A row that runs the catalog command `command_id`: its label is the
+/// command's menu text, so no surface keeps a private copy (#271).
+/// `shortcut` is the active keymap's hint for the same id (empty = none).
+pub(super) fn dd_cmd(
+    icon: Option<Handle>,
+    command_id: &'static str,
+    shortcut: &str,
+    message: Message,
+) -> DropdownEntry<Message> {
+    tag_command(
+        dd_msg(icon, &command_text(command_id), shortcut, message),
+        command_id,
+    )
+}
+
+/// [`dd_cmd`] dispatching `action` through the context-menu bridge.
+pub(super) fn dd_cmd_action(
+    icon: Option<Handle>,
+    command_id: &'static str,
+    shortcut: &str,
+    action: ContextAction,
+) -> DropdownEntry<Message> {
+    dd_cmd(
+        icon,
+        command_id,
+        shortcut,
+        Message::ContextMenu(ContextMenuMsg::Action(action)),
+    )
+}
+
+/// [`dd_cmd`] greyed because the command cannot run right now. The row
+/// keeps the command's `shortcut` hint in the right-hand column.
+pub(super) fn dd_cmd_disabled(
+    icon: Option<Handle>,
+    command_id: &'static str,
+    shortcut: &str,
+) -> DropdownEntry<Message> {
+    let right = (!shortcut.is_empty()).then_some(shortcut);
+    tag_command(
+        dd_disabled(icon, &command_text(command_id), right),
+        command_id,
+    )
+}
+
+pub(super) fn tag_command(
+    entry: DropdownEntry<Message>,
+    command_id: &'static str,
+) -> DropdownEntry<Message> {
+    match entry {
+        DropdownEntry::Item(item) => DropdownEntry::Item(item.command(command_id)),
+        other => other,
+    }
 }
 
 /// A greyed row for a feature that does not exist yet: the same passive
@@ -93,19 +156,18 @@ pub(super) fn dd_planned(
 }
 
 /// Save row for the project-root menu — active only when a schematic tab
-/// is open or the project metadata is dirty. Altium's right-click menus
-/// don't surface keyboard shortcuts, so the shortcut column stays empty
-/// even though Ctrl+S still fires `MenuMessage::Save` globally.
-pub(super) fn save_entry(enabled: bool) -> DropdownEntry<Message> {
+/// is open or the project metadata is dirty. Label and `shortcut` come from
+/// the `save_document` command like every other surface.
+pub(super) fn save_entry(enabled: bool, shortcut: &str) -> DropdownEntry<Message> {
     if enabled {
-        dd_msg(
+        dd_cmd(
             None,
-            "Save",
-            "",
+            "save_document",
+            shortcut,
             Message::Menu(crate::menu_bar::MenuMessage::Save),
         )
     } else {
-        dd_disabled(None, "Save", None)
+        dd_cmd_disabled(None, "save_document", shortcut)
     }
 }
 

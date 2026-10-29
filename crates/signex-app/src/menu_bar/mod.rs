@@ -177,6 +177,8 @@ pub enum MenuMessage {
     OpenComponentsPanel,
     OpenNavigatorPanel,
     OpenPropertiesPanel,
+    /// Open the active project's options tab.
+    OpenProjectOptions,
     OpenErcPanel,
     OpenMessagesPanel,
     OpenSignalPanel,

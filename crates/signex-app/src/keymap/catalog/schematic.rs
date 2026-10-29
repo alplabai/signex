@@ -95,6 +95,16 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "create_sheet_from_sheet_symbol",
+        category: "design",
+        label: "Create a child sheet from the selected sheet symbol",
+        menu_label: Some("Create Sheet From Sheet Symbol"),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresSelection,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "leave_sheet",
         category: "navigation",
         label: "Leave sheet / go to parent sheet",
@@ -131,6 +141,16 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "open_child_sheet",
+        category: "navigation",
+        label: "Open the selected sheet symbol's child sheet",
+        menu_label: Some("Open Child Sheet"),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresSelection,
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
@@ -361,6 +381,36 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "sync_sheet_pins",
+        category: "design",
+        label: "Sync the selected sheet symbol's pins with its child sheet",
+        menu_label: Some("Sync Sheet Pins"),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresSelection,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "change_component",
+        category: "edit",
+        label: "Change the selected part's component",
+        menu_label: Some("Change Component\u{2026}"),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresSelection,
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "open_project_options",
+        category: "file",
+        label: "Open Project Options for the active project",
+        menu_label: Some("Project Options..."),
+        group: CommandGroup::Schematic,
+        enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
