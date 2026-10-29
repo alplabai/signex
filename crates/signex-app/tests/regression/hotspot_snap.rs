@@ -204,7 +204,9 @@ fn click_on_the_grid_point_next_to_a_wire_end_stays_on_the_grid() {
         .last()
         .expect("a wire was placed")
         .clone();
-    assert_eq!((wire.start.x, wire.end.x), (5.08, 6.35));
+    // The second leg runs straight on from the first, so it folds into it
+    // (#1254): one wire from the first click to the grid point.
+    assert_eq!((wire.start.x, wire.end.x), (0.0, 6.35));
     assert_eq!(wire.end.y, 25.4);
 }
 
