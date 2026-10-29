@@ -176,9 +176,12 @@ impl Signex {
         // v0.18.6 — the `FootprintFile` envelope stays with the editor so
         // saves keep `file_uuid` and any multi-footprint siblings.
         let display_name = file.footprints[0].name.clone();
+        // A library names a footprint file by the footprint's uuid, which says
+        // nothing to the user: the tab shows the footprint's name then.
         let title = path
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
+            .filter(|stem| uuid::Uuid::parse_str(stem).is_err())
             .unwrap_or(display_name);
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         // HI-23: seed snap-disabled from the user's persisted global toggle

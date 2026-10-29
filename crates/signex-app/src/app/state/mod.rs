@@ -191,6 +191,8 @@ pub enum ModalId {
     LibraryPrimitivePicker,
     LibraryDocumentOptions,
     LibraryCreateOptions,
+    /// Which library receives a copy of a stock primitive (#813).
+    LibraryStockCopy,
     LibraryUpdates,
     /// Close library with unsaved drafts (confirm class).
     LibraryCloseConfirm,

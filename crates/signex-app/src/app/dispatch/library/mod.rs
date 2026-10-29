@@ -63,6 +63,7 @@ mod settings;
 mod settings_tests;
 #[cfg(test)]
 mod stale_row_tests;
+mod stock_copy;
 mod updates;
 mod use_site;
 
@@ -428,6 +429,7 @@ impl Signex {
                 library_path,
                 outcome,
             } => self.handle_pricing_refresh_finished(library_path, outcome),
+            LibraryMessage::StockCopy(msg) => self.handle_stock_copy(msg),
         }
     }
 }

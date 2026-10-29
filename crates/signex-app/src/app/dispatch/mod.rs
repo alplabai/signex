@@ -259,6 +259,7 @@ impl Signex {
                             ModalId::LibraryPrimitivePicker => self.library.primitive_picker = None,
                             ModalId::LibraryDocumentOptions => self.library.document_options = None,
                             ModalId::LibraryCreateOptions => self.library.create_options = None,
+                            ModalId::LibraryStockCopy => self.library.stock_copy = None,
                             ModalId::LibraryUpdates => self.library.library_updates = None,
                             ModalId::LibraryCloseConfirm => {
                                 self.library.close_library_confirm = None

@@ -155,3 +155,17 @@ fn opening_a_footprint_with_only_dangling_removals_marks_it_dirty() {
     assert!(editor.dirty, "a save must persist the heal");
     assert!(editor.file.footprints[0].load_repairs.is_empty());
 }
+
+/// A rejected edit gives `dirty` back as it was, but rows a failed cascade
+/// still owes keep the editor unsaved.
+#[test]
+fn a_rejected_edit_does_not_clear_the_mark_of_owed_rows() {
+    let mut editor = editor_ready_to_constrain("9");
+    editor.dirty = false;
+    editor.cascade_owed = vec![uuid::Uuid::now_v7()];
+
+    constrain_distance(&mut editor);
+
+    assert!(!editor.state.conflict.is_empty(), "the edit was rejected");
+    assert!(editor.dirty, "the owed rows are still unsaved");
+}

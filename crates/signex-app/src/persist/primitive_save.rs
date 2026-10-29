@@ -28,6 +28,9 @@ pub struct PrimitiveWritten {
     /// Component rows the version cascade moved onto the saved version
     /// (#832); their open Component Previews hold stale content (#1072).
     pub cascaded_rows: Vec<RowId>,
+    /// Saved primitives whose rows the cascade could not move and a retry
+    /// can: the editor keeps them and the next Save cascades them again.
+    pub cascade_owed: Vec<Uuid>,
 }
 
 /// Where a Save As came from: the old path and tab title, to put back if
