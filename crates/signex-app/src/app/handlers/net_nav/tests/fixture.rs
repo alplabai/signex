@@ -399,3 +399,57 @@ impl Project {
         std::fs::write(root, text).expect("fix root");
     }
 }
+
+pub(super) const U1: u128 = 900;
+pub(super) const U1_R1: u128 = 901;
+pub(super) const U1_R2: u128 = 902;
+pub(super) const U1_R9_WIRE: u128 = 999;
+
+/// One sheet: `U1` with pins 1 (0,0) and 2 (0,10), each wired to its own
+/// resistor, and an unrelated `R9` net far left that sorts before them.
+pub(super) fn multi_pin_project() -> Project {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let pt = Point::new;
+    let mut sheet = sheet_with_net("R1", "UNUSED", &[]);
+    let r_symbol = sheet.symbols[0].clone();
+    let mut u_lib = sheet.lib_symbols["Device:R"].clone();
+    u_lib.id = "Device:U".to_string();
+    let mut second = u_lib.pins[0].clone();
+    second.pin.number = "2".to_string();
+    second.pin.position = pt(0.0, -10.0);
+    u_lib.pins.push(second);
+    sheet.lib_symbols.insert("Device:U".to_string(), u_lib);
+    sheet.symbols.clear();
+    sheet.labels.clear();
+    sheet.wires.clear();
+    let mut place = |n: u128, reference: &str, lib: &str, at: Point| {
+        let mut s = r_symbol.clone();
+        s.uuid = id(n);
+        s.reference = reference.to_string();
+        s.lib_id = lib.to_string();
+        s.position = at;
+        sheet.symbols.push(s);
+    };
+    place(U1, "U1", "Device:U", pt(0.0, 0.0));
+    place(U1_R1, "R1", "Device:R", pt(5.0, 0.0));
+    place(U1_R2, "R2", "Device:R", pt(5.0, 10.0));
+    place(903, "R9", "Device:R", pt(-45.0, 0.0));
+    for (n, a, b) in [
+        (910, pt(0.0, 0.0), pt(5.0, 0.0)),
+        (911, pt(0.0, 10.0), pt(5.0, 10.0)),
+        (U1_R9_WIRE, pt(-50.0, 0.0), pt(-45.0, 0.0)),
+    ] {
+        sheet.wires.push(wire(a, b, n));
+    }
+    let path = write(dir.path(), "u.snxsch", sheet);
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["u.snxsch"]);
+    assert!(app.open_or_focus_sheet_path(path.clone()));
+    Project {
+        app,
+        root: path.clone(),
+        mid: path.clone(),
+        third: path,
+        _dir: dir,
+    }
+}

@@ -139,19 +139,21 @@ impl Signex {
     }
 
     /// The placement the net index is read through for the sheet at `path`:
-    /// the one the designators show (`shown_placement`) when the index reaches
-    /// the sheet through it, else the default placement (the smallest the walk
-    /// reaches) - one rule for hover, jumps, highlight and what stays bright.
+    /// exactly the one the designators show (`shown_placement`), so a window
+    /// never reads one placement's nets while drawing another's designators.
+    /// A placement the index no longer reaches reads no nets (everything
+    /// dims). Only when the designators show none does the default placement
+    /// (the smallest the walk reaches) stand in.
     pub(super) fn net_occurrence(
         &self,
         data: &ProjectNetData,
         path: &std::path::Path,
     ) -> Option<InstancePath> {
-        let live = data.index.placements(&data.key_of(path)?);
-        match self.shown_placement(path) {
-            Some(shown) if live.contains(&shown) => Some(shown),
-            _ => crate::app::state::default_placement(live.iter().cloned()),
+        if let Some(shown) = self.shown_placement(path) {
+            return Some(shown);
         }
+        let live = data.index.placements(&data.key_of(path)?);
+        crate::app::state::default_placement(live.iter().cloned())
     }
 
     /// The project that owns the sheet at `path`.

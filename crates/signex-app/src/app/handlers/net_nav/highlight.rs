@@ -54,7 +54,7 @@ impl Signex {
         self.highlight_target(target, PendingNetAction::HighlightRelated, true)
     }
 
-    fn highlight_target(
+    pub(super) fn highlight_target(
         &mut self,
         target: Option<NetTarget>,
         action: PendingNetAction,
@@ -211,7 +211,7 @@ impl Signex {
             crate::diagnostics::log_warning(messages::net_sheet_has_no_file(&name, &sheet));
             return Task::none();
         };
-        let Some(task) = self.go_to_member(&path, &member) else {
+        let Some(task) = self.go_to_member(data, &path, &member) else {
             return Task::none();
         };
         let kind = match member.kind {

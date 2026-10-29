@@ -143,6 +143,10 @@ fn a_recorded_placement_whose_sheet_symbol_is_gone_follows_the_default() {
         crate::app::EditMsg::DeleteSelected,
     ));
     p.focus(&child); // the tab still records the placement that no longer exists
+    // As in the app, the Navigator knows the hierarchy: the designators fall
+    // back to the default placement, and so does the net index.
+    p.app.refresh_panel_ctx();
+    p.app.settle_navigator();
     p.select(TWICE_X, SelectedKind::Label);
 
     p.send_settled(NetNavMsg::RelatedNetHighlightRequested);
@@ -226,5 +230,51 @@ fn a_lap_does_not_carry_over_to_another_placement_of_the_same_file() {
         p.selected().first().map(|i| i.uuid),
         Some(id(TWICE_ENTRY_A)),
         "A's own entry"
+    );
+}
+
+#[test]
+fn an_unfocused_window_reads_the_placement_its_designators_show() {
+    let (mut p, child) = placed_twice();
+    p.app
+        .open_sheet_with_placement(child.clone(), Some(via(TWICE_B)));
+    // B's sheet symbol is deleted while the child's window stays on B.
+    p.focus(&p.root.clone());
+    p.select(TWICE_B, SelectedKind::ChildSheet);
+    let _task = p.app.update(crate::app::Message::Edit(
+        crate::app::EditMsg::DeleteSelected,
+    ));
+    p.select(ROOT_VCC, SelectedKind::Label);
+    p.send_settled(NetNavMsg::RelatedNetHighlightRequested);
+
+    let project = p.app.document_state.projects[0].id;
+    let data = p
+        .app
+        .document_state
+        .net_nav
+        .index
+        .latest(project)
+        .expect("index");
+    let key = data.key_of(&child).expect("child key");
+    let shown = p.app.shown_placement(&child);
+    assert_eq!(
+        shown,
+        Some(via(TWICE_B)),
+        "an unfocused window keeps its recording"
+    );
+    assert_eq!(p.app.net_occurrence(&data, &child), shown, "one rule");
+    assert!(
+        !data.index.placements(&key).contains(&via(TWICE_B)),
+        "B is gone from the walk"
+    );
+    assert!(
+        data.index
+            .nets_in(
+                &key,
+                id(TWICE_X),
+                p.app.net_occurrence(&data, &child).as_ref()
+            )
+            .is_empty(),
+        "so it reads no nets rather than A's"
     );
 }

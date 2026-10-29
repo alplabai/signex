@@ -129,3 +129,49 @@ fn history_drops_a_sheet_it_cannot_open_instead_of_skipping_it_every_pass() {
     p.send(NetNavMsg::SheetBackRequested);
     assert_eq!(p.active(), Some(p.third.clone()));
 }
+
+#[test]
+fn a_highlight_from_a_multi_pin_symbol_stays_on_its_pins_net_through_a_renumber() {
+    use super::super::target::NetTarget;
+    use crate::app::state::net_nav::PendingNetAction;
+    let mut p = multi_pin_project();
+    let sheet = p.app.document_state.active_path.clone().expect("sheet");
+    let at_pin_2 = signex_types::schematic::Point::new(0.0, 10.0);
+    let target = NetTarget {
+        sheet,
+        item: SelectedItem::new(id(U1), SelectedKind::Symbol),
+        at: at_pin_2,
+    };
+    // With the index already built the target is used as given.
+    p.app.settle_net_index_blocking();
+    let _ = p
+        .app
+        .highlight_target(Some(target), PendingNetAction::HighlightUnderCursor, false);
+    let h = p
+        .app
+        .document_state
+        .net_nav
+        .highlight
+        .as_ref()
+        .expect("highlight");
+    assert_eq!(
+        h.anchor.pin.as_deref(),
+        Some("2"),
+        "anchored on pin 2, not the symbol"
+    );
+    let bright = p.bright().expect("bright");
+    assert!(bright.contains(&id(U1_R2)) && !bright.contains(&id(U1_R1)));
+
+    // Deleting the unrelated R9 net shifts every auto name down by one.
+    p.select(U1_R9_WIRE, SelectedKind::Wire);
+    let _task = p.app.update(crate::app::Message::Edit(
+        crate::app::EditMsg::DeleteSelected,
+    ));
+    p.app.settle_net_index_blocking();
+
+    let bright = p.bright().expect("still highlighted");
+    assert!(
+        bright.contains(&id(U1_R2)) && !bright.contains(&id(U1_R1)),
+        "still pin 2's net"
+    );
+}

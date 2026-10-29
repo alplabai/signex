@@ -133,7 +133,7 @@ impl Signex {
             crate::diagnostics::log_warning(messages::partner_has_no_file(&name, &sheet));
             return Task::none();
         };
-        let Some(task) = self.go_to_member(&path, &member) else {
+        let Some(task) = self.go_to_member(data, &path, &member) else {
             return Task::none();
         };
         crate::diagnostics::log_info(messages::jumped(&name, total, &sheet));
@@ -144,13 +144,14 @@ impl Signex {
     /// it. `None` when the sheet could not be opened (said in Messages).
     pub(super) fn go_to_member(
         &mut self,
+        data: &ProjectNetData,
         path: &std::path::Path,
         member: &NetMember,
     ) -> Option<Task<Message>> {
         let held = self.resolve_held_spelling(path.to_path_buf());
         // Another placement of the same file is another sheet instance: switch
         // to the member's own, not just to the file.
-        let shows_it = self.document_state.tab_placements.get(&held) == Some(&member.occurrence);
+        let shows_it = self.net_occurrence(data, &held).as_ref() == Some(&member.occurrence);
         if self.document_state.active_path.as_deref() != Some(held.as_path()) || !shows_it {
             self.open_sheet_with_placement(path.to_path_buf(), Some(member.occurrence.clone()));
         }
