@@ -23,9 +23,6 @@ pub struct NetHighlight {
     /// The elements of the net in each sheet placement: what stays bright
     /// there and nowhere else, since two placements of one file share uuids.
     pub elements: HashMap<(PathBuf, InstancePath), Arc<HashSet<Uuid>>>,
-    /// The placement each sheet file is read through when its tab records
-    /// none: the first the index met.
-    pub defaults: HashMap<PathBuf, InstancePath>,
 }
 
 impl NetHighlight {
@@ -46,11 +43,11 @@ impl NetHighlight {
         Some(next)
     }
 
-    /// What stays bright on the sheet at `path` shown through `placement` (the
-    /// file's default when the tab records none): its elements of the net in
-    /// that placement, nothing at all when the net does not reach it.
+    /// What stays bright on the sheet at `path` shown through `placement`: its
+    /// elements of the net in that placement, nothing at all when the net does
+    /// not reach it (or the sheet is shown through none).
     pub fn bright_on(&self, path: &Path, placement: Option<&InstancePath>) -> Arc<HashSet<Uuid>> {
-        let Some(placement) = placement.or_else(|| self.defaults.get(path)) else {
+        let Some(placement) = placement else {
             return Arc::default();
         };
         self.elements
@@ -75,7 +72,6 @@ mod tests {
             ),
             cursor: None,
             elements: HashMap::new(),
-            defaults: HashMap::new(),
         }
     }
 
@@ -110,10 +106,13 @@ mod tests {
             (PathBuf::from("a.snxsch"), InstancePath::root()),
             Arc::new(HashSet::from([id])),
         );
-        h.defaults
-            .insert(PathBuf::from("a.snxsch"), InstancePath::root());
-        assert!(h.bright_on(Path::new("a.snxsch"), None).contains(&id));
-        assert!(h.bright_on(Path::new("b.snxsch"), None).is_empty());
+        let root = InstancePath::root();
+        assert!(
+            h.bright_on(Path::new("a.snxsch"), Some(&root))
+                .contains(&id)
+        );
+        assert!(h.bright_on(Path::new("b.snxsch"), Some(&root)).is_empty());
+        assert!(h.bright_on(Path::new("a.snxsch"), None).is_empty());
         let other = InstancePath::from_chain(vec![Uuid::from_u128(9)]);
         assert!(
             h.bright_on(Path::new("a.snxsch"), Some(&other)).is_empty(),

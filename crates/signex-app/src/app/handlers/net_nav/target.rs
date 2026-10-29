@@ -19,9 +19,6 @@ pub(super) struct NetTarget {
     pub sheet: PathBuf,
     pub item: SelectedItem,
     pub at: Point,
-    /// The placement the sheet's tab was entered through; `None` when it was
-    /// opened directly, which reads the first placement.
-    pub occurrence: Option<InstancePath>,
 }
 
 /// The kinds of object that sit on a net.
@@ -117,7 +114,6 @@ impl Signex {
         let item = self.item_hit_at(x, y).filter(|i| is_net_kind(i.kind))?;
         let sheet = self.document_state.active_path.clone()?;
         Some(NetTarget {
-            occurrence: self.placement_of(&sheet),
             sheet,
             item,
             at: Point::new(x, y),
@@ -136,16 +132,26 @@ impl Signex {
         let at = item_position(canvas.active_snapshot()?, item)?;
         let sheet = self.document_state.active_path.clone()?;
         Some(NetTarget {
-            occurrence: self.placement_of(&sheet),
             sheet,
             item: *item,
             at,
         })
     }
 
-    /// The placement the tab of `sheet` was entered through (#1133).
-    pub(super) fn placement_of(&self, sheet: &std::path::Path) -> Option<InstancePath> {
-        self.document_state.tab_placements.get(sheet).cloned()
+    /// The placement the net index is read through for the sheet at `path`:
+    /// the one the designators show (`shown_placement`) when the index reaches
+    /// the sheet through it, else the default placement (the smallest the walk
+    /// reaches) - one rule for hover, jumps, highlight and what stays bright.
+    pub(super) fn net_occurrence(
+        &self,
+        data: &ProjectNetData,
+        path: &std::path::Path,
+    ) -> Option<InstancePath> {
+        let live = data.index.placements(&data.key_of(path)?);
+        match self.shown_placement(path) {
+            Some(shown) if live.contains(&shown) => Some(shown),
+            _ => crate::app::state::default_placement(live.iter().cloned()),
+        }
     }
 
     /// The project that owns the sheet at `path`.

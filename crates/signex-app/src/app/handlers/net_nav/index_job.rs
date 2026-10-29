@@ -310,7 +310,7 @@ impl Signex {
     }
 
     /// A stamp over what the net index depends on: the open sheets'
-    /// connectivity, and each project's root, sheet list and class table.
+    /// connectivity, and each project's root and sheet list.
     fn net_nav_stamp(&self) -> u64 {
         use std::hash::{Hash, Hasher};
         let document = &self.document_state;

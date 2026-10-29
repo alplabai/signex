@@ -86,7 +86,8 @@ impl Signex {
             crate::diagnostics::log_warning(messages::sheet_not_in_project());
             return Task::none();
         };
-        let occurrence = target.occurrence.as_ref();
+        let placement = self.net_occurrence(data, &target.sheet);
+        let occurrence = placement.as_ref();
         let member = data.index.member(&key, target.item.uuid, occurrence);
         let Some(source) = member.filter(|m| m.is_port()) else {
             let name = member.map(describe_member).unwrap_or_default();
@@ -95,7 +96,7 @@ impl Signex {
         };
         let name = describe_member(source);
         // Carry on the lap this jump continues, or start one from this port.
-        let anchor = (key.clone(), target.item.uuid);
+        let anchor = (key.clone(), target.item.uuid, source.occurrence.clone());
         let nav = &mut self.document_state.net_nav;
         if !nav
             .jump

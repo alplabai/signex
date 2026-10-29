@@ -221,17 +221,29 @@ pub(super) fn logged(fragments: &[&str]) -> bool {
 pub(super) const TWICE_A: u128 = 700;
 pub(super) const TWICE_B: u128 = 701;
 pub(super) const TWICE_LABEL: u128 = 710;
+pub(super) const TWICE_ENTRY_A: u128 = 720;
 pub(super) const TWICE_ENTRY_B: u128 = 721;
+pub(super) const TWICE_X: u128 = 712;
 
 /// `root` places `child` twice (A and B); each entry is wired to its own
 /// parent net, so each placement is its own net. Returns the project with
 /// both sheets open and root focused, and the child's path.
 pub(super) fn placed_twice() -> (Project, PathBuf) {
+    placed_twice_at(20.0, 40.0)
+}
+
+/// [`placed_twice`] with B's sheet entry above A's, so the nets of B sort
+/// first while A is the smaller placement.
+pub(super) fn placed_twice_b_first() -> (Project, PathBuf) {
+    placed_twice_at(40.0, 20.0)
+}
+
+fn placed_twice_at(a_y: f64, b_y: f64) -> (Project, PathBuf) {
     let _ = crate::diagnostics::init_logging();
     let dir = tempfile::tempdir().expect("tempdir");
     let pt = Point::new;
     let mut root = sheet_with_net("R1", "ROOT_ONLY", &["child.snxsch", "child.snxsch"]);
-    for (i, (symbol, name, y)) in [(TWICE_A, "A", 20.0), (TWICE_B, "B", 40.0)]
+    for (i, (symbol, name, y)) in [(TWICE_A, "A", a_y), (TWICE_B, "B", b_y)]
         .into_iter()
         .enumerate()
     {
@@ -251,6 +263,14 @@ pub(super) fn placed_twice() -> (Project, PathBuf) {
             .push(wire(pt(0.0, y), pt(5.0, y), 800 + i as u128));
     }
     let mut child = sheet_with_net("R9", "CHILD_ONLY", &[]);
+    // Only pinless nets on the child: the index meets its placements in sort order.
+    child.symbols.clear();
+    child.labels.clear();
+    child.wires.clear();
+    child.wires.push(wire(pt(0.0, 90.0), pt(10.0, 90.0), 812));
+    child
+        .labels
+        .push(label("X", pt(0.0, 90.0), LabelType::Net, TWICE_X));
     child.wires.push(wire(pt(0.0, 70.0), pt(10.0, 70.0), 811));
     child.labels.push(label(
         "SIG",

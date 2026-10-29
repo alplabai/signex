@@ -503,11 +503,60 @@ fn an_anchor_stays_on_its_own_placements_net_even_when_the_name_changes() {
     // Whatever the net is called now, B's anchor reads B's net, never A's.
     assert_eq!(idx.resolve("renamed", &anchor), Some(b_net));
     let sets = idx.highlight_elements(b_net);
-    assert!(sets.contains_key(&(key("c.sch"), via_b)));
+    assert!(sets.contains_key(&(key("c.sch"), via_b.clone())));
     assert!(!sets.contains_key(&(key("c.sch"), InstancePath::from_chain(vec![id(500)]))));
     assert_eq!(
-        idx.default_occurrence(&key("c.sch"))
-            .map(|o| o.chain().len()),
-        Some(1)
+        idx.placements(&key("c.sch")),
+        [InstancePath::from_chain(vec![id(500)]), via_b],
+        "both placements, in walk order, even before any member names them"
     );
+}
+
+/// U1 with pin 1 and pin 2, each wired to its own resistor, plus optionally an
+/// unrelated net far to the left that sorts first.
+fn u1_sheet(extra_net_first: bool) -> SchematicSheet {
+    let mut s = empty_sheet();
+    add_lib(&mut s, "R");
+    add_lib(&mut s, "U");
+    s.lib_symbols
+        .get_mut("U")
+        .unwrap()
+        .pins
+        .push(lib_pin("2", pt(0.0, -10.0)));
+    place(&mut s, "U1", "U", pt(0.0, 0.0));
+    s.symbols[0].uuid = id(900);
+    for (y, name) in [(0.0, "R1"), (10.0, "R2")] {
+        place(&mut s, name, "R", pt(5.0, y));
+        s.wires.push(wire(pt(0.0, y), pt(5.0, y)));
+        s.wires.last_mut().unwrap().uuid = id(910 + y as u128);
+    }
+    if extra_net_first {
+        place(&mut s, "R9", "R", pt(-45.0, 0.0));
+        s.wires.push(wire(pt(-50.0, 0.0), pt(-45.0, 0.0)));
+        s.wires.last_mut().unwrap().uuid = id(999);
+    }
+    s
+}
+
+#[test]
+fn a_symbol_anchor_stays_on_its_own_pins_net_when_auto_names_renumber() {
+    let before = indexed_flat(&[("p", u1_sheet(false))]);
+    let pin2_net = before
+        .pin_near(&key("p"), pt(0.0, 10.0), 0.5, None)
+        .expect("pin 2")
+        .0;
+    let name = before.net(pin2_net).unwrap().name.clone();
+    assert!(is_auto_name(&name));
+    let anchor = before
+        .anchor_in(pin2_net, &key("p"), id(900))
+        .expect("anchor");
+
+    // An unrelated net sorts first: every auto name shifts by one.
+    let after = indexed_flat(&[("p", u1_sheet(true))]);
+    let now = after
+        .pin_near(&key("p"), pt(0.0, 10.0), 0.5, None)
+        .expect("pin 2")
+        .0;
+    assert_ne!(after.net(now).unwrap().name, name, "the name moved");
+    assert_eq!(after.resolve(&name, &anchor), Some(now));
 }

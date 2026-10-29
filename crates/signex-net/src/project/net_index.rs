@@ -23,6 +23,8 @@ pub struct NetAnchor {
     pub sheet: SheetKey,
     pub id: Uuid,
     pub occurrence: InstancePath,
+    /// For a placed symbol, which pin: one symbol sits on a net per pin.
+    pub pin: Option<String>,
 }
 
 impl NetAnchor {
@@ -31,6 +33,21 @@ impl NetAnchor {
             sheet,
             id,
             occurrence,
+            pin: None,
+        }
+    }
+
+    /// The anchor of `member`.
+    fn of(member: &NetMember) -> Self {
+        let pin = match &member.kind {
+            NetMemberKind::Pin { pin, .. } => Some(pin.clone()),
+            _ => None,
+        };
+        Self {
+            sheet: member.sheet.clone(),
+            id: member.id,
+            occurrence: member.occurrence.clone(),
+            pin,
         }
     }
 }
@@ -60,25 +77,24 @@ pub struct NetHover {
 pub struct NetIndex {
     nets: Vec<NetMembers>,
     by_element: HashMap<ElementKey, Vec<usize>>,
-    /// The placements each sheet is seen in, in the order the members meet them.
-    occurrences: HashMap<SheetKey, Vec<InstancePath>>,
+    /// The placements the walk reaches each sheet through.
+    placements: HashMap<SheetKey, Vec<InstancePath>>,
     by_name: HashMap<String, usize>,
 }
 
 impl NetIndex {
-    pub(super) fn from_members(nets: Vec<NetMembers>) -> Self {
+    pub(super) fn from_members(nets: Vec<NetMembers>, walk: Vec<(SheetKey, InstancePath)>) -> Self {
         let mut by_element: HashMap<ElementKey, Vec<usize>> = HashMap::new();
-        let mut occurrences: HashMap<SheetKey, Vec<InstancePath>> = HashMap::new();
+        let mut placements: HashMap<SheetKey, Vec<InstancePath>> = HashMap::new();
+        for (sheet, placement) in walk {
+            placements.entry(sheet).or_default().push(placement);
+        }
         let mut by_name: HashMap<String, usize> = HashMap::new();
         for (i, net) in nets.iter().enumerate() {
             if !net.name.is_empty() {
                 by_name.entry(net.name.clone()).or_insert(i);
             }
             for m in &net.members {
-                let seen = occurrences.entry(m.sheet.clone()).or_default();
-                if !seen.contains(&m.occurrence) {
-                    seen.push(m.occurrence.clone());
-                }
                 let nets_of = by_element.entry((m.sheet.clone(), m.id)).or_default();
                 if nets_of.last() != Some(&i) {
                     nets_of.push(i);
@@ -88,7 +104,7 @@ impl NetIndex {
         Self {
             nets,
             by_element,
-            occurrences,
+            placements,
             by_name,
         }
     }
@@ -161,15 +177,11 @@ impl NetIndex {
             .iter()
             .find(|m| m.is_steppable())
             .or_else(|| members.first())?;
-        Some(NetAnchor::new(
-            pick.sheet.clone(),
-            pick.id,
-            pick.occurrence.clone(),
-        ))
+        Some(NetAnchor::of(pick))
     }
 
     /// The anchor for element `id` of `sheet` as it sits on net `net`: the
-    /// placement the net has it in.
+    /// placement and, for a symbol, the pin the net has it at.
     pub fn anchor_in(&self, net: usize, sheet: &SheetKey, id: Uuid) -> Option<NetAnchor> {
         let m = self
             .nets
@@ -177,13 +189,12 @@ impl NetIndex {
             .members
             .iter()
             .find(|m| m.id == id && &m.sheet == sheet)?;
-        Some(NetAnchor::new(m.sheet.clone(), m.id, m.occurrence.clone()))
+        Some(NetAnchor::of(m))
     }
 
-    /// The placement a sheet is read through when nothing says which: the
-    /// first the index met.
-    pub fn default_occurrence(&self, sheet: &SheetKey) -> Option<&InstancePath> {
-        self.occurrences.get(sheet)?.first()
+    /// The placements the walk reaches `sheet` through.
+    pub fn placements(&self, sheet: &SheetKey) -> &[InstancePath] {
+        self.placements.get(sheet).map_or(&[], Vec::as_slice)
     }
 
     /// The net an earlier highlight named, after the index was rebuilt: the
@@ -191,7 +202,18 @@ impl NetIndex {
     /// Only when the anchor is gone is the name used, and never a positional
     /// one ([`is_positional_name`]): it can belong to an unrelated net.
     pub fn resolve(&self, name: &str, anchor: &NetAnchor) -> Option<usize> {
-        let own = self.nets_in(&anchor.sheet, anchor.id, Some(&anchor.occurrence));
+        let mut own = self.nets_in(&anchor.sheet, anchor.id, Some(&anchor.occurrence));
+        // A symbol is on a net per pin: only the anchor's own pin counts.
+        if let Some(pin) = &anchor.pin {
+            own.retain(|&i| {
+                self.nets[i].members.iter().any(|m| {
+                    m.id == anchor.id
+                        && m.sheet == anchor.sheet
+                        && m.occurrence == anchor.occurrence
+                        && matches!(&m.kind, NetMemberKind::Pin { pin: p, .. } if p == pin)
+                })
+            });
+        }
         if let Some(i) = own.iter().copied().find(|&i| self.nets[i].name == name) {
             return Some(i);
         }

@@ -19,11 +19,12 @@ use super::messages;
 use super::navigate::{describe_member, selected_kind_of};
 use super::target::{NetTarget, net_of_target};
 
-/// What stays bright for net `net`, per sheet placement, and the placement each
-/// sheet file is read through when its tab records none.
-fn bright_elements(data: &ProjectNetData, net: usize) -> Bright {
-    let elements = data
-        .index
+/// What stays bright for net `net`, per sheet placement.
+fn bright_elements(
+    data: &ProjectNetData,
+    net: usize,
+) -> HashMap<(PathBuf, InstancePath), Arc<HashSet<uuid::Uuid>>> {
+    data.index
         .highlight_elements(net)
         .into_iter()
         .filter_map(|((key, placement), ids)| {
@@ -32,18 +33,7 @@ fn bright_elements(data: &ProjectNetData, net: usize) -> Bright {
                 Arc::new(ids),
             ))
         })
-        .collect();
-    let defaults = data
-        .paths
-        .iter()
-        .filter_map(|(key, path)| Some((path.clone(), data.index.default_occurrence(key)?.clone())))
-        .collect();
-    Bright { elements, defaults }
-}
-
-struct Bright {
-    elements: HashMap<(PathBuf, InstancePath), Arc<HashSet<uuid::Uuid>>>,
-    defaults: HashMap<PathBuf, InstancePath>,
+        .collect()
 }
 
 impl Signex {
@@ -99,9 +89,9 @@ impl Signex {
         target: &NetTarget,
         select_here: bool,
     ) {
+        let placement = self.net_occurrence(data, &target.sheet);
         let net = data.key_of(&target.sheet).and_then(|key| {
-            let occurrence = target.occurrence.as_ref();
-            let net = net_of_target(data, &key, &target.item, target.at, occurrence)?;
+            let net = net_of_target(data, &key, &target.item, target.at, placement.as_ref())?;
             Some((key, net))
         });
         let Some((key, net)) = net else {
@@ -113,8 +103,13 @@ impl Signex {
             .net(net)
             .map(|n| n.name.clone())
             .unwrap_or_default();
-        let bright = bright_elements(data, net);
-        let sheets = bright.elements.len();
+        let elements = bright_elements(data, net);
+        let places = elements.len();
+        let sheets = elements
+            .keys()
+            .map(|(path, _)| path)
+            .collect::<HashSet<_>>()
+            .len();
         let anchor = data
             .index
             .anchor_in(net, &key, target.item.uuid)
@@ -128,14 +123,13 @@ impl Signex {
             name: name.clone(),
             anchor,
             cursor: None,
-            elements: bright.elements,
-            defaults: bright.defaults,
+            elements,
         });
         if select_here {
-            self.select_net_members_here(data, &key, net, target.occurrence.as_ref());
+            self.select_net_members_here(data, &key, net, placement.as_ref());
         }
         self.sync_net_highlight_to_canvases();
-        crate::diagnostics::log_info(messages::highlighted(&name, sheets));
+        crate::diagnostics::log_info(messages::highlighted(&name, places, sheets));
     }
 
     /// Select the members of `net` that sit on the focused sheet.
@@ -253,9 +247,7 @@ impl Signex {
         }
         match data.index.resolve(&highlight.name, &highlight.anchor) {
             Some(net) => {
-                let bright = bright_elements(data, net);
-                highlight.elements = bright.elements;
-                highlight.defaults = bright.defaults;
+                highlight.elements = bright_elements(data, net);
                 if let Some(n) = data.index.net(net) {
                     highlight.name.clone_from(&n.name);
                 }
@@ -290,10 +282,17 @@ impl Signex {
         let bright = |path: Option<&std::path::Path>| {
             let highlight = highlight?;
             let path = path?;
-            (self.project_of_sheet(path) == Some(highlight.project)).then(|| {
-                let placement = self.document_state.tab_placements.get(path);
-                highlight.bright_on(path, placement)
-            })
+            if self.project_of_sheet(path) != Some(highlight.project) {
+                return None;
+            }
+            // The placement is read once, as hover, jumps and the target read it.
+            let data = self
+                .document_state
+                .net_nav
+                .index
+                .latest(highlight.project)?;
+            let placement = self.net_occurrence(&data, path);
+            Some(highlight.bright_on(path, placement.as_ref()))
         };
         let main = bright(main_path.as_deref());
         let windows: Vec<_> = per_window

@@ -287,7 +287,10 @@ pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
 /// [`build_project_netlist`] plus the [`NetIndex`] of what sits on each net.
 pub fn build_project_netlist_indexed(graph: &ProjectGraph) -> (ProjectNetlist, NetIndex) {
     let stitched = stitch_project(graph, Want::Members);
-    (stitched.netlist, NetIndex::from_members(stitched.members))
+    (
+        stitched.netlist,
+        NetIndex::from_members(stitched.members, stitched.placements),
+    )
 }
 
 /// Every net of the stitched project that carries two or more different names,
@@ -312,6 +315,8 @@ struct Stitched {
     netlist: ProjectNetlist,
     reports: Vec<MultiNamedNet>,
     members: Vec<NetMembers>,
+    /// Every placement the walk reached, in walk order.
+    placements: Vec<(SheetKey, InstancePath)>,
 }
 
 fn stitch_project(graph: &ProjectGraph, want: Want) -> Stitched {
@@ -524,6 +529,13 @@ fn stitch_project(graph: &ProjectGraph, want: Want) -> Stitched {
         },
         reports,
         members: listed_nets,
+        placements: if want_members {
+            occs.iter()
+                .map(|o| (o.key.clone(), o.path.clone()))
+                .collect()
+        } else {
+            Vec::new()
+        },
     }
 }
 

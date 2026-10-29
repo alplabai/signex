@@ -64,7 +64,7 @@ impl Signex {
         };
         match self.net_index_lookup(project) {
             IndexLookup::Ready(data) => {
-                let occurrence = self.placement_of(&candidate.sheet);
+                let occurrence = self.net_occurrence(&data, &candidate.sheet);
                 let card = data.key_of(&candidate.sheet).and_then(|key| {
                     let net = net_of_target(
                         &data,
