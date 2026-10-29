@@ -34,7 +34,8 @@ impl Signex {
             .map(|b| ((b.max_x - b.min_x) / grid).ceil() * grid + DEFAULT_GAP_PITCHES * grid)
             .filter(|dx| dx.is_finite() && *dx > 0.0)
             .unwrap_or(FALLBACK_SPACING_MM);
-        self.ui_state.paste_array = Some(PasteArrayState::new(
+        self.ui_state.paste_array_opens += 1;
+        let mut dialog = PasteArrayState::new(
             self.ui_state.unit,
             dx_mm,
             0.0,
@@ -42,7 +43,9 @@ impl Signex {
             self.ui_state.paste_designators,
             copied.payload.item_count(),
             self.document_state.active_path.clone(),
-        ));
+        );
+        dialog.id = self.ui_state.paste_array_opens;
+        self.ui_state.paste_array = Some(dialog);
     }
 
     pub(crate) fn handle_paste_array_message(&mut self, msg: PasteArrayMsg) -> Task<Message> {
@@ -74,6 +77,7 @@ impl Signex {
             intent: PasteIntent::ArraySeed,
             epoch: self.interaction_state.placement_epoch,
             path: self.document_state.active_path.clone(),
+            dialog: self.ui_state.paste_array.as_ref().map_or(0, |d| d.id),
         };
         let task = self.paste_seed_task(&request);
         if let (Some(_), Some(dialog)) = (&task, self.ui_state.paste_array.as_mut()) {

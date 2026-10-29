@@ -101,6 +101,7 @@ mod tests {
             intent: PasteIntent::Paste,
             epoch: 0,
             path: Some(PathBuf::from(path)),
+            dialog: 0,
         }
     }
 

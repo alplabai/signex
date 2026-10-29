@@ -693,6 +693,8 @@ pub struct PasteRequest {
     pub intent: PasteIntent,
     pub epoch: u64,
     pub path: Option<PathBuf>,
+    /// The Paste Array dialog an `ArraySeed` read is for; 0 otherwise.
+    pub dialog: u64,
 }
 
 /// Edit-command message family (ADR-0001 D3). Namespaced under

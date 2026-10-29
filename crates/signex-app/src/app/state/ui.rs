@@ -397,6 +397,9 @@ pub struct UiState {
     pub find_similar_generation: u64,
     /// The open Paste Array dialog (#1264).
     pub paste_array: Option<crate::paste_array::PasteArrayState>,
+    /// How many Paste Array dialogs were opened: tags each one so a numbers
+    /// read answers only the dialog that asked for it.
+    pub paste_array_opens: u64,
     /// v0.18.14.1 — Custom Selection Filter modal draft. `Some`
     /// while the dialog is visible; the eight-bool draft mirror
     /// commits on Apply, discards on Cancel.

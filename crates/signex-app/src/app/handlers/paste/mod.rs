@@ -26,6 +26,7 @@ use signex_engine::CopiedSelection;
 
 pub use seed::PasteSeed;
 
+use crate::app::handlers::clipboard_workflows::CopyOutcome;
 use crate::app::state::PlacementKind;
 use crate::app::{EditMsg, Message, PasteIntent, PasteRequest, Signex};
 
@@ -37,6 +38,7 @@ impl Signex {
             intent,
             epoch: self.interaction_state.placement_epoch,
             path: self.document_state.active_path.clone(),
+            dialog: 0,
         };
         match self.paste_seed_task(&request) {
             Some(seeding) => seeding,
@@ -78,9 +80,17 @@ impl Signex {
         request: PasteRequest,
         seed: &PasteSeed,
     ) -> Task<Message> {
-        if request.intent == PasteIntent::ArraySeed
-            && let Some(dialog) = self.ui_state.paste_array.as_mut()
-        {
+        if request.intent == PasteIntent::ArraySeed {
+            // Only the dialog that asked is released; an answer for one that
+            // closed or was replaced is dropped without a word.
+            let asked = self
+                .ui_state
+                .paste_array
+                .as_mut()
+                .filter(|dialog| dialog.id == request.dialog);
+            let Some(dialog) = asked else {
+                return self.finish_update();
+            };
             dialog.seed_pending = false;
         }
         if self.paste_request_is_stale(&request) {
@@ -115,7 +125,7 @@ impl Signex {
         let tool_moved = request.intent != PasteIntent::ArraySeed
             && request.epoch != self.interaction_state.placement_epoch;
         let stale = tool_moved || request.path != self.document_state.active_path;
-        if stale {
+        if stale && request.intent != PasteIntent::ArraySeed {
             crate::diagnostics::log_info(
                 "Paste cancelled: the tool or the sheet changed before the paste was ready.",
             );
@@ -145,25 +155,20 @@ impl Signex {
     }
 
     /// Copy the selection and the task that mirrors the result on the system
-    /// clipboard. A copy that carried nothing empties it, so an older
-    /// fragment left there cannot be pasted in its place.
+    /// clipboard.
     pub(crate) fn copy_and_write_clipboard_task(&mut self) -> Task<Message> {
-        let carried = self.handle_selection_copy_requested();
-        self.mirror_copy_on_clipboard_task(carried)
+        let outcome = self.handle_selection_copy_requested();
+        self.mirror_copy_on_clipboard_task(outcome)
     }
 
-    /// The system-clipboard side of a copy that returned `carried`.
-    pub(crate) fn mirror_copy_on_clipboard_task(&mut self, carried: bool) -> Task<Message> {
-        if carried {
-            return self.clipboard_write_task();
-        }
-        let dropped = self.interaction_state.clipboard.is_none()
-            && !self.interaction_state.active_canvas().selected.is_empty();
-        if dropped {
-            self.interaction_state.clipboard_text = None;
-            iced::clipboard::write(String::new())
-        } else {
-            Task::none()
+    /// The system-clipboard side of a copy. One that carried nothing empties
+    /// it, so an older fragment left there cannot be pasted in its place; a
+    /// copy that was not made leaves it alone.
+    pub(crate) fn mirror_copy_on_clipboard_task(&mut self, outcome: CopyOutcome) -> Task<Message> {
+        match outcome {
+            CopyOutcome::Carried => self.clipboard_write_task(),
+            CopyOutcome::NothingToCarry => iced::clipboard::write(String::new()),
+            CopyOutcome::Failed => Task::none(),
         }
     }
 

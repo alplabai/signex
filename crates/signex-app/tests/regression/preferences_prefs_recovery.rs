@@ -37,7 +37,7 @@ use std::sync::Mutex;
 use signex_app::app::{Message, PreferencesMsg, Signex};
 use signex_app::preferences::PrefMsg;
 
-fn inner(msg: PrefMsg) -> Message {
+pub(crate) fn inner(msg: PrefMsg) -> Message {
     Message::Preferences(PreferencesMsg::Inner(msg))
 }
 

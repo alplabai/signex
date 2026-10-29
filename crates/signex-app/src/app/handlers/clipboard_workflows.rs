@@ -25,6 +25,18 @@ fn smart_paste_offset(app: &Signex) -> (f64, f64) {
     (offset_x, margin)
 }
 
+/// What a Copy did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CopyOutcome {
+    /// The in-app copy now holds the selection.
+    Carried,
+    /// Nothing in the selection can be carried; the in-app copy was cleared.
+    NothingToCarry,
+    /// No copy was made (nothing selected, no sheet, or an error that was
+    /// logged); the in-app copy is as it was.
+    Failed,
+}
+
 impl Signex {
     /// Cut is copy + delete, but Copy (`collect_selection_clipboard`)
     /// silently drops kinds it can't carry — `ChildSheet`/`SheetPin`
@@ -61,7 +73,7 @@ impl Signex {
         let previous_copy = self.interaction_state.clipboard.clone();
         // Cut deletes only what the copy now holds: if the copy failed (the
         // reason is in the Messages panel), nothing is deleted.
-        if !self.handle_selection_copy_requested() {
+        if self.handle_selection_copy_requested() != CopyOutcome::Carried {
             crate::diagnostics::log_warning(
                 "Cut cancelled: the selection could not be copied, so nothing was deleted.",
             );
@@ -96,9 +108,9 @@ impl Signex {
         }
 
         // A failed copy must not paste whatever was on the clipboard before.
-        let carried = self.handle_selection_copy_requested();
-        let write = self.mirror_copy_on_clipboard_task(carried);
-        if !carried {
+        let outcome = self.handle_selection_copy_requested();
+        let write = self.mirror_copy_on_clipboard_task(outcome);
+        if outcome != CopyOutcome::Carried {
             return Task::batch([write, self.finish_update()]);
         }
         // The offset paste itself happens once Next free numbering is ready.
@@ -110,33 +122,32 @@ impl Signex {
         self.paste_with_offset(offset_x, offset_y);
     }
 
-    /// Copy the selection to the clipboard. `true` when the clipboard now
-    /// holds it; `false` when there was nothing selected, nothing to carry
-    /// (the in-app copy is cleared, see `copy_and_write_clipboard_task`) or the
-    /// copy failed (logged; the clipboard stays as it was).
-    pub(crate) fn handle_selection_copy_requested(&mut self) -> bool {
+    /// Copy the selection to the in-app clipboard; see [`CopyOutcome`].
+    pub(crate) fn handle_selection_copy_requested(&mut self) -> CopyOutcome {
         let Some(engine) = self.document_state.active_engine() else {
-            return false;
+            return CopyOutcome::Failed;
         };
         let selected = &self.interaction_state.active_canvas().selected;
         if selected.is_empty() {
-            return false;
+            return CopyOutcome::Failed;
         }
         let grid = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
         match engine.copy_selection(selected, grid) {
-            Ok(copied) => {
-                let carried = copied.is_some();
-                if !carried {
-                    crate::diagnostics::log_info(
-                        "Copy: nothing in the selection can be copied (sheet symbols and sheet pins are not carried); the clipboard was emptied.",
-                    );
-                }
-                self.interaction_state.clipboard = copied;
-                carried
+            Ok(Some(copied)) => {
+                self.interaction_state.clipboard = Some(copied);
+                CopyOutcome::Carried
+            }
+            Ok(None) => {
+                crate::diagnostics::log_info(
+                    "Copy: nothing in the selection can be copied (sheet symbols and sheet pins are not carried); the clipboard was emptied.",
+                );
+                self.interaction_state.clipboard = None;
+                self.interaction_state.clipboard_text = None;
+                CopyOutcome::NothingToCarry
             }
             Err(error) => {
                 crate::diagnostics::log_warning(format!("Copy failed: {error}."));
-                false
+                CopyOutcome::Failed
             }
         }
     }

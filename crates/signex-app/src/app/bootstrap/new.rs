@@ -347,6 +347,7 @@ impl Signex {
                 find_similar: None,
                 find_similar_generation: 0,
                 paste_array: None,
+                paste_array_opens: 0,
                 selection_filter_custom: None,
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),

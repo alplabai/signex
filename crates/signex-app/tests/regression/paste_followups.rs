@@ -285,3 +285,86 @@ fn a_foreign_fragment_replaces_the_copy_and_an_older_text_of_ours_is_read_again(
         our_origin
     );
 }
+
+#[test]
+fn a_rubber_stamp_with_nothing_to_carry_empties_the_system_clipboard() {
+    let (mut app, child) = app_with_child_sheet();
+    select(&mut app, &[("R1", 1)], false);
+    let _ = app.update(Message::Edit(EditMsg::Copy));
+
+    select_child(&mut app, child);
+    let task = app.update(Message::Edit(EditMsg::RubberStampCopy));
+    assert_eq!(written_text(task).as_deref(), Some(""));
+    assert!(app.interaction_state.clipboard.is_none());
+    assert!(
+        app.interaction_state.clipboard_text.is_none(),
+        "no text may stand for a copy that is gone"
+    );
+}
+
+#[test]
+fn a_copy_that_fails_leaves_the_system_clipboard_alone() {
+    let mut app = app_with_sheet(populated_sheet());
+    let path = app.document_state.active_path.clone().unwrap();
+    let engine = app.document_state.engines.get_mut(&path).unwrap();
+    let mut sheet = engine.document().clone();
+    sheet.symbols[0].position.x = f64::NAN;
+    engine.set_document(sheet);
+
+    select(&mut app, &[("R1", 1)], false);
+    let task = app.update(Message::Edit(EditMsg::Copy));
+    assert_eq!(written_text(task), None, "a failed copy writes nothing");
+    assert!(app.interaction_state.clipboard.is_none());
+}
+
+#[test]
+fn a_numbers_read_answers_only_the_dialog_that_asked() {
+    let mut app = app_with_sheet(populated_sheet());
+    app.ui_state.paste_designators = PasteDesignators::Keep;
+    select(&mut app, &[("R1", 1)], false);
+    let _ = app.update(Message::Edit(EditMsg::Copy));
+    crate::paste_stamp_array::open_array(&mut app);
+    let dialog = |m| Message::Edit(EditMsg::PasteArray(m));
+    let task = app.update(dialog(PasteArrayMsg::DesignatorsChosen(
+        PasteDesignators::NextFree,
+    )));
+    let seeded = seeded_message(task).expect("a read");
+    let first_id = app.ui_state.paste_array.as_ref().unwrap().id;
+
+    // The dialog is closed and a new one opened before the answer lands.
+    let _ = app.update(dialog(PasteArrayMsg::Closed));
+    crate::paste_stamp_array::open_array(&mut app);
+    let second = app.ui_state.paste_array.as_mut().unwrap();
+    assert_ne!(second.id, first_id);
+    second.seed_pending = true;
+
+    let _ = app.update(seeded);
+    assert!(
+        app.ui_state.paste_array.as_ref().unwrap().seed_pending,
+        "the first dialog's answer must not release the second"
+    );
+}
+
+#[test]
+fn saving_the_designator_preference_redraws_an_armed_stamp_ghost() {
+    let _serial = crate::preferences_prefs_recovery::serial();
+    let _guard = crate::preferences_prefs_recovery::PrefsPathGuard::capture();
+    let inner = crate::preferences_prefs_recovery::inner;
+    let mut app = app_with_sheet(populated_sheet());
+    app.ui_state.paste_designators = PasteDesignators::Keep;
+    select(&mut app, &[("R1", 1)], false);
+    crate::paste_support::send_and_settle(
+        &mut app,
+        EditMsg::RubberStampCopy,
+        signex_app::app::PasteIntent::Stamp,
+    );
+    assert_eq!(ghost_references(&app), ["R1"]);
+
+    let _ = app.update(Message::Preferences(signex_app::app::PreferencesMsg::Open));
+    let _ = app.update(inner(
+        signex_app::preferences::PrefMsg::DraftPasteDesignators(PasteDesignators::NextFree),
+    ));
+    let task = app.update(inner(signex_app::preferences::PrefMsg::Save));
+    crate::drive::drive(&mut app, task);
+    assert_eq!(ghost_references(&app), ["R4"]);
+}
