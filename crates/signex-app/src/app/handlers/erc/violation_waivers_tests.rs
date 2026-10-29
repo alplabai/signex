@@ -427,7 +427,7 @@ fn one_global_net_on_two_open_sheets_is_waived_per_sheet() {
     app.run_erc_blocking();
     assert_eq!(
         flagged_paths(&app),
-        [child_path.clone()],
+        std::slice::from_ref(&child_path),
         "only the top's is hidden"
     );
     let entries = app.erc_violation_waiver_entries();
