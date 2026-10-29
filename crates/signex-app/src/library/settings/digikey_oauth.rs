@@ -23,10 +23,11 @@
 //!   committed to source.
 //!
 //! Cancellation:
-//! - The caller holds a `CancelHandle`; calling `cancel()` (or setting
-//!   the shared flag) makes the polling `accept` loop stop within a
-//!   few hundred ms and return [`Outcome::Cancelled`]. Dropping the
-//!   handle does not cancel.
+//! - Setting the shared flag (`CancelHandle::cancel`, or the dispatcher's
+//!   `DigiKeyCancel`) is observed between `accept` polls, before the
+//!   exchange, and at the persist veto; the flow then returns
+//!   [`Outcome::Cancelled`]. A token stored before the cancel landed is
+//!   removed by the stale-result handler.
 
 use std::net::TcpListener;
 use std::sync::Arc;
@@ -56,7 +57,7 @@ pub enum Outcome {
     Connected { account_label: String },
     /// User-visible reason. Surfaced as "Failed: <reason>".
     Failed { reason: String },
-    /// User clicked Cancel before the browser callback fired.
+    /// Cancel landed before the refresh token was stored.
     Cancelled,
 }
 
@@ -133,19 +134,15 @@ pub fn run_blocking(
     open_browser: bool,
 ) -> Outcome {
     if client_id.is_empty() {
-        return Outcome::Failed {
-            reason: format!(
-                "DigiKey OAuth client_id missing — set ${ENV_CLIENT_ID} before connecting."
-            ),
-        };
+        return fail_and_log(format!(
+            "DigiKey OAuth client_id missing — set ${ENV_CLIENT_ID} before connecting."
+        ));
     }
 
     let (listener, redirect_uri) = match bind_callback_listener() {
         Ok(t) => t,
         Err(e) => {
-            return Outcome::Failed {
-                reason: format!("could not bind localhost callback: {e}"),
-            };
+            return fail_and_log(format!("could not bind localhost callback: {e}"));
         }
     };
 
@@ -163,35 +160,31 @@ pub fn run_blocking(
     };
 
     let (auth_url, csrf_token, verifier) = auth.start_authorization();
+    // Consumed by the one real exchange; an idle connection never takes it.
+    let mut verifier = Some(verifier);
 
     if open_browser && let Err(e) = webbrowser::open(auth_url.as_str()) {
-        return Outcome::Failed {
-            reason: format!("could not open browser: {e}"),
-        };
+        return fail_and_log(format!("could not open browser: {e}"));
     }
 
     // Block on the listener with a short polling loop so cancellation
     // fires inside a few hundred ms. `set_nonblocking` would also
     // work, but the polling pattern is more readable.
     if let Err(e) = listener.set_nonblocking(true) {
-        return Outcome::Failed {
-            reason: format!("listener nonblocking failed: {e}"),
-        };
+        return fail_and_log(format!("listener nonblocking failed: {e}"));
     }
 
     let timeout = Duration::from_secs(5 * 60); // 5 minutes
     let started = std::time::Instant::now();
     loop {
         if cancel.is_cancelled() {
-            return Outcome::Cancelled;
+            return cancelled_outcome();
         }
         if started.elapsed() > timeout {
-            return Outcome::Failed {
-                reason: "timed out waiting for browser callback".into(),
-            };
+            return fail_and_log("timed out waiting for browser callback".into());
         }
         match listener.accept() {
-            Ok((mut stream, addr)) => {
+            Ok((stream, addr)) => {
                 // MD-14: only loopback should be hitting this listener.
                 // Reject any non-loopback peer (DNS-rebinding hardening).
                 if !addr.ip().is_loopback() {
@@ -200,93 +193,261 @@ pub fn run_blocking(
                         .ignore("rejected peer; the connection is abandoned either way");
                     continue;
                 }
-                // A silent preconnect must not wedge the worker past
-                // cancel/timeout: bound the read, then keep polling.
-                stream
-                    .set_nonblocking(false)
-                    .ignore("best effort; the read timeout below bounds the wait either way");
-                stream
-                    .set_read_timeout(Some(CALLBACK_READ_TIMEOUT))
-                    .ignore("best effort; accept() already returned a live peer");
-                let req_line = read_first_line(&mut stream);
-                if !is_callback_request(&req_line) {
-                    // favicon probe, preconnect, or stray local client:
-                    // not the redirect, so the flow keeps waiting.
-                    std::io::Write::write_all(
-                        &mut stream,
-                        b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-                    )
-                    .ignore("courtesy 404; the stray peer may already be gone");
-                    continue;
-                }
-                let outcome = match callback_params(req_line) {
-                    Ok((code, returned_state)) => {
-                        match auth.exchange_code(&code, verifier, &returned_state, &csrf_token) {
-                            Ok(_access_token) => Outcome::Connected {
-                                // No identity claim is returned by the token
-                                // endpoint in DigiKey's spec; the panel
-                                // labels the connection generically until a
-                                // follow-up `/me` call lands.
-                                account_label: "DigiKey".to_string(),
-                            },
-                            Err(e) => failure_from(e),
-                        }
-                    }
-                    Err(outcome) => outcome,
-                };
-                // Courtesy page only, written after the exchange so the
-                // browser never claims "connected" for a failed handshake.
-                // `req_line` was consumed above, so the outcome does not
-                // depend on this reaching the browser.
-                let response_body = match outcome {
-                    Outcome::Connected { .. } => {
-                        "<html><body><p>Signex: DigiKey connected. You can close this window.</p></body></html>"
-                    }
-                    _ => {
-                        "<html><body><p>Signex: DigiKey was not connected. Return to Signex for details.</p></body></html>"
-                    }
-                };
-                std::io::Write::write_all(&mut stream, ok_response(response_body).as_bytes())
-                    .ignore("confirmation page only; the outcome is already decided");
-                stream.shutdown(std::net::Shutdown::Both).ignore(
-                    "connection is finished with; a failed shutdown means the peer closed first",
+                // An idle speculative connection (a browser preconnect) yields
+                // `None`: keep accepting until the real redirect or the
+                // overall deadline, rather than failing the whole flow.
+                let step = handle_callback(
+                    stream,
+                    &cancel,
+                    ACCEPTED_STREAM_IO_TIMEOUT,
+                    |code, state, may_persist| {
+                        let Some(verifier) = verifier.take() else {
+                            return Err(DigiKeyAuthError::Request(
+                                "the PKCE verifier was already used".into(),
+                            ));
+                        };
+                        auth.exchange_code_guarded(code, verifier, state, &csrf_token, may_persist)
+                    },
                 );
-                return outcome;
+                if let Some(outcome) = step {
+                    return outcome;
+                }
+                continue;
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(150));
             }
             Err(e) => {
-                return Outcome::Failed {
-                    reason: format!("listener accept: {e}"),
-                };
+                return fail_and_log(format!("listener accept: {e}"));
             }
         }
     }
 }
 
-/// How long one accepted connection may stay silent before it is dropped.
-const CALLBACK_READ_TIMEOUT: Duration = Duration::from_secs(2);
+/// How long the accepted callback connection may stall a read or write.
+/// A browser sends the request line immediately; a peer that connects and
+/// says nothing must not hold the flow (and the Cancel button) hostage.
+/// Kept short: the settings panel's busy flag blocks Connect for this long
+/// after a silent peer.
+const ACCEPTED_STREAM_IO_TIMEOUT: Duration = Duration::from_secs(2);
 
-/// True when the connection should be treated as the OAuth redirect:
-/// a request line whose path is `/callback`. A read that timed out
-/// (silent preconnect) or a different path is not the redirect; any
-/// other read error stays on the failure path so it is reported.
-fn is_callback_request(req_line: &Result<String, std::io::Error>) -> bool {
-    use std::io::ErrorKind::{TimedOut, WouldBlock};
+/// Make the accepted connection safe to read synchronously.
+///
+/// The listener is non-blocking so the accept loop can poll for
+/// cancellation, and on Windows (and the BSDs) an accepted socket inherits
+/// that mode — a bare `read` then fails with `WouldBlock` before the
+/// browser's bytes arrive. Reset it to blocking and bound every I/O call.
+fn prepare_accepted_stream(
+    stream: &std::net::TcpStream,
+    io_timeout: Duration,
+) -> std::io::Result<()> {
+    stream.set_nonblocking(false)?;
+    stream.set_read_timeout(Some(io_timeout))?;
+    stream.set_write_timeout(Some(io_timeout))?;
+    Ok(())
+}
+
+/// The user cancelled: nothing was stored. Reported to the Messages panel
+/// so a cancelled attempt is visible rather than silent.
+fn cancelled_outcome() -> Outcome {
+    tracing::info!(
+        target: "signex::distributor",
+        distributor = "digikey",
+        "the DigiKey OAuth flow was cancelled; no token was stored"
+    );
+    Outcome::Cancelled
+}
+
+/// Delete the DigiKey refresh token from the OS credential store. Blocking:
+/// call it from `spawn_blocking`, never from `update`.
+pub fn remove_stored_token() -> Result<(), String> {
+    signex_library::distributors::digikey::DigiKeyAuth::remove_stored_refresh_token()
+        .map_err(|e| e.to_string())
+}
+
+/// Report the outcome of removing a token a cancelled flow stored anyway.
+///
+/// Cancel can land after the persist veto granted and the refresh token was
+/// written; the flow's `Connected` result is then dropped as stale, and
+/// nothing else would ever show the user that a valid token sits in the
+/// keyring. Best effort: a failed delete is reported with the manual remedy.
+/// Neither the token nor the authorization code is ever logged.
+pub fn log_stale_token_removal(result: Result<(), String>) {
+    match result {
+        Ok(()) => tracing::info!(
+            target: "signex::distributor",
+            distributor = "digikey",
+            "a DigiKey token stored by a cancelled OAuth flow was removed"
+        ),
+        Err(error) => tracing::warn!(
+            target: "signex::distributor",
+            distributor = "digikey",
+            error = %error,
+            "a cancelled DigiKey OAuth flow stored a token and it could not be removed; \
+             remove the `signex-distributor-digikey` / `refresh` entry from the OS credential store"
+        ),
+    }
+}
+
+/// Build an [`Outcome::Failed`] and put the reason in the Messages panel.
+fn fail_and_log(reason: String) -> Outcome {
+    tracing::error!(
+        target: "signex::distributor",
+        distributor = "digikey",
+        reason = %reason,
+        "the DigiKey OAuth flow failed, so the account was not connected"
+    );
+    Outcome::Failed { reason }
+}
+
+/// Serve one accepted callback connection and finish the handshake.
+///
+/// `exchange(code, state, may_persist)` performs the token exchange; it is
+/// injected so tests can drive this without a network. Cancellation is
+/// re-checked after accept, before the exchange, and (through
+/// `may_persist`) immediately before the token is stored.
+///
+/// Returns `None` when the connection sent nothing — it timed out after
+/// `io_timeout` or the peer closed it, as a browser preconnect does — so the caller
+/// keeps accepting instead of ending the flow.
+fn handle_callback<E>(
+    mut stream: std::net::TcpStream,
+    cancel: &CancelHandle,
+    io_timeout: Duration,
+    exchange: E,
+) -> Option<Outcome>
+where
+    E: FnOnce(&str, &str, &dyn Fn() -> bool) -> Result<String, DigiKeyAuthError>,
+{
+    if let Err(e) = prepare_accepted_stream(&stream, io_timeout) {
+        return Some(fail_and_log(format!(
+            "could not configure the callback connection: {e}"
+        )));
+    }
+    if cancel.is_cancelled() {
+        stream
+            .shutdown(std::net::Shutdown::Both)
+            .ignore("cancelled; the connection is abandoned either way");
+        return Some(cancelled_outcome());
+    }
+
+    let req_line = read_first_line(&mut stream);
+    if is_idle_read(&req_line) {
+        stream
+            .shutdown(std::net::Shutdown::Both)
+            .ignore("idle or closed speculative connection; abandoned either way");
+        tracing::debug!(
+            target: "signex::distributor",
+            distributor = "digikey",
+            "ignored an idle connection on the OAuth callback listener; still waiting for the redirect"
+        );
+        return None;
+    }
+    if is_stray_request(&req_line) {
+        // A favicon probe or another local client: not the redirect, so
+        // answer 404 and keep waiting rather than end the flow.
+        std::io::Write::write_all(
+            &mut stream,
+            b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        )
+        .ignore("courtesy 404; the stray peer may already be gone");
+        stream
+            .shutdown(std::net::Shutdown::Both)
+            .ignore("stray connection; abandoned either way");
+        return None;
+    }
+    Some(finish_callback(stream, cancel, req_line, exchange))
+}
+
+/// True when a request line was read but its path is not `/callback`. A read
+/// error is not stray: it stays on the failure path so it is reported.
+fn is_stray_request(req_line: &Result<String, std::io::Error>) -> bool {
     match req_line {
         Ok(line) => {
             let target = line.split_whitespace().nth(1).unwrap_or("");
-            target.split('?').next() == Some("/callback")
+            target.split('?').next() != Some("/callback")
         }
-        Err(e) => !matches!(e.kind(), TimedOut | WouldBlock),
+        Err(_) => false,
+    }
+}
+
+/// A read that produced no request: it timed out (Unix reports `WouldBlock`,
+/// Windows `TimedOut`) or the peer closed without sending a byte (`Ok(0)`,
+/// which `read_first_line` yields as an empty line). Both are a speculative
+/// preconnect, not a redirect.
+fn is_idle_read(req_line: &Result<String, std::io::Error>) -> bool {
+    match req_line {
+        Ok(line) => line.is_empty(),
+        Err(e) => matches!(
+            e.kind(),
+            std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+        ),
+    }
+}
+
+/// Runs the exchange first, then writes the page, so the browser text
+/// matches the outcome (#1537).
+fn finish_callback<E>(
+    mut stream: std::net::TcpStream,
+    cancel: &CancelHandle,
+    req_line: Result<String, std::io::Error>,
+    exchange: E,
+) -> Outcome
+where
+    E: FnOnce(&str, &str, &dyn Fn() -> bool) -> Result<String, DigiKeyAuthError>,
+{
+    let outcome = callback_outcome(cancel, req_line, exchange);
+    // Courtesy page only, written after the exchange so the browser never
+    // claims "connected" for a failed or cancelled handshake. `req_line` was
+    // consumed above, so the outcome does not depend on this reaching the
+    // browser.
+    let response_body = match outcome {
+        Outcome::Connected { .. } => {
+            "<html><body><p>Signex: DigiKey connected. You can close this window.</p></body></html>"
+        }
+        _ => {
+            "<html><body><p>Signex: DigiKey was not connected. Return to Signex for details.</p></body></html>"
+        }
+    };
+    std::io::Write::write_all(&mut stream, ok_response(response_body).as_bytes())
+        .ignore("confirmation page only; the outcome is already decided");
+    stream
+        .shutdown(std::net::Shutdown::Both)
+        .ignore("connection is finished with; a failed shutdown means the peer closed first");
+    outcome
+}
+
+fn callback_outcome<E>(
+    cancel: &CancelHandle,
+    req_line: Result<String, std::io::Error>,
+    exchange: E,
+) -> Outcome
+where
+    E: FnOnce(&str, &str, &dyn Fn() -> bool) -> Result<String, DigiKeyAuthError>,
+{
+    let (code, returned_state) = match callback_params(req_line) {
+        Ok(t) => t,
+        Err(outcome) => return outcome,
+    };
+
+    if cancel.is_cancelled() {
+        return cancelled_outcome();
+    }
+
+    match exchange(&code, &returned_state, &|| !cancel.is_cancelled()) {
+        Ok(_access_token) => Outcome::Connected {
+            // No identity claim is returned by the token endpoint in
+            // DigiKey's spec; the panel labels the connection generically
+            // until a follow-up `/me` call lands.
+            account_label: "DigiKey".to_string(),
+        },
+        Err(DigiKeyAuthError::Cancelled) => cancelled_outcome(),
+        Err(e) => failure_from(e),
     }
 }
 
 fn failure_from(e: DigiKeyAuthError) -> Outcome {
-    Outcome::Failed {
-        reason: e.to_string(),
-    }
+    fail_and_log(e.to_string())
 }
 
 /// Read the first line of the HTTP request — only the line we need
@@ -505,15 +666,12 @@ mod tests {
     #[test]
     fn stray_connections_are_not_the_callback() {
         let ok = |l: &str| Ok::<String, std::io::Error>(l.to_string());
-        assert!(is_callback_request(&ok(
+        assert!(!is_stray_request(&ok(
             "GET /callback?code=a&state=b HTTP/1.1"
         )));
-        assert!(!is_callback_request(&ok("GET /favicon.ico HTTP/1.1")));
-        assert!(!is_callback_request(&ok("")));
-        let timed_out = Err(std::io::Error::from(std::io::ErrorKind::TimedOut));
-        assert!(!is_callback_request(&timed_out));
+        assert!(is_stray_request(&ok("GET /favicon.ico HTTP/1.1")));
         let reset = Err(std::io::Error::from(std::io::ErrorKind::ConnectionReset));
-        assert!(is_callback_request(&reset));
+        assert!(!is_stray_request(&reset));
     }
 
     #[test]
@@ -654,6 +812,275 @@ mod tests {
             Outcome::Failed { reason } => assert!(reason.contains("client_id")),
             other => panic!("expected Failed, got {other:?}"),
         }
+    }
+
+    const GOOD_REQUEST: &str = "GET /callback?code=the-code&state=the-state HTTP/1.1\r\n\r\n";
+
+    /// Accept one loopback connection whose peer has already sent
+    /// `request`, the way the real listener sees a browser redirect.
+    fn accepted_stream_with(request: &str) -> std::net::TcpStream {
+        use std::io::Write;
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let mut client =
+            std::net::TcpStream::connect(listener.local_addr().expect("addr")).expect("connect");
+        client.write_all(request.as_bytes()).expect("send request");
+        let (stream, _) = listener.accept().expect("accept");
+        stream
+    }
+
+    #[test]
+    fn callback_listener_binds_loopback_only() {
+        let (listener, url) = bind_callback_listener().expect("bind");
+        let ip = listener.local_addr().expect("addr").ip();
+        assert!(ip.is_loopback(), "bound to non-loopback {ip}");
+        assert!(!ip.is_unspecified(), "bound to the wildcard address {ip}");
+        assert!(url.starts_with("http://127.0.0.1:"), "redirect uri {url}");
+    }
+
+    /// #834: an accepted socket inherits the listener's non-blocking mode
+    /// on Windows/BSD, so the first read raced the browser and failed with
+    /// `WouldBlock`. Force the inherited state, then check the prepared
+    /// stream waits for a late sender instead of erroring.
+    #[test]
+    fn accepted_stream_is_blocking_with_a_bounded_read_timeout() {
+        use std::io::{Read, Write};
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let mut client =
+            std::net::TcpStream::connect(listener.local_addr().expect("addr")).expect("connect");
+        let (mut stream, _) = listener.accept().expect("accept");
+        stream.set_nonblocking(true).expect("simulate inheritance");
+
+        prepare_accepted_stream(&stream, ACCEPTED_STREAM_IO_TIMEOUT).expect("prepare");
+
+        assert_eq!(
+            stream.read_timeout().expect("read timeout"),
+            Some(ACCEPTED_STREAM_IO_TIMEOUT)
+        );
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(200));
+            client.write_all(b"hello").expect("late write");
+            client
+        });
+        let mut buf = [0u8; 5];
+        stream
+            .read_exact(&mut buf)
+            .expect("a blocking read waits for the late bytes");
+        assert_eq!(&buf, b"hello");
+        drop(writer.join().expect("writer"));
+    }
+
+    /// Sends `GOOD_REQUEST`, runs the callback with `exchange`, and returns
+    /// the outcome plus the page the browser received.
+    fn page_for<E>(cancel: &CancelHandle, exchange: E) -> (Outcome, String)
+    where
+        E: FnOnce(&str, &str, &dyn Fn() -> bool) -> Result<String, DigiKeyAuthError>,
+    {
+        use std::io::{Read, Write};
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let mut client =
+            std::net::TcpStream::connect(listener.local_addr().expect("addr")).expect("connect");
+        client
+            .write_all(GOOD_REQUEST.as_bytes())
+            .expect("send request");
+        let (stream, _) = listener.accept().expect("accept");
+        let outcome = handle_callback(stream, cancel, ACCEPTED_STREAM_IO_TIMEOUT, exchange)
+            .expect("a redirect is a final outcome");
+        let mut page = String::new();
+        client.read_to_string(&mut page).expect("read page");
+        (outcome, page)
+    }
+
+    #[test]
+    fn the_browser_page_says_connected_only_for_a_connected_outcome() {
+        let (outcome, page) = page_for(&CancelHandle::new(), |_, _, _| Ok("access".into()));
+        assert!(
+            matches!(outcome, Outcome::Connected { .. }),
+            "got {outcome:?}"
+        );
+        assert!(page.contains("DigiKey connected"), "page: {page}");
+
+        let (outcome, page) = page_for(&CancelHandle::new(), |_, _, _| {
+            Err(DigiKeyAuthError::Request("token endpoint refused".into()))
+        });
+        assert!(matches!(outcome, Outcome::Failed { .. }), "got {outcome:?}");
+        assert!(page.contains("was not connected"), "page: {page}");
+        assert!(!page.contains("DigiKey connected"), "page: {page}");
+
+        let cancel = CancelHandle::new();
+        let (outcome, page) = page_for(&cancel, |_, _, _| {
+            cancel.cancel();
+            Err(DigiKeyAuthError::Cancelled)
+        });
+        assert!(matches!(outcome, Outcome::Cancelled), "got {outcome:?}");
+        assert!(page.contains("was not connected"), "page: {page}");
+    }
+
+    #[test]
+    fn cancel_after_accept_never_reaches_the_exchange() {
+        let cancel = CancelHandle::new();
+        cancel.cancel();
+        let stream = accepted_stream_with(GOOD_REQUEST);
+
+        let outcome = handle_callback(stream, &cancel, ACCEPTED_STREAM_IO_TIMEOUT, |_, _, _| {
+            panic!("a cancelled flow must not exchange the code")
+        })
+        .expect("a cancel is a final outcome");
+
+        assert!(matches!(outcome, Outcome::Cancelled), "got {outcome:?}");
+    }
+
+    #[test]
+    fn cancel_during_the_exchange_persists_nothing() {
+        let cancel = CancelHandle::new();
+        let stream = accepted_stream_with(GOOD_REQUEST);
+        let persisted = std::cell::Cell::new(false);
+
+        let outcome = handle_callback(
+            stream,
+            &cancel,
+            ACCEPTED_STREAM_IO_TIMEOUT,
+            |code, state, may_persist| {
+                assert_eq!((code, state), ("the-code", "the-state"));
+                // The user presses Cancel while the token request is in flight.
+                cancel.cancel();
+                if !may_persist() {
+                    return Err(DigiKeyAuthError::Cancelled);
+                }
+                persisted.set(true);
+                Ok("access".into())
+            },
+        )
+        .expect("a cancel is a final outcome");
+
+        assert!(matches!(outcome, Outcome::Cancelled), "got {outcome:?}");
+        assert!(!persisted.get(), "a cancelled flow stored a token");
+    }
+
+    /// Positive control: without a cancel the same path connects and the
+    /// persist veto grants.
+    #[test]
+    fn uncancelled_callback_connects_and_may_persist() {
+        let cancel = CancelHandle::new();
+        let stream = accepted_stream_with(GOOD_REQUEST);
+
+        let outcome = handle_callback(
+            stream,
+            &cancel,
+            ACCEPTED_STREAM_IO_TIMEOUT,
+            |_, _, may_persist| {
+                assert!(may_persist());
+                Ok("access".into())
+            },
+        )
+        .expect("a redirect is a final outcome");
+
+        assert!(
+            matches!(outcome, Outcome::Connected { .. }),
+            "got {outcome:?}"
+        );
+    }
+
+    /// #834 review: Cancel lands after `may_persist` granted and the token
+    /// was stored. The flow still reports `Connected`; the handler's stale
+    /// branch (tested in `dispatch/library/settings_tests.rs`) is what
+    /// removes the token.
+    #[test]
+    fn cancel_after_persist_still_reports_connected_for_the_stale_path() {
+        let cancel = CancelHandle::new();
+        let stream = accepted_stream_with(GOOD_REQUEST);
+        let keyring = std::cell::RefCell::new(None::<String>);
+
+        let outcome = handle_callback(
+            stream,
+            &cancel,
+            ACCEPTED_STREAM_IO_TIMEOUT,
+            |_, _, may_persist| {
+                assert!(may_persist());
+                *keyring.borrow_mut() = Some("refresh-tok".to_string());
+                // Cancel arrives right after the write.
+                cancel.cancel();
+                Ok("access".into())
+            },
+        )
+        .expect("a redirect is a final outcome");
+        assert!(matches!(outcome, Outcome::Connected { .. }));
+        assert!(keyring.borrow().is_some(), "precondition: token was stored");
+    }
+
+    /// A preconnect the browser closed before sending anything reads as
+    /// `Ok(0)`; it is idle like a timeout, and the real redirect that
+    /// follows still completes the flow.
+    #[test]
+    fn a_connection_closed_without_a_request_is_skipped_and_the_next_one_connects() {
+        let cancel = CancelHandle::new();
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let closed_client = std::net::TcpStream::connect(addr).expect("connect");
+        let (closed, _) = listener.accept().expect("accept");
+        drop(closed_client);
+
+        let closed_step = handle_callback(closed, &cancel, Duration::from_secs(5), |_, _, _| {
+            panic!("a closed connection must not exchange")
+        });
+        assert!(
+            closed_step.is_none(),
+            "a closed preconnect must not end the flow, got {closed_step:?}"
+        );
+
+        let real = accepted_stream_with(GOOD_REQUEST);
+        let step = handle_callback(real, &cancel, Duration::from_secs(5), |_, _, _| {
+            Ok("access".into())
+        });
+        assert!(
+            matches!(step, Some(Outcome::Connected { .. })),
+            "got {step:?}"
+        );
+    }
+
+    /// A browser preconnect that never sends is skipped, and the real
+    /// redirect on the next connection still completes the flow.
+    #[test]
+    fn an_idle_connection_is_skipped_and_the_next_one_connects() {
+        let cancel = CancelHandle::new();
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let _idle_client = std::net::TcpStream::connect(addr).expect("idle connect");
+        let (idle, _) = listener.accept().expect("accept idle");
+
+        let idle_step = handle_callback(idle, &cancel, Duration::from_millis(100), |_, _, _| {
+            panic!("an idle connection must not exchange")
+        });
+        assert!(idle_step.is_none(), "idle connection must not end the flow");
+
+        let real = accepted_stream_with(GOOD_REQUEST);
+        let step = handle_callback(real, &cancel, Duration::from_secs(5), |_, _, _| {
+            Ok("access".into())
+        });
+        assert!(
+            matches!(step, Some(Outcome::Connected { .. })),
+            "got {step:?}"
+        );
+    }
+
+    /// A `GET /favicon.ico` is answered 404 and skipped (#1373); the real
+    /// redirect afterwards still completes the flow.
+    #[test]
+    fn a_stray_path_is_skipped_and_the_redirect_still_connects() {
+        let cancel = CancelHandle::new();
+        let stray = accepted_stream_with("GET /favicon.ico HTTP/1.1\r\nHost: x\r\n\r\n");
+        let step = handle_callback(stray, &cancel, Duration::from_secs(5), |_, _, _| {
+            panic!("a stray request must not exchange")
+        });
+        assert!(step.is_none(), "stray path must not end the flow");
+
+        let real = accepted_stream_with(GOOD_REQUEST);
+        let step = handle_callback(real, &cancel, Duration::from_secs(5), |_, _, _| {
+            Ok("access".into())
+        });
+        assert!(
+            matches!(step, Some(Outcome::Connected { .. })),
+            "got {step:?}"
+        );
     }
 
     #[test]
