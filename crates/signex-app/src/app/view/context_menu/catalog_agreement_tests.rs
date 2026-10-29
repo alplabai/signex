@@ -33,16 +33,6 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("Comment...", "planned, no behaviour"),
     ("Pin Mapping...", "planned, no behaviour"),
     ("Supplier Links...", "planned, no behaviour"),
-    // Place flyout: parameterised families awaiting `CommandArgs`, so the
-    // Active Bar command table has no id for them yet.
-    ("Net Label", "parameterised family, no id yet"),
-    ("GND Power Port", "parameterised family, no id yet"),
-    ("VCC Power Port", "parameterised family, no id yet"),
-    ("+5 Power Port", "parameterised family, no id yet"),
-    ("+12 Power Port", "parameterised family, no id yet"),
-    // Canvas: actions a bare command id cannot name.
-    ("Project Options...", "needs the project's tree key"),
-    ("Change Component\u{2026}", "no command id yet"),
     // Project tree: every action is addressed by a tree key or path the
     // palette cannot supply.
     (

@@ -93,6 +93,7 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         "delete_selection" => ctx.has_selection || ctx.has_footprint_editor,
         "remove_last_vertex" => ctx.has_selection || ctx.has_footprint_editor || ctx.drawing,
         "print"
+        | "print_active_document"
         | "paste"
         | "smart_paste"
         | "paste_special"
@@ -106,6 +107,10 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         | "place_local_net_label"
         | "place_junction"
         | "place_power_symbol"
+        | "place_power_gnd"
+        | "place_power_vcc"
+        | "place_power_plus5"
+        | "place_power_plus12"
         | "place_global_label"
         | "place_hierarchical_label"
         | "place_port"
@@ -141,7 +146,10 @@ pub(crate) fn cycle_grid_menu_enabled(ctx: &CommandContext) -> bool {
 /// handler so the explanation is not lost (Save As in a PCB tab, #671;
 /// Print with no schematic).
 pub(crate) fn explains_when_unavailable(command: &AppCommandId) -> bool {
-    matches!(command.as_str(), "save_document_as" | "print") || is_planned_command(command)
+    matches!(
+        command.as_str(),
+        "save_document_as" | "print" | "print_active_document"
+    ) || is_planned_command(command)
 }
 
 /// An Active Bar command whose tool is a planned placeholder (#1249). It is

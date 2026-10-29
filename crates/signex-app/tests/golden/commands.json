@@ -90,6 +90,11 @@
     "category": "view"
   },
   {
+    "id": "change_component",
+    "group": "Schematic",
+    "category": "edit"
+  },
+  {
     "id": "clear_all_net_colors",
     "group": "Schematic",
     "category": "view"
@@ -520,6 +525,11 @@
     "category": "preferences"
   },
   {
+    "id": "open_project_options",
+    "group": "Schematic",
+    "category": "file"
+  },
+  {
     "id": "open_schematic_preferences",
     "group": "General",
     "category": "preferences"
@@ -650,7 +660,27 @@
     "category": "place"
   },
   {
+    "id": "place_power_gnd",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_power_plus12",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_power_plus5",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
     "id": "place_power_symbol",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_power_vcc",
     "group": "Schematic",
     "category": "place"
   },
@@ -737,6 +767,11 @@
   {
     "id": "print",
     "group": "General",
+    "category": "file"
+  },
+  {
+    "id": "print_active_document",
+    "group": "Schematic",
     "category": "file"
   },
   {

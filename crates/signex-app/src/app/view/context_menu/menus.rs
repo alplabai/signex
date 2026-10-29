@@ -14,7 +14,7 @@
 use super::*;
 
 use super::items::{
-    dd_cmd, dd_cmd_action, dd_disabled, dd_kb, dd_msg, dd_planned, submenu_launcher,
+    dd_cmd, dd_cmd_action, dd_cmd_disabled, dd_disabled, dd_msg, dd_planned, submenu_launcher,
 };
 use crate::icons as ic;
 use signex_types::theme::{ThemeId, ThemeTokens};
@@ -43,6 +43,8 @@ pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "open_datasheet",
     "edit_selected_symbol_in_symbol_editor",
     "edit_selected_object_properties",
+    "change_component",
+    "open_project_options",
 ];
 
 /// Keyboard-shortcut hints for the canvas menu, keyed by command id and
@@ -415,18 +417,18 @@ pub(super) fn canvas_menu_entries(
     // way the project tree's own menu addresses it. No project: greyed, no
     // tooltip (the feature exists, there is just nothing to open it for).
     v.push(match project_key {
-        Some(key) => dd_msg(
+        Some(key) => dd_cmd(
             Some(ic::icon_dd_project_options(tid)),
-            "Project Options...",
-            "",
+            "open_project_options",
+            sc.of("open_project_options"),
             Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
                 crate::app::ProjectTreeAction::OpenProjectOptions(key),
             )),
         ),
-        None => dd_disabled(
+        None => dd_cmd_disabled(
             Some(ic::icon_dd_project_options(tid)),
-            "Project Options...",
-            None,
+            "open_project_options",
+            sc.of("open_project_options"),
         ),
     });
     v.push(dd_cmd(
@@ -438,11 +440,11 @@ pub(super) fn canvas_menu_entries(
 
     if placed_part_selected {
         use crate::library::PlacedPartAction as A;
-        // Open Datasheet and Edit Symbol read the catalog; Change Component
-        // has no command id yet (surface-local until it gets one).
+        // The placed-part actions, all catalog commands.
         for (command_id, action) in [
             ("open_datasheet", A::OpenDatasheet),
             ("edit_selected_symbol_in_symbol_editor", A::EditSymbol),
+            ("change_component", A::ChangeComponent),
         ] {
             v.push(dd_cmd_action(
                 None,
@@ -451,12 +453,6 @@ pub(super) fn canvas_menu_entries(
                 ContextAction::PlacedPart(action),
             ));
         }
-        v.push(dd_kb(
-            None,
-            "Change Component\u{2026}",
-            "",
-            ContextAction::PlacedPart(A::ChangeComponent),
-        ));
     }
     if has_selection {
         v.push(dd_planned(

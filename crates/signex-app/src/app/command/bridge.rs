@@ -141,6 +141,13 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "open_child_sheet" => context_action(ContextAction::OpenChildSheet),
         "create_sheet_from_sheet_symbol" => context_action(ContextAction::CreateChildSheet),
         "sync_sheet_pins" => context_action(ContextAction::SyncSheetPins),
+        "change_component" => placed_part(PlacedPartAction::ChangeComponent),
+        // Opens the active project's options tab; the project-tree row keeps
+        // its tree key and sends `ProjectTreeAction::OpenProjectOptions`.
+        "open_project_options" => Message::Menu(MenuMessage::OpenProjectOptions),
+        // Same message as `print`; a second id so the project tree's row can
+        // read "Print..." while File > Export keeps "PDF…".
+        "print_active_document" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "find" | "find_text" => Message::Overlay(OverlayMsg::OpenFind),
         "find_and_replace" => Message::Overlay(OverlayMsg::OpenReplace),
         "footprint_mode_pads" => {

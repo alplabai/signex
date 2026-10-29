@@ -140,6 +140,7 @@ shrink.
 | `annotate_schematic_quietly` | Annotate schematic quietly | design | `Alt+A` | `Alt+A` |
 | `bring_to_front` | Bring to front | modify | — | — |
 | `bring_to_front_of` | Bring to front of | modify | — | — |
+| `change_component` | Change the selected part's component | edit | — | — |
 | `clear_all_net_colors` | Clear all net colors | view | — | — |
 | `clear_net_color` | Clear net color | view | — | — |
 | `clear_net_highlighting` | Clear net highlighting | select | — | `~` |
@@ -177,6 +178,7 @@ shrink.
 | `open_child_sheet` | Open the selected sheet symbol's child sheet | navigation | — | — |
 | `open_components_panel` | Open Components panel / place components | panels | `P P` | — |
 | `open_net_color_palette` | Open net color palette | view | `F5` | — |
+| `open_project_options` | Open Project Options for the active project | file | — | — |
 | `place_blanket` | Place blanket | place | — | — |
 | `place_bus` | Draw bus | place | `P B` | `B` |
 | `place_bus_entry` | Place bus entry | place | — | — |
@@ -199,7 +201,11 @@ shrink.
 | `place_off_sheet_connector` | Place off sheet connector | place | — | — |
 | `place_parameter_set` | Place parameter set | place | — | — |
 | `place_port` | Place port | place | — | — |
+| `place_power_gnd` | Place GND power port | place | — | — |
+| `place_power_plus12` | Place +12 power port | place | — | — |
+| `place_power_plus5` | Place +5 power port | place | — | — |
 | `place_power_symbol` | Place power symbol | place | — | `P` |
+| `place_power_vcc` | Place VCC power port | place | — | — |
 | `place_reuse_block` | Place reuse block | place | — | — |
 | `place_sheet_entry` | Place sheet entry | place | — | — |
 | `place_sheet_symbol` | Place sheet symbol | place | — | — |
@@ -212,6 +218,7 @@ shrink.
 | `place_wire_to_bus_entry` | Place wire-to-bus entry | place | — | `Z` |
 | `previous_highlighted_net_item` | Previous item on highlighted net | select | — | `Shift+Tab` |
 | `previous_sheet` | Previous sheet | navigation | — | `PageUp` |
+| `print_active_document` | Print the active document | file | — | — |
 | `reset_schematic_designators` | Reset schematic designators | design | `T A E` | — |
 | `rotate_selection` | Rotate selection counter-clockwise | modify | — | — |
 | `rotate_selection_cw` | Rotate selection clockwise | modify | — | — |

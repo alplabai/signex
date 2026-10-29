@@ -23,6 +23,16 @@ impl Signex {
                 self.interaction_state.context_menu = None;
                 Some(task)
             }
+            MenuMessage::OpenProjectOptions => {
+                let active = self.document_state.active_document_project().map(|p| p.id);
+                let index = active
+                    .and_then(|id| self.document_state.projects.iter().position(|p| p.id == id));
+                if let Some(index) = index {
+                    self.open_project_tab(index);
+                }
+                self.interaction_state.context_menu = None;
+                Some(Task::none())
+            }
             MenuMessage::OpenErcPanel => Some(self.show_panel(crate::panels::PanelKind::Erc)),
             MenuMessage::OpenMessagesPanel => {
                 Some(self.show_panel(crate::panels::PanelKind::Messages))

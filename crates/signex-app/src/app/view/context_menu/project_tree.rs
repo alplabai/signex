@@ -250,10 +250,10 @@ impl Signex {
                 v.push(dd_planned(None, "Project Releaser...", Some("v5.2")));
                 v.push(DropdownEntry::Separator);
                 v.push(dd_planned(None, "Share...", Some("v3.4")));
-                v.push(dd_msg(
+                v.push(dd_cmd(
                     None,
-                    "Project Options...",
-                    "",
+                    "open_project_options",
+                    &self.keymap_shortcut_label("open_project_options"),
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenProjectOptions(
                         key.clone(),
                     ))),
@@ -419,12 +419,16 @@ impl Signex {
                 v.push(if has_schematic {
                     dd_cmd(
                         None,
-                        "print",
-                        &self.keymap_shortcut_label("print"),
+                        "print_active_document",
+                        &self.keymap_shortcut_label("print_active_document"),
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::PrintActive)),
                     )
                 } else {
-                    dd_cmd_disabled(None, "print", &self.keymap_shortcut_label("print"))
+                    dd_cmd_disabled(
+                        None,
+                        "print_active_document",
+                        &self.keymap_shortcut_label("print_active_document"),
+                    )
                 });
                 v.push(dd_planned(None, "Show Differences...", Some("v4.3")));
             }
