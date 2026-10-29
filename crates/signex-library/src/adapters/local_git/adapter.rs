@@ -263,11 +263,7 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn read_row(&self, table: &str, row_id: RowId) -> Result<ComponentRow, LibraryError> {
-        let target = row_id.as_uuid();
-        self.snapshot_table(table)?
-            .into_iter()
-            .find(|r| r.row_id == target)
-            .ok_or_else(|| LibraryError::NotFound(format!("row {row_id} in table {table}")))
+        self.read_component_row(table, row_id)
     }
 
     /// Linear scan across every table — O(total rows). Acceptable at
@@ -596,32 +592,43 @@ impl LibraryAdapter for LocalGitAdapter {
 
     /// The whole batch in one `.snxlib` write and one commit. A target
     /// that is missing or unreadable is that target's `Err` and the rest
-    /// still land; a failed write or commit refuses the whole batch.
+    /// still land; a failed write or commit refuses the whole batch. The
+    /// commit message is built from the rows the edit changed.
     fn update_rows(
         &self,
         targets: &[(String, RowId)],
         edit: &mut crate::adapter::RowEdit<'_>,
-        message: &str,
+        message: &crate::adapter::RowsMessage<'_>,
     ) -> Result<Vec<crate::adapter::RowEditOutcome>, LibraryError> {
-        let mut outcomes: Vec<crate::adapter::RowEditOutcome> = Vec::with_capacity(targets.len());
+        let outcomes = std::cell::RefCell::new(Vec::with_capacity(targets.len()));
         let fallback = format!("update {} rows", targets.len());
-        self.mutate_library_file_if_changed(
+        self.mutate_library_file_deferred(
             |lf| {
                 // Rows are found and edited under the write lock, after the
                 // reload, so a field another writer changed since the
                 // caller's scan is kept.
                 let mut any = false;
+                let mut done = outcomes.borrow_mut();
                 for (table, row_id) in targets {
                     let outcome = edit_one_row(lf, table, *row_id, edit);
                     any |= matches!(outcome, Ok(true));
-                    outcomes.push((*row_id, outcome));
+                    done.push((*row_id, outcome));
                 }
                 Ok(any)
             },
-            message,
+            &[],
+            &|| {
+                let changed: Vec<RowId> = outcomes
+                    .borrow()
+                    .iter()
+                    .filter(|(_, o)| matches!(o, Ok(true)))
+                    .map(|(id, _)| *id)
+                    .collect();
+                message(&changed)
+            },
             &fallback,
         )?;
-        Ok(outcomes)
+        Ok(outcomes.into_inner())
     }
 
     fn root_path(&self) -> Option<PathBuf> {

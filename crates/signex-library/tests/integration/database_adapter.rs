@@ -1075,12 +1075,12 @@ fn row_writes_are_refused_against_an_old_server() {
                     .insert_row("resistors", row.clone(), "m")
                     .unwrap_err();
                 assert!(
-                    matches!(&err, signex_library::LibraryError::Backend(m) if m.contains("too old")),
+                    matches!(&err, signex_library::LibraryError::InvalidData(m) if m.contains("too old")),
                     "{err:?}"
                 );
                 let err = adapter.update_row("resistors", row, "m").unwrap_err();
                 assert!(
-                    matches!(&err, signex_library::LibraryError::Backend(m) if m.contains("too old")),
+                    matches!(&err, signex_library::LibraryError::InvalidData(m) if m.contains("too old")),
                     "{err:?}"
                 );
             },

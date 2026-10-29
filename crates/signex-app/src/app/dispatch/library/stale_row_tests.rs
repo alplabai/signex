@@ -380,6 +380,7 @@ fn primitive_saved_with_cascade(
             versions: std::collections::HashMap::new(),
             commit_message: "Save symbol S".into(),
             cascaded_rows: rows,
+            cascade_owed: Vec::new(),
         }),
     }
 }

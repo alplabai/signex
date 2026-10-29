@@ -208,11 +208,11 @@ fn hash_from_cell_rejects_multibyte_cell() {
     assert_eq!(cell.len(), 64, "cell must be 64 BYTES to reach the slicing");
     assert!(matches!(
         hash_from_cell(&cell),
-        Err(LibraryError::Backend(_))
+        Err(LibraryError::InvalidData(_))
     ));
     assert!(matches!(
         hash_from_cell(&"z".repeat(64)),
-        Err(LibraryError::Backend(_))
+        Err(LibraryError::InvalidData(_))
     ));
 }
 

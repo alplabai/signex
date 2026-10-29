@@ -108,7 +108,7 @@ fn json_cell<T: Serialize>(value: &T) -> Result<String, LibraryError> {
 }
 
 fn from_json_cell<T: DeserializeOwned>(s: &str, name: &str) -> Result<T, LibraryError> {
-    serde_json::from_str(s).map_err(|e| LibraryError::Backend(format!("parse {name}: {e}")))
+    serde_json::from_str(s).map_err(|e| LibraryError::InvalidData(format!("parse {name}: {e}")))
 }
 
 /// The `datasheet` cell holds the single [`DatasheetRef`] object a row has
@@ -152,7 +152,7 @@ fn lifecycle_from_cell(s: &str) -> Result<LifecycleState, LibraryError> {
         "Deprecated" => LifecycleState::Deprecated,
         "Obsolete" => LifecycleState::Obsolete,
         other => {
-            return Err(LibraryError::Backend(format!(
+            return Err(LibraryError::InvalidData(format!(
                 "unknown lifecycle state {other:?}"
             )));
         }
@@ -181,7 +181,7 @@ fn timestamp_to_cell(t: DateTime<Utc>) -> String {
 fn timestamp_from_cell(s: &str) -> Result<DateTime<Utc>, LibraryError> {
     DateTime::parse_from_rfc3339(s)
         .map(|t| t.with_timezone(&Utc))
-        .map_err(|e| LibraryError::Backend(format!("parse timestamp: {e}")))
+        .map_err(|e| LibraryError::InvalidData(format!("parse timestamp: {e}")))
 }
 
 fn hash_to_cell(h: &[u8; 32]) -> String {
@@ -203,13 +203,13 @@ fn hash_from_cell(s: &str) -> Result<[u8; 32], LibraryError> {
     // provable char boundary.
     let bytes = s.as_bytes();
     if bytes.len() != 64 {
-        return Err(LibraryError::Backend(format!(
+        return Err(LibraryError::InvalidData(format!(
             "content_hash must be 64 hex chars, got {}",
             bytes.len()
         )));
     }
     if !bytes.iter().all(u8::is_ascii_hexdigit) {
-        return Err(LibraryError::Backend(
+        return Err(LibraryError::InvalidData(
             "content_hash must be 64 hex chars".to_string(),
         ));
     }
@@ -217,7 +217,7 @@ fn hash_from_cell(s: &str) -> Result<[u8; 32], LibraryError> {
     for (i, byte) in out.iter_mut().enumerate() {
         let hex = &s[i * 2..i * 2 + 2];
         *byte = u8::from_str_radix(hex, 16)
-            .map_err(|e| LibraryError::Backend(format!("hash hex: {e}")))?;
+            .map_err(|e| LibraryError::InvalidData(format!("hash hex: {e}")))?;
     }
     Ok(out)
 }
@@ -251,7 +251,7 @@ pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryEr
     // mirrors this contract on the type definition. v3.0 will add dedicated
     // columns and remove this guard.
     if plm_unused != PlmReserved::default() {
-        return Err(LibraryError::Backend(
+        return Err(LibraryError::InvalidData(
             "PlmReserved fields cannot round-trip through TSV until v3.0 ships \
              the dedicated column"
                 .into(),
@@ -293,7 +293,7 @@ pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryEr
 
 pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, LibraryError> {
     if record.len() != TABLE_HEADER.len() && record.len() != TABLE_HEADER.len() + 1 {
-        return Err(LibraryError::Backend(format!(
+        return Err(LibraryError::InvalidData(format!(
             "row has {} cells, expected {} or {}",
             record.len(),
             TABLE_HEADER.len(),
@@ -304,7 +304,7 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
     let cell = |i: usize| record.get(i).unwrap_or_default();
 
     let row_id = uuid::Uuid::parse_str(cell(0))
-        .map_err(|e| LibraryError::Backend(format!("row_id: {e}")))?;
+        .map_err(|e| LibraryError::InvalidData(format!("row_id: {e}")))?;
     let internal_pn = InternalPn::new(cell(1));
     let class = ComponentClass::new(cell(2));
     let documents = datasheet_from_cell(cell(3))?;
@@ -333,7 +333,7 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
         "" | "false" => false,
         "true" => true,
         other => {
-            return Err(LibraryError::Backend(format!(
+            return Err(LibraryError::InvalidData(format!(
                 "released cell expects 'true'/'false'/empty, got {other:?}"
             )));
         }

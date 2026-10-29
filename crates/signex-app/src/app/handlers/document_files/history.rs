@@ -449,6 +449,7 @@ impl Signex {
                 // editor, or quit would not offer to save the repair (or would
                 // ask about a file that matches disk).
                 let dirty = state.dirty;
+                self.warn_if_cascade_owed(&path);
                 self.document_state
                     .footprint_editors
                     .insert(path.clone(), state);
@@ -460,6 +461,7 @@ impl Signex {
             }
             Ok(RestoreJobDocument::Symbol(file)) => {
                 let state = crate::app::SymbolDocument::new(path.clone(), *file);
+                self.warn_if_cascade_owed(&path);
                 self.document_state
                     .symbol_editors
                     .insert(path.clone(), state);
@@ -555,6 +557,7 @@ impl Signex {
         why: &str,
         unreadable: bool,
     ) {
+        self.warn_if_cascade_owed(path);
         self.document_state.footprint_editors.remove(path);
         self.document_state.symbol_editors.remove(path);
         self.set_reloaded_dirty(path, active_idx, false);
