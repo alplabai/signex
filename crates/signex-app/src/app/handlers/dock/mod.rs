@@ -8,6 +8,7 @@ mod child_sheet_identity;
 mod floating_layout;
 mod layout_persist;
 mod library_browser;
+mod multi_edit;
 mod navigator;
 mod net_classes;
 mod panel_controls;
@@ -57,6 +58,7 @@ impl Signex {
                 return Task::batch([task, self.finish_update()]);
             }
             if self.handle_dock_library_browser_message(panel_msg)
+                || self.handle_dock_multi_edit_message(panel_msg)
                 || self.handle_dock_property_editor_message(panel_msg)
             {
                 return self.finish_update();

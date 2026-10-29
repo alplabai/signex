@@ -45,6 +45,7 @@ pub(crate) mod prefix_picker;
 pub mod preview_refresh;
 pub mod pricing;
 pub mod primitive_picker;
+pub mod range_filter;
 pub mod recovery;
 pub mod refresh;
 pub mod reprefix_lookup;

@@ -29,9 +29,11 @@ pub type Version = u32;
 mod datasheet;
 mod library_message;
 mod placed_part;
+mod range_filter;
 pub use datasheet::{DatasheetMsg, PickedFile, PickedPdf};
 pub use library_message::{LibraryMessage, ResolvedPlacement, ResolvedSymbolChoice};
 pub use placed_part::{PlacedPartAction, PlacedPartMsg, PlacedPartTarget};
+pub use range_filter::{RangeBound, RangeFilterMsg};
 
 /// User choice from the close-library confirmation modal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -593,6 +595,8 @@ pub enum PickerMsg {
     FilterChanged(String),
     SelectComponent(uuid::Uuid),
     PlaceSelected,
+    /// A range filter on a parameter column of the picker's list.
+    RangeFilter(RangeFilterMsg),
 }
 
 /// Edit Component Details modal sub-message tree — keeps

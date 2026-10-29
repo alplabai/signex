@@ -291,6 +291,9 @@ impl Signex {
                 library_path,
                 value,
             } => self.handle_browser_search_changed(library_path, value),
+            LibraryMessage::BrowserRangeFilter { library_path, msg } => {
+                self.handle_browser_range_filter(library_path, msg)
+            }
             LibraryMessage::BrowserSortColumn {
                 library_path,
                 column_key,

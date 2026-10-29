@@ -304,6 +304,11 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         value: String,
     },
+    /// A range filter on a parameter column of this Library Browser tab.
+    BrowserRangeFilter {
+        library_path: PathBuf,
+        msg: super::RangeFilterMsg,
+    },
     /// Column-header click — toggles sort direction on the matching
     /// key, or sets ascending sort if a different column is clicked.
     /// Stage 8 of `v0.9-snxlib-as-file-plan.md`. The `column_key` is

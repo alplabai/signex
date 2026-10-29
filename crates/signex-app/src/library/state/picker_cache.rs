@@ -7,6 +7,7 @@
 //! components changes, and the filtered list only when the query changes.
 
 use super::*;
+use crate::library::range_filter::{FilterColumn, RangeFilters, retain_in_range};
 
 /// One component of an open library, with what the picker draws and
 /// matches on computed once.
@@ -17,14 +18,22 @@ pub struct PickerEntry {
     pub summary: ComponentSummary,
     /// `{:?}` of the lifecycle state, as the row shows it.
     pub state_label: String,
+    /// The row's parameters, for the range filter. Empty when the library's
+    /// tables do not hold the row.
+    parameters: signex_library::ParamMap,
     internal_pn_key: String,
     mpn_key: String,
     description_key: String,
 }
 
 impl PickerEntry {
-    fn new(path: &Arc<Path>, summary: &ComponentSummary) -> Self {
+    fn new(
+        path: &Arc<Path>,
+        summary: &ComponentSummary,
+        parameters: signex_library::ParamMap,
+    ) -> Self {
         Self {
+            parameters,
             path: Arc::clone(path),
             summary: summary.clone(),
             state_label: format!("{:?}", summary.state),
@@ -50,13 +59,31 @@ pub struct PickerRows {
     entries: Vec<PickerEntry>,
     /// The normalised query `visible` was filtered for.
     needle: Option<String>,
+    /// The range filters `visible` was filtered with.
+    range: Vec<(String, signex_library::RangeFilter)>,
     visible: Vec<usize>,
+    /// The parameter columns a range filter can go on; built with
+    /// `entries`.
+    filter_columns: Vec<FilterColumn>,
+    /// Entries each range filter excluded for having no comparable value.
+    excluded: std::collections::BTreeMap<String, usize>,
 }
 
 impl PickerRows {
     /// The rows matching the current query, in library order.
     pub fn visible(&self) -> impl ExactSizeIterator<Item = &PickerEntry> {
         self.visible.iter().map(|&i| &self.entries[i])
+    }
+
+    /// The parameter columns a range filter can go on.
+    pub(crate) fn filter_columns(&self) -> &[FilterColumn] {
+        &self.filter_columns
+    }
+
+    /// How many entries each range filter excluded because their cell is
+    /// not a measurement in the column's unit.
+    pub fn range_excluded(&self) -> &std::collections::BTreeMap<String, usize> {
+        &self.excluded
     }
 
     /// No row matches.
@@ -66,20 +93,33 @@ impl PickerRows {
 
     /// Bring the rows up to date with `libraries` at `data_version` and the
     /// picker's `filter`, doing only the work that input change needs.
-    pub(super) fn sync(&mut self, libraries: &[OpenLibrary], data_version: u64, filter: &str) {
+    pub(super) fn sync(
+        &mut self,
+        libraries: &[OpenLibrary],
+        data_version: u64,
+        filter: &str,
+        range_filters: &RangeFilters,
+    ) {
         let needle = filter.trim().to_lowercase();
+        let range = range_filters.active();
         let entries_stale = self.entries_at != Some(data_version);
         if entries_stale {
             self.entries = build_entries(libraries);
+            self.filter_columns = picker_filter_columns(&self.entries);
             self.entries_at = Some(data_version);
             #[cfg(test)]
             counters::ENTRY_BUILDS.with(|c| c.set(c.get() + 1));
         }
-        if entries_stale || self.needle.as_deref() != Some(needle.as_str()) {
-            self.visible = (0..self.entries.len())
+        if entries_stale || self.needle.as_deref() != Some(needle.as_str()) || self.range != range {
+            let mut visible: Vec<usize> = (0..self.entries.len())
                 .filter(|&i| self.entries[i].matches(&needle))
                 .collect();
+            self.excluded = retain_in_range(&mut visible, &range, |&i, key| {
+                self.entries[i].parameters.get(key)
+            });
+            self.visible = visible;
             self.needle = Some(needle);
+            self.range = range;
             #[cfg(test)]
             counters::FILTER_PASSES.with(|c| c.set(c.get() + 1));
         }
@@ -90,13 +130,39 @@ fn build_entries(libraries: &[OpenLibrary]) -> Vec<PickerEntry> {
     let mut entries = Vec::new();
     for lib in libraries {
         let path: Arc<Path> = Arc::from(lib.root.as_path());
-        entries.extend(
-            lib.cached_components
-                .iter()
-                .map(|summary| PickerEntry::new(&path, summary)),
-        );
+        let by_id: HashMap<Uuid, &signex_library::ComponentRow> = lib
+            .tables
+            .values()
+            .flatten()
+            .map(|r| (r.row_id, r))
+            .collect();
+        entries.extend(lib.cached_components.iter().map(|summary| {
+            let parameters = by_id
+                .get(&summary.row_id)
+                .map(|r| r.parameters.clone())
+                .unwrap_or_default();
+            PickerEntry::new(&path, summary, parameters)
+        }));
     }
     entries
+}
+
+/// The parameter keys that hold measurements across the picker's
+/// entries, each with the unit most of its cells are in.
+fn picker_filter_columns(entries: &[PickerEntry]) -> Vec<FilterColumn> {
+    let keys: std::collections::BTreeSet<&String> =
+        entries.iter().flat_map(|e| e.parameters.keys()).collect();
+    keys.into_iter()
+        .filter_map(|key| {
+            let unit =
+                signex_library::column_unit(entries.iter().filter_map(|e| e.parameters.get(key)))?;
+            Some(FilterColumn {
+                key: key.clone(),
+                label: key.clone(),
+                unit,
+            })
+        })
+        .collect()
 }
 
 impl LibraryState {
@@ -113,9 +179,12 @@ impl LibraryState {
     pub fn sync_view_caches(&mut self) {
         let version = self.data_version;
         if let Some(picker) = self.picker.as_mut() {
-            picker
-                .rows
-                .sync(&self.open_libraries, version, &picker.filter);
+            picker.rows.sync(
+                &self.open_libraries,
+                version,
+                &picker.filter,
+                &picker.range_filters,
+            );
         }
         self.sync_panel_rows();
         self.sync_browser_caches();
