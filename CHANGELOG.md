@@ -20,51 +20,75 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [1.0.0-rc.1] — 2026-10-29
 
-_The first v1.0 release candidate: a schematic-only Community Preview. PCB and footprint editing are present but are not part of the v1.0 promise, and this build is a pre-release._
+_First v1.0 release candidate: a schematic-only Community Preview. PCB and footprint editing ship but are outside the v1.0 promise._
 
 ### Highlights
 
-- **Typed component values** — a number field, an SI prefix picker and a fixed unit replace free text; typed values sort by magnitude and take a range filter (#1572).
-- **Stock library with placeable parts** — passives, discretes, connectors and 74HC logic ship in every installer and mount on first run, and a library part follows the cursor until you click (#325, #929, #327, #328, #1252).
-- **ERC rule profiles, waivers and reports** — a rule set per project with its own profile screens, waivers with a reason (per finding and per net), completeness rules, and reports as text, CSV, JSON, HTML and PDF (#1085, #1608, #1285, #1581, #1286, #1287).
-- **Library integrity** — drift from the library is shown on placed parts, a stale save no longer overwrites a newer edit, two Signex windows no longer overwrite each other's library edits, library writes are crash-safe, and a failed git commit no longer fails a save: Messages says "Saved, not committed" and the library browser shows an uncommitted-changes banner with a Commit now button (#912, #1108, #892, #904, #104, #858).
-- **Saves and edits off the UI thread** — saving, exporting, opening from the project tree, Annotate, ERC, netlist rebuilds, library edits and Preferences saves no longer freeze the window (#859, #1420, #893, #858, #1602).
-- **Net navigation** — follow a net across sheets, a deterministic name for multi-named nets, buses across sheets and net classes (#1270, #1271, #1272, #1043, #1049, #1042).
-- **Recovery and autosave** — optional autosave of recovery copies and restore of unsaved edits after a crash, for schematic, symbol, footprint and PCB editors (#104, #1164, #1185).
-- **Keymap and menu unification** — shortcuts follow the menu's enabled state, context-menu rows read their label and shortcut from the command catalog, and Move and Move Selection are distinct (#907, #271).
-- **Native dialogs and menus** — dialogs open as their own windows and the main menu lives in the macOS system menu bar (#1632).
-- **Projects tree hierarchy** — the Projects tree shows the sheet hierarchy (#1618).
-- **Schematic editing depth** — Break Wire, Find Similar Objects, project-wide Find and Replace, system-clipboard paste, repeat placement with auto-increment, and Place Sheet and Sheet Entry tools (#1254, #1257, #1268, #1263, #1253, #358, #1275).
-- **Altium project import** — File > Import > Altium Project… converts an Altium project, and a running import can be cancelled (#1097, #1132).
+- **Typed component values** — number + SI prefix + unit; sorts by magnitude (#1572).
+- **Stock library** — passives, discretes, connectors and 74HC logic, mounted on first run (#325, #929).
+- **ERC profiles, waivers and reports** — per-project rule sets; reports as text, CSV, JSON, HTML, PDF (#1085, #1608, #1286).
+- **Library integrity** — drift shown on placed parts; crash-safe, conflict-safe library writes (#912, #1108, #892, #904).
+- **No UI freezes** — save, export, Annotate, ERC and netlist rebuilds run off the UI thread (#1420, #893, #1602).
+- **Net navigation** — follow nets and buses across sheets; net classes (#1270, #1271, #1043).
+- **Crash recovery** — optional autosave and restore of unsaved edits in every editor (#104, #1164).
+- **Unified keymap and menus** — one command catalog drives shortcuts, menus and context menus (#907, #271).
+- **Native dialogs** — dialogs open as their own windows; macOS system menu bar (#1632).
+- **Altium project import** — File > Import > Altium Project…, cancellable (#1097, #1132).
+
+### Changed
+
+- **Faster large designs** — connectivity, ERC, hit-testing, panning and text shaping scale to big sheets (#1366, #1430, #1429, #171).
+- **Faster libraries** — large libraries open, filter and save a row quickly (#1355, #1353, #1522).
+- **One id scheme** — every new id is a UUID v7 (#1703).
+- **Rename Project renames its folder** (#1221).
+
+### Fixed
+
+343 fixes and 88 changes since v0.15.0. By area:
+
+- **Saves and data loss** — atomic PCB saves, no lost edits on Save As / Close Project / quit, out-of-order and case-variant saves no longer overwrite each other (#140, #1089, #1112, #1155, #1505).
+- **Libraries** — conflict-safe multi-window edits, stale rows can't overwrite newer saves, unknown keys survive, rename keeps links (#892, #904, #1072, #1435, #739).
+- **Version control** — commits record the saved bytes, no empty commits, History restore commits or says why not (#859, #149, #1025, #1090).
+- **Crash recovery** — recovery copies no longer overwritten, stranded or skipped (#1208, #1433, #1510, #1540).
+- **ERC** — power ports, multi-unit parts, cross-sheet designators, bus widths and stable ordering (#675, #691, #915, #1049, #1364).
+- **BOM** — child sheets counted per placement, DNP variants, MPN grouping, no spreadsheet formulas (#730, #674, #673, #109).
+- **Schematic editing** — exact grid snap, electrical-grid snap, locked symbols stay put, rotate/mirror no longer drift, Move edge cases (#1057, #1246, #1250, #1039, #973).
+- **Undo** — follows edit order and the window you type in; annotation and net-colour edits undoable (#975, #1546, #829, #1005).
+- **Keyboard and menus** — unmapped and dead shortcuts fixed, menu hints follow the keymap (#103, #1378, #271).
+- **PDF and print** — rotated text, page sizes `A`–`E` / `USLetter` / `USLegal`, B&W preview matches the PDF (#1125, #1199, #1403).
+- **Footprints and sketches** — rotated pads, silk arcs, many-pad sketches solve, no solver message floods (#680, #1424, #1153, #685).
+- **3D import** — hostile, malformed and nested VRML / STEP / glTF input handled (#112, #689, #708, #591).
+- **Input validation** — `NaN` / `inf` refused in fields and at load (#678, #828, #924).
+- **Packaging** — AppImage runs on glibc 2.35+, pre-releases install and upgrade cleanly (#1688).
+
+### Removed
+
+- **Dead settings** — three no-op Appearance settings; Margin and Zones boxes in Page Options (#635, #1196).
+
+### Security
+
+- **Library server hardening** — refuses plaintext on a non-loopback bind (#115).
+- **Distributor credentials in the OS keychain** (#976).
 
 ### Install
 
-Pick the package for your platform from the assets below. `SHA256SUMS.txt` lists the SHA-256 of every file.
-
 | Platform | Asset |
 |---|---|
-| Windows (x86_64, ARM64) | `signex-setup-<arch>-1.0.0-rc.1.exe` installer, or `signex-windows-<arch>-1.0.0-rc.1.zip` portable |
-| macOS (Apple silicon and Intel) | `signex-macos-universal-1.0.0-rc.1.dmg` |
-| Linux (x86_64, ARM64) | `signex_1.0.0-rc.1_<arch>.deb`, `Signex-1.0.0-rc.1-<arch>.AppImage`, or `signex-linux-<arch>-1.0.0-rc.1.tar.gz` |
-| All | `signex-1.0.0-rc.1.cdx.json` (CycloneDX SBOM) and `SHA256SUMS.txt` |
+| Windows (x86_64, ARM64) | `signex-setup-<arch>-1.0.0-rc.1.exe` or `signex-windows-<arch>-1.0.0-rc.1.zip` |
+| macOS (Apple silicon + Intel) | `signex-macos-universal-1.0.0-rc.1.dmg` |
+| Linux (x86_64, ARM64) | `signex_1.0.0-rc.1_<amd64|arm64>.deb`, `Signex-1.0.0-rc.1-<arch>.AppImage`, `signex-linux-<arch>-1.0.0-rc.1.tar.gz` |
 
-- **These builds are UNSIGNED.** On macOS, right-click Signex and choose **Open** on first launch (Gatekeeper); the app carries only an ad-hoc signature and is not notarized. On Windows, SmartScreen shows "Windows protected your PC": choose **More info**, then **Run anyway**. On Linux nothing is signed, and `SHA256SUMS.txt` is an integrity checksum, not a signature.
-- **Linux needs glibc 2.35 or newer** (Ubuntu 22.04, Debian 12 and later); check with `ldd --version`.
-- **This is a pre-release.** GitHub's `releases/latest` still points at v0.15.0; get this build from the Releases page.
+- **Unsigned.** macOS: right-click → **Open** on first launch. Windows: SmartScreen → **More info** → **Run anyway**.
+- **Linux needs glibc 2.35+** (Ubuntu 22.04, Debian 12); check with `ldd --version`.
+- **Verify:** `sha256sum -c SHA256SUMS.txt --ignore-missing`
+- **Pre-release** — `releases/latest` still points at v0.15.0.
 
 ### Known issues
 
-- **Synchronous IO still in `update`** — a few paths still do IO on the UI thread (#859).
-- **One Document model** — a `DocumentId`, an engine-owned history and a single dirty source for every document kind is not finished (#661).
-- **User guide** — the guide is written, but the fresh-install walkthrough on a clean machine is still pending (#322).
-- **Ruleset drift** — `.github/rulesets/*.json` have drifted from the live `trunk` and `main` rulesets (#1723).
-- **README screenshots** — they predate the clean-room renderer and show legacy `.kicad_sch` file names (#1724).
+- **Some IO still on the UI thread** (#859).
+- **Unified Document model unfinished** (#661).
 
-### Detailed changes
-
-Every change since v0.15.0, grouped by type, is in [CHANGELOG.md](https://github.com/alplabai/signex/blob/v1.0.0-rc.1/CHANGELOG.md#detailed-changes-in-100-rc1).
-
-[Full changelog](https://github.com/alplabai/signex/compare/v0.15.0...v1.0.0-rc.1)
+Full detail: [CHANGELOG.md](https://github.com/alplabai/signex/blob/v1.0.0-rc.1/CHANGELOG.md#detailed-changes-in-100-rc1) · [full diff](https://github.com/alplabai/signex/compare/v0.15.0...v1.0.0-rc.1)
 
 ## Detailed changes in 1.0.0-rc.1
 
