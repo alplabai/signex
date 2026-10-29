@@ -1,4 +1,5 @@
-//! File ▸ Export ▸ ERC Report — plain text / CSV of the cached ERC results.
+//! File ▸ Export ▸ ERC Report — text, CSV, JSON, HTML or PDF of the cached
+//! ERC results, with the project's waivers (#1287).
 //!
 //! Rows come from `build_erc_diagnostic_entries`, the Messages panel's own row
 //! model, so the file matches the panel in count, order, severity and message.
@@ -9,6 +10,7 @@
 use std::path::PathBuf;
 
 use iced::Task;
+use signex_output::erc_report::{ErcReportWaiver, ErcReportWaiverKind, ErcReportWaiverStatus};
 use signex_output::{
     ErcReportExporter, ErcReportFormat, ErcReportOptions, ErcReportRow, ErcReportSeverity,
     ExportContext, Exporter, ProjectMetadata,
@@ -20,6 +22,45 @@ use crate::panels::{ErcDiagnosticEntry, ErcSeverityLite};
 #[cfg(test)]
 #[path = "erc_report_tests.rs"]
 mod tests;
+
+/// A per-finding waiver as the report lists it.
+fn report_waiver(w: &crate::panels::ErcViolationWaiverEntry) -> ErcReportWaiver {
+    use crate::panels::ErcWaiverStatus as S;
+    let (status, waived_count) = match w.status {
+        S::Waiving(n) => (ErcReportWaiverStatus::Active, n),
+        S::Lapsed => (ErcReportWaiverStatus::Lapsed, 0),
+        S::Unmatched => (ErcReportWaiverStatus::Unmatched, 0),
+        S::Incomplete => (ErcReportWaiverStatus::Incomplete, 0),
+    };
+    ErcReportWaiver {
+        kind: ErcReportWaiverKind::PerFinding,
+        rule_id: w.rule_id.clone(),
+        subject: w.message.clone(),
+        reason: w.reason.clone(),
+        author: w.author.clone(),
+        date: w.date.clone(),
+        status,
+        waived_count,
+    }
+}
+
+/// A per-net waiver (#1581), which records no reason or author.
+fn report_net_waiver(w: &crate::panels::ErcWaiverEntry) -> ErcReportWaiver {
+    ErcReportWaiver {
+        kind: ErcReportWaiverKind::PerNet,
+        rule_id: w.rule_id.clone(),
+        subject: format!("net {}", w.net),
+        reason: String::new(),
+        author: String::new(),
+        date: String::new(),
+        status: if w.hidden > 0 {
+            ErcReportWaiverStatus::Active
+        } else {
+            ErcReportWaiverStatus::Unmatched
+        },
+        waived_count: w.hidden,
+    }
+}
 
 fn report_row(entry: &ErcDiagnosticEntry) -> ErcReportRow {
     ErcReportRow {
@@ -61,6 +102,12 @@ impl Signex {
             format,
             violations: self.erc_report_rows(),
             rule_set: self.ui_state.erc_run_rule_set.clone(),
+            waivers: self
+                .erc_violation_waiver_entries()
+                .iter()
+                .map(report_waiver)
+                .chain(self.erc_waiver_entries().iter().map(report_net_waiver))
+                .collect(),
             ..ErcReportOptions::default()
         }
     }
@@ -85,6 +132,9 @@ impl Signex {
                     .set_title("Export ERC Report")
                     .add_filter("Text (.txt)", &["txt"])
                     .add_filter("CSV (.csv)", &["csv"])
+                    .add_filter("JSON (.json)", &["json"])
+                    .add_filter("HTML (.html)", &["html", "htm"])
+                    .add_filter("PDF (.pdf)", &["pdf"])
                     .set_file_name("erc-report.txt")
                     .save_file()
                     .await

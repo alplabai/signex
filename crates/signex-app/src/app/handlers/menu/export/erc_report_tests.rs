@@ -121,3 +121,55 @@ fn same_file_name_in_two_directories_gets_distinct_sheet_keys() {
     assert_eq!(rows[0].sheet_name, rows[1].sheet_name);
     assert_ne!(rows[0].sheet_key, rows[1].sheet_key);
 }
+
+#[test]
+fn html_report_from_the_panel_rows_escapes_net_names() {
+    let mut app = app_with_erc();
+    app.ui_state.erc_violations_by_path.insert(
+        PathBuf::from("c.snxsch"),
+        vec![violation(
+            RuleKind::SinglePinNet,
+            Severity::Warning,
+            "Net '<script>x()</script>' connects only one pin, R1.1",
+            7.0,
+        )],
+    );
+    let opts = app.erc_report_options(ErcReportFormat::Html);
+    let ctx = ExportContext {
+        sheets: Vec::new(),
+        metadata: ProjectMetadata::default(),
+        netlist: None,
+        netlist_sheets: Vec::new(),
+        current_sheet: None,
+        netlist_placements: Vec::new(),
+    };
+    let html = String::from_utf8(ErcReportExporter.export(&ctx, &opts).expect("html").bytes)
+        .expect("utf-8");
+    assert!(!html.contains("<script"));
+    assert!(html.contains("Net &#39;&lt;script&gt;x()&lt;/script&gt;&#39;"));
+    assert!(html.contains("c.snxsch"));
+}
+
+#[test]
+fn waivers_map_into_the_report_with_their_status() {
+    use crate::panels::{ErcViolationWaiverEntry, ErcWaiverStatus};
+    let entry = ErcViolationWaiverEntry {
+        rule_id: "builtin::unused_pin".into(),
+        objects: vec!["u".into()],
+        message: "Pin on TP1 is not connected".into(),
+        reason: "test point".into(),
+        author: "A. Designer".into(),
+        date: "2026-10-29".into(),
+        status: ErcWaiverStatus::Lapsed,
+    };
+    let w = report_waiver(&entry);
+    assert_eq!(w.status, ErcReportWaiverStatus::Lapsed);
+    assert_eq!((w.reason.as_str(), w.waived_count), ("test point", 0));
+    let net = report_net_waiver(&crate::panels::ErcWaiverEntry {
+        rule_id: "user::r".into(),
+        net: "VBUS".into(),
+        hidden: 2,
+    });
+    assert_eq!(net.kind, ErcReportWaiverKind::PerNet);
+    assert_eq!(net.waived_count, 2);
+}

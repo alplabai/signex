@@ -1,12 +1,18 @@
-//! ERC report exporter — plain text and CSV.
+//! ERC report exporter — plain text, CSV, JSON, HTML and PDF.
 //!
 //! The exporter formats violations the caller already has; it never runs ERC
 //! (the same contract the netlist exporter keeps with its pre-derived
 //! netlist). Rows mirror the Messages panel: same order, same content.
 
 mod csv;
+mod html;
+mod json;
+mod pdf;
+pub mod report;
 mod text;
 
+#[cfg(test)]
+mod report_tests;
 #[cfg(test)]
 mod tests;
 
@@ -53,16 +59,29 @@ pub enum ErcReportFormat {
     #[default]
     Text,
     Csv,
+    /// Machine-readable, schema in `docs/ERC_REPORT.md`.
+    Json,
+    /// One self-contained page, inline CSS.
+    Html,
+    Pdf,
 }
 
 impl ErcReportFormat {
-    /// CSV when the chosen path ends in `.csv` (any case), text otherwise.
+    /// By the chosen path's extension (any case): `.csv`, `.json`,
+    /// `.html`/`.htm`, `.pdf`; text otherwise.
     pub fn from_output_path(path: &std::path::Path) -> Self {
-        let is_csv = path
+        let ext = path
             .extension()
             .and_then(|e| e.to_str())
-            .is_some_and(|e| e.eq_ignore_ascii_case("csv"));
-        if is_csv { Self::Csv } else { Self::Text }
+            .map(str::to_ascii_lowercase)
+            .unwrap_or_default();
+        match ext.as_str() {
+            "csv" => Self::Csv,
+            "json" => Self::Json,
+            "html" | "htm" => Self::Html,
+            "pdf" => Self::Pdf,
+            _ => Self::Text,
+        }
     }
 }
 
@@ -96,6 +115,8 @@ pub struct ErcReportOptions {
     pub violations: Option<Vec<ErcReportRow>>,
     /// Written into the report header when present.
     pub rule_set: Option<ErcReportRuleSet>,
+    /// Stored waivers, listed by the JSON, HTML and PDF forms.
+    pub waivers: Vec<report::ErcReportWaiver>,
 }
 
 #[derive(Debug, Clone)]
@@ -111,6 +132,10 @@ pub enum ErcReportError {
     NeverRun,
     #[error("csv: {0}")]
     Csv(String),
+    #[error("json: {0}")]
+    Json(String),
+    #[error("pdf: {0}")]
+    Pdf(String),
 }
 
 pub struct ErcReportExporter;
@@ -132,6 +157,9 @@ impl Exporter for ErcReportExporter {
                 text::emit(&rows, &labels, opts.group_by_sheet, opts.rule_set.as_ref())
             }
             ErcReportFormat::Csv => csv::emit(&rows, &labels, opts.rule_set.as_ref())?,
+            ErcReportFormat::Json => json::emit(&report::build(&rows, opts))?,
+            ErcReportFormat::Html => html::emit(&report::build(&rows, opts)),
+            ErcReportFormat::Pdf => pdf::emit(&report::build(&rows, opts))?,
         };
         Ok(ErcReportOutput {
             bytes,
