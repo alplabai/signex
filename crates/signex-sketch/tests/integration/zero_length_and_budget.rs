@@ -210,18 +210,21 @@ fn recovery_sketches() -> Vec<(&'static str, Sketch)> {
     vec![("saddle retry", saddle), ("conflict recovery", conflict)]
 }
 
-/// What a solve produced, as one comparable string: every number as bits.
+/// What a solve produced, as one comparable string: every number as bits,
+/// and its warnings.
 fn outcome(result: &Result<FullSolveOutput, SolveError>) -> String {
     match result {
         Ok(out) => format!(
-            "ok {} {} {:?}",
+            "ok {} {} {:?} {:?}",
             out.result.iterations,
             out.result.final_residual_norm.to_bits(),
             out.result
                 .state
                 .iter()
                 .map(|v| v.to_bits())
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>(),
+            // A pool one unit short skips the redundancy pass and says so.
+            out.warnings
         ),
         Err(e) => format!("err {e:?}"),
     }
