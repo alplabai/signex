@@ -568,6 +568,16 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "paste_array",
+        category: "edit",
+        label: "Paste array",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "paste_special",
         category: "edit",
         label: "Paste special",

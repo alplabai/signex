@@ -78,6 +78,7 @@ shrink.
 | `open_preferences` | Open preferences | preferences | `Ctrl+,` | `Ctrl+,` |
 | `open_schematic_preferences` | Open schematic preferences | preferences | `T P` | — |
 | `paste` | Paste | edit | `Ctrl+V` | `Ctrl+V` |
+| `paste_array` | Paste array | edit | — | — |
 | `paste_special` | Paste special | edit | — | `Ctrl+Shift+V` |
 | `placement_accept` | Accept current placement or move stage | interactive | `Enter` | — |
 | `placement_properties` | Edit properties of the object being placed or moved | interactive | `Tab` | — |
@@ -162,6 +163,7 @@ shrink.
 | `flip_selected_x` | Flip selected x | modify | — | — |
 | `flip_selected_y` | Flip selected y | modify | — | — |
 | `force_annotate_all_schematics` | Force annotate all schematics | design | `Shift+Alt+A` | `Shift+Alt+A` |
+| `go_to_net_partner` | Go to net partner on another sheet | navigation | — | — |
 | `highlight_net_under_cursor` | Highlight net under cursor | select | — | ``` |
 | `highlight_related_net_objects` | Highlight/select related net objects across sheets | select | `Alt+Click` | — |
 | `lasso_select` | Lasso select | select | — | — |

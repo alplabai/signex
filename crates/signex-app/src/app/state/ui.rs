@@ -157,12 +157,26 @@ pub struct UiState {
     pub move_keeps_wires: bool,
     /// Draft mirror of [`Self::move_keeps_wires`] for the Preferences dialog.
     pub preferences_draft_move_keeps_wires: bool,
+    /// Show the net name, class and pins after a short dwell over a wire, pin
+    /// or label (#1270). On by default.
+    pub net_hover_enabled: bool,
+    /// Draft mirror of [`Self::net_hover_enabled`] for the Preferences dialog.
+    pub preferences_draft_net_hover_enabled: bool,
     /// Saved "Select by drag direction" preference (#1257): a box drag to
     /// the right selects what it fully contains, to the left what it touches.
     /// Off falls back to the global `selection_mode`. Default on.
     pub drag_direction_select: bool,
     /// Draft mirror of [`Self::drag_direction_select`] for Preferences.
     pub preferences_draft_drag_direction_select: bool,
+    /// Saved "Increment step" (#1253): how far a repeated label placement and
+    /// Paste Array move the trailing number of a text. Never zero.
+    pub increment_step: i32,
+    /// Draft mirror of [`Self::increment_step`] for Preferences.
+    pub preferences_draft_increment_step: i32,
+    /// Saved "Designators on paste" (#1263).
+    pub paste_designators: crate::paste_prefs::PasteDesignators,
+    /// Draft mirror of [`Self::paste_designators`] for Preferences.
+    pub preferences_draft_paste_designators: crate::paste_prefs::PasteDesignators,
     /// Saved "Window controls" placement (where min/max/close go).
     pub window_controls_placement: crate::chrome::controls::WindowControlsPlacement,
     /// Draft mirror of [`Self::window_controls_placement`] for Preferences.
@@ -381,6 +395,8 @@ pub struct UiState {
     /// Token of the newest Find Similar project search. Lives outside the
     /// dialog state so a reopened dialog never reuses an old token.
     pub find_similar_generation: u64,
+    /// The open Paste Array dialog (#1264).
+    pub paste_array: Option<crate::paste_array::PasteArrayState>,
     /// v0.18.14.1 — Custom Selection Filter modal draft. `Some`
     /// while the dialog is visible; the eight-bool draft mirror
     /// commits on Apply, discards on Cancel.
@@ -601,7 +617,10 @@ impl UiState {
             || self.preferences_draft_pcb_gpu_render != self.pcb_gpu_render
             || self.preferences_draft_annotate_undo != self.annotate_undo
             || self.preferences_draft_move_keeps_wires != self.move_keeps_wires
+            || self.preferences_draft_net_hover_enabled != self.net_hover_enabled
             || self.preferences_draft_drag_direction_select != self.drag_direction_select
+            || self.preferences_draft_increment_step != self.increment_step
+            || self.preferences_draft_paste_designators != self.paste_designators
             || self.preferences_draft_window_controls_placement != self.window_controls_placement
             || self.preferences_draft_autosave_enabled != self.autosave_enabled
             || self.preferences_draft_symbol_grid_style != self.symbol_grid_style

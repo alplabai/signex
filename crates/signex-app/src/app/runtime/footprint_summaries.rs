@@ -263,6 +263,7 @@ mod tests {
             colours: std::collections::HashMap::new(),
             over_constraints,
             redundant_constraints: Vec::new(),
+            warnings: Vec::new(),
             jacobian: Vec::new(),
             params,
         };

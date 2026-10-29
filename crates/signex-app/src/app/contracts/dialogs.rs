@@ -667,6 +667,31 @@ pub enum GitCommitFailure {
     Failed(String),
 }
 
+/// What a paste request does once the system clipboard has answered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PasteIntent {
+    /// Attach the copy to the cursor.
+    Paste,
+    /// Place the copy beside the existing content.
+    SmartPaste,
+    /// Open the Paste Array dialog.
+    Array,
+    /// Place the copy just made, beside the original.
+    Duplicate,
+    /// Arm the copy just made as a rubber stamp.
+    Stamp,
+}
+
+/// One paste-family request in flight: what it is for, and the tool state it
+/// was made in. An answer that arrives after the placement epoch or the
+/// active sheet moved on is dropped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PasteRequest {
+    pub intent: PasteIntent,
+    pub epoch: u64,
+    pub path: Option<PathBuf>,
+}
+
 /// Edit-command message family (ADR-0001 D3). Namespaced under
 /// `Message::Edit` and routed to `dispatch_edit_message`.
 #[derive(Debug, Clone)]
@@ -701,6 +726,27 @@ pub enum EditMsg {
     SmartPaste,
     /// Duplicate the current selection in place.
     Duplicate,
+    /// Arm the last label or text note again, with its text stepped (#1253).
+    RepeatLastItem,
+    /// Rubber-stamp copy: copy the selection and keep pasting it on every
+    /// click until Esc or a right-click (#1264).
+    RubberStampCopy,
+    /// Open the Paste Array dialog for the clipboard (#1264).
+    PasteArrayRequested,
+    /// A Paste Array dialog event (#1264).
+    PasteArray(crate::paste_array::PasteArrayMsg),
+    /// The system clipboard answered a paste request (#1263): its text if it
+    /// holds any. A Signex fragment in it replaces the in-app copy.
+    PasteTextRead {
+        request: PasteRequest,
+        text: Option<String>,
+    },
+    /// The project's designator numbers were read off the UI thread (#1263);
+    /// the paste carries on.
+    PasteCountersSeeded {
+        request: PasteRequest,
+        seed: std::sync::Arc<crate::app::handlers::paste::PasteSeed>,
+    },
     /// Reorder the selected drawings within the sheet's drawing list; the
     /// selection's circuit elements are ignored (#1583).
     ArrangeDrawings(signex_engine::DrawingArrange),

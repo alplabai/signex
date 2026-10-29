@@ -258,6 +258,14 @@ parent's sheet symbol. This is fixed; there is no setting for it. ERC warns
 with "Local label name on other sheets" when the same net label name appears on
 more than one sheet.
 
+To follow a net across sheets, select a port, global label, hierarchical label
+or sheet entry and run **Go to net partner on another sheet** from the command
+palette; run it again to cycle through the other ends. The highlight commands
+keep a net bright on every sheet while the rest fades, and step through its pins
+and labels. Resting the pointer on a wire, pin or label shows its net, class and
+pins (Preferences ▸ Schematic ▸ Editing turns it off). See
+[NET_NAVIGATION.md](NET_NAVIGATION.md).
+
 1. Choose **Place ▸ Net Label**, or press `P` then `N` in the default profile
    (`L` in the Classic profile).
 2. Click where you want the label. It is placed with the default text `NET`.

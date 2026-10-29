@@ -50,6 +50,15 @@ mod bom_validation;
 #[path = "regression/pdf_page_setup.rs"]
 mod pdf_page_setup;
 
+#[path = "regression/paste_clipboard.rs"]
+mod paste_clipboard;
+#[path = "regression/paste_numbering_async.rs"]
+mod paste_numbering_async;
+#[path = "regression/paste_stamp_array.rs"]
+mod paste_stamp_array;
+#[path = "regression/paste_support.rs"]
+mod paste_support;
+
 #[path = "regression/paste_instance_entries.rs"]
 mod paste_instance_entries;
 
@@ -58,6 +67,9 @@ mod annotate_undo_scope;
 
 #[path = "regression/prefs.rs"]
 mod prefs;
+
+#[path = "regression/net_nav.rs"]
+mod net_nav;
 
 // #1070 — the palette lists only commands that can act in the active editor.
 #[path = "regression/palette_context_filter.rs"]
@@ -258,6 +270,8 @@ mod library_place_ui;
 mod library_stock_place;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
+#[path = "regression/repeat_placement.rs"]
+mod repeat_placement;
 // #1301, #1262, #1260 — Open Datasheet, Edit Symbol and Change Component
 // on a placed part.
 #[path = "regression/placed_part_actions.rs"]

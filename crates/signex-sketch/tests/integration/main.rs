@@ -15,6 +15,7 @@ mod lm_basic;
 mod minted_pads_scale;
 mod non_finite_input;
 mod over_constraint_reporting;
+mod redundancy_budget;
 mod redundant_constraints;
 mod round_trip;
 mod solver_api;

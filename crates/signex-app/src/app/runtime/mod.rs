@@ -9,7 +9,7 @@ mod footprint_summaries;
 mod history;
 mod label_class_pick;
 mod navigator_ctx;
-mod net_class_styles;
+pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
 mod primitive_dirty;
 mod sheet_frame;
@@ -68,6 +68,7 @@ impl Signex {
         self.library.note_shown_browser(shown_browser.as_deref());
         self.library.sync_view_caches();
         let class_styles = self.refresh_net_class_styles();
+        let net_nav = self.refresh_net_nav();
         self.sync_label_class_pick();
         self.sync_diagnostics_panel_ctx();
         self.refresh_command_palette_if_stale();
@@ -102,6 +103,7 @@ impl Signex {
             reprefix_window,
             instance_note,
             class_styles,
+            net_nav,
         ])
     }
 
@@ -159,6 +161,9 @@ impl Signex {
         }
 
         self.sync_visible_document_from_active_tab();
+        // The sheet now in view is the history's current one, and the net
+        // highlight follows the tab (#1271, #1272).
+        self.note_sheet_focused();
         // A move armed or floating on the previous tab must not drop here.
         self.cancel_move_pick();
         // A half-placed two-click shape belongs to the tab it was started in.

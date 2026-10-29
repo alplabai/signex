@@ -291,6 +291,40 @@ pub(crate) fn open_sheets_snapshot_of(
         .collect()
 }
 
+/// Everything the assembler needs for one source document's project, owned,
+/// so the (disk-reading) assembly can run on a blocking thread.
+pub(crate) struct ProjectSheetPlan {
+    open: OpenSheets,
+    pages: Vec<PathBuf>,
+    root: PathBuf,
+    fold: CaseFold,
+}
+
+impl ProjectSheetPlan {
+    pub(crate) fn assemble(&self) -> ProjectSheetSet {
+        assemble_project_sheets_from(&self.open, &self.pages, &self.root, self.fold)
+    }
+}
+
+/// The plan for `source`'s project. Every open engine is snapshotted, so a
+/// sheet the hierarchy walk reaches that is open (declared or not) counts
+/// with its unsaved edits; only sheets that are not open are read from disk.
+pub(crate) fn plan_project_sheets_for(
+    document_state: &DocumentState,
+    source: &Path,
+) -> ProjectSheetPlan {
+    let project = document_state.document_project(source);
+    let fold = crate::app::state::project_case::fold_of(project);
+    let pages = project_pages(project);
+    let root = resolve_netlist_root_for(document_state, source);
+    ProjectSheetPlan {
+        open: open_sheets_snapshot(document_state),
+        pages,
+        root,
+        fold,
+    }
+}
+
 /// [`assemble_project_sheets`] over a snapshot instead of the live state.
 pub(crate) fn assemble_project_sheets_from(
     open: &OpenSheets,

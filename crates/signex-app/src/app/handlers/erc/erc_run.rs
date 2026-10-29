@@ -464,6 +464,18 @@ impl Signex {
         world_y: f64,
         select: Option<signex_types::schematic::SelectedItem>,
     ) -> Task<Message> {
+        self.focus_world_point(world_x, world_y, select);
+        Task::none()
+    }
+
+    /// Select `select` (when given) and stage a fit around `(world_x,
+    /// world_y)`, for callers that return no task.
+    pub(crate) fn focus_world_point(
+        &mut self,
+        world_x: f64,
+        world_y: f64,
+        select: Option<signex_types::schematic::SelectedItem>,
+    ) {
         if let Some(item) = select {
             self.interaction_state.active_canvas_mut().selected = vec![item];
             self.update_selection_info();
@@ -483,7 +495,6 @@ impl Signex {
                 width: half * 2.0,
                 height: half * 2.0,
             }));
-        Task::none()
     }
 
     pub(crate) fn handle_toggle_auto_focus(&mut self) -> Task<Message> {

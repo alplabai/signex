@@ -56,6 +56,14 @@ unsaved-changes guard. The stock quit item sends `terminate:`, which exits
 without it. Dock ▸ Quit and logout still send `terminate:`; those two paths
 remain unguarded.
 
+**Check marks.** The View menu's panel rows carry `MenuItem::checked`, read
+from `MenuContext::open_panels` (`Signex::open_panels`, the same
+`is_panel_open` answer the status-bar panel list uses). Natively they are
+`CheckMenuItem`s; a moved mark refreshes in place. AppKit flips a check item
+itself on a click, so choosing one drops the applied spec and the next sync
+redraws every mark from the Model. A panel row opens or reveals its panel;
+the panel's shortcut toggles it.
+
 **No accelerators on model rows.** An AppKit key equivalent fires before iced
 sees the key, which bypasses the widget-capture rule in `app/dispatch/input.rs`
 (a focused text input owns Ctrl/Command + C, V, X, A, Z), and the Ctrl-to-

@@ -18,8 +18,11 @@ pub enum PlacementKind {
     /// A library part: placed again and again, each copy with the next
     /// designator counted for `prefix`, until Esc or a right-click.
     Part { prefix: String },
-    /// Pasted content: keeps its own designators and is placed once.
+    /// Pasted content: placed once.
     Paste,
+    /// Rubber-stamp copy: pasted content that stays on the cursor after a
+    /// click, until Esc or a right-click.
+    Stamp,
 }
 
 impl PlacementKind {
@@ -28,12 +31,19 @@ impl PlacementKind {
     pub fn prefix(&self) -> Option<&str> {
         match self {
             Self::Part { prefix } => Some(prefix),
-            Self::Paste => None,
+            Self::Paste | Self::Stamp => None,
         }
     }
 
+    /// Copied content (a paste or a stamp), which has no part form.
     #[must_use]
     pub fn is_paste(&self) -> bool {
+        matches!(self, Self::Paste | Self::Stamp)
+    }
+
+    /// Whether the session ends with its first click.
+    #[must_use]
+    pub fn ends_after_click(&self) -> bool {
         matches!(self, Self::Paste)
     }
 }
@@ -73,4 +83,28 @@ impl PlacementSession {
         self.ghost = PlacementGhost::new(&payload);
         self.payload = payload;
     }
+}
+
+/// The per-prefix designator numbers a paste hands out from, read once when
+/// the paste started and advanced in memory by every commit after it.
+#[derive(Debug, Clone, Default)]
+pub struct PasteCounters {
+    /// The sheet they were read for.
+    pub target: PathBuf,
+    pub counters: std::collections::HashMap<String, u32>,
+}
+
+/// What "Repeat last item" arms again: the text-bearing tool that placed
+/// something last, with the text its next copy would carry (already stepped).
+#[derive(Debug, Clone, PartialEq)]
+pub enum LastPlacement {
+    /// A net label, port or hierarchical port.
+    Label {
+        port: Option<(signex_types::schematic::LabelType, String)>,
+        text: String,
+        /// The look the Tab form gave it; `None` for the tool defaults.
+        style: Option<crate::panels::PrePlacementStyle>,
+    },
+    /// A text note.
+    Text { text: String },
 }

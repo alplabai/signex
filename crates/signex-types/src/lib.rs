@@ -19,6 +19,7 @@ pub mod property;
 pub mod quantity;
 pub mod rotation2d;
 pub mod schematic;
+pub mod text_increment;
 pub mod theme;
 pub mod violation;
 pub mod zone_holes;

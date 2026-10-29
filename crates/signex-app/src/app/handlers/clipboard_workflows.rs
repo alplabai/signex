@@ -3,7 +3,7 @@ use iced::Task;
 use super::super::*;
 
 /// Fixed offset of a Duplicate, and the fallback of Smart Paste.
-const DEFAULT_PASTE_OFFSET_MM: f64 = 5.08;
+pub(crate) const DEFAULT_PASTE_OFFSET_MM: f64 = 5.08;
 
 fn smart_paste_offset(app: &Signex) -> (f64, f64) {
     let default_offset = DEFAULT_PASTE_OFFSET_MM;
@@ -72,20 +72,25 @@ impl Signex {
             .active_canvas_mut()
             .selected
             .extend(kept);
-        Task::none()
+        self.clipboard_write_task()
     }
 
-    pub(crate) fn handle_selection_duplicate_requested(&mut self) {
+    /// Duplicate copies the selection (the copy is the clipboard, as for any
+    /// Copy) and places it at once, shifted by a fixed offset.
+    pub(crate) fn handle_selection_duplicate_requested(&mut self) -> Task<Message> {
         if self.interaction_state.active_canvas().selected.is_empty()
             || !self.has_active_schematic()
         {
-            return;
+            return self.finish_update();
         }
 
         // A failed copy must not paste whatever was on the clipboard before.
-        if self.handle_selection_copy_requested() {
-            self.paste_with_offset(DEFAULT_PASTE_OFFSET_MM, DEFAULT_PASTE_OFFSET_MM);
+        if !self.handle_selection_copy_requested() {
+            return self.finish_update();
         }
+        let write = self.clipboard_write_task();
+        // The offset paste itself happens once Next free numbering is ready.
+        Task::batch([write, self.begin_paste(crate::app::PasteIntent::Duplicate)])
     }
 
     pub(crate) fn handle_clipboard_smart_paste_requested(&mut self) {
@@ -117,21 +122,28 @@ impl Signex {
     /// Paste: the copied content attaches to the cursor, Space / X / Y turn
     /// it, and one click places it as one undo step. A paste is single-shot.
     pub(crate) fn handle_clipboard_paste_requested(&mut self) {
+        self.arm_paste_session(crate::app::state::PlacementKind::Paste);
+    }
+
+    /// Attach the copy to the cursor as a `kind` session (a paste or a
+    /// stamp). Designators are given at each click, not here.
+    pub(crate) fn arm_paste_session(&mut self, kind: crate::app::state::PlacementKind) {
         let Some((payload, target, _origin)) = self.prepared_paste() else {
             return;
         };
         // A library read still in flight must not replace the paste on the
         // cursor when it finishes: a paste is the newest gesture.
         self.interaction_state.placement_epoch += 1;
-        self.arm_placement_session(payload, &target, crate::app::state::PlacementKind::Paste);
+        self.arm_placement_session(payload, &target, kind);
     }
 
     /// Smart Paste and Duplicate: place the copy now, shifted by a fixed
     /// offset from where it was copied, as one undo step.
-    fn paste_with_offset(&mut self, offset_x: f64, offset_y: f64) {
-        let Some((payload, _target, origin)) = self.prepared_paste() else {
+    pub(crate) fn paste_with_offset(&mut self, offset_x: f64, offset_y: f64) {
+        let Some((payload, target, origin)) = self.prepared_paste() else {
             return;
         };
+        let payload = self.paste_numbering(&target).apply(&payload);
         let at = signex_types::schematic::Point::new(origin.x + offset_x, origin.y + offset_y);
         match payload.place_commands(at) {
             Ok(commands) if !commands.is_empty() => {
@@ -150,7 +162,7 @@ impl Signex {
     /// there is nothing to paste or no sheet is active (silent: there is
     /// nothing to say), or when the sheet is read-only (reported in the
     /// Messages panel and as a notice).
-    fn prepared_paste(
+    pub(crate) fn prepared_paste(
         &mut self,
     ) -> Option<(
         signex_engine::PlacementPayload,

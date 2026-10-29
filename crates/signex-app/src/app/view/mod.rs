@@ -206,6 +206,7 @@ impl Signex {
             scale_factor: crate::ui_scale::render_scale(ui.main_window_scale, ui.ui_scale),
             active_keymap: Some(std::sync::Arc::clone(&ui.active_keymap)),
             recent_projects: ui.recent_projects.entries(),
+            open_panels: self.open_panels(),
         };
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row = || {
@@ -374,15 +375,9 @@ impl Signex {
                 .map(move |msg| Message::Tab { window_id, msg }),
             );
         } else {
-            // Empty placeholder strip with the same metrics as
-            // tab_bar::view: 2 px outer padding + 22 px tall inner
-            // pill = 26 px total. Without this the chrome jumps
-            // when the first tab opens.
-            let placeholder = container(iced::widget::Space::new())
-                .width(Length::Fill)
-                .height(26)
-                .style(crate::styles::toolbar_strip(&document.panel_ctx.tokens));
-            main = main.push(placeholder);
+            // Same height as the tab strip (`tab_bar::TAB_STRIP_HEIGHT`), so
+            // the chrome does not jump when the first tab opens.
+            main = main.push(tab_bar::placeholder(&document.panel_ctx.tokens));
         }
         let main = main
             .push(center_row)
