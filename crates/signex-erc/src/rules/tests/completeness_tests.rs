@@ -305,3 +305,32 @@ fn off_grid_flags_pins_and_wire_ends_in_the_micron_key_space() {
     );
     assert!(found(&on, RuleKind::OffGrid).is_empty());
 }
+
+#[test]
+fn units_not_placed_never_enumerates_an_absurd_unit_count() {
+    let mut huge = part("U1");
+    huge.unit_count = u32::MAX;
+    let started = std::time::Instant::now();
+    let out = found(&with_symbols(vec![huge]), RuleKind::UnitsNotPlaced);
+    assert!(started.elapsed() < std::time::Duration::from_secs(1));
+    assert_eq!(out.len(), 1);
+    assert!(
+        out[0].message.contains("4294967295 units"),
+        "{}",
+        out[0].message
+    );
+}
+
+#[test]
+fn units_not_placed_lists_at_most_eight_missing_units() {
+    let mut first = part("U1");
+    first.unit_count = 20;
+    let out = found(&with_symbols(vec![first]), RuleKind::UnitsNotPlaced);
+    assert!(
+        out[0]
+            .message
+            .ends_with("unit 2, 3, 4, 5, 6, 7, 8, 9, ... (+11 more)"),
+        "{}",
+        out[0].message
+    );
+}

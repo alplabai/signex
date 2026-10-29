@@ -35,8 +35,8 @@ pub fn project_units_not_placed<K: Clone>(sheets: &[(K, &SchematicSheet)]) -> Ve
     }
     missing_units(&units)
         .into_iter()
-        .map(|(first, missing)| {
-            let violation = Violation::from(units_finding(&units[first], &missing));
+        .map(|(first, gap)| {
+            let violation = Violation::from(units_finding(&units[first], &gap));
             (owners[first].clone(), violation)
         })
         .collect()

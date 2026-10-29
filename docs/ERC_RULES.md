@@ -67,3 +67,8 @@ Units of one part are often on different sheets. A sheet checked on its own
 reports every unit it does not hold; the app's ERC run replaces those findings
 with one project-wide pass over every sheet of the run
 (`project_units_not_placed`), so a unit placed on another sheet counts.
+
+Unit numbers come from a file, so the rule never sizes a loop by them alone:
+a library symbol claiming more than 256 units (`MAX_UNITS_PER_PART`) is
+reported once as likely corrupt instead of being enumerated, and a message
+lists at most eight missing units before "(+N more)".
