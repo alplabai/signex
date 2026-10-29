@@ -136,6 +136,13 @@ impl PendingPathOps {
         self.ops.is_empty()
     }
 
+    /// Is an Annotate or Reset Duplicate Designators run holding sheets?
+    pub fn rewrite_running(&self) -> bool {
+        self.ops
+            .iter()
+            .any(|op| op.kind == PathOpKind::ProjectRewrite)
+    }
+
     /// Is a library rename or delete running? Library edits write through
     /// the mounted adapter, which still points at the old path until a
     /// rename lands (and at a vanishing directory during a delete).

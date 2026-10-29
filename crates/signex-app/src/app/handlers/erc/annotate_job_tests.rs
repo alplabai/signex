@@ -519,3 +519,27 @@ fn the_project_undo_group_records_the_open_sheet_and_the_written_one() {
         "undo must say the written sheet stays annotated"
     );
 }
+
+#[test]
+fn an_undo_while_the_unopened_sheets_are_still_being_written_names_them() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, dir) = project(vec![unit("R?", 1, 0.0)], vec![unit("R?", 1, 0.0)]);
+    app.ui_state.annotate_undo = crate::annotate_undo::AnnotateUndo::Project;
+    let read = app.handle_annotate(ResetAndRenumber);
+    let write = app.update(completion(read));
+    let since = crate::diagnostics::newest_entry_id();
+
+    // Ctrl+Z after numbering, before the write worker has reported.
+    let undo = app.update(Message::Edit(crate::app::EditMsg::Undo));
+    settle_task(&mut app, undo);
+    let named = logged_since(since, "not open, so still annotated on disk");
+    let child = child_path(&dir);
+    let mentions_child = crate::diagnostics::recent_entries().iter().any(|e| {
+        Some(e.id) > since
+            && e.message.contains("still annotated on disk")
+            && e.message.contains("z_child.snxsch")
+    });
+    settle_task(&mut app, write);
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(named && mentions_child, "undo must warn about {child:?}");
+}

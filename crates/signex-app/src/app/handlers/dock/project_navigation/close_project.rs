@@ -713,8 +713,13 @@ impl Signex {
         if self.document_state.pending_path_ops.is_empty() {
             return false;
         }
-        let detail = "A rename or delete is still running, so the app was not closed. \
-                      Try again once it finishes.";
+        let detail = if self.document_state.pending_path_ops.rewrite_running() {
+            "Annotate or Reset Duplicate Designators is still running, so the app was not \
+             closed. Try again once it finishes."
+        } else {
+            "A rename or delete is still running, so the app was not closed. \
+             Try again once it finishes."
+        };
         crate::diagnostics::log_warning(detail);
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::quit_held(detail));
         true

@@ -311,6 +311,8 @@ impl Signex {
         }
         let changed_sheets = touched_sheets.live.len();
         touched_sheets.parked = parked_here.iter().cloned().collect();
+        // Owed to disk already, so an undo before the write lands still names them.
+        touched_sheets.disk_only = writes.iter().map(|w| w.path.clone()).collect();
         if let Some(group) = undo_group {
             self.set_undo_group_sheets(group, touched_sheets);
         }

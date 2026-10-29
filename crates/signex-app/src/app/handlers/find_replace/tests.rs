@@ -789,6 +789,89 @@ fn an_unopened_annotate_write_mid_flight_refuses_the_replace() {
     );
 }
 
+/// The child with an unannotated symbol, so Annotate rewrites its file.
+fn child_annotate_will_rewrite(child: &Path) -> String {
+    let mut sheet =
+        crate::app::handlers::menu::export::tests::sheet_with_net("R?", "CHILD_NET", &[]);
+    sheet.labels[0].label_type = signex_types::schematic::LabelType::Net;
+    let text = signex_types::format::SnxSchematic::new(sheet)
+        .write_string()
+        .unwrap();
+    std::fs::write(child, &text).unwrap();
+    text
+}
+
+/// Annotate with its sheets read and numbered, its write handed out and not
+/// yet run: the window between `PassSheetsRead` and `PassSheetsWritten`.
+fn annotate_write_in_flight(app: &mut Signex) -> iced::Task<crate::app::Message> {
+    let read = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    let message = crate::persist::run_task::outputs(read).remove(0);
+    app.update(message)
+}
+
+#[test]
+fn an_annotate_write_in_flight_refuses_a_replace_prepared_before_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _root, child) = placed_twice_on_disk(&dir);
+    let text = child_annotate_will_rewrite(&child);
+    let (generation, prep) = prepared_child_replace(&mut app);
+    let write = annotate_write_in_flight(&mut app);
+
+    deliver(&mut app, generation, prep);
+
+    assert!(logged("Replace cancelled: a document changed"));
+    assert!(!app.document_state.engines.contains_key(&child));
+    crate::app::path_ops::settle_task(&mut app, write);
+    let annotated = std::fs::read(&child).unwrap();
+    assert_ne!(annotated, text.as_bytes(), "Annotate wrote the child");
+    assert!(
+        !app.document_state.engines.contains_key(&child),
+        "no stale engine can save over the annotated bytes"
+    );
+}
+
+#[test]
+fn handing_out_an_annotate_write_moves_the_epoch() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _root, child) = placed_twice_on_disk(&dir);
+    child_annotate_will_rewrite(&child);
+    let read = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    let message = crate::persist::run_task::outputs(read).remove(0);
+    let before = app.document_state.documents_epoch;
+
+    let _write = app.update(message);
+
+    assert_ne!(
+        app.document_state.documents_epoch, before,
+        "a read in flight must be out of date once the write is handed out"
+    );
+}
+
+#[test]
+fn a_replace_never_installs_an_engine_for_a_sheet_annotate_is_writing() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _root, child) = placed_twice_on_disk(&dir);
+    child_annotate_will_rewrite(&child);
+    let (generation, prep) = prepared_child_replace(&mut app);
+    let write = annotate_write_in_flight(&mut app);
+    // Leave only the sheet-held check standing: the epoch alone would cancel.
+    let epoch = app.document_state.documents_epoch;
+    app.ui_state
+        .find_replace
+        .replace_job
+        .as_mut()
+        .expect("replace in flight")
+        .epoch = epoch;
+
+    deliver(&mut app, generation, prep);
+
+    assert!(
+        !app.document_state.engines.contains_key(&child),
+        "an engine from pre-Annotate bytes would save over the numbering"
+    );
+    crate::app::path_ops::settle_task(&mut app, write);
+}
+
 #[test]
 fn deleting_a_sheet_mid_flight_refuses_the_replace() {
     let dir = tempfile::tempdir().unwrap();

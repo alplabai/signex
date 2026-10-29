@@ -234,6 +234,7 @@ impl Signex {
             return Task::none();
         };
         let Stage::Reading(read) = &job.stage else {
+            self.document_state.pending_path_ops.finish(job.guard);
             return Task::none();
         };
         // Released first: the checks below ask whether ANOTHER operation holds
@@ -336,6 +337,10 @@ impl Signex {
             let refresh = self.finish_run_view();
             return Task::batch([task, refresh]);
         }
+        // The sheets are about to change on disk behind the engines: a read of
+        // them already in flight (project Replace) is out of date from here, not
+        // from the write's completion.
+        self.document_state.note_document_written_behind_engines();
         let paths: Vec<PathBuf> = writes.iter().map(|w| w.path.clone()).collect();
         let fold = self.run_fold();
         let guard = self.guard_run_paths(&paths, fold);
@@ -432,15 +437,17 @@ impl Signex {
             tasks.push(self.autosave_after_disk_write(&path));
             written.push(path);
         }
-        self.record_written_sheets(undo, &written);
+        self.forget_unwritten_sheets(undo, &failed);
         self.report_written(label, &written, &failed);
         tasks
     }
 
-    fn record_written_sheets(&mut self, undo: Option<RunUndo>, written: &[PathBuf]) {
+    /// The group listed every sheet owed to disk from numbering on, so an undo
+    /// during the write can name them; the ones that never landed come off.
+    fn forget_unwritten_sheets(&mut self, undo: Option<RunUndo>, failed: &[PathBuf]) {
         let Some(undo) = undo else { return };
         if let Some(group) = self.document_state.undo_groups.get_mut(&undo.group) {
-            group.disk_only.extend(written.iter().cloned());
+            group.disk_only.retain(|path| !failed.contains(path));
         }
     }
 
