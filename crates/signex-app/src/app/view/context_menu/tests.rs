@@ -83,7 +83,7 @@ fn edit_rows_show_the_resolved_keymap_shortcuts() {
     sc.mirror_x = "Shift+X".into();
     sc.mirror_y = "Shift+Y".into();
     let tokens = theme_tokens(TID);
-    let entries = canvas_menu_entries(TID, &tokens, true, false, false, None, &sc);
+    let entries = canvas_menu_entries(TID, &tokens, selected(), None, None, &sc);
     let shortcut_of = |label: &str| {
         entries.iter().find_map(|e| match e {
             DropdownEntry::Item(it) if it.label == label => Some(it.shortcut.clone()),
