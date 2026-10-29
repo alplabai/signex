@@ -274,7 +274,7 @@ fn editor_with_pads(n: usize) -> crate::app::FootprintDocument {
     for i in 0..n {
         e.state.add_pad_at(i as f64 * 2.0, 0.0);
     }
-    e.dirty = false;
+    e.set_dirty(false);
     e.history.clear();
     e
 }
@@ -286,7 +286,7 @@ fn issue_146_rotate_with_no_selection_stays_clean() {
     let mut e = editor_with_pads(2);
     e.state.selected_pad = None;
     apply_footprint_primitive_edit(&mut e, FootprintEditorMsg::ActiveBarRotateSelection);
-    assert!(!e.dirty, "no-op rotate must not dirty the document");
+    assert!(!e.is_dirty(), "no-op rotate must not dirty the document");
     assert!(
         e.history.is_empty(),
         "no-op rotate must not stack undo history"
@@ -300,7 +300,7 @@ fn issue_146_rotate_with_selection_dirties_and_snapshots_once() {
     let mut e = editor_with_pads(2);
     e.state.selected_pad = Some(0);
     apply_footprint_primitive_edit(&mut e, FootprintEditorMsg::ActiveBarRotateSelection);
-    assert!(e.dirty, "a real rotate dirties the document");
+    assert!(e.is_dirty(), "a real rotate dirties the document");
     assert_eq!(
         e.history.len(),
         1,
@@ -315,7 +315,7 @@ fn issue_146_align_to_grid_with_no_selection_stays_clean() {
     let mut e = editor_with_pads(1);
     e.state.selected_pad = None;
     apply_footprint_primitive_edit(&mut e, FootprintEditorMsg::ActiveBarAlignSelectionToGrid);
-    assert!(!e.dirty);
+    assert!(!e.is_dirty());
     assert!(e.history.is_empty());
 }
 
@@ -380,7 +380,7 @@ fn editor_with_positions(positions: &[(f64, f64)]) -> crate::app::FootprintDocum
         e.state.selected_pad = Some(0);
         e.state.selected_pads_extra = (1..positions.len()).collect();
     }
-    e.dirty = false;
+    e.set_dirty(false);
     e.history.clear();
     e
 }
@@ -435,7 +435,7 @@ fn align_confirm_both_axes_is_one_undo_step() {
     });
     apply_footprint_primitive_edit(&mut e, FootprintEditorMsg::AlignConfirm);
 
-    assert!(e.dirty, "a real two-axis confirm dirties the document");
+    assert!(e.is_dirty(), "a real two-axis confirm dirties the document");
     assert_eq!(
         e.history.len(),
         1,
@@ -512,7 +512,7 @@ fn align_confirm_neither_axis_is_clean_noop() {
     apply_footprint_primitive_edit(&mut e, FootprintEditorMsg::AlignConfirm);
 
     assert!(
-        !e.dirty,
+        !e.is_dirty(),
         "confirming with neither axis chosen must not dirty"
     );
     assert!(
@@ -542,7 +542,7 @@ fn align_confirm_below_size_gate_pushes_no_history() {
 
     apply_footprint_primitive_edit(&mut e, FootprintEditorMsg::AlignConfirm);
 
-    assert!(!e.dirty, "a confirm that can't apply must not dirty");
+    assert!(!e.is_dirty(), "a confirm that can't apply must not dirty");
     assert!(
         e.history.is_empty(),
         "a below-gate confirm pushes no history"
@@ -582,6 +582,6 @@ fn align_cancel_closes_modal_and_keeps_selection() {
     );
     let positions_after: Vec<_> = e.state.pads.iter().map(|p| p.position_mm).collect();
     assert_eq!(positions_after, positions_before, "cancel moves no pads");
-    assert!(!e.dirty, "cancel does not dirty");
+    assert!(!e.is_dirty(), "cancel does not dirty");
     assert!(e.history.is_empty(), "cancel pushes no history");
 }

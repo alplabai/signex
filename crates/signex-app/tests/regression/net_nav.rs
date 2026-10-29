@@ -56,7 +56,7 @@ mod flows {
     fn open_project(dir: &Path) -> (Signex, PathBuf, PathBuf) {
         let sheet = |label: u128, wire: u128| {
             let mut s = SchematicSheet {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 version: 1,
                 generator: "signex-test".into(),
                 generator_version: "0.9".into(),
@@ -81,6 +81,7 @@ mod flows {
                 justify: HAlign::default(),
                 justify_v: VAlign::default(),
                 font_family: None,
+                locked: false,
             });
             s
         };

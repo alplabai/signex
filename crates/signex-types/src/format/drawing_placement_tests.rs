@@ -26,6 +26,7 @@ fn rect(uuid: &str) -> SchDrawing {
         width: 0.25,
         fill: FillType::None,
         stroke_color: None,
+        locked: false,
     }
 }
 

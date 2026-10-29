@@ -36,7 +36,7 @@ fn two_unit_lib() -> LibSymbol {
 
 fn child(filename: &str) -> ChildSheet {
     ChildSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         name: "C".into(),
         filename: filename.into(),
         position: Point::new(0.0, 0.0),
@@ -65,7 +65,7 @@ fn app_with_child_reference(reference: &str, fold: CaseFold) -> (Signex, PlacedP
         ..Default::default()
     };
     let mut sheet = SchematicSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         paper_size: "A4".into(),
         ..Default::default()
     };
@@ -80,7 +80,7 @@ fn app_with_child_reference(reference: &str, fold: CaseFold) -> (Signex, PlacedP
     };
     app.document_state.engines.insert(root.clone(), engine);
     let other = SchematicSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         paper_size: "A4".into(),
         ..Default::default()
     };

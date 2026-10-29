@@ -33,6 +33,7 @@ fn sheet() -> SchematicSheet {
             justify: HAlign::Left,
             justify_v: VAlign::Bottom,
             font_family: None,
+            locked: false,
         }],
         symbols: vec![Symbol {
             uuid: id(2),

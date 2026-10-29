@@ -65,6 +65,7 @@ impl SymbolDocument {
                 format: self.file.format.clone(),
                 file_uuid: self.file.file_uuid,
                 display_name: self.file.display_name.clone(),
+                copied_from: self.file.copied_from,
                 symbols: Vec::new(),
                 created: self.file.created,
                 updated: self.file.updated,
@@ -97,7 +98,7 @@ impl SymbolDocument {
         } else {
             self.reset_view_for_symbol_switch();
         }
-        self.dirty = true;
+        self.mark_dirty();
     }
 
     /// Start the newly active symbol on unit 1 with a fresh viewport, so

@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 #[test]
 fn full_row_round_trip_via_snxlib() {
-    let lib = Uuid::new_v4();
+    let lib = Uuid::now_v7();
     let row = ComponentRow {
         alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
@@ -25,8 +25,8 @@ fn full_row_round_trip_via_snxlib() {
         description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Released,
-        symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
-        footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
+        symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
+        footprint_ref: Some(PrimitiveRef::new(lib, Uuid::now_v7())),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Yageo", "RC0805FR-0710KL"),

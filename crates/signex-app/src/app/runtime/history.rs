@@ -15,7 +15,7 @@ impl Signex {
         }
         let d = &mut self.document_state;
         if let Some(p) = &d.history.active_path {
-            let dirty = history_dirty(&d.tabs, d.active_tab, &d.dirty_paths, p);
+            let dirty = history_dirty(d, p);
             if dirty != d.history.dirty {
                 d.history.dirty = dirty;
                 d.panel_ctx.history = d.history.clone();
@@ -62,8 +62,7 @@ impl Signex {
             // saved/edited the active file without switching tabs.
             if let Some(p) = self.document_state.history.active_path.clone() {
                 let d = &self.document_state;
-                self.document_state.history.dirty =
-                    history_dirty(&d.tabs, d.active_tab, &d.dirty_paths, &p);
+                self.document_state.history.dirty = history_dirty(d, &p);
             }
             self.document_state.panel_ctx.history = self.document_state.history.clone();
             return Task::none();
@@ -85,8 +84,7 @@ impl Signex {
         };
 
         let d = &self.document_state;
-        self.document_state.history.dirty =
-            history_dirty(&d.tabs, d.active_tab, &d.dirty_paths, &target);
+        self.document_state.history.dirty = history_dirty(d, &target);
         self.document_state.history.loading = true;
         self.document_state.history.mode = crate::panels::history::HistoryRenderMode::Loading;
         self.document_state.panel_ctx.history = self.document_state.history.clone();
@@ -171,19 +169,14 @@ impl Signex {
 /// Browser tab is keyed on its `.snxlib` directory, but the library is
 /// tracked (and marked dirty) through its `library.toml`, so both keys are
 /// consulted for that tab kind. Pure: no filesystem access.
-fn history_dirty(
-    tabs: &[crate::app::TabInfo],
-    active_tab: usize,
-    dirty_paths: &std::collections::HashSet<std::path::PathBuf>,
-    path: &std::path::Path,
-) -> bool {
-    if dirty_paths.contains(path) {
+fn history_dirty(d: &crate::app::DocumentState, path: &std::path::Path) -> bool {
+    if d.is_document_dirty(path) {
         return true;
     }
     matches!(
-        tabs.get(active_tab).map(|t| &t.kind),
+        d.tabs.get(d.active_tab).map(|t| &t.kind),
         Some(crate::app::TabKind::LibraryBrowser(_))
-    ) && dirty_paths.contains(&path.join("library.toml"))
+    ) && d.is_document_dirty(&path.join("library.toml"))
 }
 
 /// The file the History panel tracks for the active tab, from Model state
@@ -278,7 +271,6 @@ mod tests {
             title: "s".into(),
             path: path.to_path_buf(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });
@@ -374,14 +366,12 @@ mod tests {
             title: "parts".into(),
             path: library.clone(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind: crate::app::TabKind::LibraryBrowser(library.clone()),
         });
         app.document_state.active_tab = app.document_state.tabs.len() - 1;
         app.document_state
-            .dirty_paths
-            .insert(library.join("library.toml"));
+            .mark_document_dirty(&library.join("library.toml"));
 
         let _task = app.refresh_history_panel();
 

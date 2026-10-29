@@ -99,11 +99,12 @@ impl Lcg {
 
 fn wire(a: Point, b: Point) -> Wire {
     Wire {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: a,
         end: b,
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
@@ -141,7 +142,7 @@ fn random_sheet(seed: u64, wire_count: usize) -> (Vec<Wire>, Vec<Junction>) {
         let p = pt(&mut rng);
         junctions.push(Junction {
             unknown_columns: Default::default(),
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             position: p,
             diameter: 0.0,
             minted: rng.next(2) == 0,

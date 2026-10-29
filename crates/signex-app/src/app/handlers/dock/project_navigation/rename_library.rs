@@ -75,7 +75,16 @@ impl Signex {
             self.refuse_rename_while_project_saving();
             return iced::Task::none();
         }
+        // The same holds for a draft inside the library: its write names the
+        // old path and its completion would find no editor behind it.
         let fold = self.document_state.fold_for_project(project);
+        let saving = self
+            .library_draft_paths(&old_path, fold)
+            .find(|draft| self.document_state.document_saves.is_saving(draft));
+        if let Some(saving) = saving {
+            self.refuse_rename_while_library_saving(&saving);
+            return iced::Task::none();
+        }
         let id = self.document_state.pending_path_ops.begin_with_dependents(
             PathOpKind::RenameLibrary,
             vec![old_path.clone(), new_path.clone()],
@@ -316,7 +325,7 @@ impl Signex {
                 let project_is_open =
                     |path: &Path| self.document_state.projects.iter().any(|p| p.path == path);
                 if let Some(project) = stale_project.filter(|p| project_is_open(p)) {
-                    self.document_state.dirty_paths.insert(project);
+                    self.document_state.mark_document_dirty(&project);
                 }
                 self.report_library_rename_failure(
                     old,
@@ -458,16 +467,51 @@ impl Signex {
         // entry to patch, the project is marked dirty so Close Project and
         // quit prompt for the new path.
         if outcome != LibraryRetarget::Patched {
-            self.document_state.dirty_paths.insert(project_path);
+            self.document_state.mark_document_dirty(&project_path);
         }
 
-        self.rekey_library_documents(old_path, new_path);
+        let fold = self.document_state.fold_for_project(project);
+        self.rekey_library_documents(old_path, new_path, fold);
         Ok(())
+    }
+
+    /// The symbol and footprint drafts open at or under `root`.
+    fn library_draft_paths(
+        &self,
+        root: &Path,
+        fold: crate::app::state::CaseFold,
+    ) -> impl Iterator<Item = PathBuf> {
+        let d = &self.document_state;
+        d.symbol_editors
+            .keys()
+            .chain(d.footprint_editors.keys())
+            .filter(|p| crate::app::state::scope::path_is_under(p, root, fold))
+            .cloned()
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 
     /// Move every open tab, dirty marker and undocked window that lives at
     /// or under the library's old path.
-    fn rekey_library_documents(&mut self, old_path: &Path, new_path: &Path) {
+    fn rekey_library_documents(
+        &mut self,
+        old_path: &Path,
+        new_path: &Path,
+        fold: crate::app::state::CaseFold,
+    ) {
+        // Drafts first: `rekey_open_document` moves the editor, its tab (path
+        // and kind), its stored dirty mark and its path-keyed records
+        // together, so the dirty draft stays dirty at the new path.
+        let drafts: Vec<(PathBuf, PathBuf)> = self
+            .library_draft_paths(old_path, fold)
+            .map(|p| {
+                let to = crate::app::state::scope::rebase_under(&p, old_path, new_path);
+                (p, to)
+            })
+            .collect();
+        for (from, to) in drafts {
+            self.rekey_open_document(&from, &to);
+        }
         let new_title = new_path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -496,13 +540,12 @@ impl Signex {
         }
         let moved_dirty: Vec<(PathBuf, PathBuf)> = self
             .document_state
-            .dirty_paths
-            .iter()
-            .filter_map(|p| rebase_path(p, old_path, new_path).map(|m| (p.clone(), m)))
+            .dirty_document_paths()
+            .into_iter()
+            .filter_map(|p| rebase_path(&p, old_path, new_path).map(|m| (p, m)))
             .collect();
         for (from, to) in moved_dirty {
-            self.document_state.dirty_paths.remove(&from);
-            self.document_state.dirty_paths.insert(to);
+            self.document_state.rekey_document_dirty(&from, &to);
         }
         for kind in self.ui_state.windows.values_mut() {
             if let crate::app::state::WindowKind::UndockedTab { path, .. } = kind

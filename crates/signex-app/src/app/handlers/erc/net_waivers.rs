@@ -49,29 +49,41 @@ impl Signex {
         net: &str,
         waive: bool,
     ) -> Task<Message> {
-        if self.document_state.active_document_project().is_none() {
+        let Some(mut rules) = self.rules_for_waiver_edit() else {
             return Task::none();
-        }
-        let mut rules = match self
-            .document_state
-            .active_document_project()
-            .and_then(|p| p.data.rules.clone())
-        {
-            Some(rules) => rules,
-            None if self.active_project_has_unreadable_rules() => {
-                crate::diagnostics::log_warning(
-                    "Not waiving: this project holds a rule set from a newer Signex that \
-                     storing would replace.",
-                );
-                return Task::none();
-            }
-            None => self.seeded_project_rules(),
         };
         if !signex_erc::waivers::set_waived(&mut rules.erc_net_waivers, rule_id, net, waive) {
             return Task::none();
         }
         self.replace_project_rules(Some(rules), true);
         self.handle_run_erc()
+    }
+
+    /// The active project's rule set to add a waiver to: the stored one, or a
+    /// snapshot of this machine's preferences when it stores none (said in
+    /// the Messages panel, since the project's rules now travel with it). `None`
+    /// (logged) without a project, or when the project holds a rule set from
+    /// a newer build that storing would replace.
+    pub(super) fn rules_for_waiver_edit(&self) -> Option<ProjectRules> {
+        let project = self.document_state.active_document_project()?;
+        match project.data.rules.clone() {
+            Some(rules) => Some(rules),
+            None if self.active_project_has_unreadable_rules() => {
+                crate::diagnostics::log_warning(
+                    "Not waiving: this project holds a rule set from a newer Signex that \
+                     storing would replace.",
+                );
+                None
+            }
+            None => {
+                crate::diagnostics::log_info(format!(
+                    "ERC: project {} now stores its own ERC rules, copied from this \
+                     machine's preferences, so the waiver has a place to live.",
+                    project.data.name
+                ));
+                Some(self.seeded_project_rules())
+            }
+        }
     }
 
     /// The rule set "Store ERC rules in this project" would write: this

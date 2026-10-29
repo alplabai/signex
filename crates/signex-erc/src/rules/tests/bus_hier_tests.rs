@@ -9,12 +9,12 @@ use super::*;
 fn hierarchy(pin: &str, child_labels: Vec<ErcLabel>) -> ErcContext {
     let mut parent = ctx(Vec::new(), Vec::new(), Vec::new(), Vec::new());
     parent.child_sheets.push(crate::context::ErcChildSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         name: "Sub".into(),
         filename: "child.snxsch".into(),
         position: pt(0.0, 0.0),
         pins: vec![crate::context::ErcSheetPin {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             name: pin.into(),
             position: pt(0.0, 40.0),
         }],
@@ -87,7 +87,7 @@ fn a_width_mismatch_has_no_peer_on_the_parent_canvas() {
 
 fn global_bus(text: &str) -> ErcLabel {
     ErcLabel {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         label_type: LabelType::Global,
         ..net_label(text, pt(0.0, 0.0))
     }

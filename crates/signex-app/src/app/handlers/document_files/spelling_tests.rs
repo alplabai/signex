@@ -13,7 +13,7 @@ use crate::app::{Message, Signex};
 
 fn sheet() -> signex_types::schematic::SchematicSheet {
     signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         ..Default::default()
     }
 }
@@ -32,7 +32,7 @@ fn app_holding_lib() -> (Signex, PathBuf) {
 
 /// A folding project in a real directory holding `Lib.snxsch`, open in a tab.
 fn app_holding_real_lib() -> (Signex, PathBuf, PathBuf) {
-    let dir = std::env::temp_dir().join(format!("signex-1149-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-1149-{}", uuid::Uuid::now_v7()));
     std::fs::create_dir_all(dir.join("sub")).expect("tempdir");
     let file = dir.join("Lib.snxsch");
     let text = signex_types::format::SnxSchematic::new(sheet())
@@ -60,7 +60,6 @@ fn focus_another_tab(app: &mut Signex) {
         title: "Other".to_string(),
         path: PathBuf::from("/w/proj/Other.snxsch"),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -96,7 +95,6 @@ fn the_pcb_open_under_another_case_reuses_the_tab() {
         title: "Board".to_string(),
         path: held.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: crate::app::TabKind::Pcb,
     });
@@ -140,7 +138,6 @@ fn a_primitive_opened_under_another_case_reuses_the_tab() {
         title: "Comp".to_string(),
         path: held.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: crate::app::TabKind::SymbolEditor(held.clone()),
     });
@@ -252,7 +249,6 @@ fn primitive_save_as_onto_another_case_of_an_open_tab_is_refused() {
             title: name.to_string(),
             path: path.clone(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind: crate::app::TabKind::SymbolEditor(path),
         });

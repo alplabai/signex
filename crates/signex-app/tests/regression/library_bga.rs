@@ -68,7 +68,6 @@ fn fixture_footprint_with_bga_array(stem: &str) -> (Signex, signex_sketch::array
         title: stem.to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

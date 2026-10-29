@@ -156,7 +156,7 @@ fn assert_parked_child_back_on_disk(app: &Signex, child: &Path) {
         !app.document_state.engines.contains_key(child),
         "the clean parked engine is dropped"
     );
-    assert!(!app.document_state.dirty_paths.contains(child));
+    assert!(!app.document_state.is_document_dirty(child));
     assert!(
         std::fs::read_to_string(child)
             .unwrap()
@@ -173,7 +173,7 @@ fn project_replace_leaves_closed_sheets_dirty_and_unwritten() {
     replace_in_project(&mut app, "child_net", "X");
 
     assert_eq!(first_label(&app, &child), "X");
-    assert!(app.document_state.dirty_paths.contains(&child));
+    assert!(app.document_state.is_document_dirty(&child));
     assert_eq!(std::fs::read(&child).unwrap(), before, "disk is untouched");
     assert!(logged("Replaced 1 on 1 sheet: child.snxsch"));
 }
@@ -452,7 +452,7 @@ fn a_double_replace_all_replaces_once_and_a_stale_prepared_is_ignored() {
 #[test]
 fn undo_of_a_replace_that_parked_a_closed_sheet_refuses_the_redo() {
     let (mut app, _dir, top, child) = after_replace();
-    assert!(app.document_state.dirty_paths.contains(&child));
+    assert!(app.document_state.is_document_dirty(&child));
 
     undo(&mut app);
     assert_parked_child_back_on_disk(&app, &child);
@@ -472,7 +472,7 @@ fn a_result_added_after_the_scan_is_left_untouched() {
     let (mut app, top, _child) = placed_twice_on_disk(&dir);
     project_search(&mut app, "top_net");
     let mut extra = app.document_state.engines[&top].document().labels[0].clone();
-    extra.uuid = uuid::Uuid::new_v4();
+    extra.uuid = uuid::Uuid::now_v7();
     extra.text = "EXTRA_TOP_NET".into();
     assert!(app.apply_engine_command(
         signex_engine::Command::PlaceLabel { label: extra },
@@ -536,7 +536,7 @@ fn a_shown_result_whose_rewrite_is_a_no_op_is_not_reported_as_changed() {
         .expect("a job");
     let listed = job.matches[0].sheet.clone().expect("a project hit");
 
-    let (commands, hits, left_alone) = super::project_replace::live_replacement(
+    let (commands, hits, left_alone, _locked) = super::project_replace::live_replacement(
         &app.document_state.engines[&top],
         &job,
         &prep,
@@ -1033,4 +1033,40 @@ fn a_rename_of_another_projects_open_sheet_does_not_refuse_the_replace() {
         app.ui_state.find_replace.is_busy(),
         "the replace read started"
     );
+}
+
+/// A locked label is skipped and named; the rest of the project is replaced
+/// (it used to abort the whole run).
+#[test]
+fn project_replace_skips_a_locked_label_and_replaces_the_rest() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, parent, child) = placed_twice_on_disk(&dir);
+    let label = app.document_state.engines[&parent].document().labels[0].uuid;
+    app.document_state
+        .engines
+        .get_mut(&parent)
+        .unwrap()
+        .execute(signex_engine::Command::SetItemLocked {
+            item: signex_types::schematic::SelectedItem::new(
+                label,
+                signex_types::schematic::SelectedKind::Label,
+            ),
+            locked: true,
+        })
+        .unwrap();
+
+    replace_in_project(&mut app, "net", "X");
+
+    assert_eq!(
+        first_label(&app, &parent),
+        "TOP_NET",
+        "the locked label stayed"
+    );
+    assert_eq!(
+        first_label(&app, &child),
+        "CHILD_X",
+        "the other sheet changed"
+    );
+    assert!(logged("locked object(s): label TOP_NET"));
+    assert!(!logged("Nothing was replaced"));
 }

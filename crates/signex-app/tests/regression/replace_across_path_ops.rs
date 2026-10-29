@@ -25,13 +25,13 @@ struct Fixture {
 
 fn sheet_with_label(text: &str) -> SchematicSheet {
     let mut sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };
     sheet.labels.push(Label {
         unknown_columns: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         text: text.to_string(),
         position: Point::new(0.0, 0.0),
         rotation: 0.0,
@@ -41,6 +41,7 @@ fn sheet_with_label(text: &str) -> SchematicSheet {
         justify: HAlign::default(),
         justify_v: VAlign::default(),
         font_family: None,
+        locked: false,
     });
     sheet
 }
@@ -190,9 +191,9 @@ fn save_all(app: &mut Signex) {
     if app.ui_state.app_quit_confirm.is_none() {
         // No prompt is only right when there is nothing left to write.
         assert!(
-            app.document_state.dirty_paths.is_empty(),
+            !app.document_state.has_dirty_documents(),
             "quit skipped Save All with dirty documents: {:?}",
-            app.document_state.dirty_paths
+            app.document_state.dirty_document_paths()
         );
         return;
     }
@@ -208,7 +209,7 @@ fn assert_nothing_held_at(app: &Signex, old: &Path) {
         !ds.engines.contains_key(old),
         "the Replace installed an engine at the old path"
     );
-    assert!(!ds.dirty_paths.contains(old), "the old path is dirty");
+    assert!(!ds.is_document_dirty(old), "the old path is dirty");
     assert!(ds.tabs.iter().all(|t| t.path != old), "a tab holds it");
 }
 

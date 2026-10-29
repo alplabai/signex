@@ -44,7 +44,7 @@ fn app_with_library_at(name: &str, root: PathBuf) -> (Signex, LibraryRowRef) {
     app.library.open_libraries.push(OpenLibrary {
         root: root.clone(),
         display_name: name.into(),
-        library_id: Uuid::new_v4(),
+        library_id: Uuid::now_v7(),
         tables: Default::default(),
         cached_components: Vec::new(),
         cached_symbols: Vec::new(),

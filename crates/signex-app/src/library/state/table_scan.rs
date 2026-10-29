@@ -57,7 +57,7 @@ mod tests {
 
     #[test]
     fn scan_visits_every_table_and_loads_prices() {
-        let adapter = PricedAdapter::new(Uuid::new_v4());
+        let adapter = PricedAdapter::new(Uuid::now_v7());
         let scan = scan_tables(
             &adapter,
             vec!["R".into(), "C".into()],
@@ -71,7 +71,7 @@ mod tests {
 
     #[test]
     fn scan_keeps_a_table_empty_when_its_read_fails() {
-        let adapter = FailingListingAdapter::new(Uuid::new_v4());
+        let adapter = FailingListingAdapter::new(Uuid::now_v7());
         let mut read_errs = Vec::new();
         let scan = scan_tables(
             &adapter,

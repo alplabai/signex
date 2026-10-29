@@ -64,7 +64,7 @@ fn a_failed_reverse_patch_reports_the_stale_project_without_dirtying_it() {
         Some((project_path.clone(), suffix)),
     );
     assert!(
-        app.document_state.dirty_paths.is_empty(),
+        !app.document_state.has_dirty_documents(),
         "dirtying waits until the file is back at the old path"
     );
 }
@@ -79,9 +79,9 @@ fn the_stale_project_is_dirtied_only_when_the_file_moves_back() {
     let stale = || Some((project_path.clone(), "; still lists it".to_string()));
 
     app.report_library_rollback(&old_path, &new_path, "r", Ok(()), stale());
-    assert!(app.document_state.dirty_paths.contains(&project_path));
+    assert!(app.document_state.is_document_dirty(&project_path));
 
-    app.document_state.dirty_paths.clear();
+    app.document_state.mark_documents_clean_where(|_| true);
     app.report_library_rollback(
         &old_path,
         &new_path,
@@ -89,7 +89,7 @@ fn the_stale_project_is_dirtied_only_when_the_file_moves_back() {
         Err("denied".to_string()),
         stale(),
     );
-    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(!app.document_state.has_dirty_documents());
     assert!(
         app.document_state.error_notice.is_some(),
         "a stranded library raises the card"
@@ -110,7 +110,7 @@ fn a_project_closed_meanwhile_is_not_dirtied_by_the_rollback() {
         Some((project_path, "; still lists it".to_string())),
     );
 
-    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(!app.document_state.has_dirty_documents());
 }
 
 #[test]

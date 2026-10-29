@@ -12,7 +12,9 @@ use uuid::Uuid;
 use crate::paste_support::sheet::{
     app_with_sheet, app_with_sheet_at, click, part, populated_sheet, references, select,
 };
-use crate::paste_support::{answer, answer_request, paste, request, send_and_settle, written_text};
+use crate::paste_support::{
+    answer, answer_request, paste, request, send_and_settle, settle, written_text,
+};
 use crate::placement_session::second_sheet;
 
 fn symbol_count(app: &Signex) -> usize {
@@ -26,7 +28,7 @@ fn symbol_count(app: &Signex) -> usize {
 
 fn child_ref(filename: &str) -> ChildSheet {
     ChildSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         name: filename.to_owned(),
         filename: filename.to_owned(),
         position: Point::new(0.0, 0.0),
@@ -57,7 +59,7 @@ fn app_with_child_on_disk(
 
 fn child_with_r9() -> String {
     let mut child = SchematicSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         paper_size: "A4".to_owned(),
         ..Default::default()
     };
@@ -196,8 +198,12 @@ fn array_with_choice(global: PasteDesignators, chosen: PasteDesignators) -> Vec<
     answer(&mut app, PasteIntent::Array, None);
     let state = app.ui_state.paste_array.as_ref().expect("dialog open");
     assert_eq!(state.designators, global, "starts as the saved preference");
-    for msg in [
+    // Choosing Next free reads the project's numbers; OK waits for them.
+    let task = app.update(Message::Edit(EditMsg::PasteArray(
         PasteArrayMsg::DesignatorsChosen(chosen),
+    )));
+    settle(&mut app, task, true);
+    for msg in [
         PasteArrayMsg::CountChanged("2".to_owned()),
         PasteArrayMsg::ApplyPressed,
     ] {
@@ -265,7 +271,7 @@ fn a_fifty_copy_array_places_every_copy_and_label() {
 fn an_open_project_sheet_counts_with_its_unsaved_edits() {
     let (mut app, dir) = app_with_child_on_disk("child.snxsch", child_with_r9);
     let mut unsaved = SchematicSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         paper_size: "A4".to_owned(),
         ..Default::default()
     };
@@ -316,7 +322,7 @@ fn a_paste_array_of_a_foreign_fragment_brings_its_library_body() {
 fn a_new_request_does_not_strip_an_armed_stamps_project_numbers() {
     let (mut app, _dir) = app_with_child_on_disk("child.snxsch", || {
         let mut child = SchematicSheet {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             paper_size: "A4".to_owned(),
             ..Default::default()
         };

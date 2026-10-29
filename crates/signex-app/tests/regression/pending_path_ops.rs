@@ -72,7 +72,7 @@ fn fixture(dirty: bool) -> Fixture {
     });
     app.document_state.active_project = Some(project);
     let mut engine = signex_engine::Engine::new(SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     })
@@ -83,14 +83,13 @@ fn fixture(dirty: bool) -> Fixture {
         title: "Power".to_string(),
         path: old.clone(),
         cached_document: None,
-        dirty,
         project_id: Some(project),
         kind: TabKind::Schematic,
     });
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(old.clone());
     if dirty {
-        app.document_state.dirty_paths.insert(old.clone());
+        app.document_state.mark_document_dirty(&old);
     }
     Fixture {
         app,
@@ -226,7 +225,7 @@ fn saving_the_sheet_while_it_is_being_renamed_is_refused_and_does_not_recreate_i
         "the refused save must not recreate the old name"
     );
     assert!(
-        f.app.document_state.dirty_paths.contains(&f.new),
+        f.app.document_state.is_document_dirty(&f.new),
         "the unsaved edit stays dirty under the new name"
     );
 }
@@ -265,14 +264,13 @@ fn an_edit_made_while_the_rename_runs_travels_with_the_document() {
     let task = start_rename(&mut f.app, &f.old.clone(), "PSU.snxsch");
 
     edit(&mut f.app, &f.old.clone(), "A3");
-    f.app.document_state.dirty_paths.insert(f.old.clone());
-    f.app.document_state.tabs[0].dirty = true;
+    f.app.document_state.mark_document_dirty(&f.old);
     complete(&mut f.app, task);
 
     let engine = f.app.document_state.engines.get(&f.new).expect("re-keyed");
     assert_eq!(engine.document().paper_size, "A3", "the edit was kept");
-    assert!(f.app.document_state.dirty_paths.contains(&f.new));
-    assert!(!f.app.document_state.dirty_paths.contains(&f.old));
+    assert!(f.app.document_state.is_document_dirty(&f.new));
+    assert!(!f.app.document_state.is_document_dirty(&f.old));
 }
 
 #[test]
@@ -313,7 +311,7 @@ fn a_rename_onto_an_existing_file_leaves_everything_unchanged() {
     );
     assert!(f.old.exists());
     assert!(f.app.document_state.engines.contains_key(&f.old));
-    assert!(f.app.document_state.dirty_paths.contains(&f.old));
+    assert!(f.app.document_state.is_document_dirty(&f.old));
     assert_eq!(f.app.document_state.tabs[0].path, f.old);
     let error = f
         .app
@@ -386,7 +384,7 @@ fn closing_the_project_while_the_rename_runs_warns_and_still_rekeys_open_documen
     assert!(f.new.exists());
     assert!(f.app.document_state.engines.contains_key(&f.new));
     assert!(!f.app.document_state.engines.contains_key(&f.old));
-    assert!(f.app.document_state.dirty_paths.contains(&f.new));
+    assert!(f.app.document_state.is_document_dirty(&f.new));
     assert!(logged(
         "Its project was closed while Power.snxsch was renamed to PSU.snxsch"
     ));
@@ -403,7 +401,7 @@ fn deleting_a_dirty_sheet_discards_it_after_the_worker_and_says_so() {
 
     assert!(!f.old.exists());
     assert!(f.app.document_state.engines.is_empty());
-    assert!(!f.app.document_state.dirty_paths.contains(&f.old));
+    assert!(!f.app.document_state.is_document_dirty(&f.old));
     assert!(logged("discarded 1 unsaved document(s)"));
     assert!(
         f.app

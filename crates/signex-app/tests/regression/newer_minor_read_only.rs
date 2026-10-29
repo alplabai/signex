@@ -12,7 +12,7 @@ fn saving_a_newer_minor_schematic_is_refused_and_stays_dirty() {
     let tmp = TempDir::new().expect("tempdir");
     let path = tmp.path().join("Newer.snxsch");
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };
@@ -30,19 +30,21 @@ fn saving_a_newer_minor_schematic_is_refused_and_stays_dirty() {
         title: "Newer".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::Schematic,
     });
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(path.clone());
-    app.document_state.dirty_paths.insert(path.clone());
+    app.document_state.mark_document_dirty(&path);
 
     let _ = app.update(Message::File(FileMsg::Save));
 
     assert_eq!(std::fs::read_to_string(&path).unwrap(), newer, "untouched");
-    assert!(app.document_state.dirty_paths.contains(&path));
-    assert!(app.document_state.tabs[0].dirty);
+    assert!(app.document_state.is_document_dirty(&path));
+    assert!(
+        app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
     // The card carries the full cause; the Messages panel line is trimmed
     // to 160 bytes, so only its leading context is matched.
     let notice = app.document_state.error_notice.as_ref().expect("card");

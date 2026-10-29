@@ -33,7 +33,7 @@ fn row_at(revision: u64) -> ComponentRow {
         description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
-        symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
+        symbol_ref: PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7()),
         footprint_ref: None,
         sim_ref: None,
         pin_map_overrides: Vec::new(),
@@ -59,9 +59,9 @@ fn row_at(revision: u64) -> ComponentRow {
 /// dirty Component Preview.
 fn app_with_row(stored: u64, read: u64) -> (Signex, EditorAddress) {
     let (mut app, _task) = Signex::new();
-    let library_id = Uuid::new_v4();
+    let library_id = Uuid::now_v7();
     let root = std::env::temp_dir()
-        .join(format!("snx-stale-row-{}", Uuid::new_v4().simple()))
+        .join(format!("snx-stale-row-{}", Uuid::now_v7().simple()))
         .join("lib.snxlib");
     app.library.open_libraries.clear();
     let row = row_at(read);
@@ -357,7 +357,7 @@ fn a_stale_primitive_bind_from_the_preview_offers_the_reload() {
     let _ = app.apply_primitive_pick_to_preview(
         address.clone(),
         signex_library::PrimitiveKind::Symbol,
-        PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
+        PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7()),
     );
 
     assert!(editor(&app, &address).stale_base);
@@ -380,6 +380,7 @@ fn primitive_saved_with_cascade(
             versions: std::collections::HashMap::new(),
             commit_message: "Save symbol S".into(),
             cascaded_rows: rows,
+            cascade_owed: Vec::new(),
         }),
     }
 }
@@ -435,7 +436,7 @@ fn a_refused_browser_row_bind_refreshes_the_cache_so_a_retry_is_not_refused_agai
     let _ = app.apply_primitive_pick_to_browser_row(
         address.clone(),
         signex_library::PrimitiveKind::Symbol,
-        PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
+        PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7()),
     );
 
     app.land_pending_refresh(&address.library_path);
@@ -473,7 +474,7 @@ fn a_superseded_refreshs_follow_up_runs_when_the_latest_lands() {
     let path = address.library_path.clone();
     let _ = app.refresh_library_task(&path, RefreshFollowUp::CleanEditors(vec![address.row_id]));
     let superseded = app.library.refresh_generations[&path];
-    let other_row = RowId::from_uuid(Uuid::new_v4());
+    let other_row = RowId::from_uuid(Uuid::now_v7());
     let _ = app.refresh_library_task(&path, RefreshFollowUp::CleanEditors(vec![other_row]));
 
     // The older read reports first: nothing applies, nothing follows yet.
@@ -497,7 +498,7 @@ fn two_quick_commits_still_refresh_the_first_rows_clean_preview() {
     commit_cell(&mut app, &address, "R-115b");
     // A second commit's request (another row) is made before the first
     // read lands.
-    let other_row = RowId::from_uuid(Uuid::new_v4());
+    let other_row = RowId::from_uuid(Uuid::now_v7());
     let _ = app.refresh_library_task(
         &address.library_path,
         RefreshFollowUp::CleanEditors(vec![other_row]),

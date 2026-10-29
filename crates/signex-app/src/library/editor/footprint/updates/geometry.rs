@@ -49,7 +49,7 @@ fn add_new_sibling(editor: &mut crate::app::FootprintDocument) {
         editor.primitive(),
     );
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 fn add_pad(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
@@ -70,7 +70,7 @@ fn add_pad(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
         FootprintEditorState::sync_pads_to_primitive(state, primitive);
     });
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 fn add_via(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
@@ -108,7 +108,7 @@ fn add_via(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
         FootprintEditorState::sync_pads_to_primitive(state, primitive);
     });
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 // v0.18.15.1 — Place Track 2-click gesture. First click
@@ -136,7 +136,7 @@ fn track_click(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64)
             // segment's start, matching Altium's stroke-a-
             // polyline workflow.
             editor.state.track_first = Some((x_mm, y_mm));
-            editor.dirty = true;
+            editor.mark_dirty();
         }
     }
     editor.canvas_cache.clear();
@@ -181,7 +181,7 @@ fn arc_click(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
                         stroke_width: 0.15,
                         filled: false,
                     });
-                editor.dirty = true;
+                editor.mark_dirty();
             }
             PlaceArcPending::Idle
         }
@@ -224,7 +224,7 @@ fn polygon_commit(editor: &mut crate::app::FootprintDocument) {
                 stroke_width: if filled { 0.0 } else { 0.15 },
                 filled,
             });
-        editor.dirty = true;
+        editor.mark_dirty();
     }
     editor.canvas_cache.clear();
 }
@@ -254,7 +254,7 @@ fn add_text(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
             filled: false,
         });
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 // v0.14 — Place Text Frame press-drag-release commit (item
@@ -279,7 +279,7 @@ fn add_text_frame(
         );
     });
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 // v0.18.12 — Place Hole tool. Drops a non-plated through
@@ -295,7 +295,7 @@ fn add_hole(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
         FootprintEditorState::sync_pads_to_primitive(state, primitive);
     });
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 fn mint_body3d(editor: &mut crate::app::FootprintDocument) {
@@ -305,7 +305,7 @@ fn mint_body3d(editor: &mut crate::app::FootprintDocument) {
     });
     editor.state.active_bar_menu = None;
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 fn mint_extruded_body3d(editor: &mut crate::app::FootprintDocument) {
@@ -315,7 +315,7 @@ fn mint_extruded_body3d(editor: &mut crate::app::FootprintDocument) {
     });
     editor.state.active_bar_menu = None;
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 /// v0.15 — gate the Pads → Sketch mirror on whether the footprint already

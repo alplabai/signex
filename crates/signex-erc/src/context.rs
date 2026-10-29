@@ -55,6 +55,9 @@ impl PaperSize {
 #[derive(Debug, Clone)]
 pub struct ErcPin {
     pub world_pos: Point,
+    /// The pin's tip in the symbol's own (library) coordinates: stable when
+    /// the part moves, and distinct for two pins sharing a number or name.
+    pub local_pos: Point,
     /// Pin number (falls back to the name when the library pin has none) —
     /// the `pin` half of a `designator.pin` label in diagnostics.
     pub number: String,
@@ -77,12 +80,23 @@ pub struct ErcPin {
 pub struct ErcSymbol {
     pub uuid: Uuid,
     pub reference: String,
+    /// Designators the symbol's instance entries give its placements (#829),
+    /// empty when it has none and every placement shows `reference`.
+    pub instance_designators: Vec<String>,
     /// Library symbol id; with `reference` and `unit` it decides which
     /// instances are units of one part.
     pub lib_id: String,
     /// Unit number of this instance within its part.
     pub unit: u32,
     pub value: String,
+    /// Assigned footprint; empty when none.
+    pub footprint: String,
+    /// `false` for a part that is not placed on the board (no footprint due).
+    pub on_board: bool,
+    /// Units the library symbol defines ([`LibSymbol::unit_count`]).
+    ///
+    /// [`LibSymbol::unit_count`]: signex_types::schematic::LibSymbol::unit_count
+    pub unit_count: u32,
     pub position: Point,
     pub is_power: bool,
     /// World-space pin instances with connectivity pre-computed.
@@ -90,6 +104,68 @@ pub struct ErcSymbol {
     /// Component attributes / fields (from symbol properties).
     /// DSL: `component.attr("class")`.
     pub attrs: HashMap<String, String>,
+}
+
+/// A pin's anchor for a waiver identity: `<number>@<x>,<y>`, the tip in the
+/// symbol's own coordinates in `pt_key` units, so two pins that share a
+/// number (or, unnumbered, a name) stay apart and moving the part changes
+/// nothing.
+pub fn pin_anchor(number: &str, local: &Point) -> String {
+    let (x, y) = pt_key(local);
+    format!("{number}@{x},{y}")
+}
+
+impl ErcPin {
+    /// See [`pin_anchor`].
+    pub fn anchor(&self) -> String {
+        pin_anchor(&self.number, &self.local_pos)
+    }
+}
+
+impl ErcNetPin {
+    /// See [`pin_anchor`].
+    pub fn anchor(&self) -> String {
+        pin_anchor(&self.number, &self.local_pos)
+    }
+}
+
+impl ErcSymbol {
+    /// The designator of each placement of this symbol, see
+    /// [`placement_designators`].
+    pub fn placement_designators(&self) -> Vec<&str> {
+        if self.instance_designators.is_empty() {
+            vec![self.reference.as_str()]
+        } else {
+            self.instance_designators
+                .iter()
+                .map(String::as_str)
+                .collect()
+        }
+    }
+}
+
+/// True when one of the No-ERC directive `positions` sits at `p`, compared in
+/// the 1 µm key space (`pt_key`). The one test both the per-sheet context and
+/// the project-wide units pass use.
+pub(crate) fn no_erc_directive_at<'a>(
+    positions: impl IntoIterator<Item = &'a Point>,
+    p: &Point,
+) -> bool {
+    let k = pt_key(p);
+    positions.into_iter().any(|d| pt_key(d) == k)
+}
+
+/// The designator of each placement of `symbol`: its instance entries'
+/// designators (#829, the ones `designator_in` resolves to), or `reference`
+/// when it has none. A sheet's run does not know which placements exist, so
+/// a symbol with entries is judged by those.
+pub fn placement_designators(symbol: &signex_types::schematic::Symbol) -> Vec<&str> {
+    let entries: Vec<&str> = symbol.valid_instance_entries().map(|(_, r)| r).collect();
+    if entries.is_empty() {
+        vec![symbol.reference.as_str()]
+    } else {
+        entries
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -186,6 +262,8 @@ pub struct ErcNetPin {
     pub number: String,
     /// World-space position of the pin tip.
     pub position: Point,
+    /// The tip in the symbol's own coordinates (see [`ErcPin::local_pos`]).
+    pub local_pos: Point,
     pub direction: PinDirection,
     /// `true` when the owning symbol is a power flag (`PWR_FLAG`), not an
     /// ordinary power port. A flag declares a rail driven without naming it,
@@ -255,10 +333,7 @@ impl ErcContext {
     /// True when a No-ERC directive sits at `p`, compared in the 1 µm key
     /// space (`pt_key`) like every other point test in this crate.
     pub fn has_no_erc_directive_at(&self, p: &Point) -> bool {
-        let k = pt_key(p);
-        self.no_erc_directives
-            .iter()
-            .any(|d| pt_key(&d.position) == k)
+        no_erc_directive_at(self.no_erc_directives.iter().map(|d| &d.position), p)
     }
 
     pub fn from_snapshot(snapshot: &SchematicSheet) -> Self {
@@ -392,6 +467,7 @@ impl ErcContext {
                         let world = SymbolTransform::from_symbol(sym).apply(lp.pin.position);
                         ErcPin {
                             world_pos: Point::new(world.x, world.y),
+                            local_pos: lp.pin.position,
                             number: if lp.pin.number.is_empty() {
                                 lp.pin.name.clone()
                             } else {
@@ -410,9 +486,16 @@ impl ErcContext {
                 Some(ErcSymbol {
                     uuid: sym.uuid,
                     reference: sym.reference.clone(),
+                    instance_designators: sym
+                        .valid_instance_entries()
+                        .map(|(_, r)| r.to_string())
+                        .collect(),
                     lib_id: sym.lib_id.clone(),
                     unit: sym.unit,
                     value: sym.value.clone(),
+                    footprint: sym.footprint.clone(),
+                    on_board: sym.on_board,
+                    unit_count: lib_sym.unit_count(),
                     position: sym.position,
                     is_power: sym.is_power,
                     pins,
@@ -544,6 +627,7 @@ fn summarize_nets(
                 reference: sym.reference.clone(),
                 number: pin.number.clone(),
                 position: pin.world_pos,
+                local_pos: pin.local_pos,
                 direction: pin.electrical_type,
                 is_power_flag: sym.is_power && signex_net::is_power_flag(&sym.lib_id),
             });
@@ -637,6 +721,7 @@ mod tests {
     fn pin(pos: Point, dir: PinDirection) -> ErcPin {
         ErcPin {
             world_pos: pos,
+            local_pos: pos,
             number: "1".into(),
             electrical_type: dir,
             required: true,
@@ -648,9 +733,13 @@ mod tests {
         ErcSymbol {
             uuid: Uuid::nil(),
             reference: "U1".into(),
+            instance_designators: Vec::new(),
             lib_id: String::new(),
             unit: 1,
             value: String::new(),
+            footprint: String::new(),
+            on_board: true,
+            unit_count: 1,
             position: pt(0.0, 0.0),
             is_power: false,
             pins,

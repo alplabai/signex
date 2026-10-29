@@ -8,12 +8,13 @@ use crate::app::contracts::DrawingFieldEdit;
 
 fn rect(start: Point, end: Point) -> SchDrawing {
     SchDrawing::Rect {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start,
         end,
         width: 0.0,
         fill: FillType::default(),
         stroke_color: None,
+        locked: false,
     }
 }
 

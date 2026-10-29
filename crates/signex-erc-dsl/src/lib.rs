@@ -52,6 +52,9 @@ pub fn parse_validate_compile_to_eval_fns(
 }
 
 #[cfg(test)]
+mod identity_guard_tests;
+
+#[cfg(test)]
 mod tests {
     use std::collections::HashMap;
 
@@ -68,13 +71,18 @@ mod tests {
                     .parse()
                     .expect("valid uuid"),
                 reference: "U1".to_string(),
+                instance_designators: Vec::new(),
                 lib_id: String::new(),
                 unit: 1,
                 value: "MCU".to_string(),
+                footprint: String::new(),
+                on_board: true,
+                unit_count: 1,
                 position: Point::new(10.0, 10.0),
                 is_power: false,
                 pins: vec![ErcPin {
                     world_pos: Point::new(10.0, 10.0),
+                    local_pos: Point::new(10.0, 10.0),
                     number: "1".into(),
                     electrical_type: PinDirection::Output,
                     required: true,
@@ -179,6 +187,7 @@ then warning \"hit\"
             reference: sym.reference.clone(),
             number: "1".into(),
             position: sym.pins[0].world_pos,
+            local_pos: sym.pins[0].local_pos,
             direction: PinDirection::Output,
             is_power_flag: false,
         }];
@@ -259,6 +268,7 @@ then warning \"hit\"
             .iter()
             .map(|&electrical_type| ErcPin {
                 world_pos: Point::new(10.0, 10.0),
+                local_pos: Point::new(10.0, 10.0),
                 number: "1".into(),
                 electrical_type,
                 required: true,

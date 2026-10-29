@@ -34,7 +34,6 @@ fn open_footprint_tab(app: &mut Signex) {
         title: "f".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path),
     });
@@ -55,7 +54,7 @@ const SCHEMATIC_ONLY: &[&str] = &[
 
 fn open_schematic_tab(app: &mut Signex) {
     let sheet = signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         version: 1,
         generator: "signex-test".into(),
         generator_version: "0.9".into(),
@@ -183,7 +182,6 @@ fn tab_switch_rebuilds_the_open_palette() {
         title: "board".into(),
         path: PathBuf::from("palette-context.snxpcb"),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Pcb,
     });

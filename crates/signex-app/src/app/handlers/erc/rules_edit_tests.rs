@@ -9,7 +9,7 @@ use signex_erc::{RuleKind, Severity};
 use crate::app::handlers::menu::export::tests::app_workspace;
 
 fn workspace(tag: &str) -> crate::app::Signex {
-    let dir = std::env::temp_dir().join(format!("signex-erc-{tag}-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-erc-{tag}-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
     // `Signex::new` loads the machine preferences, which tests in this module
     // write; Store seeds from them, and an edit that matches the seed is a
@@ -21,7 +21,7 @@ fn workspace(tag: &str) -> crate::app::Signex {
 
 fn is_dirty(app: &crate::app::Signex) -> bool {
     let path = &app.document_state.projects[0].path;
-    app.document_state.dirty_paths.contains(path)
+    app.document_state.is_document_dirty(path)
 }
 
 #[test]

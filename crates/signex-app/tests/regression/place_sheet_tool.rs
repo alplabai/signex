@@ -15,7 +15,7 @@ use tempfile::TempDir;
 
 pub(crate) fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         version: 0,
         generator: String::new(),
         generator_version: String::new(),
@@ -53,7 +53,6 @@ pub(crate) fn app_with_sheet_tool(path: PathBuf) -> Signex {
         title: "root".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -101,7 +100,7 @@ fn drag_places_a_sheet_with_the_dragged_rect_and_generated_names() {
     assert_eq!(s.name, "sheet1");
     assert_eq!(s.filename, "sheet1.snxsch");
     assert!(s.pins.is_empty());
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.is_document_dirty(&path));
     assert!(
         !tmp.path().join("sheet1.snxsch").exists(),
         "placing must not create the child file"
@@ -126,14 +125,14 @@ fn tiny_or_zero_area_drag_is_rejected_and_the_tool_stays_armed() {
     drag(&mut app, (10.0, 10.0), (11.0, 40.0));
 
     assert!(sheets(&app).is_empty());
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.is_document_dirty(&path));
     assert_eq!(app.interaction_state.current_tool, Tool::Sheet);
     assert!(app.interaction_state.shape_anchor.is_none());
 
     // Still armed: a valid drag now places exactly one sheet.
     drag(&mut app, (10.0, 10.0), (40.0, 40.0));
     assert_eq!(sheets(&app).len(), 1);
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.is_document_dirty(&path));
 }
 
 #[test]
@@ -245,7 +244,6 @@ fn defaults_are_unique_across_parents_of_one_project() {
         title: "other".to_string(),
         path: other.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -338,7 +336,6 @@ fn a_half_placed_sheet_corner_does_not_follow_the_user_to_another_tab() {
         title: "other".to_string(),
         path: other,
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

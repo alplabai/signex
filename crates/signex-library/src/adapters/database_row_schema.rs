@@ -51,7 +51,7 @@ impl RowSchemaGuard {
         };
         if server < ROW_SCHEMA {
             self.forget();
-            return Err(LibraryError::Backend(format!(
+            return Err(LibraryError::InvalidData(format!(
                 "the library server is too old for this signex (row schema {server}, need \
                  {ROW_SCHEMA}); {UPGRADE_HINT}"
             )));
@@ -80,7 +80,7 @@ impl RowSchemaGuard {
         };
         if !revisions {
             self.forget();
-            return Err(LibraryError::Backend(format!(
+            return Err(LibraryError::InvalidData(format!(
                 "the library server is too old for this signex (it keeps no primitive \
                  revisions, so a save could overwrite someone else's version); {UPGRADE_HINT}"
             )));
@@ -135,7 +135,7 @@ fn fetch_version(
 /// the response body carries the stable marker.
 pub(super) fn schema_refusal(body: &serde_json::Value) -> Option<LibraryError> {
     (body["code"].as_str() == Some(ROW_SCHEMA_REFUSED_CODE)).then(|| {
-        LibraryError::Backend(format!(
+        LibraryError::InvalidData(format!(
             "the library server refused the row write as a schema mismatch; {UPGRADE_HINT}"
         ))
     })

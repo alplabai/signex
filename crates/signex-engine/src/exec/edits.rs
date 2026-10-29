@@ -3,6 +3,59 @@
 use crate::*;
 
 impl Engine {
+    /// Write the `locked` flag of a wire, label, text note or drawing (#1573);
+    /// a missing item, another kind or an unchanged value is a no-op that
+    /// records no history entry.
+    fn set_item_locked(
+        &mut self,
+        before: SchematicSheet,
+        item: signex_types::schematic::SelectedItem,
+        locked: bool,
+    ) -> Result<CommandResult, EngineError> {
+        use signex_types::schematic::SelectedKind;
+        let doc = &mut self.document;
+        let slot: Option<&mut bool> = match item.kind {
+            SelectedKind::Wire => doc
+                .wires
+                .iter_mut()
+                .find(|w| w.uuid == item.uuid)
+                .map(|w| &mut w.locked),
+            SelectedKind::Label => doc
+                .labels
+                .iter_mut()
+                .find(|l| l.uuid == item.uuid)
+                .map(|l| &mut l.locked),
+            SelectedKind::TextNote => doc
+                .text_notes
+                .iter_mut()
+                .find(|n| n.uuid == item.uuid)
+                .map(|n| &mut n.locked),
+            _ => None,
+        };
+        let changed = match slot {
+            Some(slot) => std::mem::replace(slot, locked) != locked,
+            None if item.kind == SelectedKind::Drawing => doc
+                .drawings
+                .iter_mut()
+                .find(|d| d.uuid() == item.uuid)
+                .is_some_and(|d| {
+                    let differs = d.is_locked() != locked;
+                    d.set_locked(locked);
+                    differs
+                }),
+            None => false,
+        };
+        if !changed {
+            return Ok(CommandResult::unchanged());
+        }
+        let patch_pair = PatchPair {
+            semantic: SemanticPatch::StyleUpdated,
+            document: DocumentPatch::from_selected_kind(item.kind),
+        };
+        self.record_history(before, patch_pair);
+        Ok(CommandResult::changed(patch_pair))
+    }
+
     /// Write one boolean symbol flag; a missing symbol or an unchanged
     /// value is a no-op that records no history entry.
     fn set_symbol_flag(
@@ -249,6 +302,7 @@ impl Engine {
             Command::SetSymbolLocked { symbol_id, locked } => {
                 self.set_symbol_flag(before, symbol_id, |s| &mut s.locked, locked)
             }
+            Command::SetItemLocked { item, locked } => self.set_item_locked(before, item, locked),
             Command::SetSymbolDnp { symbol_id, dnp } => {
                 self.set_symbol_flag(before, symbol_id, |s| &mut s.dnp, dnp)
             }
@@ -470,7 +524,7 @@ mod tests {
     use crate::test_support::test_sheet;
 
     fn engine_with_symbol() -> (Engine, uuid::Uuid) {
-        let uuid = uuid::Uuid::new_v4();
+        let uuid = uuid::Uuid::now_v7();
         let mut sheet = test_sheet();
         sheet.symbols.push(signex_types::schematic::Symbol {
             uuid,
@@ -529,7 +583,7 @@ mod tests {
         assert!(!same.changed);
         let missing = engine
             .execute(Command::SetSymbolLocked {
-                symbol_id: uuid::Uuid::new_v4(),
+                symbol_id: uuid::Uuid::now_v7(),
                 locked: true,
             })
             .unwrap();

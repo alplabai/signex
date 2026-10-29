@@ -54,6 +54,7 @@ fn markup_ctx(note: &str, label: &str) -> ExportContext {
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
         font_family: None,
+        locked: false,
     });
     ctx.sheets[0].schematic.labels.push(Label {
         unknown_columns: Default::default(),
@@ -67,6 +68,7 @@ fn markup_ctx(note: &str, label: &str) -> ExportContext {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         font_family: None,
+        locked: false,
     });
     ctx
 }
@@ -256,6 +258,7 @@ fn exports_schematic_content() {
         justify: signex_types::schematic::HAlign::Center,
         justify_v: signex_types::schematic::VAlign::Bottom,
         font_family: None,
+        locked: false,
     });
 
     let mut ctx = sample_ctx(1);
@@ -613,6 +616,7 @@ fn wire_ctx() -> ExportContext {
         end: Point::new(50.0, 20.0),
         stroke_width: 0.15,
         unknown_columns: Default::default(),
+        locked: false,
     });
     let mut ctx = sample_ctx(1);
     ctx.sheets[0].schematic = sheet;
@@ -715,7 +719,7 @@ fn note_ctx(notes: &[(&str, f64, signex_types::schematic::HAlign)]) -> ExportCon
     let mut ctx = sample_ctx(1);
     for (text, rotation, justify_h) in notes {
         ctx.sheets[0].schematic.text_notes.push(TextNote {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             text: (*text).into(),
             position: Point::new(40.0, 40.0),
             rotation: *rotation,
@@ -723,6 +727,7 @@ fn note_ctx(notes: &[(&str, f64, signex_types::schematic::HAlign)]) -> ExportCon
             justify_h: *justify_h,
             font_family: None,
             justify_v: VAlign::Bottom,
+            locked: false,
         });
     }
     ctx

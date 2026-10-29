@@ -38,7 +38,7 @@ impl Signex {
                 self.interaction_state.active_canvas_mut().ghost_label =
                     Some(signex_types::schematic::Label {
                         unknown_columns: Default::default(),
-                        uuid: uuid::Uuid::new_v4(),
+                        uuid: uuid::Uuid::now_v7(),
                         text: "NET".to_string(),
                         position: signex_types::schematic::Point::new(0.0, 0.0),
                         rotation: 0.0,
@@ -48,6 +48,7 @@ impl Signex {
                         justify: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::Bottom,
                         font_family: None,
+                        locked: false,
                     });
                 task
             }
@@ -77,7 +78,7 @@ impl Signex {
                 let task = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)));
                 self.interaction_state.active_canvas_mut().ghost_text =
                     Some(signex_types::schematic::TextNote {
-                        uuid: uuid::Uuid::new_v4(),
+                        uuid: uuid::Uuid::now_v7(),
                         text: default_text.to_string(),
                         position: signex_types::schematic::Point::new(0.0, 0.0),
                         rotation: 0.0,
@@ -85,6 +86,7 @@ impl Signex {
                         justify_h: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::default(),
                         font_family: None,
+                        locked: false,
                     });
                 task
             }

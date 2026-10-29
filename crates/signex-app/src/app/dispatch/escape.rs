@@ -444,7 +444,6 @@ mod tests {
             title: "part".to_string(),
             path: footprint.clone(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind: crate::app::TabKind::FootprintEditor(footprint),
         });
@@ -634,7 +633,6 @@ mod tests {
             title: "part".to_string(),
             path: path.clone(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind: crate::app::TabKind::SymbolEditor(path.clone()),
         });

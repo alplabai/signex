@@ -34,7 +34,7 @@ fn placement(id: &str) -> [Command; 2] {
         },
         Command::PlaceSymbol {
             symbol: Symbol {
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 lib_id: id.to_string(),
                 ..Default::default()
             },

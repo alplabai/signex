@@ -163,17 +163,17 @@ mod tests {
         assert_eq!(task.units(), 0);
     }
 
-    /// `break_wire` is a real catalog entry
+    /// `center_on_cursor` is a real catalog entry
     /// (`keymap/catalog`) with no arm in `core_to_message`
     /// yet — it must resolve to a no-op too, not panic.
     #[test]
     fn catalog_id_with_no_bridge_arm_is_a_no_op_and_does_not_panic() {
         let (mut app, _task) = Signex::new();
 
-        let command = AppCommandId::new("break_wire").unwrap();
+        let command = AppCommandId::new("center_on_cursor").unwrap();
         assert!(
             crate::keymap::metadata_for(&command).is_some(),
-            "test fixture drifted: break_wire is no longer a catalog id"
+            "test fixture drifted: center_on_cursor is no longer a catalog id"
         );
 
         let task = app.dispatch_command(&command, CommandArgs::none(), None);
@@ -189,7 +189,7 @@ mod tests {
 
         let (mut app, _task) = Signex::new();
         app.interaction_state.active_canvas_mut().selected =
-            vec![SelectedItem::new(uuid::Uuid::new_v4(), SelectedKind::Wire)];
+            vec![SelectedItem::new(uuid::Uuid::now_v7(), SelectedKind::Wire)];
 
         let command = AppCommandId::new("unselect_all").unwrap();
         let _ = app.dispatch_command(&command, CommandArgs::none(), None);
@@ -209,7 +209,6 @@ mod tests {
                 title: format!("t{i}"),
                 path: std::path::PathBuf::from(format!("t{i}.snxsch")),
                 cached_document: None,
-                dirty: false,
                 project_id: None,
                 kind,
             });

@@ -26,7 +26,7 @@ struct World {
 
 fn symbol(reference: &str, x: f64) -> Symbol {
     Symbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         lib_id: "Device:D".to_string(),
         reference: reference.to_string(),
         position: Point::new(x, 0.0),
@@ -47,15 +47,15 @@ fn linked(f: &Fixture, reference: &str, x: f64) -> Symbol {
 /// A part linked to a library that is not mounted.
 fn from_unmounted(reference: &str, x: f64) -> Symbol {
     Symbol {
-        library_id: Some(Uuid::new_v4()),
-        row_id: Some(Uuid::new_v4()),
+        library_id: Some(Uuid::now_v7()),
+        row_id: Some(Uuid::now_v7()),
         ..symbol(reference, x)
     }
 }
 
 fn sheet_of(f: &Fixture, symbols: Vec<Symbol>) -> SchematicSheet {
     let mut sheet = SchematicSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols,
         ..Default::default()
@@ -96,7 +96,6 @@ fn world(f: Fixture, root: Vec<Symbol>, child: Vec<Symbol>, child_read_only: boo
                 title: "child".to_string(),
                 path,
                 cached_document: None,
-                dirty: false,
                 project_id: None,
                 kind: TabKind::Schematic,
             });
@@ -356,7 +355,7 @@ fn reprefix_overflow_does_not_split_a_part() {
     let f = fixture_of_class("diode");
     // The child (walked first) holds a part of a second row (LED -> `H`); the
     // root holds a diode that must become `V`, but `V` is saturated.
-    let led_row = Uuid::new_v4();
+    let led_row = Uuid::now_v7();
     let mut led = linked(&f, "D5", 0.0);
     led.row_id = Some(led_row);
     let root = vec![linked(&f, "D1", 0.0), linked(&f, "V4294967295", 10.0)];
@@ -390,8 +389,7 @@ fn reprefix_overflow_does_not_split_a_part() {
     assert!(
         !w.app
             .document_state
-            .dirty_paths
-            .contains(&PathBuf::from(CHILD))
+            .is_document_dirty(&PathBuf::from(CHILD))
     );
     // Rolled back, not undone: Ctrl+Y must not bring half of the run back.
     let child = &w.app.document_state.engines[&PathBuf::from(CHILD)];
@@ -508,7 +506,7 @@ fn reprefix_unopened_sheets_stay_dirty_unsaved_and_undo_as_one() {
     );
     let parked = &w.app.document_state.engines[&child_path];
     assert!(parked.document().symbols[0].reference.starts_with('V'));
-    assert!(w.app.document_state.dirty_paths.contains(&child_path));
+    assert!(w.app.document_state.is_document_dirty(&child_path));
     assert!(
         w.app.document_state.engines[&root_path].document().symbols[0]
             .reference
@@ -520,7 +518,7 @@ fn reprefix_unopened_sheets_stay_dirty_unsaved_and_undo_as_one() {
     assert_eq!(engines[&root_path].document().symbols[0].reference, "D1");
     // Back at what is on disk: nothing to save, no unsaved-edits prompt, and
     // no tabless engine left to shadow the file.
-    assert!(!w.app.document_state.dirty_paths.contains(&child_path));
+    assert!(!w.app.document_state.is_document_dirty(&child_path));
     assert!(!engines.contains_key(&child_path));
 
     // Redo is refused whole: re-applying the open sheet alone would split
@@ -559,7 +557,7 @@ fn redo_of_a_reprefix_with_a_dropped_parked_sheet_changes_nothing() {
     let mut child = signex_engine::Engine::new(sheet_of(
         &w.f,
         vec![Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             ..unit(&root_unit, 2)
         }],
     ))
@@ -643,7 +641,7 @@ fn closing_the_annotate_dialog_drops_an_open_reprefix_confirm() {
 fn undo_during_a_save_of_a_parked_sheet_keeps_it_dirty() {
     let (mut w, _dir, _root_path, child_path, _bytes) = disk_world();
     reprefix(&mut w);
-    assert!(w.app.document_state.dirty_paths.contains(&child_path));
+    assert!(w.app.document_state.is_document_dirty(&child_path));
 
     // The save of the re-prefixed bytes is in flight when Undo is pressed.
     let _job = w
@@ -658,7 +656,7 @@ fn undo_during_a_save_of_a_parked_sheet_keeps_it_dirty() {
         "D2"
     );
     assert!(
-        w.app.document_state.dirty_paths.contains(&child_path),
+        w.app.document_state.is_document_dirty(&child_path),
         "the landing save would write the re-prefixed bytes; the sheet must stay dirty"
     );
 }

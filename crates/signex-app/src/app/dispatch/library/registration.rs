@@ -222,7 +222,7 @@ impl Signex {
                 // Mark the project file dirty so the user is prompted
                 // to persist the new library entry in the `.snxprj`.
                 let project_path = loaded.path.clone();
-                self.document_state.dirty_paths.insert(project_path);
+                self.document_state.mark_document_dirty(&project_path);
             }
             Err(e) => {
                 tracing::warn!(
@@ -443,7 +443,7 @@ impl Signex {
             unknown: Default::default(),
         });
         let project_path = loaded.path.clone();
-        self.document_state.dirty_paths.insert(project_path);
+        self.document_state.mark_document_dirty(&project_path);
         self.refresh_panel_ctx();
     }
 }

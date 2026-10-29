@@ -179,10 +179,10 @@ impl Signex {
                 });
                 match result {
                     Some(Ok(true)) => {
-                        if !self.document_state.dirty_paths.contains(path) {
+                        if !self.document_state.is_document_dirty(path) {
                             newly_dirty.push(path.clone());
                         }
-                        self.mark_cached_sheet_dirty(path);
+                        self.document_state.mark_document_dirty(path);
                         any_cached_changed = true;
                         touched_sheets.live.push(path.clone());
                     }
@@ -233,7 +233,7 @@ impl Signex {
                         self.document_state.insert_engine(path.clone(), engine);
                         parked_here.insert(path.clone());
                         newly_dirty.push(path.clone());
-                        self.mark_cached_sheet_dirty(path);
+                        self.document_state.mark_document_dirty(path);
                         any_cached_changed = true;
                         touched_sheets.live.push(path.clone());
                     }
@@ -347,15 +347,7 @@ impl Signex {
             }
         }
         for path in newly_dirty {
-            self.document_state.dirty_paths.remove(path);
-            if let Some(tab) = self
-                .document_state
-                .tabs
-                .iter_mut()
-                .find(|t| &t.path == path)
-            {
-                tab.dirty = false;
-            }
+            self.document_state.mark_document_clean(path);
         }
         crate::diagnostics::log_warning(format!(
             "{label}: a sheet could not be converted, so the whole run was undone and nothing \

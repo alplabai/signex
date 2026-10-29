@@ -225,15 +225,7 @@ impl Signex {
         }
         let result = result?;
         if result.changed {
-            self.document_state.dirty_paths.insert(parent.clone());
-            for tab in self
-                .document_state
-                .tabs
-                .iter_mut()
-                .filter(|t| t.path == *parent)
-            {
-                tab.dirty = true;
-            }
+            self.document_state.mark_document_dirty(parent);
             if self.document_state.active_path.as_ref() == Some(parent) {
                 self.sync_canvas_from_visible_schematic(
                     crate::schematic_runtime::RenderInvalidation::CHILD_SHEETS,
@@ -360,7 +352,7 @@ mod tests {
             format!("{notice:?}").contains("Parent.snxsch"),
             "{notice:?}"
         );
-        assert!(!app.document_state.dirty_paths.contains(&parent));
+        assert!(!app.document_state.is_document_dirty(&parent));
         let engine = &app.document_state.engines[&parent];
         assert_eq!(engine.document().child_sheets[0].filename, "child.snxsch");
     }
@@ -388,6 +380,6 @@ mod tests {
             Default::default(),
         );
         assert_eq!(outcome.failed.len(), 1, "{outcome:?}");
-        assert!(!app.document_state.dirty_paths.contains(&parent));
+        assert!(!app.document_state.is_document_dirty(&parent));
     }
 }

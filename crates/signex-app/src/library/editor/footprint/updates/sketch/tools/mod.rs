@@ -224,7 +224,7 @@ fn handle_tool_click(
 
     if try_consume_repick_polar_center(editor, resolved_id) {
         editor.canvas_cache.clear();
-        editor.dirty = true;
+        editor.mark_dirty();
         return;
     }
 
@@ -279,7 +279,7 @@ fn handle_tool_click(
         editor.state.placement_input_others.clear();
     }
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 // v0.22 Phase A1 — ensure the sketch has at least one plane so a fresh

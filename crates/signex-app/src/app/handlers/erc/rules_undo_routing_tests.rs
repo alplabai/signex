@@ -16,16 +16,16 @@ use crate::keymap::AppCommandId;
 /// A project over a fresh directory whose root sheet is open with one
 /// symbol, so the sheet has an undo history to protect.
 fn app_with_sheet() -> (Signex, uuid::Uuid) {
-    let dir = std::env::temp_dir().join(format!("signex-erc-route-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-erc-route-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
     // `Signex::new` loads the machine preferences, which other tests write;
     // Store seeds from them, and an edit that matches the seed is a no-op.
     app.ui_state.erc_severity_override.clear();
     app.ui_state.pin_matrix_overrides.clear();
     let path = dir.join("a_root.snxsch");
-    let symbol = uuid::Uuid::new_v4();
+    let symbol = uuid::Uuid::now_v7();
     let sheet = signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols: vec![Symbol {
             uuid: symbol,
@@ -40,7 +40,6 @@ fn app_with_sheet() -> (Signex, uuid::Uuid) {
         title: "a_root.snxsch".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -193,7 +192,7 @@ fn clicking_the_selected_severity_records_nothing_and_stays_clean() {
     let _ = app.handle_store_erc_rules_in_project();
     let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Info);
     let path = app.document_state.projects[0].path.clone();
-    app.document_state.dirty_paths.clear();
+    app.document_state.mark_documents_clean_where(|_| true);
     let steps = |app: &Signex| {
         let history = &app.document_state.rules_history[&app.document_state.projects[0].id];
         (history.can_undo(), history.can_redo())
@@ -202,7 +201,7 @@ fn clicking_the_selected_severity_records_nothing_and_stays_clean() {
 
     let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Info);
 
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.is_document_dirty(&path));
     assert_eq!(steps(&app), before);
     // One undo returns to the seeded set: the no-op added no step of its own.
     assert!(app.undo_project_rules());

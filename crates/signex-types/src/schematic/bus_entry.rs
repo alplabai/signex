@@ -93,7 +93,7 @@ mod tests {
 
     fn bus(sx: f64, sy: f64, ex: f64, ey: f64) -> Bus {
         Bus {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(sx, sy),
             end: Point::new(ex, ey),
         }

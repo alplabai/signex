@@ -36,6 +36,7 @@ use signex_library::{PrimitiveKind, PrimitiveRef, RowId};
 
 mod alternate_symbols;
 mod browser;
+mod commit_pending;
 mod component_preview;
 mod components_panel;
 mod datasheet_save;
@@ -64,6 +65,7 @@ mod settings;
 mod settings_tests;
 #[cfg(test)]
 mod stale_row_tests;
+mod stock_copy;
 mod updates;
 mod use_site;
 
@@ -146,6 +148,13 @@ impl Signex {
             LibraryMessage::BrowserDismissDeleteError { library_path } => {
                 self.handle_browser_dismiss_delete_error(library_path)
             }
+            LibraryMessage::BrowserCommitPending { library_path } => {
+                self.handle_browser_commit_pending(library_path)
+            }
+            LibraryMessage::BrowserCommitPendingDone {
+                library_path,
+                result,
+            } => self.handle_browser_commit_pending_done(&library_path, result),
             LibraryMessage::BrowserBeginRenameTable {
                 library_path,
                 table,
@@ -435,6 +444,7 @@ impl Signex {
                 library_path,
                 outcome,
             } => self.handle_pricing_refresh_finished(library_path, outcome),
+            LibraryMessage::StockCopy(msg) => self.handle_stock_copy(msg),
         }
     }
 }

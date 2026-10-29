@@ -278,11 +278,11 @@ impl Signex {
 
     /// Forget the in-memory documents of a file (or `.snxlib` directory)
     /// the user just deleted. A parked dirty engine or draft would
-    /// otherwise survive in `dirty_paths` and be written back by Save All.
+    /// otherwise survive as a dirty mark and be written back by Save All.
     pub(crate) fn drop_deleted_documents(&mut self, deleted: &std::path::Path, fold: CaseFold) {
         // The file is gone: a replace that read it earlier must not bring it back.
         self.document_state.note_document_written_behind_engines();
-        let gone = |p: &std::path::PathBuf| path_is_under(p, deleted, fold);
+        let gone = |p: &std::path::Path| path_is_under(p, deleted, fold);
         let dead: Vec<_> = self
             .document_state
             .engines
@@ -294,11 +294,15 @@ impl Signex {
             self.forget_net_colors_of(path);
         }
         let doc = &mut self.document_state;
+        let discarded = doc
+            .dirty_document_paths()
+            .iter()
+            .filter(|p| gone(p))
+            .count();
         doc.engines.retain(|p, _| !gone(p));
         doc.symbol_editors.retain(|p, _| !gone(p));
         doc.footprint_editors.retain(|p, _| !gone(p));
-        let discarded = doc.dirty_paths.iter().filter(|p| gone(p)).count();
-        doc.dirty_paths.retain(|p| !gone(p));
+        doc.mark_documents_clean_where(gone);
         doc.document_saves
             .forget_where(|p| path_is_under(p, deleted, fold));
         if discarded > 0 {
@@ -327,30 +331,27 @@ impl Signex {
         // Excluding a document (or a library / folder holding documents) with
         // unsaved edits asks first (#738): the modal stays open and moves to
         // its Save / Discard / Cancel stage.
-        if choice == RemoveChoice::ExcludeFromProject {
-            // A footprint draft only reaches `dirty_paths` on a sync.
-            self.sync_editor_dirty_paths();
-            if let Some(dialog) = self.ui_state.remove_dialog.clone()
-                && self.has_unsaved_edits(&dialog.target_path, self.dialog_fold(&dialog))
-            {
-                let Some(dialog) = self.repointed_dialog(&dialog) else {
-                    self.ui_state.remove_dialog = None;
-                    self.refresh_panel_ctx();
-                    return iced::Task::none();
-                };
-                if self.discard_blocked_by_other_project(&dialog) {
-                    crate::diagnostics::log_warning(format!(
-                        "{} has unsaved edits and another open project also uses it: \
-                         Discard is not offered, only Save or Cancel.",
-                        dialog.display_name
-                    ));
-                    self.refresh_panel_ctx();
-                }
-                if let Some(dialog) = self.ui_state.remove_dialog.as_mut() {
-                    dialog.unsaved_prompt = true;
-                }
+        if choice == RemoveChoice::ExcludeFromProject
+            && let Some(dialog) = self.ui_state.remove_dialog.clone()
+            && self.has_unsaved_edits(&dialog.target_path, self.dialog_fold(&dialog))
+        {
+            let Some(dialog) = self.repointed_dialog(&dialog) else {
+                self.ui_state.remove_dialog = None;
+                self.refresh_panel_ctx();
                 return iced::Task::none();
+            };
+            if self.discard_blocked_by_other_project(&dialog) {
+                crate::diagnostics::log_warning(format!(
+                    "{} has unsaved edits and another open project also uses it: \
+                     Discard is not offered, only Save or Cancel.",
+                    dialog.display_name
+                ));
+                self.refresh_panel_ctx();
             }
+            if let Some(dialog) = self.ui_state.remove_dialog.as_mut() {
+                dialog.unsaved_prompt = true;
+            }
+            return iced::Task::none();
         }
 
         // An open still reading a file being deleted would land on a path
@@ -544,7 +545,7 @@ impl Signex {
             // delete already happened above when DeleteFile was picked;
             // the dirty bit only tracks the project's *list* of
             // children, which lives in the .snxprj.
-            self.document_state.dirty_paths.insert(p);
+            self.document_state.mark_document_dirty(&p);
         }
     }
 }
@@ -558,7 +559,7 @@ mod tests {
 
     fn sheet() -> signex_types::schematic::SchematicSheet {
         signex_types::schematic::SchematicSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             paper_size: "A4".to_string(),
             ..Default::default()
         }
@@ -569,7 +570,7 @@ mod tests {
         app.document_state
             .engines
             .insert(path.to_path_buf(), engine);
-        app.document_state.dirty_paths.insert(path.to_path_buf());
+        app.document_state.mark_document_dirty(path);
     }
 
     #[test]
@@ -581,7 +582,7 @@ mod tests {
         app.drop_deleted_documents(Path::new("/w/Top.snxsch"), CaseFold::FOLD);
 
         assert!(!app.document_state.engines.contains_key(&keyed));
-        assert!(!app.document_state.dirty_paths.contains(&keyed));
+        assert!(!app.document_state.is_document_dirty(&keyed));
     }
 
     #[test]
@@ -593,7 +594,7 @@ mod tests {
             uuid: id,
             ..Default::default()
         };
-        let (gone_wire, kept_wire) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+        let (gone_wire, kept_wire) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
         for (path, id) in [(&gone, gone_wire), (&kept, kept_wire)] {
             let mut s = sheet();
             s.wires.push(wire_of(id));
@@ -639,7 +640,6 @@ mod tests {
             title: "fp".into(),
             path: path.to_path_buf(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind: TabKind::FootprintEditor(path.to_path_buf()),
         });

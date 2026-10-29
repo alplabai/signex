@@ -115,6 +115,19 @@ fn view_symbol_status<'a>(
         })
         .style(symbol_tool_button_style(false, border));
 
+    // A copy of a stock symbol can be made again from the editor (#813).
+    let copy_again: Element<'a, LibraryMessage> = if editor.file.copied_from.is_some() {
+        crate::library::modal_chrome::secondary_btn(
+            "Copy Again",
+            LibraryMessage::StockCopy(
+                crate::library::stock_copy::StockCopyMsg::CopyAgainRequested(path.to_path_buf()),
+            ),
+            tokens,
+        )
+    } else {
+        Space::new().into()
+    };
+
     container(
         row![
             text(coord_text).size(TS.body).color(text_c),
@@ -127,6 +140,7 @@ fn view_symbol_status<'a>(
             sep(),
             grid_toggle,
             grid_cycle,
+            copy_again,
             Space::new().width(Length::Fill),
             match &editor.status_message {
                 Some(msg) => text(msg.clone())
@@ -190,7 +204,7 @@ fn view_symbol_toolbar<'a>(
     let max_part = crate::library::editor::symbol::state::max_part_number(editor.primitive());
     let active_part = editor.active_part;
 
-    let save_label = if editor.dirty { "Save *" } else { "Save" };
+    let save_label = if editor.is_dirty() { "Save *" } else { "Save" };
     let body_controls = body_toolbar(editor, &path, text_c, border);
 
     container(

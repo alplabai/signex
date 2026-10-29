@@ -154,6 +154,7 @@ pub fn message_touches_disk(message: &crate::app::Message) -> bool {
                 | L::RecoveryLibraryMissingLocateResult(_)
                 | L::ComponentsPanelPromoteToGlobal(_)
                 | L::LibraryUpdatesApply
+                | L::StockCopy(crate::library::stock_copy::StockCopyMsg::CopyFinished(_))
         ),
         _ => false,
     }

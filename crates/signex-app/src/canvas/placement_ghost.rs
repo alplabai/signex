@@ -85,6 +85,12 @@ impl PlacementGhost {
         }
     }
 
+    /// The items the ghost draws (designators as shown on the cursor).
+    #[must_use]
+    pub fn fragment(&self) -> &SchematicSheet {
+        &self.fragment
+    }
+
     /// Whether this ghost is drawn as a box instead of its items.
     #[must_use]
     pub fn is_bounding_box_only(&self) -> bool {

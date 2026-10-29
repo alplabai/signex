@@ -216,7 +216,7 @@ pub struct SketchSolveSlot {
 impl Default for SketchSolveSlot {
     fn default() -> Self {
         Self {
-            instance: Uuid::new_v4(),
+            instance: Uuid::now_v7(),
             generation: 0,
             in_flight: None,
             wanted: false,

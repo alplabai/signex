@@ -64,9 +64,14 @@ pub(crate) fn pins_touch_not_connected(ctx: &ErcContext, out: &mut Vec<Diagnosti
         }
     }
 
-    // Deterministic order, independent of hash iteration.
+    // Deterministic order, independent of hash iteration; the pins at each
+    // point by (symbol uuid, anchor), so which pin is "first" (the primary)
+    // does not depend on document order.
     let mut points: Vec<_> = by_point.into_iter().collect();
     points.sort_by_key(|(k, _)| *k);
+    for (_, pins) in &mut points {
+        pins.sort_by_key(|(s, p)| (s.uuid, p.anchor()));
+    }
 
     for (_, pins) in points {
         let Some(&(first_symbol, first_pin)) = pins.first() else {
@@ -103,7 +108,8 @@ pub(crate) fn pins_touch_not_connected(ctx: &ErcContext, out: &mut Vec<Diagnosti
                     pin.world_pos,
                 )
                 .with_primary(sel(first_symbol.uuid, SelectedKind::Symbol))
-                .with_peer(sel(symbol.uuid, SelectedKind::Symbol)),
+                .with_peer(sel(symbol.uuid, SelectedKind::Symbol))
+                .at_pin_number(format!("{}/{}", first_pin.anchor(), pin.anchor())),
             );
         }
     }

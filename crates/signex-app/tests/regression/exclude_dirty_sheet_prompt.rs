@@ -15,7 +15,7 @@ const ORIGINAL: &[u8] = b"original-bytes";
 
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         root_sheet_page: "1".to_string(),
         ..Default::default()
@@ -74,12 +74,11 @@ fn open_sheet(app: &mut Signex, path: &Path, project: ProjectId, dirty: bool) {
         title: path.file_stem().unwrap().to_string_lossy().into_owned(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty,
         project_id: Some(project),
         kind: TabKind::Schematic,
     });
     if dirty {
-        app.document_state.dirty_paths.insert(path.to_path_buf());
+        app.document_state.mark_document_dirty(path);
     }
 }
 
@@ -138,7 +137,7 @@ fn excluding_a_dirty_sheet_prompts_and_changes_nothing_yet() {
     assert!(dialog.unsaved_prompt);
     assert!(project_lists_sheet(&app));
     assert!(app.document_state.tabs.iter().any(|t| t.path == sheet));
-    assert!(app.document_state.dirty_paths.contains(&sheet));
+    assert!(app.document_state.is_document_dirty(&sheet));
     assert_eq!(std::fs::read(&sheet).unwrap(), ORIGINAL);
 }
 
@@ -152,7 +151,7 @@ fn save_writes_the_sheet_then_excludes_it() {
     assert_ne!(std::fs::read(&sheet).unwrap(), ORIGINAL, "Save must write");
     assert!(app.ui_state.remove_dialog.is_none());
     assert!(!project_lists_sheet(&app));
-    assert!(!app.document_state.dirty_paths.contains(&sheet));
+    assert!(!app.document_state.is_document_dirty(&sheet));
     assert!(app.document_state.tabs.iter().all(|t| t.path != sheet));
 }
 
@@ -167,7 +166,7 @@ fn discard_excludes_without_writing_and_leaves_no_dirty_engine() {
     assert_eq!(std::fs::read(&sheet).unwrap(), ORIGINAL, "must not write");
     assert!(app.ui_state.remove_dialog.is_none());
     assert!(!project_lists_sheet(&app));
-    assert!(!app.document_state.dirty_paths.contains(&sheet));
+    assert!(!app.document_state.is_document_dirty(&sheet));
     assert!(!app.document_state.engines.contains_key(&sheet));
     assert!(app.document_state.tabs.iter().all(|t| t.path != sheet));
     assert!(
@@ -200,7 +199,7 @@ fn cancel_leaves_everything_as_it_was() {
     assert!(app.ui_state.remove_dialog.is_none());
     assert!(project_lists_sheet(&app));
     assert!(app.document_state.tabs.iter().any(|t| t.path == sheet));
-    assert!(app.document_state.dirty_paths.contains(&sheet));
+    assert!(app.document_state.is_document_dirty(&sheet));
     assert!(app.document_state.engines.contains_key(&sheet));
     assert_eq!(std::fs::read(&sheet).unwrap(), ORIGINAL);
 }
@@ -254,7 +253,7 @@ fn a_failed_save_keeps_the_prompt_and_does_not_exclude() {
     choose(&mut app, ExcludeDirtyChoice::Save);
 
     assert!(project_lists_sheet(&app), "a failed save must not exclude");
-    assert!(app.document_state.dirty_paths.contains(&sheet));
+    assert!(app.document_state.is_document_dirty(&sheet));
     assert!(app.document_state.engines.contains_key(&sheet));
     assert!(
         app.ui_state.remove_dialog.is_some() || app.document_state.error_notice.is_some(),
@@ -304,7 +303,7 @@ fn discard_is_refused_while_another_open_project_shares_the_sheet() {
         app.document_state.engines.contains_key(&sheet),
         "B's edits must survive"
     );
-    assert!(app.document_state.dirty_paths.contains(&sheet));
+    assert!(app.document_state.is_document_dirty(&sheet));
     assert!(project_lists_sheet(&app), "A must not be excluded either");
     assert!(
         app.ui_state.remove_dialog.is_some(),
@@ -330,7 +329,7 @@ fn save_still_works_for_a_sheet_shared_with_another_project() {
 }
 
 /// A project with a `Lib.snxlib` holding a dirty footprint draft whose
-/// `dirty_paths` marker was never synced (only the editor flag is set).
+/// dirty marker is only the editor's own flag.
 fn library_fixture() -> (Signex, TempDir, PathBuf, PathBuf, Vec<u8>) {
     let tmp = TempDir::new().expect("tempdir");
     let lib = tmp.path().join("Lib.snxlib");
@@ -347,7 +346,7 @@ fn library_fixture() -> (Signex, TempDir, PathBuf, PathBuf, Vec<u8>) {
     // A real edit: a container save merges only footprints changed since the
     // editor's baseline (#902), so an untouched draft would write nothing.
     editor.file.footprints[0].name = "fp-edited".to_string();
-    editor.dirty = true;
+    editor.mark_dirty();
     app.document_state
         .footprint_editors
         .insert(fp.clone(), editor);
@@ -373,7 +372,7 @@ fn excluding_a_library_with_a_dirty_draft_prompts_and_save_writes_it() {
     let written = String::from_utf8(std::fs::read(&fp).unwrap()).expect("utf8 container");
     assert!(written.contains("fp-edited"), "the edit must be on disk");
     assert!(app.ui_state.remove_dialog.is_none());
-    assert!(!app.document_state.dirty_paths.contains(&fp));
+    assert!(!app.document_state.is_document_dirty(&fp));
 }
 
 #[test]
@@ -386,7 +385,7 @@ fn discarding_a_library_drops_every_draft_under_it() {
 
     assert_eq!(std::fs::read(&fp).unwrap(), original, "must not write");
     assert!(app.document_state.footprint_editors.is_empty());
-    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(!app.document_state.has_dirty_documents());
     assert!(app.ui_state.remove_dialog.is_none());
 }
 
@@ -420,7 +419,7 @@ fn discard_is_refused_for_a_library_two_open_projects_list() {
         app.document_state.footprint_editors.contains_key(&fp),
         "B's draft must survive"
     );
-    assert!(app.document_state.dirty_paths.contains(&fp));
+    assert!(app.document_state.is_document_dirty(&fp));
     assert!(app.ui_state.remove_dialog.is_some());
     assert!(diagnostics_mention(&app, "another open project"));
     assert_eq!(std::fs::read(&fp).unwrap(), original);
@@ -461,7 +460,7 @@ fn discard_is_refused_for_a_library_another_project_lists_through_dotdot() {
         app.document_state.footprint_editors.contains_key(&fp),
         "B's draft must survive"
     );
-    assert!(app.document_state.dirty_paths.contains(&fp));
+    assert!(app.document_state.is_document_dirty(&fp));
     assert!(app.ui_state.remove_dialog.is_some());
     assert!(diagnostics_mention(&app, "also uses it"));
     assert_eq!(std::fs::read(&fp).unwrap(), original);

@@ -17,8 +17,8 @@ use crate::library::test_adapters::{FailingListingAdapter, cached_summary};
 /// primitive just saved inside it.
 fn app_with_cached_library() -> (Signex, PathBuf) {
     let (mut app, _task) = Signex::new();
-    let library_id = Uuid::new_v4();
-    let dir = std::env::temp_dir().join(format!("snx-editor-cache-{}", Uuid::new_v4().simple()));
+    let library_id = Uuid::now_v7();
+    let dir = std::env::temp_dir().join(format!("snx-editor-cache-{}", Uuid::now_v7().simple()));
     let root = dir.join("lib.snxlib");
     // Bootstrap mounted the bundled stock library; these tests address
     // `open_libraries.first()`, so start from an empty set.
@@ -78,7 +78,7 @@ fn a_post_save_refresh_that_fails_reaches_the_messages_panel() {
     let (mut app, saved) = app_with_cached_library();
     // Unique display name — the diagnostics ring is global and shared
     // with every other test in this binary.
-    let marker = format!("FailingLib-{}", Uuid::new_v4().simple());
+    let marker = format!("FailingLib-{}", Uuid::now_v7().simple());
     app.library
         .open_libraries
         .first_mut()

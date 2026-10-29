@@ -12,14 +12,12 @@ signex-bom = { path = "../signex-bom" }
 signex-types = { path = "../signex-types" }
 thiserror = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 pdf-writer = { workspace = true }
 rust_xlsxwriter = { workspace = true }
 tiny-skia = { workspace = true }
 ttf-parser = { workspace = true }
 uuid = { workspace = true }
-
-[dev-dependencies]
-serde_json = { workspace = true }
 
 [[example]]
 name = "qa_harness"

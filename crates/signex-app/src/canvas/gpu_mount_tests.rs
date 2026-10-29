@@ -162,7 +162,7 @@ fn world(x: f32, y: f32) -> (u32, u32) {
 
 fn label(text: &str, x: f64, y: f64, rotation: f64) -> Label {
     Label {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         text: text.into(),
         position: Point::new(x, y),
         rotation,
@@ -173,6 +173,7 @@ fn label(text: &str, x: f64, y: f64, rotation: f64) -> Label {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
@@ -181,50 +182,55 @@ fn label(text: &str, x: f64, y: f64, rotation: f64) -> Label {
 pub(super) fn fixture() -> SchematicSheet {
     let mut sheet = SchematicSheet::default();
     sheet.wires.push(Wire {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(5.0, 5.0),
         end: Point::new(20.0, 5.0),
         stroke_width: 0.25,
         unknown_columns: Default::default(),
+        locked: false,
     });
     // A second wire a drag leaves alone.
     sheet.wires.push(Wire {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(5.0, 8.0),
         end: Point::new(20.0, 8.0),
         stroke_width: 0.25,
         unknown_columns: Default::default(),
+        locked: false,
     });
     // A rectangle drawing, a polygon of ordinary size.
     sheet.drawings.push(SchDrawing::Rect {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(22.0, 12.0),
         end: Point::new(25.0, 15.0),
         width: 0.25,
         fill: FillType::None,
         stroke_color: None,
+        locked: false,
     });
     // A drawing circle, in the polygon bucket, far below the radius floor.
     sheet.drawings.push(SchDrawing::Circle {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         center: Point::new(28.0, 9.0),
         radius: 0.03,
         width: 0.01,
         fill: FillType::None,
         stroke_color: None,
+        locked: false,
     });
     sheet.drawings.push(SchDrawing::Arc {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(5.0, 13.0),
         mid: Point::new(10.0, 10.0),
         end: Point::new(15.0, 13.0),
         width: 0.25,
         fill: FillType::None,
         stroke_color: None,
+        locked: false,
     });
     // A junction dot, in the circle bucket, far below the radius floor.
     sheet.junctions.push(Junction {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         position: Point::new(28.0, 5.0),
         diameter: 0.06,
         minted: false,

@@ -8,10 +8,12 @@ use thiserror::Error;
 use uuid::Uuid;
 
 mod annotation;
+mod erc_waiver;
 mod rule_profile;
 mod rules;
 mod unknown;
 pub use annotation::{AnnotationSettings, AnnotationState};
+pub use erc_waiver::ErcWaiver;
 pub use rule_profile::{
     RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
 };

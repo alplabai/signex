@@ -55,11 +55,12 @@ impl Signex {
                 let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
                 if let Some(start) = self.interaction_state.shape_anchor.take() {
                     let drawing = signex_types::schematic::SchDrawing::Line {
-                        uuid: uuid::Uuid::new_v4(),
+                        uuid: uuid::Uuid::now_v7(),
                         start,
                         end: p,
                         width: pre_placement_shape(&self.document_state).0,
                         stroke_color: None,
+                        locked: false,
                     };
                     self.apply_engine_command(
                         signex_engine::Command::PlaceSchDrawing { drawing },
@@ -84,12 +85,13 @@ impl Signex {
                 let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
                 if let Some(start) = self.interaction_state.shape_anchor.take() {
                     let drawing = signex_types::schematic::SchDrawing::Rect {
-                        uuid: uuid::Uuid::new_v4(),
+                        uuid: uuid::Uuid::now_v7(),
                         start,
                         end: p,
                         width: pp_w,
                         fill: pp_fill,
                         stroke_color: None,
+                        locked: false,
                     };
                     self.apply_engine_command(
                         signex_engine::Command::PlaceSchDrawing { drawing },
@@ -112,12 +114,13 @@ impl Signex {
                     let radius = (dx * dx + dy * dy).sqrt();
                     if radius > 0.01 {
                         let drawing = signex_types::schematic::SchDrawing::Circle {
-                            uuid: uuid::Uuid::new_v4(),
+                            uuid: uuid::Uuid::now_v7(),
                             center,
                             radius,
                             width: pp_w,
                             fill: pp_fill,
                             stroke_color: None,
+                            locked: false,
                         };
                         self.apply_engine_command(
                             signex_engine::Command::PlaceSchDrawing { drawing },
@@ -139,13 +142,14 @@ impl Signex {
                 if self.interaction_state.arc_points.len() >= 3 {
                     let pts = std::mem::take(&mut self.interaction_state.arc_points);
                     let drawing = signex_types::schematic::SchDrawing::Arc {
-                        uuid: uuid::Uuid::new_v4(),
+                        uuid: uuid::Uuid::now_v7(),
                         start: pts[0],
                         mid: pts[1],
                         end: pts[2],
                         width: pp_w,
                         fill: pp_fill,
                         stroke_color: None,
+                        locked: false,
                     };
                     self.apply_engine_command(
                         signex_engine::Command::PlaceSchDrawing { drawing },
@@ -190,11 +194,12 @@ impl Signex {
                 let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
                 let pts = std::mem::take(&mut self.interaction_state.polyline_points);
                 let drawing = signex_types::schematic::SchDrawing::Polyline {
-                    uuid: uuid::Uuid::new_v4(),
+                    uuid: uuid::Uuid::now_v7(),
                     points: pts,
                     width: pp_w,
                     fill: pp_fill,
                     stroke_color: None,
+                    locked: false,
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceSchDrawing { drawing },

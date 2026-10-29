@@ -198,10 +198,10 @@ mod tests {
 
     #[test]
     fn binding_an_alternate_as_default_drops_it_from_the_alternates() {
-        let lib = Uuid::new_v4();
+        let lib = Uuid::now_v7();
         let (iec, ansi) = (
-            PrimitiveRef::new(lib, Uuid::new_v4()),
-            PrimitiveRef::new(lib, Uuid::new_v4()),
+            PrimitiveRef::new(lib, Uuid::now_v7()),
+            PrimitiveRef::new(lib, Uuid::now_v7()),
         );
         let mut r = crate::component::tests::fixture_row();
         let old_default = r.symbol_ref;
@@ -231,8 +231,8 @@ mod tests {
 
     #[test]
     fn issues_flag_unbound_default_and_duplicate_alternates() {
-        let lib = Uuid::new_v4();
-        let other = PrimitiveRef::new(lib, Uuid::new_v4());
+        let lib = Uuid::now_v7();
+        let other = PrimitiveRef::new(lib, Uuid::now_v7());
         let mut r = row_with(Vec::new());
         assert!(alternate_symbol_issues(&r).is_empty());
 
@@ -241,8 +241,8 @@ mod tests {
             AlternateSymbol::new(r.symbol_ref, "", "same"),
             AlternateSymbol::new(other, "", "first"),
             AlternateSymbol::new(other, "", "second"),
-            AlternateSymbol::new(PrimitiveRef::new(lib, Uuid::new_v4()), "", "  "),
-            AlternateSymbol::new(PrimitiveRef::new(lib, Uuid::new_v4()), "", " FIRST "),
+            AlternateSymbol::new(PrimitiveRef::new(lib, Uuid::now_v7()), "", "  "),
+            AlternateSymbol::new(PrimitiveRef::new(lib, Uuid::now_v7()), "", " FIRST "),
         ];
         assert_eq!(
             alternate_symbol_issues(&r),

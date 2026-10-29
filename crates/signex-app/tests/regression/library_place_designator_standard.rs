@@ -204,7 +204,7 @@ fn picking_a_standard_in_the_project_tab_sets_it_and_marks_the_project_dirty() {
         loaded.data.designator_standard(),
         Some(DesignatorStandard::Iec81346_2)
     );
-    assert!(app.document_state.dirty_paths.contains(&loaded.path));
+    assert!(app.document_state.is_document_dirty(&loaded.path));
 
     pick(&mut app, None);
     assert!(app.document_state.projects[0].data.annotation.is_none());
@@ -220,12 +220,12 @@ fn re_picking_library_designator_keeps_an_unreadable_section_and_stays_clean() {
     pick_standard(&mut app, None);
     let loaded = &app.document_state.projects[0];
     assert!(loaded.data.has_unreadable_annotation());
-    assert!(!app.document_state.dirty_paths.contains(&loaded.path));
+    assert!(!app.document_state.is_document_dirty(&loaded.path));
 
     pick_standard(&mut app, Some(DesignatorStandard::Ieee315));
     let loaded = &app.document_state.projects[0];
     assert!(!loaded.data.has_unreadable_annotation());
-    assert!(app.document_state.dirty_paths.contains(&loaded.path));
+    assert!(app.document_state.is_document_dirty(&loaded.path));
 }
 
 #[test]

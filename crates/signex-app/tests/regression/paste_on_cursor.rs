@@ -128,11 +128,12 @@ fn space_x_y_turn_a_pasted_group() {
     let (mut app, _other) = app_with_copied_part();
     // Add a wire to the copy: a group, not a lone part.
     let wire = Wire {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(10.16, 20.32),
         end: Point::new(25.4, 20.32),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     };
     let wire_id = wire.uuid;
     let part = doc(&app).symbols[0].uuid;
@@ -182,11 +183,12 @@ fn a_large_paste_draws_only_its_bounding_box() {
         payload: signex_engine::PlacementPayload::new(signex_types::schematic::SchematicSheet {
             wires: (0..n)
                 .map(|i| Wire {
-                    uuid: uuid::Uuid::new_v4(),
+                    uuid: uuid::Uuid::now_v7(),
                     start: Point::new(i as f64 * 1.27, 0.0),
                     end: Point::new(i as f64 * 1.27, 1.27),
                     stroke_width: 0.0,
                     unknown_columns: Default::default(),
+                    locked: false,
                 })
                 .collect(),
             ..Default::default()
@@ -336,11 +338,12 @@ fn cut_aborts_and_deletes_nothing_when_the_copy_fails() {
     let f = fixture();
     let mut app = app_with_library(&f);
     let wire = Wire {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(10.16, 10.16),
         end: Point::new(f64::NAN, 10.16),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     };
     let id = wire.uuid;
     app.document_state

@@ -157,6 +157,15 @@ fn open(app: &mut Signex, modal: ModalId) {
                 draft: Default::default(),
             })
         }
+        ModalId::LibraryStockCopy => {
+            app.library.stock_copy = Some(crate::library::stock_copy::StockCopyState {
+                source: "/stock/symbols/R.snxsym".into(),
+                kind: crate::library::stock_copy::StockPrimitiveKind::Symbol,
+                label: "R".into(),
+                previous_unavailable: None,
+                error: None,
+            })
+        }
         ModalId::LibraryUpdates => {
             app.library.library_updates =
                 Some(crate::library::updates_dialog::LibraryUpdatesState::new(
@@ -401,7 +410,8 @@ fn a_quit_confirm_stays_answerable_while_a_detached_confirm_is_open() {
     open(&mut app, ModalId::RenameDialog);
     let _ = app.sync_detached_modals();
     assert!(app.locking_confirm_window().is_some());
-    app.document_state.dirty_paths.insert("/p/a.snxsch".into());
+    app.document_state
+        .mark_document_dirty(std::path::Path::new("/p/a.snxsch"));
     let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
     assert!(
         app.ui_state.app_quit_confirm.is_some(),
@@ -646,6 +656,7 @@ fn every_dialog_window_is_filled_by_its_body_on_the_theme_surface() {
                     | ModalId::LibraryCreateOptions
                     | ModalId::LibraryDocumentOptions
                     | ModalId::LibraryRecovery
+                    | ModalId::LibraryStockCopy
                     | ModalId::LibraryUpdates
                     | ModalId::LibraryPicker
                     | ModalId::LibraryPrimitivePicker

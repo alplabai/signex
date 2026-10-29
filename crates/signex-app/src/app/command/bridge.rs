@@ -80,6 +80,7 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         }
         "zoom_to_selection_area" => Message::CanvasEvent(CanvasEvent::FitSelection),
         "measure_distance" => Message::Tool(ToolMessage::SelectTool(Tool::Measure)),
+        "break_wire" => Message::Tool(ToolMessage::SelectTool(Tool::BreakWire)),
         "copy" => Message::Edit(EditMsg::Copy),
         "cycle_selection_mode" => {
             Message::Selection(selection_request::SelectionRequest::CycleMode)
@@ -417,7 +418,8 @@ mod tests {
     ///
     /// The ids listed there are a mix, and the distinction decides the fix:
     /// - **unimplemented** — the catalog entry and the binding are the only
-    ///   occurrences in the tree (`break_wire`). A feature, not an arm.
+    ///   occurrences in the tree (`place_junction`,
+    ///   `repeat_last_item`). A feature, not an arm.
     ///   This is most of what is left. It also covers ids whose obvious
     ///   target turns out to be a STUB, where an arm would trade a logged
     ///   warning for a silent no-op. Read the handler body, not just its
@@ -439,7 +441,7 @@ mod tests {
     /// `docs/audit/command-registry-action-surface-2026-07-25.md` §5.
     #[rustfmt::skip]
     const UNMAPPED_CATALOG_IDS: &[&str] = &[
-        "autoplace_fields", "break_wire", "center_on_cursor",
+        "autoplace_fields", "center_on_cursor",
         "close_active_document", "copy_attributes_or_add_vertex", "cycle_fast_grid",
         "cycle_wiring_mode",
         "fast_grid_1", "fast_grid_2",
@@ -786,7 +788,7 @@ mod tests {
         app.interaction_state.active_canvas_mut().polyline_points = pts;
         app.interaction_state.active_canvas_mut().selected.push(
             signex_types::schematic::SelectedItem::new(
-                uuid::Uuid::new_v4(),
+                uuid::Uuid::now_v7(),
                 signex_types::schematic::SelectedKind::Wire,
             ),
         );
@@ -864,6 +866,10 @@ mod tests {
             ))
         ));
         assert!(matches!(
+            resolve_id("break_wire"),
+            Some(Message::Tool(ToolMessage::SelectTool(Tool::BreakWire)))
+        ));
+        assert!(matches!(
             resolve_id("zoom_to_selection_area"),
             Some(Message::CanvasEvent(CanvasEvent::FitSelection))
         ));
@@ -875,13 +881,15 @@ mod tests {
     fn an_unmapped_command_reports_that_it_is_not_available_yet() {
         let _guard = serial();
         let _ = crate::diagnostics::init_logging();
-        let command = AppCommandId::new("break_wire").unwrap();
+        let command = AppCommandId::new("center_on_cursor").unwrap();
 
         assert!(core_to_message(&command).is_none());
 
         assert!(crate::diagnostics::recent_entries().iter().any(|entry| {
-            entry.message.contains("command 'break_wire'")
-                && entry.message.contains("Break wire is not available yet")
+            entry.message.contains("command 'center_on_cursor'")
+                && entry
+                    .message
+                    .contains("Center on cursor is not available yet")
         }));
     }
 

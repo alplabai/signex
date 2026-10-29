@@ -128,7 +128,7 @@ fn v026e_cut_removes_pad_populates_clipboard_and_pushes_history() {
         1,
         "Cut must snapshot history so undo can restore the pad"
     );
-    assert!(editor.dirty, "Cut marks the editor dirty");
+    assert!(editor.is_dirty(), "Cut marks the editor dirty");
 }
 
 #[test]
@@ -260,7 +260,7 @@ fn v026g_rotate_selection_increments_rotation_by_90_degrees() {
         editor.state.pads[0].rotation_deg, 90.0,
         "Rotate must increment rotation_deg by 90"
     );
-    assert!(editor.dirty, "Rotate marks the editor dirty");
+    assert!(editor.is_dirty(), "Rotate marks the editor dirty");
 }
 
 #[test]

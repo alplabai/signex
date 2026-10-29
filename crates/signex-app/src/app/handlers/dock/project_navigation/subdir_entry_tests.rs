@@ -59,7 +59,7 @@ fn confirm_remove(app: &mut Signex, target: PathBuf, choice: RemoveChoice) {
 #[test]
 fn renaming_a_subdirectory_sheet_keeps_its_prefix_and_dirties_the_project() {
     let (mut app, _tmp, sheet, _pcb) = app_with_subdir_entries();
-    app.document_state.dirty_paths.clear();
+    app.document_state.mark_documents_clean_where(|_| true);
 
     submit_rename(&mut app, sheet, "Power2.snxsch");
 
@@ -69,7 +69,7 @@ fn renaming_a_subdirectory_sheet_keeps_its_prefix_and_dirties_the_project() {
         project.data.schematic_root.as_deref(),
         Some("sub/Power2.snxsch")
     );
-    assert!(app.document_state.dirty_paths.contains(&project.path));
+    assert!(app.document_state.is_document_dirty(&project.path));
 }
 
 #[test]
@@ -89,8 +89,7 @@ fn deleting_a_subdirectory_sheet_drops_its_entry_and_the_root() {
     confirm_remove(&mut app, sheet.clone(), RemoveChoice::DeleteFile);
     assert!(
         app.document_state
-            .dirty_paths
-            .contains(&app.document_state.projects[0].path)
+            .is_document_dirty(&app.document_state.projects[0].path)
     );
 
     let data = &app.document_state.projects[0].data;
@@ -106,8 +105,7 @@ fn excluding_a_subdirectory_sheet_drops_its_entry_and_the_root() {
     confirm_remove(&mut app, sheet.clone(), RemoveChoice::ExcludeFromProject);
     assert!(
         app.document_state
-            .dirty_paths
-            .contains(&app.document_state.projects[0].path)
+            .is_document_dirty(&app.document_state.projects[0].path)
     );
 
     let data = &app.document_state.projects[0].data;
@@ -123,8 +121,7 @@ fn excluding_a_subdirectory_pcb_clears_the_pcb_file() {
     confirm_remove(&mut app, pcb, RemoveChoice::ExcludeFromProject);
     assert!(
         app.document_state
-            .dirty_paths
-            .contains(&app.document_state.projects[0].path)
+            .is_document_dirty(&app.document_state.projects[0].path)
     );
 
     assert_eq!(app.document_state.projects[0].data.pcb_file, None);

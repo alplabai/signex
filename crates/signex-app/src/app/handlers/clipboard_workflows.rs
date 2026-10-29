@@ -25,6 +25,18 @@ fn smart_paste_offset(app: &Signex) -> (f64, f64) {
     (offset_x, margin)
 }
 
+/// What a Copy did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CopyOutcome {
+    /// The in-app copy now holds the selection.
+    Carried,
+    /// Nothing in the selection can be carried; the in-app copy was cleared.
+    NothingToCarry,
+    /// No copy was made (nothing selected, no sheet, or an error that was
+    /// logged); the in-app copy is as it was.
+    Failed,
+}
+
 impl Signex {
     /// Cut is copy + delete, but Copy (`collect_selection_clipboard`)
     /// silently drops kinds it can't carry — `ChildSheet`/`SheetPin`
@@ -58,16 +70,30 @@ impl Signex {
         }
 
         self.interaction_state.active_canvas_mut().selected = cuttable;
+        let previous_copy = self.interaction_state.clipboard.clone();
+        let previous_text = self.interaction_state.clipboard_text.clone();
         // Cut deletes only what the copy now holds: if the copy failed (the
         // reason is in the Messages panel), nothing is deleted.
-        if !self.handle_selection_copy_requested() {
+        if self.handle_selection_copy_requested() != CopyOutcome::Carried {
             crate::diagnostics::log_warning(
                 "Cut cancelled: the selection could not be copied, so nothing was deleted.",
             );
+            self.interaction_state.clipboard = previous_copy;
+            self.interaction_state.clipboard_text = previous_text;
             self.interaction_state.active_canvas_mut().selected = selected;
             return Task::none();
         }
-        self.handle_selection_delete_requested();
+        // The system clipboard is written only once the delete went through;
+        // a failed delete leaves the earlier copy in charge.
+        if !self.handle_selection_delete_requested() {
+            crate::diagnostics::log_warning(
+                "Cut cancelled: the selection could not be deleted, so nothing was copied.",
+            );
+            self.interaction_state.clipboard = previous_copy;
+            self.interaction_state.clipboard_text = previous_text;
+            self.interaction_state.active_canvas_mut().selected = selected;
+            return Task::none();
+        }
         self.interaction_state
             .active_canvas_mut()
             .selected
@@ -85,10 +111,11 @@ impl Signex {
         }
 
         // A failed copy must not paste whatever was on the clipboard before.
-        if !self.handle_selection_copy_requested() {
-            return self.finish_update();
+        let outcome = self.handle_selection_copy_requested();
+        let write = self.mirror_copy_on_clipboard_task(outcome);
+        if outcome != CopyOutcome::Carried {
+            return Task::batch([write, self.finish_update()]);
         }
-        let write = self.clipboard_write_task();
         // The offset paste itself happens once Next free numbering is ready.
         Task::batch([write, self.begin_paste(crate::app::PasteIntent::Duplicate)])
     }
@@ -98,23 +125,32 @@ impl Signex {
         self.paste_with_offset(offset_x, offset_y);
     }
 
-    /// Copy the selection to the clipboard. `true` when the clipboard now
-    /// holds it; `false` when there was nothing to carry or the copy failed
-    /// (a failure is logged and leaves the clipboard as it was).
-    pub(crate) fn handle_selection_copy_requested(&mut self) -> bool {
+    /// Copy the selection to the in-app clipboard; see [`CopyOutcome`].
+    pub(crate) fn handle_selection_copy_requested(&mut self) -> CopyOutcome {
         let Some(engine) = self.document_state.active_engine() else {
-            return false;
+            return CopyOutcome::Failed;
         };
+        let selected = &self.interaction_state.active_canvas().selected;
+        if selected.is_empty() {
+            return CopyOutcome::Failed;
+        }
         let grid = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
-        match engine.copy_selection(&self.interaction_state.active_canvas().selected, grid) {
-            Ok(copied) => {
-                let carried = copied.is_some();
-                self.interaction_state.clipboard = copied;
-                carried
+        match engine.copy_selection(selected, grid) {
+            Ok(Some(copied)) => {
+                self.interaction_state.clipboard = Some(copied);
+                CopyOutcome::Carried
+            }
+            Ok(None) => {
+                crate::diagnostics::log_info(
+                    "Copy: nothing in the selection can be copied (sheet symbols and sheet pins are not carried); the clipboard was emptied.",
+                );
+                self.interaction_state.clipboard = None;
+                self.interaction_state.clipboard_text = None;
+                CopyOutcome::NothingToCarry
             }
             Err(error) => {
                 crate::diagnostics::log_warning(format!("Copy failed: {error}."));
-                false
+                CopyOutcome::Failed
             }
         }
     }
@@ -135,6 +171,7 @@ impl Signex {
         // cursor when it finishes: a paste is the newest gesture.
         self.interaction_state.placement_epoch += 1;
         self.arm_placement_session(payload, &target, kind);
+        self.refresh_paste_ghost();
     }
 
     /// Smart Paste and Duplicate: place the copy now, shifted by a fixed

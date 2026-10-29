@@ -230,7 +230,7 @@ pub(crate) fn apply_footprint_clipboard_op(
             });
             if did_delete {
                 editor.canvas_cache.clear();
-                editor.dirty = true;
+                editor.mark_dirty();
             }
         }
         FootprintEditorMsg::PastePad => {
@@ -286,7 +286,7 @@ pub(crate) fn apply_footprint_clipboard_op(
                 FootprintEditorState::sync_pads_to_primitive(state, primitive);
             });
             editor.canvas_cache.clear();
-            editor.dirty = true;
+            editor.mark_dirty();
         }
         _ => {}
     }
@@ -518,7 +518,7 @@ fn footprint_nudge_selection(editor: &mut crate::app::FootprintDocument, dx: f64
         FootprintEditorState::sync_pads_to_primitive(state, primitive);
     });
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 /// v0.24 Phase 1 (Track B) — message-kind classifier driving the

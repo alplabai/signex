@@ -65,7 +65,7 @@ fn place_point(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64)
         apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(entity));
     });
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 fn move_point(
@@ -182,7 +182,7 @@ fn move_point(
         }
     }
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 // v0.27 — drag a Line edge by translating both its endpoints in one
@@ -392,7 +392,7 @@ fn move_line(
         FootprintEditorState::sync_pads_to_primitive(state, primitive);
     });
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 // v0.27 — propagate a dragged sketch Line to the literal pad bbox.
@@ -564,7 +564,7 @@ fn resize_round_pad(editor: &mut crate::app::FootprintDocument, pad_idx: usize, 
         FootprintEditorState::sync_pads_to_primitive(state, primitive);
     });
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 /// Regenerate the sidecar geometry of a pad whose frame a live Sketch

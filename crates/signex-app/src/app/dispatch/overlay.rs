@@ -524,12 +524,12 @@ impl Signex {
             }
             ErcMsg::DefaultProfileMigrated(result) => self.handle_default_profile_migrated(&result),
             ErcMsg::RulesUndone => {
-                self.undo_project_rules();
-                Task::none()
+                let changed = self.undo_project_rules();
+                self.rerun_erc_after_rules_edit(changed)
             }
             ErcMsg::RulesRedone => {
-                self.redo_project_rules();
-                Task::none()
+                let changed = self.redo_project_rules();
+                self.rerun_erc_after_rules_edit(changed)
             }
             ErcMsg::PinMatrixCellCycled { row, col } => {
                 self.handle_pin_matrix_cell_cycled(row, col)

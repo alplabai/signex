@@ -331,6 +331,18 @@ impl Signex {
         }
     }
 
+    /// Refuse a library rename that would strand an off-thread draft write:
+    /// shown in the dialog and logged, naming the draft's file.
+    pub(super) fn refuse_rename_while_library_saving(&mut self, draft: &std::path::Path) {
+        let label = draft.file_name().map_or_else(
+            || draft.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        );
+        let reason = format!("{label} is still being saved; try again in a moment.");
+        self.set_rename_error(&reason);
+        crate::diagnostics::log_warning(format!("[rename] refused: {reason}"));
+    }
+
     /// Refuse a rename that would race an off-thread `.snxprj` write: shown
     /// in the dialog and logged to the Messages panel.
     pub(super) fn refuse_rename_while_project_saving(&mut self) {

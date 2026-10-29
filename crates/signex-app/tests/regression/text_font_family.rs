@@ -25,6 +25,7 @@ fn label(id: uuid::Uuid) -> Label {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
@@ -38,6 +39,7 @@ fn note(id: uuid::Uuid) -> TextNote {
         font_family: None,
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
+        locked: false,
     }
 }
 
@@ -57,7 +59,6 @@ fn app_with(sheet: SchematicSheet, path: &Path) -> Signex {
         title: "fonts".to_string(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -98,7 +99,7 @@ fn label_family(app: &Signex, path: &Path, id: uuid::Uuid) -> Option<String> {
 
 #[test]
 fn a_family_edit_is_stored_as_typed_and_undone_with_one_undo() {
-    let id = uuid::Uuid::new_v4();
+    let id = uuid::Uuid::now_v7();
     let path = PathBuf::from("font-edit.snxsch");
     let sheet = SchematicSheet {
         labels: vec![label(id)],
@@ -116,7 +117,12 @@ fn a_family_edit_is_stored_as_typed_and_undone_with_one_undo() {
         Some(MISSING),
         "a family this machine lacks is still what the document stores"
     );
-    assert!(app.document_state.dirty_paths.contains(&path) || app.document_state.tabs[0].dirty);
+    assert!(
+        app.document_state.is_document_dirty(&path)
+            || app
+                .document_state
+                .is_document_dirty(&app.document_state.tabs[0].path)
+    );
 
     let _ = app.update(Message::Edit(EditMsg::Undo));
     assert_eq!(label_family(&app, &path, id), None);
@@ -124,11 +130,11 @@ fn a_family_edit_is_stored_as_typed_and_undone_with_one_undo() {
 
 #[test]
 fn a_missing_family_is_reported_once_per_document() {
-    let (first, second) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+    let (first, second) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
     let path = PathBuf::from("font-notice.snxsch");
     let sheet = SchematicSheet {
         labels: vec![label(first), label(second)],
-        text_notes: vec![note(uuid::Uuid::new_v4())],
+        text_notes: vec![note(uuid::Uuid::now_v7())],
         ..Default::default()
     };
     let mut app = app_with(sheet, &path);

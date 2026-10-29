@@ -38,7 +38,7 @@ impl Signex {
             .document_state
             .project_by_id(project_id)
             .with_context(|| format!("project {project_id:?} is no longer loaded"))?;
-        if !self.document_state.dirty_paths.contains(&project.path) {
+        if !self.document_state.is_document_dirty(&project.path) {
             return Ok(Task::none());
         }
         let write = self.prepare_project_write(project_id)?;
@@ -133,7 +133,7 @@ impl Signex {
                 });
         if unchanged {
             self.finish_clean_project_save(&path);
-        } else if self.document_state.dirty_paths.contains(&path) {
+        } else if self.document_state.is_document_dirty(&path) {
             crate::diagnostics::log_info(format!(
                 "[save] {} changed while it was being written; it stays modified",
                 path.display()
@@ -263,7 +263,7 @@ impl Signex {
     /// The project's bytes on disk match it: clear the marker, queue the
     /// project git commit, refresh the tree's dirty dot.
     fn finish_clean_project_save(&mut self, path: &std::path::Path) {
-        self.document_state.dirty_paths.remove(path);
+        self.document_state.mark_document_clean(path);
         let label = path
             .file_name()
             .map(|f| f.to_string_lossy().into_owned())

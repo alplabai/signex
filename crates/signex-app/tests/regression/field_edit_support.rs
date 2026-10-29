@@ -26,7 +26,7 @@ fn field_text(at: Point) -> TextProp {
 /// A part at `at` with its designator 5 mm above and its value 5 mm below.
 pub(crate) fn part(reference: &str, value: &str, at: (f64, f64)) -> Symbol {
     Symbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         lib_id: "lib:r".into(),
         reference: reference.into(),
         value: value.into(),
@@ -43,7 +43,7 @@ pub(crate) fn part(reference: &str, value: &str, at: (f64, f64)) -> Symbol {
 
 pub(crate) fn label(text: &str, at: (f64, f64)) -> Label {
     Label {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         text: text.into(),
         position: Point::new(at.0, at.1),
         rotation: 0.0,
@@ -54,16 +54,18 @@ pub(crate) fn label(text: &str, at: (f64, f64)) -> Label {
         justify: HAlign::Left,
         justify_v: Default::default(),
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
 pub(crate) fn wire(a: (f64, f64), b: (f64, f64), width: f64) -> Wire {
     Wire {
         unknown_columns: Default::default(),
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
         stroke_width: width,
+        locked: false,
     }
 }
 
@@ -83,7 +85,6 @@ pub(crate) fn app_with(mut sheet: SchematicSheet) -> Signex {
         title: "field-edit".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -99,7 +100,7 @@ pub(crate) fn app_with(mut sheet: SchematicSheet) -> Signex {
 
 pub(crate) fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     }

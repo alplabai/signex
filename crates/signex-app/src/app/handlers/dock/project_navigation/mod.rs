@@ -529,12 +529,12 @@ mod tests {
             sym.clone(),
             signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s")),
         );
-        sym_ed.dirty = true;
+        sym_ed.mark_dirty();
         let mut fp_ed = FootprintDocument::new(
             fp.clone(),
             signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("g")),
         );
-        fp_ed.dirty = true;
+        fp_ed.mark_dirty();
         app.document_state
             .symbol_editors
             .insert(sym.clone(), sym_ed);
@@ -549,7 +549,6 @@ mod tests {
                 title: "t".into(),
                 path,
                 cached_document: None,
-                dirty: false,
                 project_id: None,
                 kind,
             });
@@ -560,7 +559,7 @@ mod tests {
         assert!(app.document_state.tabs.is_empty());
         assert!(app.document_state.symbol_editors.contains_key(&sym));
         assert!(app.document_state.footprint_editors.contains_key(&fp));
-        assert!(app.document_state.dirty_paths.contains(&sym));
-        assert!(app.document_state.dirty_paths.contains(&fp));
+        assert!(app.document_state.is_document_dirty(&sym));
+        assert!(app.document_state.is_document_dirty(&fp));
     }
 }

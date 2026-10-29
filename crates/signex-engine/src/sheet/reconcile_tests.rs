@@ -27,7 +27,7 @@ fn port(name: &str, direction: &str) -> SheetPort {
 
 fn symbol_with(pins: Vec<SheetPin>) -> ChildSheet {
     ChildSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         name: "Child".to_string(),
         filename: "child.sch".to_string(),
         position: Point::new(100.0, 100.0),
@@ -44,7 +44,7 @@ fn symbol_with(pins: Vec<SheetPin>) -> ChildSheet {
 
 fn hand_pin(name: &str, at: (f64, f64)) -> SheetPin {
     SheetPin {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         name: name.to_string(),
         direction: "input".to_string(),
         position: Point::new(at.0, at.1),
@@ -189,7 +189,7 @@ fn place(sheet: &mut SchematicSheet, reference: &str, at: Point) {
 fn hierarchical_label(text: &str, at: Point) -> Label {
     Label {
         unknown_columns: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         text: text.to_string(),
         position: at,
         rotation: 0.0,
@@ -199,6 +199,7 @@ fn hierarchical_label(text: &str, at: Point) -> Label {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         font_family: None,
+        locked: false,
     }
 }
 
@@ -392,13 +393,13 @@ fn a_slot_under_a_junction_or_no_connect_is_not_free() {
     let mut parent = test_sheet();
     parent.child_sheets.push(symbol_with(Vec::new()));
     parent.junctions.push(Junction {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         position: Point::new(100.0, 102.54),
         diameter: 0.0,
         ..Default::default()
     });
     parent.no_connects.push(NoConnect {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         position: Point::new(100.0, 105.08),
     });
 

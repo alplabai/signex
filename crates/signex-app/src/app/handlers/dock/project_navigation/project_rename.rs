@@ -498,9 +498,7 @@ impl Signex {
         if self.document_state.active_path.as_deref() == Some(from) {
             self.document_state.active_path = Some(to.to_path_buf());
         }
-        if self.document_state.dirty_paths.remove(from) {
-            self.document_state.dirty_paths.insert(to.to_path_buf());
-        }
+        self.document_state.rekey_document_dirty(from, to);
         self.rekey_page_setup(from, to);
         self.rekey_undocked_windows(from, to);
     }
@@ -524,7 +522,7 @@ impl Signex {
             .chain(ds.engines.keys().cloned())
             .chain(ds.symbol_editors.keys().cloned())
             .chain(ds.footprint_editors.keys().cloned())
-            .chain(ds.dirty_paths.iter().cloned())
+            .chain(ds.dirty_document_paths())
             .chain(ds.pcb_revisions.keys().cloned())
             .chain(ds.active_path.iter().cloned())
             .filter(|p| crate::app::state::scope::path_is_under(p, &job.old_dir, fold))

@@ -72,7 +72,7 @@ impl Signex {
             .iter()
             .find(|tab| matches!(tab.kind, TabKind::Pcb) && tab.path == path)
             .with_context(|| format!("no open PCB at {}", path.display()))?;
-        if !tab.dirty && !self.document_state.dirty_paths.contains(&path) {
+        if !self.document_state.is_document_dirty(&path) {
             return Ok(None);
         }
         let revision = self
@@ -219,7 +219,7 @@ impl Signex {
     /// both completions, so the warning fires in either completion order.
     fn warn_unwritten_spellings(&mut self, path: &std::path::Path) {
         for path in self.document_state.document_saves.take_superseded(path) {
-            if self.document_state.dirty_paths.contains(&path) {
+            if self.document_state.is_document_dirty(&path) {
                 crate::diagnostics::log_warning(format!(
                     "[save] {} was not written: a newer write to the same file landed first; \
                      it stays modified",
@@ -307,15 +307,7 @@ impl Signex {
     /// markers, release a parked engine nothing holds open, and queue the
     /// project git commit.
     fn finish_clean_save(&mut self, path: &std::path::Path, saved: crate::app::state::CommitBytes) {
-        self.document_state.dirty_paths.remove(path);
-        for tab in self
-            .document_state
-            .tabs
-            .iter_mut()
-            .filter(|t| t.path == path)
-        {
-            tab.dirty = false;
-        }
+        self.document_state.mark_document_clean(path);
         // The tab closed mid-save and parked the engine because it was
         // dirty; now it is clean nothing needs it.
         if !self.document_is_held_open(path) {
@@ -381,7 +373,7 @@ impl Signex {
                 self.ui_state.net_color_revision.insert(to.clone(), count);
             }
             if colours_moved_on {
-                self.mark_cached_sheet_dirty(&to);
+                self.document_state.mark_document_dirty(&to);
                 self.refresh_panel_ctx();
             }
             crate::diagnostics::log_info(format!("[save-as] Wrote {}", to.display()));

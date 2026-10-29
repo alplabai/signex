@@ -29,33 +29,36 @@ fn scene_of(drawings: Vec<SchDrawing>) -> Scene {
 
 fn line(x: f64) -> SchDrawing {
     SchDrawing::Line {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(x, 10.0),
         end: Point::new(x + 5.0, 10.0),
         width: 0.25,
         stroke_color: None,
+        locked: false,
     }
 }
 
 fn rect(fill: FillType) -> SchDrawing {
     SchDrawing::Rect {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(10.0, 8.0),
         end: Point::new(20.0, 14.0),
         width: 0.25,
         fill,
         stroke_color: None,
+        locked: false,
     }
 }
 
 fn circle(radius: f64, fill: FillType) -> SchDrawing {
     SchDrawing::Circle {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         center: Point::new(30.0, 30.0),
         radius,
         width: 0.25,
         fill,
         stroke_color: None,
+        locked: false,
     }
 }
 
@@ -88,13 +91,14 @@ fn drawings_keep_file_order_across_kinds() {
 #[test]
 fn an_arc_drawing_is_one_arc_item_and_a_collinear_one_two_lines() {
     let arc = |mid_y: f64| SchDrawing::Arc {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(0.0, 0.0),
         mid: Point::new(5.0, mid_y),
         end: Point::new(10.0, 0.0),
         width: 0.25,
         fill: FillType::None,
         stroke_color: None,
+        locked: false,
     };
 
     let bent = scene_of(vec![arc(3.0)]);
@@ -110,7 +114,7 @@ fn an_arc_drawing_is_one_arc_item_and_a_collinear_one_two_lines() {
 #[test]
 fn an_unfilled_polyline_is_its_segments_and_a_filled_one_a_polygon() {
     let polyline = |fill| SchDrawing::Polyline {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         points: vec![
             Point::new(0.0, 0.0),
             Point::new(4.0, 0.0),
@@ -119,6 +123,7 @@ fn an_unfilled_polyline_is_its_segments_and_a_filled_one_a_polygon() {
         width: 0.25,
         fill,
         stroke_color: None,
+        locked: false,
     };
 
     let open = scene_of(vec![polyline(FillType::None)]);

@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 fn unit_symbol(reference: &str, lib_id: &str, unit: u32) -> Symbol {
     Symbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         lib_id: lib_id.to_string(),
         reference: reference.to_string(),
         unit,

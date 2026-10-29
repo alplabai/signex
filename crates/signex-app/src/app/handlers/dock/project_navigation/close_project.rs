@@ -15,7 +15,7 @@ impl Signex {
     /// Projects-panel right-click → Close Project.
     ///
     /// If any file in the project's directory has unsaved edits
-    /// (`dirty_paths` intersects the project dir), opens the
+    /// (a dirty document lies in the project dir), opens the
     /// `ProjectCloseConfirm` modal first instead of closing
     /// immediately. The modal's choice handler
     /// (`handle_project_close_confirm`) calls back into this method
@@ -102,9 +102,6 @@ impl Signex {
         else {
             return Task::none();
         };
-        // The gate reads `dirty_paths`; do not rely on every edit site
-        // having refreshed the panel context since its last editor edit.
-        self.sync_editor_dirty_paths();
         // Engines are re-read here (no IO), so an edit made while the Task ran
         // is seen. Evidence that no longer describes the workspace is read
         // again instead of acted on.
@@ -121,7 +118,7 @@ impl Signex {
         // scan walks ancestors rather than the immediate parent, and the
         // project's own `.snxprj` sits at the root and is picked up too.
         // Component Preview rows are keyed by row, not file, so they are
-        // not in `dirty_paths`; the scan places them too (#666): a row is
+        // not among the dirty paths; the scan places them too (#666): a row is
         // the project's only when its library is the project's own.
         let scan = self.current_close_scan(project_idx, &sheet_refs);
         if let Some(line) = scan.warning(&project_name) {
@@ -164,7 +161,7 @@ impl Signex {
     /// Inner close-project flow that actually drops tabs + the
     /// project entry. Called either directly (clean project) or via
     /// the project-close confirm modal once the user picks Save All
-    /// or Discard All. Trusts that `dirty_paths` for this project is
+    /// or Discard All. Trusts that the dirty marks for this project are
     /// already empty apart from `kept` (callers ensure this).
     ///
     /// `kept` are dirty documents another open project claims: their tabs
@@ -238,9 +235,9 @@ impl Signex {
         }
 
         // Drop the project's parked engines too — without this, an
-        // engine that was kept alive by `dirty_paths` would leak
+        // engine that was kept alive by its dirty mark would leak
         // through project close. Save All / Discard All have already
-        // pruned `dirty_paths` for the project, so this loop just
+        // pruned the dirty marks for the project, so this loop just
         // sweeps the engine map for paths directly in this project's
         // directory or reached through its sheet hierarchy.
         if let Some(project) = self.document_state.projects.get(project_idx) {
@@ -380,19 +377,8 @@ impl Signex {
             };
         }
         let key = path_key_with(path, fold);
-        for variant in held.iter().filter(|p| **p != target) {
-            if let Some(tab) = self
-                .document_state
-                .tabs
-                .iter_mut()
-                .find(|t| t.path == *variant)
-            {
-                tab.dirty = false;
-            }
-        }
         self.document_state
-            .dirty_paths
-            .retain(|p| path_key_with(p, fold) != key);
+            .mark_documents_clean_where(|p| path_key_with(p, fold) == key);
         Ok(())
     }
 
@@ -406,7 +392,7 @@ impl Signex {
     ) -> Option<(Vec<std::path::PathBuf>, String)> {
         let kept: Vec<_> = held
             .iter()
-            .filter(|p| p.as_path() != target && self.document_state.dirty_paths.contains(*p))
+            .filter(|p| p.as_path() != target && self.document_state.is_document_dirty(p))
             .cloned()
             .collect();
         if kept.is_empty() {
@@ -496,15 +482,7 @@ impl Signex {
             // the recovery copy, so a write still running is stale here;
             // callers chain `autosave_sweep` to remove the copy on disk.
             self.document_state.autosave.supersede_in_flight(path);
-            self.document_state.dirty_paths.remove(path);
-            if let Some(tab) = self
-                .document_state
-                .tabs
-                .iter_mut()
-                .find(|t| t.path == *path)
-            {
-                tab.dirty = false;
-            }
+            self.document_state.mark_document_clean(path);
             // Parity with the Ctrl+S schematic path (`save_active_document`):
             // auto-commit the saved sheet into the owning project's git
             // repo. Best-effort, no-op when `enable_git` is off — the
@@ -562,7 +540,6 @@ impl Signex {
         // A project opened since the references were read has disk-only
         // children nobody resolved; read again and re-prompt rather than act
         // on stale ownership.
-        self.sync_editor_dirty_paths();
         let stale = self.document_state.stale_causes(&state.sheet_refs);
         if !stale.is_empty() {
             crate::diagnostics::log_warning(format!(
@@ -632,7 +609,7 @@ impl Signex {
                 // `execute_close_project` afterwards,
                 // but doing it here too keeps the flow symmetric
                 // with SaveAll (after this match the project's
-                // dirty_paths entries are gone either way).
+                // dirty marks are gone either way).
                 let mut tasks: Vec<Task<Message>> = Vec::new();
                 for path in &state.dirty_paths {
                     self.forget_net_colors_of(path);
@@ -640,15 +617,7 @@ impl Signex {
                         .document_saves
                         .forget_where(|p| p == path);
                     self.document_state.remove_engine(path);
-                    self.document_state.dirty_paths.remove(path);
-                    if let Some(tab) = self
-                        .document_state
-                        .tabs
-                        .iter_mut()
-                        .find(|t| &t.path == path)
-                    {
-                        tab.dirty = false;
-                    }
+                    self.document_state.mark_document_clean(path);
                     tasks.push(self.discard_primitive_editor(path));
                 }
                 // Component Preview rows outlive the project's tabs, so
@@ -673,6 +642,7 @@ impl Signex {
     /// have `project_id: None` (a library nested under the project), so
     /// the project-close sweep by `project_id` would never reach it.
     fn discard_primitive_editor(&mut self, path: &std::path::Path) -> Task<Message> {
+        self.warn_if_cascade_owed(path);
         self.document_state.symbol_editors.remove(path);
         self.document_state.footprint_editors.remove(path);
         let tab_idx = self.document_state.tabs.iter().position(|t| {
@@ -690,7 +660,7 @@ impl Signex {
 
     /// Entry point for every app-exit request — chrome ✕, File ▸ Exit,
     /// and OS close (Alt+F4) all funnel here. If any document in the
-    /// workspace has unsaved edits (`dirty_paths` non-empty, or a dirty
+    /// workspace has unsaved edits (a dirty document, or a dirty
     /// Component Preview row), opens the
     /// app-quit confirmation modal instead of exiting; otherwise closes
     /// the main window, which the daemon turns into process exit via
@@ -699,9 +669,6 @@ impl Signex {
         if self.hold_quit_while_path_op() {
             return Task::none();
         }
-        // Same hardening as `close_project_at_tree_path`: the quit gate
-        // must see footprint and symbol edits even if no panel refresh ran after them.
-        self.sync_editor_dirty_paths();
         // Guard against a second close request stacking a duplicate
         // modal while the first is still up.
         if self.ui_state.app_quit_confirm.is_some() {
@@ -712,11 +679,14 @@ impl Signex {
                 .map_or_else(Task::none, iced::window::gain_focus);
         }
         let dirty_rows = self.library.dirty_editors();
-        if self.document_state.dirty_paths.is_empty() && dirty_rows.is_empty() {
+        if !self.document_state.has_dirty_documents() && dirty_rows.is_empty() {
             return self.close_main_window_now();
         }
-        let mut dirty: Vec<std::path::PathBuf> =
-            self.document_state.dirty_paths.iter().cloned().collect();
+        let mut dirty: Vec<std::path::PathBuf> = self
+            .document_state
+            .dirty_document_paths()
+            .into_iter()
+            .collect();
         dirty.sort();
         self.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState {
             dirty_paths: dirty,
@@ -775,9 +745,11 @@ impl Signex {
                 // (a window that was not locked, a route nobody thought of)
                 // is NOT in the list: refresh the confirm, keep it open, and
                 // leave every recovery copy alone.
-                self.sync_editor_dirty_paths();
-                let mut live: Vec<std::path::PathBuf> =
-                    self.document_state.dirty_paths.iter().cloned().collect();
+                let mut live: Vec<std::path::PathBuf> = self
+                    .document_state
+                    .dirty_document_paths()
+                    .into_iter()
+                    .collect();
                 live.sort();
                 let live_rows = self.library.dirty_editors();
                 let unseen = live.iter().any(|p| !state.dirty_paths.contains(p))
@@ -845,7 +817,7 @@ mod tests {
             path.to_path_buf(),
             SymbolDocument::new(path.to_path_buf(), file),
         );
-        app.document_state.dirty_paths.insert(path.to_path_buf());
+        app.document_state.mark_document_dirty(path);
         app
     }
 
@@ -865,7 +837,7 @@ mod tests {
         assert!(result.is_ok(), "symbol draft should save, got {result:?}");
         assert!(path.exists(), "the .snxsym must be written to disk");
         assert!(
-            !app.document_state.dirty_paths.contains(&path),
+            !app.document_state.is_document_dirty(&path),
             "dirty marker must clear once the symbol is saved",
         );
     }
@@ -881,7 +853,7 @@ mod tests {
 
         assert!(result.is_ok(), "case-variant save failed: {result:?}");
         assert!(held.exists(), "the held spelling must be the one written");
-        assert!(app.document_state.dirty_paths.is_empty());
+        assert!(!app.document_state.has_dirty_documents());
     }
 
     /// Two engines for one file, held as `Lib`/`lib`; the second carries a
@@ -902,7 +874,7 @@ mod tests {
             let mut engine = signex_engine::Engine::new(sheet).expect("engine");
             engine.set_path(Some(path.clone()));
             app.document_state.engines.insert(path.clone(), engine);
-            app.document_state.dirty_paths.insert(path.clone());
+            app.document_state.mark_document_dirty(path);
         }
         (app, upper, lower)
     }
@@ -923,8 +895,8 @@ mod tests {
             "{text}"
         );
         assert_eq!(std::fs::read(&upper).unwrap(), b"on-disk");
-        assert!(app.document_state.dirty_paths.contains(&upper));
-        assert!(app.document_state.dirty_paths.contains(&lower));
+        assert!(app.document_state.is_document_dirty(&upper));
+        assert!(app.document_state.is_document_dirty(&lower));
     }
 
     fn decide_dir_folds(app: &mut Signex, dir: &std::path::Path) {
@@ -942,11 +914,11 @@ mod tests {
         let err = app.try_save_dirty_path_with(&upper).unwrap_err();
 
         assert!(format!("{err:#}").starts_with("Save each spelling separately"));
-        assert!(!app.document_state.dirty_paths.contains(&upper));
-        assert!(app.document_state.dirty_paths.contains(&lower));
+        assert!(!app.document_state.is_document_dirty(&upper));
+        assert!(app.document_state.is_document_dirty(&lower));
         // The retry writes the spelling that is still dirty and succeeds.
         assert!(app.try_save_dirty_path_with(&lower).is_ok());
-        assert!(app.document_state.dirty_paths.is_empty());
+        assert!(!app.document_state.has_dirty_documents());
     }
 
     #[test]
@@ -959,7 +931,7 @@ mod tests {
         let result = app.try_save_dirty_path_with(&upper);
 
         assert!(result.is_ok(), "identical variants must save: {result:?}");
-        assert!(app.document_state.dirty_paths.is_empty());
+        assert!(!app.document_state.has_dirty_documents());
     }
 
     #[test]
@@ -1013,7 +985,7 @@ mod tests {
         let file =
             signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
         let mut editor = crate::app::FootprintDocument::new(path.clone(), file);
-        editor.dirty = true;
+        editor.mark_dirty();
         app.document_state
             .footprint_editors
             .insert(path.clone(), editor);
@@ -1050,7 +1022,7 @@ mod tests {
         // prompt, editor stays open) rather than discarded. It only gets that
         // far when the gate saw it despite the missing panel refresh.
         assert!(app.ui_state.project_close_confirm.is_none());
-        assert!(app.document_state.dirty_paths.contains(&path));
+        assert!(app.document_state.is_document_dirty(&path));
         assert!(app.document_state.footprint_editors.contains_key(&path));
     }
 
@@ -1060,7 +1032,7 @@ mod tests {
         let (mut app, _path) = app_with_unsynced_dirty_footprint(dir.path());
         // A clean workspace, so the close goes straight through.
         app.document_state.footprint_editors.clear();
-        app.document_state.dirty_paths.clear();
+        app.document_state.mark_documents_clean_where(|_| true);
         let project = &app.document_state.projects[0];
         let (project_id, project_path) = (project.id, project.path.clone());
         app.document_state

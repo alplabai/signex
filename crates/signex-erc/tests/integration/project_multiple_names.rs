@@ -20,7 +20,7 @@ fn pt(x: f64, y: f64) -> Point {
 fn label(text: &str, at: Point, label_type: LabelType) -> Label {
     Label {
         unknown_columns: Default::default(),
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         text: text.to_string(),
         position: at,
         rotation: 0.0,
@@ -30,6 +30,7 @@ fn label(text: &str, at: Point, label_type: LabelType) -> Label {
         font_family: None,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        locked: false,
     }
 }
 
@@ -332,7 +333,7 @@ fn a_no_erc_directive_on_the_winning_name_suppresses_the_finding() {
     );
     assert_eq!(project(&root, &[]).len(), 1);
     root.no_erc_directives.push(NoConnect {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         position: pt(10.0, 0.0),
     });
     assert!(project(&root, &[]).is_empty());
@@ -355,7 +356,7 @@ fn a_child_placed_twice_gives_one_row_at_one_marker() {
 
 fn no_erc(at: Point) -> NoConnect {
     NoConnect {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         position: at,
     }
 }

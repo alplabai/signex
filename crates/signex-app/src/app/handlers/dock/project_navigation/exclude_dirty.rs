@@ -55,9 +55,7 @@ impl DiscardBlock {
 const PROMPT_NAMES_SHOWN: usize = 3;
 
 impl Signex {
-    /// Dirty documents at or under `target`, sorted. Pure: callers that need
-    /// a footprint draft's flag folded into `dirty_paths` run
-    /// `sync_editor_dirty_paths` first.
+    /// Dirty documents at or under `target`, sorted.
     pub(crate) fn unsaved_documents(
         &self,
         target: &std::path::Path,
@@ -65,8 +63,8 @@ impl Signex {
     ) -> Vec<std::path::PathBuf> {
         let doc = &self.document_state;
         let mut found: Vec<std::path::PathBuf> = doc
-            .dirty_paths
-            .iter()
+            .dirty_document_paths()
+            .into_iter()
             .filter(|p| path_is_under(p, target, fold))
             // A project file's own dirty marker is metadata, not a document
             // the user can lose by excluding a row.
@@ -76,7 +74,6 @@ impl Signex {
                     .iter()
                     .any(|lp| path_key_with(&lp.path, fold) == key)
             })
-            .cloned()
             .collect();
         found.sort();
         found
@@ -260,7 +257,6 @@ impl Signex {
             self.refresh_panel_ctx();
             return iced::Task::none();
         }
-        self.sync_editor_dirty_paths();
         // `docs` is listed under the project's fold (the host default while it
         // is undecided) but each save below decides its own spelling. That is
         // safe: a spelling the save keeps stays dirty, so the quit gate still
@@ -345,7 +341,7 @@ impl Signex {
     ) {
         let keys: std::collections::HashSet<String> =
             docs.iter().map(|p| path_key_with(p, fold)).collect();
-        let is_discarded = |p: &std::path::PathBuf| keys.contains(&path_key_with(p, fold));
+        let is_discarded = |p: &std::path::Path| keys.contains(&path_key_with(p, fold));
         let dead: Vec<std::path::PathBuf> = self
             .document_state
             .engines
@@ -360,7 +356,7 @@ impl Signex {
         doc.engines.retain(|p, _| !is_discarded(p));
         doc.symbol_editors.retain(|p, _| !is_discarded(p));
         doc.footprint_editors.retain(|p, _| !is_discarded(p));
-        doc.dirty_paths.retain(|p| !is_discarded(p));
+        doc.mark_documents_clean_where(is_discarded);
         crate::diagnostics::log_warning(format!(
             "Excluded {display_name} from the project: discarded {} unsaved document(s)",
             docs.len()
