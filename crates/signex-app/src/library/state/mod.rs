@@ -169,6 +169,10 @@ pub struct LibraryBrowserState {
     /// clicking a class row in the left sidebar — clicking the
     /// same row twice clears the filter.
     pub class_filter: Option<String>,
+    /// Range filters on this tab's measurement columns, by parameter key
+    /// (#1572). Cleared when the active table changes: the columns are
+    /// the table's.
+    pub range_filters: crate::library::range_filter::RangeFilters,
     /// Edit Component Details modal — opened by double-clicking a row
     /// in the grid. `None` while closed.
     pub edit_modal: Option<EditRowModalState>,
@@ -243,6 +247,7 @@ impl LibraryBrowserState {
             search: String::new(),
             lifecycle_filter: LifecycleFilter::default(),
             class_filter: None,
+            range_filters: Default::default(),
             edit_modal: None,
             cell_edit: HashMap::new(),
             delete_confirm: None,

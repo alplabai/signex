@@ -169,6 +169,8 @@ mod history_reload_repair;
 
 #[path = "regression/library_browser_cell_commit.rs"]
 mod library_browser_cell_commit;
+#[path = "regression/library_range_filter.rs"]
+mod library_range_filter;
 #[path = "regression/library_row_base_local.rs"]
 mod library_row_base_local;
 
@@ -258,6 +260,8 @@ mod sheet_symbol_edit;
 #[path = "regression/symbol_undo_steps.rs"]
 mod symbol_undo_steps;
 
+#[path = "regression/field_edit_support.rs"]
+mod field_edit_support;
 #[path = "regression/library_alternate_symbols.rs"]
 mod library_alternate_symbols;
 #[path = "regression/library_place_designator_standard.rs"]
@@ -274,6 +278,12 @@ mod library_stock_place;
 mod library_symbol_drift;
 #[path = "regression/repeat_placement.rs"]
 mod repeat_placement;
+// #1258 — Properties edits the shared fields of a multi-selection.
+#[path = "regression/multi_selection_edit.rs"]
+mod multi_selection_edit;
+// #1255, #1670 — in-place editing of a part's designator, value and footprint.
+#[path = "regression/inplace_field_edit.rs"]
+mod inplace_field_edit;
 // #1301, #1262, #1260 — Open Datasheet, Edit Symbol and Change Component
 // on a placed part.
 #[path = "regression/placed_part_actions.rs"]

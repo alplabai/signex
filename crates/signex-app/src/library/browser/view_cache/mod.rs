@@ -13,7 +13,10 @@ use super::columns::{ColumnKind, GridColumn, derive_columns, row_matches_filter}
 use super::price::PriceView;
 use super::sort::{CellSortKey, sort_by_cell_key};
 use super::*;
+use crate::library::range_filter::{FilterColumn, retain_in_range};
 use crate::library::state::{BrowserSort, OpenLibrary};
+use signex_library::RangeFilter;
+use std::collections::BTreeMap;
 
 /// The inputs a cache was built from.
 #[derive(Debug, Clone)]
@@ -25,6 +28,7 @@ struct ViewKey {
     lifecycle_filter: LifecycleFilter,
     class_filter: Option<String>,
     sort_by: Option<BrowserSort>,
+    range: Vec<(String, RangeFilter)>,
 }
 
 impl ViewKey {
@@ -42,6 +46,7 @@ impl ViewKey {
             && self.lifecycle_filter == browser.lifecycle_filter
             && self.class_filter == browser.class_filter
             && self.sort_by == browser.sort_by
+            && self.range == browser.range_filters.active()
     }
 }
 
@@ -53,6 +58,10 @@ pub struct BrowserViewCache {
     pub(super) visible: Vec<usize>,
     pub(super) columns: Vec<GridColumn>,
     pub(super) main_currency: String,
+    /// The parameter columns a range filter can go on, with their units.
+    pub(super) filter_columns: Vec<FilterColumn>,
+    /// Rows each range filter excluded for having no comparable value.
+    pub(super) range_excluded: BTreeMap<String, usize>,
 }
 
 /// The table the browser shows: the selected one, else the first by name —
@@ -65,6 +74,26 @@ pub(super) fn active_table<'a>(lib: &'a OpenLibrary, browser: &'a LibraryBrowser
             .min()
             .unwrap_or_default()
     })
+}
+
+/// The parameter columns that hold measurements, with the unit most of
+/// their cells are in.
+fn filter_columns(columns: &[GridColumn], rows: &[ComponentRow]) -> Vec<FilterColumn> {
+    columns
+        .iter()
+        .filter_map(|c| {
+            let ColumnKind::Parameter(key) = &c.kind else {
+                return None;
+            };
+            let unit =
+                signex_library::column_unit(rows.iter().filter_map(|r| r.parameters.get(key)))?;
+            Some(FilterColumn {
+                key: key.clone(),
+                label: c.label.clone(),
+                unit,
+            })
+        })
+        .collect()
 }
 
 impl BrowserViewCache {
@@ -92,8 +121,15 @@ impl BrowserViewCache {
             })
             .collect();
 
+        let range = browser.range_filters.active();
+        let range_excluded = retain_in_range(&mut visible, &range, |&i, key| {
+            // `visible` holds indices into `rows`.
+            rows.get(i).and_then(|r| r.parameters.get(key))
+        });
+
         let prices = PriceView::new(&lib.pricing, clock, rows);
         let columns = derive_columns(rows, lib.library_id, registry, table, &prices);
+        let filter_columns = filter_columns(&columns, rows);
 
         // Stage 8: the user's sort selection, applied to the filtered rows.
         if let Some(sort) = browser.sort_by.as_ref()
@@ -118,11 +154,24 @@ impl BrowserViewCache {
                 lifecycle_filter,
                 class_filter: browser.class_filter.clone(),
                 sort_by: browser.sort_by.clone(),
+                range,
             },
             visible,
             columns,
             main_currency: prices.main_currency().to_string(),
+            filter_columns,
+            range_excluded,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn visible_for_test(&self) -> &[usize] {
+        &self.visible
+    }
+
+    #[cfg(test)]
+    pub(crate) fn range_excluded_for_test(&self) -> &BTreeMap<String, usize> {
+        &self.range_excluded
     }
 
     pub(super) fn matches(

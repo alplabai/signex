@@ -215,6 +215,13 @@ impl Signex {
         self.document_state.panel_ctx.selected_drawing = None;
         self.document_state.panel_ctx.selected_drawing_placement = Default::default();
         self.document_state.panel_ctx.selected_child_sheet = None;
+        self.document_state.panel_ctx.multi_draft = None;
+        self.document_state.panel_ctx.multi_groups = match self.document_state.active_engine() {
+            Some(engine) if selected.len() > 1 => {
+                signex_engine::selection_groups(engine.document(), selected)
+            }
+            _ => Default::default(),
+        };
 
         if selected.len() != 1 {
             if !selected.is_empty() {
