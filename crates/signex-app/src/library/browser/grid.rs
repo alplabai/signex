@@ -479,3 +479,23 @@ fn unbound_pick_button<'a>(
     })
     .into()
 }
+
+#[cfg(test)]
+mod tests {
+    /// Measurement cells are routed through `ColumnKind::measurement_press`
+    /// (a button that opens the modal), not through the inline text input.
+    /// The behaviour of `measurement_press` is tested in `columns.rs`; this
+    /// pins that the grid still asks it.
+    #[test]
+    fn the_grid_routes_measurement_cells_through_measurement_press() {
+        let source = include_str!("grid.rs");
+        let code = source
+            .rsplit_once("mod tests {")
+            .map_or(source, |(code, _)| code);
+        let call = ["kind.measurement", "_press("].concat();
+        assert!(
+            code.contains(&call),
+            "grid.rs must send measurement cells to the edit modal"
+        );
+    }
+}

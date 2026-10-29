@@ -100,8 +100,8 @@ pub use manifest::{
 pub use manufacturer::{AlternateStatus, DistributorListing, ManufacturerPart};
 pub use param::{ParamMap, ParamValue};
 pub use param_edit::{
-    MeasurementParts, commit_measurement, commit_slot_measurement, slot_problem, slot_unit,
-    violation_words,
+    MeasurementParts, commit_measurement, commit_slot_measurement, slot_field_seed, slot_problem,
+    slot_unit, violation_words,
 };
 pub use pricing::{
     CachedPricing, DroppedUpdate, PricingError, PricingUpdate, RowPricing, StoreOutcome, age_label,

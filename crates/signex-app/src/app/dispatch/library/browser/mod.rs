@@ -524,8 +524,21 @@ impl Signex {
                         .entry(key.clone())
                         .or_insert_with(|| (String::new(), String::new()));
                     entry.0 = value;
-                    // A prefix or unit typed into the number is refused at once.
-                    modal.error = param_commit::number_field_problem(modal, &key);
+                    // A prefix or unit typed into the number is refused at
+                    // once. Another reason that is showing stays until its
+                    // own field changes.
+                    let prefix = format!("Parameter \"{key}\"");
+                    match param_commit::number_field_problem(modal, &key, template) {
+                        Some(problem) => modal.error = Some(problem),
+                        None if modal
+                            .error
+                            .as_deref()
+                            .is_some_and(|e| e.starts_with(&prefix)) =>
+                        {
+                            modal.error = None;
+                        }
+                        None => {}
+                    }
                 }
                 BrowserEditMsg::SetParamUnit { key, unit } => {
                     param_commit::pick_unit(modal, &key, unit, template);

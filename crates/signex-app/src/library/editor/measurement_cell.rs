@@ -35,9 +35,18 @@ fn row_unit(
 
 /// What the number field shows: the pending buffer, else the stored
 /// value's number in the prefix the picker shows.
-fn field_text(state: &ComponentPreviewState, name: &str, typed_unit: bool) -> String {
+fn field_text(
+    state: &ComponentPreviewState,
+    name: &str,
+    typed_unit: bool,
+    slot_unit: Option<&Unit>,
+) -> String {
     if let Some(buf) = state.params_edit_buf.get(name) {
         return buf.clone();
+    }
+    // A slot's field shows the seed the commit compares against.
+    if let (Some(unit), Some(v)) = (slot_unit, state.row.parameters.get(name)) {
+        return signex_library::slot_field_seed(v, unit).0;
     }
     match state.row.parameters.get(name) {
         Some(v) if typed_unit && v.measurement_parts().is_some() => v
@@ -62,7 +71,12 @@ pub(super) fn view<'a>(
     let known: Option<Unit> = slot
         .and_then(slot_unit)
         .or_else(|| Unit::from_alias(unit_token.trim()));
-    let buf = field_text(state, name, known.is_some());
+    let buf = field_text(
+        state,
+        name,
+        known.is_some(),
+        slot.and_then(slot_unit).as_ref(),
+    );
     let event = |msg| super::params::editor_event(address, msg);
 
     let input_slot = slot.cloned();

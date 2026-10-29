@@ -61,6 +61,27 @@ pub(crate) fn unit_picker<'a, M: Clone + 'a>(
     .into()
 }
 
+/// A one-line notice when a free parameter's unit changed: the number is
+/// kept as shown, so the value now means something else.
+pub(crate) fn unit_change_note(
+    key: &str,
+    before: Option<&Unit>,
+    after: &signex_library::ParamValue,
+) -> Option<String> {
+    let before = before?;
+    let after_unit = after.as_quantity().map(|q| q.unit().clone());
+    if after_unit.as_ref() == Some(before) {
+        return None;
+    }
+    let to = after_unit
+        .as_ref()
+        .map_or("no unit".to_string(), |u| u.glyph().to_string());
+    Some(format!(
+        "Parameter \"{key}\": unit changed from {} to {to}; the number was kept as shown, so the value is reinterpreted, not converted.",
+        before.glyph()
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -73,6 +94,32 @@ mod tests {
         assert!(labels.contains(&"ppm/°C".to_string()));
         assert_eq!(labels.len(), Unit::STANDARD.len() + 1);
         assert_eq!(unit_choices(false).len(), Unit::STANDARD.len());
+    }
+
+    #[test]
+    fn a_unit_change_is_noted_and_a_repick_is_not() {
+        let before = Unit::Ohm;
+        let kept = signex_library::ParamValue::Measurement {
+            value: 4700.0,
+            unit: "ohm".into(),
+        };
+        assert_eq!(unit_change_note("v", Some(&before), &kept), None);
+        let percent = signex_library::ParamValue::Measurement {
+            value: 4.7,
+            unit: "%".into(),
+        };
+        let note = unit_change_note("v", Some(&before), &percent).unwrap();
+        assert!(
+            note.contains("reinterpreted") && note.contains('%'),
+            "{note}"
+        );
+        let plain = signex_library::ParamValue::Number(4.7);
+        assert!(
+            unit_change_note("v", Some(&before), &plain)
+                .unwrap()
+                .contains("no unit")
+        );
+        assert_eq!(unit_change_note("v", None, &plain), None);
     }
 
     #[test]

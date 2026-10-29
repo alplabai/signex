@@ -109,14 +109,39 @@ pub fn violation_words(v: &TemplateViolation) -> Option<String> {
     }
 }
 
+/// What a measurement slot's field shows for `value`: the number text and
+/// the prefix its picker shows. A measurement in a known unit shows its
+/// engineering number and prefix (the prefix falls back to none where the
+/// slot unit lacks it: `{4.7, "kV"}` on a farad slot shows `4.7` with no
+/// prefix); a unit the editor does not know, a plain number and text show
+/// the stored number as written, with no prefix.
+pub fn slot_field_seed(value: &ParamValue, slot_unit: &Unit) -> (String, SiPrefix) {
+    if let Some(parts) = value.measurement_parts() {
+        let prefix = if slot_unit.allowed_prefixes().contains(&parts.prefix) {
+            parts.prefix
+        } else {
+            SiPrefix::One
+        };
+        return (parts.mantissa, prefix);
+    }
+    let text = match value {
+        ParamValue::Measurement { value, .. } => value.to_string(),
+        ParamValue::Number(n) => n.to_string(),
+        other => other.display(),
+    };
+    (text, SiPrefix::One)
+}
+
 /// [`commit_measurement`] for a parameter whose class template has a
 /// measurement `slot` with a known unit: the slot fixes the unit, and a
 /// typed value that breaks the slot (zero or negative where the slot does
 /// not allow it) is refused with the reason. The edit is not stored.
 ///
-/// A field the user did not change is a no-op even when the stored value
-/// already breaks the slot (a legacy wrong-unit or zero value stays as it
-/// is until edited): nothing is rewritten, and nothing is refused.
+/// A field still showing what it was seeded with ([`slot_field_seed`]: the
+/// text and prefix the cell showed) is a no-op, whatever the stored value
+/// is: a legacy wrong-unit, zero, unknown-unit or plain-number value stays
+/// exactly as it is until the user edits the field. Nothing is rewritten
+/// and nothing is refused.
 pub fn commit_slot_measurement(
     existing: Option<&ParamValue>,
     mantissa: &str,
@@ -129,7 +154,9 @@ pub fn commit_slot_measurement(
     } else {
         SiPrefix::One
     };
-    if let Some(old) = existing.filter(|_| field_unchanged(existing, mantissa, prefix)) {
+    if let Some(old) = existing
+        && slot_field_seed(old, &unit) == (mantissa.trim().to_string(), prefix)
+    {
         return Ok(old.clone());
     }
     let value = commit_measurement(existing, mantissa, prefix, &unit).map_err(|e| e.to_string())?;
@@ -288,5 +315,34 @@ mod tests {
     fn an_overflowing_number_is_refused() {
         let res = slot("value", "ohm");
         assert!(commit_slot_measurement(None, "1e308", SiPrefix::Mega, &res).is_err());
+    }
+
+    /// Enter on a slot value the field cannot express is a no-op: an
+    /// unknown unit, a prefix the slot unit lacks, and a plain number.
+    #[test]
+    fn an_unchanged_slot_field_keeps_values_it_cannot_express() {
+        let res = slot("value", "ohm");
+        let cap = slot("value", "F");
+        let cases = [
+            (meas(4.7, "meg"), "4.7", &res),
+            (meas(4.7, "kV"), "4.7", &cap),
+            (ParamValue::Number(4.7), "4.7", &res),
+        ];
+        for (stored, shown, slot) in cases {
+            let unit = slot_unit(slot).unwrap();
+            let (text, prefix) = slot_field_seed(&stored, &unit);
+            assert_eq!(text, shown, "{stored:?}");
+            let kept = commit_slot_measurement(Some(&stored), &text, prefix, slot).unwrap();
+            assert_eq!(kept, stored, "{stored:?}");
+        }
+    }
+
+    /// Editing such a value stores it in the slot's unit.
+    #[test]
+    fn editing_a_value_the_field_cannot_express_stores_the_slot_unit() {
+        let res = slot("value", "ohm");
+        let v = commit_slot_measurement(Some(&ParamValue::Number(4.7)), "10", SiPrefix::Kilo, &res)
+            .unwrap();
+        assert_eq!(v, meas(10_000.0, "ohm"));
     }
 }

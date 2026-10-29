@@ -660,3 +660,17 @@ fn a_prefix_typed_into_the_modal_number_is_flagged_at_once() {
     let (app, _) = edit_param_in_modal(&snxlib, row_id, "value", vec![set_value("4k7")]);
     assert!(modal_error(&app, &snxlib).is_some());
 }
+
+/// Typing in another field does not wipe a refusal that is showing.
+#[test]
+fn typing_elsewhere_keeps_a_pending_refusal() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (snxlib, row_id) = library_with_param(tmp.path(), "resistor", "value", 4700.0, "ohm");
+    let other = BrowserEditMsg::SetParamValue {
+        key: "other".into(),
+        value: "5".into(),
+    };
+    let (app, _) = edit_param_in_modal(&snxlib, row_id, "value", vec![pick_unit_msg("F"), other]);
+    let err = modal_error(&app, &snxlib).expect("the refusal is still showing");
+    assert!(err.contains("fixes its unit"), "{err}");
+}

@@ -73,10 +73,13 @@ pub(crate) fn flush_edit_buffers(state: &mut ComponentPreviewState) -> Result<()
     let names: Vec<String> = state.params_edit_buf.keys().cloned().collect();
     for name in names {
         let slot = measurement_slot(state, &name);
-        let unit = match (state.row.parameters.get(&name), &slot) {
-            (Some(ParamValue::Number(_)), _) => None,
-            (Some(ParamValue::Measurement { unit, .. }), _) => Some(unit.clone()),
-            (_, Some(slot)) => Some(slot.unit.clone().unwrap_or_default()),
+        // A class-template measurement slot decides how its buffer is
+        // committed, whatever kind the stored value has (a legacy plain
+        // number in a slot is edited as a measurement, like on Enter).
+        let unit = match (&slot, state.row.parameters.get(&name)) {
+            (Some(slot), _) => Some(slot.unit.clone().unwrap_or_default()),
+            (None, Some(ParamValue::Number(_))) => None,
+            (None, Some(ParamValue::Measurement { unit, .. })) => Some(unit.clone()),
             _ => {
                 state.params_edit_buf.remove(&name);
                 continue;
@@ -625,5 +628,88 @@ mod tests {
         let mut state = state_with("gain", meas(4.7, "kΩ"));
         pick_unit(&mut state, "gain".into(), "F".into());
         assert_eq!(state.row.parameters["gain"], meas(4.7, "F"));
+    }
+
+    /// Save on a slot row stored as a plain number commits it as a
+    /// measurement, like Enter: `10` with k stores 10000 ohm, and the slot's
+    /// rules apply (a negative resistance, a zero capacitance are refused).
+    #[test]
+    fn save_commits_a_plain_number_in_a_slot_like_enter() {
+        let res = slot("value", "ohm");
+        let mut state = state_with("value", ParamValue::Number(4.7));
+        set_measurement_buf(&mut state, "value".into(), "10".into(), Some(res.clone()));
+        state.params_prefix.insert("value".into(), SiPrefix::Kilo);
+        assert_eq!(flush_edit_buffers(&mut state), Ok(()));
+        assert_eq!(state.row.parameters["value"], meas(10_000.0, "ohm"));
+
+        let mut enter_state = state_with("value", ParamValue::Number(4.7));
+        enter_state
+            .params_prefix
+            .insert("value".into(), SiPrefix::Kilo);
+        set_measurement_buf(
+            &mut enter_state,
+            "value".into(),
+            "10".into(),
+            Some(res.clone()),
+        );
+        commit_measurement(&mut enter_state, "value".into(), "ohm".into());
+        assert_eq!(
+            enter_state.row.parameters["value"],
+            state.row.parameters["value"]
+        );
+
+        let mut negative = state_with("value", ParamValue::Number(4.7));
+        set_measurement_buf(&mut negative, "value".into(), "-5".into(), Some(res));
+        let err = flush_edit_buffers(&mut negative).unwrap_err();
+        assert!(err.contains("negative not allowed"), "{err}");
+        assert_eq!(negative.row.parameters["value"], ParamValue::Number(4.7));
+
+        let mut zero = state_with("value", ParamValue::Number(1e-7));
+        set_measurement_buf(
+            &mut zero,
+            "value".into(),
+            "0".into(),
+            Some(slot("value", "F")),
+        );
+        let err = flush_edit_buffers(&mut zero).unwrap_err();
+        assert!(err.contains("zero not allowed"), "{err}");
+        assert_eq!(zero.row.parameters["value"], ParamValue::Number(1e-7));
+    }
+
+    /// Enter on a slot value the field cannot express rewrites nothing: an
+    /// unknown unit, a prefix the slot unit lacks, a plain number.
+    #[test]
+    fn enter_on_a_slot_value_the_field_cannot_express_rewrites_nothing() {
+        let cases = [
+            (meas(4.7, "meg"), slot("value", "ohm"), "ohm"),
+            (meas(4.7, "kV"), slot("value", "F"), "F"),
+            (ParamValue::Number(4.7), slot("value", "ohm"), "ohm"),
+        ];
+        for (stored, slot, unit) in cases {
+            let mut state = state_with("value", stored.clone());
+            let seed = signex_library::slot_field_seed(
+                &stored,
+                &signex_library::slot_unit(&slot).unwrap(),
+            )
+            .0;
+            set_measurement_buf(&mut state, "value".into(), seed, Some(slot));
+            commit_measurement(&mut state, "value".into(), unit.into());
+            assert_eq!(state.row.parameters["value"], stored);
+            assert!(!state.dirty, "{stored:?}");
+            assert!(state.params_error.is_empty(), "{stored:?}");
+        }
+    }
+
+    /// A unit change on a free parameter keeps the number as shown and
+    /// says the value is reinterpreted; re-picking the same unit says nothing.
+    #[test]
+    fn a_unit_change_says_the_value_is_reinterpreted() {
+        let mut state = state_with("gain", meas(4.7, "kΩ"));
+        pick_unit(&mut state, "gain".into(), "%".into());
+        let note = state.params_error.get("gain").expect("a notice");
+        assert!(note.contains("reinterpreted"), "{note}");
+        let mut same = state_with("gain", meas(4.7, "kΩ"));
+        pick_unit(&mut same, "gain".into(), "ohm".into());
+        assert!(same.params_error.is_empty());
     }
 }

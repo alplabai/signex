@@ -27,6 +27,7 @@ use signex_types::numeric::parse_finite_f64;
 use signex_types::quantity::{MantissaError, SiPrefix, Unit, parse_mantissa};
 
 use crate::library::prefix_picker::effective_prefix;
+use crate::library::unit_picker::unit_change_note;
 
 /// Why a measurement cell refuses an inline commit, for the report.
 const MEASUREMENT_IN_MODAL: &str =
@@ -49,7 +50,14 @@ pub(super) struct ParamRefusal {
 pub(super) fn param_value_for_commit(
     existing: Option<&ParamValue>,
     buf: &str,
+    in_measurement_slot: bool,
 ) -> Result<ParamValue, ParamRefusal> {
+    // A class-template measurement slot is edited in the dialog whatever
+    // the stored value is (missing, text or a plain number): an inline
+    // buffer would be stored as text and skip the slot's unit and rules.
+    if in_measurement_slot {
+        return Err(refusal(MEASUREMENT_IN_MODAL, existing));
+    }
     match existing {
         // A measurement is not edited in a grid cell: its cell opens the
         // Edit Component Details modal, which has the SI-prefix picker and
@@ -104,6 +112,11 @@ fn measurement_slot<'t>(
     template
         .and_then(|t| t.slot(key))
         .filter(|s| s.kind == ParamKind::Measurement && slot_unit(s).is_some())
+}
+
+/// Whether `key` is a measurement slot with a known unit in `template`.
+pub(super) fn is_measurement_slot(template: Option<&ParameterTemplate>, key: &str) -> bool {
+    measurement_slot(template, key).is_some()
 }
 
 /// What the edit modal's "commit parameter" stores for a typed `value`,
@@ -205,8 +218,23 @@ pub(super) fn pick_unit(
         .entry(key.to_string())
         .or_insert_with(|| (String::new(), String::new()));
     entry.1 = unit;
+    let before = modal
+        .draft
+        .parameters
+        .get(key)
+        .and_then(ParamValue::as_quantity)
+        .map(|q| q.unit().clone());
     // A pick is a whole edit: apply it to the draft now.
     commit_param_buffer(modal, key, template);
+    if modal.error.is_none()
+        && let Some(note) = modal
+            .draft
+            .parameters
+            .get(key)
+            .and_then(|v| unit_change_note(key, before.as_ref(), v))
+    {
+        modal.error = Some(note);
+    }
 }
 
 /// What is wrong with the number the user has typed so far, if it is
@@ -215,9 +243,14 @@ pub(super) fn pick_unit(
 pub(super) fn number_field_problem(
     modal: &crate::library::state::EditRowModalState,
     key: &str,
+    template: Option<&ParameterTemplate>,
 ) -> Option<String> {
     let (value, unit) = modal.param_buf.get(key)?;
-    Unit::from_alias(unit.trim())?;
+    // The slot's unit applies even when the buffer holds none (a slot
+    // that stores a plain number or text).
+    if measurement_slot(template, key).is_none() {
+        Unit::from_alias(unit.trim())?;
+    }
     match parse_mantissa(value) {
         Err(e @ (MantissaError::HasLetters(_) | MantissaError::Comma(_))) => {
             Some(format!("Parameter \"{key}\": {e}."))
@@ -291,7 +324,7 @@ mod tests {
     fn an_inline_commit_to_a_measurement_cell_is_refused() {
         for existing in [kilo_ohms(), canonical_kilo_ohms()] {
             for buf in ["470", "4.7", "10"] {
-                let refusal = param_value_for_commit(Some(&existing), buf)
+                let refusal = param_value_for_commit(Some(&existing), buf, false)
                     .expect_err("a measurement is edited in the dialog");
                 assert_eq!(refusal.expected, MEASUREMENT_IN_MODAL);
                 assert_eq!(refusal.kept, "4.7 kΩ");
@@ -306,7 +339,7 @@ mod tests {
         let existing = kilo_ohms();
 
         // Act
-        let committed = param_value_for_commit(Some(&existing), "4k7");
+        let committed = param_value_for_commit(Some(&existing), "4k7", false);
 
         // Assert
         let refusal = committed.expect_err("an unparseable buffer must be refused");
@@ -320,7 +353,7 @@ mod tests {
         let existing = ParamValue::Number(3.0);
 
         // Act
-        let committed = param_value_for_commit(Some(&existing), "3 pieces");
+        let committed = param_value_for_commit(Some(&existing), "3 pieces", false);
 
         // Assert
         let refusal = committed.expect_err("an unparseable buffer must be refused");
@@ -334,7 +367,7 @@ mod tests {
         let existing = ParamValue::Number(3.0);
 
         // Act
-        let committed = param_value_for_commit(Some(&existing), "12.5");
+        let committed = param_value_for_commit(Some(&existing), "12.5", false);
 
         // Assert
         assert_eq!(committed.ok(), Some(ParamValue::Number(12.5)));
@@ -343,8 +376,8 @@ mod tests {
     #[test]
     fn an_untyped_cell_takes_the_buffer_verbatim() {
         // Arrange / Act
-        let fresh = param_value_for_commit(None, "4k7");
-        let text = param_value_for_commit(Some(&ParamValue::Text("old".into())), "4k7");
+        let fresh = param_value_for_commit(None, "4k7", false);
+        let text = param_value_for_commit(Some(&ParamValue::Text("old".into())), "4k7", false);
 
         // Assert
         assert_eq!(fresh.ok(), Some(ParamValue::Text("4k7".to_string())));
@@ -360,7 +393,7 @@ mod tests {
         let existing = ParamValue::Bool(true);
 
         // Act
-        let committed = param_value_for_commit(Some(&existing), "maybe");
+        let committed = param_value_for_commit(Some(&existing), "maybe", false);
 
         // Assert
         let refusal = committed.expect_err("an unreadable boolean buffer must be refused");
@@ -386,7 +419,7 @@ mod tests {
             ("False", false),
         ] {
             assert_eq!(
-                param_value_for_commit(Some(&existing), buf).ok(),
+                param_value_for_commit(Some(&existing), buf, false).ok(),
                 Some(ParamValue::Bool(expected)),
                 "{buf} must still commit as a boolean"
             );
@@ -398,7 +431,7 @@ mod tests {
     #[test]
     fn refusing_a_boolean_buffer_does_not_touch_untyped_cells() {
         // Arrange / Act
-        let committed = param_value_for_commit(None, "maybe");
+        let committed = param_value_for_commit(None, "maybe", false);
 
         // Assert
         assert_eq!(committed.ok(), Some(ParamValue::Text("maybe".to_string())));
@@ -410,9 +443,9 @@ mod tests {
     #[test]
     fn typed_cells_refuse_non_finite_buffers() {
         for bad in NON_FINITE {
-            let number = param_value_for_commit(Some(&ParamValue::Number(3.0)), bad);
+            let number = param_value_for_commit(Some(&ParamValue::Number(3.0)), bad, false);
             assert!(number.is_err(), "number cell took {bad:?}");
-            let measurement = param_value_for_commit(Some(&kilo_ohms()), bad);
+            let measurement = param_value_for_commit(Some(&kilo_ohms()), bad, false);
             assert!(measurement.is_err(), "measurement cell took {bad:?}");
         }
     }
@@ -686,10 +719,70 @@ mod tests {
         modal
             .param_buf
             .insert("value".into(), ("4k7".into(), "ohm".into()));
-        assert!(number_field_problem(&modal, "value").is_some());
+        assert!(number_field_problem(&modal, "value", None).is_some());
         modal
             .param_buf
             .insert("value".into(), ("4.7".into(), "ohm".into()));
-        assert!(number_field_problem(&modal, "value").is_none());
+        assert!(number_field_problem(&modal, "value", None).is_none());
+    }
+
+    /// A measurement-slot cell whose key is missing or holds text never
+    /// commits the buffer as text inline; it is refused.
+    #[test]
+    fn a_slot_cell_without_a_measurement_is_refused_inline() {
+        assert!(param_value_for_commit(None, "10", true).is_err());
+        assert!(param_value_for_commit(Some(&ParamValue::Text("x".into())), "10", true).is_err());
+        assert!(param_value_for_commit(None, "10", false).is_ok());
+    }
+
+    /// `4k7` is flagged as typed even when the buffer holds no unit (a slot
+    /// stored as a plain number), because the slot supplies it.
+    #[test]
+    fn a_prefix_typed_into_a_unitless_slot_buffer_is_flagged() {
+        let t = template(slot("value", "ohm"));
+        let mut modal = modal_with(ParamValue::Number(4.7));
+        modal
+            .param_buf
+            .insert("value".into(), ("4k7".into(), String::new()));
+        assert!(number_field_problem(&modal, "value", Some(&t)).is_some());
+        assert!(number_field_problem(&modal, "value", None).is_none());
+    }
+
+    /// Enter on a slot value the field cannot express rewrites nothing.
+    #[test]
+    fn modal_enter_on_a_slot_value_the_field_cannot_express_rewrites_nothing() {
+        let cases = [
+            (
+                ParamValue::Measurement {
+                    value: 4.7,
+                    unit: "meg".into(),
+                },
+                slot("value", "ohm"),
+            ),
+            (
+                ParamValue::Measurement {
+                    value: 4.7,
+                    unit: "kV".into(),
+                },
+                slot("value", "F"),
+            ),
+            (ParamValue::Number(4.7), slot("value", "ohm")),
+        ];
+        for (stored, slot) in cases {
+            let t = template(slot);
+            let mut modal = modal_with(stored.clone());
+            commit_param_buffer(&mut modal, "value", Some(&t));
+            assert_eq!(modal.draft.parameters["value"], stored);
+            assert!(modal.error.is_none(), "{stored:?}: {:?}", modal.error);
+        }
+    }
+
+    /// Changing a free parameter's unit says the value is reinterpreted.
+    #[test]
+    fn a_free_unit_change_is_noted() {
+        let mut modal = modal_with(canonical_kilo_ohms());
+        pick_unit(&mut modal, "value", "%".into(), None);
+        let note = modal.error.expect("a notice");
+        assert!(note.contains("reinterpreted"), "{note}");
     }
 }

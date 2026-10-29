@@ -40,8 +40,8 @@ pub mod mount;
 pub mod panel;
 pub mod picker;
 pub mod place;
-pub(crate) mod prefix_picker;
 pub mod placed_part;
+pub(crate) mod prefix_picker;
 pub mod preview_refresh;
 pub mod pricing;
 pub mod primitive_picker;
@@ -54,7 +54,7 @@ pub mod settings;
 pub mod state;
 #[cfg(test)]
 pub(crate) mod test_adapters;
-mod unit_picker;
+pub(crate) mod unit_picker;
 pub mod updates_dialog;
 #[cfg(test)]
 mod view_purity_tests;

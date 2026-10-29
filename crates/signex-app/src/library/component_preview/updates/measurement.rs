@@ -17,6 +17,7 @@ use signex_types::quantity::{MantissaError, SiPrefix, Unit, parse_mantissa};
 
 use crate::library::ComponentPreviewState;
 use crate::library::prefix_picker::effective_prefix;
+use crate::library::unit_picker::unit_change_note;
 
 /// The measurement slot with a known unit behind `name`'s pending edit.
 pub(super) fn measurement_slot(state: &ComponentPreviewState, name: &str) -> Option<ParamSlot> {
@@ -160,7 +161,19 @@ pub(super) fn pick_unit(state: &mut ComponentPreviewState, name: String, unit: S
         (None, None) => (value.to_string(), SiPrefix::One),
     };
     let prefix = effective_prefix(&new_unit, shown);
+    let before = stored.as_quantity().map(|q| q.unit().clone());
     let result =
         commit_typed(Some(stored), &mantissa, prefix, &new_unit).map_err(|e| e.to_string());
-    apply(state, name, result);
+    let ok = result.is_ok();
+    apply(state, name.clone(), result);
+    // The number is kept as shown, so a changed unit reinterprets it: say so.
+    if ok
+        && let Some(note) = state
+            .row
+            .parameters
+            .get(&name)
+            .and_then(|v| unit_change_note(&name, before.as_ref(), v))
+    {
+        state.params_error.insert(name, note);
+    }
 }

@@ -492,8 +492,8 @@ fn bool_cell<'a>(
                 },
             )
         })
-        .size(14)
-        .spacing(4)
+        .size(TS.heading)
+        .spacing(SP.s)
         .into()
 }
 
