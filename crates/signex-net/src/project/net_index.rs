@@ -149,10 +149,17 @@ impl NetIndex {
         if let Some(&i) = own.first() {
             return Some(i);
         }
-        if is_positional_name(name) {
+        if self.is_positional(name) {
             return None;
         }
         self.by_name.get(name).copied()
+    }
+
+    /// Whether `name` follows position rather than identity: an auto name, or
+    /// the `<base>_<n>` a duplicate of the existing net `<base>` gets. After
+    /// an edit it can belong to a different net.
+    pub fn is_positional(&self, name: &str) -> bool {
+        is_auto_name(name) || dedup_base(name).is_some_and(|base| self.by_name.contains_key(base))
     }
 
     /// The other ports on the nets `id` is on: Global and Hierarchical labels
@@ -177,14 +184,24 @@ impl NetIndex {
             .position(|m| m.id == id && &m.sheet == sheet)
             .map_or(0, |p| p + 1);
         let (head, tail) = ports.split_at(at.min(ports.len()));
-        let mut ring: Vec<&NetMember> = tail
-            .iter()
+        tail.iter()
             .chain(head)
             .filter(|m| !(m.id == id && &m.sheet == sheet))
             .copied()
-            .collect();
-        // A jump goes somewhere else: other sheets and placements first.
-        if let Some(source) = ports.iter().find(|m| m.id == id && &m.sheet == sheet) {
+            .collect()
+    }
+
+    /// [`Self::partners`] for a jump: ports on another sheet or placement
+    /// first, so the first jump leaves the source's sheet. It holds the same
+    /// ports as the plain ring, so a cursor that walks it visits each once.
+    pub fn jump_ring(
+        &self,
+        sheet: &SheetKey,
+        id: Uuid,
+        occurrence: Option<&InstancePath>,
+    ) -> Vec<&NetMember> {
+        let mut ring = self.partners(sheet, id, occurrence);
+        if let Some(source) = self.member(sheet, id, occurrence) {
             ring.sort_by_key(|m| m.sheet == source.sheet && m.occurrence == source.occurrence);
         }
         ring
@@ -285,12 +302,9 @@ pub fn is_auto_name(name: &str) -> bool {
         .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
-/// A name that follows position rather than identity: an auto name, or the
-/// `<name>_<n>` suffix a duplicate gets. After an edit it can belong to a
-/// different net, so it never finds a net again.
-pub fn is_positional_name(name: &str) -> bool {
-    is_auto_name(name)
-        || name.rsplit_once('_').is_some_and(|(base, n)| {
-            !base.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())
-        })
+/// The `<base>` of a `<base>_<n>` name, the shape `dedup_net_names` gives the
+/// later of two nets with one name.
+fn dedup_base(name: &str) -> Option<&str> {
+    let (base, n) = name.rsplit_once('_')?;
+    (!base.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())).then_some(base)
 }

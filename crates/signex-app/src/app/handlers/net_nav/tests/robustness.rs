@@ -67,7 +67,7 @@ fn deleting_the_anchor_never_moves_the_highlight_to_an_unrelated_net() {
 
     assert!(p.app.document_state.net_nav.highlight.is_none());
     assert!(p.bright().is_none());
-    assert!(logged(&["no longer exists"]));
+    assert!(logged(&["was anchored to"]));
 }
 
 #[test]
@@ -263,4 +263,231 @@ fn a_stale_answer_starts_the_newest_build_and_the_parked_command_still_runs() {
 
     p.app.settle_net_index_blocking();
     assert_eq!(p.active(), Some(p.mid.clone()), "the parked jump ran");
+}
+
+#[test]
+fn repeated_jumps_leave_the_sheet_first_and_visit_every_port_once_per_lap() {
+    let mut p = ring_project();
+    p.select(1, SelectedKind::Label);
+    let mut visits = Vec::new();
+    for _ in 0..4 {
+        p.send_settled(NetNavMsg::PartnerJumpRequested);
+        visits.push((p.active().expect("sheet"), p.selected()[0].uuid));
+    }
+    assert_eq!(
+        visits[0].0, p.mid,
+        "the first jump leaves the source's sheet"
+    );
+    let ports: std::collections::HashSet<_> = visits.iter().map(|(_, u)| *u).collect();
+    assert_eq!(
+        ports,
+        [1u128, 2, 5, 6].map(id).into_iter().collect(),
+        "{visits:?}"
+    );
+    assert_eq!(visits.len(), ports.len(), "each port once per lap");
+}
+
+#[test]
+fn selecting_another_port_starts_a_new_lap() {
+    let mut p = ring_project();
+    p.select(1, SelectedKind::Label);
+    p.send_settled(NetNavMsg::PartnerJumpRequested);
+    assert_eq!(p.active(), Some(p.mid.clone()));
+    p.focus(&p.root.clone());
+    p.select(2, SelectedKind::Label);
+    p.send_settled(NetNavMsg::PartnerJumpRequested);
+    assert_eq!(
+        p.active(),
+        Some(p.mid.clone()),
+        "a fresh lap from port 2 leaves the sheet"
+    );
+    assert_eq!(p.selected()[0].uuid, id(5));
+}
+
+#[test]
+fn class_less_project_warnings_survive_the_class_job_and_edits_in_it() {
+    use signex_types::net_class::NetClass;
+    let mut p = project();
+    let a = p.app.document_state.projects[0].id;
+    p.app
+        .document_state
+        .project_by_id_mut(a)
+        .expect("A")
+        .data
+        .net_classes = vec![NetClass {
+        nets: vec!["VCC".to_string()],
+        ..NetClass::named("Power")
+    }];
+    let (b_sheet, b_label) = p.add_second_project_with_broken_page(PAGE_B);
+    assert_eq!(p.active(), Some(b_sheet));
+    p.select_uuid(b_label, SelectedKind::Label);
+    p.send_settled(NetNavMsg::RelatedNetHighlightRequested);
+    assert_eq!(crate::diagnostics::logged_count(PAGE_B), 1);
+
+    for item in [
+        (B_WIRE, SelectedKind::Wire),
+        (B_SYMBOL, SelectedKind::Symbol),
+    ] {
+        p.select(item.0, item.1);
+        delete_selected(&mut p);
+        p.app.settle_net_class_styles_blocking();
+        p.app.settle_net_index_blocking();
+    }
+    assert_eq!(
+        crate::diagnostics::logged_count(PAGE_B),
+        1,
+        "still one line"
+    );
+}
+
+#[test]
+fn a_page_the_class_job_met_first_is_not_reported_again_by_the_index() {
+    use signex_types::net_class::NetClass;
+    use signex_types::project::SheetEntry;
+    let mut p = project();
+    let dir = p.root.parent().expect("dir").to_path_buf();
+    std::fs::write(dir.join(CLASS_FIRST_PAGE), "not a schematic").expect("write page");
+    let pid = p.app.document_state.projects[0].id;
+    let project = p
+        .app
+        .document_state
+        .project_by_id_mut(pid)
+        .expect("project");
+    project.data.net_classes = vec![NetClass {
+        nets: vec!["VCC".to_string()],
+        ..NetClass::named("Power")
+    }];
+    project.data.sheets.push(SheetEntry {
+        name: CLASS_FIRST_PAGE.to_string(),
+        filename: CLASS_FIRST_PAGE.to_string(),
+        symbols_count: 0,
+        wires_count: 0,
+        labels_count: 0,
+        unknown: Default::default(),
+    });
+    p.app.settle_net_class_styles_blocking();
+    assert_eq!(
+        crate::diagnostics::logged_count(CLASS_FIRST_PAGE),
+        1,
+        "the class job said it"
+    );
+
+    p.select(ROOT_VCC, SelectedKind::Label);
+    p.send_settled(NetNavMsg::RelatedNetHighlightRequested);
+    assert_eq!(
+        crate::diagnostics::logged_count(CLASS_FIRST_PAGE),
+        1,
+        "the index stays quiet"
+    );
+}
+
+fn empty_outcome(
+    project: crate::app::state::ProjectId,
+    key: crate::app::state::net_class_styles::ProjectKey,
+) -> crate::app::state::net_nav::IndexOutcome {
+    crate::app::state::net_nav::IndexOutcome {
+        project,
+        key,
+        result: Ok(std::sync::Arc::new(
+            crate::app::state::net_nav::ProjectNetData {
+                index: signex_net::NetIndex::default(),
+                paths: Default::default(),
+                base_dir: None,
+                fold: Default::default(),
+                classes: Vec::new(),
+            },
+        )),
+        warnings: Vec::new(),
+    }
+}
+
+const NOT_READY: &str = "before the net index was ready";
+
+#[test]
+fn a_parked_command_does_not_fire_against_a_newer_selection() {
+    let mut p = project();
+    p.select(ROOT_VCC, SelectedKind::Label);
+    p.send(NetNavMsg::PartnerJumpRequested);
+    let before = crate::diagnostics::logged_count(NOT_READY);
+    // The user moved on while the index built.
+    p.select(ROOT_VCC_WIRE, SelectedKind::Wire);
+
+    p.app.settle_net_index_blocking();
+
+    assert_eq!(
+        p.active(),
+        Some(p.root.clone()),
+        "no jump from the old selection"
+    );
+    assert!(p.app.document_state.net_nav.pending.is_none());
+    assert!(
+        crate::diagnostics::logged_count(NOT_READY) > before,
+        "and it says so"
+    );
+}
+
+#[test]
+fn a_command_whose_stale_build_finds_no_project_is_dropped_not_parked_again() {
+    use crate::app::runtime::net_class_styles::plan_projects;
+    let mut p = project();
+    p.select(ROOT_VCC, SelectedKind::Label);
+    p.send(NetNavMsg::PartnerJumpRequested);
+    let planned = plan_projects(&p.app.document_state).remove(0);
+    let (a, old_key) = (planned.project, planned.key);
+    // The key moves while the build runs, then the project is left.
+    p.focus(&p.mid.clone());
+    p.select(23, SelectedKind::Wire);
+    delete_selected(&mut p);
+    let _ = p.app.net_index_lookup(a);
+    p.app.document_state.projects.retain(|x| x.id != a);
+    let before = crate::diagnostics::logged_count(NOT_READY);
+
+    let follow_up = p.app.apply_net_index(&empty_outcome(a, old_key));
+
+    assert_eq!(follow_up.units(), 0, "nothing to rebuild");
+    assert!(
+        p.app.document_state.net_nav.pending.is_none(),
+        "dropped, not parked"
+    );
+    assert!(crate::diagnostics::logged_count(NOT_READY) > before);
+}
+
+#[test]
+fn another_projects_build_leaves_a_command_parked_for_a_project_still_open() {
+    let mut p = project();
+    p.select(ROOT_VCC, SelectedKind::Label);
+    p.send(NetNavMsg::PartnerJumpRequested);
+    let (b_sheet, b_label) = p.add_second_project();
+    p.select_uuid(b_label, SelectedKind::Label);
+
+    p.app.settle_net_index_blocking(); // B's build lands
+
+    assert!(
+        p.app.document_state.net_nav.pending.is_some(),
+        "A's command waits for A"
+    );
+    assert_eq!(p.active(), Some(b_sheet), "and did not run in B");
+}
+
+#[test]
+fn a_command_whose_project_is_out_of_view_when_its_index_lands_does_not_run() {
+    use crate::app::runtime::net_class_styles::plan_projects;
+    let mut p = project();
+    p.select(ROOT_VCC, SelectedKind::Label);
+    p.send(NetNavMsg::PartnerJumpRequested);
+    let planned = plan_projects(&p.app.document_state).remove(0);
+    let (a, key) = (planned.project, planned.key);
+    let (b_sheet, b_label) = p.add_second_project();
+    p.select_uuid(b_label, SelectedKind::Label);
+    let before = crate::diagnostics::logged_count(NOT_READY);
+
+    let _follow_up = p.app.apply_net_index(&empty_outcome(a, key));
+
+    assert_eq!(p.active(), Some(b_sheet));
+    assert!(p.app.document_state.net_nav.pending.is_none());
+    assert!(
+        !logged(&["has no partner", ONLY_B]),
+        "A's jump did not run on B's label"
+    );
+    assert!(crate::diagnostics::logged_count(NOT_READY) > before);
 }

@@ -145,7 +145,16 @@ pub(super) fn nothing_highlighted() -> String {
 }
 
 pub(super) fn highlight_gone() -> String {
-    "Highlight a net again; the highlighted net no longer exists, so it was cleared.".to_string()
+    "Highlight the net again: the item it was anchored to was deleted, so the highlight was cleared."
+        .to_string()
+}
+
+pub(super) fn command_dropped_left() -> String {
+    "Run the command again: its project was left before the net index was ready.".to_string()
+}
+
+pub(super) fn command_dropped_moved() -> String {
+    "Run the command again: the selection changed before the net index was ready.".to_string()
 }
 
 pub(super) fn net_has_no_members() -> String {
@@ -218,6 +227,8 @@ mod tests {
             highlighted(&l, 12),
             nothing_highlighted(),
             highlight_gone(),
+            command_dropped_left(),
+            command_dropped_moved(),
             net_has_no_members(),
             net_sheet_has_no_file(&l, &l),
             stepped(&l, "label", &l, &l, 10, 99),

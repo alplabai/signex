@@ -36,6 +36,8 @@ pub(super) const R5_WIRE: u128 = 42;
 pub(super) const R4_WIRE: u128 = 41;
 pub(super) const BROKEN: &str = "broken_page_7291.snxsch";
 /// A page that breaks late; its own name keeps the shared log ring unambiguous.
+pub(super) const PAGE_B: &str = "page_b_3318.snxsch";
+pub(super) const CLASS_FIRST_PAGE: &str = "class_first_9921.snxsch";
 pub(super) const LATE_PAGE: &str = "late_page_5503.snxsch";
 
 pub(super) struct Project {
@@ -276,23 +278,73 @@ pub(super) fn placed_twice() -> (Project, PathBuf) {
 }
 
 pub(super) const ONLY_B: &str = "ONLYB";
+pub(super) const B_WIRE: u128 = 901;
+pub(super) const B_SYMBOL: u128 = 902;
+pub(super) const B_LABEL: u128 = 900;
 
 impl Project {
     /// Add a second, unrelated project with one open sheet carrying the
     /// global label `ONLYB`, and focus it. Returns that sheet's path and the
     /// label's uuid.
     pub fn add_second_project(&mut self) -> (PathBuf, Uuid) {
+        self.add_project_b(None)
+    }
+
+    /// [`Self::add_second_project`] listing one more page that does not parse.
+    pub fn add_second_project_with_broken_page(&mut self, page: &str) -> (PathBuf, Uuid) {
+        self.add_project_b(Some(page))
+    }
+
+    fn add_project_b(&mut self, broken: Option<&str>) -> (PathBuf, Uuid) {
         let dir = tempfile::tempdir().expect("tempdir");
         let label_id = id(900);
         let mut sheet = sheet_with_net("RB", ONLY_B, &[]);
         sheet.labels[0].uuid = label_id;
+        sheet.wires[0].uuid = id(B_WIRE);
+        sheet.symbols[0].uuid = id(B_SYMBOL);
         let path = write(dir.path(), "b_only.snxsch", sheet);
-        let mut other = app_workspace(&dir.path().to_string_lossy(), &["b_only.snxsch"]);
+        let mut listed = vec!["b_only.snxsch"];
+        if let Some(page) = broken {
+            std::fs::write(dir.path().join(page), "not a schematic").expect("write page");
+            listed.push(page);
+        }
+        let mut other = app_workspace(&dir.path().to_string_lossy(), &listed);
         let mut project = other.document_state.projects.remove(0);
         project.id = self.app.document_state.mint_project_id();
         self.app.document_state.projects.push(project);
         assert!(self.app.open_or_focus_sheet_path(path.clone()));
         std::mem::forget(dir);
         (path, label_id)
+    }
+}
+
+/// `root` and `c.snxsch` each carry two global `VCC` labels, one at each end of
+/// a wire: ports 1 and 2 on root, 5 and 6 on the child. Both sheets are open,
+/// root focused.
+pub(super) fn ring_project() -> Project {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let pt = Point::new;
+    let mut root = sheet_with_net("R1", "VCC", &["c.snxsch"]);
+    root.labels[0].uuid = id(1);
+    root.labels
+        .push(label("VCC", pt(10.0, 0.0), LabelType::Global, 2));
+    let mut child = sheet_with_net("R2", "VCC", &[]);
+    child.labels[0].uuid = id(5);
+    child
+        .labels
+        .push(label("VCC", pt(10.0, 0.0), LabelType::Global, 6));
+    let root_path = write(dir.path(), "root.snxsch", root);
+    let child_path = write(dir.path(), "c.snxsch", child);
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["root.snxsch", "c.snxsch"]);
+    for path in [&child_path, &root_path] {
+        assert!(app.open_or_focus_sheet_path(path.clone()));
+    }
+    Project {
+        app,
+        root: root_path,
+        mid: child_path.clone(),
+        third: child_path,
+        _dir: dir,
     }
 }

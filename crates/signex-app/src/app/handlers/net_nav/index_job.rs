@@ -9,7 +9,7 @@ use crate::app::project_sheets::{self, OpenSheets};
 use crate::app::runtime::net_class_styles::plan_projects;
 use crate::app::state::ProjectId;
 use crate::app::state::net_class_styles::ProjectKey;
-use crate::app::state::net_nav::{IndexOutcome, PendingNetAction, ProjectNetData, Stored};
+use crate::app::state::net_nav::{IndexOutcome, Pending, PendingNetAction, ProjectNetData, Stored};
 
 use super::super::super::*;
 use super::messages;
@@ -130,9 +130,15 @@ impl Signex {
         action: PendingNetAction,
         build: Task<Message>,
     ) -> Task<Message> {
+        let pending = Pending {
+            project,
+            action,
+            sheet: self.document_state.active_path.clone(),
+            selected: self.interaction_state.active_canvas().selected.clone(),
+        };
         let nav = &mut self.document_state.net_nav;
         if action != PendingNetAction::HoverDwell || nav.pending.is_none() {
-            nav.pending = Some((project, action));
+            nav.pending = Some(pending);
         }
         build
     }
@@ -143,11 +149,19 @@ impl Signex {
             // A newer key arrived while this one ran: build it now, once.
             Stored::Stale => match self.net_index_lookup(outcome.project) {
                 IndexLookup::Building(build) => build,
-                IndexLookup::Ready(_) | IndexLookup::Unavailable => Task::none(),
+                IndexLookup::Ready(_) => self.run_pending_for(outcome.project),
+                IndexLookup::Unavailable => {
+                    self.drop_pending_of(outcome.project, messages::command_dropped_left());
+                    Task::none()
+                }
             },
             Stored::Failed(reason) => {
                 let nav = &mut self.document_state.net_nav;
-                if nav.pending.is_some_and(|(p, _)| p == outcome.project) {
+                if nav
+                    .pending
+                    .as_ref()
+                    .is_some_and(|p| p.project == outcome.project)
+                {
                     nav.pending = None;
                 }
                 crate::diagnostics::log_warning(messages::index_failed(&reason));
@@ -166,12 +180,21 @@ impl Signex {
     /// for another project waits for that one's build, or is dropped when it
     /// is gone; it never runs against a different project.
     fn run_pending_for(&mut self, landed: ProjectId) -> Task<Message> {
-        let Some((project, action)) = self.document_state.net_nav.pending.take() else {
+        let Some(pending) = self.document_state.net_nav.pending.take() else {
             return Task::none();
         };
+        let Pending {
+            project,
+            action,
+            sheet,
+            selected,
+        } = pending.clone();
+        let user_command = action != PendingNetAction::HoverDwell;
         if project != landed {
-            if self.document_state.project_by_id(project).is_some() {
-                self.document_state.net_nav.pending = Some((project, action));
+            if self.project_is_planned(project) {
+                self.document_state.net_nav.pending = Some(pending);
+            } else if user_command {
+                crate::diagnostics::log_info(messages::command_dropped_left());
             }
             return Task::none();
         }
@@ -181,10 +204,37 @@ impl Signex {
             .as_deref()
             .and_then(|p| self.project_of_sheet(p))
             == Some(project);
-        if in_view {
-            self.run_pending_net_action(action)
-        } else {
-            Task::none()
+        if !in_view {
+            if user_command {
+                crate::diagnostics::log_info(messages::command_dropped_left());
+            }
+            return Task::none();
+        }
+        let same_context = sheet == self.document_state.active_path
+            && selected == self.interaction_state.active_canvas().selected;
+        if user_command && !same_context {
+            crate::diagnostics::log_info(messages::command_dropped_moved());
+            return Task::none();
+        }
+        self.run_pending_net_action(action)
+    }
+
+    /// Whether `project` still has open sheets, so an index can still come.
+    fn project_is_planned(&self, project: ProjectId) -> bool {
+        plan_projects(&self.document_state)
+            .iter()
+            .any(|p| p.project == project)
+    }
+
+    /// Drop the parked command of `project` and say so, unless it was only
+    /// the hover's.
+    fn drop_pending_of(&mut self, project: ProjectId, line: String) {
+        let nav = &mut self.document_state.net_nav;
+        if nav.pending.as_ref().is_some_and(|p| p.project == project) {
+            let dropped = nav.pending.take();
+            if dropped.is_some_and(|p| p.action != PendingNetAction::HoverDwell) {
+                crate::diagnostics::log_info(line);
+            }
         }
     }
 

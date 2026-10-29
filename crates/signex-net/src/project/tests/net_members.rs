@@ -398,12 +398,6 @@ fn a_live_anchor_beats_an_unrelated_net_that_now_carries_the_name() {
 }
 
 #[test]
-fn a_name_that_follows_position_is_not_trusted() {
-    assert!(is_positional_name("N$3") && is_positional_name("EN_2"));
-    assert!(!is_positional_name("EN") && !is_positional_name("EN_A") && !is_positional_name("VCC"));
-}
-
-#[test]
 fn power_ports_on_other_sheets_come_before_those_on_the_same_sheet() {
     let mut root = root_with_child("a.sch", vec![]);
     add_lib(&mut root, "P");
@@ -420,5 +414,62 @@ fn power_ports_on_other_sheets_come_before_those_on_the_same_sheet() {
     let idx = indexed(&root, &[("a.sch", a)]);
 
     let from_root = idx.partners(&key("root.sch"), id(70), None);
-    assert_eq!(ids(&from_root), [id(71), id(72)], "the other sheet first");
+    assert_eq!(
+        ids(&idx.jump_ring(&key("root.sch"), id(70), None)),
+        [id(71), id(72)]
+    );
+    assert_eq!(ids(&from_root), [id(72), id(71)], "the plain ring");
+}
+
+/// Two global `VCC` labels per sheet, one on each end of a wire.
+fn two_label_sheet(base: u128) -> SchematicSheet {
+    let mut s = empty_sheet();
+    s.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    s.labels
+        .push(labelled("VCC", pt(0.0, 0.0), LabelType::Global, base));
+    s.labels
+        .push(labelled("VCC", pt(10.0, 0.0), LabelType::Global, base + 1));
+    s
+}
+
+#[test]
+fn the_jump_ring_leaves_the_sheet_first_and_still_reaches_every_port() {
+    let mut root = two_label_sheet(1);
+    root.child_sheets.push(child_sheet("A", "a.sch", vec![]));
+    let idx = indexed(&root, &[("a.sch", two_label_sheet(5))]);
+
+    // The plain ring stays on the sheet first; the jump ring leaves it.
+    assert_eq!(
+        ids(&idx.partners(&key("root.sch"), id(1), None)),
+        [id(2), id(5), id(6)]
+    );
+    assert_eq!(
+        ids(&idx.jump_ring(&key("root.sch"), id(1), None)),
+        [id(5), id(6), id(2)]
+    );
+    assert_eq!(
+        ids(&idx.jump_ring(&key("a.sch"), id(5), None)),
+        [id(1), id(2), id(6)]
+    );
+}
+
+#[test]
+fn a_suffixed_name_is_positional_only_when_its_base_name_exists() {
+    let named = |wire: u128, text: &str| {
+        let mut s = en_page(wire, wire + 1, false);
+        s.labels
+            .push(labelled(text, pt(0.0, 0.0), LabelType::Net, wire + 1));
+        s
+    };
+    let gone = (key("p1"), id(404));
+    let lone = indexed_flat(&[("p1", named(100, "DATA_1"))]);
+    assert!(
+        lone.resolve("DATA_1", &gone).is_some(),
+        "no DATA net: DATA_1 is a real name"
+    );
+    let dup = indexed_flat(&[("p1", named(100, "EN")), ("p2", named(200, "EN"))]);
+    assert!(
+        dup.resolve("EN_2", &gone).is_none(),
+        "EN exists: EN_2 is a dedup suffix"
+    );
 }

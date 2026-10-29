@@ -9,12 +9,14 @@ mod highlight;
 mod history;
 pub mod hover;
 mod index_cache;
+mod jump;
 mod reported;
 
 pub use highlight::NetHighlight;
 pub use history::SheetHistory;
 pub use hover::{HoverCard, HoverState};
 pub use index_cache::{IndexOutcome, NetIndexCache, ProjectNetData, Stored};
+pub use jump::JumpCursor;
 pub use reported::ReportedWarnings;
 
 /// What the user asked for while the index it needs was still being built:
@@ -28,6 +30,16 @@ pub enum PendingNetAction {
     HoverDwell,
 }
 
+/// A command asked while its project's index was being built, with what it
+/// was asked about: it runs only if that is still what the user is looking at.
+#[derive(Debug, Clone)]
+pub struct Pending {
+    pub project: crate::app::state::ProjectId,
+    pub action: PendingNetAction,
+    pub sheet: Option<std::path::PathBuf>,
+    pub selected: Vec<signex_types::schematic::SelectedItem>,
+}
+
 /// Everything cross-sheet navigation keeps between messages.
 #[derive(Default)]
 pub struct NetNavState {
@@ -35,8 +47,10 @@ pub struct NetNavState {
     pub highlight: Option<NetHighlight>,
     pub hover: HoverState,
     pub index: NetIndexCache,
-    /// The project it was asked in, and what to run when its index lands.
-    pub pending: Option<(crate::app::state::ProjectId, PendingNetAction)>,
+    /// A command waiting for its project's index.
+    pub pending: Option<Pending>,
+    /// Where the run of Go to net partner is in its ring.
+    pub jump: Option<JumpCursor>,
     /// Stitch warnings already shown, shared with the net-class refresh.
     pub reported: ReportedWarnings,
     /// What the highlight's index refresh last saw, so an update that changed

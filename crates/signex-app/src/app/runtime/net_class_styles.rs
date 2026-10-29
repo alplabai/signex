@@ -277,7 +277,13 @@ impl Signex {
                 crate::diagnostics::log_warning(warning);
             }
         }
-        for entry in &resolved.projects {
+        // Only a project the job stitched says what is currently wrong with
+        // it; one without classes was not, and the index owns its warnings.
+        for entry in resolved
+            .projects
+            .iter()
+            .filter(|e| !e.key.classes.is_empty())
+        {
             self.document_state
                 .net_nav
                 .reported

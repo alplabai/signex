@@ -5,7 +5,9 @@ use iced::Task;
 use signex_net::{NetMember, NetMemberKind};
 use signex_types::schematic::{SelectedItem, SelectedKind};
 
-use crate::app::state::net_nav::{PendingNetAction, ProjectNetData};
+use std::sync::Arc;
+
+use crate::app::state::net_nav::{JumpCursor, PendingNetAction, ProjectNetData};
 
 use super::super::super::*;
 use super::index_job::IndexLookup;
@@ -77,7 +79,7 @@ impl Signex {
             .or_else(|| self.target_under_cursor().filter(is_port_kind))
     }
 
-    fn jump_with(&mut self, data: &ProjectNetData, target: &NetTarget) -> Task<Message> {
+    fn jump_with(&mut self, data: &Arc<ProjectNetData>, target: &NetTarget) -> Task<Message> {
         let Some(key) = data.key_of(&target.sheet) else {
             crate::diagnostics::log_warning(messages::sheet_not_in_project());
             return Task::none();
@@ -90,12 +92,36 @@ impl Signex {
             return Task::none();
         };
         let name = describe_member(source);
-        let partners = data.index.partners(&key, target.item.uuid, occurrence);
-        let Some(first) = partners.first().copied() else {
-            crate::diagnostics::log_info(messages::no_partner(&name));
+        // Carry on the lap this jump continues, or start one from this port.
+        let anchor = (key.clone(), target.item.uuid);
+        let nav = &mut self.document_state.net_nav;
+        if !nav
+            .jump
+            .as_ref()
+            .is_some_and(|c| c.continues(data, &anchor))
+        {
+            let partners: Vec<NetMember> = data
+                .index
+                .jump_ring(&key, target.item.uuid, occurrence)
+                .into_iter()
+                .cloned()
+                .collect();
+            if partners.is_empty() {
+                nav.jump = None;
+                crate::diagnostics::log_info(messages::no_partner(&name));
+                return Task::none();
+            }
+            nav.jump = Some(JumpCursor::start(
+                Arc::clone(data),
+                source.clone(),
+                partners,
+            ));
+        }
+        let Some(cursor) = nav.jump.as_mut() else {
             return Task::none();
         };
-        let total = partners.len();
+        let total = cursor.lap_len() - 1;
+        let first = cursor.advance().clone();
         let (member, sheet) = (first.clone(), data.sheet_label(&first.sheet));
         let Some(path) = data
             .path_of(&member.sheet)
