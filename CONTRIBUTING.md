@@ -31,13 +31,13 @@ does something that Signex doesn't yet, that's a valid feature request.
    [Claiming an issue](#claiming-an-issue)
 3. Fork, branch, code, PR (details below)
 
-### Improve the KiCad Migration Path
+### Improve Migration from GPL-based EDA Tools
 
-KiCad import / export lives in the optional [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
-companion repo (GPL-3.0-or-later). PRs that improve KiCad parsing
+Import of files from GPL-based EDA tools lives in the optional [import companion repository](https://github.com/alplabai/signex-kicad-import)
+(GPL-3.0-or-later). PRs that improve parsing
 fidelity, fix migration round-trip issues, or expand the converter's
 coverage belong **there**, not in the main signex repo. The main repo
-is Apache-2.0 clean and contains no KiCad-derived code by design — see
+is Apache-2.0 clean and contains no code derived from GPL-based EDA tools by design — see
 [docs/LICENSING.md](docs/LICENSING.md).
 
 ### Add Test Fixtures
@@ -283,7 +283,7 @@ feat: add measure tool with distance annotation
 fix: wire junction not created at T-intersection
 refactor: split app update into semantic modules
 chore: update iced_aw to 0.13.1
-docs: add KiCad 9 fixture for multi-sheet test
+docs: add a multi-sheet fixture for the netlist test
 ```
 
 ## Crate Map
@@ -301,7 +301,7 @@ Each crate maps to an `area:` label (auto-applied to PRs by path — see
 | `signex-library` / `signex-library-server` | Component library model + the library server. | `library` |
 | `signex-erc` / `signex-erc-dsl` | ERC rule engine + DSL compiler. | `erc` |
 | `signex-bom` | Bill-of-materials generation. | `bom` |
-| `signex-output` | PDF / netlist exporters (non-KiCad formats). | `output` |
+| `signex-output` | PDF / netlist exporters (native and neutral formats). | `output` |
 | `signex-renderer` / `signex-gfx` | Canvas draw routines + GPU rendering. | `rendering` |
 | `signex-3d-model-importer` | 3D model (glTF/STEP) import. | `3d` |
 | `signex-widgets` / `chrome-catalog` | Custom Iced widgets + chrome catalog. | `widgets` |
@@ -350,9 +350,11 @@ In short:
   `ci · required` aggregates `check · <os>` (check + clippy `-D warnings` on
   Linux, macOS and Windows), `test · workspace` and `lint · repo gates`
   (rustfmt, `cargo deny` licenses and bans, `arch guard`
-  (`scripts/check_arch_guard.sh`: crate dependency edges against
-  `scripts/arch-edges.txt`; when it fires on an intended new edge, add that
-  line or run the script with `--generate` in the same PR), the god-file and
+  (`scripts/check_arch_guard.sh`: checks crate dependency edges against
+  `scripts/arch-edges.txt` and keeps domain crates off the UI/GPU stack. A new
+  crate edge is a design change: name the edge and its reason in the PR
+  description. A domain crate never gains an edge onto the UI/GPU stack.
+  `--generate` only regenerates the table after that decision), the god-file and
   discarded-Task ratchets, lint lockstep and the changelog fragment check). A
   PR that touches only prose skips the Rust jobs and still gets a green
   `ci · required` from the lint job. The `cargo-deny` sources/advisories steps
@@ -371,9 +373,53 @@ Examples of good first contributions:
 - Add a missing keyboard shortcut
 - Fix a rendering discrepancy
 - Add a test fixture for a corner case
-- Implement a menu item that's currently a stub
+- Implement a menu item that's currently a stub: add its catalog command id
+  and bridge arm (see [Architecture rules](#architecture-rules)), not a handler
+  wired to the menu alone
 - Improve an error message
 - Add a missing element type to the native format codec
+
+## Architecture rules
+
+These are the rules reviewers hold every PR to. The reasoning is in the linked
+documents; the gates (arch guard, god-file ratchet, clippy) catch only part of
+them, so the rest is on the author.
+
+- **MVU** ([ADR-0001](docs/architecture/adr-0001-app-structure-and-boundaries.md)):
+  all state lives in the model; `view` is pure; `update` is the only place
+  state changes, and IO is returned as a `Task`, never run inline (the
+  bounded `SaveBarrier` wait in ADR-0003 D2 is the sanctioned exception). No
+  process-global app state. Message routers are exhaustive, with no `_` arm.
+- **Messages:** the root `Message` gets no new flat variant; a new message
+  goes into its surface's namespaced enum. Name messages as past-tense events
+  (imperative names are the house style only inside `OverlayMsg`).
+- **Domain logic in domain crates:** the app calls them and never re-derives
+  them. Connectivity comes only from `signex-net`
+  ([ADR-0002](docs/architecture/adr-0002-netlist-single-derivation.md)),
+  geometry from `signex-sketch`, baking from `signex-bake`. Domain crates take
+  no `iced` / `wgpu` dependency, and crate edges are the ones in
+  `scripts/arch-edges.txt`.
+- **Commands** ([docs/COMMANDS.md](docs/COMMANDS.md)): a new user-invokable
+  action gets one catalog `AppCommandId` and one bridge arm, and every surface
+  row for it (menu, context menu, keymap, palette, Active Bar) takes its label
+  and shortcut from the catalog rather than a private literal. Catalog ids with
+  no arm yet are listed in `UNMAPPED_CATALOG_IDS` in
+  `crates/signex-app/src/app/command/bridge.rs`, a ratchet that only shrinks.
+  Ids are public API: never renamed or removed without an alias. A command is
+  not a `Message`.
+- **Deferred work**
+  ([ADR-0003](docs/architecture/adr-0003-deferred-work-and-consistent-history.md)):
+  owed work is explicit model state. Every boundary (save, undo, redo,
+  document or tab switch) runs the ADR-0003 D2 flush first (the `finish_pending` contract; in code,
+  `settle_pending_solve` in the footprint editor and the `SaveBarrier` wait
+  for document writes), and undo snapshots are only of finished states.
+- **Persistence:** document writes go through
+  `signex_types::atomic_io::atomic_write`. External input is never
+  `unwrap`ped. Failures reach the Messages panel.
+- **Files:** production files stay under the god-file cap
+  (`scripts/check_file_size.sh`). Split by domain into a folder (`foo/mod.rs`
+  plus `foo/<concern>.rs`) without a redundant prefix. One decision, one
+  helper.
 
 ## Code Style
 
@@ -425,9 +471,9 @@ with every contributor.
 The main signex repo is **Apache-2.0 clean**. Patches must not introduce
 code, data, or dependencies under any licence incompatible with
 Apache-2.0 — which is a wider net than GPL, and the next section defines
-it. KiCad import / export lives in the
-[signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
-GPL-3.0-or-later companion repo — that's where KiCad-related work
+it. Import from GPL-based EDA tools lives in the
+[import companion repository](https://github.com/alplabai/signex-kicad-import)
+(GPL-3.0-or-later) — that's where work on those formats
 belongs. See [docs/LICENSING.md](docs/LICENSING.md) for the full statement
 and the rationale behind the two-repo split.
 
@@ -520,14 +566,24 @@ it never blocks, and it fires on plenty of entirely original work — if it
 lands on yours, it means nothing more than "this PR is large".
 
 Why this matters: large-language-model assistants that have been
-trained on KiCad source can inadvertently produce structurally
+trained on GPL-based EDA tool source can inadvertently produce structurally
 derivative code even when generating "from scratch." If your LLM has
-been exposed to KiCad source, route the contribution to the GPL
+been exposed to such source, route the contribution to the GPL
 companion (where derivation is fine) rather than the Apache main repo.
 
 For reference, the License Guard CI also fails any push that
-introduces KiCad-flavoured identifiers (`kicad`, `KiCad`, `F_CU`,
-`B_CU`, `F_SILKS`, `tri_state`, `Net-(`, …) anywhere under `crates/`.
+introduces the GPL-based EDA tool's name, matched case-insensitively as a
+substring, anywhere in a `.rs` or `.toml` file under `crates/` (code,
+comments and strings alike), or a `const` / `static` named after one of its
+numbered layer ids (`F_CU`, `B_CU`, …). The other blocking jobs reject
+GPL-licensed parser/writer imports and Cargo dependencies; the removed API
+surface (`PinElectricalType`, `parse_markup(`, …); that tool's auto-net-name
+format (`Net-(…-Pad…)`), C++ class and file references in comments, and
+schematic/PCB/symbol file-format literals; the bare word `Standard` in
+`signex-renderer` / `signex-engine` comments; solver names and attribution
+(SolveSpace, FreeCAD, planegcs, OpenCascade) in `signex-sketch` /
+`signex-bake`; and mirror-source markers. The patterns are in
+`.github/workflows/license-guard.yml`.
 This is a structural backstop on top of the PR-description self-
 declaration.
 

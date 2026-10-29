@@ -21,7 +21,7 @@ from this source. Full list:
 Unsure about a source? [Ask in an issue](https://github.com/alplabai/signex/issues/new) —
 that's cheaper than finding out at review. If it *is* license-gated, add a line
 `License-gated sources: yes` and CI routes it to the GPL-3.0 companion repo
-[signex-kicad-import](https://github.com/alplabai/signex-kicad-import).
+[import companion repository](https://github.com/alplabai/signex-kicad-import).
 
 ## Labels
 
