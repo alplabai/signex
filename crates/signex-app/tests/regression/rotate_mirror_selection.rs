@@ -95,6 +95,7 @@ fn label(text: &str, label_type: LabelType, at: (f64, f64)) -> Label {
         justify_v: VAlign::Bottom,
         font_family: None,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
@@ -110,6 +111,7 @@ fn mixed_sheet(r1_mirror: (bool, bool)) -> (SchematicSheet, Ids) {
         end: Point::new(20.0, 10.0),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     };
     let net = label("NET", LabelType::Net, (20.0, 16.0));
     let flag = label("FLAG", LabelType::Global, (10.0, 16.0));
@@ -122,6 +124,7 @@ fn mixed_sheet(r1_mirror: (bool, bool)) -> (SchematicSheet, Ids) {
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
         font_family: None,
+        locked: false,
     };
     let ids = Ids {
         symbol: SelectedItem::new(r1.uuid, SelectedKind::Symbol),
@@ -731,6 +734,7 @@ fn a_self_contained_selection_keeps_its_netlist() {
         end: Point::new(b.0, b.1),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     };
     let net = label("N1", LabelType::Net, (20.0, 10.0));
     let selected = vec![
@@ -772,6 +776,7 @@ fn two_mirrors_cancel_without_drift() {
         end: Point::new(11.0, 12.0),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     };
     let item = SelectedItem::new(wire.uuid, SelectedKind::Wire);
     let sheet = SchematicSheet {
@@ -822,6 +827,7 @@ fn wire_from(a: (f64, f64), b: (f64, f64)) -> (SchematicSheet, SelectedItem) {
         end: Point::new(b.0, b.1),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     };
     let item = SelectedItem::new(wire.uuid, SelectedKind::Wire);
     let sheet = SchematicSheet {

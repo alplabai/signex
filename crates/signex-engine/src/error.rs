@@ -58,7 +58,7 @@ pub enum EngineError {
     #[error("the selection holds a coordinate that is not a finite number; it was not copied")]
     NonFiniteCoordinate,
     #[error("{}", locked_message(references, action))]
-    SymbolLocked {
+    ItemLocked {
         references: Vec<String>,
         action: &'static str,
     },

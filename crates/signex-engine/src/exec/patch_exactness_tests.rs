@@ -134,6 +134,7 @@ fn label(n: u128) -> Label {
         font_family: None,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        locked: false,
     }
 }
 
@@ -147,6 +148,7 @@ fn text_note(n: u128) -> TextNote {
         font_family: None,
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
+        locked: false,
     }
 }
 
@@ -182,6 +184,7 @@ fn drawing(n: u128, end_x: f64) -> SchDrawing {
         end: pt(end_x, 5.0 * n as f64),
         width: 0.2,
         stroke_color: None,
+        locked: false,
     }
 }
 
@@ -367,7 +370,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 48] = [
+const ALL_KINDS: [CommandKind; 49] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -378,6 +381,7 @@ const ALL_KINDS: [CommandKind; 48] = [
     CommandKind::UpdateLabelProps,
     CommandKind::SetSymbolRotation,
     CommandKind::SetSymbolLocked,
+    CommandKind::SetItemLocked,
     CommandKind::SetSymbolDnp,
     CommandKind::SetSymbolBodyStyle,
     CommandKind::UpdateSymbolTextSize,
@@ -433,6 +437,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::UpdateLabelProps
         | CommandKind::SetSymbolRotation
         | CommandKind::SetSymbolLocked
+        | CommandKind::SetItemLocked
         | CommandKind::SetSymbolDnp
         | CommandKind::SetSymbolBodyStyle
         | CommandKind::UpdateSymbolTextSize
@@ -673,6 +678,19 @@ fn samples() -> Vec<(String, Command)> {
             locked: true,
         },
     );
+    for (kind, id) in [
+        (SelectedKind::Wire, uid(WIRE, 1)),
+        (SelectedKind::Label, uid(LABEL, 1)),
+        (SelectedKind::TextNote, uid(TEXT_NOTE, 1)),
+    ] {
+        add(
+            &format!("SetItemLocked {kind:?}"),
+            Command::SetItemLocked {
+                item: SelectedItem::new(id, kind),
+                locked: true,
+            },
+        );
+    }
     add(
         "SetSymbolDnp",
         Command::SetSymbolDnp {

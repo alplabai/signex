@@ -147,6 +147,7 @@ pub(crate) fn add_label(sheet: &mut SchematicSheet, text: &str, at: (f64, f64)) 
         font_family: None,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        locked: false,
     });
 }
 
@@ -856,6 +857,7 @@ pub(crate) fn add_labelled(sheet: &mut SchematicSheet, rng: &mut Lcg, at: (f64, 
         font_family: None,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        locked: false,
     });
 }
 

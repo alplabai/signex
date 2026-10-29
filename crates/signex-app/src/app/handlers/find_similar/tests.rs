@@ -27,6 +27,7 @@ fn wire(x: f64) -> Wire {
         end: Point::new(x + 10.0, 20.0),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 

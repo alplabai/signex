@@ -493,6 +493,7 @@ mod tests {
             end: Point::new(5.0, 31.0),
             width: 0.0,
             stroke_color: None,
+            locked: false,
         };
         let selection = vec![
             SelectedItem::new(moved.uuid, SelectedKind::Symbol),

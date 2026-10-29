@@ -146,6 +146,7 @@ pub fn child_document_for_symbol(mut blank: SchematicSheet, symbol: &ChildSheet)
             font_family: None,
             justify: HAlign::default(),
             justify_v: VAlign::default(),
+            locked: false,
         });
     }
     blank

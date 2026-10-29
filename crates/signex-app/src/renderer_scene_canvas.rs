@@ -766,6 +766,7 @@ mod canvas_font_tests {
             justify: Default::default(),
             justify_v: Default::default(),
             unknown_columns: Default::default(),
+            locked: false,
         };
         // Roboto is bundled, so it is installed on every machine and the
         // result does not depend on the fonts of the machine running this.

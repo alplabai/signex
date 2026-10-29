@@ -25,6 +25,7 @@ fn label(id: uuid::Uuid) -> Label {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
@@ -38,6 +39,7 @@ fn note(id: uuid::Uuid) -> TextNote {
         font_family: None,
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
+        locked: false,
     }
 }
 

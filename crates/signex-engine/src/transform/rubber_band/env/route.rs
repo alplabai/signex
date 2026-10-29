@@ -204,6 +204,7 @@ impl Env {
                     end: b,
                     stroke_width: 0.0,
                     unknown_columns: Default::default(),
+                    locked: false,
                 });
                 wire.uuid = Uuid::new_v4();
                 wire.start = a;

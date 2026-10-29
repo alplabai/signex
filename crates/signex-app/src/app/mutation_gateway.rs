@@ -83,7 +83,7 @@ impl Signex {
 
     /// `commands` without what the lock would refuse (see
     /// `Engine::without_locked`), and the references skipped.
-    fn without_locked_symbols(
+    fn without_locked_items(
         engine: &signex_engine::Engine,
         commands: Vec<signex_engine::Command>,
     ) -> (Vec<signex_engine::Command>, Vec<String>) {
@@ -105,7 +105,7 @@ impl Signex {
             return;
         }
         crate::diagnostics::log_warning(format!(
-            "Skipped {} locked symbol(s): {}; unlock in Properties to change them",
+            "Skipped {} locked object(s): {}; unlock in Properties to change them",
             skipped.len(),
             skipped.join(", ")
         ));
@@ -158,7 +158,7 @@ impl Signex {
         };
 
         // A locked symbol is skipped, not allowed to cancel the batch.
-        let (commands, skipped) = Self::without_locked_symbols(engine, commands);
+        let (commands, skipped) = Self::without_locked_items(engine, commands);
         Self::report_locked_skips(&skipped);
         if commands.is_empty() {
             return (CommandOutcome::Unchanged, None);
@@ -266,8 +266,8 @@ impl Signex {
         // The same rule as a batch: locked symbols are skipped and named. A
         // command that is nothing but locked symbols still reaches the
         // engine, so the user is told why nothing happened.
-        let command = if engine.names_locked_symbol(&command) {
-            let (mut kept, skipped) = Self::without_locked_symbols(engine, vec![command.clone()]);
+        let command = if engine.names_locked_item(&command) {
+            let (mut kept, skipped) = Self::without_locked_items(engine, vec![command.clone()]);
             match kept.pop() {
                 Some(pruned) => {
                     Self::report_locked_skips(&skipped);
@@ -293,7 +293,7 @@ impl Signex {
             Ok(_) => crate::schematic_runtime::RenderInvalidation::NONE,
             Err(error) => {
                 failed = Some(error.to_string());
-                if matches!(error, signex_engine::EngineError::SymbolLocked { .. }) {
+                if matches!(error, signex_engine::EngineError::ItemLocked { .. }) {
                     // Same level as the skip notice a batch raises.
                     crate::diagnostics::log_warning(error.to_string());
                 } else {

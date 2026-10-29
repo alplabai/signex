@@ -124,6 +124,7 @@ fn find_replace_app(reference: &str) -> (Signex, uuid::Uuid, uuid::Uuid, uuid::U
         justify: signex_types::schematic::HAlign::Left,
         justify_v: signex_types::schematic::VAlign::Bottom,
         font_family: None,
+        locked: false,
     });
     engine.set_document(sheet.clone());
     app.interaction_state
@@ -149,7 +150,7 @@ fn replace_all(app: &mut Signex, query: &str, replacement: &str) {
 fn replace_all_skips_a_locked_symbol_and_still_replaces_the_rest() {
     let reference = "RLOCKREPL1250";
     let (mut app, locked, free, label) = find_replace_app(reference);
-    let needle = format!("Skipped 1 locked symbol(s): {reference}");
+    let needle = format!("Skipped 1 locked object(s): {reference}");
     let before = logged(&needle);
 
     replace_all(&mut app, "GND", "VSS");
@@ -180,7 +181,7 @@ fn replace_all_skips_a_locked_symbol_and_still_replaces_the_rest() {
 fn a_mixed_selection_moves_the_free_symbol_and_skips_the_locked_one() {
     let reference = "RLOCKMIX1250";
     let (mut app, locked, free, _) = find_replace_app(reference);
-    let needle = format!("Skipped 1 locked symbol(s): {reference}");
+    let needle = format!("Skipped 1 locked object(s): {reference}");
     let before = logged(&needle);
     app.interaction_state.active_canvas_mut().selected = vec![
         SelectedItem::new(locked, SelectedKind::Symbol),
@@ -245,7 +246,7 @@ fn keyboard_rotate_and_mirror_leave_a_locked_symbol_unchanged() {
 fn cut_skips_a_locked_symbol_without_touching_the_clipboard() {
     let reference = "RLOCKCUT1250";
     let (mut app, _) = locked_symbol_app(reference);
-    let needle = format!("Skipped 1 locked symbol(s): {reference}");
+    let needle = format!("Skipped 1 locked object(s): {reference}");
     let before = logged(&needle);
 
     let _ = app.update(Message::Edit(EditMsg::Cut));

@@ -54,6 +54,7 @@ fn two_row_sheet() -> SchematicSheet {
             justify: HAlign::Left,
             justify_v: VAlign::Bottom,
             font_family: None,
+            locked: false,
         });
     }
     sheet

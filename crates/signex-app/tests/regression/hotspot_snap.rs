@@ -225,6 +225,7 @@ fn move_pin_tip_near_wire_end(hotspots: bool) -> (f64, f64) {
         start: Point::new(50.0, 50.0),
         end: Point::new(25.4 + 0.3, 12.7 + 0.1),
         stroke_width: 0.0,
+        locked: false,
     };
     let (mut app, path) =
         app_with_symbol_and_wire(hotspots, Point::new(0.0, 0.0), symbol, Some(wire));

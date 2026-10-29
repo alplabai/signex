@@ -196,6 +196,7 @@ fn dragging_a_bus_on_the_canvas_carries_entry_and_wire() {
             end: Point::new(12.54, 12.54),
             stroke_width: 0.0,
             unknown_columns: Default::default(),
+            locked: false,
         }],
         ..Default::default()
     };

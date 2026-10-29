@@ -1,13 +1,51 @@
-//! A small padlock above every locked symbol (#1250), drawn in the
-//! selection layer so it follows the camera and never enters the scene
-//! cache. The colour is the theme's `value` token.
+//! A small padlock above every locked symbol (#1250), wire, label, text note
+//! and drawing (#1573), drawn in the selection layer so it follows the
+//! camera and never enters the scene cache. The colour is the theme's
+//! `value` token.
 
 use super::*;
 
-/// Whether any symbol of `snapshot` is locked, i.e. the layer has a padlock
+/// Whether anything of `snapshot` is locked, i.e. the layer has a padlock
 /// to draw even with nothing selected.
-pub fn has_locked_symbol(snapshot: &SchematicRenderSnapshot) -> bool {
-    snapshot.symbols.iter().any(|s| s.locked)
+pub fn has_locked_item(snapshot: &SchematicRenderSnapshot) -> bool {
+    !locked_items(snapshot).is_empty()
+}
+
+/// Every locked object of `snapshot`, as the selection items its bounds are
+/// read through.
+fn locked_items(snapshot: &SchematicRenderSnapshot) -> Vec<SelectedItem> {
+    let item = |uuid, kind| SelectedItem::new(uuid, kind);
+    let symbols = snapshot
+        .symbols
+        .iter()
+        .filter(|s| s.locked)
+        .map(|s| item(s.uuid, SelectedKind::Symbol));
+    let wires = snapshot
+        .wires
+        .iter()
+        .filter(|w| w.locked)
+        .map(|w| item(w.uuid, SelectedKind::Wire));
+    let labels = snapshot
+        .labels
+        .iter()
+        .filter(|l| l.locked)
+        .map(|l| item(l.uuid, SelectedKind::Label));
+    let notes = snapshot
+        .text_notes
+        .iter()
+        .filter(|n| n.locked)
+        .map(|n| item(n.uuid, SelectedKind::TextNote));
+    let drawings = snapshot
+        .drawings
+        .iter()
+        .filter(|d| d.is_locked())
+        .map(|d| item(d.uuid(), SelectedKind::Drawing));
+    symbols
+        .chain(wires)
+        .chain(labels)
+        .chain(notes)
+        .chain(drawings)
+        .collect()
 }
 
 pub fn draw_lock_indicators(
@@ -17,12 +55,7 @@ pub fn draw_lock_indicators(
     colors: &CanvasColors,
     designators: &Designators,
 ) {
-    let locked: Vec<SelectedItem> = snapshot
-        .symbols
-        .iter()
-        .filter(|s| s.locked)
-        .map(|s| SelectedItem::new(s.uuid, SelectedKind::Symbol))
-        .collect();
+    let locked = locked_items(snapshot);
     if locked.is_empty() {
         return;
     }
@@ -81,4 +114,85 @@ pub fn draw_lock_indicators(
         DirtyFlags::OVERLAY,
         transform,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::schematic::{HAlign, Label, LabelType, SchDrawing, TextNote, VAlign, Wire};
+
+    fn label(locked: bool) -> Label {
+        Label {
+            uuid: uuid::Uuid::nil(),
+            text: "N".into(),
+            position: Point::new(0.0, 0.0),
+            rotation: 0.0,
+            label_type: LabelType::Net,
+            shape: String::new(),
+            font_size: 1.27,
+            font_family: None,
+            justify: HAlign::Left,
+            justify_v: VAlign::Bottom,
+            locked,
+            unknown_columns: Default::default(),
+        }
+    }
+
+    fn note(locked: bool) -> TextNote {
+        TextNote {
+            uuid: uuid::Uuid::nil(),
+            text: "n".into(),
+            position: Point::new(0.0, 0.0),
+            rotation: 0.0,
+            font_size: 1.27,
+            font_family: None,
+            justify_h: HAlign::Left,
+            justify_v: VAlign::Bottom,
+            locked,
+        }
+    }
+
+    fn sheet() -> SchematicRenderSnapshot {
+        SchematicSheet::default()
+    }
+
+    #[test]
+    fn nothing_locked_draws_no_padlock() {
+        let mut sheet = sheet();
+        sheet.wires.push(Wire::default());
+        sheet.labels.push(label(false));
+        sheet.text_notes.push(note(false));
+        assert!(!has_locked_item(&sheet));
+    }
+
+    #[test]
+    fn a_locked_wire_label_note_or_drawing_gets_a_padlock() {
+        let wire = Wire {
+            locked: true,
+            ..Default::default()
+        };
+        let mut with_wire = sheet();
+        with_wire.wires.push(wire);
+        assert!(has_locked_item(&with_wire));
+
+        let mut with_label = sheet();
+        with_label.labels.push(label(true));
+        assert!(has_locked_item(&with_label));
+
+        let mut with_note = sheet();
+        with_note.text_notes.push(note(true));
+        assert!(has_locked_item(&with_note));
+
+        let mut with_drawing = sheet();
+        with_drawing.drawings.push(SchDrawing::Line {
+            uuid: uuid::Uuid::nil(),
+            start: Point::new(0.0, 0.0),
+            end: Point::new(1.0, 0.0),
+            width: 0.1,
+            stroke_color: None,
+            locked: true,
+        });
+        assert!(has_locked_item(&with_drawing));
+        assert_eq!(locked_items(&with_drawing).len(), 1);
+    }
 }

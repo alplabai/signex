@@ -17,6 +17,7 @@ fn wire(uuid: uuid::Uuid, y: f64) -> Wire {
         start: Point::new(10.0, y),
         end: Point::new(30.0, y),
         stroke_width: 0.0,
+        locked: false,
     }
 }
 

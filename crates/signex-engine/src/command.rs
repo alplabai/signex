@@ -55,6 +55,7 @@ pub enum CommandKind {
     UpdateLabelProps,
     SetSymbolRotation,
     SetSymbolLocked,
+    SetItemLocked,
     SetSymbolDnp,
     SetSymbolBodyStyle,
     UpdateSymbolTextSize,
@@ -166,6 +167,13 @@ pub enum Command {
     /// Set a symbol's `locked` flag (Properties panel "Locked" checkbox).
     SetSymbolLocked {
         symbol_id: Uuid,
+        locked: bool,
+    },
+    /// Set the `locked` flag of a wire, label, text note or drawing (#1573);
+    /// the Properties panel "Locked" checkbox. A symbol uses
+    /// `SetSymbolLocked`; any other kind is a no-op.
+    SetItemLocked {
+        item: SelectedItem,
         locked: bool,
     },
     /// Set a symbol's `dnp` (Do Not Populate) flag (Properties panel "DNP"
@@ -476,6 +484,7 @@ impl Command {
             Command::UpdateLabelProps { .. } => CommandKind::UpdateLabelProps,
             Command::SetSymbolRotation { .. } => CommandKind::SetSymbolRotation,
             Command::SetSymbolLocked { .. } => CommandKind::SetSymbolLocked,
+            Command::SetItemLocked { .. } => CommandKind::SetItemLocked,
             Command::SetSymbolDnp { .. } => CommandKind::SetSymbolDnp,
             Command::SetSymbolBodyStyle { .. } => CommandKind::SetSymbolBodyStyle,
             Command::UpdateSymbolTextSize { .. } => CommandKind::UpdateSymbolTextSize,

@@ -33,6 +33,7 @@ fn named_wire(text: &str, label_type: LabelType) -> SchematicSheet {
         font_family: None,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        locked: false,
     });
     sheet
 }

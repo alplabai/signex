@@ -414,6 +414,7 @@ impl Signex {
                             justify_h: signex_types::schematic::HAlign::Left,
                             justify_v: signex_types::schematic::VAlign::default(),
                             font_family: None,
+                            locked: false,
                         });
                 }
                 if tool == Tool::BusEntry {

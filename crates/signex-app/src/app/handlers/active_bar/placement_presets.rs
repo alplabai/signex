@@ -71,6 +71,7 @@ impl Signex {
                         justify: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::Bottom,
                         font_family: None,
+                        locked: false,
                     });
             }
             ActiveBarAction::PlaceOffSheetConnector => {
@@ -92,6 +93,7 @@ impl Signex {
                         justify: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::Bottom,
                         font_family: None,
+                        locked: false,
                     });
             }
             ActiveBarAction::PlaceBusEntry => {

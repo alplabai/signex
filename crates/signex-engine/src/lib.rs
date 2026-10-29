@@ -30,6 +30,8 @@ mod annotation_tests;
 
 #[cfg(test)]
 mod lock_tests;
+#[cfg(test)]
+mod object_lock_tests;
 
 #[cfg(test)]
 mod history_tests;
@@ -402,7 +404,7 @@ impl Engine {
         };
         self.refuse_if_read_only(incoming)?;
         // A refusal touches nothing, so it moves no revision.
-        if let Some(refusal) = self.locked_symbol_refusal(&cmd) {
+        if let Some(refusal) = self.locked_item_refusal(&cmd) {
             return Err(refusal);
         }
         self.bump_revision();
@@ -414,6 +416,7 @@ impl Engine {
             | Command::UpdateLabelProps { .. }
             | Command::SetSymbolRotation { .. }
             | Command::SetSymbolLocked { .. }
+            | Command::SetItemLocked { .. }
             | Command::SetSymbolDnp { .. }
             | Command::SetSymbolBodyStyle { .. }
             | Command::UpdateSymbolTextSize { .. }
@@ -669,6 +672,7 @@ mod tests {
             justify: signex_types::schematic::HAlign::Left,
             justify_v: signex_types::schematic::VAlign::Bottom,
             font_family: None,
+            locked: false,
         });
         document.labels.push(Label {
             unknown_columns: Default::default(),
@@ -682,6 +686,7 @@ mod tests {
             justify: signex_types::schematic::HAlign::Left,
             justify_v: signex_types::schematic::VAlign::Bottom,
             font_family: None,
+            locked: false,
         });
 
         let engine = Engine::new(document).unwrap();
