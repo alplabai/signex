@@ -580,9 +580,10 @@ GPL-licensed parser/writer imports and Cargo dependencies; the removed API
 surface (`PinElectricalType`, `parse_markup(`, …); that tool's auto-net-name
 format (`Net-(…-Pad…)`), C++ class and file references in comments, and
 schematic/PCB/symbol file-format literals; the bare word `Standard` in
-`signex-renderer` / `signex-engine` comments; solver names and attribution
-(SolveSpace, FreeCAD, planegcs, OpenCascade) in `signex-sketch` /
-`signex-bake`; and mirror-source markers. The patterns are in
+`signex-renderer` / `signex-engine` comments; solver names (SolveSpace,
+FreeCAD, planegcs, OpenCascade) in `signex-sketch` / `signex-bake`, and
+attribution to those solvers ("based on …", "derived from …") anywhere outside
+`docs/audit/`; and mirror-source markers. The patterns are in
 `.github/workflows/license-guard.yml`.
 This is a structural backstop on top of the PR-description self-
 declaration.
