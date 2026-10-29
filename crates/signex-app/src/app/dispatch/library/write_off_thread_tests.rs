@@ -880,3 +880,6 @@ fn a_failed_new_component_insert_reaches_messages() {
 
 #[path = "deferred_close_tests.rs"]
 mod deferred_close_tests;
+
+#[path = "held_back_tests.rs"]
+mod held_back_tests;

@@ -233,6 +233,7 @@ impl LibraryState {
 
     fn open_library_marked(&mut self, root: PathBuf, read_only: bool) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
+            self.cancel_pending_close(&root, "it was opened again");
             return Ok(());
         }
         let adapter = LocalGitAdapter::open(&root)?;

@@ -38,6 +38,18 @@ impl LibraryState {
         self.closing.remove(root)
     }
 
+    /// Drop a deferred close and say why in Messages, when one was pending.
+    /// Every re-mount (both mount entry points) and Cancel in the close
+    /// prompt come through here.
+    pub fn cancel_pending_close(&mut self, root: &Path, why: &str) {
+        if self.cancel_close(root) {
+            crate::diagnostics::log_info(format!(
+                "Pending Close Library of {} cancelled: {why}.",
+                self.library_label(root)
+            ));
+        }
+    }
+
     /// Drop the library backing `root` — unmounts it from `set` and drops
     /// every Component Preview editor pointing at it. The dispatcher asks
     /// about dirty editors first (`dirty_editors_for_library`), both when
@@ -69,6 +81,10 @@ impl LibraryState {
         if let Some(idx) = self.open_libraries.iter().position(|lib| lib.root == root) {
             let entry = self.open_libraries.remove(idx);
             self.touch_data();
+            // What its last commits left out is reported before it goes.
+            if let Some(adapter) = self.set.get(entry.library_id) {
+                crate::library::held_back::report_held_back(&entry.display_name, adapter);
+            }
             self.set.unmount(entry.library_id);
             self.editors.retain(|key, _| key.library_path != root);
             // Names, drift rows and Update must not use an unmounted library.

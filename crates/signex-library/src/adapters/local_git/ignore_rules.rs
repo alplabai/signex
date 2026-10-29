@@ -26,6 +26,20 @@ pub(super) fn apply_managed_rules(repo: &git2::Repository) -> Result<(), git2::E
     repo.add_ignore_rule(GITIGNORE_BLOCK_BODY)
 }
 
+/// Whether `rel` is clutter the managed block names. Every rule in the
+/// block has no slash, so it matches the file name in any directory.
+pub(super) fn is_managed_clutter(rel: &str) -> bool {
+    let rules = GITIGNORE_BLOCK_BODY
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'));
+    let Ok(spec) = git2::Pathspec::new(rules) else {
+        return false;
+    };
+    let name = rel.rsplit('/').next().unwrap_or(rel);
+    spec.matches_path(Path::new(name), git2::PathspecFlags::DEFAULT)
+}
+
 impl LocalGitAdapter {
     /// Merge the managed block into the library's `.gitignore` before a
     /// commit. `Some` when the file changed, so the commit records it. A

@@ -133,9 +133,11 @@ impl LocalGitAdapter {
         };
         // The managed ignore block rides with this commit; on a failure it
         // joins the ledger like the caller's files.
+        let riders: Vec<String> = self.merge_ignore_rules_for_commit().into_iter().collect();
         let mut extras: Vec<String> = extra_rel_paths.to_vec();
-        extras.extend(self.merge_ignore_rules_for_commit());
-        match self.try_commit(&removed, rel_path, &extras, message) {
+        extras.extend(riders.iter().cloned());
+        let message = with_riders(message, &riders);
+        match self.try_commit(&removed, rel_path, &extras, &message) {
             Ok(landed) => {
                 self.settle_ledger(landed.held);
                 match landed.oid {
@@ -257,69 +259,70 @@ impl LocalGitAdapter {
         let sig = git2::Signature::now(&sig_name, &sig_email)
             .map_err(|e| format!("git signature: {e}"))?;
         let _commit_lock = super::commit_lock::lock_repo_for_commit(repo.path())?;
-        super::ignore_rules::apply_managed_rules(&repo).map_err(|e| format!("git ignore: {e}"))?;
 
         let own = Own {
             removed,
             rel_path,
             extras: extra_rel_paths,
         };
-        let sweep = self.plan_sweep(&repo, &own);
+        let sweep = self
+            .plan_sweep(&repo, &own)
+            .map_err(|e| e.message().to_owned())?;
         let swept = sweep.names();
         // History stays truthful: the commit says what else it holds.
-        let full_message = if swept.is_empty() {
+        let message = if swept.is_empty() {
             message.to_owned()
         } else {
             format!("{message}\n\nalso commits pending: {}", swept.join(", "))
         };
-        let with_sweep = own.commit(&repo, &sig, &full_message, &sweep);
-        match with_sweep {
-            Ok(oid) => Ok(Landed {
-                oid,
-                held: sweep.held,
-            }),
-            // A pending file failing must not take the caller's change down
-            // with it: commit that alone and keep the sweep pending.
-            Err(e) if !swept.is_empty() && own.has_changes() => {
-                let oid = own
-                    .commit(&repo, &sig, message, &Sweep::default())
-                    .map_err(|_| e.message().to_owned())?;
-                let mut held = sweep.held;
-                held.extend(swept.into_iter().map(|path| HeldBackFile {
-                    path,
-                    reason: e.message().to_owned(),
-                }));
-                Ok(Landed { oid, held })
-            }
-            Err(e) => Err(e.message().to_owned()),
-        }
+        let oid = own
+            .commit(&repo, &sig, &message, &sweep)
+            .map_err(|e| e.message().to_owned())?;
+        Ok(Landed {
+            oid,
+            held: sweep.held,
+        })
     }
 
     /// The ledger files to record with this commit. Files an earlier failed
     /// commit left behind ride along; a file that is gone is committed as a
-    /// removal, so a rename whose commit failed is recorded whole. An
-    /// ignored file is dropped from the ledger; one that cannot be read is
-    /// held back.
-    fn plan_sweep(&self, repo: &git2::Repository, own: &Own<'_>) -> Sweep {
+    /// removal, so a rename whose commit failed is recorded whole. Clutter
+    /// the managed ignore block names is dropped from the ledger (only when
+    /// HEAD does not track it); a file the commit could not hash (unreadable,
+    /// a directory, an LFS read error) is held back and stays pending.
+    fn plan_sweep(&self, repo: &git2::Repository, own: &Own<'_>) -> Result<Sweep, git2::Error> {
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| git2::Error::from_str("repository has no working tree"))?;
+        let head = match repo.head() {
+            Ok(head) => Some(head.peel_to_tree()?),
+            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
+            Err(e) => return Err(e),
+        };
+        let tracked = |rel: &str| {
+            head.as_ref()
+                .is_some_and(|t| t.get_path(Path::new(rel)).is_ok())
+        };
         let mut sweep = Sweep::default();
         for pending in self.ledger().paths.iter() {
-            if own.holds(pending) || repo.is_path_ignored(Path::new(pending)).unwrap_or(false) {
+            if own.holds(pending)
+                || (super::ignore_rules::is_managed_clutter(pending) && !tracked(pending))
+            {
                 continue;
             }
-            let path = self.root_dir.join(pending);
-            if path.symlink_metadata().is_err() {
+            if self.root_dir.join(pending).symlink_metadata().is_err() {
                 sweep.removed.push(pending.clone());
                 continue;
             }
-            match fs::File::open(&path) {
+            match super::lfs::blob_for_path(repo, workdir, Path::new(pending)) {
                 Ok(_) => sweep.extras.push(pending.clone()),
                 Err(e) => sweep.held.push(HeldBackFile {
                     path: pending.clone(),
-                    reason: e.to_string(),
+                    reason: e.message().to_owned(),
                 }),
             }
         }
-        sweep
+        Ok(sweep)
     }
 
     /// Remember the files of a failed commit and, once per cause, say so.
@@ -365,12 +368,16 @@ struct Own<'a> {
     extras: &'a [String],
 }
 
-impl Own<'_> {
-    /// Whether the caller asked to record anything of its own.
-    fn has_changes(&self) -> bool {
-        self.rel_path.is_some() || !self.extras.is_empty() || !self.removed.is_empty()
+/// `message` naming the files that ride along unasked (the merged ignore
+/// block), so history says what the commit holds.
+fn with_riders(message: &str, riders: &[String]) -> String {
+    if riders.is_empty() {
+        return message.to_owned();
     }
+    format!("{message}\n\nalso commits: {}", riders.join(", "))
+}
 
+impl Own<'_> {
     fn holds(&self, path: &str) -> bool {
         Some(path) == self.rel_path
             || self.extras.iter().any(|p| p == path)
@@ -408,5 +415,23 @@ impl Own<'_> {
                 message,
             )
         })
+    }
+}
+
+/// Safety net (#1729): an adapter dropped with held-back files nobody asked
+/// for still names them. The app drains every adapter it commits through
+/// (`signex-app` `library::held_back`), so this stays quiet in practice.
+impl Drop for LocalGitAdapter {
+    fn drop(&mut self) {
+        let held = std::mem::take(&mut self.ledger().held_back);
+        for file in held {
+            tracing::warn!(
+                target: "signex::library",
+                "Not committed, kept pending: could not read {} ({}) in {}",
+                file.path,
+                file.reason,
+                self.root_dir.display()
+            );
+        }
     }
 }

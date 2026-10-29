@@ -192,7 +192,7 @@ impl StockCopyJob {
         let directory = target_dir.join(self.kind.directory());
         std::fs::create_dir_all(&directory)?;
         let destination = free_file(&directory, &file_stem, self.kind.extension());
-        adapter.rewrite_file_locked(&destination, &message, &mut |current| {
+        let written = adapter.rewrite_file_locked(&destination, &message, &mut |current| {
             if current.is_some() {
                 return Err(LibraryError::Conflict(format!(
                     "{} appeared while copying; nothing was overwritten",
@@ -200,7 +200,12 @@ impl StockCopyJob {
                 )));
             }
             Ok(Some(text.clone().into_bytes()))
-        })?;
+        });
+        // The adapter is opened for this one copy: report what its commits
+        // left out before it goes (#1729).
+        let library = adapter.manifest().library.name.clone();
+        crate::library::held_back::report_held_back(&library, &adapter);
+        written?;
         Ok((destination, false))
     }
 }

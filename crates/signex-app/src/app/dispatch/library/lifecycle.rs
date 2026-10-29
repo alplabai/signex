@@ -169,7 +169,10 @@ impl Signex {
         };
         match choice {
             CloseLibraryChoice::Cancel => {
-                // No state change — user kept the library open.
+                // The user kept the library open: a close still waiting for
+                // writes must not unmount it later.
+                self.library
+                    .cancel_pending_close(&confirm.library_path, "the close prompt was cancelled");
             }
             CloseLibraryChoice::DiscardAll => {
                 // Drop the library's editors now: a close that waits for

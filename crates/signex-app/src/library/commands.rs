@@ -51,24 +51,10 @@ use crate::app::library_entry::library_entry_location;
 pub fn open_library(state: &mut LibraryState, root: PathBuf) -> Result<(), LibraryError> {
     let already_open = state.library_at(&root).is_some();
     state.open_library(root.clone())?;
-    if already_open {
-        cancel_close_on_reopen(state, &root);
-    }
     if already_open && let Err(e) = state.refresh_components(&root) {
         tracing::warn!(target: "signex::library", path = %root.display(), error = %e, "refresh_components failed; UI starts with empty list");
     }
     Ok(())
-}
-
-/// Opening a library whose close waits for its writes cancels that close
-/// (#1728): the user wants it open, so it must not unmount later.
-pub fn cancel_close_on_reopen(state: &mut LibraryState, root: &std::path::Path) {
-    if state.cancel_close(root) {
-        crate::diagnostics::log_info(format!(
-            "Pending Close Library of {} cancelled: it was opened again.",
-            state.library_label(root)
-        ));
-    }
 }
 
 // ── Library lifecycle helpers ────────────────────────────────────────

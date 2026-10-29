@@ -175,3 +175,123 @@ fn one_unreadable_pending_file_does_not_stall_the_next_commit() {
     }
     fs::set_permissions(&bad, fs::Permissions::from_mode(0o644)).unwrap();
 }
+
+/// A branch-ref lock a crashed git left behind: every commit fails.
+fn fail_commits(root: &Path) -> PathBuf {
+    let head = fs::read_to_string(root.join(".git").join("HEAD")).unwrap();
+    let branch = head.trim().strip_prefix("ref: ").unwrap().to_owned();
+    let lock = root.join(".git").join(format!("{branch}.lock"));
+    let file = fs::File::create(&lock).unwrap();
+    file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(60))
+        .unwrap();
+    lock
+}
+
+/// Put `rel` into the ledger the way a save whose commit failed does.
+fn pending_from_a_failed_commit(adapter: &LocalGitAdapter, rel: &str) {
+    let lock = fail_commits(adapter.root());
+    let outcome = adapter
+        .commit_external_change(&adapter.root().join(rel), "save")
+        .unwrap();
+    assert!(!outcome.is_recorded(), "the commit failed");
+    fs::remove_file(lock).unwrap();
+}
+
+/// Commit `rel` as it is on disk with plain git.
+fn plain_commit(root: &Path, rel: &str) {
+    let repo = git2::Repository::open(root).unwrap();
+    let mut index = repo.index().unwrap();
+    index.add_path(Path::new(rel)).unwrap();
+    index.write().unwrap();
+    let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+    let parent = repo.head().unwrap().peel_to_commit().unwrap();
+    let sig = git2::Signature::now("User", "user@example.test").unwrap();
+    repo.commit(Some("HEAD"), &sig, &sig, "plain", &tree, &[&parent])
+        .unwrap();
+}
+
+/// Review #1729: only the managed block's rules drop a ledger file. A file
+/// the user's own rule ignores was committed on purpose by the caller, and
+/// the sweep records it like any other pending file.
+#[test]
+fn a_pending_file_under_a_user_ignore_rule_is_still_committed() {
+    let dir = tempfile::tempdir().unwrap();
+    let adapter = versioned(&dir);
+    let root = adapter.root().to_path_buf();
+    let ignore = root.join(".gitignore");
+    let user = format!("{}*.pdf\n", fs::read_to_string(&ignore).unwrap());
+    fs::write(&ignore, user).unwrap();
+    plain_commit(&root, ".gitignore");
+    fs::create_dir_all(root.join("docs")).unwrap();
+    fs::write(root.join("docs/sheet.pdf"), "pdf").unwrap();
+    pending_from_a_failed_commit(&adapter, "docs/sheet.pdf");
+
+    adapter.add_library_class(class("res"), "add res").unwrap();
+
+    assert_eq!(head_blob(&root, "docs/sheet.pdf").unwrap(), b"pdf");
+    assert_eq!(adapter.pending_changes(), None);
+}
+
+#[test]
+fn a_tracked_file_under_a_user_ignore_rule_is_still_committed() {
+    let dir = tempfile::tempdir().unwrap();
+    let adapter = versioned(&dir);
+    let root = adapter.root().to_path_buf();
+    fs::write(root.join("keep.log"), "v1").unwrap();
+    plain_commit(&root, "keep.log");
+    let ignore = root.join(".gitignore");
+    let user = format!("{}*.log\n", fs::read_to_string(&ignore).unwrap());
+    fs::write(&ignore, user).unwrap();
+    plain_commit(&root, ".gitignore");
+    fs::write(root.join("keep.log"), "v2").unwrap();
+    pending_from_a_failed_commit(&adapter, "keep.log");
+
+    adapter.add_library_class(class("res"), "add res").unwrap();
+
+    assert_eq!(head_blob(&root, "keep.log").unwrap(), b"v2");
+    assert_eq!(adapter.pending_changes(), None);
+}
+
+/// Review #1729: a pending path the commit cannot hash (here a directory,
+/// which opens fine as a file handle) is the only one held back; the good
+/// pending file next to it is committed.
+#[test]
+fn only_the_pending_path_that_cannot_be_hashed_is_held_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let adapter = versioned(&dir);
+    let root = adapter.root().to_path_buf();
+    fs::create_dir_all(root.join("symbols/sub")).unwrap();
+    fs::write(root.join("symbols/sub/x.snxsym"), "x").unwrap();
+    fs::write(root.join("symbols/good.snxsym"), "good").unwrap();
+    pending_from_a_failed_commit(&adapter, "symbols/sub");
+    pending_from_a_failed_commit(&adapter, "symbols/good.snxsym");
+
+    adapter.add_library_class(class("res"), "add res").unwrap();
+
+    assert_eq!(head_blob(&root, "symbols/good.snxsym").unwrap(), b"good");
+    let held = adapter.take_held_back_files();
+    assert_eq!(
+        held.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(),
+        vec!["symbols/sub"]
+    );
+    let pending = adapter
+        .pending_changes()
+        .expect("the directory stays pending");
+    assert_eq!(pending.paths, vec!["symbols/sub".to_string()]);
+}
+
+/// Review #1729: when the merged ignore block rides in a commit, the
+/// commit message says so.
+#[test]
+fn a_commit_that_adds_the_ignore_block_names_it_in_its_message() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = older_library(&dir, "");
+    let adapter = LocalGitAdapter::open(root.join("Lib.snxlib")).unwrap();
+
+    adapter.add_library_class(class("res"), "add res").unwrap();
+
+    let repo = git2::Repository::open(&root).unwrap();
+    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    let message = head.message().unwrap();
+    assert!(message.contains("also commits: .gitignore"), "{message}");
+}

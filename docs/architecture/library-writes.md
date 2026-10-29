@@ -72,9 +72,12 @@ meanwhile.
   dropped silently. Clean editors close with the library. Discard All
   drops the library's editors at once, so a close it defers does not ask
   again.
-- **Opening again cancels it.** Opening the library (Open Library, a
-  Library Browser tab, any `commands::open_library` caller) while its close
-  waits clears the close.
+- **Opening again cancels it.** Any re-mount of the library while its
+  close waits clears the close: both mount entry points
+  (`LibraryState::open_library`, `request_mount`) call
+  `cancel_pending_close`, so Open Library, a Library Browser tab, a
+  project-open auto-mount and Add Library all count. Cancel in the close
+  prompt clears it too.
 - Each step (deferred, closed, stopped by unsaved editors, cancelled by a
   re-open) is one Messages line naming the library.
 
@@ -83,9 +86,11 @@ meanwhile.
 A versioned library's repository carries the managed `.gitignore` block
 projects get (`signex_types::project_vcs_files::GITIGNORE_BLOCK_BODY`:
 `*.tmp`, `.*.signex-writelock`, `.DS_Store`, `Thumbs.db`, `desktop.ini`),
-so OS and temp clutter never reaches the commit ledger or a commit. The
-rule is the `.gitignore` the user can see and edit, not a filter by file
-extension.
+so OS and temp clutter never reaches the commit ledger or a commit. As in
+projects, the block between the `# >>> signex (managed) >>>` markers is
+Signex-maintained and merged back on the next write; the user's own rules
+go outside it. The rule lives in the `.gitignore` the user can read, not
+in a hidden filter by file extension.
 
 - **New library with version control.** The block is written before
   `git init` and staged in the first commit, beside `.gitattributes`.
@@ -98,15 +103,23 @@ extension.
   (`git2::Repository::add_ignore_rule`, not persisted), so clutter is not
   listed. The library's next commit (always a writable adapter: a
   read-only mount refuses every write) merges the block into `.gitignore`,
-  keeping the user's lines, and records it in that same commit. A file the
-  merge refuses (broken markers, a link, read-only) is left alone and
-  warned about once.
+  keeping the user's lines, and records it in that same commit; the commit
+  message lists it ("also commits: .gitignore"). A file the merge refuses
+  (broken markers, a link, read-only) is left alone and warned about once.
 
 The sweep that adds every ledger file to the next commit never lets one
-bad file stall the library. An ignored ledger file is dropped from the
-ledger. A file that cannot be read (permissions, a lock held by another
-program) is left out and stays pending; if the commit with the sweep still
-fails while the caller's own change alone would land, the caller's change
-is committed and the whole sweep stays pending. Each file left out is
-returned by `LibraryAdapter::take_held_back_files`, and the app names it in
-the Messages panel on every commit it blocks (`sync_uncommitted`).
+bad file stall the library:
+
+- Only clutter the managed block names, and only when HEAD does not track
+  it, is dropped from the ledger. A file the user's own rules ignore is
+  swept like any other: the caller committed it on purpose.
+- Each swept file is hashed the way the commit hashes it
+  (`lfs::blob_for_path`) before the commit. One that fails (unreadable, a
+  directory, an LFS read error) is left out and stays pending; the others
+  and the caller's own change are committed.
+- Each file left out is returned by `LibraryAdapter::take_held_back_files`.
+  The app reports it through one helper (`library::held_back`), on every
+  commit it blocks: mounted adapters after each update and before an
+  unmount, adapters opened for one job (a container save, a stock copy)
+  when the job ends. An adapter dropped with files nobody asked for names
+  them itself, as a safety net.

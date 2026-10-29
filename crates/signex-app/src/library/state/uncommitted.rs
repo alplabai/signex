@@ -56,12 +56,7 @@ impl LibraryState {
             let Some(adapter) = self.set.get(lib.library_id) else {
                 continue;
             };
-            for held in adapter.take_held_back_files() {
-                crate::diagnostics::log_warning(format!(
-                    "Not committed, kept pending: could not read {} ({}) in library {}",
-                    held.path, held.reason, lib.display_name
-                ));
-            }
+            crate::library::held_back::report_held_back(&lib.display_name, adapter);
             if let Some(changes) = adapter.uncommitted_changes() {
                 pending.insert(lib.root.clone(), changes);
             }

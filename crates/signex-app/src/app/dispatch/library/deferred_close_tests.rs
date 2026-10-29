@@ -121,7 +121,7 @@ fn a_discard_all_close_does_not_ask_again_when_it_completes() {
 }
 
 /// A dirty symbol editor (and its tab) for a container inside the library.
-fn dirty_symbol_in_library(f: &mut Fixture) -> PathBuf {
+pub(super) fn dirty_symbol_in_library(f: &mut Fixture) -> PathBuf {
     let dir = f.file.parent().unwrap().join("symbols");
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("Held.snxsym");
@@ -158,4 +158,47 @@ fn a_close_deferred_behind_a_container_save_completes_when_the_save_lands() {
 
     assert!(path.exists(), "the container was written");
     assert!(closed(&f), "and the close finished with it");
+}
+
+/// Review #1728: Cancel in the close prompt also cancels a close that was
+/// already waiting, so a later write cannot unmount the library against it.
+#[test]
+fn cancel_in_the_close_prompt_cancels_a_waiting_close() {
+    let mut f = fixture();
+    let write = start_cell_edit(&mut f);
+    request_close(&mut f);
+    let address = f.open_preview(1);
+    f.app.library.editors.get_mut(&address).unwrap().dirty = true;
+    request_close(&mut f);
+    assert!(f.app.library.close_library_confirm.is_some(), "asked");
+    send(
+        &mut f,
+        LibraryMessage::CloseLibraryConfirm(crate::library::messages::CloseLibraryChoice::Cancel),
+    );
+    assert!(
+        f.app.library.closing.is_empty(),
+        "the waiting close is gone"
+    );
+
+    finish(&mut f.app, write);
+    assert!(!closed(&f), "the user's Cancel holds");
+}
+
+/// Review #1728: any re-mount cancels a pending close, the project-open
+/// auto-mount included (it goes through `request_mount`).
+#[test]
+fn a_silent_remount_cancels_a_pending_close() {
+    let mut f = fixture();
+    let write = start_cell_edit(&mut f);
+    request_close(&mut f);
+
+    let request = f
+        .app
+        .library
+        .request_mount(&f.file, crate::library::mount::MountIntent::Silent);
+    assert_eq!(request, crate::library::mount::MountRequest::AlreadyMounted);
+    assert!(f.app.library.closing.is_empty());
+
+    finish(&mut f.app, write);
+    assert!(!closed(&f));
 }

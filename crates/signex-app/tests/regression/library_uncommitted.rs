@@ -285,22 +285,29 @@ fn an_unreadable_pending_file_is_named_in_messages_and_the_save_still_commits() 
     app.library
         .library_browsers
         .insert(snxlib.clone(), LibraryBrowserState::new(snxlib.clone()));
-    let named = || {
+    // Named by a commit made after `since`: the file name is unique to this
+    // test and the window is one save, so the shared ring's other traffic
+    // cannot fake or hide it.
+    let named_since = |since: Option<u64>| {
         signex_app::diagnostics::recent_entries()
             .iter()
-            .filter(|e| e.message.contains(&name))
-            .count()
+            .any(|e| since.is_none_or(|id| e.id > id) && e.message.contains(&name))
     };
 
+    let since = signex_app::diagnostics::newest_entry_id();
     add_table(&mut app, &snxlib, "caps");
     assert_eq!(head_tables(&snxlib), vec!["caps".to_string()]);
-    assert_eq!(named(), 1, "the unreadable file is named");
+    assert!(named_since(since), "the unreadable file is named");
+    let since = signex_app::diagnostics::newest_entry_id();
     add_table(&mut app, &snxlib, "res");
     assert_eq!(
         head_tables(&snxlib),
         vec!["caps".to_string(), "res".to_string()]
     );
-    assert_eq!(named(), 2, "and named again on every commit it blocks");
+    assert!(
+        named_since(since),
+        "and named again on every commit it blocks"
+    );
     let pending = app.library.uncommitted_in(&snxlib).expect("still pending");
     assert_eq!(pending.paths, vec![format!("symbols/{name}")]);
     std::fs::set_permissions(&bad, std::fs::Permissions::from_mode(0o644)).unwrap();

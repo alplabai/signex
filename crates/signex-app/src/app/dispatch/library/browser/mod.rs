@@ -62,10 +62,7 @@ impl Signex {
             .library
             .request_mount(&path, MountIntent::OpenBrowserTab)
         {
-            MountRequest::AlreadyMounted => {
-                commands::cancel_close_on_reopen(&mut self.library, &path);
-                self.finish_open_library_browser(path)
-            }
+            MountRequest::AlreadyMounted => self.finish_open_library_browser(path),
             MountRequest::InFlight => {
                 // A preparation for this path is already running and the
                 // call above upgraded its intent to `OpenBrowserTab`, so
