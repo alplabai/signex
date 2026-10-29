@@ -171,28 +171,28 @@ mod tests {
         sheet.wires.push(
             serde_json::from_str(&format!(
                 r#"{{"uuid":"{}","start":{{"x":5.0,"y":5.0}},"end":{{"x":15.0,"y":5.0}},"stroke_width":0.25,"unknown_columns":{foreign}}}"#,
-                Uuid::new_v4()
+                Uuid::now_v7()
             ))
             .unwrap(),
         );
         sheet.buses.push(Bus {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: at(5.0, 10.0),
             end: at(15.0, 10.0),
         });
         sheet.junctions.push(
             serde_json::from_str(&format!(
                 r#"{{"uuid":"{}","position":{{"x":10.0,"y":5.0}},"diameter":0.5,"minted":true,"unknown_columns":{foreign}}}"#,
-                Uuid::new_v4()
+                Uuid::now_v7()
             ))
             .unwrap(),
         );
         sheet.no_connects.push(NoConnect {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             position: at(20.0, 5.0),
         });
         sheet.text_notes.push(TextNote {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             text: "note\twith tab".to_owned(),
             position: at(5.0, 15.0),
             rotation: 90.0,
@@ -205,12 +205,12 @@ mod tests {
         sheet.labels.push(
             serde_json::from_str(&format!(
                 r#"{{"uuid":"{}","text":"D0","position":{{"x":15.0,"y":5.0}},"rotation":0.0,"label_type":"net","shape":"","font_size":1.27,"unknown_columns":{foreign}}}"#,
-                Uuid::new_v4()
+                Uuid::now_v7()
             ))
             .unwrap(),
         );
         let line = SchDrawing::Line {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: at(0.0, 0.0),
             end: at(25.0, 0.0),
             width: 0.5,
@@ -218,7 +218,7 @@ mod tests {
             locked: true,
         };
         let poly = SchDrawing::Polyline {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             points: vec![at(0.0, 20.0), at(10.0, 25.0), at(20.0, 20.0)],
             width: 0.25,
             fill: Default::default(),

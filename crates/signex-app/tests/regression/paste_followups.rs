@@ -12,7 +12,7 @@ use crate::paste_support::{reads_clipboard, written_text};
 
 fn child_sheet() -> ChildSheet {
     ChildSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         name: "child".to_owned(),
         filename: "child.snxsch".to_owned(),
         position: Point::new(60.0, 60.0),
