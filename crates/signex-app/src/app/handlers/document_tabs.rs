@@ -274,6 +274,7 @@ impl Signex {
             if park_dirty && self.primitive_draft_is_dirty(p) {
                 self.document_state.dirty_paths.insert(p.clone());
             } else {
+                self.warn_if_cascade_owed(p);
                 self.document_state.symbol_editors.remove(p);
                 self.document_state.footprint_editors.remove(p);
                 self.document_state.dirty_paths.remove(p);

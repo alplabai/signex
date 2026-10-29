@@ -80,7 +80,7 @@ impl LocalGitAdapter {
                 Ok(Some(text?))
             },
             asset_rel_paths,
-            message,
+            &|| message.to_string(),
             fallback,
         )
     }

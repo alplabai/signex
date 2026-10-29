@@ -66,7 +66,7 @@ pub use alternate_symbol_edit::{
 };
 pub use cascade::{
     CascadeKind, CascadeReport, PrimitiveSave, cascade_after_footprint_save, cascade_after_saves,
-    cascade_after_sim_save, cascade_after_symbol_save, patch_bump,
+    cascade_after_sim_save, cascade_after_symbol_save, patch_bump, retry_cannot_fix,
 };
 pub use component::{
     ComponentRow, DESIGNATOR_PREFIX_PARAM, DatasheetDoc, DatasheetRef, PinPadOverride, PlmReserved,
@@ -222,6 +222,7 @@ fn with_rollback_notes(error: adapter::LibraryError, notes: Vec<String>) -> adap
     match error {
         LibraryError::Conflict(m) => LibraryError::Conflict(format!("{m}; {notes}")),
         LibraryError::Backend(m) => LibraryError::Backend(format!("{m}; {notes}")),
+        LibraryError::InvalidData(m) => LibraryError::InvalidData(format!("{m}; {notes}")),
         other => LibraryError::Backend(format!("{other}; {notes}")),
     }
 }

@@ -335,6 +335,21 @@ impl LocalGitAdapter {
     where
         F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
     {
+        self.mutate_library_file_deferred(f, asset_rel_paths, &|| message.to_string(), fallback)
+    }
+
+    /// [`Self::mutate_library_file_with_assets`] whose commit message is
+    /// built after the edit ran, so it can say what the edit did.
+    pub(super) fn mutate_library_file_deferred<F>(
+        &self,
+        f: F,
+        asset_rel_paths: &[String],
+        message: &dyn Fn() -> String,
+        fallback: &str,
+    ) -> Result<(), LibraryError>
+    where
+        F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
+    {
         self.save_edit(
             |lf, _| {
                 if !f(lf)? {
@@ -368,7 +383,7 @@ impl LocalGitAdapter {
         &self,
         edit: F,
         asset_rel_paths: &[String],
-        message: &str,
+        message: &dyn Fn() -> String,
         fallback: &str,
     ) -> Result<(), LibraryError>
     where
@@ -408,6 +423,8 @@ impl LocalGitAdapter {
         } else {
             Some((std::fs::read(&self.file_path)?, guard.clone()))
         };
+        // Built before the write: nothing after it may fail or panic.
+        let message = message();
         // HI-6: atomic write — never half-write the manifest.
         signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
         self.warn_plain_token_once(&candidate.manifest.mode);
@@ -424,7 +441,7 @@ impl LocalGitAdapter {
             );
         }
         if let Err(commit_err) =
-            self.commit_change_with(None, &rel, asset_rel_paths, message, fallback)
+            self.commit_change_with(None, &rel, asset_rel_paths, &message, fallback)
         {
             let Some((previous, previous_file)) = previous else {
                 self.record_commit_warning(&commit_err);
@@ -470,6 +487,7 @@ impl LocalGitAdapter {
             .library_file
             .read()
             .map_err(|_| LibraryError::Backend("library_file read lock poisoned".into()))?;
+        self.row_reads.retain_tables(guard.tables.keys());
         let Some(table) = guard.tables.get(name) else {
             return Ok(Vec::new());
         };
@@ -478,13 +496,7 @@ impl LocalGitAdapter {
         // away, but for v0.9 we want a loud error if a hand-edited
         // .snxlib drifts the schema.
         validate_legacy_header(name, &table.columns)?;
-        let mut out = Vec::with_capacity(table.rows.len());
-        for row in &table.rows {
-            let mut component = library_row_to_component(row)?;
-            component.server_revision = Some(row_base(row));
-            out.push(component);
-        }
-        Ok(out)
+        self.row_reads.table(name, &table.rows)
     }
 
     // ── Symbol container helpers (v0.9 phase 2 multi-symbol files) ────────
