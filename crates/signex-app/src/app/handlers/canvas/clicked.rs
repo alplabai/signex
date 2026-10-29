@@ -387,6 +387,34 @@ impl Signex {
                     false,
                 );
             }
+            // Placed where clicked, like the other one-click placements. The
+            // net builder accepts a dot anywhere; one off a wire joins nothing.
+            Tool::Junction => {
+                // A second dot on the same point (the net builder's 1 um key)
+                // joins nothing new and would only stack in the file.
+                let at = signex_types::schematic::Point::new(wx, wy);
+                let already_there = self.document_state.active_engine().is_some_and(|engine| {
+                    engine
+                        .document()
+                        .junctions
+                        .iter()
+                        .any(|j| signex_net::pt_key(&j.position) == signex_net::pt_key(&at))
+                });
+                if !already_there {
+                    let junction = signex_types::schematic::Junction {
+                        uuid: uuid::Uuid::new_v4(),
+                        position: signex_types::schematic::Point::new(wx, wy),
+                        diameter: 0.0,
+                        minted: false,
+                        unknown_columns: Default::default(),
+                    };
+                    self.apply_engine_command(
+                        signex_engine::Command::PlaceJunction { junction },
+                        false,
+                        false,
+                    );
+                }
+            }
             Tool::NoErcDirective => {
                 let directive = signex_types::schematic::NoConnect {
                     uuid: uuid::Uuid::new_v4(),

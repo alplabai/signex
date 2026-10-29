@@ -500,6 +500,7 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
             "Bus",
             "Bus Entry",
             "Net Label",
+            "Junction",
             "Port",
             "Off Sheet Connector",
             "GND Power Port",
