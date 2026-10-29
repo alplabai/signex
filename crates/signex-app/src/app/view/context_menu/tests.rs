@@ -61,27 +61,31 @@ fn selected() -> CanvasSelection {
 }
 
 fn shortcuts() -> CanvasShortcuts {
-    CanvasShortcuts {
-        find: "Ctrl+F".into(),
-        find_similar: "Shift+F".into(),
-        cut: "Ctrl+X".into(),
-        copy: "Ctrl+C".into(),
-        paste: "Ctrl+V".into(),
-        smart_paste: "Shift+Ctrl+V".into(),
-        rotate: "Space".into(),
-        mirror_x: "X".into(),
-        mirror_y: "Y".into(),
-        delete: "Del".into(),
-    }
+    CanvasShortcuts::resolve(|id| {
+        match id {
+            "find" => "Ctrl+F",
+            "find_similar_objects" => "Shift+F",
+            "cut" => "Ctrl+X",
+            "copy" => "Ctrl+C",
+            "paste" => "Ctrl+V",
+            "smart_paste" => "Shift+Ctrl+V",
+            "rotate_counterclockwise" => "Space",
+            "mirror_x" => "X",
+            "mirror_y" => "Y",
+            "delete_selection" => "Del",
+            _ => "",
+        }
+        .to_string()
+    })
 }
 
 #[test]
 fn edit_rows_show_the_resolved_keymap_shortcuts() {
     let mut sc = shortcuts();
-    sc.rotate = "R".into();
-    sc.delete = "Delete".into();
-    sc.mirror_x = "Shift+X".into();
-    sc.mirror_y = "Shift+Y".into();
+    sc.set("rotate_counterclockwise", "R");
+    sc.set("delete_selection", "Delete");
+    sc.set("mirror_x", "Shift+X");
+    sc.set("mirror_y", "Shift+Y");
     let tokens = theme_tokens(TID);
     let entries = canvas_menu_entries(TID, &tokens, selected(), None, None, &sc);
     let shortcut_of = |label: &str| {
@@ -217,7 +221,7 @@ fn canvas_menu_grows_and_gates_on_selection() {
     );
 
     // Clipboard + find rows are always present.
-    for row in ["Find Text...", "Cut", "Copy", "Paste", "Paste Special"] {
+    for row in ["Find", "Cut", "Copy", "Paste", "Paste Special"] {
         assert!(has_row(&without, row), "missing {row}");
     }
     // Selection-only rows appear only with a selection.
@@ -375,8 +379,8 @@ fn align_gate_thresholds() {
 
 #[test]
 fn align_menu_disables_pairwise_below_two() {
-    let one = align_entries(TID, 1);
-    let three = align_entries(TID, 3);
+    let one = align_entries(TID, 1, &|_| String::new());
+    let three = align_entries(TID, 3, &|_| String::new());
     // Pairwise + distribute greyed with one item; grid always on.
     assert!(disabled_of(&one, "Align Left"));
     assert!(disabled_of(&one, "Distribute Horizontally"));
@@ -390,7 +394,7 @@ fn align_menu_disables_pairwise_below_two() {
 
 #[test]
 fn place_menu_greys_only_the_planned_tools() {
-    let e = place_entries(TID);
+    let e = place_entries(TID, &|_| String::new());
     assert!(has_row(&e, "Wire"));
     assert!(has_row(&e, "Part"));
     // Placement actions are always available, except the planned tools
@@ -494,7 +498,7 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
     // Routing the rows through `action_label` must not change what the
     // user sees; this pins the wording that was hard-coded before.
     assert_eq!(
-        labels(&place_entries(TID)),
+        labels(&place_entries(TID, &|_| String::new())),
         [
             "Wire",
             "Bus",
@@ -524,7 +528,7 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
         ]
     );
     assert_eq!(
-        labels(&align_entries(TID, 3)),
+        labels(&align_entries(TID, 3, &|_| String::new())),
         [
             "Align Left",
             "Align Right",
@@ -556,7 +560,7 @@ fn canvas_row_text_is_byte_identical_to_the_old_literals() {
         &shortcuts(),
     );
     for expected in [
-        "Find Text...",
+        "Find",
         "Cut",
         "Copy",
         "Paste",
@@ -695,7 +699,7 @@ fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
     );
     assert_eq!(customs(&with), customs(&without) + 1);
 
-    let rows = super::submenu::arrange_entries();
+    let rows = super::submenu::arrange_entries(&|_| String::new());
     for label in [
         "Bring to Front",
         "Send to Back",

@@ -10,6 +10,8 @@ mod project_tree;
 mod submenu;
 
 #[cfg(test)]
+mod catalog_agreement_tests;
+#[cfg(test)]
 mod tests;
 
 use super::*;
