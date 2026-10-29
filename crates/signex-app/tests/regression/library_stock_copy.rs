@@ -72,6 +72,9 @@ fn new_library(path: &Path, name: &str) {
 
 fn world() -> World {
     let serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    // The refusal tests read the diagnostics ring, which stays empty until
+    // logging is up; run alone, nothing else starts it.
+    let _ = signex_app::diagnostics::init_logging();
     let tmp = TempDir::new().expect("tempdir");
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/stock-library");
     copy_dir(&source, &tmp.path().join("stock"));
@@ -441,6 +444,9 @@ fn a_library_made_in_the_dialog_survives_a_restart() {
 
 #[test]
 fn a_second_stock_open_while_the_dialog_is_up_is_refused_not_dropped() {
+    // The Messages ring only records once logging is set up; a test process
+    // of its own (nextest) has not done it.
+    let _ = signex_app::diagnostics::init_logging();
     let mut w = world();
     let stock_r = w.stock_r();
     let stock_c = w.stock_file("symbols", "C.snxsym");
