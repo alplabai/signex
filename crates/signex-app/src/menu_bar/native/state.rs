@@ -172,6 +172,24 @@ impl NativeMenuState {
         self.applied_inputs = None;
     }
 
+    /// Pretend a menu is on screen (activation tests).
+    #[cfg(test)]
+    pub(crate) fn seed_applied_for_test(&mut self) {
+        self.applied = Some(NativeMenuSpec::default());
+        self.applied_inputs = Some(MenuInputs::new(
+            CommandContext::default(),
+            &[],
+            false,
+            Vec::new(),
+        ));
+    }
+
+    /// Whether any applied spec or inputs are remembered (tests).
+    #[cfg(test)]
+    pub(crate) fn is_applied_for_test(&self) -> bool {
+        self.applied.is_some() || self.applied_inputs.is_some()
+    }
+
     /// Whether `inputs` differ from the last sync and the menu is live.
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub(crate) fn needs_sync(&self, inputs: &MenuInputs) -> bool {

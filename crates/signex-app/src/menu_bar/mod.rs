@@ -238,6 +238,22 @@ pub enum MenuMessage {
     PreviousSheet,
 }
 
+impl MenuMessage {
+    /// Whether this is a View-menu panel row, which carries a check mark.
+    pub(crate) fn is_panel_row(&self) -> bool {
+        matches!(
+            self,
+            Self::OpenProjectsPanel
+                | Self::OpenComponentsPanel
+                | Self::OpenNavigatorPanel
+                | Self::OpenPropertiesPanel
+                | Self::OpenErcPanel
+                | Self::OpenMessagesPanel
+                | Self::OpenSignalPanel
+        )
+    }
+}
+
 /// Context passed into `view` so each menu leaf can decide whether to
 /// render as an active link or a disabled item. Keeps the menu
 /// context-aware — e.g. Annotate / ERC / Save are unclickable when no
@@ -352,7 +368,7 @@ pub(crate) mod native;
 mod view;
 
 #[cfg(test)]
-mod panel_check_tests;
+pub(crate) mod panel_check_tests;
 #[cfg(test)]
 mod planned_tests;
 

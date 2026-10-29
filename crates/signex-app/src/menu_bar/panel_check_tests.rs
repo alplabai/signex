@@ -16,7 +16,7 @@ const PANEL_ROWS: [(&str, PanelKind); 7] = [
     ("Signal", PanelKind::Signal),
 ];
 
-fn context(app: &Signex) -> MenuContext<'static> {
+pub(crate) fn context(app: &Signex) -> MenuContext<'static> {
     MenuContext {
         open_panels: app.open_panels(),
         ..MenuContext::default()
@@ -24,7 +24,7 @@ fn context(app: &Signex) -> MenuContext<'static> {
 }
 
 /// The `checked` state of the View-menu row labelled `label`.
-fn view_row_checked(ctx: &MenuContext, label: &str) -> Option<bool> {
+pub(crate) fn view_row_checked(ctx: &MenuContext, label: &str) -> Option<bool> {
     let model = menu_bar_model(ctx);
     let view = model.menus.iter().find(|m| m.title == "View").unwrap();
     view.entries.iter().find_map(|entry| match entry {
@@ -76,6 +76,18 @@ fn the_shortcut_toggles_the_check_mark() {
 
     run(&mut app, "toggle_properties_panel");
     assert_eq!(view_row_checked(&context(&app), "Properties"), Some(false));
+}
+
+#[test]
+fn a_panel_hidden_behind_another_tab_stays_checked() {
+    let (mut app, _task) = Signex::new();
+    app.document_state.dock.close_panel(PanelKind::Properties);
+    let _ = app.show_panel(PanelKind::Properties);
+    // Same home region as Properties; showing it takes the front.
+    app.document_state.dock.show_panel(PanelKind::Filter);
+    assert!(!app.document_state.dock.is_frontmost(PanelKind::Properties));
+
+    assert_eq!(view_row_checked(&context(&app), "Properties"), Some(true));
 }
 
 #[test]

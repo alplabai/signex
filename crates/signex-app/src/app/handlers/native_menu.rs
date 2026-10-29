@@ -46,16 +46,7 @@ impl Signex {
         }
         match self.native_menu.actions.get(id).cloned() {
             Some(action) => {
-                if matches!(
-                    action,
-                    MenuMessage::OpenProjectsPanel
-                        | MenuMessage::OpenComponentsPanel
-                        | MenuMessage::OpenNavigatorPanel
-                        | MenuMessage::OpenPropertiesPanel
-                        | MenuMessage::OpenErcPanel
-                        | MenuMessage::OpenMessagesPanel
-                        | MenuMessage::OpenSignalPanel
-                ) {
+                if action.is_panel_row() {
                     self.native_menu.invalidate();
                 }
                 let message = self.native_menu_message(action);
@@ -120,6 +111,17 @@ mod tests {
             dirty_paths: dirty.iter().map(Into::into).collect(),
             dirty_rows: Vec::new(),
         });
+    }
+
+    #[test]
+    fn choosing_a_panel_row_drops_the_applied_menu_so_marks_redraw() {
+        let mut app = seeded(false);
+        app.native_menu.seed_applied_for_test();
+        assert!(app.native_menu.is_applied_for_test());
+
+        let _ = app.handle_native_menu_activated("View/Properties");
+
+        assert!(!app.native_menu.is_applied_for_test());
     }
 
     const SHORTCUTS: &str = "Help/Keyboard Shortcuts";

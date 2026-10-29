@@ -15,7 +15,7 @@ use super::state::{ItemChange, MenuInputs, NativeMenuState, Refresh, plan_refres
 use super::{Accelerator, NativeBuild, NativeMenu, NativeMenuSpec, NativeNode, Predefined};
 use crate::diagnostics::{log_info, log_warning};
 
-/// The installed menu and the item handles enablement updates go through.
+/// A native row's handle: a plain item, or a check item with a mark.
 enum Handle {
     Plain(MenuItem),
     Check(CheckMenuItem),
@@ -35,6 +35,7 @@ impl Handle {
     }
 }
 
+/// The installed menu and the item handles enablement updates go through.
 pub(super) struct Shell {
     /// Owns the NSMenu; dropping it releases the items.
     menu: Menu,

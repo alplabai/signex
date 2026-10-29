@@ -48,6 +48,7 @@ pub(super) fn panel_item(
     kind: crate::panels::PanelKind,
     action: MenuMessage,
 ) -> MenuEntry {
+    debug_assert!(action.is_panel_row());
     MenuEntry::Item(MenuItem {
         label: label.to_owned(),
         shortcut: None,
