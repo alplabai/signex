@@ -171,6 +171,35 @@ pub(super) fn handle_recovery_library_missing_locate_result(
     Task::none()
 }
 
+/// The git re-init a *Git missing* dialog started has finished: reopen the
+/// library, or keep the dialog open with the reason (#141).
+pub(super) fn handle_git_reinit_finished(
+    app: &mut Signex,
+    path: std::path::PathBuf,
+    result: Result<(), String>,
+) -> Task<Message> {
+    match result {
+        Ok(()) => {
+            app.library.recovery = None;
+            Task::done(Message::Library(LibraryMessage::OpenLibraryAt(Some(path))))
+        }
+        Err(reason) => {
+            tracing::warn!(
+                target: "signex::library",
+                path = %path.display(),
+                error = %reason,
+                "git recover-init failed"
+            );
+            // Keep the dialog open and show the reason so the click is
+            // never a silent no-op (#141).
+            if let Some(RecoveryDialog::GitMissing { error, .. }) = app.library.recovery.as_mut() {
+                *error = Some(reason);
+            }
+            Task::none()
+        }
+    }
+}
+
 /// Handle the user's choice from the *Git missing* recovery dialog.
 pub(super) fn handle_recovery_git_missing(
     app: &mut Signex,
@@ -197,28 +226,35 @@ pub(super) fn handle_recovery_git_missing(
                     Some(read_only_repair_notice(&path, "cannot be re-initialised"));
                 return Task::none();
             }
-            match LocalGitAdapter::recover_init(&path) {
-                Ok(_) => {
-                    app.library.recovery = None;
-                    Task::done(Message::Library(LibraryMessage::OpenLibraryAt(Some(path))))
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        path = %path.display(),
-                        error = %e,
-                        "git recover-init failed"
-                    );
-                    // Keep the dialog open and show the reason so the
-                    // click is never a silent no-op (#141).
-                    if let Some(RecoveryDialog::GitMissing { error, .. }) =
-                        app.library.recovery.as_mut()
-                    {
-                        *error = Some(e.to_string());
-                    }
-                    Task::none()
-                }
+            // A re-init already running on this library: wait for it.
+            if app.library.writes.pending(&path) > 0 {
+                crate::diagnostics::log_info(
+                    "Re-init was ignored: this library is still being written (a re-init already running, or an edit); click it again once that has finished.",
+                );
+                app.sync_diagnostics_panel_ctx();
+                return Task::none();
             }
+            // `git init` and the first commit run on a worker (#893).
+            let turn = app.library.writes.turn(&path);
+            let done_path = path.clone();
+            Task::perform(
+                async move {
+                    tokio::task::spawn_blocking(move || {
+                        turn.wait();
+                        LocalGitAdapter::recover_init(&path)
+                            .map(|_| ())
+                            .map_err(|e| e.to_string())
+                    })
+                    .await
+                    .unwrap_or_else(|e| Err(format!("the git re-init task failed: {e}")))
+                },
+                move |result| {
+                    Message::Library(LibraryMessage::GitReinitFinished {
+                        path: done_path.clone(),
+                        result,
+                    })
+                },
+            )
         }
         GitMissingChoice::RestoreFromRemote => {
             // v0.9 leaves this disabled — the manifest doesn't carry a

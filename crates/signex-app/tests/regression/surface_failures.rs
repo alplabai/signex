@@ -21,9 +21,10 @@ use crate::primitive_dirty_quit::{
 };
 
 fn close_tab(app: &mut Signex, idx: usize) {
-    let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+    let task = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
         TabContextAction::Close(idx),
     )));
+    crate::drive::drive(app, task);
 }
 
 #[test]
@@ -54,12 +55,13 @@ fn saving_a_component_row_that_cannot_be_written_shows_the_save_failed_card() {
     let mut app = app_with_preview_edit();
     let address = app.library.editors.keys().next().cloned().unwrap();
 
-    let _ = app.update(Message::Library(LibraryMessage::EditorEvent {
+    let task = app.update(Message::Library(LibraryMessage::EditorEvent {
         library_path: address.library_path.clone(),
         table: address.table.clone(),
         row_id: address.row_id,
         msg: EditorMsg::SaveDraft,
     }));
+    crate::drive::drive(&mut app, task);
 
     let notice = app.document_state.error_notice.as_ref().expect("a card");
     assert_eq!(notice.title, "Save Failed");
@@ -119,11 +121,12 @@ fn closing_a_dirty_component_preview_tab_keeps_the_draft() {
 }
 
 fn restore_clicked(app: &mut Signex) {
-    let _ = app.update(Message::Dock(DockMessage::Panel(
+    let task = app.update(Message::Dock(DockMessage::Panel(
         PanelMsg::HistoryRestoreClicked {
             sha: "abc123".into(),
         },
     )));
+    crate::drive::drive(app, task);
 }
 
 #[test]
@@ -143,9 +146,10 @@ fn history_restore_over_unsaved_edits_asks_before_it_acts() {
     assert!(app.document_state.error_notice.is_none(), "nothing ran yet");
 
     // Cancel disarms it.
-    let _ = app.update(Message::Dock(DockMessage::Panel(
+    let task = app.update(Message::Dock(DockMessage::Panel(
         PanelMsg::HistoryRestoreCancelled,
     )));
+    crate::drive::drive(&mut app, task);
     assert!(app.document_state.history.pending_restore.is_none());
 
     // Confirming runs the restore; the file has no owning project, so the
@@ -306,7 +310,8 @@ fn closing_a_symbol_tab_dirtied_by_undo_after_a_save_parks_the_draft() {
     assert!(!app.document_state.is_document_dirty(&path));
 
     // Undo re-dirties the editor, and every reader sees it (#760).
-    let _ = app.update(Message::Edit(EditMsg::Undo));
+    let task = app.update(Message::Edit(EditMsg::Undo));
+    crate::drive::drive(&mut app, task);
     assert!(app.document_state.symbol_editors[&path].is_dirty());
     assert!(app.document_state.is_document_dirty(&path));
     close_tab(&mut app, 0);
@@ -320,10 +325,11 @@ fn close_library_save_all_with_a_failing_row_keeps_the_library_and_drafts() {
     let mut app = app_with_preview_edit();
     let address = app.library.editors.keys().next().cloned().unwrap();
 
-    let _ = app.update(Message::Library(LibraryMessage::ConfirmCloseLibrary {
+    let task = app.update(Message::Library(LibraryMessage::ConfirmCloseLibrary {
         library_path: address.library_path.clone(),
         dirty_editors: vec![address.clone()],
     }));
+    crate::drive::drive(&mut app, task);
     crate::settle_support::settle(
         &mut app,
         Message::Library(LibraryMessage::CloseLibraryConfirm(
@@ -345,7 +351,8 @@ fn a_parked_footprint_draft_is_written_by_quit_save_all() {
     edit_description_via_panel(&mut app);
     close_tab(&mut app, 0);
 
-    let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
+    let task = app.update(Message::Window(WindowMsg::CloseMainWindow));
+    crate::drive::drive(&mut app, task);
     crate::settle_support::settle(
         &mut app,
         Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
@@ -392,16 +399,18 @@ fn close_all_and_close_all_others_park_dirty_drafts() {
             .set_dirty(true);
     }
 
-    let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+    let task = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
         TabContextAction::CloseAllOthers(0),
     )));
+    crate::drive::drive(&mut app, task);
     assert_eq!(app.document_state.tabs.len(), 1);
     assert!(app.document_state.footprint_editors.contains_key(&b));
     assert!(app.document_state.footprint_editors.contains_key(&c));
 
-    let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+    let task = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
         TabContextAction::CloseAll,
     )));
+    crate::drive::drive(&mut app, task);
     assert!(app.document_state.tabs.is_empty());
     for p in [&a, &b, &c] {
         assert!(app.document_state.footprint_editors.contains_key(p));

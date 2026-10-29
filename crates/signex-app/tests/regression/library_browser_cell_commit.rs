@@ -173,12 +173,13 @@ fn an_unparseable_buffer_does_not_retype_a_measurement_parameter() {
     app.library.library_browsers.insert(snxlib.clone(), browser);
 
     // Act — Enter in the cell.
-    let _ = app.update(Message::Library(LibraryMessage::BrowserCellCommit {
+    let task = app.update(Message::Library(LibraryMessage::BrowserCellCommit {
         library_path: snxlib.clone(),
         table: TABLE.to_string(),
         row_id,
         column: format!("parameters.{PARAM}"),
     }));
+    crate::drive::drive(&mut app, task);
 
     // Assert — the stored value keeps its type AND its unit.
     assert_eq!(
@@ -226,12 +227,13 @@ fn a_refused_cell_commit_reaches_the_messages_panel() {
     app.library.library_browsers.insert(snxlib.clone(), browser);
 
     // Act
-    let _ = app.update(Message::Library(LibraryMessage::BrowserCellCommit {
+    let task = app.update(Message::Library(LibraryMessage::BrowserCellCommit {
         library_path: snxlib.clone(),
         table: TABLE.to_string(),
         row_id,
         column: format!("parameters.{PARAM}"),
     }));
+    crate::drive::drive(&mut app, task);
 
     // Assert — the refusal is on screen in the same frame, naming the
     // parameter, what was typed and what was kept. A silent refusal
@@ -294,12 +296,13 @@ fn commit_into_measurement_at(snxlib: &std::path::Path, row_id: RowId, typed: &s
     app.library
         .library_browsers
         .insert(snxlib.to_path_buf(), browser);
-    let _ = app.update(Message::Library(LibraryMessage::BrowserCellCommit {
+    let task = app.update(Message::Library(LibraryMessage::BrowserCellCommit {
         library_path: snxlib.to_path_buf(),
         table: TABLE.to_string(),
         row_id,
         column: format!("parameters.{PARAM}"),
     }));
+    crate::drive::drive(&mut app, task);
     param_on_disk(snxlib, row_id)
 }
 
@@ -329,11 +332,12 @@ fn edit_param_in_modal(
     app.library
         .library_browsers
         .insert(snxlib.to_path_buf(), browser);
-    let _ = app.update(Message::Library(LibraryMessage::BrowserOpenEditModal {
+    let task = app.update(Message::Library(LibraryMessage::BrowserOpenEditModal {
         library_path: snxlib.to_path_buf(),
         table: TABLE.to_string(),
         row_id,
     }));
+    crate::drive::drive(&mut app, task);
     let seeded = app
         .library
         .library_browsers
@@ -341,10 +345,11 @@ fn edit_param_in_modal(
         .and_then(|b| b.edit_modal.as_ref())
         .and_then(|m| m.param_buf.get(param).cloned());
     for msg in steps {
-        let _ = app.update(Message::Library(LibraryMessage::BrowserEdit {
+        let task = app.update(Message::Library(LibraryMessage::BrowserEdit {
             library_path: snxlib.to_path_buf(),
             msg,
         }));
+        crate::drive::drive(&mut app, task);
     }
     (app, seeded)
 }
@@ -709,12 +714,13 @@ fn an_inline_commit_to_a_slot_cell_without_a_measurement_is_refused() {
             .cell_edit
             .insert((row_id, "parameters.value".to_string()), "10".to_string());
         app.library.library_browsers.insert(snxlib.clone(), browser);
-        let _ = app.update(Message::Library(LibraryMessage::BrowserCellCommit {
+        let task = app.update(Message::Library(LibraryMessage::BrowserCellCommit {
             library_path: snxlib.clone(),
             table: TABLE.to_string(),
             row_id,
             column: "parameters.value".to_string(),
         }));
+        crate::drive::drive(&mut app, task);
 
         let after = row_on_disk(&snxlib, row_id);
         assert_eq!(after.parameters, before.parameters, "{stored:?}");

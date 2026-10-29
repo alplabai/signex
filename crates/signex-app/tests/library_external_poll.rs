@@ -91,7 +91,7 @@ fn polled(app: &mut Signex, outcome: PollOutcome) {
     );
     for ((path, _), generation) in changed.iter().zip(before) {
         if generations(app, path) != generation {
-            app.land_pending_refresh(path);
+            drop(app.land_pending_refresh(path));
         }
     }
 }

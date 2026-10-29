@@ -60,6 +60,7 @@ pub(crate) mod unit_picker;
 pub mod updates_dialog;
 #[cfg(test)]
 mod view_purity_tests;
+pub mod writes;
 
 // Re-export the heavily-used types so callers don't have to know
 // the internal module layout. `LibraryMessage` is folded into the

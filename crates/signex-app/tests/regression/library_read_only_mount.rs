@@ -176,7 +176,8 @@ fn write_attempts_on_a_read_only_mount_explain_and_leave_disk_untouched() {
     for msg in write_attempts(&snxlib, row_id) {
         app.document_state.error_notice = None;
         let label = format!("{msg:?}");
-        let _ = app.update(Message::Library(msg));
+        let task = app.update(Message::Library(msg));
+        crate::drive::drive(&mut app, task);
 
         let notice = app
             .document_state
@@ -224,10 +225,11 @@ fn the_same_attempts_on_an_ordinary_mount_write() {
     assert!(!app.library.is_read_only(&snxlib));
     let before = bytes_of(tmp.path());
 
-    let _ = app.update(Message::Library(LibraryMessage::BrowserAddComponent {
+    let task = app.update(Message::Library(LibraryMessage::BrowserAddComponent {
         library_path: snxlib.clone(),
         table: Some(TABLE.to_string()),
     }));
+    crate::drive::drive(&mut app, task);
 
     assert!(app.document_state.error_notice.is_none());
     assert_ne!(before, bytes_of(tmp.path()), "Add Component must write");
@@ -257,10 +259,11 @@ fn opening_a_primitive_picker_on_a_read_only_row_explains_and_opens_nothing() {
     for target in picker_targets(&snxlib, row_id) {
         app.document_state.error_notice = None;
         let label = format!("{target:?}");
-        let _ = app.update(Message::Library(LibraryMessage::OpenPrimitivePicker {
+        let task = app.update(Message::Library(LibraryMessage::OpenPrimitivePicker {
             kind: PrimitiveKind::Symbol,
             target,
         }));
+        crate::drive::drive(&mut app, task);
         assert!(app.library.primitive_picker.is_none(), "{label}");
         let notice = app
             .document_state
@@ -287,10 +290,11 @@ fn opening_a_primitive_picker_on_an_ordinary_row_opens_it() {
         TABLE.to_string(),
         row_id,
     ));
-    let _ = app.update(Message::Library(LibraryMessage::OpenPrimitivePicker {
+    let task = app.update(Message::Library(LibraryMessage::OpenPrimitivePicker {
         kind: PrimitiveKind::Symbol,
         target,
     }));
+    crate::drive::drive(&mut app, task);
     assert!(app.library.primitive_picker.is_some());
     assert!(app.document_state.error_notice.is_none());
 }
@@ -307,12 +311,13 @@ fn a_component_preview_save_on_a_read_only_library_explains() {
     let mut app = app_with_browser(&snxlib, true);
     let before = bytes_of(tmp.path());
 
-    let _ = app.update(Message::Library(LibraryMessage::EditorEvent {
+    let task = app.update(Message::Library(LibraryMessage::EditorEvent {
         library_path: snxlib.clone(),
         table: TABLE.to_string(),
         row_id,
         msg: EditorMsg::SaveDraft,
     }));
+    crate::drive::drive(&mut app, task);
 
     let notice = app
         .document_state
@@ -356,11 +361,13 @@ fn scrolling_the_spice_deck_on_a_read_only_row_is_not_refused() {
     };
     let warned_before = refusals();
 
-    let _ = app.update(event(Action::Scroll { lines: 3 }));
+    let task = app.update(event(Action::Scroll { lines: 3 }));
+    crate::drive::drive(&mut app, task);
     assert!(app.document_state.error_notice.is_none());
     assert_eq!(refusals(), warned_before, "scroll must not log a warning");
 
-    let _ = app.update(event(Action::Edit(Edit::Insert('x'))));
+    let task = app.update(event(Action::Edit(Edit::Insert('x'))));
+    crate::drive::drive(&mut app, task);
     let notice = app
         .document_state
         .error_notice
@@ -404,10 +411,11 @@ fn open_edit_save(snxlib: &Path, open_path: &Path) -> Signex {
         app.document_state.footprint_editors.contains_key(open_path),
         "the footprint must open in an editor tab"
     );
-    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+    let task = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: open_path.to_path_buf(),
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetName("renamed".into())),
     }));
+    crate::drive::drive(&mut app, task);
     // The write runs off the UI thread; settle runs its task to completion.
     crate::settle_support::settle(
         &mut app,
@@ -510,11 +518,12 @@ fn a_refused_write_is_logged_to_the_diagnostics_ring() {
     let (snxlib, row_id) = stock_like_library(tmp.path());
     let mut app = app_with_browser(&snxlib, true);
 
-    let _ = app.update(Message::Library(LibraryMessage::BrowserDeleteRowConfirm {
+    let task = app.update(Message::Library(LibraryMessage::BrowserDeleteRowConfirm {
         library_path: snxlib.clone(),
         table: TABLE.to_string(),
         row_id,
     }));
+    crate::drive::drive(&mut app, task);
 
     assert!(
         logged("[library] write refused: Signex Stock is mounted read-only"),
@@ -544,7 +553,8 @@ fn new_component_skips_a_read_only_library_and_uses_the_writable_one() {
     let stock_before = bytes_of(&stock_dir);
     let mine_before = bytes_of(&mine_dir);
 
-    let _ = app.update(Message::Library(LibraryMessage::NewComponent));
+    let task = app.update(Message::Library(LibraryMessage::NewComponent));
+    crate::drive::drive(&mut app, task);
 
     assert_eq!(
         stock_before,
@@ -565,7 +575,8 @@ fn new_component_with_only_read_only_libraries_writes_nothing() {
     let mut app = app_with_browser(&snxlib, true);
     let before = bytes_of(tmp.path());
 
-    let _ = app.update(Message::Library(LibraryMessage::NewComponent));
+    let task = app.update(Message::Library(LibraryMessage::NewComponent));
+    crate::drive::drive(&mut app, task);
 
     assert_eq!(before, bytes_of(tmp.path()), "nothing is written");
 }

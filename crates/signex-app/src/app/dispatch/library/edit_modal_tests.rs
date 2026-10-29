@@ -14,6 +14,7 @@ use crate::app::{Message, Signex};
 use crate::library::messages::{BrowserEditMsg, LibraryMessage};
 use crate::library::state::{LibraryBrowserState, LibraryDisplaySettings, OpenLibrary};
 use crate::library::test_adapters::RevisionedRowAdapter;
+use crate::library::writes::test_support::run_write;
 
 const TABLE: &str = "R";
 
@@ -112,7 +113,8 @@ fn edit_details_opens_the_modal_for_that_row_and_save_persists() {
         })
     };
     let _ = app.update(edit(BrowserEditMsg::SetInternalPn("R-1500-B".into())));
-    let _ = app.update(edit(BrowserEditMsg::Save));
+    let task = app.update(edit(BrowserEditMsg::Save));
+    run_write(&mut app, task);
 
     assert!(
         app.library.library_browsers[&root].edit_modal.is_none(),
@@ -120,7 +122,7 @@ fn edit_details_opens_the_modal_for_that_row_and_save_persists() {
     );
     // The write is synchronous; the cached grid catches up when the
     // off-thread refresh (#1374) lands.
-    app.land_pending_refresh(&root);
+    drop(app.land_pending_refresh(&root));
     let stored = app
         .library
         .library_at(&root)
@@ -188,10 +190,11 @@ fn save_commits_a_parameter_typed_without_pressing_enter() {
             value: "4.7".into(),
         },
     ));
-    let _ = app.update(edit(&root, BrowserEditMsg::Save));
+    let task = app.update(edit(&root, BrowserEditMsg::Save));
+    run_write(&mut app, task);
 
     assert!(app.library.library_browsers[&root].edit_modal.is_none());
-    app.land_pending_refresh(&root);
+    drop(app.land_pending_refresh(&root));
     assert_eq!(
         stored(&app, &root, row_id).parameters.get("param_1"),
         Some(&signex_library::ParamValue::Number(4.7))
@@ -210,7 +213,8 @@ fn save_refuses_an_invalid_uncommitted_parameter_and_keeps_the_modal_open() {
             value: "nan".into(),
         },
     ));
-    let _ = app.update(edit(&root, BrowserEditMsg::Save));
+    let task = app.update(edit(&root, BrowserEditMsg::Save));
+    run_write(&mut app, task);
 
     let modal = app.library.library_browsers[&root]
         .edit_modal
@@ -242,10 +246,11 @@ fn a_hash_pinned_datasheet_survives_editing_another_field_and_saving() {
     // A keystroke routed at the URL setter must not replace the pin.
     let _ = app.update(edit(&root, BrowserEditMsg::SetDatasheetUrl("x".into())));
     let _ = app.update(edit(&root, BrowserEditMsg::SetMpn("R-1500-B".into())));
-    let _ = app.update(edit(&root, BrowserEditMsg::Save));
+    let task = app.update(edit(&root, BrowserEditMsg::Save));
+    run_write(&mut app, task);
 
     assert!(app.library.library_browsers[&root].edit_modal.is_none());
-    app.land_pending_refresh(&root);
+    drop(app.land_pending_refresh(&root));
     let row = stored(&app, &root, row_id);
     assert_eq!(row.primary_mpn.mpn, "R-1500-B");
     assert_eq!(row.datasheet, pinned);
@@ -265,8 +270,10 @@ fn editing_the_description_updates_the_draft_and_saves_it() {
         .unwrap();
     assert_eq!(modal.draft.description, "100 nF 50 V X7R");
 
-    let _ = app.update(edit(&root, BrowserEditMsg::Save));
-    app.land_pending_refresh(&root);
+    let task = app.update(edit(&root, BrowserEditMsg::Save));
+
+    run_write(&mut app, task);
+    drop(app.land_pending_refresh(&root));
     assert_eq!(stored(&app, &root, row_id).description, "100 nF 50 V X7R");
 }
 

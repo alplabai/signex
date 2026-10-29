@@ -516,28 +516,40 @@ pub fn auto_mount_project_libraries(
 // New Component create-flow (components are TSV rows in the DBLib model)
 // ─────────────────────────────────────────────────────────────────────
 
-/// Create a new component **row**:
+/// A draft component row, built and ready to be inserted.
+pub struct NewComponentRow {
+    /// The `.snxlib` of the library the row goes into.
+    pub library_root: std::path::PathBuf,
+    pub table: String,
+    pub row_id: RowId,
+    pub row: ComponentRow,
+    pub commit_message: String,
+    /// "symbol" / "footprint" the row has nothing bound for.
+    pub unbound: Vec<&'static str>,
+}
+
+/// Build a new component **row** (no IO):
 ///
 /// 1. Builds a [`ComponentRow`] with the user-supplied PN / class and
 ///    sentinel `Uuid::nil()` symbol/footprint refs (the primitive
 ///    binding is the user's explicit choice — picked from existing
 ///    `.snxsym` / `.snxfpt` files post-creation, never auto-minted).
 /// 2. Computes the canonical content hash via [`hash_row_content`].
-/// 3. Inserts the row into the chosen table via `adapter.insert_row`.
 ///
-/// Returns the new row's `RowId` so the caller can open it as a
-/// Component Preview tab via `LibraryMessage::OpenComponentRow`. The
-/// preview's "Pick Symbol / Pick Footprint" affordance (Phase 2) lets
-/// the user bind the primitives.
-pub fn create_component_row(
-    state: &mut LibraryState,
+/// The caller inserts it with `adapter.insert_row` on a worker (#893) and
+/// opens the row as a Component Preview tab via
+/// `LibraryMessage::OpenComponentRow` once that has landed. The preview's
+/// "Pick Symbol / Pick Footprint" affordance lets the user bind the
+/// primitives.
+pub fn build_component_row(
+    state: &LibraryState,
     library_idx: usize,
     table: &str,
     internal_pn: &str,
     class: ComponentClass,
     symbol_ref: Option<PrimitiveRef>,
     footprint_ref: Option<PrimitiveRef>,
-) -> Result<RowId, LibraryError> {
+) -> Result<NewComponentRow, LibraryError> {
     // Inline-add flow (Library Browser "+ Component" button): the row
     // is minted with an empty internal_pn so the user can fill it in
     // via the table's inline cell editor. Lifecycle promotion to
@@ -603,7 +615,7 @@ pub fn create_component_row(
         server_revision: None,
     };
     row.content_hash = hash_row_content(&row)?;
-    let mut unbound: Vec<&str> = Vec::new();
+    let mut unbound: Vec<&'static str> = Vec::new();
     if row.is_symbol_unbound() {
         unbound.push("symbol");
     }
@@ -611,28 +623,18 @@ pub fn create_component_row(
         unbound.push("footprint");
     }
 
-    let commit_msg = format!("new component: {internal_pn}");
-    let adapter = state
-        .set
-        .get(library_id)
-        .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
-    adapter.insert_row(table, row, &commit_msg)?;
-
-    if let Err(e) = state.refresh_components(&library_root) {
-        tracing::warn!(
-            target: "signex::library",
-            path = %library_root.display(),
-            error = %e,
-            "post-create refresh failed; panel may be stale until next refresh"
-        );
-    }
-
-    report_unbound_row(internal_pn, &unbound);
-    Ok(row_id)
+    Ok(NewComponentRow {
+        library_root,
+        table: table.to_string(),
+        row_id,
+        row,
+        commit_message: format!("new component: {internal_pn}"),
+        unbound,
+    })
 }
 
 /// Tell the Messages panel that a freshly created row has nothing bound.
-fn report_unbound_row(internal_pn: &str, unbound: &[&str]) {
+pub(crate) fn report_unbound_row(internal_pn: &str, unbound: &[String]) {
     if unbound.is_empty() {
         return;
     }

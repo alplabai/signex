@@ -7,7 +7,23 @@
 
 use super::*;
 use crate::library::messages::DatasheetMsg;
+use crate::library::refresh::RefreshFollowUp;
 use crate::library::resolve::{ResolvedKind, report_read_failure};
+use crate::library::writes::{
+    PreviewRowSave, RowEdit, RowStart, WriteFailure, WriteKind, row_edit_task,
+};
+
+/// One Component Preview row save, ready to run.
+struct RowWrite {
+    library_path: std::path::PathBuf,
+    table: String,
+    /// The copy to write (hashed, stamped).
+    row: signex_library::ComponentRow,
+    /// Library-relative paths of the pinned PDFs committed with the row.
+    needed: Vec<String>,
+    /// Hashes of the staged PDFs the row pins.
+    saved_hashes: Vec<String>,
+}
 
 impl Signex {
     /// Trace-only signal: a Component Preview tab was opened for the
@@ -38,8 +54,7 @@ impl Signex {
         // (and its in-flight mark released) whatever the mount has become.
         let msg = match msg {
             EditorMsg::Datasheet(DatasheetMsg::AssetsStored { generation, result }) => {
-                self.finish_staged_asset_store(&address, generation, result);
-                return Task::none();
+                return self.finish_staged_asset_store(&address, generation, result);
             }
             // A refused file is also reported to the Messages panel, not
             // only on the Datasheet tab.
@@ -77,7 +92,7 @@ impl Signex {
                     .library
                     .editors
                     .get(&address)
-                    .is_some_and(|state| state.saving_row.is_some()) =>
+                    .is_some_and(|state| state.saving_row.is_some() || state.binding_primitive) =>
             {
                 // The row is being saved: reloading now would drop the copy
                 // being saved. Reload once the save has finished.
@@ -240,52 +255,142 @@ impl Signex {
         )));
     }
 
-    /// Write one Component Preview row that pins no staged PDF back through
-    /// its library adapter and clear the editor's dirty flag. Returns why a
-    /// save failed so a Save-All flow can keep the app open and name the
-    /// row instead of dropping the edit. A row whose editor is already gone
-    /// has nothing to save and counts as saved.
+    /// Write the row on a worker, committing the PDFs it pins from this
+    /// session (which must be among `written_assets`, the ones already
+    /// stored beside the library) with it. The write takes its turn in the
+    /// library's queue, so it neither overtakes nor is overtaken by the
+    /// other row writes of that library (#893).
     ///
-    /// No PDF is written here: a row that pins PDFs picked this session
-    /// goes through `begin_save_row` / `begin_save_row_in_batch`, which
-    /// write them on a worker first.
-    pub(crate) fn try_save_row(&mut self, address: &EditorAddress) -> anyhow::Result<()> {
-        if self
-            .library
-            .editors
-            .get(address)
-            .is_some_and(|state| state.saving_row.is_some())
-        {
-            anyhow::bail!("this row is still being saved; try again in a moment");
-        }
-        self.commit_row(address, &[])
-    }
-
-    /// Save the row through its adapter, committing the PDFs it pins from
-    /// this session (which must be among `written_assets`, the ones
-    /// already stored beside the library) with it, and settle the editor.
-    /// The row saved is the copy taken when Save was pressed, if a PDF
-    /// write ran in between; edits made meanwhile stay unsaved. Written
-    /// PDFs the saved row does not pin are not committed.
-    pub(super) fn commit_row(
+    /// The row saved is the copy in `saving_row`, taken when Save was
+    /// pressed; edits made meanwhile stay unsaved. `batch` names the Save
+    /// All whose settle step needs the outcome, recorded in
+    /// `LibraryState::batch_row_failures` instead of raising a card.
+    pub(super) fn begin_row_write(
         &mut self,
         address: &EditorAddress,
         written_assets: &[String],
-    ) -> anyhow::Result<()> {
-        use anyhow::Context as _;
-        let Some(state) = self.library.editors.get_mut(address) else {
-            return Ok(());
+        batch: Option<u64>,
+    ) -> anyhow::Result<Task<Message>> {
+        let Some(write) = self.prepare_row_write(address, written_assets)? else {
+            return Ok(Task::none());
         };
-        let snapshot = state.saving_row.take();
-        if snapshot.is_none() {
+        let generation = self
+            .library
+            .editors
+            .get(address)
+            .map_or(0, |state| state.saving_generation);
+        let RowWrite {
+            library_path,
+            table,
+            row,
+            needed,
+            saved_hashes,
+        } = write;
+        let kind = WriteKind::PreviewRowSaved {
+            address: address.clone(),
+            generation,
+            batch,
+            saved: Box::new(PreviewRowSave {
+                row: row.clone(),
+                saved_hashes,
+            }),
+        };
+        let edit = RowEdit {
+            table,
+            row_id: address.row_id,
+            start: RowStart::Full(Box::new(row)),
+            patch: None,
+            assets: needed,
+            message: "edit row (signex-app)",
+        };
+        Ok(row_edit_task(&mut self.library, &library_path, kind, edit))
+    }
+
+    /// A row save finished.
+    pub(in crate::app::dispatch::library) fn preview_row_saved(
+        &mut self,
+        address: EditorAddress,
+        generation: u64,
+        batch: Option<u64>,
+        saved: PreviewRowSave,
+        written: Option<Box<signex_library::ComponentRow>>,
+        outcome: Result<Option<u64>, WriteFailure>,
+    ) -> Task<Message> {
+        // The save this result belongs to is gone when its editor was
+        // closed (and maybe reopened, even saved again) meanwhile: the
+        // editor then holds a different live row, which this result must
+        // not settle.
+        let current = self.library.editors.get(&address).is_some_and(|state| {
+            state.saving_row.is_some() && state.saving_generation == generation
+        });
+        match outcome {
+            Ok(revision) => {
+                if current {
+                    let row = written.map_or(saved.row, |row| *row);
+                    self.apply_row_written(&address, row, &saved.saved_hashes, revision);
+                }
+            }
+            Err(failure) => {
+                if current {
+                    self.row_write_failed(&address, failure.row_changed);
+                }
+                let error =
+                    anyhow::anyhow!("update row in table {}: {}", address.table, failure.reason);
+                match batch {
+                    // A Save All is waiting on this row: its settle step
+                    // reports the failure and keeps the window / library
+                    // open.
+                    Some(batch) => {
+                        let label = self.library.editor_label(&address);
+                        crate::diagnostics::log_error(
+                            &format!("Save All: could not save {label}"),
+                            &error,
+                        );
+                        self.library
+                            .batch_row_failures
+                            .insert((batch, address.clone()), (label, format!("{error:#}")));
+                    }
+                    None => self.report_save_row_failure(&error),
+                }
+            }
+        }
+        // The editor stays dirty on its old base revision after a failure;
+        // the refresh shows what is stored.
+        self.refresh_library_task(&address.library_path, RefreshFollowUp::Nothing)
+    }
+
+    /// Everything a row save needs, taken from the editor: the copy to
+    /// write and the PDFs it pins. `Ok(None)` when the editor is gone.
+    /// A failure leaves the editor as it was before the save, not saving.
+    fn prepare_row_write(
+        &mut self,
+        address: &EditorAddress,
+        written_assets: &[String],
+    ) -> anyhow::Result<Option<RowWrite>> {
+        let Some(state) = self.library.editors.get_mut(address) else {
+            return Ok(None);
+        };
+        let prepared = Self::row_write_of(state, written_assets);
+        if prepared.is_err() {
+            state.saving_row = None;
+        }
+        prepared.map(Some)
+    }
+
+    fn row_write_of(
+        state: &mut ComponentPreviewState,
+        written_assets: &[String],
+    ) -> anyhow::Result<RowWrite> {
+        use anyhow::Context as _;
+        if state.saving_row.is_none() {
             // A typed number still in its edit buffer is part of the row.
             crate::library::component_preview::updates::flush_edit_buffers(state)
                 .map_err(anyhow::Error::msg)?;
         }
-        let library_path = state.library_path.clone();
-        let table = state.table.clone();
-        let edited_since_save = snapshot.as_ref().is_some_and(|saved| *saved != state.row);
-        let mut row = snapshot.unwrap_or_else(|| state.row.clone());
+        let mut row = state
+            .saving_row
+            .clone()
+            .unwrap_or_else(|| state.row.clone());
         let saved_hashes: Vec<String> = state
             .staged_assets_pinned_by(&row)
             .into_iter()
@@ -302,55 +407,56 @@ impl Signex {
         // hash failure fails the save instead of being warned past.
         row.refresh_content_hash()
             .context("refresh row content hash")?;
+        Ok(RowWrite {
+            library_path: state.library_path.clone(),
+            table: state.table.clone(),
+            row,
+            needed,
+            saved_hashes,
+        })
+    }
 
-        let library_id = self
-            .library
-            .library_at(&library_path)
-            .map(|lib| lib.library_id)
-            .with_context(|| format!("library {} is not open", library_path.display()))?;
-        let adapter = self
-            .library
-            .set
-            .get(library_id)
-            .with_context(|| format!("library {} is not mounted", library_path.display()))?;
-        // A server-backed library refuses the write if the row changed
-        // since this editor read it; the error keeps the editor dirty.
-        // The pinned PDFs are committed in the same commit as the row.
-        let saved =
-            adapter.update_row_with_assets(&table, row.clone(), "edit row (signex-app)", &needed);
-        let stale = matches!(saved, Err(signex_library::LibraryError::RowChanged { .. }));
-        let revision = match saved {
-            Ok(revision) => revision,
-            Err(e) => {
-                if stale && let Some(state) = self.library.editors.get_mut(address) {
-                    state.stale_base = true;
-                }
-                return Err(anyhow::Error::new(e).context(format!("update row in table {table}")));
-            }
-        };
-        row.server_revision = revision;
+    /// A row save was refused or failed: the editor is no longer saving, and
+    /// offers "Reload saved version" when the row moved on.
+    fn row_write_failed(&mut self, address: &EditorAddress, stale: bool) {
         if let Some(state) = self.library.editors.get_mut(address) {
-            state.stale_base = false;
-            state.reload_confirming = false;
-            if edited_since_save {
-                // The saved copy is stored; what was typed since is not.
-                // Only the new base revision is taken over.
-                state.row.server_revision = revision;
-            } else {
-                state.row = row;
-                state.dirty = false;
-                state.datasheet_errors.clear();
+            state.saving_row = None;
+            if stale {
+                state.stale_base = true;
             }
-            // Written and committed: those staged copies are spent (a PDF
-            // picked since stays staged).
-            state
-                .staged_datasheets
-                .retain(|hash, _| !saved_hashes.contains(hash));
         }
-        if let Err(e) = self.library.refresh_components(&library_path) {
-            tracing::warn!(target: "signex::library", error = %e, "post-save refresh failed");
+    }
+
+    /// The row was written at `revision`: settle the editor.
+    fn apply_row_written(
+        &mut self,
+        address: &EditorAddress,
+        mut row: signex_library::ComponentRow,
+        saved_hashes: &[String],
+        revision: Option<u64>,
+    ) {
+        row.server_revision = revision;
+        let Some(state) = self.library.editors.get_mut(address) else {
+            return;
+        };
+        let snapshot = state.saving_row.take();
+        let edited_since_save = snapshot.is_some_and(|saved| saved != state.row);
+        state.stale_base = false;
+        state.reload_confirming = false;
+        if edited_since_save {
+            // The saved copy is stored; what was typed since is not.
+            // Only the new base revision is taken over.
+            state.row.server_revision = revision;
+        } else {
+            state.row = row;
+            state.dirty = false;
+            state.datasheet_errors.clear();
         }
-        Ok(())
+        // Written and committed: those staged copies are spent (a PDF
+        // picked since stays staged).
+        state
+            .staged_datasheets
+            .retain(|hash, _| !saved_hashes.contains(hash));
     }
 
     /// Replace the working copy of one Component Preview with the row the

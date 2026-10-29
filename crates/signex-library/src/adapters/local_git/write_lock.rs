@@ -219,7 +219,7 @@ fn wait_for(file: &File) -> Waited {
 
 fn held_too_long(file_path: &Path, lock: &Path) -> LibraryError {
     LibraryError::Backend(format!(
-        "{} is being written by another Signex process (lock {} held for over {} s); the \
+        "another Signex process is writing {} (lock {} held for over {} s); the \
          edit was not saved",
         file_path.display(),
         lock.display(),

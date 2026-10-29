@@ -32,6 +32,10 @@ pub(super) struct PrimitiveWrite {
     pub mounted_library: Option<std::path::PathBuf>,
     pub now: chrono::DateTime<chrono::Utc>,
     pub snapshot: Snapshot,
+    /// This write's place in the owning library's write order (#893): the
+    /// worker waits for it, so the write neither overtakes nor is
+    /// overtaken by the library's row writes.
+    pub turn: Option<crate::library::writes::Turn>,
 }
 
 /// What both container kinds' writes share.
@@ -44,6 +48,9 @@ struct WriteContext<'a> {
 
 impl PrimitiveWrite {
     pub(super) fn run(self) -> Result<PrimitiveWritten, String> {
+        if let Some(turn) = &self.turn {
+            turn.wait();
+        }
         let library = SaveLibrary::resolve(&self.path, self.mounted_library.as_deref());
         let context = WriteContext {
             library: &library,

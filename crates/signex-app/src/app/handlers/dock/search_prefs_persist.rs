@@ -51,6 +51,8 @@ impl Signex {
         // A pricing walk must not write into a library after quit, and an
         // in-flight save + commit is waited for.
         let next = self.wait_for_pricing_then(next);
+        // As must a library edit a worker is still writing (#893).
+        let next = self.wait_for_library_writes_then(next);
         // Every `background_pref_write` started so far (Save Preferences,
         // recent projects, filter presets, toggles) must land before exit
         // (#1351).

@@ -110,11 +110,12 @@ fn open_app_with_preview(snxlib: &std::path::Path, row_id: RowId) -> (Signex, Ed
     app.library
         .open_library(snxlib.to_path_buf())
         .expect("mount library");
-    let _ = app.update(Message::Library(LibraryMessage::OpenComponentRow {
+    let task = app.update(Message::Library(LibraryMessage::OpenComponentRow {
         library_path: snxlib.to_path_buf(),
         table: TABLE.to_string(),
         row_id,
     }));
+    crate::drive::drive(&mut app, task);
     let address = EditorAddress::new(snxlib.to_path_buf(), TABLE.to_string(), row_id);
     assert!(app.library.editors.contains_key(&address), "preview open");
     (app, address)
@@ -129,23 +130,25 @@ fn browser_commits_pn(app: &mut Signex, snxlib: &std::path::Path, row_id: RowId,
     app.library
         .library_browsers
         .insert(snxlib.to_path_buf(), browser);
-    let _ = app.update(Message::Library(LibraryMessage::BrowserCellCommit {
+    let task = app.update(Message::Library(LibraryMessage::BrowserCellCommit {
         library_path: snxlib.to_path_buf(),
         table: TABLE.to_string(),
         row_id,
         column: "internal_pn".to_string(),
     }));
+    crate::drive::drive(app, task);
     // The re-read the commit started, landing as the runtime would.
-    app.land_pending_refresh(snxlib);
+    drop(app.land_pending_refresh(snxlib));
 }
 
 fn save_preview(app: &mut Signex, address: &EditorAddress) {
-    let _ = app.update(Message::Library(LibraryMessage::EditorEvent {
+    let task = app.update(Message::Library(LibraryMessage::EditorEvent {
         library_path: address.library_path.clone(),
         table: address.table.clone(),
         row_id: address.row_id,
         msg: EditorMsg::SaveDraft,
     }));
+    crate::drive::drive(app, task);
 }
 
 /// The preview's base must be set and equal what a fresh read carries.

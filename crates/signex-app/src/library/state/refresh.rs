@@ -235,6 +235,20 @@ impl LibraryState {
         }
     }
 
+    /// Show the row a write stored, ahead of the re-read: the cached row is
+    /// replaced whole, revision included, so the copy and its revision
+    /// always describe the same stored row.
+    pub fn replace_cached_row(&mut self, root: &Path, table: &str, row: ComponentRow) {
+        self.touch_data();
+        let cached = self
+            .library_at_mut(root)
+            .and_then(|lib| lib.tables.get_mut(table))
+            .and_then(|rows| rows.iter_mut().find(|r| r.row_id == row.row_id));
+        if let Some(slot) = cached {
+            *slot = row;
+        }
+    }
+
     fn adapter_at(&self, root: &Path) -> Result<&dyn LibraryAdapter, LibraryError> {
         let not_found = || LibraryError::NotFound(root.display().to_string());
         let library_id = self.library_at(root).ok_or_else(not_found)?.library_id;
