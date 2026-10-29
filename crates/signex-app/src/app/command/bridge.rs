@@ -177,6 +177,19 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
             Message::Tool(ToolMessage::SelectTool(Tool::Label))
         }
         "place_no_connect" => Message::Tool(ToolMessage::SelectTool(Tool::NoConnect)),
+        // The same Active Bar actions the buttons send, so a key and a click
+        // arm the same tool. The Place menu's Power Port row sends GND too.
+        "place_power_symbol" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+            crate::active_bar::ActiveBarAction::PlacePowerGND,
+        )),
+        // The Active Bar's "Port" arms a global label; "Off Sheet
+        // Connector" arms a hierarchical one.
+        "place_global_label" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+            crate::active_bar::ActiveBarAction::PlacePort,
+        )),
+        "place_hierarchical_label" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+            crate::active_bar::ActiveBarAction::PlaceOffSheetConnector,
+        )),
         "place_text" => Message::Tool(ToolMessage::SelectTool(Tool::Text)),
         "place_wire" => Message::Tool(ToolMessage::SelectTool(Tool::Wire)),
         "place_wire_to_bus_entry" => Message::Tool(ToolMessage::SelectTool(Tool::BusEntry)),
@@ -380,7 +393,7 @@ mod tests {
     /// The ids listed there are a mix, and the distinction decides the fix:
     /// - **unimplemented** — the catalog entry and the binding are the only
     ///   occurrences in the tree (`break_wire`,
-    ///   `place_global_label`, `place_hierarchical_label`,
+    ///   `place_junction`,
     ///   `repeat_last_item`, `rubber_stamp_copy`). A feature, not an arm.
     ///   This is most of what is left. It also covers ids whose obvious
     ///   target turns out to be a STUB, where an arm would trade a logged
@@ -413,8 +426,9 @@ mod tests {
         "highlight_related_net_objects", "import_graphics",
         "next_highlighted_net_item",
         "place_design_block",
-        "place_global_label", "place_hierarchical_label", "place_junction",
-        "place_power_symbol",
+        // No junction tool exists: junctions are derived from wire topology
+        // and the engine's PlaceJunction command has no UI tool (#1666).
+        "place_junction",
         "previous_highlighted_net_item",
         "refresh_view", "repeat_last_item",
         "reset_local_coordinates", "rubber_stamp_copy", "select_expand_connection",
@@ -496,6 +510,24 @@ mod tests {
         assert!(matches!(
             resolve("place_no_connect"),
             Message::Tool(ToolMessage::SelectTool(Tool::NoConnect))
+        ));
+        assert!(matches!(
+            resolve("place_power_symbol"),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::PlacePowerGND
+            ))
+        ));
+        assert!(matches!(
+            resolve("place_global_label"),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::PlacePort
+            ))
+        ));
+        assert!(matches!(
+            resolve("place_hierarchical_label"),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::PlaceOffSheetConnector
+            ))
         ));
         assert!(matches!(
             resolve("place_wire_to_bus_entry"),
