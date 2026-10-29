@@ -92,13 +92,12 @@ pub(super) fn fixture(root: &Path, stem: &str, git: bool) -> Fixture {
         title: "main".into(),
         path: sheet.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::Schematic,
     });
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(sheet.clone());
-    app.document_state.dirty_paths.insert(sheet.clone());
+    app.document_state.mark_document_dirty(&sheet);
     // The list is loaded from the per-process prefs file other tests share.
     app.ui_state.recent_projects.clear();
     app.ui_state.recent_projects.record(&project_file);
@@ -214,7 +213,7 @@ fn renaming_a_project_folder_re_keys_documents_recent_projects_and_git() {
     assert!(ds.engines.contains_key(&new_sheet) && !ds.engines.contains_key(&fx.sheet));
     assert_eq!(ds.tabs[0].path, new_sheet);
     assert_eq!(ds.active_path.as_deref(), Some(new_sheet.as_path()));
-    assert!(ds.dirty_paths.contains(&new_sheet) && !ds.dirty_paths.contains(&fx.sheet));
+    assert!(ds.is_document_dirty(&new_sheet) && !ds.is_document_dirty(&fx.sheet));
     assert!(fx.app.ui_state.rename_dialog.is_none());
     assert!(ds.project_folder_renames.is_empty());
     assert!(
@@ -330,7 +329,7 @@ fn a_save_started_while_the_folder_moves_writes_nothing_and_keeps_the_edit() {
     // A save in this window is refused rather than recreating `Foo/`.
     let refused = fx.app.begin_schematic_save(fx.sheet.clone(), None);
     assert!(refused.is_err(), "save must be refused during the move");
-    assert!(fx.app.document_state.dirty_paths.contains(&fx.sheet));
+    assert!(fx.app.document_state.is_document_dirty(&fx.sheet));
     assert!(!fx.app.document_state.document_saves.is_any_saving());
 
     // Opening a document in the moving project is refused too.
@@ -350,7 +349,7 @@ fn a_save_started_while_the_folder_moves_writes_nothing_and_keeps_the_edit() {
     let new_sheet = new_dir.join("main.snxsch");
     assert!(!fx.folder.exists(), "no write recreated the old folder");
     assert_eq!(std::fs::read(&new_sheet).expect("sheet"), b"sheet");
-    assert!(fx.app.document_state.dirty_paths.contains(&new_sheet));
+    assert!(fx.app.document_state.is_document_dirty(&new_sheet));
     // Once the move has landed, the same edit saves under the new path.
     let save = fx.app.begin_schematic_save(new_sheet.clone(), None);
     assert!(save.is_ok());
@@ -364,13 +363,13 @@ fn the_project_file_and_editor_saves_are_refused_while_the_folder_moves() {
     let symbol = fx.folder.join("Lib.snxsym");
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Sym1"));
     let mut editor = crate::app::SymbolDocument::new(symbol.clone(), file);
-    editor.dirty = true;
+    editor.mark_dirty();
     fx.app
         .document_state
         .symbol_editors
         .insert(symbol.clone(), editor);
-    fx.app.document_state.dirty_paths.insert(symbol.clone());
-    fx.app.document_state.dirty_paths.insert(old_file.clone());
+    fx.app.document_state.mark_document_dirty(&symbol);
+    fx.app.document_state.mark_document_dirty(&old_file);
     let project_id = fx.app.document_state.projects[0].id;
 
     let task = submit_rename(&mut fx.app, &old_file, "Bar");
@@ -379,14 +378,14 @@ fn the_project_file_and_editor_saves_are_refused_while_the_folder_moves() {
     // The `.snxprj` writer (Ctrl+S, Save All, Close Project).
     assert!(fx.app.persist_project_by_id(project_id).is_err());
     assert_eq!(std::fs::read(&old_file).expect("project file"), b"{}");
-    assert!(fx.app.document_state.dirty_paths.contains(&old_file));
+    assert!(fx.app.document_state.is_document_dirty(&old_file));
 
     // The symbol / footprint editor writers.
     assert!(fx.app.save_primitive_tab_at(&symbol).is_err());
     assert!(fx.app.save_primitive_tab_blocking(&symbol).is_err());
     assert!(!symbol.exists(), "no editor write reached the old folder");
-    assert!(fx.app.document_state.dirty_paths.contains(&symbol));
-    assert!(fx.app.document_state.symbol_editors[&symbol].dirty);
+    assert!(fx.app.document_state.is_document_dirty(&symbol));
+    assert!(fx.app.document_state.symbol_editors[&symbol].is_dirty());
 
     run_task(&mut fx.app, task);
     assert!(!fx.folder.exists(), "no write recreated the old folder");
@@ -596,7 +595,6 @@ fn a_library_under_the_folder_refuses_the_folder_move_whatever_holds_it() {
                 title: "p".into(),
                 path: p.clone(),
                 cached_document: None,
-                dirty: false,
                 project_id: None,
                 kind: TabKind::LibraryBrowser(p),
             });

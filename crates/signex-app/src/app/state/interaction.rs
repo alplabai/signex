@@ -46,6 +46,11 @@ pub struct InteractionState {
     /// The last Copy or Cut: the items with the library bodies they use,
     /// anchored at the grid-snapped centre they were copied from.
     pub clipboard: Option<signex_engine::CopiedSelection>,
+    /// The system-clipboard text that stands for `clipboard`: what this
+    /// window last wrote for it, or the foreign fragment it adopted. A paste
+    /// that reads the same text keeps `clipboard` as it is instead of
+    /// parsing it back (which would re-anchor it to the current grid).
+    pub clipboard_text: Option<String>,
     pub draw_mode: DrawMode,
     pub editing_text: Option<TextEditState>,
     pub context_menu: Option<ContextMenuState>,

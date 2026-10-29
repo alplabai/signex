@@ -808,10 +808,11 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         }
         _ => {
             // Generic read-only properties for other types
+            // `Locked` is the checkbox row below, not a read-only line.
             let info: Vec<(String, String)> = ctx
                 .selection_info
                 .iter()
-                .filter(|(k, _)| k != "Type")
+                .filter(|(k, _)| k != "Type" && k != "Locked")
                 .cloned()
                 .collect();
             col = col.push(collapsible_section(
@@ -829,6 +830,38 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 },
             ));
         }
+    }
+
+    // ── Lock ── (#1573): wires, labels, text notes and drawings.
+    if let (Some(id), Some(kind)) = (uuid, selected_kind)
+        && matches!(
+            kind,
+            signex_types::schematic::SelectedKind::Wire
+                | signex_types::schematic::SelectedKind::Label
+                | signex_types::schematic::SelectedKind::TextNote
+                | signex_types::schematic::SelectedKind::Drawing
+        )
+    {
+        let locked = get("Locked") == "Yes";
+        let item = signex_types::schematic::SelectedItem::new(id, kind);
+        col = col.push(collapsible_section(
+            "sel_state",
+            "State",
+            &ctx.collapsed_sections,
+            muted,
+            border_c,
+            move || {
+                Column::new()
+                    .spacing(0)
+                    .width(Length::Fill)
+                    .push(form_check_row(
+                        "Locked",
+                        locked,
+                        PanelMsg::ToggleItemLocked(item),
+                        muted,
+                    ))
+            },
+        ));
     }
 
     // ── Status bar ──

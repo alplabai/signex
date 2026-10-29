@@ -147,6 +147,7 @@ pub(crate) fn add_label(sheet: &mut SchematicSheet, text: &str, at: (f64, f64)) 
         font_family: None,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        locked: false,
     });
 }
 
@@ -643,7 +644,7 @@ fn a_power_port_keeps_its_wire_and_its_net_name() {
     assert_clean(&mut engine, &before);
 }
 
-fn child_fixture() -> (Engine, Uuid, Uuid) {
+pub(crate) fn child_fixture() -> (Engine, Uuid, Uuid) {
     let mut sheet = test_sheet();
     let pin = SheetPin {
         uuid: Uuid::new_v4(),
@@ -856,6 +857,7 @@ pub(crate) fn add_labelled(sheet: &mut SchematicSheet, rng: &mut Lcg, at: (f64, 
         font_family: None,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        locked: false,
     });
 }
 

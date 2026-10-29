@@ -115,6 +115,7 @@ fn every_field_is_accounted_for() {
         start: _,
         end: _,
         stroke_width: _,
+        locked: _,
         unknown_columns: _,
     } = Wire::default();
     let Junction {

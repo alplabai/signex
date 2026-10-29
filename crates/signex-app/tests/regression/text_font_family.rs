@@ -25,6 +25,7 @@ fn label(id: uuid::Uuid) -> Label {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
@@ -38,6 +39,7 @@ fn note(id: uuid::Uuid) -> TextNote {
         font_family: None,
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
+        locked: false,
     }
 }
 
@@ -57,7 +59,6 @@ fn app_with(sheet: SchematicSheet, path: &Path) -> Signex {
         title: "fonts".to_string(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -116,7 +117,12 @@ fn a_family_edit_is_stored_as_typed_and_undone_with_one_undo() {
         Some(MISSING),
         "a family this machine lacks is still what the document stores"
     );
-    assert!(app.document_state.dirty_paths.contains(&path) || app.document_state.tabs[0].dirty);
+    assert!(
+        app.document_state.is_document_dirty(&path)
+            || app
+                .document_state
+                .is_document_dirty(&app.document_state.tabs[0].path)
+    );
 
     let _ = app.update(Message::Edit(EditMsg::Undo));
     assert_eq!(label_family(&app, &path, id), None);

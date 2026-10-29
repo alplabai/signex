@@ -368,7 +368,7 @@ pub struct UiState {
     pub remove_dialog: Option<crate::app::RemoveDialogState>,
     /// "Close Project — Unsaved Edits" confirmation modal. `Some`
     /// while the user is being asked to save / discard / cancel a
-    /// close request that intersects `dirty_paths`. Cleared on any
+    /// close request that touches a dirty document. Cleared on any
     /// of the three button choices.
     pub project_close_confirm: Option<crate::app::ProjectCloseConfirmState>,
     /// "Create the missing sheet?" confirm; `Some` while it is up.
@@ -378,7 +378,7 @@ pub struct UiState {
     pub pending_create_sheet: Option<(std::path::PathBuf, std::path::PathBuf)>,
     /// "Exit Signex — Unsaved Edits" confirmation modal. `Some` while
     /// the user is being asked to save / discard / cancel an app-exit
-    /// request that intersects `dirty_paths`. Cleared on any of the
+    /// request that touches a dirty document. Cleared on any of the
     /// three button choices.
     pub app_quit_confirm: Option<crate::app::AppQuitConfirmState>,
     /// v0.11 Enable Version Control modal — opened from the
@@ -397,6 +397,9 @@ pub struct UiState {
     pub find_similar_generation: u64,
     /// The open Paste Array dialog (#1264).
     pub paste_array: Option<crate::paste_array::PasteArrayState>,
+    /// How many Paste Array dialogs were opened: tags each one so a numbers
+    /// read answers only the dialog that asked for it.
+    pub paste_array_opens: u64,
     /// v0.18.14.1 — Custom Selection Filter modal draft. `Some`
     /// while the dialog is visible; the eight-bool draft mirror
     /// commits on Apply, discards on Cancel.

@@ -53,7 +53,7 @@ impl Signex {
             return crate::app::view::detached_title::detached_modal_title(*modal).to_owned();
         }
         let version = env!("CARGO_PKG_VERSION");
-        let dirty_count = self.document_state.dirty_paths.len();
+        let dirty_count = self.document_state.dirty_document_count();
         if dirty_count == 0 {
             format!("Signex {version}")
         } else {

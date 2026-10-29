@@ -21,6 +21,7 @@ fn note(text: &str, y: f64) -> TextNote {
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
         font_family: None,
+        locked: false,
     }
 }
 

@@ -18,7 +18,6 @@ fn push_tab(app: &mut Signex, path: &Path, project_id: Option<signex_app::app::P
         title: path.display().to_string(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: false,
         project_id,
         kind: TabKind::FootprintEditor(path.to_path_buf()),
     });
@@ -159,7 +158,6 @@ fn deleting_a_footprint_before_the_active_one_keeps_the_active_primitive() {
         title: "lib".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -171,7 +169,11 @@ fn deleting_a_footprint_before_the_active_one_keeps_the_active_primitive() {
 
     let editor = &app.document_state.footprint_editors[&path];
     assert_eq!(editor.primitive().uuid, active_uuid);
-    assert!(app.document_state.tabs[0].dirty, "tab chip must show dirty");
+    assert!(
+        app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path),
+        "tab chip must show dirty"
+    );
 }
 
 #[test]
@@ -192,7 +194,6 @@ fn deleting_a_symbol_before_the_active_one_keeps_the_active_primitive() {
         title: "lib".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });

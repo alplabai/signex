@@ -30,15 +30,14 @@ fn project_rules(app: &crate::app::Signex) -> Option<signex_types::project::Proj
 
 fn is_dirty(app: &crate::app::Signex) -> bool {
     app.document_state
-        .dirty_paths
-        .contains(&app.document_state.projects[0].path)
+        .is_document_dirty(&app.document_state.projects[0].path)
 }
 
 /// A project that stores rules, with the Save-as dialog open.
 fn with_dialog(tag: &str) -> crate::app::Signex {
     let mut app = workspace(tag);
     let _ = app.handle_store_erc_rules_in_project();
-    app.document_state.dirty_paths.clear();
+    app.document_state.mark_documents_clean_where(|_| true);
     let _ = app.handle_profile_save_dialog_opened();
     app
 }

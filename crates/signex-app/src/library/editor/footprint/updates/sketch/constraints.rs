@@ -30,7 +30,7 @@ fn edit_parameter(editor: &mut crate::app::FootprintDocument, name: String, expr
         apply_sketch_edit_with_warnings(state, primitive, SketchEdit::EditParameter { name, expr });
     });
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 fn add_constraint_for_selection(
@@ -237,7 +237,7 @@ fn add_constraint_for_selection(
     editor.with_parts(|state, primitive| {
         apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddConstraint(constraint));
     });
-    editor.dirty = true;
+    editor.mark_dirty();
     editor.canvas_cache.clear();
 }
 

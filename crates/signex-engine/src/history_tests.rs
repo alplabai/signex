@@ -13,6 +13,7 @@ fn wire(i: usize) -> Wire {
         end: Point::new(i as f64, 5.0),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 

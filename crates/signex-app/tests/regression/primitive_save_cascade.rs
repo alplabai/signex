@@ -165,7 +165,6 @@ fn fixture_with(setup: Setup) -> Fixture {
         title: "pair".into(),
         path: symbol_path.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::SymbolEditor(symbol_path.clone()),
     });
@@ -191,7 +190,7 @@ fn edit_a(f: &mut Fixture) {
         .get_mut(&f.symbol_path)
         .unwrap();
     editor.file.symbols[0].description = "edited".into();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 fn save(app: &mut Signex) {
@@ -282,12 +281,11 @@ fn saving_a_footprint_bumps_the_component_row_that_uses_it() {
         .get_mut(&path)
         .unwrap();
     editor.file.footprints[0].description = "edited".into();
-    editor.dirty = true;
+    editor.mark_dirty();
     f.app.document_state.tabs.push(TabInfo {
         title: "fp".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::FootprintEditor(path),
     });
@@ -328,7 +326,7 @@ fn a_second_save_without_edits_bumps_nothing_and_the_next_edit_bumps_once_more()
         .symbol_editors
         .get_mut(&f.symbol_path)
         .unwrap()
-        .dirty = true;
+        .set_dirty(true);
     save(&mut f.app);
     let row = row_on_disk(&f.library_file, f.users);
     assert_eq!(symbol_on_disk(&f).symbols[0].version, "0.0.2");
@@ -494,9 +492,9 @@ fn a_failed_cascade_is_retried_by_the_next_save_without_edits() {
     let owed = |f: &Fixture| {
         let editor = &f.app.document_state.symbol_editors[&f.symbol_path];
         (
-            editor.dirty,
-            f.app.document_state.dirty_paths.contains(&f.symbol_path),
-            f.app.document_state.tabs.iter().any(|t| t.dirty),
+            editor.is_dirty(),
+            f.app.document_state.is_document_dirty(&f.symbol_path),
+            f.app.document_state.has_dirty_documents(),
             editor.cascade_owed.len(),
         )
     };
@@ -531,7 +529,7 @@ fn a_failed_cascade_is_retried_by_the_next_save_without_edits() {
         "nothing is owed after the retry landed"
     );
     assert!(
-        !f.app.document_state.dirty_paths.contains(&f.symbol_path),
+        !f.app.document_state.is_document_dirty(&f.symbol_path),
         "and the editor is clean"
     );
 }
@@ -568,7 +566,7 @@ fn a_malformed_row_gets_permanent_advice_and_is_not_owed() {
         0,
         "a retry cannot fix it, so nothing is owed"
     );
-    assert!(!f.app.document_state.dirty_paths.contains(&f.symbol_path));
+    assert!(!f.app.document_state.is_document_dirty(&f.symbol_path));
 
     // Another Save has nothing to retry and changes nothing more.
     let version = symbol_on_disk(&f).symbols[0].version.clone();
@@ -610,7 +608,7 @@ fn closing_a_tab_that_still_owes_rows_keeps_the_editor() {
     };
     save(&mut f.app);
     drop(locked);
-    assert!(f.app.document_state.tabs.iter().any(|t| t.dirty));
+    assert!(f.app.document_state.has_dirty_documents());
 
     let tabs = f.app.document_state.tabs.len();
     use signex_app::app::{ContextMenuMsg, TabContextAction};

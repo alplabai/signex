@@ -98,7 +98,7 @@ impl SymbolDocument {
         } else {
             self.reset_view_for_symbol_switch();
         }
-        self.dirty = true;
+        self.mark_dirty();
     }
 
     /// Start the newly active symbol on unit 1 with a fresh viewport, so

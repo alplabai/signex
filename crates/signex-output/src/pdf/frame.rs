@@ -373,6 +373,7 @@ mod special_string_tests {
                 font_family: None,
                 justify_h: Default::default(),
                 justify_v: Default::default(),
+                locked: false,
             });
         let sheet = SheetSnapshot {
             path: std::path::PathBuf::from("/p/power.snxsch"),

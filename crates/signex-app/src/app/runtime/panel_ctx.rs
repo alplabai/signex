@@ -250,9 +250,6 @@ impl Signex {
         self.drop_pending_profile_update_for_other_project();
         let fs_request = self.project_fs_request();
         self.document_state.project_fs.want(fs_request);
-        // The dirty dots below read `dirty_paths`; make sure footprint
-        // edits are in it first (#666).
-        self.sync_editor_dirty_paths();
         let previous_navigator = std::mem::take(&mut self.document_state.panel_ctx.navigator);
         let navigator = self.next_navigator_model(previous_navigator);
         // Build per-project panel info from every loaded project in the
@@ -262,17 +259,16 @@ impl Signex {
         // `panel_ctx.projects` directly yet.
         let active_id = self.document_state.active_project;
         // Open-state lookup is "is there a tab pointing at this path?"
-        // Dirty-state lookup is the project-scoped `dirty_paths` set,
-        // which persists across tab close (Altium parity: closing a
-        // tab keeps the file dirty until the project is saved or the
-        // edits are explicitly discarded).
+        // Dirty-state lookup is per document, not per tab, so it persists
+        // across tab close (Altium parity: closing a tab keeps the file
+        // dirty until the project is saved or the edits are discarded).
         let open_paths: std::collections::HashSet<std::path::PathBuf> = self
             .document_state
             .tabs
             .iter()
             .map(|tab| tab.path.clone())
             .collect();
-        let dirty_paths = self.document_state.dirty_paths.clone();
+        let dirty_paths = self.document_state.dirty_document_paths();
         // Active-tab path drives the per-row highlight in the tree —
         // matches Altium's "you are here" cue. None when no tabs open.
         let active_path = self

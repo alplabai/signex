@@ -250,7 +250,7 @@ impl Signex {
             self.report_restore_target_closed(&path);
             return Task::none();
         }
-        if self.document_state.dirty_paths.contains(&path)
+        if self.document_state.is_document_dirty(&path)
             || self.is_dirty_primitive_editor(&path)
             || self.is_dirty_pcb(&path)
         {
@@ -284,11 +284,9 @@ impl Signex {
             }
             RestoredDocument::Symbol(file) => {
                 self.restore_symbol_copy(&path, *file);
-                self.sync_editor_dirty_paths();
             }
             RestoredDocument::Footprint(file) => {
                 self.restore_footprint_copy(&path, *file);
-                self.sync_editor_dirty_paths();
             }
             RestoredDocument::Pcb(board) => {
                 self.restore_pcb_copy(&path, *board);

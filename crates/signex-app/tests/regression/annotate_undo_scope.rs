@@ -84,7 +84,6 @@ fn project(mode: AnnotateUndo) -> Project {
             title: path.file_stem().unwrap().to_string_lossy().into_owned(),
             path: path.clone(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind: signex_app::app::TabKind::Schematic,
         });
@@ -153,7 +152,7 @@ fn one_step_mode_undo_on_the_root_sheet_reverts_both_sheets() {
 
     assert_eq!(refs(&p.app, &p.root), ["U?", "C?"]);
     assert_eq!(refs(&p.app, &p.child), ["U?", "R?"]);
-    assert!(p.app.document_state.dirty_paths.contains(&p.child));
+    assert!(p.app.document_state.is_document_dirty(&p.child));
 
     redo(&mut p.app);
 

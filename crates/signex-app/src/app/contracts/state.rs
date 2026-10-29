@@ -149,8 +149,7 @@ pub struct ProjectTreeContextMenuState {
 
 /// State for the "Close Project — Unsaved Edits" confirmation modal.
 /// Opens only when the user closes a project that has at least one
-/// entry in `DocumentState.dirty_paths` rooted in the project's
-/// directory; the modal lists every dirty file by filename so the
+/// dirty document rooted in the project's directory; the modal lists every dirty file by filename so the
 /// user can see what they're about to lose.
 #[derive(Debug, Clone)]
 pub struct ProjectCloseConfirmState {
@@ -210,7 +209,7 @@ pub struct CreateChildSheetConfirmState {
 
 /// State for the "Exit Signex — Unsaved Edits" confirmation modal.
 /// Opens when the user requests app exit (chrome ✕, File ▸ Exit,
-/// Alt+F4) while `DocumentState.dirty_paths` is non-empty. Lists
+/// Alt+F4) while any document is dirty. Lists
 /// every dirty file across the whole workspace so the user sees what
 /// they are about to lose before choosing Save All / Discard All /
 /// Cancel. Reuses `ProjectCloseChoice` for the three outcomes.

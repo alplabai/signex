@@ -123,7 +123,8 @@ impl Signex {
         };
         let tab = document.project_tabs.entry(project_id).or_default();
         if tab.general_history.apply(&mut project.data, command) {
-            document.dirty_paths.insert(project.path.clone());
+            let project_file = project.path.clone();
+            document.mark_document_dirty(&project_file);
             self.refresh_panel_ctx();
         }
     }
@@ -167,7 +168,8 @@ impl Signex {
         if moved {
             // Like an edit: the document now differs from what was last
             // saved, or matches it only by coincidence; the save decides.
-            document.dirty_paths.insert(project.path.clone());
+            let project_file = project.path.clone();
+            document.mark_document_dirty(&project_file);
             self.refresh_panel_ctx();
         }
         moved

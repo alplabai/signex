@@ -491,8 +491,10 @@ fn a_written_pdf_the_saved_row_does_not_pin_is_not_committed() {
     assert!(tree.get_path(Path::new(&rel(&orphan))).is_err());
 }
 
+/// #858: the row and its PDF are written, so a failed commit is a saved row
+/// that is not committed, not a refused save; "Commit now" records the PDF.
 #[test]
-fn a_failed_commit_keeps_the_editor_owed_and_a_retry_commits_the_pdf() {
+fn a_failed_commit_still_saves_the_row_and_commit_now_commits_the_pdf() {
     let tmp = tempfile::tempdir().unwrap();
     let (mut app, address, file) = app_with_git_library(tmp.path());
     let hash = pick(&mut app, &address, PDF);
@@ -501,25 +503,30 @@ fn a_failed_commit_keeps_the_editor_owed_and_a_retry_commits_the_pdf() {
     std::fs::write(&head, b"not a ref").unwrap();
 
     save_row_to_completion(&mut app, &address);
-    let notice = app.document_state.error_notice.take().expect("a card");
-    assert!(format!("{notice:?}").contains("not saved"), "{notice:?}");
-    let state = editor(&app, &address);
-    assert!(state.dirty && state.staged_datasheets.contains_key(&hash));
+    assert!(app.document_state.error_notice.is_none());
+    assert!(!editor(&app, &address).dirty, "the row is saved");
+    app.library.sync_uncommitted();
+    let rel = signex_library::datasheet_asset_rel_path(&hash).unwrap();
+    let pending = app
+        .library
+        .uncommitted_in(&file)
+        .expect("uncommitted state");
+    assert!(pending.paths.contains(&rel), "{pending:?}");
+    assert!(datasheet_asset_path(&file, &hash).unwrap().is_file());
 
     std::fs::write(&head, good_head).unwrap();
-    save_row_to_completion(&mut app, &address);
-    assert!(app.document_state.error_notice.is_none());
-    assert!(!editor(&app, &address).dirty);
-    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
-    let tree = repo
-        .head()
+    let library_id = app.library.library_at(&file).unwrap().library_id;
+    let outcome = app
+        .library
+        .set
+        .get(library_id)
         .unwrap()
-        .peel_to_commit()
-        .unwrap()
-        .tree()
+        .commit_pending("")
         .unwrap();
-    let rel = signex_library::datasheet_asset_rel_path(&hash).unwrap();
-    assert!(tree.get_path(Path::new(&rel)).is_ok());
+    assert_eq!(outcome, signex_library::CommitOutcome::Committed);
+    app.library.sync_uncommitted();
+    assert!(app.library.uncommitted_in(&file).is_none());
+    assert!(head_has(&file, &hash));
 }
 
 #[test]
@@ -784,7 +791,7 @@ fn break_head(file: &Path) -> Vec<u8> {
 }
 
 #[test]
-fn save_all_where_the_store_works_but_the_commit_fails_stays_open() {
+fn save_all_where_the_store_works_but_the_commit_fails_still_saves() {
     let tmp = tempfile::tempdir().unwrap();
     let (mut app, address, file) = app_with_git_library(tmp.path());
     let hash = pick(&mut app, &address, PDF);
@@ -794,11 +801,11 @@ fn save_all_where_the_store_works_but_the_commit_fails_stays_open() {
     run_save_all(&mut app, task);
 
     assert!(datasheet_asset_path(&file, &hash).unwrap().is_file());
-    let state = editor(&app, &address);
-    assert!(state.dirty && state.staged_datasheets.contains_key(&hash));
-    let notice = app.document_state.error_notice.as_ref().expect("a card");
-    assert!(format!("{notice:?}").contains("stayed open"), "{notice:?}");
+    assert!(!editor(&app, &address).dirty, "the row is saved");
+    assert!(app.document_state.error_notice.is_none());
     assert!(app.library.batch_row_failures.is_empty());
+    app.library.sync_uncommitted();
+    assert!(app.library.uncommitted_in(&file).is_some());
     std::fs::write(file.parent().unwrap().join(".git").join("HEAD"), good_head).unwrap();
 }
 

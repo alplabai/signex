@@ -50,6 +50,7 @@ fn net_label(text: &str, pos: Point) -> Label {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         font_family: None,
+        locked: false,
     }
 }
 

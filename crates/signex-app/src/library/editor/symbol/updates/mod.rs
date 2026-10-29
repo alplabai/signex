@@ -55,7 +55,7 @@ fn begin_drag_if_needed(editor: &mut SymEditor) {
 
 /// Mark the symbol as dirty and invalidate the canvas cache.
 fn mark_dirty(editor: &mut SymEditor) {
-    editor.dirty = true;
+    editor.mark_dirty();
     editor.canvas_cache.clear();
 }
 

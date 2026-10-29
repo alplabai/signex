@@ -2,6 +2,7 @@
 
 use iced::Task;
 
+use crate::app::handlers::clipboard_workflows::CopyOutcome;
 use crate::app::{Message, PasteIntent, Signex};
 
 impl Signex {
@@ -12,11 +13,14 @@ impl Signex {
     pub(crate) fn handle_rubber_stamp_requested(&mut self) -> Task<Message> {
         if self.interaction_state.active_canvas().selected.is_empty()
             || !self.has_active_schematic()
-            || !self.handle_selection_copy_requested()
         {
             return self.finish_update();
         }
-        let write = self.clipboard_write_task();
+        let outcome = self.handle_selection_copy_requested();
+        let write = self.mirror_copy_on_clipboard_task(outcome);
+        if outcome != CopyOutcome::Carried {
+            return Task::batch([write, self.finish_update()]);
+        }
         Task::batch([write, self.begin_paste(PasteIntent::Stamp)])
     }
 }

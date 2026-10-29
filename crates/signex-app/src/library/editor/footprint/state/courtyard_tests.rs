@@ -69,7 +69,7 @@ fn a_left_out_pad_is_reported_to_the_messages_panel() {
         editor.state.pads[i].size_mm = (2.0, 2.0);
         editor.state.pads[i].number = number.into();
     }
-    editor.dirty = false;
+    editor.set_dirty(false);
 
     apply_footprint_primitive_edit(&mut editor, FootprintEditorMsg::RecomputeCourtyardOutline);
 
@@ -78,7 +78,7 @@ fn a_left_out_pad_is_reported_to_the_messages_panel() {
         .any(|e| e.message.contains("ISLAND_PAD") && e.message.contains("Courtyard outline"));
     assert!(reported, "the left-out pad must reach the Messages panel");
     assert!(
-        !editor.dirty,
+        !editor.is_dirty(),
         "recomputing the outline must not dirty the file"
     );
 }

@@ -14,6 +14,7 @@ fn rect(start: Point, end: Point) -> SchDrawing {
         width: 0.0,
         fill: FillType::default(),
         stroke_color: None,
+        locked: false,
     }
 }
 
