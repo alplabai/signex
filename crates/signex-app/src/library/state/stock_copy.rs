@@ -1,6 +1,5 @@
 //! Questions the stock-copy flow asks of the open libraries (#813).
 
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use super::LibraryState;
@@ -40,18 +39,6 @@ impl LibraryState {
             .is_some_and(|lib| lib.root_dir().is_some())
             && !self.is_read_only(root)
             && !self.is_stock_root(root)
-    }
-
-    /// The names of `kind` the library at `root` holds, from its cache.
-    pub fn primitive_names(&self, root: &Path, kind: StockPrimitiveKind) -> HashSet<String> {
-        let Some(lib) = self.library_at(root) else {
-            return HashSet::new();
-        };
-        let summaries = match kind {
-            StockPrimitiveKind::Symbol => &lib.cached_symbols,
-            StockPrimitiveKind::Footprint => &lib.cached_footprints,
-        };
-        summaries.iter().map(|s| s.name.clone()).collect()
     }
 
     /// What to call the stock file at `path` in the dialog: the name the

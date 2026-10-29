@@ -8,19 +8,35 @@ use std::path::{Path, PathBuf};
 use signex_library::{
     FootprintFile, LibraryAdapter as _, LibraryError, LocalGitAdapter, SymbolFile,
 };
+use uuid::Uuid;
+
+use crate::panels::components_panel::global_prefs::{self, GlobalLibraryEntry};
 
 use super::{CopyTarget, StockPrimitiveKind};
 use crate::library::state::NewLibraryDefaults;
 
+/// Where the stock file to copy comes from.
+pub enum StockSource {
+    /// The file the user opened.
+    File(PathBuf),
+    /// The stock file whose `file_uuid` a copy recorded; found by scanning
+    /// the stock library's directory for its kind. Used by Copy Again,
+    /// which starts from the copy.
+    ByUuid { stock_dir: PathBuf, uuid: Uuid },
+}
+
 /// One copy of one stock file.
 pub struct StockCopyJob {
-    pub source: PathBuf,
+    /// What the in-flight record and the outcome are keyed by.
+    pub key: PathBuf,
+    pub source: StockSource,
     pub kind: StockPrimitiveKind,
     /// The stock library's directory: where the source's STEP models live.
     pub source_library_dir: PathBuf,
     pub target: CopyTarget,
-    /// Names of this kind the target library already holds.
-    pub taken_names: HashSet<String>,
+    /// Make a new copy even when the target already holds one of this
+    /// stock primitive.
+    pub copy_again: bool,
     /// Seeds the manifest of a library this copy creates.
     pub new_library_defaults: NewLibraryDefaults,
     pub now: chrono::DateTime<chrono::Utc>,
@@ -29,37 +45,72 @@ pub struct StockCopyJob {
 /// How a copy ended. Cloneable so it can ride a message.
 #[derive(Debug, Clone)]
 pub struct StockCopyOutcome {
+    /// The job's `key`.
     pub source: PathBuf,
     /// The `.snxlib` the copy went to (or was to be created at).
     pub library: PathBuf,
-    /// This copy created `library`.
+    /// This job created `library` (whether or not the copy then worked).
     pub created_library: bool,
+    /// An existing copy was found, so nothing was written.
+    pub reused: bool,
     /// The copy's file, or why there is none.
     pub result: Result<PathBuf, String>,
+    /// The global library list after registering a created library, so it
+    /// survives a restart; `None` when no library was created.
+    pub global_libraries: Option<Result<Vec<GlobalLibraryEntry>, String>>,
 }
 
 impl StockCopyJob {
     pub fn run(self) -> StockCopyOutcome {
-        let (library, created) = match &self.target {
-            CopyTarget::Existing(path) => (path.clone(), false),
-            CopyTarget::New(path) => (path.clone(), true),
+        let library = match &self.target {
+            CopyTarget::Existing(path) | CopyTarget::New(path) => path.clone(),
         };
-        let source = self.source.clone();
-        let result = self.copy().map_err(|e| e.to_string());
-        StockCopyOutcome {
-            source,
-            // A library whose creation failed does not exist; the handler
-            // keys mounting off `result`.
-            created_library: created && result.is_ok(),
-            library,
-            result,
+        let mut outcome = StockCopyOutcome {
+            source: self.key.clone(),
+            library: library.clone(),
+            created_library: false,
+            reused: false,
+            result: Err(String::new()),
+            global_libraries: None,
+        };
+        if matches!(self.target, CopyTarget::New(_)) {
+            if let Err(e) =
+                crate::library::commands::create_library_file(&library, &self.new_library_defaults)
+            {
+                outcome.result = Err(e.to_string());
+                return outcome;
+            }
+            outcome.created_library = true;
+            outcome.global_libraries = Some(global_prefs::add_path(library.clone()));
+        }
+        outcome.result = match self.copy() {
+            Ok((path, reused)) => {
+                outcome.reused = reused;
+                Ok(path)
+            }
+            Err(e) => Err(e.to_string()),
+        };
+        outcome
+    }
+
+    fn source_path(&self) -> Result<PathBuf, LibraryError> {
+        match &self.source {
+            StockSource::File(path) => Ok(path.clone()),
+            StockSource::ByUuid { stock_dir, uuid } => {
+                files_in(&stock_dir.join(self.kind.directory()), self.kind)
+                    .into_iter()
+                    .find(|path| {
+                        std::fs::read_to_string(path)
+                            .is_ok_and(|text| text.contains(&format!("file_uuid = \"{uuid}\"")))
+                    })
+                    .ok_or_else(|| {
+                        LibraryError::NotFound(format!("the stock file {uuid} was not found"))
+                    })
+            }
         }
     }
 
-    fn copy(self) -> Result<PathBuf, LibraryError> {
-        if let CopyTarget::New(path) = &self.target {
-            crate::library::commands::create_library_file(path, &self.new_library_defaults)?;
-        }
+    fn copy(self) -> Result<(PathBuf, bool), LibraryError> {
         let library_file = match &self.target {
             CopyTarget::Existing(path) | CopyTarget::New(path) => path.clone(),
         };
@@ -74,14 +125,40 @@ impl StockCopyJob {
             })?
             .to_path_buf();
 
-        let bytes = std::fs::read(&self.source)?;
+        let bytes = std::fs::read(self.source_path()?)?;
+        let source_uuid = match self.kind {
+            StockPrimitiveKind::Symbol => {
+                SymbolFile::from_bytes(&bytes).map_err(backend)?.file_uuid
+            }
+            StockPrimitiveKind::Footprint => {
+                FootprintFile::from_bytes(&bytes)
+                    .map_err(backend)?
+                    .file_uuid
+            }
+        };
+        if !self.copy_again
+            && let Some(existing) = find_existing_copy(&target_dir, self.kind, source_uuid)
+        {
+            return Ok((existing, true));
+        }
+
+        // The names the library holds now, read from its files, so the
+        // symbol name and the file name are judged against the same disk.
+        let taken_names: HashSet<String> = match self.kind {
+            StockPrimitiveKind::Symbol => adapter.list_symbols()?,
+            StockPrimitiveKind::Footprint => adapter.list_footprints()?,
+        }
+        .into_iter()
+        .map(|summary| summary.name)
+        .collect();
+
         // A symbol file is found by scanning the directory, so it is named
         // after its symbol, as the stock files are. A footprint file is
         // found by the footprint's uuid, so it is named by that.
         let (text, name, file_stem, step_hashes) = match self.kind {
             StockPrimitiveKind::Symbol => {
                 let file = SymbolFile::from_bytes(&bytes).map_err(backend)?;
-                let copy = file.copy_for_library(&self.taken_names, self.now);
+                let copy = file.copy_for_library(&taken_names, self.now);
                 let name = copy.symbols[0].name.clone();
                 let stem = file_stem_for(&name);
                 (
@@ -93,7 +170,7 @@ impl StockCopyJob {
             }
             StockPrimitiveKind::Footprint => {
                 let file = FootprintFile::from_bytes(&bytes).map_err(backend)?;
-                let copy = file.copy_for_library(&self.taken_names, self.now);
+                let copy = file.copy_for_library(&taken_names, self.now);
                 let name = copy.footprints[0].name.clone();
                 let stem = copy.footprints[0].uuid.to_string();
                 let hashes = copy.step_hashes();
@@ -124,8 +201,34 @@ impl StockCopyJob {
             }
             Ok(Some(text.clone().into_bytes()))
         })?;
-        Ok(destination)
+        Ok((destination, false))
     }
+}
+
+/// The primitive files of `kind` directly in `directory`, sorted.
+fn files_in(directory: &Path, kind: StockPrimitiveKind) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return Vec::new();
+    };
+    let mut files: Vec<PathBuf> = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| StockPrimitiveKind::of_path(path) == Some(kind))
+        .collect();
+    files.sort();
+    files
+}
+
+/// The copy of the stock file `source_uuid` already in `target_dir`, if any.
+fn find_existing_copy(
+    target_dir: &Path,
+    kind: StockPrimitiveKind,
+    source_uuid: Uuid,
+) -> Option<PathBuf> {
+    let needle = format!("copied_from = \"{source_uuid}\"");
+    files_in(&target_dir.join(kind.directory()), kind)
+        .into_iter()
+        .find(|path| std::fs::read_to_string(path).is_ok_and(|text| text.contains(&needle)))
 }
 
 fn backend(error: impl std::fmt::Display) -> LibraryError {
@@ -142,6 +245,16 @@ fn copy_step_model(
     message: &str,
     adapter: &LocalGitAdapter,
 ) {
+    // The hash names a file; only a hex digest is accepted, so a hostile
+    // footprint file cannot point the copy outside `step/`.
+    if hash.is_empty() || hash.len() > 128 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+        tracing::warn!(
+            target: "signex::library",
+            hash = %hash,
+            "a copied footprint names a STEP model that is not a hex digest; the model was not copied"
+        );
+        return;
+    }
     let name = format!("{hash}.step");
     let from = source_dir.join("step").join(&name);
     let to = target_dir.join("step").join(&name);
@@ -216,6 +329,24 @@ mod tests {
         assert_eq!(file_stem_for("a/b:c"), "a_b_c");
         assert_eq!(file_stem_for("  "), "copy");
         assert_eq!(file_stem_for("name."), "name");
+    }
+
+    #[test]
+    fn a_step_name_that_is_not_hex_is_not_copied() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let source = dir.path().join("src");
+        let target = dir.path().join("dst");
+        std::fs::create_dir_all(source.join("step")).unwrap();
+        std::fs::write(source.join("evil.step"), b"x").unwrap();
+        std::fs::create_dir_all(&target).unwrap();
+        let library = dir.path().join("T.snxlib");
+        crate::library::commands::create_library_file(&library, &NewLibraryDefaults::default())
+            .unwrap();
+        let adapter = LocalGitAdapter::open(&library).unwrap();
+        copy_step_model(&source, &target, "../evil", "m", &adapter);
+        copy_step_model(&source, &target, "", "m", &adapter);
+        assert!(!target.join("step").exists());
+        assert!(!target.join("evil.step").exists());
     }
 
     #[test]

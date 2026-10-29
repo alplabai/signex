@@ -34,6 +34,7 @@ impl SymbolFile {
         let mut copy = self.clone();
         let mut taken = taken_names.clone();
         copy.file_uuid = Uuid::now_v7();
+        copy.copied_from = Some(self.file_uuid);
         copy.created = now;
         copy.updated = now;
         for symbol in &mut copy.symbols {
@@ -43,6 +44,9 @@ impl SymbolFile {
             symbol.created = now;
             symbol.updated = now;
             taken.insert(symbol.name.clone());
+        }
+        if let Some(first) = copy.symbols.first() {
+            copy.display_name = first.name.clone();
         }
         copy
     }
@@ -57,6 +61,7 @@ impl FootprintFile {
         let mut copy = self.clone();
         let mut taken = taken_names.clone();
         copy.file_uuid = Uuid::now_v7();
+        copy.copied_from = Some(self.file_uuid);
         copy.created = now;
         copy.updated = now;
         for footprint in &mut copy.footprints {
@@ -66,6 +71,9 @@ impl FootprintFile {
             footprint.created = now;
             footprint.updated = now;
             taken.insert(footprint.name.clone());
+        }
+        if let Some(first) = copy.footprints.first() {
+            copy.display_name = first.name.clone();
         }
         copy
     }
@@ -115,6 +123,29 @@ mod tests {
         assert_ne!(copy.symbols[0].uuid, original.symbols[0].uuid);
         assert_eq!(copy.symbols[0].name, "R");
         assert_eq!(original.symbols[0].name, "R");
+    }
+
+    #[test]
+    fn a_copy_records_its_source_and_names_the_container_after_the_copy() {
+        let original = SymbolFile::from_symbol(Symbol::empty("R"));
+        let copy = original.copy_for_library(&names(&["R"]), Utc::now());
+        assert_eq!(copy.copied_from, Some(original.file_uuid));
+        assert_eq!(copy.display_name, "R (2)");
+        let reread = SymbolFile::from_bytes(copy.to_toml_string().unwrap().as_bytes()).unwrap();
+        assert_eq!(reread.copied_from, Some(original.file_uuid));
+        assert_eq!(original.copied_from, None);
+        assert!(
+            !original.to_toml_string().unwrap().contains("copied_from"),
+            "a file that is not a copy stays as it was"
+        );
+    }
+
+    #[test]
+    fn a_footprint_copy_records_its_source() {
+        let original = FootprintFile::from_footprint(Footprint::empty("0603"));
+        let copy = original.copy_for_library(&HashSet::new(), Utc::now());
+        let reread = FootprintFile::from_bytes(copy.to_toml_string().unwrap().as_bytes()).unwrap();
+        assert_eq!(reread.copied_from, Some(original.file_uuid));
     }
 
     #[test]

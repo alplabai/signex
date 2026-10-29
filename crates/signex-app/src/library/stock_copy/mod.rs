@@ -109,6 +109,9 @@ pub enum StockCopyMsg {
     NewLibraryPathChosen(Option<PathBuf>),
     /// The user dismissed the dialog (button, Esc or window close).
     Cancelled,
+    /// Copy Again was pressed in the editor of the copy at this path: make
+    /// a fresh copy of the stock primitive it was copied from.
+    CopyAgainRequested(PathBuf),
     /// The copy finished on its worker.
     CopyFinished(job::StockCopyOutcome),
 }

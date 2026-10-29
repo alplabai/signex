@@ -11,12 +11,13 @@ use super::*;
 use crate::app::state::ErrorNotice;
 use crate::library::mount::{MountIntent, MountRequest, spawn_pending_mounts};
 use crate::library::refresh::{RefreshFollowUp, refresh_task};
-use crate::library::stock_copy::job::{StockCopyJob, StockCopyOutcome};
+use crate::library::stock_copy::job::{StockCopyJob, StockCopyOutcome, StockSource};
 use crate::library::stock_copy::{CopyTarget, StockCopyMsg, StockCopyState, StockPrimitiveKind};
 
 impl Signex {
     /// A stock primitive was asked for. With a usable remembered library
-    /// the copy starts at once; otherwise the dialog asks which library.
+    /// the copy (or the copy already there) opens at once; otherwise the
+    /// dialog asks which library.
     pub(crate) fn request_stock_copy(
         &mut self,
         path: PathBuf,
@@ -25,9 +26,27 @@ impl Signex {
         if self.library.stock_copies_in_flight.contains(&path) {
             return Task::none();
         }
+        if let Some(open) = &self.library.stock_copy {
+            // One question at a time: the second request is refused, not
+            // dropped silently.
+            if open.source != path {
+                crate::diagnostics::log_warning(format!(
+                    "Finish the Copy to Library dialog for {} before opening {}.",
+                    open.label,
+                    self.library.stock_primitive_label(&path, kind)
+                ));
+            }
+            return Task::none();
+        }
         if let Some(target) = self.library.usable_stock_copy_target() {
             let target = target.to_path_buf();
-            return self.start_stock_copy(path, kind, CopyTarget::Existing(target));
+            return self.start_stock_copy(
+                path.clone(),
+                StockSource::File(path),
+                kind,
+                CopyTarget::Existing(target),
+                false,
+            );
         }
         let label = self.library.stock_primitive_label(&path, kind);
         self.library.stock_copy = Some(StockCopyState {
@@ -54,6 +73,7 @@ impl Signex {
                 self.library.stock_copy = None;
                 Task::none()
             }
+            StockCopyMsg::CopyAgainRequested(copy_path) => self.copy_again(copy_path),
             StockCopyMsg::CopyFinished(outcome) => self.finish_stock_copy(outcome),
         }
     }
@@ -76,47 +96,98 @@ impl Signex {
         let Some(state) = self.library.stock_copy.take() else {
             return Task::none();
         };
-        self.start_stock_copy(state.source, state.kind, target)
+        self.start_stock_copy(
+            state.source.clone(),
+            StockSource::File(state.source),
+            state.kind,
+            target,
+            false,
+        )
+    }
+
+    /// Copy Again: a fresh copy of the stock primitive the copy at
+    /// `copy_path` was made from, into the library that holds it.
+    fn copy_again(&mut self, copy_path: PathBuf) -> Task<Message> {
+        let Some(kind) = StockPrimitiveKind::of_path(&copy_path) else {
+            return Task::none();
+        };
+        let copied_from = match kind {
+            StockPrimitiveKind::Symbol => self
+                .document_state
+                .symbol_editors
+                .get(&copy_path)
+                .and_then(|editor| editor.file.copied_from),
+            StockPrimitiveKind::Footprint => self
+                .document_state
+                .footprint_editors
+                .get(&copy_path)
+                .and_then(|editor| editor.file.copied_from),
+        };
+        let stock_dir = self
+            .library
+            .stock_library_root
+            .as_deref()
+            .and_then(Path::parent)
+            .map(Path::to_path_buf);
+        let library = self
+            .library
+            .containing_library(&copy_path)
+            .map(|lib| lib.root.clone());
+        let (Some(uuid), Some(stock_dir), Some(library)) = (copied_from, stock_dir, library) else {
+            crate::diagnostics::log_warning(
+                "Copy Again needs the stock library and the library holding this copy to be open.",
+            );
+            return Task::none();
+        };
+        if self.library.stock_copies_in_flight.contains(&copy_path) {
+            return Task::none();
+        }
+        self.start_stock_copy(
+            copy_path,
+            StockSource::ByUuid { stock_dir, uuid },
+            kind,
+            CopyTarget::Existing(library),
+            true,
+        )
     }
 
     fn start_stock_copy(
         &mut self,
-        source: PathBuf,
+        key: PathBuf,
+        source: StockSource,
         kind: StockPrimitiveKind,
         target: CopyTarget,
+        copy_again: bool,
     ) -> Task<Message> {
-        let taken_names = match &target {
-            CopyTarget::Existing(root) => self.library.primitive_names(root, kind),
-            CopyTarget::New(_) => Default::default(),
+        let source_library_dir = match &source {
+            StockSource::File(path) => self
+                .library
+                .library_dir_of(path)
+                .or_else(|| path.parent().and_then(Path::parent).map(Path::to_path_buf))
+                .unwrap_or_default(),
+            StockSource::ByUuid { stock_dir, .. } => stock_dir.clone(),
         };
-        let source_library_dir = self
-            .library
-            .library_dir_of(&source)
-            .or_else(|| {
-                source
-                    .parent()
-                    .and_then(Path::parent)
-                    .map(Path::to_path_buf)
-            })
-            .unwrap_or_default();
         let library = match &target {
             CopyTarget::Existing(path) | CopyTarget::New(path) => path.clone(),
         };
         let job = StockCopyJob {
-            source: source.clone(),
+            key: key.clone(),
+            source,
             kind,
             source_library_dir,
             target,
-            taken_names,
+            copy_again,
             new_library_defaults: self.library.new_library_defaults.clone(),
             now: chrono::Utc::now(),
         };
-        self.library.stock_copies_in_flight.insert(source.clone());
+        self.library.stock_copies_in_flight.insert(key.clone());
         let failed = StockCopyOutcome {
-            source,
+            source: key,
             library,
             created_library: false,
+            reused: false,
             result: Err("the copy worker stopped before it finished".to_string()),
+            global_libraries: None,
         };
         Task::perform(
             async move {
@@ -134,6 +205,24 @@ impl Signex {
 
     fn finish_stock_copy(&mut self, outcome: StockCopyOutcome) -> Task<Message> {
         self.library.stock_copies_in_flight.remove(&outcome.source);
+        let mut tasks = Vec::new();
+        // A library this copy created is recorded as global so it is
+        // mounted again at the next start, whether or not the copy worked.
+        match outcome.global_libraries {
+            Some(Ok(list)) => self.library.global_libraries = list,
+            Some(Err(reason)) => {
+                self.report_global_libraries_save_failure("register the new library", &reason)
+            }
+            None => {}
+        }
+        if outcome.created_library
+            && self
+                .library
+                .request_mount(&outcome.library, MountIntent::Silent)
+                == MountRequest::Spawn
+        {
+            tasks.push(spawn_pending_mounts(vec![outcome.library.clone()]));
+        }
         let copy_path = match outcome.result {
             Ok(path) => path,
             Err(reason) => {
@@ -147,10 +236,15 @@ impl Signex {
                     "The stock {noun} could not be copied into {}: {reason}",
                     outcome.library.display()
                 )));
-                return Task::none();
+                return Task::batch(tasks);
             }
         };
-        let mut tasks = Vec::new();
+        if outcome.reused {
+            crate::diagnostics::log_info(format!(
+                "Opened your existing copy {}. Use Copy Again in its editor for a fresh one.",
+                copy_path.display()
+            ));
+        }
         if self.library.stock_copy_target.as_deref() != Some(outcome.library.as_path()) {
             self.library.stock_copy_target = Some(outcome.library.clone());
             let remembered = outcome.library.clone();
@@ -159,15 +253,7 @@ impl Signex {
                 move || crate::fonts::write_stock_copy_target_pref(&remembered),
             ));
         }
-        if outcome.created_library {
-            if self
-                .library
-                .request_mount(&outcome.library, MountIntent::Silent)
-                == MountRequest::Spawn
-            {
-                tasks.push(spawn_pending_mounts(vec![outcome.library.clone()]));
-            }
-        } else {
+        if !outcome.created_library && !outcome.reused {
             tasks.push(refresh_task(
                 &mut self.library,
                 &outcome.library,

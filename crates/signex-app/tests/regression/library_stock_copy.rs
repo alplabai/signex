@@ -21,7 +21,12 @@ use uuid::Uuid;
 
 use crate::library_place_symbol::run;
 
+/// The remembered target lives in the process-wide `prefs.json`, so the
+/// tests of this file run one at a time.
+static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 struct World {
+    _serial: std::sync::MutexGuard<'static, ()>,
     tmp: TempDir,
     stock: PathBuf,
     target: PathBuf,
@@ -66,6 +71,7 @@ fn new_library(path: &Path, name: &str) {
 }
 
 fn world() -> World {
+    let serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().expect("tempdir");
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/stock-library");
     copy_dir(&source, &tmp.path().join("stock"));
@@ -74,6 +80,8 @@ fn world() -> World {
     new_library(&target, "Mine");
 
     let (mut app, _boot) = Signex::new();
+    // Prefs are shared by the process: start without a remembered target.
+    app.library.stock_copy_target = None;
     app.library.stock_library_root = Some(stock.clone());
     app.library
         .open_library_read_only(stock.clone())
@@ -82,6 +90,7 @@ fn world() -> World {
         .open_library(target.clone())
         .expect("mount mine");
     World {
+        _serial: serial,
         tmp,
         stock,
         target,
@@ -104,11 +113,7 @@ impl World {
 
     /// Apply `message` and every message its tasks lead to.
     fn settle(&mut self, message: Message) {
-        let mut pending = vec![message];
-        while let Some(next) = pending.pop() {
-            let task = self.app.update(next);
-            pending.extend(run(task));
-        }
+        settle_message(&mut self.app, message);
     }
 
     fn open(&mut self, path: &Path) {
@@ -139,6 +144,31 @@ impl World {
     fn stock_bytes(&self) -> BTreeMap<PathBuf, Vec<u8>> {
         bytes_of(self.stock.parent().unwrap())
     }
+}
+
+fn settle_message(app: &mut Signex, message: Message) {
+    let mut pending = vec![message];
+    while let Some(next) = pending.pop() {
+        let task = app.update(next);
+        pending.extend(run(task));
+    }
+}
+
+/// A new app as a restart builds it: prefs and the global library table are
+/// read, and the boot task mounts what it lists. The stock library is the
+/// world's copy, mounted the way the app mounts it.
+fn restarted(w: &World) -> Signex {
+    let (mut app, boot) = Signex::new();
+    let mut pending = run(boot);
+    while let Some(next) = pending.pop() {
+        let task = app.update(next);
+        pending.extend(run(task));
+    }
+    app.library.stock_library_root = Some(w.stock.clone());
+    app.library
+        .open_library_read_only(w.stock.clone())
+        .expect("mount stock");
+    app
 }
 
 fn bytes_of(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
@@ -234,21 +264,236 @@ fn a_second_open_goes_straight_to_the_remembered_library() {
 #[test]
 fn a_name_collision_in_the_target_gets_a_suffix() {
     let mut w = world();
+    // The user already has a symbol called R, and a file named R.snxsym.
+    let own = w.target_dir().join("symbols/R.snxsym");
+    std::fs::create_dir_all(own.parent().unwrap()).unwrap();
+    std::fs::write(
+        &own,
+        SymbolFile::from_symbol(Symbol::empty("R"))
+            .to_toml_string()
+            .unwrap(),
+    )
+    .unwrap();
+    let own_before = std::fs::read(&own).unwrap();
+    let stock_r = w.stock_r();
+    w.open(&stock_r);
+    let target = w.target.clone();
+
+    w.pick(&target);
+
+    let copy = w.target_dir().join("symbols/R (2).snxsym");
+    assert!(copy.is_file(), "the copy is suffixed");
+    let copied = symbol_in(&copy);
+    assert_eq!(copied.symbols[0].name, "R (2)");
+    assert_eq!(
+        copied.display_name, "R (2)",
+        "the container is named after the copy"
+    );
+    assert_eq!(
+        std::fs::read(&own).unwrap(),
+        own_before,
+        "the user's R is untouched"
+    );
+}
+
+#[test]
+fn a_second_open_reuses_the_copy_and_does_not_make_another() {
+    let mut w = world();
     let stock_r = w.stock_r();
     w.open(&stock_r);
     let target = w.target.clone();
     w.pick(&target);
+    let copy = w.target_dir().join("symbols/R.snxsym");
+    assert_eq!(
+        symbol_in(&copy).copied_from,
+        Some(symbol_in(&stock_r).file_uuid),
+        "the copy records the stock file it came from"
+    );
+    w.app.document_state.tabs.clear();
+    w.app.document_state.symbol_editors.clear();
+    let before = bytes_of(&w.target_dir());
 
     w.open(&stock_r);
 
+    assert!(w.app.library.stock_copy.is_none());
+    assert_eq!(w.editor_paths(), vec![copy], "the existing copy opens");
+    assert_eq!(bytes_of(&w.target_dir()), before, "nothing new was written");
+}
+
+#[test]
+fn an_open_copy_tab_is_activated_by_the_next_open() {
+    let mut w = world();
+    let stock_r = w.stock_r();
+    let stock_c = w.stock_file("symbols", "C.snxsym");
+    w.open(&stock_r);
+    let target = w.target.clone();
+    w.pick(&target);
+    w.open(&stock_c);
+    let copy_r = w.target_dir().join("symbols/R.snxsym");
+    let copy_c = w.target_dir().join("symbols/C.snxsym");
+    let active = |w: &World| {
+        w.app.document_state.tabs[w.app.document_state.active_tab]
+            .path
+            .clone()
+    };
+    assert_eq!(active(&w), copy_c);
+
+    w.open(&stock_r);
+
+    assert_eq!(active(&w), copy_r, "the R tab came forward");
+    assert_eq!(w.editor_paths().len(), 2, "no third tab");
+}
+
+#[test]
+fn copy_again_makes_a_fresh_suffixed_copy() {
+    let mut w = world();
+    let stock_r = w.stock_r();
+    w.open(&stock_r);
+    let target = w.target.clone();
+    w.pick(&target);
+    let first = w.target_dir().join("symbols/R.snxsym");
+
+    w.settle(Message::Library(LibraryMessage::StockCopy(
+        StockCopyMsg::CopyAgainRequested(first.clone()),
+    )));
+
     let second = w.target_dir().join("symbols/R (2).snxsym");
-    assert!(second.is_file(), "the second copy is suffixed");
-    assert_eq!(symbol_in(&second).symbols[0].name, "R (2)");
+    assert!(second.is_file());
+    let copied = symbol_in(&second);
+    assert_eq!(copied.symbols[0].name, "R (2)");
+    assert_eq!(copied.copied_from, symbol_in(&first).copied_from);
+    assert_ne!(copied.symbols[0].uuid, symbol_in(&first).symbols[0].uuid);
+    assert!(w.editor_paths().contains(&second));
+    assert!(first.is_file(), "the first copy stays");
+}
+
+#[test]
+fn an_open_after_a_restart_reuses_the_copy() {
+    let mut w = world();
+    let stock_r = w.stock_r();
+    w.open(&stock_r);
+    let target = w.target.clone();
+    w.pick(&target);
+    // `Mine` is a library the user made earlier and keeps in the global table.
+    signex_app::panels::components_panel::global_prefs::add_path(target.clone()).unwrap();
+    let before = bytes_of(&w.target_dir());
+
+    let mut app = restarted(&w);
     assert_eq!(
-        symbol_in(&w.target_dir().join("symbols/R.snxsym")).symbols[0].name,
-        "R",
-        "the first copy keeps the stock name"
+        app.library.usable_stock_copy_target(),
+        Some(target.as_path()),
+        "the remembered target is mounted and usable again"
     );
+    settle_message(
+        &mut app,
+        Message::File(FileMsg::Opened(Some(stock_r.clone()))),
+    );
+
+    let copy = w.target_dir().join("symbols/R.snxsym");
+    assert!(app.library.stock_copy.is_none());
+    let editors: Vec<PathBuf> = app
+        .document_state
+        .tabs
+        .iter()
+        .filter(|t| matches!(t.kind, TabKind::SymbolEditor(_)))
+        .map(|t| t.path.clone())
+        .collect();
+    assert_eq!(editors, vec![copy]);
+    assert_eq!(bytes_of(&w.target_dir()), before);
+}
+
+#[test]
+fn a_library_made_in_the_dialog_survives_a_restart() {
+    let mut w = world();
+    let stock_r = w.stock_r();
+    let fresh = w.tmp.path().join("fresh/Fresh.snxlib");
+    w.open(&stock_r);
+    w.settle(Message::Library(LibraryMessage::StockCopy(
+        StockCopyMsg::NewLibraryPathChosen(Some(fresh.clone())),
+    )));
+    assert!(
+        w.app
+            .library
+            .global_libraries
+            .iter()
+            .any(|entry| entry.path == fresh),
+        "the new library is recorded as global"
+    );
+
+    let mut app = restarted(&w);
+
+    assert!(
+        app.library.library_at(&fresh).is_some(),
+        "it is mounted again"
+    );
+    assert_eq!(
+        app.library.usable_stock_copy_target(),
+        Some(fresh.as_path())
+    );
+    let copy = fresh.parent().unwrap().join("symbols/R.snxsym");
+    settle_message(&mut app, Message::File(FileMsg::Opened(Some(stock_r))));
+    assert!(app.library.stock_copy.is_none(), "no second question");
+    assert!(
+        app.document_state.tabs.iter().any(|t| t.path == copy),
+        "the user's copy is reachable"
+    );
+}
+
+#[test]
+fn a_second_stock_open_while_the_dialog_is_up_is_refused_not_dropped() {
+    let mut w = world();
+    let stock_r = w.stock_r();
+    let stock_c = w.stock_file("symbols", "C.snxsym");
+    w.open(&stock_r);
+
+    w.open(&stock_c);
+
+    let dialog = w.app.library.stock_copy.as_ref().expect("still asking");
+    assert_eq!(dialog.source, stock_r, "the first question stays");
+    assert!(
+        signex_app::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("Finish the Copy to Library dialog")),
+        "the refusal is reported"
+    );
+}
+
+#[test]
+fn a_read_only_library_that_is_not_stock_never_receives_a_copy() {
+    let mut w = world();
+    let stock_r = w.stock_r();
+    let ro = w.tmp.path().join("ro/Ro.snxlib");
+    new_library(&ro, "Ro");
+    w.app
+        .library
+        .open_library_read_only(ro.clone())
+        .expect("mount ro");
+    assert!(
+        w.app
+            .library
+            .writable_libraries()
+            .iter()
+            .all(|(root, _)| *root != ro),
+        "it is not offered"
+    );
+    w.app.library.stock_copy_target = Some(ro.clone());
+    w.open(&stock_r);
+    assert!(
+        w.app.library.stock_copy.is_some(),
+        "a read-only target asks again"
+    );
+
+    w.pick(&ro);
+
+    assert!(
+        w.app
+            .library
+            .stock_copy
+            .as_ref()
+            .is_some_and(|d| d.error.is_some())
+    );
+    assert!(w.editor_paths().is_empty());
+    assert_eq!(file_count(&ro.parent().unwrap().join("symbols")), 0);
 }
 
 #[test]
@@ -332,10 +577,21 @@ fn a_stock_footprint_behaves_the_same() {
     assert_eq!(w.editor_paths(), copies);
     assert_eq!(w.stock_bytes(), before);
 
-    // Second open: straight to the remembered library, suffixed.
+    let tab_title = &w.app.document_state.tabs[w.app.document_state.active_tab].title;
+    assert_eq!(
+        tab_title, &stock_name,
+        "the tab shows the footprint's name, not its uuid file"
+    );
+
+    // Second open: straight to the existing copy, nothing new written.
     w.open(&stock_fpt);
     assert!(w.app.library.stock_copy.is_none());
-    let suffixed = format!("{stock_name} (2)");
+    assert_eq!(file_count(&w.target_dir().join("footprints")), 1);
+
+    // Copy Again makes a suffixed one.
+    w.settle(Message::Library(LibraryMessage::StockCopy(
+        StockCopyMsg::CopyAgainRequested(copies[0].clone()),
+    )));
     let names: Vec<String> = std::fs::read_dir(w.target_dir().join("footprints"))
         .unwrap()
         .map(|e| {
@@ -346,7 +602,7 @@ fn a_stock_footprint_behaves_the_same() {
                 .clone()
         })
         .collect();
-    assert!(names.contains(&suffixed), "{names:?}");
+    assert!(names.contains(&format!("{stock_name} (2)")), "{names:?}");
 }
 
 #[test]
