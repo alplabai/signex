@@ -190,7 +190,7 @@ fn view_symbol_toolbar<'a>(
     let max_part = crate::library::editor::symbol::state::max_part_number(editor.primitive());
     let active_part = editor.active_part;
 
-    let save_label = if editor.dirty { "Save *" } else { "Save" };
+    let save_label = if editor.is_dirty() { "Save *" } else { "Save" };
     let body_controls = body_toolbar(editor, &path, text_c, border);
 
     container(

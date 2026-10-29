@@ -186,7 +186,6 @@ fn schematic_in(app: &mut Signex, path: &Path) {
         title: file_name(path),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -232,7 +231,6 @@ fn primitive_save_as_onto_a_restoring_file_is_refused_and_rolled_back() {
         title: "other".into(),
         path: other.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(other.clone()),
     });
@@ -337,8 +335,11 @@ fn a_restore_clicked_mid_save_is_refused_and_the_save_commit_holds_the_saved_byt
     let _ = crate::diagnostics::init_logging();
     let (dir, path, sha, restored, mut app) = schematic_fixture("stamp-route");
     let saved = format!("{}\n", std::fs::read_to_string(&path).expect("read"));
-    app.document_state.dirty_paths.insert(path.clone());
-    app.document_state.tabs[0].dirty = true;
+    app.document_state.mark_document_dirty(&path);
+    {
+        let path = app.document_state.tabs[0].path.clone();
+        app.document_state.mark_document_dirty(&path);
+    }
     let revision = app.document_state.engines[&path].revision();
     let job = app
         .document_state
@@ -401,7 +402,11 @@ fn a_restore_clicked_mid_save_is_refused_and_the_save_commit_holds_the_saved_byt
 fn a_restore_over_edits_marks_the_tab_and_the_dirty_set_together() {
     let _ = crate::diagnostics::init_logging();
     let (_dir, path, sha, _restored, mut app) = schematic_fixture("over-edits");
-    assert!(!app.document_state.tabs[0].dirty, "a clean tab to start");
+    assert!(
+        !app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path),
+        "a clean tab to start"
+    );
     let task = app.handle_history_restore_clicked(&sha);
     // A colour override changes what the tab holds without either dirty
     // marker having been told yet.
@@ -413,9 +418,10 @@ fn a_restore_over_edits_marks_the_tab_and_the_dirty_set_together() {
     finish_restore(&mut app, collect_messages(task));
 
     assert!(logged("was edited while its restore"));
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.is_document_dirty(&path));
     assert!(
-        app.document_state.tabs[0].dirty,
+        app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path),
         "the tab flag agrees with the dirty set"
     );
 }

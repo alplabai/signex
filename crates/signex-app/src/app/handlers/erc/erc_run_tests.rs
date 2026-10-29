@@ -253,7 +253,7 @@ fn erc_navigation_keeps_the_dirty_engine_of_a_tab_less_sheet() {
         &path,
         sheet_with_net("R_EDIT", "EDITED_NET", &[]),
     );
-    app.document_state.dirty_paths.insert(path.clone());
+    app.document_state.mark_document_dirty(&path);
     assert!(app.document_state.tabs.is_empty());
 
     app.ensure_sheet_open_and_active(&path);

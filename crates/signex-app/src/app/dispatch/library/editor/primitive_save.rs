@@ -200,13 +200,15 @@ impl Signex {
                 }
             }
             editor.file.updated = now;
-            editor.dirty = false;
+            editor.set_dirty(false);
             editor.save_generation = generation;
-            return Ok(Snapshot::Symbol {
+            let snapshot = Snapshot::Symbol {
                 file: editor.file.clone(),
                 baseline: editor.baseline.clone(),
                 name: editor.primitive().name.clone(),
-            });
+            };
+            self.document_state.keep_document_dirty_until_saved(path);
+            return Ok(snapshot);
         }
         if let Some(editor) = self.document_state.footprint_editors.get_mut(path) {
             // A drag solve still owed would be written unsolved, with the
@@ -230,13 +232,15 @@ impl Signex {
                 }
             }
             editor.file.updated = now;
-            editor.dirty = false;
+            editor.set_dirty(false);
             editor.save_generation = generation;
-            return Ok(Snapshot::Footprint {
+            let snapshot = Snapshot::Footprint {
                 file: editor.file.clone(),
                 baseline: editor.baseline.clone(),
                 name: editor.primitive().name.clone(),
-            });
+            };
+            self.document_state.keep_document_dirty_until_saved(path);
+            return Ok(snapshot);
         }
         // Reporting success here would log a write that never happened.
         anyhow::bail!(
@@ -319,7 +323,7 @@ impl Signex {
             // Only the editor that asked may be saved: one that replaced it
             // since holds a draft nobody asked to save.
             if self.primitive_save_generation(&asking) != Some(generation)
-                || !self.primitive_draft_is_dirty(&asking)
+                || !self.document_state.is_document_dirty(&asking)
             {
                 continue;
             }
@@ -391,7 +395,7 @@ impl Signex {
                 .map(|editor| {
                     cascade::apply_symbol_versions(&mut editor.file, versions);
                     editor.baseline = saved;
-                    editor.dirty
+                    editor.is_dirty()
                 }),
             WrittenContainer::Footprint(saved) => self
                 .document_state
@@ -400,7 +404,7 @@ impl Signex {
                 .map(|editor| {
                     cascade::apply_footprint_versions(&mut editor.file, versions);
                     editor.baseline = saved;
-                    editor.dirty
+                    editor.is_dirty()
                 }),
         };
         if edited_since == Some(false) {
@@ -411,15 +415,7 @@ impl Signex {
     /// The draft at `path` matches disk: drop its dirty markers, and the
     /// editor itself when it was closed while dirty and parked for Save All.
     fn mark_primitive_clean(&mut self, path: &std::path::Path) {
-        self.document_state.dirty_paths.remove(path);
-        for tab in self
-            .document_state
-            .tabs
-            .iter_mut()
-            .filter(|tab| tab.path == path)
-        {
-            tab.dirty = false;
-        }
+        self.document_state.mark_document_clean(path);
         if !self.document_is_held_open(path) {
             self.document_state.symbol_editors.remove(path);
             self.document_state.footprint_editors.remove(path);
@@ -444,13 +440,7 @@ impl Signex {
         };
         // The snapshot cleared the flag; the draft is still unsaved.
         if let Some(draft) = &draft {
-            if let Some(editor) = self.document_state.symbol_editors.get_mut(draft) {
-                editor.dirty = true;
-            }
-            if let Some(editor) = self.document_state.footprint_editors.get_mut(draft) {
-                editor.dirty = true;
-            }
-            self.document_state.dirty_paths.insert(draft.clone());
+            self.document_state.mark_document_dirty(draft);
         }
         let failed_path = draft.unwrap_or_else(|| path.to_path_buf());
         self.document_state

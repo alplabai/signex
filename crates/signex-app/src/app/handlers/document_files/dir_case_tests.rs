@@ -31,7 +31,6 @@ fn app_holding_loose_lib() -> Signex {
         title: "Other".to_string(),
         path: PathBuf::from(DIR).join("Other.snxsch"),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -146,15 +145,7 @@ fn app_with_dirty_variants(dir: &Path, edit_second: bool) -> (Signex, PathBuf, P
             ..Default::default()
         };
         app.open_schematic_tab(path.clone(), "Lib".to_string(), sheet);
-        app.document_state.dirty_paths.insert(path.clone());
-        for tab in app
-            .document_state
-            .tabs
-            .iter_mut()
-            .filter(|t| t.path == *path)
-        {
-            tab.dirty = true;
-        }
+        app.document_state.mark_document_dirty(&path);
     }
     app.activate_tab_for_path(&upper);
     (app, upper, lower)
@@ -174,11 +165,7 @@ fn feed(app: &mut Signex, task: iced::Task<Message>) {
 }
 
 fn tab_dirty(app: &Signex, path: &Path) -> bool {
-    app.document_state
-        .tabs
-        .iter()
-        .find(|t| t.path == path)
-        .is_some_and(|t| t.dirty)
+    app.document_state.is_document_dirty(path)
 }
 
 #[test]
@@ -209,8 +196,8 @@ fn ctrl_s_refuses_when_another_spelling_holds_different_edits() {
 
     assert!(sink.0.lock().unwrap().is_empty(), "nothing was written");
     assert!(tab_dirty(&app, &upper) && tab_dirty(&app, &lower));
-    assert!(app.document_state.dirty_paths.contains(&upper));
-    assert!(app.document_state.dirty_paths.contains(&lower));
+    assert!(app.document_state.is_document_dirty(&upper));
+    assert!(app.document_state.is_document_dirty(&lower));
     assert_eq!(
         refusals(),
         before + 1,
@@ -319,7 +306,6 @@ fn a_loose_symbol_tab_starts_a_probe_and_a_case_variant_opens_apart_once_it_says
         title: "R".to_string(),
         path: held.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: crate::app::TabKind::SymbolEditor(held.clone()),
     });

@@ -48,7 +48,6 @@ fn app_with_drawings() -> Signex {
         title: "doc".into(),
         path,
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

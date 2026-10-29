@@ -84,7 +84,7 @@ impl Signex {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.record_edit(Some(("description", 0)), |editor| {
                 editor.primitive_mut().description = v.to_string();
-                editor.dirty = true;
+                editor.mark_dirty();
                 true
             });
         }
@@ -99,7 +99,7 @@ impl Signex {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.record_edit(Some(("default_designator", 0)), |editor| {
                 editor.primitive_mut().default_designator = v.to_string();
-                editor.dirty = true;
+                editor.mark_dirty();
                 true
             });
         }
@@ -114,7 +114,7 @@ impl Signex {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.record_edit(None, |editor| {
                 editor.primitive_mut().component_type = *t;
-                editor.dirty = true;
+                editor.mark_dirty();
                 true
             });
         }
@@ -129,7 +129,7 @@ impl Signex {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.record_edit(Some(("height", 0)), |editor| {
                 editor.primitive_mut().height_mm = fp_parse_optional_mm(v);
-                editor.dirty = true;
+                editor.mark_dirty();
                 true
             });
         }
@@ -144,7 +144,7 @@ impl Signex {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.record_edit(Some(("name", 0)), |editor| {
                 editor.primitive_mut().name = name.to_string();
-                editor.dirty = true;
+                editor.mark_dirty();
                 editor.canvas_cache.clear();
                 true
             });

@@ -20,7 +20,6 @@ fn app_with_empty_sheet() -> Signex {
         title: "planned-tools".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

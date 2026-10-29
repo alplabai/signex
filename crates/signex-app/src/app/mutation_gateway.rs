@@ -464,8 +464,8 @@ impl Signex {
         if update_selection_info {
             self.update_selection_info();
         }
-        // Re-derive panel context — `tab.dirty` has just transitioned
-        // false→true (or stayed true), and `panel_ctx.projects[*].sheets[*]
+        // Re-derive panel context — the document's dirty mark has just been
+        // set (or stayed set), and `panel_ctx.projects[*].sheets[*]
         // .is_dirty` is what drives the red dot on the project-tree row.
         // Without this refresh, the dot only appears after the next
         // unrelated event that happens to call `refresh_panel_ctx`.
@@ -511,7 +511,6 @@ mod tests {
             title: "top".to_string(),
             path: top.clone(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });
@@ -548,7 +547,6 @@ mod tests {
             title: "top".to_string(),
             path: top.clone(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });

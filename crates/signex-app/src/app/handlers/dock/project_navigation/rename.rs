@@ -236,6 +236,7 @@ impl Signex {
         // Entries match by resolved path and keep their directory prefix
         // (`sub/Power.snxsch` becomes `sub/Power2.snxsch`, #1367). (#54)
         let owner_idx = state.tree_path.first().copied();
+        let mut dirtied_project_file = None;
         if let Some(idx) = owner_idx
             && let Some(loaded) = self.document_state.projects.get_mut(idx)
         {
@@ -266,8 +267,11 @@ impl Signex {
             // A rename that touched neither (a footprint, say) leaves the
             // project file as it was and must not dirty it.
             if changed {
-                self.document_state.dirty_paths.insert(loaded.path.clone());
+                dirtied_project_file = Some(loaded.path.clone());
             }
+        }
+        if let Some(project_file) = dirtied_project_file {
+            self.document_state.mark_document_dirty(&project_file);
         }
 
         // Update any open tabs + engine-map keys that pointed at the
@@ -345,11 +349,7 @@ impl Signex {
         if self.document_state.active_path.as_deref() == Some(old_path) {
             self.document_state.active_path = Some(new_path.to_path_buf());
         }
-        if self.document_state.dirty_paths.remove(old_path) {
-            self.document_state
-                .dirty_paths
-                .insert(new_path.to_path_buf());
-        }
+        self.document_state.rekey_document_dirty(old_path, new_path);
         // A failure or queued save names the file by its old path.
         self.document_state
             .document_saves

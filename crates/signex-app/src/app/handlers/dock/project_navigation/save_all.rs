@@ -66,7 +66,7 @@ impl Signex {
         held: &'a [std::path::PathBuf],
     ) -> &'a std::path::PathBuf {
         held.iter()
-            .find(|path| self.document_state.dirty_paths.contains(*path))
+            .find(|path| self.document_state.is_document_dirty(*path))
             .unwrap_or(&held[0])
     }
 
@@ -286,7 +286,7 @@ impl Signex {
         let mut failed: Vec<(String, String)> = Vec::new();
         for path in paths
             .iter()
-            .filter(|path| self.document_state.dirty_paths.contains(*path))
+            .filter(|path| self.document_state.is_document_dirty(*path))
         {
             let reason = self
                 .document_state
@@ -380,7 +380,7 @@ impl Signex {
     /// holds open is released as soon as it is clean.
     fn clear_saved_case_variants(&mut self, variants: &[CaseVariants]) {
         for CaseVariants { written, others } in variants {
-            if self.document_state.dirty_paths.contains(written) {
+            if self.document_state.is_document_dirty(written) {
                 continue;
             }
             let unchanged: Vec<_> = others
@@ -388,15 +388,7 @@ impl Signex {
                 .filter(|pinned| self.pin_spelling(&pinned.path) == **pinned)
                 .collect();
             for pinned in unchanged {
-                for tab in self
-                    .document_state
-                    .tabs
-                    .iter_mut()
-                    .filter(|tab| tab.path == pinned.path)
-                {
-                    tab.dirty = false;
-                }
-                self.document_state.dirty_paths.remove(&pinned.path);
+                self.document_state.mark_document_clean(&pinned.path);
             }
         }
     }
@@ -411,7 +403,6 @@ impl Signex {
         sheet_refs: crate::app::state::sheet_refs::SheetRefs,
         kept_paths: &[std::path::PathBuf],
     ) -> Task<Message> {
-        self.sync_editor_dirty_paths();
         let unchanged = self.document_state.stale_causes(&sheet_refs).is_empty()
             && self
                 .document_state

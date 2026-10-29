@@ -181,9 +181,7 @@ impl Signex {
         match std::fs::rename(new_path, old_path) {
             Ok(()) => {
                 if let Some(project) = stale_project {
-                    self.document_state
-                        .dirty_paths
-                        .insert(project.to_path_buf());
+                    self.document_state.mark_document_dirty(project);
                 }
                 self.report_library_rename_failure(
                     old_path,
@@ -345,7 +343,7 @@ impl Signex {
         // entry to patch, the project is marked dirty so Close Project and
         // quit prompt for the new path.
         if outcome != LibraryRetarget::Patched {
-            self.document_state.dirty_paths.insert(project_path);
+            self.document_state.mark_document_dirty(&project_path);
         }
 
         self.rekey_library_documents(old_path, new_path);
@@ -412,13 +410,12 @@ impl Signex {
         }
         let moved_dirty: Vec<(PathBuf, PathBuf)> = self
             .document_state
-            .dirty_paths
-            .iter()
-            .filter_map(|p| rebase_path(p, old_path, new_path).map(|m| (p.clone(), m)))
+            .dirty_document_paths()
+            .into_iter()
+            .filter_map(|p| rebase_path(&p, old_path, new_path).map(|m| (p, m)))
             .collect();
         for (from, to) in moved_dirty {
-            self.document_state.dirty_paths.remove(&from);
-            self.document_state.dirty_paths.insert(to);
+            self.document_state.rekey_document_dirty(&from, &to);
         }
         for kind in self.ui_state.windows.values_mut() {
             if let crate::app::state::WindowKind::UndockedTab { path, .. } = kind

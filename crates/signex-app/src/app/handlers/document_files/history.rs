@@ -24,7 +24,6 @@ impl Signex {
     /// successful blob read + atomic write). The result is applied by
     /// [`Self::handle_history_restore_finished`].
     pub(crate) fn handle_history_restore_clicked(&mut self, sha: &str) -> Task<Message> {
-        self.sync_editor_dirty_paths();
         let Some(active) = self.document_state.tabs.get(self.document_state.active_tab) else {
             return Task::none();
         };
@@ -43,7 +42,7 @@ impl Signex {
         // Restoring replaces the in-memory document and its undo stack, so
         // unsaved edits would be gone for good: ask first (#110). The first
         // click arms the row's confirmation, the second one restores.
-        if self.primitive_draft_is_dirty(&full_path)
+        if self.document_state.is_document_dirty(&full_path)
             && self.document_state.history.pending_restore.as_deref() != Some(sha)
         {
             self.document_state.history.pending_restore = Some(sha.to_owned());
@@ -227,8 +226,6 @@ impl Signex {
         result: Result<Box<RestoredFile>, RestoreFailure>,
     ) -> Task<Message> {
         let path = request.path;
-        // Settle lazily-tracked editor edits once for every check below.
-        self.sync_editor_dirty_paths();
         let finished = self
             .document_state
             .pending_restores
@@ -251,7 +248,7 @@ impl Signex {
             // Edits survive a closed tab as a parked draft, so unsaved work
             // is judged by the dirty marker, not only by an open tab.
             let has_edits =
-                wrote && (tab_idx.is_some() || self.document_state.dirty_paths.contains(&path));
+                wrote && (tab_idx.is_some() || self.document_state.is_document_dirty(&path));
             self.report_restore_without_tab(&path, sha, &result, has_edits);
             return Task::none();
         };
@@ -293,13 +290,13 @@ impl Signex {
         let Some(tab) = self.document_state.tabs.get(idx) else {
             return false;
         };
-        !tab.dirty && !self.document_state.dirty_paths.contains(&tab.path)
+        !self.document_state.is_document_dirty(&tab.path)
     }
 
     /// The file is back on disk: mark it dirty (the reload clears that where
     /// the loaded document matches disk) and log it.
     fn note_restored(&mut self, path: &std::path::Path, sha: &str) {
-        self.document_state.dirty_paths.insert(path.to_path_buf());
+        self.document_state.mark_document_dirty(path);
         let shown = self
             .owning_project_root(path)
             .and_then(|root| path.strip_prefix(root).ok().map(|p| p.to_path_buf()))
@@ -311,17 +308,7 @@ impl Signex {
     /// disk; the unsaved edits stay in the tab rather than being replaced, and
     /// nothing is committed. The user chooses by saving or closing.
     fn report_restore_over_edits(&mut self, path: &std::path::Path, sha: &str) {
-        // Both dirty markers follow the edits, or quit would not offer to
-        // save them (set) or the tab would look clean (flag).
-        self.document_state.dirty_paths.insert(path.to_path_buf());
-        for tab in self
-            .document_state
-            .tabs
-            .iter_mut()
-            .filter(|tab| tab.path == path)
-        {
-            tab.dirty = true;
-        }
+        self.document_state.mark_document_dirty(path);
         self.report_restore_failure(format!(
             "{} was edited while its restore to {sha} ran, so the unsaved edits were kept and \
              the restored file was not loaded or committed. The file on disk is the restored \
@@ -393,7 +380,7 @@ impl Signex {
                     self.fail_schematic_reload(&path, idx, &why, unreadable)
                 }
                 crate::app::TabKind::Pcb => self.fail_pcb_reload(&path, idx, &why, unreadable),
-                _ => self.fail_primitive_reload(&path, idx, &why, unreadable),
+                _ => self.fail_primitive_reload(&path, &why, unreadable),
             },
             Err(RestoreFailure::NotRestored(message)) => self.report_restore_failure(message),
             Ok(RestoreJobDocument::Schematic(sheet)) => {
@@ -422,7 +409,7 @@ impl Signex {
                     .get(&path)
                     .is_some_and(|engine| engine.document().is_read_only());
                 if read_only {
-                    self.set_reloaded_dirty(&path, idx, false);
+                    self.set_reloaded_dirty(&path, false);
                     self.commit_restore(&path, restored_bytes);
                 }
             }
@@ -436,7 +423,7 @@ impl Signex {
                 // The tab now matches disk. Leaving it dirty would let Ctrl+S
                 // re-encode the board and drop the restored file's comments
                 // and formatting, so commit the on-disk bytes as they are.
-                self.set_reloaded_dirty(&path, idx, false);
+                self.set_reloaded_dirty(&path, false);
                 self.commit_restore(&path, restored_bytes);
             }
             Ok(RestoreJobDocument::Footprint(file)) => {
@@ -445,14 +432,13 @@ impl Signex {
                     .with_global_snap_disabled(snap_disabled);
                 // A load repair makes the reloaded editor differ from disk, so
                 // it is dirty; otherwise it matches disk and the stale marker
-                // must go. Either way the tab and `dirty_paths` follow the
-                // editor, or quit would not offer to save the repair (or would
-                // ask about a file that matches disk).
-                let dirty = state.dirty;
+                // must go, or quit would not offer to save the repair (or
+                // would ask about a file that matches disk).
+                let dirty = state.is_dirty();
                 self.document_state
                     .footprint_editors
                     .insert(path.clone(), state);
-                self.set_reloaded_dirty(&path, idx, dirty);
+                self.set_reloaded_dirty(&path, dirty);
                 if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
                     editor.canvas_cache.clear();
                 }
@@ -465,7 +451,7 @@ impl Signex {
                     .insert(path.clone(), state);
                 // The reloaded editor is clean, so the stale dirty marker must
                 // go or quit asks about a file that matches disk.
-                self.set_reloaded_dirty(&path, idx, false);
+                self.set_reloaded_dirty(&path, false);
                 self.commit_restore(&path, restored_bytes);
             }
             Ok(RestoreJobDocument::Library) => self.reload_library_tab(&kind),
@@ -548,16 +534,10 @@ impl Signex {
     /// finds nothing to write and cannot overwrite the restored bytes), clear
     /// the dirty marker set for the restore, and raise the error card.
     /// `unreadable` is true for an IO error, where reopening can help.
-    fn fail_primitive_reload(
-        &mut self,
-        path: &std::path::Path,
-        active_idx: usize,
-        why: &str,
-        unreadable: bool,
-    ) {
+    fn fail_primitive_reload(&mut self, path: &std::path::Path, why: &str, unreadable: bool) {
         self.document_state.footprint_editors.remove(path);
         self.document_state.symbol_editors.remove(path);
-        self.set_reloaded_dirty(path, active_idx, false);
+        self.set_reloaded_dirty(path, false);
         self.report_restore_failure(restore_reload_card(path, why, unreadable));
     }
 
@@ -575,7 +555,7 @@ impl Signex {
             self.discard_state_of_replaced_engine();
         }
         self.document_state.remove_engine(path);
-        self.set_reloaded_dirty(path, active_idx, false);
+        self.set_reloaded_dirty(path, false);
         self.report_restore_failure(restore_reload_card(path, why, unreadable));
     }
 
@@ -590,24 +570,21 @@ impl Signex {
         unreadable: bool,
     ) {
         self.document_state.drop_pcb_board(active_idx);
-        self.set_reloaded_dirty(path, active_idx, false);
+        self.set_reloaded_dirty(path, false);
         if active_idx == self.document_state.active_tab {
             self.apply_loaded_empty_document(false);
         }
         self.report_restore_failure(restore_reload_card(path, why, unreadable));
     }
 
-    /// Records whether a document just reloaded from disk is dirty, in
-    /// both places that track it. Every reload arm goes through here so
-    /// a stale marker cannot outlive the reload (#780).
-    fn set_reloaded_dirty(&mut self, path: &std::path::Path, active_idx: usize, dirty: bool) {
+    /// Records whether a document just reloaded from disk is dirty. Every
+    /// reload arm goes through here so a stale marker cannot outlive the
+    /// reload (#780).
+    fn set_reloaded_dirty(&mut self, path: &std::path::Path, dirty: bool) {
         if dirty {
-            self.document_state.dirty_paths.insert(path.to_path_buf());
+            self.document_state.mark_document_dirty(path);
         } else {
-            self.document_state.dirty_paths.remove(path);
-        }
-        if let Some(tab) = self.document_state.tabs.get_mut(active_idx) {
-            tab.dirty = dirty;
+            self.document_state.mark_document_clean(path);
         }
     }
 }

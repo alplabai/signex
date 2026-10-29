@@ -14,16 +14,15 @@ fn app_with_dirty_symbol(dir: &Path) -> (Signex, PathBuf) {
     let path = dir.join("Lib.snxsym");
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Sym1"));
     let mut editor = SymbolDocument::new(path.clone(), file);
-    editor.dirty = true;
+    editor.mark_dirty();
     app.document_state
         .symbol_editors
         .insert(path.clone(), editor);
-    app.document_state.dirty_paths.insert(path.clone());
+    app.document_state.mark_document_dirty(&path);
     app.document_state.tabs.push(TabInfo {
         title: "Lib".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });
@@ -44,15 +43,18 @@ fn the_write_happens_when_the_task_runs_not_in_update() {
     let task = app.save_primitive_tab_at(&path).expect("save starts");
     assert!(!path.exists(), "update itself wrote nothing");
     assert!(
-        app.document_state.dirty_paths.contains(&path),
+        app.document_state.is_document_dirty(&path),
         "nothing is clean before the write completes"
     );
 
     land(&mut app, task);
     assert!(path.exists(), "the task wrote the container");
-    assert!(!app.document_state.dirty_paths.contains(&path));
-    assert!(!app.document_state.tabs[0].dirty);
-    assert!(!app.document_state.symbol_editors[&path].dirty);
+    assert!(!app.document_state.is_document_dirty(&path));
+    assert!(
+        !app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
+    assert!(!app.document_state.symbol_editors[&path].is_dirty());
 }
 
 #[test]
@@ -82,13 +84,13 @@ fn a_failed_write_reaches_the_messages_panel_and_keeps_the_draft_dirty() {
     app.document_state
         .symbol_editors
         .insert(path.clone(), editor);
-    app.document_state.dirty_paths.insert(path.clone());
+    app.document_state.mark_document_dirty(&path);
 
     let task = app.save_primitive_tab_at(&path).expect("save starts");
     land(&mut app, task);
 
-    assert!(app.document_state.symbol_editors[&path].dirty);
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.symbol_editors[&path].is_dirty());
+    assert!(app.document_state.is_document_dirty(&path));
     assert!(app.document_state.error_notice.is_some());
     assert!(app.document_state.inflight_git_commits.is_empty());
     let path_text = path.display().to_string();
@@ -112,14 +114,17 @@ fn an_edit_during_the_write_keeps_the_draft_dirty() {
         .symbol_editors
         .get_mut(&path)
         .expect("editor")
-        .dirty = true;
+        .set_dirty(true);
 
     land(&mut app, task);
 
     assert!(path.exists(), "the snapshot was written");
-    assert!(app.document_state.symbol_editors[&path].dirty);
-    assert!(app.document_state.dirty_paths.contains(&path));
-    assert!(app.document_state.tabs[0].dirty);
+    assert!(app.document_state.symbol_editors[&path].is_dirty());
+    assert!(app.document_state.is_document_dirty(&path));
+    assert!(
+        app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
 }
 
 #[test]
@@ -153,7 +158,7 @@ fn edit_symbol(app: &mut Signex, path: &Path, name: &str) {
         .get_mut(path)
         .expect("editor");
     editor.primitive_mut().name = name.to_string();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 /// The completion a container save task emits.
@@ -202,8 +207,8 @@ fn a_second_save_of_a_path_still_writing_queues_one_follow_up() {
     );
 
     assert_eq!(names_on_disk(&path), vec!["Edited".to_string()]);
-    assert!(!app.document_state.dirty_paths.contains(&path));
-    assert!(!app.document_state.symbol_editors[&path].dirty);
+    assert!(!app.document_state.is_document_dirty(&path));
+    assert!(!app.document_state.symbol_editors[&path].is_dirty());
 }
 
 /// Replace the editor at `path` with a fresh one holding `name`, as a reopen
@@ -214,29 +219,18 @@ fn replace_editor(app: &mut Signex, path: &Path, name: &str) {
         path.to_path_buf(),
         SymbolDocument::new(path.to_path_buf(), file),
     );
-    app.document_state.dirty_paths.insert(path.to_path_buf());
-    for tab in app
-        .document_state
-        .tabs
-        .iter_mut()
-        .filter(|t| t.path == path)
-    {
-        tab.dirty = true;
-    }
+    app.document_state.mark_document_dirty(path);
 }
 
 fn assert_replaced_editor_untouched(app: &Signex, path: &Path, name: &str) {
     let editor = &app.document_state.symbol_editors[path];
     assert_eq!(editor.baseline.symbols[0].name, name, "baseline untouched");
     assert!(
-        app.document_state.dirty_paths.contains(path),
+        app.document_state.is_document_dirty(path),
         "its dirty marker stays"
     );
     assert!(
-        app.document_state
-            .tabs
-            .iter()
-            .any(|t| t.path == path && t.dirty),
+        app.document_state.is_document_dirty(&path),
         "its tab stays dirty"
     );
 }
@@ -253,7 +247,6 @@ fn a_late_completion_leaves_a_discarded_and_reopened_draft_alone() {
         title: "Lib".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });
@@ -289,7 +282,6 @@ fn a_failed_save_as_keeps_the_draft_when_the_original_was_reopened() {
         title: "Lib".into(),
         path: from.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::SymbolEditor(from.clone()),
     });
@@ -298,20 +290,20 @@ fn a_failed_save_as_keeps_the_draft_when_the_original_was_reopened() {
         .symbol_editors
         .get_mut(&from)
         .expect("reopened")
-        .dirty = true;
+        .set_dirty(true);
 
     land(&mut app, task);
 
     let draft = &app.document_state.symbol_editors[&to];
     assert_eq!(draft.primitive().name, "Sym1", "the Save As draft survives");
-    assert!(draft.dirty);
-    assert!(app.document_state.dirty_paths.contains(&to));
+    assert!(draft.is_dirty());
+    assert!(app.document_state.is_document_dirty(&to));
     assert_eq!(
         app.document_state.symbol_editors[&from].primitive().name,
         "Reopened",
         "the reopened editor is not overwritten"
     );
-    assert!(app.document_state.dirty_paths.contains(&from));
+    assert!(app.document_state.is_document_dirty(&from));
     for path in [&from, &to] {
         let tabs = app.document_state.tabs.iter().filter(|t| t.path == *path);
         assert_eq!(tabs.count(), 1, "one tab on {}", path.display());
@@ -354,8 +346,8 @@ fn a_failed_save_as_puts_the_tab_back_where_it_was() {
 
     assert_eq!(app.document_state.tabs[0].path, from);
     assert!(app.document_state.symbol_editors.contains_key(&from));
-    assert!(app.document_state.symbol_editors[&from].dirty);
-    assert!(app.document_state.dirty_paths.contains(&from));
+    assert!(app.document_state.symbol_editors[&from].is_dirty());
+    assert!(app.document_state.is_document_dirty(&from));
     assert!(app.document_state.error_notice.is_some());
 }
 
@@ -371,7 +363,7 @@ fn a_follow_up_queued_by_a_replaced_editor_is_dropped() {
         .symbol_editors
         .get_mut(&path)
         .expect("restored")
-        .dirty = true;
+        .set_dirty(true);
 
     let follow_up = app.handle_primitive_saved(completion(running));
 
@@ -507,8 +499,11 @@ fn a_blocking_save_settles_the_draft_without_a_task() {
     app.save_primitive_tab_blocking(&path).expect("save");
 
     assert!(path.exists());
-    assert!(!app.document_state.dirty_paths.contains(&path));
-    assert!(!app.document_state.tabs[0].dirty);
+    assert!(!app.document_state.is_document_dirty(&path));
+    assert!(
+        !app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
     assert!(!app.document_state.document_saves.is_saving(&path));
 }
 

@@ -24,7 +24,7 @@ fn rules(app: &crate::app::Signex) -> Option<signex_types::project::ProjectRules
 
 fn is_dirty(app: &crate::app::Signex) -> bool {
     let path = &app.document_state.projects[0].path;
-    app.document_state.dirty_paths.contains(path)
+    app.document_state.is_document_dirty(path)
 }
 
 fn found(profile: RuleProfile) -> Arc<Result<Option<(RuleProfile, &'static str)>, String>> {
@@ -262,7 +262,7 @@ fn save_through_handler(app: &mut crate::app::Signex, dir: &std::path::Path, nam
 fn saving_a_profile_records_it_then_drift_and_update_work() {
     let mut app = edited_project("saveref");
     let lib = tempfile::tempdir().unwrap();
-    app.document_state.dirty_paths.clear();
+    app.document_state.mark_documents_clean_where(|_| true);
     let before = rules(&app).unwrap();
     assert_eq!(before.profile.as_ref().unwrap().source, "builtin");
 

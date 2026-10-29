@@ -89,7 +89,6 @@ fn app_with_symbol_and_wire(
         title: "hotspot-snap".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

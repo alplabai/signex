@@ -197,9 +197,6 @@ fn reject_conflicting_edit(
         editor.redo = redo;
     }
     if let Some(dirty_before) = unsolved.dirty_before {
-        editor.dirty = dirty_before;
-        if !dirty_before {
-            editor.clean_mirror_owed = true;
-        }
+        editor.set_dirty(dirty_before);
     }
 }

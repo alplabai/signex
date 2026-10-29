@@ -127,7 +127,7 @@ impl Signex {
                     }
                     crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, primitive);
                 });
-                editor.dirty = true;
+                editor.mark_dirty();
                 editor.canvas_cache.clear();
                 true
             });
@@ -386,7 +386,7 @@ impl Signex {
                     }
                     crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, primitive);
                 });
-                editor.dirty = true;
+                editor.mark_dirty();
                 editor.canvas_cache.clear();
                 true
             });
@@ -423,7 +423,7 @@ impl Signex {
                     return false;
                 };
                 f(attr);
-                editor.dirty = true;
+                editor.mark_dirty();
                 editor.canvas_cache.clear();
                 true
             });

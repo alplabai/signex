@@ -118,7 +118,7 @@ impl Signex {
         if let Some(loaded) = ds.projects.iter_mut().find(|p| p.id == id) {
             loaded.data.rules = rules;
         }
-        ds.dirty_paths.insert(path);
+        ds.mark_document_dirty(&path);
         self.refresh_panel_ctx();
     }
 }

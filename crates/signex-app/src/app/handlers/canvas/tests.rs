@@ -63,7 +63,6 @@ fn app_focused_on(focused: &str) -> Signex {
         title: "sheet".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: Some(id),
         kind: TabKind::Schematic,
     });
@@ -149,7 +148,7 @@ fn child_sheet_double_click_keeps_the_dirty_engine_of_a_tab_less_sheet() {
         &path,
         sheet_with_net("R_EDIT", "EDITED_NET", &[]),
     );
-    app.document_state.dirty_paths.insert(path.clone());
+    app.document_state.mark_document_dirty(&path);
 
     app.open_or_focus_sheet_path(path.clone());
 
@@ -208,7 +207,6 @@ fn dragging_a_bus_on_the_canvas_carries_entry_and_wire() {
         title: "bus-drag".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

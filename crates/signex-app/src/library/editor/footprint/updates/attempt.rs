@@ -56,7 +56,7 @@ impl EditAttempt {
         Self {
             snapshot,
             rejections_before: editor.state.conflict.rejections(),
-            dirty_before: editor.dirty,
+            dirty_before: editor.is_dirty(),
             is_drag_tick,
         }
     }
@@ -79,7 +79,7 @@ impl EditAttempt {
         };
         let rejected = editor.state.conflict.rejections() != self.rejections_before;
         if (rejected || self.is_drag_tick) && editor.is_unchanged_since(&snapshot) {
-            editor.dirty = self.dirty_before;
+            editor.set_dirty(self.dirty_before);
             return (false, None);
         }
         (true, editor.commit_history(snapshot))

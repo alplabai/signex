@@ -105,12 +105,7 @@ fn a_mounted_drifted_library_updates_the_personal_sheet_once_and_marks_it_dirty(
         assert_eq!(symbol.library_id, Some(f.library_id), "link kept");
         assert_eq!(symbol.row_id, Some(f.row_id), "link kept");
     }
-    assert!(
-        app.document_state
-            .tabs
-            .iter()
-            .any(|t| t.path == path && t.dirty)
-    );
+    assert!(app.document_state.is_document_dirty(&path));
     assert!(app.library.library_updates.is_none());
     assert_eq!(not_mounted_warnings(&f), 0);
 }
@@ -139,12 +134,7 @@ fn a_mounted_library_that_has_not_drifted_changes_nothing() {
     for (a, b) in opened.symbols.iter().zip(&before.symbols) {
         assert_eq!(a.library_version, b.library_version);
     }
-    assert!(
-        app.document_state
-            .tabs
-            .iter()
-            .any(|t| t.path == path && !t.dirty)
-    );
+    assert!(!app.document_state.is_document_dirty(&path));
     assert!(app.library.library_updates.is_none());
 }
 
@@ -169,12 +159,7 @@ fn an_unmounted_library_warns_once_and_leaves_the_sheet_alone() {
         assert_eq!(symbol.library_version, STALE);
         assert_eq!(symbol.library_id, Some(f.library_id), "link kept");
     }
-    assert!(
-        app.document_state
-            .tabs
-            .iter()
-            .any(|t| t.path == path && !t.dirty)
-    );
+    assert!(!app.document_state.is_document_dirty(&path));
     assert!(app.library.library_updates.is_none());
 }
 
@@ -230,10 +215,7 @@ fn finish_mount(app: &mut Signex, f: &Fixture) {
 }
 
 fn is_dirty(app: &Signex, path: &PathBuf) -> bool {
-    app.document_state
-        .tabs
-        .iter()
-        .any(|t| &t.path == path && t.dirty)
+    app.document_state.is_document_dirty(&path)
 }
 
 #[test]

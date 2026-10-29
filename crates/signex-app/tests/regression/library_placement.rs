@@ -720,7 +720,6 @@ fn v027_sketch_line_drag_resizes_rect_pad_bbox() {
         title: "v027-line-drag".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

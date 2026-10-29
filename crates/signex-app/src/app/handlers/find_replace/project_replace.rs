@@ -325,7 +325,7 @@ impl Signex {
                 active_invalidation = done.invalidation;
                 self.ui_state.net_color_redo.remove(&done.path);
             } else {
-                self.mark_cached_sheet_dirty(&done.path);
+                self.document_state.mark_document_dirty(&done.path);
             }
         }
         let names: Vec<String> = applied

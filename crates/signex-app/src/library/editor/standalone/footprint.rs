@@ -183,7 +183,7 @@ fn view_footprint_top_strip<'a>(
 
     let save_path = editor.path.clone();
     let save_btn = button(
-        text(if editor.dirty { "Save *" } else { "Save" })
+        text(if editor.is_dirty() { "Save *" } else { "Save" })
             .size(TS.body)
             .color(text_c),
     )
@@ -377,7 +377,7 @@ fn view_footprint_sketch_toolbar<'a>(
 
     let save_path = editor.path.clone();
     let save_btn = button(
-        text(if editor.dirty { "Save *" } else { "Save" })
+        text(if editor.is_dirty() { "Save *" } else { "Save" })
             .size(TS.body)
             .color(text_c),
     )
@@ -517,7 +517,7 @@ fn view_footprint_toolbar<'a>(
 
     let save_path = editor.path.clone();
     let save_btn = button(
-        text(if editor.dirty { "Save *" } else { "Save" })
+        text(if editor.is_dirty() { "Save *" } else { "Save" })
             .size(TS.body)
             .color(text_c),
     )

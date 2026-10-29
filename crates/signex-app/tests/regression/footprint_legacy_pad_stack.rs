@@ -80,7 +80,6 @@ fn open_editor(file: FootprintFile) -> (Signex, PathBuf) {
         title: "legacy".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -116,7 +115,7 @@ fn a_pre_1052_footprint_is_offered_the_restore_and_nothing_is_changed_on_open() 
     ])));
     let ed = editor(&app, &path);
     assert!(ed.state.legacy_pad_stack_offered, "offer is raised on open");
-    assert!(!ed.dirty, "opening alone must not dirty the document");
+    assert!(!ed.is_dirty(), "opening alone must not dirty the document");
     assert!(stacks(&app, &path).iter().all(|s| !s.paste_top_enabled));
     assert_eq!(
         pad_stack_check::smd_pads_without_paste(&ed.state.pads),
@@ -134,7 +133,7 @@ fn restore_enables_paste_and_thermal_in_one_undo_step() {
     panel(&mut app, PanelMsg::FpEditorRestorePadStackDefaults);
 
     let ed = editor(&app, &path);
-    assert!(ed.dirty, "the restore is an unsaved edit");
+    assert!(ed.is_dirty(), "the restore is an unsaved edit");
     for s in stacks(&app, &path) {
         assert!(s.paste_top_enabled && s.paste_bottom_enabled && s.thermal_relief);
     }
@@ -173,7 +172,7 @@ fn dismissing_the_offer_changes_nothing_in_the_document() {
     panel(&mut app, PanelMsg::FpEditorDismissPadStackOffer);
     let ed = editor(&app, &path);
     assert!(!ed.state.legacy_pad_stack_offered);
-    assert!(!ed.dirty);
+    assert!(!ed.is_dirty());
     assert!(ed.history.is_empty());
     assert!(stacks(&app, &path).iter().all(|s| *s == pre_1052_stack()));
     // The standing warning stays: the pad still has no paste opening.

@@ -102,7 +102,6 @@ fn app_with_tabs(kinds: Vec<TabKind>) -> Signex {
             title: format!("t{i}"),
             path: PathBuf::from(format!("t{i}.snxsch")),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind,
         });

@@ -8,6 +8,9 @@ use super::TabInfo;
 
 mod case_fold;
 pub(crate) mod dir_case;
+mod dirty;
+#[cfg(test)]
+mod dirty_tests;
 mod error_notice;
 mod interaction;
 mod keymap_recorder;
@@ -415,14 +418,9 @@ pub struct DocumentState {
     /// its earlier-run recovery copy checked (#1208). `open_schematic_tab`
     /// queues the path, `update` starts the check.
     pub recovery_check_due: Vec<std::path::PathBuf>,
-    /// Files with unsaved edits, keyed by absolute path. Tracks the
-    /// "Altium-style" project-scoped dirty state — a file stays in this
-    /// set after its tab is closed (the engine in `engines` keeps the
-    /// edited document) and clears when the file is saved or the
-    /// project's edits are explicitly discarded. Drives the red dot on
-    /// the Projects-panel tree row independently of `tab.dirty`, which
-    /// would otherwise lose the signal the moment the tab is closed.
-    pub dirty_paths: std::collections::HashSet<PathBuf>,
+    /// Dirty documents that no editor draft holds; see `dirty.rs`, the only
+    /// reader and writer. Ask `is_document_dirty`, never this field.
+    pub(crate) dirty_docs: dirty::DirtyDocuments,
     /// Undo/redo of each project's net-class table (#1042). The table is
     /// project data, so it has its own history beside the per-sheet engines.
     pub net_class_history: std::collections::HashMap<ProjectId, signex_engine::NetClassHistory>,

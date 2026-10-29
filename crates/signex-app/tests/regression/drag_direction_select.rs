@@ -41,7 +41,6 @@ fn app_with_wires() -> (Signex, uuid::Uuid, uuid::Uuid) {
         title: "drag-direction".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

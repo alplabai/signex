@@ -39,11 +39,10 @@ fn push_tab(app: &mut Signex, path: &Path, kind: TabKind) {
         title: "doc".into(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind,
     });
-    app.document_state.dirty_paths.insert(path.to_path_buf());
+    app.document_state.mark_document_dirty(path);
     app.document_state.active_tab = app.document_state.tabs.len() - 1;
 }
 
@@ -99,8 +98,8 @@ fn symbol_save_as_writes_symbol_file_and_rekeys_tab() {
     assert!(!ds.symbol_editors.contains_key(&old));
     assert_eq!(ds.tabs[0].path, new);
     assert!(matches!(&ds.tabs[0].kind, TabKind::SymbolEditor(p) if p == &new));
-    assert!(!ds.dirty_paths.contains(&old));
-    assert!(!ds.dirty_paths.contains(&new), "written copy is clean");
+    assert!(!ds.is_document_dirty(&old));
+    assert!(!ds.is_document_dirty(&new), "written copy is clean");
 }
 
 #[test]
@@ -126,7 +125,7 @@ fn footprint_save_as_writes_footprint_file_and_rekeys_tab() {
     assert!(!ds.footprint_editors.contains_key(&old));
     assert_eq!(ds.tabs[0].path, new);
     assert!(matches!(&ds.tabs[0].kind, TabKind::FootprintEditor(p) if p == &new));
-    assert!(!ds.dirty_paths.contains(&old));
+    assert!(!ds.is_document_dirty(&old));
 }
 
 #[test]
@@ -197,8 +196,8 @@ fn failed_save_as_write_rolls_the_rekey_back() {
     assert_eq!(ds.tabs[0].path, old);
     assert_eq!(ds.tabs[0].title, "keep me");
     assert!(matches!(&ds.tabs[0].kind, TabKind::SymbolEditor(p) if p == &old));
-    assert!(ds.dirty_paths.contains(&old), "still dirty: nothing saved");
-    assert!(!ds.dirty_paths.contains(&new));
+    assert!(ds.is_document_dirty(&old), "still dirty: nothing saved");
+    assert!(!ds.is_document_dirty(&new));
     assert_eq!(std::fs::read(&old).unwrap(), b"original");
     assert!(
         logged(&tmp, "Save As failed"),
@@ -284,7 +283,7 @@ fn extensionless_pick_never_overwrites_an_existing_file_with_the_appended_extens
     assert!(!ds.symbol_editors.contains_key(&existing));
     assert_eq!(ds.tabs[0].path, old);
     assert_eq!(ds.tabs[0].title, "keep me");
-    assert!(ds.dirty_paths.contains(&old), "still dirty: nothing saved");
+    assert!(ds.is_document_dirty(&old), "still dirty: nothing saved");
     assert!(
         logged(&tmp, "already exists and was not overwritten"),
         "the refusal must reach the Messages panel"

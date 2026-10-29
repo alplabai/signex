@@ -209,7 +209,6 @@ mod tests {
                 title: format!("t{i}"),
                 path: std::path::PathBuf::from(format!("t{i}.snxsch")),
                 cached_document: None,
-                dirty: false,
                 project_id: None,
                 kind,
             });

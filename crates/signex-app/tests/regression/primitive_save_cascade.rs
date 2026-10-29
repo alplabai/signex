@@ -165,7 +165,6 @@ fn fixture_with(setup: Setup) -> Fixture {
         title: "pair".into(),
         path: symbol_path.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::SymbolEditor(symbol_path.clone()),
     });
@@ -191,7 +190,7 @@ fn edit_a(f: &mut Fixture) {
         .get_mut(&f.symbol_path)
         .unwrap();
     editor.file.symbols[0].description = "edited".into();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 fn save(app: &mut Signex) {
@@ -282,12 +281,11 @@ fn saving_a_footprint_bumps_the_component_row_that_uses_it() {
         .get_mut(&path)
         .unwrap();
     editor.file.footprints[0].description = "edited".into();
-    editor.dirty = true;
+    editor.mark_dirty();
     f.app.document_state.tabs.push(TabInfo {
         title: "fp".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::FootprintEditor(path),
     });
@@ -328,7 +326,7 @@ fn a_second_save_without_edits_bumps_nothing_and_the_next_edit_bumps_once_more()
         .symbol_editors
         .get_mut(&f.symbol_path)
         .unwrap()
-        .dirty = true;
+        .set_dirty(true);
     save(&mut f.app);
     let row = row_on_disk(&f.library_file, f.users);
     assert_eq!(symbol_on_disk(&f).symbols[0].version, "0.0.2");

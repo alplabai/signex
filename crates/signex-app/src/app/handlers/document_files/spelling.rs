@@ -29,7 +29,7 @@ impl Signex {
         let parked_dirty = document_state
             .engines
             .keys()
-            .filter(|held| document_state.dirty_paths.contains(*held));
+            .filter(|held| document_state.is_document_dirty(*held));
         document_state
             .tabs
             .iter()

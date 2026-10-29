@@ -28,7 +28,6 @@ fn push_tab(app: &mut Signex, path: &Path, kind: TabKind) {
         title: "doc".into(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind,
     });
@@ -88,7 +87,7 @@ fn symbol_reload_from_disk_clears_the_dirty_marker_so_quit_does_not_prompt() {
     push_tab(&mut app, &path, TabKind::SymbolEditor(path.clone()));
 
     panel(&mut app, PanelMsg::SymEditorSetSymbolName("edited".into()));
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.is_document_dirty(&path));
 
     // A dirty draft makes Restore a two-click confirm: the first click
     // only arms it, the second reloads.
@@ -109,10 +108,13 @@ fn symbol_reload_from_disk_clears_the_dirty_marker_so_quit_does_not_prompt() {
     let editor = &app.document_state.symbol_editors[&path];
     assert_eq!(editor.primitive().name, "orig", "the reload took effect");
     assert!(
-        !app.document_state.dirty_paths.contains(&path),
+        !app.document_state.is_document_dirty(&path),
         "a reloaded symbol matches disk, so it is not dirty"
     );
-    assert!(!app.document_state.tabs[0].dirty);
+    assert!(
+        !app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
 
     let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
     assert!(

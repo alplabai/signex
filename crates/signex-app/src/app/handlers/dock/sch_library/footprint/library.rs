@@ -107,12 +107,7 @@ impl Signex {
                     }
                     editor.panel_selected_idx = None;
                     editor.canvas_cache.clear();
-                    editor.dirty = true;
-                    self.document_state.dirty_paths.insert(path.clone());
-                    if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path)
-                    {
-                        tab.dirty = true;
-                    }
+                    self.document_state.mark_document_dirty(&path);
                 } else if last == 1 {
                     crate::diagnostics::log_warning(format!(
                         "{}: refused to delete the last footprint in the file",

@@ -61,7 +61,7 @@ fn editor_ready_to_constrain(mm: &str) -> FootprintDocument {
     editor.state.selected_sketch = Some(p1);
     editor.state.selected_sketch_secondary = Some(p2);
     editor.state.dimension_input = mm.to_string();
-    editor.dirty = false;
+    editor.set_dirty(false);
     editor
 }
 
@@ -83,7 +83,7 @@ fn a_rejected_edit_leaves_undo_redo_and_dirty_untouched() {
     editor.history[0].selected_pad = Some(7);
     let spare = editor.begin_edit();
     editor.redo.push(spare);
-    editor.dirty = false;
+    editor.set_dirty(false);
 
     constrain_distance(&mut editor);
 
@@ -95,7 +95,10 @@ fn a_rejected_edit_leaves_undo_redo_and_dirty_untouched() {
         "the oldest undo step was not evicted"
     );
     assert_eq!(editor.redo.len(), 1, "the redo stack was not cleared");
-    assert!(!editor.dirty, "a rejected edit does not dirty the document");
+    assert!(
+        !editor.is_dirty(),
+        "a rejected edit does not dirty the document"
+    );
 }
 
 #[test]
@@ -108,7 +111,7 @@ fn opening_a_footprint_the_loader_repaired_marks_it_dirty_and_clears_the_record(
         FootprintFile::from_footprint(fp),
     );
 
-    assert!(editor.dirty, "a save must persist the repair");
+    assert!(editor.is_dirty(), "a save must persist the repair");
     assert!(
         editor.file.footprints[0].load_repairs.is_empty(),
         "reported once; history snapshots never carry the record"
@@ -124,7 +127,7 @@ fn opening_an_untouched_footprint_stays_clean() {
         FootprintFile::from_footprint(fp),
     );
 
-    assert!(!editor.dirty);
+    assert!(!editor.is_dirty());
 }
 
 #[test]
@@ -139,7 +142,7 @@ fn a_kept_edit_records_history_clears_redo_and_marks_dirty() {
     assert!(editor.state.conflict.is_empty(), "the edit solved");
     assert_eq!(editor.history.len(), 1);
     assert!(editor.redo.is_empty());
-    assert!(editor.dirty);
+    assert!(editor.is_dirty());
 }
 
 #[test]
@@ -152,6 +155,6 @@ fn opening_a_footprint_with_only_dangling_removals_marks_it_dirty() {
         FootprintFile::from_footprint(fp),
     );
 
-    assert!(editor.dirty, "a save must persist the heal");
+    assert!(editor.is_dirty(), "a save must persist the heal");
     assert!(editor.file.footprints[0].load_repairs.is_empty());
 }

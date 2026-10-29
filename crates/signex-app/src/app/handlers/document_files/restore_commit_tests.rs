@@ -28,7 +28,6 @@ pub(super) fn open_tab(dir: &Path, path: &Path, kind: TabKind) -> Signex {
         title: "part".into(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind,
     });
@@ -41,8 +40,11 @@ fn assert_restored_and_committed(app: &Signex, path: &Path, restored: &str) {
     let pending = &app.document_state.pending_git_commits;
     assert_eq!(pending.len(), 1, "exactly one commit queued");
     assert!(pending[0].message.starts_with("Restore "));
-    assert!(!app.document_state.dirty_paths.contains(path));
-    assert!(!app.document_state.tabs[0].dirty);
+    assert!(!app.document_state.is_document_dirty(path));
+    assert!(
+        !app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
 }
 
 pub(super) fn footprint_text(name: &str) -> String {
@@ -236,10 +238,11 @@ fn a_repaired_footprint_restore_stays_dirty_and_the_later_save_is_committed_too(
 
     restore(&mut app, &sha);
     assert!(
-        app.document_state.tabs[0].dirty,
+        app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path),
         "load repair leaves it dirty"
     );
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.is_document_dirty(&path));
     assert_eq!(app.document_state.pending_git_commits.len(), 1);
     let queued = app.document_state.pending_git_commits.remove(0);
     assert_eq!(queued.message, "Restore part.snxfpt");
@@ -305,8 +308,11 @@ fn assert_failed_reload_blocks_save(
     assert!(!app.document_state.engines.contains_key(path));
     assert!(app.document_state.pending_git_commits.is_empty());
     assert!(app.document_state.inflight_git_commits.is_empty());
-    assert!(!app.document_state.dirty_paths.contains(path));
-    assert!(!app.document_state.tabs[0].dirty);
+    assert!(!app.document_state.is_document_dirty(path));
+    assert!(
+        !app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
     // Ctrl+S, then the write task as the iced runtime runs it.
     let save = app.update(Message::File(FileMsg::Save));
     run_task(app, save);
@@ -559,7 +565,7 @@ fn a_restore_whose_tab_closed_meanwhile_installs_and_commits_nothing() {
     let _ = app.close_tab_now(0);
     finish_restore(&mut app, messages);
     assert!(!app.document_state.footprint_editors.contains_key(&path));
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.is_document_dirty(&path));
     assert!(app.document_state.pending_git_commits.is_empty());
     assert!(!app.document_state.pending_restores.contains(&path));
 }
@@ -584,7 +590,6 @@ fn a_restore_finishing_after_a_tab_switch_restores_its_tab_without_taking_focus(
         title: "other".into(),
         path: other.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::SymbolEditor(other),
     });
@@ -735,7 +740,7 @@ fn a_panel_edit_made_while_a_restore_runs_is_kept_not_replaced() {
     let (_dir, path, sha, mut app) = footprint_fixture();
     marker_editor(&mut app, &path, "mine");
     let messages = click_restore(&mut app, &sha);
-    // A real edit on the clean tab: it reaches `dirty_paths` only lazily.
+    // A real edit on the clean tab.
     edit_description(&mut app, "edited");
     finish_restore(&mut app, messages);
     assert_eq!(description(&app, &path), "edited", "edit not replaced");
@@ -773,8 +778,11 @@ fn a_net_colour_change_on_a_dirty_schematic_during_a_restore_is_kept() {
     let engine = signex_engine::Engine::new(Default::default()).expect("engine");
     app.document_state.engines.insert(path.clone(), engine);
     app.document_state.active_path = Some(path.clone());
-    app.document_state.dirty_paths.insert(path.clone());
-    app.document_state.tabs[0].dirty = true;
+    app.document_state.mark_document_dirty(&path);
+    {
+        let path = app.document_state.tabs[0].path.clone();
+        app.document_state.mark_document_dirty(&path);
+    }
 
     assert!(click_restore(&mut app, &sha).is_empty(), "arms the confirm");
     let messages = click_restore(&mut app, &sha);
@@ -808,7 +816,7 @@ fn closing_a_dirty_tab_during_a_restore_parks_the_draft_and_warns() {
         "draft",
         "draft parked, not replaced"
     );
-    assert!(app.document_state.footprint_editors[&path].dirty);
+    assert!(app.document_state.footprint_editors[&path].is_dirty());
     assert!(logged(&format!(
         "{} has unsaved edits but its file is now at {sha}; saving overwrites that restore",
         file_name(&path)
@@ -831,11 +839,10 @@ fn a_restore_does_not_land_in_a_tab_reopened_while_it_ran() {
         title: "part".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
-    app.document_state.dirty_paths.insert(path.clone());
+    app.document_state.mark_document_dirty(&path);
 
     finish_restore(&mut app, messages);
     assert_eq!(editor_name(&app, &path), "reopened");
@@ -912,8 +919,11 @@ fn restoring_a_newer_minor_schematic_leaves_it_clean_and_quit_does_not_prompt() 
 
     let engine = &app.document_state.engines[&path];
     assert!(engine.document().is_read_only(), "the restored sheet loads");
-    assert!(!app.document_state.tabs[0].dirty);
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(
+        !app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
+    assert!(!app.document_state.is_document_dirty(&path));
     let _task = app.handle_app_quit_requested();
     assert!(app.ui_state.app_quit_confirm.is_none(), "quit must not ask");
 }

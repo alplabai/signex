@@ -83,7 +83,6 @@ pub(crate) fn app_with(mut sheet: SchematicSheet) -> Signex {
         title: "field-edit".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

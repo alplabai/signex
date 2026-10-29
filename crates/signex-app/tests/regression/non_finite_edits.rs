@@ -42,7 +42,6 @@ fn move_app() -> Signex {
         title: "non-finite-move".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -170,7 +169,10 @@ fn a_refused_move_by_axis_leaves_the_pad_and_keeps_the_dialog_open() {
             editor.state.move_by_modal.is_some(),
             "dx={dx:?} dy={dy:?}: the dialog stays open so the user can correct it"
         );
-        assert!(!editor.dirty, "dx={dx:?} dy={dy:?}: nothing was edited");
+        assert!(
+            !editor.is_dirty(),
+            "dx={dx:?} dy={dy:?}: nothing was edited"
+        );
         assert!(
             editor.history.is_empty(),
             "dx={dx:?} dy={dy:?}: a refused move is not an undo step"
@@ -198,7 +200,7 @@ fn a_finite_move_by_still_moves_the_pad_and_closes_the_dialog() {
     let editor = &app.document_state.footprint_editors[&path];
     assert_eq!(editor.state.pads[0].position_mm, (3.5, 1.0));
     assert!(editor.state.move_by_modal.is_none());
-    assert!(editor.dirty);
+    assert!(editor.is_dirty());
     assert_eq!(editor.history.len(), 1);
 }
 
@@ -215,7 +217,6 @@ fn symbol_app() -> (Signex, PathBuf) {
         title: "nf".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });
@@ -234,13 +235,16 @@ fn symbol_app() -> (Signex, PathBuf) {
         }),
     }));
     // The fixture's own setup edits are not the thing under test.
-    app.document_state.dirty_paths.clear();
-    app.document_state.tabs[0].dirty = false;
+    app.document_state.mark_documents_clean_where(|_| true);
+    {
+        let path = app.document_state.tabs[0].path.clone();
+        app.document_state.mark_document_clean(&path);
+    }
     app.document_state
         .symbol_editors
         .get_mut(&path)
         .expect("editor")
-        .dirty = false;
+        .set_dirty(false);
     (app, path)
 }
 
@@ -253,9 +257,15 @@ fn sym<'a>(app: &'a Signex, path: &Path) -> &'a Symbol {
 }
 
 fn is_dirty(app: &Signex) -> bool {
-    !app.document_state.dirty_paths.is_empty()
-        || app.document_state.tabs[0].dirty
-        || app.document_state.symbol_editors.values().any(|e| e.dirty)
+    app.document_state.has_dirty_documents()
+        || app
+            .document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+        || app
+            .document_state
+            .symbol_editors
+            .values()
+            .any(|e| e.is_dirty())
 }
 
 #[test]

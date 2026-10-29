@@ -33,7 +33,6 @@ fn locked_symbol_app(reference: &str) -> (Signex, uuid::Uuid) {
         title: "symbol-locked".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

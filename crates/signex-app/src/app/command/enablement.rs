@@ -293,7 +293,7 @@ impl Signex {
                 .projects
                 .iter()
                 .find(|p| p.id == id)
-                .is_some_and(|p| document.dirty_paths.contains(&p.path))
+                .is_some_and(|p| document.is_document_dirty(&p.path))
         })
     }
 }
@@ -318,7 +318,6 @@ mod tests {
             title: "doc".into(),
             path: path.to_path_buf(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind,
         });
@@ -460,7 +459,7 @@ mod tests {
         app.document_state.active_project = Some(project);
         assert!(!enabled(&app, "save_document"));
 
-        app.document_state.dirty_paths.insert(path);
+        app.document_state.mark_document_dirty(&path);
         assert!(enabled(&app, "save_document"));
     }
 
@@ -667,7 +666,6 @@ mod tests {
                 title: "undocked".into(),
                 path: path.clone(),
                 cached_document: None,
-                dirty: false,
                 project_id: None,
                 kind: TabKind::Schematic,
             },

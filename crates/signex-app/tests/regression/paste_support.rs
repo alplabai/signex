@@ -179,7 +179,6 @@ pub(crate) mod sheet {
             title: "paste-1263".to_owned(),
             path: path.clone(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind: TabKind::Schematic,
         });

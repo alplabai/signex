@@ -265,7 +265,6 @@ pub(crate) fn app_with_empty_sheet() -> Signex {
         title: "place-364".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -440,7 +439,8 @@ fn one_undo_removes_the_placement_and_its_new_lib_symbol() {
     assert!(doc(&app).symbols.is_empty());
     assert!(doc(&app).lib_symbols.is_empty());
     assert!(
-        app.document_state.tabs[0].dirty,
+        app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path),
         "undo leaves the tab dirty"
     );
 }
