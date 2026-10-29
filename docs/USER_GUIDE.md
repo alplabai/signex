@@ -133,9 +133,10 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 
 **View ▸ Cycle Grid Size** steps the grid of the schematic. The keyboard
 shortcut for cycling the snap grid (`G` in the Altium profile) acts only in the
-footprint editor; on a schematic use the menu. **View ▸ Zoom In** (`Ctrl+=`)
-and **Zoom Out** (`Ctrl+-`) zoom about the centre of the view; the scroll wheel
-zooms about the pointer.
+footprint editor; on a schematic use the menu. **View ▸ Zoom In** and
+**Zoom Out** zoom about the centre of the view. `PageUp` / `PageDown` (Altium
+profile) or `F1` / `F2` (Classic profile) and the scroll wheel zoom about the
+pointer.
 
 ## 5. Place a symbol
 

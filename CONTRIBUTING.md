@@ -118,16 +118,14 @@ bash scripts/check_discarded_tasks.sh   # no `let _ =` on an iced::Task
 bash scripts/check_lint_lockstep.sh     # workspace lints present in every member
 bash scripts/changelog_assemble.sh --check   # changelog.d fragments
 ```
- Clippy runs inside the
-required `check` job, so its **deny-by-default lints (the `correctness` group)
-fail the job and block the merge**; warn-level lints are surfaced as
-annotations and don't. Run it with the same `--all-targets --all-features` CI
-uses, or your local run will silently skip `tests/`, `benches/`, `examples/`,
-inline `#[cfg(test)] mod tests`, and every feature-gated module.
-Because the toolchain is pinned (`rust-toolchain.toml`, Rust 1.97.0),
-your local `cargo fmt` output is identical to CI's — run it before you commit
-(or wire it into a local `pre-commit` hook) so the required `fmt · rustfmt`
-check stays green.
+Clippy runs in CI with `-D warnings`, so any clippy warning fails the job and
+blocks the merge (it feeds the required `ci · required` context). Run it with the
+same `--all-targets --all-features` CI uses, or your local run will silently skip
+`tests/`, `benches/`, `examples/`, inline `#[cfg(test)] mod tests`, and every
+feature-gated module. Because the toolchain is pinned (`rust-toolchain.toml`,
+Rust 1.97.0), your local `cargo fmt` output is identical to CI's — run it before
+you commit (or wire it into a local `pre-commit` hook) so the formatting check in
+`ci · required` stays green.
 
 ## Claiming an issue
 
