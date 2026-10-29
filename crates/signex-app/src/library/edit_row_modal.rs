@@ -3,13 +3,11 @@
 //!
 //! `view_delete_confirm` lives in this module too.
 
-use std::collections::BTreeMap;
-
 use iced::widget::{
-    Column, Space, button, column, container, pick_list, row, scrollable, text, text_input,
+    Space, button, column, container, pick_list, row, scrollable, text, text_input,
 };
 use iced::{Border, Element, Length, Theme};
-use signex_library::{ComponentClass, DatasheetRef, LifecycleState, ParamValue};
+use signex_library::{ComponentClass, DatasheetRef, LifecycleState, ParameterTemplate};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
@@ -61,6 +59,7 @@ pub fn view<'a>(
     tokens: &'a ThemeTokens,
     windowed: bool,
     classes: Vec<crate::fonts::ComponentClassEntry>,
+    template: Option<&'a ParameterTemplate>,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -272,7 +271,7 @@ pub fn view<'a>(
     .padding([SP.s, 0.0]);
 
     // Parameters table.
-    let params_section = view_params_section(edit, tokens, send.clone());
+    let params_section = super::edit_row_params::view(edit, template, tokens, send.clone());
 
     let form_body = column![
         pn_class_state_row,
@@ -312,6 +311,10 @@ pub fn view<'a>(
         )
         .padding([SP.s, SP.xl])
         .into()
+    } else if let Some(note) = edit.note.as_ref() {
+        container(text(note.clone()).size(TS.body).color(muted))
+            .padding([SP.s, SP.xl])
+            .into()
     } else {
         Space::new().height(0).into()
     };
@@ -406,187 +409,6 @@ pub fn view<'a>(
     .style(crate::styles::modal_card(tokens))
     .clip(true)
     .into()
-}
-
-fn view_params_section<'a>(
-    edit: &'a EditRowModalState,
-    tokens: &'a ThemeTokens,
-    send: impl Fn(BrowserEditMsg) -> LibraryMessage + Clone + 'a,
-) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
-
-    let header = row![
-        text("Parameters")
-            .size(TS.body)
-            .color(muted)
-            .width(Length::Fill),
-        button(container(text("+ Add Parameter").size(TS.body).color(text_c)).padding([3, 10]))
-            .on_press(send.clone()(BrowserEditMsg::AddParam))
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            }),
-    ]
-    .align_y(iced::Alignment::Center);
-
-    let mut col: Column<'a, LibraryMessage> = column![header, Space::new().height(4)].spacing(0);
-
-    let header_row = container(
-        row![
-            text("Key")
-                .size(TS.caption)
-                .color(muted)
-                .width(Length::FillPortion(3)),
-            text("Value")
-                .size(TS.caption)
-                .color(muted)
-                .width(Length::FillPortion(3)),
-            text("Unit")
-                .size(TS.caption)
-                .color(muted)
-                .width(Length::FillPortion(2)),
-            text("").size(TS.caption).width(Length::Fixed(40.0)),
-        ]
-        .padding([SP.xs, 6.0]),
-    )
-    .style(move |_: &Theme| iced::widget::container::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgba(
-            1.0, 1.0, 1.0, 0.04,
-        ))),
-        border: Border {
-            width: 0.0,
-            radius: 2.0.into(),
-            color: border,
-        },
-        ..Default::default()
-    });
-    col = col.push(header_row);
-
-    // Stage 18: `tags` has its own dedicated input above this section,
-    // so we hide it from the parameters table to avoid a duplicate row.
-    let visible_params: BTreeMap<&String, &ParamValue> = edit
-        .draft
-        .parameters
-        .iter()
-        .filter(|(k, _)| k.as_str() != "tags")
-        .collect();
-    if visible_params.is_empty() {
-        col = col.push(
-            container(text("No parameters yet.").size(TS.body).color(muted)).padding([SP.m, 6.0]),
-        );
-    } else {
-        // Iterate in BTreeMap key order for stable layout.
-        let entries = visible_params;
-        for (key, value) in entries {
-            let key_owned = key.clone();
-            let (cur_value, cur_unit) = match edit.param_buf.get(&key_owned) {
-                Some((v, u)) => (v.clone(), u.clone()),
-                None => match value {
-                    ParamValue::Text(s) => (s.clone(), String::new()),
-                    ParamValue::Number(n) => (n.to_string(), String::new()),
-                    ParamValue::Bool(b) => (b.to_string(), String::new()),
-                    ParamValue::Measurement { value, unit } => (value.to_string(), unit.clone()),
-                },
-            };
-
-            let send_v = send.clone();
-            let key_for_v = key_owned.clone();
-            let val_input = text_input("value", &cur_value)
-                .on_input(move |s| {
-                    send_v(BrowserEditMsg::SetParamValue {
-                        key: key_for_v.clone(),
-                        value: s,
-                    })
-                })
-                .on_submit({
-                    let send_c = send.clone();
-                    let key_c = key_owned.clone();
-                    send_c(BrowserEditMsg::CommitParam { key: key_c })
-                })
-                .padding(SP.s)
-                .size(TS.body);
-
-            let send_u = send.clone();
-            let key_for_u = key_owned.clone();
-            let unit_input = text_input("unit", &cur_unit)
-                .on_input(move |s| {
-                    send_u(BrowserEditMsg::SetParamUnit {
-                        key: key_for_u.clone(),
-                        unit: s,
-                    })
-                })
-                .on_submit({
-                    let send_c = send.clone();
-                    let key_c = key_owned.clone();
-                    send_c(BrowserEditMsg::CommitParam { key: key_c })
-                })
-                .padding(SP.s)
-                .size(TS.body);
-
-            let send_del = send.clone();
-            let key_for_del = key_owned.clone();
-            let delete_btn =
-                button(container(text("✕").size(TS.body).color(muted)).padding([SP.xs, SP.m]))
-                    .on_press_with(move || {
-                        send_del(BrowserEditMsg::DeleteParam {
-                            key: key_for_del.clone(),
-                        })
-                    })
-                    .style(move |_: &Theme, _| iced::widget::button::Style {
-                        background: Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04,
-                        ))),
-                        text_color: muted,
-                        border: Border {
-                            width: 1.0,
-                            radius: 3.0.into(),
-                            color: border,
-                        },
-                        ..iced::widget::button::Style::default()
-                    });
-
-            col = col.push(
-                row![
-                    container(text(key_owned.clone()).size(TS.body).color(text_c))
-                        .padding([SP.xs, 6.0])
-                        .width(Length::FillPortion(3)),
-                    container(val_input)
-                        .padding([SP.xs, SP.s])
-                        .width(Length::FillPortion(3)),
-                    container(unit_input)
-                        .padding([SP.xs, SP.s])
-                        .width(Length::FillPortion(2)),
-                    container(delete_btn)
-                        .padding([SP.xs, 6.0])
-                        .width(Length::Fixed(40.0)),
-                ]
-                .align_y(iced::Alignment::Center),
-            );
-        }
-    }
-
-    container(col)
-        .padding([0, 0])
-        .style(move |_: &Theme| iced::widget::container::Style {
-            background: None,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            ..Default::default()
-        })
-        .into()
 }
 
 pub(crate) fn short_uuid(u: &uuid::Uuid) -> String {

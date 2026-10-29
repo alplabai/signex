@@ -325,6 +325,7 @@ pub enum ActiveBarAction {
     DrawBus,
     PlaceBusEntry,
     PlaceNetLabel,
+    PlaceJunction,
     // Power
     PlacePowerGND,
     PlacePowerVCC,
@@ -438,6 +439,7 @@ fn action_icon(action: &ActiveBarAction, tid: ThemeId) -> svg::Handle {
         ActiveBarAction::DrawBus => ic::icon_dd_bus(tid),
         ActiveBarAction::PlaceBusEntry => ic::icon_dd_bus_entry(tid),
         ActiveBarAction::PlaceNetLabel => ic::icon_dd_net_label(tid),
+        ActiveBarAction::PlaceJunction => ic::icon_dd_junction(tid),
         // Power
         ActiveBarAction::PlacePowerGND => ic::icon_dd_gnd(tid),
         ActiveBarAction::PlacePowerVCC => ic::icon_dd_vcc(tid),
