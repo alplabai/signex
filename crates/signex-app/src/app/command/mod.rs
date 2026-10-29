@@ -2,9 +2,10 @@
 //! id→[`crate::app::Message`] bridge (`bridge.rs`). Slice 2 adds the
 //! registry's dispatch entry point ([`Signex::dispatch_command`]) and
 //! its argument type ([`CommandArgs`]). Slice 3 gates it on
-//! [`enablement::is_enabled`], which the menu bar reads too; rewiring
-//! menus/palette onto the registry (slice 4) is not done yet; the
-//! palette still calls `bridge::core_to_message` directly.
+//! [`enablement::is_enabled`], which the menu bar reads too. The palette
+//! and the keymap run commands through [`Signex::dispatch_command`]; of
+//! the menu items only Undo and Redo do. The rest still emit their own
+//! `Message` variants.
 
 pub(crate) mod active_bar;
 mod args;

@@ -92,9 +92,8 @@ pub struct GridPickerState {
 /// v0.18.19 added Fine / Coarse display + Multiplier draft fields.
 #[derive(Debug, Clone)]
 pub struct GridPropertiesState {
-    pub step_x_mm: String,
-    pub step_y_mm: String,
-    pub link_xy: bool,
+    /// Grid step in mm; one value drives both axes.
+    pub step_mm: String,
     pub fine_display: crate::library::editor::footprint::state::GridDisplay,
     pub coarse_display: crate::library::editor::footprint::state::GridDisplay,
     pub multiplier: u32,
@@ -364,23 +363,23 @@ pub enum ProjectTreeAction {
     /// indices are ignored so the action is safe to fire from any node
     /// underneath a project root.
     CloseProject(signex_widgets::tree_view::TreeKey),
-    /// v0.9 project-root: run ERC across the project. Promotes the
+    /// Project root: run ERC across the project. Promotes the
     /// project to active, opens its `schematic_root` if no schematic
     /// from this project is currently active, then dispatches the
     /// existing ERC dialog.
     ValidateProject(signex_widgets::tree_view::TreeKey),
-    /// v0.9 project-root: open the rename modal seeded with the
+    /// Project root: open the rename modal seeded with the
     /// project name (the `.snxprj` stem). Submit renames the trio
     /// `<old>.snxprj` / `<old>.snxsch` / `<old>.snxpcb` in lockstep.
     OpenProjectRenameDialog(signex_widgets::tree_view::TreeKey),
     /// Project root: Project Options… opens (or focuses) the project's
     /// Project tab (#1202).
     OpenProjectOptions(signex_widgets::tree_view::TreeKey),
-    /// v0.9 project-root: open a file dialog and add the picked file
+    /// Project root: open a file dialog and add the picked file
     /// to the project. Files outside the project directory are copied
     /// in; files already inside just trigger a tree refresh.
     AddExistingToProject(signex_widgets::tree_view::TreeKey),
-    /// v0.9 project-root → Add New ▸ Schematic. Spawns a Save-As
+    /// Project root → Add New ▸ Schematic. Spawns a Save-As
     /// dialog scoped to the project directory; the result writes a
     /// blank `.snxsch`, registers it as a SheetEntry, marks the
     /// project dirty, and refreshes the tree (no tab opens).
