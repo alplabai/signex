@@ -41,6 +41,7 @@ fn label(text: &str, at: Point) -> Label {
         justify: HAlign::default(),
         justify_v: VAlign::default(),
         font_family: None,
+        locked: false,
     }
 }
 
