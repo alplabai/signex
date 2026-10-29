@@ -13,7 +13,8 @@ use super::target::{is_net_kind, net_of_target};
 impl Signex {
     /// Note the object under the cursor after a move. Cheap: it reads the
     /// canvas hit test only; the index is consulted on the dwell, never here.
-    pub(crate) fn observe_net_hover(
+    #[doc(hidden)]
+    pub fn observe_net_hover(
         &mut self,
         hit: Option<signex_types::schematic::SelectedItem>,
         world: (f64, f64),
@@ -63,8 +64,15 @@ impl Signex {
         };
         match self.net_index_lookup(project) {
             IndexLookup::Ready(data) => {
+                let occurrence = self.placement_of(&candidate.sheet);
                 let card = data.key_of(&candidate.sheet).and_then(|key| {
-                    let net = net_of_target(&data, &key, &candidate.item, candidate.world)?;
+                    let net = net_of_target(
+                        &data,
+                        &key,
+                        &candidate.item,
+                        candidate.world,
+                        occurrence.as_ref(),
+                    )?;
                     let hover = data.index.hover(net, &data.classes)?;
                     Some(HoverCard::from_hover(
                         &hover,

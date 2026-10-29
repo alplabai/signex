@@ -31,6 +31,10 @@ pub(super) const MID_SIG: u128 = 12;
 pub(super) const ALONE: u128 = 24;
 pub(super) const THIRD_VCC: u128 = 31;
 pub(super) const THIRD_R3: u128 = 32;
+/// An unlabelled net on root (R5) and one on third (R4): auto-named.
+pub(super) const R5_WIRE: u128 = 42;
+pub(super) const R4_WIRE: u128 = 41;
+pub(super) const BROKEN: &str = "broken_page_7291.snxsch";
 
 pub(super) struct Project {
     pub app: Signex,
@@ -72,6 +76,15 @@ fn write(
 
 /// The project on disk with every sheet open and `root` focused.
 pub(super) fn project() -> Project {
+    build(false)
+}
+
+/// [`project`] plus a listed page that does not parse.
+pub(super) fn project_with_broken_page() -> Project {
+    build(true)
+}
+
+fn build(broken_page: bool) -> Project {
     // The Messages ring only records once the logger is installed.
     let _ = crate::diagnostics::init_logging();
     let dir = tempfile::tempdir().expect("tempdir");
@@ -116,14 +129,30 @@ pub(super) fn project() -> Project {
     third.labels[0].uuid = id(THIRD_VCC);
     third.symbols[0].uuid = id(THIRD_R3);
 
+    for (sheet, wire_id, sym_id, reference) in [
+        (&mut root, R5_WIRE, 43, "R5"),
+        (&mut third, R4_WIRE, 33, "R4"),
+    ] {
+        sheet
+            .wires
+            .push(wire(pt(0.0, 50.0), pt(5.0, 50.0), wire_id));
+        let mut symbol = sheet.symbols[0].clone();
+        symbol.uuid = id(sym_id);
+        symbol.reference = reference.to_string();
+        symbol.position = pt(0.0, 50.0);
+        sheet.symbols.push(symbol);
+    }
+
     let root_path = write(dir.path(), "root.snxsch", root);
     let mid_path = write(dir.path(), "mid.snxsch", mid);
     let third_path = write(dir.path(), "third.snxsch", third);
 
-    let mut app = app_workspace(
-        &dir.path().to_string_lossy(),
-        &["root.snxsch", "mid.snxsch", "third.snxsch"],
-    );
+    let mut listed = vec!["root.snxsch", "mid.snxsch", "third.snxsch"];
+    if broken_page {
+        std::fs::write(dir.path().join(BROKEN), "not a schematic").expect("write broken page");
+        listed.push(BROKEN);
+    }
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &listed);
     for path in [&third_path, &mid_path, &root_path] {
         assert!(app.open_or_focus_sheet_path(path.clone()), "open {path:?}");
     }
@@ -178,4 +207,63 @@ pub(super) fn logged(fragments: &[&str]) -> bool {
     crate::diagnostics::recent_entries()
         .iter()
         .any(|e| fragments.iter().all(|f| e.message.contains(f)))
+}
+
+pub(super) const TWICE_A: u128 = 700;
+pub(super) const TWICE_B: u128 = 701;
+pub(super) const TWICE_LABEL: u128 = 710;
+pub(super) const TWICE_ENTRY_B: u128 = 721;
+
+/// `root` places `child` twice (A and B); each entry is wired to its own
+/// parent net, so each placement is its own net. Returns the project with
+/// both sheets open and root focused, and the child's path.
+pub(super) fn placed_twice() -> (Project, PathBuf) {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let pt = Point::new;
+    let mut root = sheet_with_net("R1", "ROOT_ONLY", &["child.snxsch", "child.snxsch"]);
+    for (i, (symbol, name, y)) in [(TWICE_A, "A", 20.0), (TWICE_B, "B", 40.0)]
+        .into_iter()
+        .enumerate()
+    {
+        let cs = &mut root.child_sheets[i];
+        cs.uuid = id(symbol);
+        cs.name = name.to_string();
+        cs.pins.push(SheetPin {
+            uuid: id(symbol + 20),
+            name: "SIG".to_string(),
+            direction: String::new(),
+            position: pt(0.0, y),
+            rotation: 0.0,
+            auto_generated: false,
+            user_moved: false,
+        });
+        root.wires
+            .push(wire(pt(0.0, y), pt(5.0, y), 800 + i as u128));
+    }
+    let mut child = sheet_with_net("R9", "CHILD_ONLY", &[]);
+    child.wires.push(wire(pt(0.0, 70.0), pt(10.0, 70.0), 811));
+    child.labels.push(label(
+        "SIG",
+        pt(0.0, 70.0),
+        LabelType::Hierarchical,
+        TWICE_LABEL,
+    ));
+    let root_path = write(dir.path(), "root.snxsch", root);
+    let child_path = write(dir.path(), "child.snxsch", child);
+    let mut app = app_workspace(
+        &dir.path().to_string_lossy(),
+        &["root.snxsch", "child.snxsch"],
+    );
+    for path in [&child_path, &root_path] {
+        assert!(app.open_or_focus_sheet_path(path.clone()));
+    }
+    let project = Project {
+        app,
+        root: root_path,
+        mid: child_path.clone(),
+        third: child_path.clone(),
+        _dir: dir,
+    };
+    (project, child_path)
 }

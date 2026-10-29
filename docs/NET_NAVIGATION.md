@@ -18,7 +18,8 @@ entries, power ports, wires and junctions, each with its sheet and placement
 - `pin_near(sheet, point, tolerance)`: the pin tip under a point.
 - `hover(net, classes)`: name, class and pins with their sheets.
 
-A *port* is a Global or Hierarchical label, or a sheet entry. A net with no
+A *port* is a Global or Hierarchical label, a sheet entry or a power port (its
+partners are the same-rail power ports on other sheets). A net with no
 component pin (only labels and sheet entries) is kept too, so ports that join
 across sheets still find each other.
 
@@ -71,6 +72,15 @@ hover" (default on; key `net_hover_enabled` in `prefs.json`).
 | `highlight_related_net_objects` | Highlight the selected net and select its members here. |
 | `next_highlighted_net_item`, `previous_highlighted_net_item` | Step through the net's members across sheets. |
 | `clear_net_highlighting` | Remove the highlight. |
+
+A sheet placed more than once is read per placement: hover, partners and
+related selection use the placement the tab was entered through (the first one
+when the tab was opened directly).
+
+A highlighted net is found again after an edit by its anchor element, then by
+its name, never by an auto-assigned `N$k` name; if neither finds it, the
+highlight is cleared and Messages says so. At most one index build runs per
+project; a newer request waits for it and is built once after.
 
 A project is required: a loose schematic with no `.snxprj` has no hierarchy to
 read, and the commands say so in the Messages panel.

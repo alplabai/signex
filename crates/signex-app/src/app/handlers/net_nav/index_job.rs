@@ -122,26 +122,35 @@ impl Signex {
         ))
     }
 
-    /// Park `action` and hand back the build's task.
+    /// Park `action` and hand back the build's task. A command the user gave
+    /// is never displaced by the hover's own timer.
     pub(super) fn wait_for_net_index(
         &mut self,
         action: PendingNetAction,
         build: Task<Message>,
     ) -> Task<Message> {
-        self.document_state.net_nav.pending = Some(action);
+        let nav = &mut self.document_state.net_nav;
+        if action != PendingNetAction::HoverDwell || nav.pending.is_none() {
+            nav.pending = Some(action);
+        }
         build
     }
 
     /// Store a finished build and re-run what waited for it.
     pub(super) fn apply_net_index(&mut self, outcome: &IndexOutcome) -> Task<Message> {
         match self.document_state.net_nav.index.apply(outcome) {
-            Stored::Stale => Task::none(),
+            // A newer key arrived while this one ran: build it now, once.
+            Stored::Stale => match self.net_index_lookup(outcome.project) {
+                IndexLookup::Building(build) => build,
+                IndexLookup::Ready(_) | IndexLookup::Unavailable => Task::none(),
+            },
             Stored::Failed(reason) => {
                 self.document_state.net_nav.pending = None;
                 crate::diagnostics::log_warning(messages::index_failed(&reason));
                 Task::none()
             }
             Stored::Fresh(data) => {
+                self.report_index_warnings(outcome);
                 self.refresh_highlight_from(outcome.project, &data);
                 match self.document_state.net_nav.pending.take() {
                     Some(action) => self.run_pending_net_action(action),
@@ -151,24 +160,78 @@ impl Signex {
         }
     }
 
+    /// Say which sheets would not read and what the stitch found, once per
+    /// change. A project with net classes already hears the same lines from
+    /// the net-class style refresh, so it is left to that one.
+    fn report_index_warnings(&mut self, outcome: &IndexOutcome) {
+        let fresh = self
+            .document_state
+            .net_nav
+            .index
+            .new_warnings(outcome.project, &outcome.warnings);
+        if !outcome.key.classes.is_empty() {
+            return;
+        }
+        for warning in fresh {
+            crate::diagnostics::log_warning(messages::index_warning(&warning));
+        }
+    }
+
     /// Keep a highlighted net's index fresh through edits, so what stays
-    /// bright follows the document.
+    /// bright follows the document, and let go of what a closed project held.
     pub(crate) fn refresh_net_nav(&mut self) -> Task<Message> {
-        let build = match self
+        let build = self.refresh_highlight_index();
+        self.sync_net_highlight_to_canvases();
+        build
+    }
+
+    fn refresh_highlight_index(&mut self) -> Task<Message> {
+        let Some(project) = self
             .document_state
             .net_nav
             .highlight
             .as_ref()
             .map(|h| h.project)
-        {
-            Some(project) => match self.net_index_lookup(project) {
-                IndexLookup::Building(task) => task,
-                _ => Task::none(),
-            },
-            None => Task::none(),
+        else {
+            return Task::none();
         };
-        self.sync_net_highlight_to_canvases();
-        build
+        let stamp = self.net_nav_stamp();
+        if self.document_state.net_nav.refresh_stamp == Some(stamp) {
+            return Task::none();
+        }
+        self.document_state.net_nav.refresh_stamp = Some(stamp);
+        let open: Vec<ProjectId> = plan_projects(&self.document_state)
+            .iter()
+            .map(|p| p.project)
+            .collect();
+        self.document_state.net_nav.index.retain_projects(&open);
+        if self.document_state.project_by_id(project).is_none() {
+            self.document_state.net_nav.highlight = None;
+            crate::diagnostics::log_info(messages::project_closed());
+            return Task::none();
+        }
+        match self.net_index_lookup(project) {
+            IndexLookup::Building(task) => task,
+            IndexLookup::Ready(_) | IndexLookup::Unavailable => Task::none(),
+        }
+    }
+
+    /// A stamp over what the net index depends on: the open sheets'
+    /// connectivity, and each project's root, sheet list and class table.
+    fn net_nav_stamp(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let document = &self.document_state;
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        crate::app::runtime::net_class_styles::connectivity_stamp(document).hash(&mut hasher);
+        for project in &document.projects {
+            project.id.hash(&mut hasher);
+            project.data.schematic_root.hash(&mut hasher);
+            for sheet in &project.data.sheets {
+                sheet.filename.hash(&mut hasher);
+            }
+            format!("{:?}", project.data.net_classes).hash(&mut hasher);
+        }
+        hasher.finish()
     }
 
     /// Build and apply the active project's index on this thread, for a

@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use signex_net::SheetKey;
-use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
+use signex_types::schematic::{InstancePath, Point, SchematicSheet, SelectedItem, SelectedKind};
 
 use crate::app::state::net_nav::ProjectNetData;
 
@@ -19,6 +19,9 @@ pub(super) struct NetTarget {
     pub sheet: PathBuf,
     pub item: SelectedItem,
     pub at: Point,
+    /// The placement the sheet's tab was entered through; `None` when it was
+    /// opened directly, which reads the first placement.
+    pub occurrence: Option<InstancePath>,
 }
 
 /// The kinds of object that sit on a net.
@@ -40,17 +43,19 @@ pub(super) fn net_of_target(
     sheet: &SheetKey,
     item: &SelectedItem,
     at: Point,
+    occurrence: Option<&InstancePath>,
 ) -> Option<usize> {
+    let nets = data.index.nets_in(sheet, item.uuid, occurrence);
     match item.kind {
         SelectedKind::Symbol => data
             .index
-            .pin_near(sheet, at, PIN_TOLERANCE_MM)
+            .pin_near(sheet, at, PIN_TOLERANCE_MM, occurrence)
             .map(|(net, _)| net)
-            .or_else(|| match data.index.nets_of(sheet, item.uuid) {
+            .or_else(|| match nets.as_slice() {
                 [only] => Some(*only),
                 _ => None,
             }),
-        kind if is_net_kind(kind) => data.index.nets_of(sheet, item.uuid).first().copied(),
+        kind if is_net_kind(kind) => nets.first().copied(),
         _ => None,
     }
 }
@@ -107,8 +112,10 @@ impl Signex {
     pub(super) fn target_under_cursor(&self) -> Option<NetTarget> {
         let (x, y) = self.cursor_world_now()?;
         let item = self.item_hit_at(x, y).filter(|i| is_net_kind(i.kind))?;
+        let sheet = self.document_state.active_path.clone()?;
         Some(NetTarget {
-            sheet: self.document_state.active_path.clone()?,
+            occurrence: self.placement_of(&sheet),
+            sheet,
             item,
             at: Point::new(x, y),
         })
@@ -124,11 +131,18 @@ impl Signex {
             return None;
         }
         let at = item_position(canvas.active_snapshot()?, item)?;
+        let sheet = self.document_state.active_path.clone()?;
         Some(NetTarget {
-            sheet: self.document_state.active_path.clone()?,
+            occurrence: self.placement_of(&sheet),
+            sheet,
             item: *item,
             at,
         })
+    }
+
+    /// The placement the tab of `sheet` was entered through (#1133).
+    pub(super) fn placement_of(&self, sheet: &std::path::Path) -> Option<InstancePath> {
+        self.document_state.tab_placements.get(sheet).cloned()
     }
 
     /// The project that owns the sheet at `path`.

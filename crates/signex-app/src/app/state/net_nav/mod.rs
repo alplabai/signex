@@ -34,4 +34,7 @@ pub struct NetNavState {
     pub hover: HoverState,
     pub index: NetIndexCache,
     pub pending: Option<PendingNetAction>,
+    /// What the highlight's index refresh last saw, so an update that changed
+    /// no connectivity, sheet list or class table does no planning.
+    pub refresh_stamp: Option<u64>,
 }

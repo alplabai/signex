@@ -38,7 +38,7 @@ fn file(path: &Path) -> String {
 }
 
 pub(super) fn no_port_selected() -> String {
-    "Select a port, label or sheet entry first, then run Go to net partner.".to_string()
+    "Select a label, sheet entry or power port first, then run Go to net partner.".to_string()
 }
 
 pub(super) fn no_project(what: &str) -> String {
@@ -65,7 +65,7 @@ pub(super) fn sheet_not_in_project() -> String {
 
 pub(super) fn not_a_port(name: &str) -> String {
     cap(format!(
-        "Select a global label, hierarchical label or sheet entry; '{}' is not a port.",
+        "Select a global label, hierarchical label, sheet entry or power port; '{}' is not one.",
         clip(name, NAME_CLIP)
     ))
 }
@@ -107,9 +107,21 @@ pub(super) fn no_history(forward: bool) -> String {
 
 pub(super) fn history_skipped(path: &Path) -> String {
     cap(format!(
-        "Sheet history skipped {}: it cannot be opened.",
+        "Open the sheet from the project tree instead; history skipped {}, it is missing.",
         file(path)
     ))
+}
+
+pub(super) fn index_warning(warning: &str) -> String {
+    cap(format!(
+        "Check the project's sheets: {}",
+        clip(warning, 110)
+    ))
+}
+
+pub(super) fn project_closed() -> String {
+    "Highlight a net again in an open project; its project was closed, so the highlight was cleared."
+        .to_string()
 }
 
 pub(super) fn nothing_pointed_at() -> String {
@@ -199,6 +211,8 @@ mod tests {
             no_history(true),
             no_history(false),
             history_skipped(&path),
+            index_warning(&l),
+            project_closed(),
             nothing_pointed_at(),
             on_no_net(),
             highlighted(&l, 12),

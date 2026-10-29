@@ -75,15 +75,22 @@ pub enum Stored {
     Fresh(Arc<ProjectNetData>),
     /// The build failed; the key is not retried until it moves.
     Failed(String),
-    /// A newer request replaced this one: dropped.
+    /// A newer request arrived while this one ran: dropped, and the caller
+    /// starts the one build the newest key needs.
     Stale,
 }
 
 #[derive(Default)]
 pub struct NetIndexCache {
     entries: HashMap<ProjectId, (ProjectKey, Arc<ProjectNetData>)>,
+    /// The newest key asked for.
     wanted: HashMap<ProjectId, ProjectKey>,
+    /// The key a worker is building now: at most one per project.
+    in_flight: HashMap<ProjectId, ProjectKey>,
     failed: HashMap<ProjectId, ProjectKey>,
+    /// The stitch warnings last reported per project, so a rebuild that
+    /// finds the same ones says nothing more.
+    reported: HashMap<ProjectId, Vec<String>>,
 }
 
 impl NetIndexCache {
@@ -102,17 +109,22 @@ impl NetIndexCache {
     }
 
     /// Record that `project` should hold the index for `key`. `true` when a
-    /// worker has to build it: the cache neither holds it, has it in flight,
-    /// nor already failed on it.
+    /// worker has to start now: the cache neither holds the key, nor has a
+    /// worker running for the project (a newer key waits for it to land and
+    /// is built once then), nor already failed on it.
     pub fn want(&mut self, project: ProjectId, key: &ProjectKey) -> bool {
         if self.failed.get(&project) == Some(key) {
             return false;
         }
         self.failed.remove(&project);
-        if self.fresh(project, key).is_some() || self.wanted.get(&project) == Some(key) {
+        if self.fresh(project, key).is_some() {
             return false;
         }
         self.wanted.insert(project, key.clone());
+        if self.in_flight.contains_key(&project) {
+            return false;
+        }
+        self.in_flight.insert(project, key.clone());
         true
     }
 
@@ -125,6 +137,9 @@ impl NetIndexCache {
     /// remembered so the same key is not retried until the project's key
     /// moves.
     pub fn apply(&mut self, outcome: &IndexOutcome) -> Stored {
+        if self.in_flight.get(&outcome.project) == Some(&outcome.key) {
+            self.in_flight.remove(&outcome.project);
+        }
         if self.wanted.get(&outcome.project) != Some(&outcome.key) {
             return Stored::Stale;
         }
@@ -146,12 +161,28 @@ impl NetIndexCache {
     pub fn retain_projects(&mut self, keep: &[ProjectId]) {
         self.entries.retain(|id, _| keep.contains(id));
         self.wanted.retain(|id, _| keep.contains(id));
+        self.in_flight.retain(|id, _| keep.contains(id));
         self.failed.retain(|id, _| keep.contains(id));
+        self.reported.retain(|id, _| keep.contains(id));
+    }
+
+    /// The warnings of `project`'s latest build that its previous one did not
+    /// already report.
+    pub fn new_warnings(&mut self, project: ProjectId, warnings: &[String]) -> Vec<String> {
+        let seen = self.reported.entry(project).or_default();
+        let fresh = warnings
+            .iter()
+            .filter(|w| !seen.contains(w))
+            .cloned()
+            .collect();
+        *seen = warnings.to_vec();
+        fresh
     }
 
     /// Forget requests in flight and failures, for a caller that lost its tasks.
     pub fn forget_pending(&mut self) {
         self.wanted.clear();
+        self.in_flight.clear();
         self.failed.clear();
     }
 }
@@ -220,13 +251,54 @@ mod tests {
     }
 
     #[test]
-    fn an_answer_for_a_key_no_longer_wanted_is_dropped() {
+    fn an_answer_for_a_key_no_longer_wanted_is_dropped_and_the_newest_builds_once() {
         let p = ProjectId::test_id(1);
         let mut cache = NetIndexCache::default();
-        cache.want(p, &key(1));
-        cache.want(p, &key(2));
+        assert!(cache.want(p, &key(1)));
+        assert!(!cache.want(p, &key(2)), "one build per project at a time");
+        assert!(!cache.want(p, &key(3)), "still one");
         assert!(matches!(cache.apply(&outcome(p, key(1))), Stored::Stale));
         assert!(cache.fresh(p, &key(1)).is_none());
+        assert!(
+            cache.want(p, &key(3)),
+            "the newest key builds when the worker lands"
+        );
+        assert!(!cache.want(p, &key(3)));
+        assert!(matches!(cache.apply(&outcome(p, key(3))), Stored::Fresh(_)));
+    }
+
+    #[test]
+    fn a_closed_project_is_dropped_from_every_table() {
+        let (a, b) = (ProjectId::test_id(1), ProjectId::test_id(2));
+        let mut cache = NetIndexCache::default();
+        for p in [a, b] {
+            cache.want(p, &key(1));
+            cache.apply(&outcome(p, key(1)));
+            cache.new_warnings(p, &["w".to_string()]);
+        }
+        cache.retain_projects(&[a]);
+        assert!(cache.latest(b).is_none());
+        assert_eq!(
+            cache.new_warnings(b, &["w".to_string()]),
+            ["w"],
+            "b forgotten"
+        );
+        assert!(cache.latest(a).is_some());
+    }
+
+    #[test]
+    fn a_warning_is_reported_once_until_it_changes() {
+        let p = ProjectId::test_id(1);
+        let mut cache = NetIndexCache::default();
+        let w = vec!["page.snxsch unreadable".to_string()];
+        assert_eq!(cache.new_warnings(p, &w).len(), 1);
+        assert!(cache.new_warnings(p, &w).is_empty());
+        assert!(cache.new_warnings(p, &[]).is_empty());
+        assert_eq!(
+            cache.new_warnings(p, &w).len(),
+            1,
+            "back after it went away"
+        );
     }
 
     #[test]

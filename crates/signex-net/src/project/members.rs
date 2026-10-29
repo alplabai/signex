@@ -50,12 +50,13 @@ pub struct NetMember {
 
 impl NetMember {
     /// A member that carries a net across sheets: a Global or Hierarchical
-    /// label, or a sheet entry.
+    /// label, a sheet entry or a power port.
     pub fn is_port(&self) -> bool {
         matches!(
             self.kind,
             NetMemberKind::Label(LabelType::Global | LabelType::Hierarchical)
                 | NetMemberKind::SheetPin { .. }
+                | NetMemberKind::PowerPort
         )
     }
 

@@ -64,8 +64,14 @@ impl Signex {
     /// The selection, else the pointed-at object, when it is a label or sheet
     /// entry.
     fn port_target(&self) -> Option<NetTarget> {
-        let is_port_kind =
-            |t: &NetTarget| matches!(t.item.kind, SelectedKind::Label | SelectedKind::SheetPin);
+        // A placed symbol is a candidate for its power port; the index says
+        // whether it is one.
+        let is_port_kind = |t: &NetTarget| {
+            matches!(
+                t.item.kind,
+                SelectedKind::Label | SelectedKind::SheetPin | SelectedKind::Symbol
+            )
+        };
         self.target_from_selection()
             .filter(is_port_kind)
             .or_else(|| self.target_under_cursor().filter(is_port_kind))
@@ -76,14 +82,15 @@ impl Signex {
             crate::diagnostics::log_warning(messages::sheet_not_in_project());
             return Task::none();
         };
-        let member = data.index.member(&key, target.item.uuid);
+        let occurrence = target.occurrence.as_ref();
+        let member = data.index.member(&key, target.item.uuid, occurrence);
         let Some(source) = member.filter(|m| m.is_port()) else {
             let name = member.map(describe_member).unwrap_or_default();
             crate::diagnostics::log_info(messages::not_a_port(&name));
             return Task::none();
         };
         let name = describe_member(source);
-        let partners = data.index.partners(&key, target.item.uuid);
+        let partners = data.index.partners(&key, target.item.uuid, occurrence);
         let Some(first) = partners.first().copied() else {
             crate::diagnostics::log_info(messages::no_partner(&name));
             return Task::none();
@@ -138,7 +145,10 @@ impl Signex {
                 crate::diagnostics::log_info(messages::no_history(forward));
                 return Task::none();
             };
-            if self.open_or_focus_sheet_path(path.clone()) {
+            // A sheet that is neither open nor on disk is skipped here, so the
+            // open path does not report it as a missing child sheet.
+            let open = self.document_state.tabs.iter().any(|t| t.path == path);
+            if (open || path.exists()) && self.open_or_focus_sheet_path(path.clone()) {
                 return Task::none();
             }
             crate::diagnostics::log_warning(messages::history_skipped(&path));

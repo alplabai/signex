@@ -66,5 +66,5 @@ fn a_wire_is_not_a_port_and_the_jump_says_so() {
     p.send_settled(NetNavMsg::PartnerJumpRequested);
 
     assert_eq!(p.active(), Some(p.root.clone()));
-    assert!(logged(&["Select a port, label or sheet entry"]));
+    assert!(logged(&["Select a label, sheet entry or power port"]));
 }

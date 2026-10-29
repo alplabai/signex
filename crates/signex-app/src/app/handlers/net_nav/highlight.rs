@@ -84,7 +84,8 @@ impl Signex {
         select_here: bool,
     ) {
         let net = data.key_of(&target.sheet).and_then(|key| {
-            let net = net_of_target(data, &key, &target.item, target.at)?;
+            let occurrence = target.occurrence.as_ref();
+            let net = net_of_target(data, &key, &target.item, target.at, occurrence)?;
             Some((key, net))
         });
         let Some((key, net)) = net else {
@@ -106,7 +107,7 @@ impl Signex {
             elements,
         });
         if select_here {
-            self.select_net_members_here(data, &key, net);
+            self.select_net_members_here(data, &key, net, target.occurrence.as_ref());
         }
         self.sync_net_highlight_to_canvases();
         crate::diagnostics::log_info(messages::highlighted(&name, sheets));
@@ -118,12 +119,16 @@ impl Signex {
         data: &ProjectNetData,
         key: &signex_net::SheetKey,
         net: usize,
+        occurrence: Option<&signex_types::schematic::InstancePath>,
     ) {
         let Some(members) = data.index.net(net).map(|n| &n.members) else {
             return;
         };
         let mut items: Vec<SelectedItem> = Vec::new();
-        for member in members.iter().filter(|m| &m.sheet == key) {
+        for member in members
+            .iter()
+            .filter(|m| &m.sheet == key && occurrence.is_none_or(|o| &m.occurrence == o))
+        {
             let item = SelectedItem::new(member.id, selected_kind_of(member));
             if !items.contains(&item) {
                 items.push(item);
@@ -225,6 +230,11 @@ impl Signex {
                 highlight.elements = bright_elements(data, net);
                 if let Some(n) = data.index.net(net) {
                     highlight.name.clone_from(&n.name);
+                }
+                // Anchor on something that still exists, so the next rebuild
+                // does not depend on an element that may be gone by then.
+                if let Some(anchor) = data.index.anchor_of(net) {
+                    highlight.anchor = anchor;
                 }
             }
             None => {

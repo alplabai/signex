@@ -105,7 +105,7 @@ fn resolve_project(open: &OpenSheets, job: ProjectJob) -> ResolvedProject {
 /// Stamp over every open sheet's identity and connectivity revision. Moves on
 /// any edit that can change a net, and on a sheet opening, closing or being
 /// replaced; not on an edit that leaves connectivity alone.
-fn connectivity_stamp(document: &DocumentState) -> u64 {
+pub(in crate::app) fn connectivity_stamp(document: &DocumentState) -> u64 {
     document.engines.iter().fold(0u64, |acc, (path, engine)| {
         let mut hasher = DefaultHasher::new();
         (path, engine.instance_id(), engine.connectivity_revision()).hash(&mut hasher);
