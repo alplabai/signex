@@ -1,0 +1,263 @@
+//! The net index: partners across sheets, steps, hover facts, highlight sets.
+use super::*;
+use signex_types::net_class::NetClass;
+
+fn id(n: u128) -> Uuid {
+    Uuid::from_u128(n)
+}
+
+fn key(name: &str) -> SheetKey {
+    SheetKey::new(name)
+}
+
+fn labelled(text: &str, at: Point, ty: LabelType, uuid: u128) -> Label {
+    Label {
+        uuid: id(uuid),
+        ..label(text, at, ty)
+    }
+}
+
+/// `root` under `root.sch` plus `children`, indexed.
+fn indexed(root: &SchematicSheet, children: &[(&str, SchematicSheet)]) -> NetIndex {
+    let mut sheets: HashMap<SheetKey, SchematicSheet> =
+        children.iter().map(|(k, v)| (key(k), v.clone())).collect();
+    sheets.insert(key("root.sch"), root.clone());
+    let resolved = sheets
+        .iter()
+        .map(|(k, s)| {
+            let sub = s
+                .child_sheets
+                .iter()
+                .map(|cs| (cs.filename.clone(), key(&cs.filename)))
+                .collect();
+            (k.clone(), sub)
+        })
+        .collect();
+    let roots = [ProjectRoot {
+        key: key("root.sch"),
+    }];
+    let graph = ProjectGraph {
+        sheets: &sheets,
+        resolved: &resolved,
+        roots: &roots,
+    };
+    build_project_netlist_indexed(&graph).1
+}
+
+fn root_with_child(file: &str, pins: Vec<SheetPin>) -> SchematicSheet {
+    let mut root = empty_sheet();
+    let mut cs = child_sheet("A", file, pins);
+    cs.uuid = id(500);
+    root.child_sheets.push(cs);
+    root
+}
+
+fn entry(name: &str, at: Point, uuid: u128) -> SheetPin {
+    SheetPin {
+        uuid: id(uuid),
+        ..sheet_pin(name, at)
+    }
+}
+
+fn ids(partners: &[&NetMember]) -> Vec<Uuid> {
+    partners.iter().map(|m| m.id).collect()
+}
+
+#[test]
+fn global_labels_on_two_sheets_are_partners() {
+    let mut root = root_with_child("a.sch", vec![]);
+    root.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    root.labels
+        .push(labelled("VCC", pt(0.0, 0.0), LabelType::Global, 1));
+    let mut a = empty_sheet();
+    a.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    a.labels
+        .push(labelled("VCC", pt(0.0, 0.0), LabelType::Global, 2));
+    let idx = indexed(&root, &[("a.sch", a)]);
+
+    let from_root = idx.partners(&key("root.sch"), id(1));
+    assert_eq!(ids(&from_root), [id(2)]);
+    assert_eq!(from_root[0].sheet, key("a.sch"));
+    let from_child = idx.partners(&key("a.sch"), id(2));
+    assert_eq!(ids(&from_child), [id(1)]);
+}
+
+#[test]
+fn a_hierarchical_label_and_its_sheet_entry_are_partners() {
+    let mut root = root_with_child("a.sch", vec![entry("SIG", pt(0.0, 0.0), 10)]);
+    root.wires.push(wire(pt(0.0, 0.0), pt(-5.0, 0.0)));
+    let mut a = empty_sheet();
+    a.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    a.labels
+        .push(labelled("SIG", pt(0.0, 0.0), LabelType::Hierarchical, 11));
+    let idx = indexed(&root, &[("a.sch", a)]);
+
+    let up = idx.partners(&key("a.sch"), id(11));
+    assert_eq!(ids(&up), [id(10)]);
+    assert_eq!(up[0].sheet, key("root.sch"));
+    assert!(matches!(up[0].kind, NetMemberKind::SheetPin { .. }));
+    let down = idx.partners(&key("root.sch"), id(10));
+    assert_eq!(ids(&down), [id(11)]);
+}
+
+/// Two children whose entries are wired together on the parent: the two child
+/// ports are partners of each other, and repeating the jump cycles the ring.
+#[test]
+fn ports_of_sibling_sheets_wired_together_are_partners_and_cycle() {
+    let mut root = empty_sheet();
+    for (n, file, x) in [(500, "a.sch", 0.0), (501, "b.sch", 10.0)] {
+        let mut cs = child_sheet(file, file, vec![entry("SIG", pt(x, 0.0), 10 + n)]);
+        cs.uuid = id(n);
+        root.child_sheets.push(cs);
+    }
+    root.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    let child = |label_uuid| {
+        let mut c = empty_sheet();
+        c.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+        c.labels.push(labelled(
+            "SIG",
+            pt(0.0, 0.0),
+            LabelType::Hierarchical,
+            label_uuid,
+        ));
+        c
+    };
+    let idx = indexed(&root, &[("a.sch", child(21)), ("b.sch", child(22))]);
+
+    let from_a = idx.partners(&key("a.sch"), id(21));
+    assert_eq!(from_a.first().map(|m| m.id), Some(id(22)));
+    assert_eq!(from_a.len(), 3, "the other label and both sheet entries");
+    let from_b = idx.partners(&key("b.sch"), id(22));
+    assert_eq!(
+        from_b.first().map(|m| m.id),
+        Some(id(510)),
+        "the ring continues past the last port to the first"
+    );
+}
+
+#[test]
+fn a_lone_or_local_label_has_no_partner() {
+    let mut root = root_with_child("a.sch", vec![]);
+    root.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    root.labels
+        .push(labelled("ALONE", pt(0.0, 0.0), LabelType::Global, 1));
+    root.wires.push(wire(pt(20.0, 0.0), pt(25.0, 0.0)));
+    root.labels
+        .push(labelled("LOCAL", pt(20.0, 0.0), LabelType::Net, 3));
+    let mut a = empty_sheet();
+    a.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    a.labels
+        .push(labelled("LOCAL", pt(0.0, 0.0), LabelType::Net, 4));
+    let idx = indexed(&root, &[("a.sch", a)]);
+
+    assert!(idx.partners(&key("root.sch"), id(1)).is_empty());
+    assert!(
+        idx.partners(&key("root.sch"), id(3)).is_empty(),
+        "local labels never cross"
+    );
+    assert!(
+        idx.partners(&key("a.sch"), id(99)).is_empty(),
+        "unknown element"
+    );
+}
+
+/// R1 on the root and R2 on the child share `VCC` through two global labels.
+fn two_sheet_vcc() -> NetIndex {
+    let mut root = root_with_child("a.sch", vec![]);
+    add_lib(&mut root, "R");
+    place(&mut root, "R1", "R", pt(0.0, 0.0));
+    root.symbols[0].uuid = id(100);
+    root.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    root.wires[0].uuid = id(300);
+    root.labels
+        .push(labelled("VCC", pt(5.0, 0.0), LabelType::Global, 1));
+    let mut a = empty_sheet();
+    add_lib(&mut a, "R");
+    place(&mut a, "R2", "R", pt(0.0, 0.0));
+    a.symbols[0].uuid = id(101);
+    a.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    a.labels
+        .push(labelled("VCC", pt(5.0, 0.0), LabelType::Global, 2));
+    indexed(&root, &[("a.sch", a)])
+}
+
+#[test]
+fn steps_visit_pins_and_labels_across_sheets_but_not_wiring() {
+    let idx = two_sheet_vcc();
+    let net = idx.nets_of(&key("root.sch"), id(100))[0];
+    let steps = idx.steps(net);
+    let at: Vec<(String, Uuid)> = steps.iter().map(|m| (m.sheet.to_string(), m.id)).collect();
+    assert_eq!(
+        at,
+        [
+            ("root.sch".to_string(), id(100)),
+            ("root.sch".to_string(), id(1)),
+            ("a.sch".to_string(), id(101)),
+            ("a.sch".to_string(), id(2)),
+        ]
+    );
+    assert_eq!(
+        idx.nets_of(&key("a.sch"), id(101))[0],
+        net,
+        "one net on both sheets"
+    );
+}
+
+#[test]
+fn highlight_elements_cover_every_sheet_the_net_reaches() {
+    let idx = two_sheet_vcc();
+    let net = idx.nets_of(&key("root.sch"), id(100))[0];
+    let sets = idx.highlight_elements(net);
+    assert!(sets[&key("root.sch")].contains(&id(300)), "the wire");
+    assert!(sets[&key("root.sch")].contains(&id(100)), "the symbol");
+    assert!(sets[&key("a.sch")].contains(&id(2)), "the far label");
+}
+
+#[test]
+fn hover_names_the_net_its_class_and_every_pin_with_its_sheet() {
+    let idx = two_sheet_vcc();
+    let net = idx.nets_of(&key("root.sch"), id(1))[0];
+    let class = NetClass {
+        nets: vec!["VCC".to_string()],
+        ..NetClass::named("Power")
+    };
+    let hover = idx.hover(net, &[class]).expect("net exists");
+    assert_eq!(hover.name, "VCC");
+    assert_eq!(hover.class.as_deref(), Some("Power"));
+    let pins: Vec<(String, String, String)> = hover
+        .pins
+        .iter()
+        .map(|p| (p.reference.clone(), p.pin.clone(), p.sheet.to_string()))
+        .collect();
+    assert_eq!(
+        pins,
+        [
+            ("R1".into(), "1".into(), "root.sch".into()),
+            ("R2".into(), "1".into(), "a.sch".into()),
+        ]
+    );
+    assert_eq!(idx.hover(net, &[]).expect("net").class, None);
+}
+
+#[test]
+fn pin_near_finds_the_pin_tip_under_a_point_on_its_own_sheet_only() {
+    let idx = two_sheet_vcc();
+    let (net, member) = idx
+        .pin_near(&key("root.sch"), pt(0.2, 0.1), 0.5)
+        .expect("R1 pin tip");
+    assert_eq!(member.id, id(100));
+    assert_eq!(idx.net(net).map(|n| n.name.as_str()), Some("VCC"));
+    assert!(idx.pin_near(&key("root.sch"), pt(3.0, 3.0), 0.5).is_none());
+    assert!(idx.pin_near(&key("a.sch"), pt(9.0, 9.0), 0.5).is_none());
+}
+
+#[test]
+fn resolve_follows_a_net_by_name_or_anchor_after_a_rebuild() {
+    let idx = two_sheet_vcc();
+    let anchor = (key("root.sch"), id(1));
+    let found = idx.resolve("VCC", &anchor).expect("by anchor");
+    assert_eq!(idx.net(found).map(|n| n.name.as_str()), Some("VCC"));
+    let gone = (key("root.sch"), id(404));
+    assert_eq!(idx.resolve("VCC", &gone), Some(found), "by name");
+    assert_eq!(idx.resolve("NOPE", &gone), None);
+}
