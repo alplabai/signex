@@ -96,7 +96,6 @@ mod tests {
             title: "break-wire".to_string(),
             path: path.clone(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind: TabKind::Schematic,
         });
