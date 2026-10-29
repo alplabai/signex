@@ -680,6 +680,9 @@ pub enum PasteIntent {
     Duplicate,
     /// Arm the copy just made as a rubber stamp.
     Stamp,
+    /// Read the project's numbers for an open Paste Array dialog whose
+    /// designator choice became Next free; nothing follows the read.
+    ArraySeed,
 }
 
 /// One paste-family request in flight: what it is for, and the tool state it
@@ -690,6 +693,8 @@ pub struct PasteRequest {
     pub intent: PasteIntent,
     pub epoch: u64,
     pub path: Option<PathBuf>,
+    /// The Paste Array dialog an `ArraySeed` read is for; 0 otherwise.
+    pub dialog: u64,
 }
 
 /// Edit-command message family (ADR-0001 D3). Namespaced under

@@ -11,6 +11,7 @@ pub(crate) fn request(app: &Signex, intent: PasteIntent) -> PasteRequest {
         intent,
         epoch: app.interaction_state.placement_epoch,
         path: app.document_state.active_path.clone(),
+        dialog: 0,
     }
 }
 
@@ -28,22 +29,23 @@ pub(crate) fn settle(app: &mut Signex, task: iced::Task<Message>, reads_numbers:
     }
 }
 
-fn reads_numbers(app: &Signex, intent: PasteIntent) -> bool {
-    intent == PasteIntent::Array || app.ui_state.paste_designators == PasteDesignators::NextFree
+/// Every intent reads the project's numbers only under Next free.
+fn reads_numbers(app: &Signex) -> bool {
+    app.ui_state.paste_designators == PasteDesignators::NextFree
 }
 
 /// Send `message` and settle the numbering read it starts, for Duplicate and
 /// rubber stamp, which have no clipboard read.
-pub(crate) fn send_and_settle(app: &mut Signex, message: EditMsg, intent: PasteIntent) {
+pub(crate) fn send_and_settle(app: &mut Signex, message: EditMsg, _intent: PasteIntent) {
     let task = app.update(Message::Edit(message));
-    let reads = reads_numbers(app, intent);
+    let reads = reads_numbers(app);
     settle(app, task, reads);
 }
 
 /// `text` as the system clipboard's answer to a paste request.
 pub(crate) fn paste_with_clipboard(app: &mut Signex, text: Option<&str>) {
     let task = app.update(Message::Edit(EditMsg::Paste));
-    let reads = reads_numbers(app, PasteIntent::Paste);
+    let reads = reads_numbers(app);
     settle(app, task, reads);
     answer(app, PasteIntent::Paste, text);
 }
@@ -57,7 +59,7 @@ pub(crate) fn paste(app: &mut Signex) {
 /// Smart Paste with nothing usable on the system clipboard.
 pub(crate) fn smart_paste(app: &mut Signex) {
     let task = app.update(Message::Edit(EditMsg::SmartPaste));
-    let reads = reads_numbers(app, PasteIntent::SmartPaste);
+    let reads = reads_numbers(app);
     settle(app, task, reads);
     answer(app, PasteIntent::SmartPaste, None);
 }

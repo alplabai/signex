@@ -4,8 +4,9 @@ use iced::Task;
 use signex_engine::Command;
 use signex_types::schematic::Point;
 
-use crate::app::{Message, Signex};
+use crate::app::{Message, PasteIntent, PasteRequest, Signex};
 use crate::paste_array::{PasteArrayInput, PasteArrayMsg, PasteArrayState};
+use crate::paste_prefs::PasteDesignators;
 
 /// Width of the copy in the default X spacing is padded by this many grid
 /// pitches so neighbouring copies do not touch.
@@ -33,7 +34,8 @@ impl Signex {
             .map(|b| ((b.max_x - b.min_x) / grid).ceil() * grid + DEFAULT_GAP_PITCHES * grid)
             .filter(|dx| dx.is_finite() && *dx > 0.0)
             .unwrap_or(FALLBACK_SPACING_MM);
-        self.ui_state.paste_array = Some(PasteArrayState::new(
+        self.ui_state.paste_array_opens += 1;
+        let mut dialog = PasteArrayState::new(
             self.ui_state.unit,
             dx_mm,
             0.0,
@@ -41,23 +43,47 @@ impl Signex {
             self.ui_state.paste_designators,
             copied.payload.item_count(),
             self.document_state.active_path.clone(),
-        ));
+        );
+        dialog.id = self.ui_state.paste_array_opens;
+        self.ui_state.paste_array = Some(dialog);
     }
 
     pub(crate) fn handle_paste_array_message(&mut self, msg: PasteArrayMsg) -> Task<Message> {
         self.close_paste_array_if_sheet_changed();
+        let mut seeding = Task::none();
         if let Some(state) = self.ui_state.paste_array.as_mut() {
             match msg {
                 PasteArrayMsg::CountChanged(text) => state.count = text,
                 PasteArrayMsg::XSpacingChanged(text) => state.x_spacing = text,
                 PasteArrayMsg::YSpacingChanged(text) => state.y_spacing = text,
                 PasteArrayMsg::StepChanged(text) => state.step = text,
-                PasteArrayMsg::DesignatorsChosen(mode) => state.designators = mode,
+                PasteArrayMsg::DesignatorsChosen(mode) => {
+                    state.designators = mode;
+                    if mode == PasteDesignators::NextFree {
+                        seeding = self.seed_paste_array();
+                    }
+                }
                 PasteArrayMsg::ApplyPressed => self.apply_paste_array(),
                 PasteArrayMsg::Closed => self.ui_state.paste_array = None,
             }
         }
-        self.finish_update()
+        Task::batch([seeding, self.finish_update()])
+    }
+
+    /// Read the project's numbers for a dialog that just chose Next free;
+    /// OK waits for them.
+    fn seed_paste_array(&mut self) -> Task<Message> {
+        let request = PasteRequest {
+            intent: PasteIntent::ArraySeed,
+            epoch: self.interaction_state.placement_epoch,
+            path: self.document_state.active_path.clone(),
+            dialog: self.ui_state.paste_array.as_ref().map_or(0, |d| d.id),
+        };
+        let task = self.paste_seed_task(&request);
+        if let (Some(_), Some(dialog)) = (&task, self.ui_state.paste_array.as_mut()) {
+            dialog.seed_pending = true;
+        }
+        task.unwrap_or_else(Task::none)
     }
 
     /// Close the dialog when the active sheet is not the one it was opened
@@ -79,9 +105,26 @@ impl Signex {
     /// and its label numbers have moved `k` steps; designators follow the
     /// "Designators on paste" preference, numbered in turn across the copies.
     fn apply_paste_array(&mut self) {
+        // The copy may have changed since the dialog opened (another Copy,
+        // another window): the item cap is checked against the copy that is
+        // about to be placed, and a refusal is logged by `input()`'s reason.
+        let items = self
+            .interaction_state
+            .clipboard
+            .as_ref()
+            .map(|c| c.payload.item_count());
+        if let (Some(items), Some(state)) = (items, self.ui_state.paste_array.as_mut()) {
+            state.items_per_copy = items;
+        }
         let Some(state) = self.ui_state.paste_array.as_ref() else {
             return;
         };
+        if state.seed_pending && state.designators == PasteDesignators::NextFree {
+            crate::diagnostics::log_warning(
+                "Paste Array: the project's designators are still being read; press OK again in a moment.",
+            );
+            return;
+        }
         let input = match state.input() {
             Ok(input) => input,
             Err(reason) => {
