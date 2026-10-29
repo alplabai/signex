@@ -470,6 +470,8 @@ impl Signex {
         let selected_uuid = self.document_state.panel_ctx.selected_uuid;
         let selected_kind = self.document_state.panel_ctx.selected_kind;
         let selection_info = self.document_state.panel_ctx.selection_info.clone();
+        let multi_groups = self.document_state.panel_ctx.multi_groups.clone();
+        let multi_draft = self.document_state.panel_ctx.multi_draft.clone();
         let symbol_choices = self.document_state.panel_ctx.symbol_choices.clone();
         let drawing_edit_buf = self.document_state.panel_ctx.drawing_edit_buf.clone();
         let drawing_edit_buf_for = self.document_state.panel_ctx.drawing_edit_buf_for;
@@ -613,6 +615,8 @@ impl Signex {
             selected_uuid,
             selected_kind,
             selection_info,
+            multi_groups,
+            multi_draft,
             symbol_choices,
             drawing_edit_buf,
             drawing_edit_buf_for,

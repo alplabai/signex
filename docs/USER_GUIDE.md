@@ -272,6 +272,29 @@ pins (Preferences ▸ Schematic ▸ Editing turns it off). See
 3. Press `Esc` to leave the tool, then double-click the label, type the new
    name, and press `Enter`.
 
+### Editing text in place
+
+Double-click a part's designator or value to edit it where it sits: type, then
+press `Enter` to apply (one undo step) or `Esc` to cancel. The same editor opens
+from the keyboard on the object under the pointer, or on the one selected part:
+`F2` (Default profile) edits a label, a text note or a part's designator; the
+Classic profile has `U` for the designator, `V` for the value and `F` for the
+footprint. A part's footprint has no text on the sheet, so its editor opens at
+the part. A command with nothing to act on says so in the Messages panel.
+
+### Editing several objects at once
+
+With more than one object selected, Properties lists the fields they share, a
+group each for parts, labels and wires. A value the objects disagree on reads
+`<mixed>`. Type a new value and press `Enter` (or flip a checkbox) to set it on
+every object of that group in one undo step. Parts offer value, footprint, DNP,
+In BOM, On board and their custom parameters; labels size, justification and
+rotation (0, 90, 180 or 270); wires width. Label text is not edited in bulk,
+because giving labels one name would merge their nets. Value, footprint and
+parameter edits skip locked parts and the Messages panel says which; DNP, In BOM
+and On board apply to locked parts too. An empty parameter value removes that
+parameter from every selected part.
+
 ### Bus labels
 
 A bus carries the signals its label names. Put a label on the bus (anywhere

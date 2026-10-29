@@ -35,6 +35,7 @@ pub mod param_edit;
 pub mod pricing;
 pub mod pricing_refresh;
 pub mod primitive;
+pub mod range_filter;
 pub mod search;
 #[cfg(feature = "search-tantivy")]
 pub mod search_index;
@@ -119,6 +120,9 @@ pub use primitive::{
     Polygon, PrimitiveKind, PrimitiveRef, SimKind, SimModel, StepAttachment, Symbol, SymbolFile,
     SymbolGraphic, SymbolGraphicKind, SymbolPin, chain_into_closed_contour,
     normalize_arc_endpoints_deg,
+};
+pub use range_filter::{
+    EQUALS_RELATIVE_TOLERANCE, RangeFilter, RangeOp, RangeVerdict, column_unit,
 };
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]
