@@ -120,7 +120,7 @@ fn set_role(
         _ => {}
     }
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 // Reachable from the Sketch ▸ Modify dropdown as well as the bar itself,
@@ -384,7 +384,7 @@ fn make_pad_from_profile(editor: &mut crate::app::FootprintDocument) {
     editor.state.selected_sketch = Some(centre_id);
     editor.state.selected_sketch_secondary = None;
     editor.state.selected_sketch_extra.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
     editor.canvas_cache.clear();
 }
 
@@ -504,6 +504,6 @@ fn unlink_corner_radius(
         // geometry from the (now per-corner-aware) parameters.
         apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
     });
-    editor.dirty = true;
+    editor.mark_dirty();
     editor.canvas_cache.clear();
 }

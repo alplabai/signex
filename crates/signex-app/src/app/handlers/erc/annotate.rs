@@ -164,19 +164,6 @@ impl Signex {
         ));
     }
 
-    /// Record that a non-active engine (a cached tab, or a parked engine whose
-    /// tab was closed) now holds unsaved edits. `tab.dirty` alone is not
-    /// enough: `dirty_paths` is what the quit guard, the tab-close engine
-    /// parking, the title-bar count and Save-All read, and a bare
-    /// `tab.dirty = true` never propagates into it (#585). Shared by Annotate
-    /// and Reset Duplicate Designators so the two cannot drift (#669).
-    pub(in crate::app) fn mark_cached_sheet_dirty(&mut self, path: &std::path::Path) {
-        if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
-            tab.dirty = true;
-        }
-        self.document_state.dirty_paths.insert(path.to_path_buf());
-    }
-
     /// Refuse a project-wide rewrite up front, with a notice, when any of its
     /// sheets lies in a project whose folder is being renamed: the unopened
     /// sheets would be written into the old folder. True when refused.
@@ -322,8 +309,8 @@ impl Signex {
 
         let mut resets = 0_usize;
         // Active engine — goes through ReplaceDocument so undo records the
-        // snapshot, and through the mutation gateway so the sheet reaches
-        // `dirty_paths` (#585). The clone is taken first and the engine
+        // snapshot, and through the mutation gateway so the sheet is
+        // marked dirty (#585). The clone is taken first and the engine
         // borrow released, because the gateway needs `&mut self`.
         let reset_sheet = self.document_state.active_engine().and_then(|engine| {
             if engine.document().is_read_only() {
@@ -380,7 +367,7 @@ impl Signex {
                 }
             });
             if let Some(true) = applied {
-                self.mark_cached_sheet_dirty(&path);
+                self.document_state.mark_document_dirty(&path);
                 resets += 1;
             }
         }
@@ -406,7 +393,7 @@ impl Signex {
             match engine.save() {
                 Ok(_) => {
                     resets += 1;
-                    self.document_state.dirty_paths.remove(&path);
+                    self.document_state.mark_document_clean(&path);
                     // Rewritten outside the document save path: call the
                     // autosave hook so a recovery copy of the old content goes.
                     recovery_cleanup.push(self.autosave_after_disk_write(&path));

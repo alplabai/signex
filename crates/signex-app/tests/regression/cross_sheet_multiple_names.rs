@@ -85,7 +85,6 @@ fn an_erc_run_reports_a_net_named_differently_on_two_sheets() {
         title: "root".to_string(),
         path: root_path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

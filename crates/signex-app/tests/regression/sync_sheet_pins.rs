@@ -142,7 +142,6 @@ fn fixture_with(child: Option<SchematicSheet>, symbols: Vec<ChildSheet>) -> Fixt
         title: "parent".to_string(),
         path: parent_path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -262,7 +261,7 @@ fn sync_marks_the_sheet_dirty() {
 
     sync(&mut f.app);
 
-    assert!(!f.app.document_state.dirty_paths.is_empty());
+    assert!(f.app.document_state.has_dirty_documents());
 }
 
 #[test]

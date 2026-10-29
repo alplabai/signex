@@ -265,7 +265,6 @@ fn properties_panel_shows_corner_radius_for_round_rect_pad() {
         title: "test".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
     });
@@ -342,7 +341,6 @@ fn editing_corner_radius_updates_all_4_arcs() {
         title: "test".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
     });
@@ -438,7 +436,6 @@ fn unlink_corner_radius_mints_per_corner_param() {
         title: "test".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
     });
@@ -518,7 +515,6 @@ fn reverse_mirror_updates_pad_stack_corner_radius_pct() {
         title: "test".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
     });
@@ -761,7 +757,6 @@ fn editing_oval_width_param_propagates_through_solve() {
         title: "test".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
     });
@@ -1046,7 +1041,6 @@ fn editing_chamfer_len_propagates_through_solve() {
         title: "test".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
     });
@@ -1174,7 +1168,6 @@ fn v025_oval_width_edit_mirrors_back_to_pad_size_mm() {
         title: "v025-oval".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

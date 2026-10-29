@@ -273,7 +273,10 @@ fn team_apply_syncs_canvas_and_dirty_flag() {
     make_version_stale(&mut app);
     edit_library_symbol(&f, add_pin);
     scan(&mut app);
-    app.document_state.tabs[0].dirty = false;
+    {
+        let path = app.document_state.tabs[0].path.clone();
+        app.document_state.mark_document_clean(&path);
+    }
     apply_team_updates(&mut app);
     let canvas = app.interaction_state.active_canvas();
     let snap = canvas
@@ -285,7 +288,10 @@ fn team_apply_syncs_canvas_and_dirty_flag() {
         snap.lib_symbols[&snap.symbols[0].lib_id].pins.len(),
         before + 1
     );
-    assert!(app.document_state.tabs[0].dirty);
+    assert!(
+        app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
 }
 
 /// Instances sharing a `lib_id` share one embedded copy and one checkbox:
@@ -389,15 +395,12 @@ fn opening_a_read_only_sheet_applies_no_library_update() {
     read_only.unknown.newer_minor_source = Some("snxsch/1.7".into());
     engine.set_document(read_only);
     // Placing the symbol dirtied the fixture; only the scan's effect counts.
-    app.document_state.dirty_paths.clear();
-    for tab in &mut app.document_state.tabs {
-        tab.dirty = false;
-    }
+    app.document_state.mark_documents_clean_where(|_| true);
     scan(&mut app);
     assert_eq!(pin_count(&app), before, "the copy must stay as written");
     assert_eq!(version(&app), "0.0.1");
-    assert!(app.document_state.dirty_paths.is_empty());
-    assert!(app.document_state.tabs.iter().all(|t| !t.dirty));
+    assert!(!app.document_state.has_dirty_documents());
+    assert!(!app.document_state.has_dirty_documents());
 }
 
 // ---- #950 round 3: off-thread Apply, re-bound rows, parked sheets ----
@@ -582,7 +585,6 @@ fn team_apply_on_a_parked_sheet_updates_it_and_clears_net_color_redo() {
         title: "other-sheet".to_string(),
         path: b.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -596,7 +598,7 @@ fn team_apply_on_a_parked_sheet_updates_it_and_clears_net_color_redo() {
         before + 1
     );
     assert_eq!(parked.symbols[0].library_version, "1.2.3");
-    assert!(app.document_state.dirty_paths.contains(&a));
+    assert!(app.document_state.is_document_dirty(&a));
     assert!(!app.ui_state.net_color_redo.contains_key(&a));
 }
 

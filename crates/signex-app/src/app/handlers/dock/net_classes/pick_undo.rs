@@ -150,7 +150,8 @@ impl crate::app::Signex {
         if !moved {
             return false;
         }
-        document.dirty_paths.insert(project.path.clone());
+        let project_file = project.path.clone();
+        document.mark_document_dirty(&project_file);
         let steps = document.net_class_picks.entry(path).or_default();
         let (from, to) = if undoing {
             (&mut steps.undo, &mut steps.redo)

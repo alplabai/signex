@@ -30,7 +30,6 @@ fn app_with_sheet() -> (Signex, uuid::Uuid) {
         title: "a_root.snxsch".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -91,8 +90,7 @@ fn undo_reverts_the_pick_and_leaves_the_sheet_alone() {
     assert_eq!(symbol_x(&app), moved_x, "the earlier sheet edit stays");
     assert!(
         app.document_state
-            .dirty_paths
-            .contains(&app.document_state.projects[0].path)
+            .is_document_dirty(&app.document_state.projects[0].path)
     );
 }
 
@@ -170,7 +168,6 @@ fn open_second_sheet(app: &mut Signex) -> std::path::PathBuf {
         title: "b_sheet.snxsch".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

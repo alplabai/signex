@@ -53,7 +53,6 @@ fn app_showing(sheet: SchematicSheet) -> Signex {
         title: "find-similar".to_owned(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

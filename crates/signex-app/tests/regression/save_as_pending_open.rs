@@ -53,7 +53,6 @@ fn open_active(app: &mut Signex, path: &Path, symbol_uuid: uuid::Uuid) -> uuid::
         title: "A".to_string(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -153,16 +152,13 @@ fn save_as_onto_a_pending_open_keeps_edits_and_one_tab() {
         "tab paths must be unique"
     );
     assert!(
-        app.document_state.dirty_paths.contains(&edited.0),
+        app.document_state.is_document_dirty(&edited.0),
         "the edited document must still be flagged dirty"
     );
-    let tab_dirty = app
-        .document_state
-        .tabs
-        .iter()
-        .find(|t| t.path == edited.0)
-        .map(|t| t.dirty);
-    assert_eq!(tab_dirty, Some(true), "its tab must still show dirty");
+    assert!(
+        app.document_state.is_document_dirty(&edited.0),
+        "its tab must still show dirty"
+    );
 }
 
 #[test]
@@ -307,7 +303,7 @@ fn an_open_started_during_the_save_as_write_refuses_the_rekey_and_reports_it() {
         vec![SelectedItem::new(doomed, SelectedKind::Symbol)];
     let _ = app.update(Message::Edit(EditMsg::DeleteSelected));
     assert!(
-        app.document_state.dirty_paths.contains(&a),
+        app.document_state.is_document_dirty(&a),
         "fixture: A is dirty"
     );
 
@@ -333,7 +329,7 @@ fn an_open_started_during_the_save_as_write_refuses_the_rekey_and_reports_it() {
         .expect("A keeps its engine");
     assert_eq!(engine.document().uuid, a_uuid);
     assert_eq!(engine.path(), Some(a.as_path()));
-    assert!(app.document_state.dirty_paths.contains(&a), "A stays dirty");
+    assert!(app.document_state.is_document_dirty(&a), "A stays dirty");
     assert_eq!(tab_count(&app, &p), 1, "exactly one tab for P");
     assert!(
         panel_has(&app, "was written, but the tab was switched"),
@@ -388,7 +384,7 @@ fn a_superseded_open_attaches_a_tab_to_a_dirty_parked_engine() {
         signex_engine::Engine::new(sheet_with(vec![symbol(uuid::Uuid::new_v4())])).expect("engine");
     let parked_uuid = parked.document().uuid;
     app.document_state.engines.insert(parent.clone(), parked);
-    app.document_state.dirty_paths.insert(parent.clone());
+    app.document_state.mark_document_dirty(&parent);
     app.document_state.pending_opens.insert(parent.clone());
 
     let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
@@ -405,7 +401,7 @@ fn a_superseded_open_attaches_a_tab_to_a_dirty_parked_engine() {
         .expect("engine kept");
     assert_eq!(engine.document().uuid, parked_uuid, "engine not replaced");
     assert_eq!(engine.document().symbols.len(), 1, "edits kept");
-    assert!(app.document_state.dirty_paths.contains(&parent));
+    assert!(app.document_state.is_document_dirty(&parent));
 }
 
 // ---- #1137: follow-ups to #1089 ----------------------------------------
@@ -434,7 +430,6 @@ fn second_tab(app: &mut Signex, path: &Path) {
         title: "B".to_string(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

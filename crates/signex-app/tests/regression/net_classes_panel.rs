@@ -60,7 +60,7 @@ fn classes(app: &Signex) -> &[signex_types::net_class::NetClass] {
 #[test]
 fn editing_a_class_changes_the_project_and_marks_it_dirty() {
     let (mut app, path) = fixture();
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.is_document_dirty(&path));
 
     send(&mut app, NetClassMsg::Add);
     commit(&mut app, NetClassField::Name, "Power");
@@ -71,7 +71,7 @@ fn editing_a_class_changes_the_project_and_marks_it_dirty() {
     assert_eq!(class.name, "Power");
     assert_eq!(class.style.wire_width_mm, Some(0.4));
     assert_eq!(class.style.line, NetLineStyle::Dashed);
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.is_document_dirty(&path));
 
     let shown = &app.document_state.panel_ctx.net_classes;
     assert!(shown.available);
@@ -99,10 +99,10 @@ fn undo_and_redo_walk_the_table_back_and_forth() {
 fn a_refused_edit_leaves_the_project_clean() {
     let (mut app, path) = fixture();
     send(&mut app, NetClassMsg::Add);
-    app.document_state.dirty_paths.clear();
+    app.document_state.mark_documents_clean_where(|_| true);
     commit(&mut app, NetClassField::Color, "not-a-colour");
     assert!(classes(&app)[0].style.is_default());
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.is_document_dirty(&path));
     assert!(app.document_state.panel_ctx.net_classes.notice.is_some());
 }
 

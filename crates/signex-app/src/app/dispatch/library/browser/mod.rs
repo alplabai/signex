@@ -155,7 +155,6 @@ impl Signex {
             title,
             path: path.clone(),
             cached_document: None,
-            dirty: false,
             project_id,
             kind: crate::app::TabKind::LibraryBrowser(path),
         });
@@ -768,7 +767,6 @@ impl Signex {
             title,
             path: synthetic_path,
             cached_document: None,
-            dirty: false,
             project_id,
             kind: crate::app::TabKind::ComponentEditor(crate::app::ComponentEditorTab {
                 library_path: address.library_path.clone(),
