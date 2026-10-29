@@ -381,7 +381,7 @@ impl Signex {
                 if tool == Tool::Text {
                     self.interaction_state.active_canvas_mut().ghost_text =
                         Some(signex_types::schematic::TextNote {
-                            uuid: uuid::Uuid::new_v4(),
+                            uuid: uuid::Uuid::now_v7(),
                             text: "Text".to_string(),
                             position: signex_types::schematic::Point::new(0.0, 0.0),
                             rotation: 0.0,

@@ -55,7 +55,7 @@ fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
 
 fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
     SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols,
         ..Default::default()
@@ -104,8 +104,8 @@ fn symbols_of(app: &Signex, path: &Path) -> Vec<Symbol> {
 /// A loaded, active schematic holding two plain symbols, so a test can
 /// spend one on a gateway edit and one on a gateway-bypassing edit.
 fn fixture_two_symbols() -> (Signex, uuid::Uuid, uuid::Uuid) {
-    let doomed_uuid = uuid::Uuid::new_v4();
-    let moved_uuid = uuid::Uuid::new_v4();
+    let doomed_uuid = uuid::Uuid::now_v7();
+    let moved_uuid = uuid::Uuid::now_v7();
 
     let path = PathBuf::from("undo-marker.snxsch");
     let (mut app, _initial_task) = Signex::new();
@@ -310,7 +310,7 @@ fn a_pasted_batch_is_one_undo_step() {
 fn an_undo_in_one_tab_spends_exactly_one_of_that_tabs_edits() {
     let path_a = PathBuf::from("undo-tab-a.snxsch");
     let path_b = PathBuf::from("undo-tab-b.snxsch");
-    let b_symbols: Vec<uuid::Uuid> = (0..3).map(|_| uuid::Uuid::new_v4()).collect();
+    let b_symbols: Vec<uuid::Uuid> = (0..3).map(|_| uuid::Uuid::now_v7()).collect();
 
     let (mut app, _initial_task) = Signex::new();
     add_tab(&mut app, &path_a, sheet_with(Vec::new()));
@@ -452,7 +452,7 @@ fn panel_locked_and_dnp_toggles_write_the_symbol_and_undo_once() {
 fn set_clipboard_no_connects(app: &mut Signex) {
     let no_connects: Vec<NoConnect> = (0..3)
         .map(|i| NoConnect {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             position: Point::new(f64::from(i) * 10.0, 0.0),
         })
         .collect();

@@ -290,7 +290,7 @@ mod tests {
     fn sheet_referencing(filename: &str) -> signex_engine::Engine {
         let mut sheet = SchematicSheet::default();
         sheet.child_sheets.push(ChildSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             name: "c".to_string(),
             filename: filename.to_string(),
             position: Default::default(),

@@ -20,10 +20,10 @@ use std::path::{Path, PathBuf};
 // ── Move Selection ──────────────────────────────────────────────────
 
 fn move_app() -> Signex {
-    let uuid = uuid::Uuid::new_v4();
+    let uuid = uuid::Uuid::now_v7();
     let path = PathBuf::from("non-finite-move.snxsch");
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols: vec![signex_types::schematic::Symbol {
             uuid,

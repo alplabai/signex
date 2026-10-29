@@ -834,11 +834,11 @@ mod sheet_size_report_tests {
         // during `open_schematic_tab`, and without a logger it is dropped,
         // which would make this test depend on which test ran first.
         let _ = crate::diagnostics::init_logging();
-        let name = format!("{name}_{}", uuid::Uuid::new_v4().simple());
+        let name = format!("{name}_{}", uuid::Uuid::now_v7().simple());
         let mut app = app_workspace("/w/proj", &[]);
         let path = std::path::PathBuf::from(format!("/w/proj/{name}.snxsch"));
         let sheet = signex_types::schematic::SchematicSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             paper_size: paper_size.to_string(),
             ..Default::default()
         };

@@ -810,10 +810,10 @@ fn the_library_updates_modal_follows_the_rename() {
     f.app.library.library_updates = Some(LibraryUpdatesState::new(
         f.prj.clone(),
         vec![LibraryUpdateEntry {
-            symbol_uuid: uuid::Uuid::new_v4(),
+            symbol_uuid: uuid::Uuid::now_v7(),
             ref_des: "R1".into(),
             lib_id: "L:S".into(),
-            library_id: uuid::Uuid::new_v4(),
+            library_id: uuid::Uuid::now_v7(),
             library_name: "alpha".into(),
             row_id: signex_library::RowId::new(),
             library_path: f.alpha.clone(),
@@ -837,7 +837,7 @@ fn rename_does_not_flush_unsaved_project_state() {
     let mut f = fixture();
     let pending = f._tmp.path().join("gamma").join("gamma.snxlib");
     f.app.document_state.projects[0].pending_libraries.insert(
-        uuid::Uuid::new_v4(),
+        uuid::Uuid::now_v7(),
         PendingLibrarySpec {
             lib_path: pending.clone(),
             enable_git: false,

@@ -306,7 +306,7 @@ fn team_apply_stamps_every_instance_of_the_shared_symbol() {
         let engine = app.document_state.active_engine_mut().unwrap();
         let mut d = engine.document().clone();
         let mut twin = d.symbols[0].clone();
-        twin.uuid = Uuid::new_v4();
+        twin.uuid = Uuid::now_v7();
         twin.reference = "U2".into();
         d.symbols.push(twin);
         engine.set_document(d);
@@ -342,7 +342,7 @@ fn a_rebound_row_does_not_overwrite_the_placed_symbol_copy() {
     place(&mut app, &f);
     make_version_stale(&mut app);
     // The placed symbol keys another symbol than the one its row names.
-    let other = format!("{}:{}", f.library_id, Uuid::new_v4());
+    let other = format!("{}:{}", f.library_id, Uuid::now_v7());
     {
         let engine = app.document_state.active_engine_mut().unwrap();
         let mut d = engine.document().clone();
@@ -476,7 +476,7 @@ fn rows_of_one_symbol_keep_their_own_versions() {
         let engine = app.document_state.active_engine_mut().unwrap();
         let mut d = engine.document().clone();
         let mut twin = d.symbols[0].clone();
-        twin.uuid = Uuid::new_v4();
+        twin.uuid = Uuid::now_v7();
         twin.reference = "U2".into();
         twin.row_id = Some(row2_id);
         twin.library_version = "0.0.1".into();
@@ -514,7 +514,7 @@ fn update_from_library_does_not_stamp_a_rebound_rows_version() {
     let mut row = adapter
         .read_row("ICs", signex_library::RowId::from_uuid(f.row_id))
         .unwrap();
-    row.symbol_ref.uuid = Uuid::new_v4();
+    row.symbol_ref.uuid = Uuid::now_v7();
     row.version = "9.9.9".into();
     adapter.update_row("ICs", row, "rebind").unwrap();
     drop(adapter);
@@ -573,7 +573,7 @@ fn team_apply_on_a_parked_sheet_updates_it_and_clears_net_color_redo() {
         b.clone(),
         signex_engine::Engine::new_with_path(
             signex_types::schematic::SchematicSheet {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 paper_size: "A4".to_string(),
                 ..Default::default()
             },
@@ -623,7 +623,7 @@ fn a_bound_sibling_on_the_same_row_does_not_leak_its_version() {
     let mut app = app_with_library(&f);
     place(&mut app, &f);
     // A second library symbol X, which the row does not bind.
-    let x_id = Uuid::new_v4();
+    let x_id = Uuid::now_v7();
     let mut x = two_unit_symbol();
     x.uuid = x_id;
     add_pin(&mut x);
@@ -642,7 +642,7 @@ fn a_bound_sibling_on_the_same_row_does_not_leak_its_version() {
         d.lib_symbols.insert(x_key.clone(), copy);
         // U2: correctly bound to Y on the row. U1: X on the same row.
         let mut u2 = d.symbols[0].clone();
-        u2.uuid = Uuid::new_v4();
+        u2.uuid = Uuid::now_v7();
         u2.reference = "U2".into();
         d.symbols.push(u2);
         d.symbols[0].lib_id = x_key.clone();
@@ -673,10 +673,10 @@ fn a_scan_failure_survives_an_all_checked_apply() {
         let engine = app.document_state.active_engine_mut().unwrap();
         let mut d = engine.document().clone();
         let mut twin = d.symbols[0].clone();
-        twin.uuid = Uuid::new_v4();
+        twin.uuid = Uuid::now_v7();
         twin.reference = "U2".into();
         // Keys another symbol than its row names: refused at scan time.
-        twin.lib_id = format!("{}:{}", f.library_id, Uuid::new_v4());
+        twin.lib_id = format!("{}:{}", f.library_id, Uuid::now_v7());
         twin.library_version = "0.0.1".into();
         d.symbols.push(twin);
         engine.set_document(d);
@@ -757,7 +757,7 @@ fn apply_does_not_stamp_a_row_rebound_since_the_scan() {
     select_all_updates(&mut app);
     let (_task, input) = click_apply_input(&mut app);
     edit_row(&f, |r| {
-        r.symbol_ref.uuid = Uuid::new_v4();
+        r.symbol_ref.uuid = Uuid::now_v7();
         r.version = "9.9.9".into();
     });
     let read = read_symbols(input, &mounted(&app));
@@ -804,7 +804,7 @@ fn insert_twin(app: &mut Signex, row_id: Uuid, reference: &str, version: &str) {
     let engine = app.document_state.active_engine_mut().unwrap();
     let mut d = engine.document().clone();
     let mut twin = d.symbols[0].clone();
-    twin.uuid = Uuid::new_v4();
+    twin.uuid = Uuid::now_v7();
     twin.reference = reference.into();
     twin.row_id = Some(row_id);
     twin.library_version = version.into();
@@ -833,7 +833,7 @@ fn insert_row_of_same_symbol(f: &Fixture, pn: &str, version: &str, rebind: bool)
     row.internal_pn = signex_library::identity::InternalPn::new(pn);
     row.version = version.into();
     if rebind {
-        row.symbol_ref.uuid = Uuid::new_v4();
+        row.symbol_ref.uuid = Uuid::now_v7();
     }
     adapter.insert_row("ICs", row, "extra row").unwrap();
     id
@@ -946,14 +946,14 @@ fn missing_rows_and_unreadable_libraries_are_told_apart() {
     select_all_updates(&mut app);
     let (_task, input) = click_apply_input(&mut app);
     let mut gone = input.clone();
-    gone.wanted[0].1[0].row_id = Uuid::new_v4();
+    gone.wanted[0].1[0].row_id = Uuid::now_v7();
     let read = read_symbols(gone, &mounted(&app));
     let line = &read.reads[0].skipped[0];
     assert!(line.contains("version not stamped") && line.contains("is not in its library"));
     assert!(!line.contains("different symbol"), "{line}");
     assert!(read.reads[0].symbol.is_ok(), "copy still read");
     let mut unreadable = input;
-    unreadable.wanted[0].1[0].library_id = Uuid::new_v4();
+    unreadable.wanted[0].1[0].library_id = Uuid::now_v7();
     let read = read_symbols(unreadable, &mounted(&app));
     let line = &read.reads[0].skipped[0];
     assert!(line.contains("version not stamped") && line.contains("is unreadable"));
@@ -995,7 +995,7 @@ fn a_lib_id_with_a_team_instance_is_not_auto_applied_for_its_personal_one() {
         let engine = app.document_state.active_engine_mut().unwrap();
         let mut d = engine.document().clone();
         let mut u2 = d.symbols[0].clone();
-        u2.uuid = Uuid::new_v4();
+        u2.uuid = Uuid::now_v7();
         u2.reference = "U2".into();
         u2.library_id = Some(b.library_id);
         u2.row_id = Some(b.row_id);
@@ -1059,7 +1059,7 @@ fn team_beside_stale_personal(u1_row: impl FnOnce(&Fixture) -> Uuid) -> (Signex,
         let engine = app.document_state.active_engine_mut().unwrap();
         let mut d = engine.document().clone();
         let mut u2 = d.symbols[0].clone();
-        u2.uuid = Uuid::new_v4();
+        u2.uuid = Uuid::now_v7();
         u2.reference = "U2".into();
         u2.library_id = Some(b.library_id);
         u2.row_id = Some(b.row_id);
@@ -1085,7 +1085,7 @@ fn logged_with(parts: &[&str]) -> bool {
 #[test]
 fn an_unreadable_team_row_blocks_the_personal_siblings_auto_apply() {
     let _ = signex_app::diagnostics::init_logging();
-    let (mut app, before) = team_beside_stale_personal(|_| Uuid::new_v4());
+    let (mut app, before) = team_beside_stale_personal(|_| Uuid::now_v7());
     scan(&mut app);
     assert_eq!(pin_count(&app), before, "the shared copy is not touched");
     assert_eq!(doc(&app).symbols[1].library_version, "0.0.1");

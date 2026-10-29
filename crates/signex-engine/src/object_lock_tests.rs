@@ -603,7 +603,7 @@ fn moving_off_a_locked_wire_leaves_nothing_that_joins_nets_later() {
     engine
         .execute(Command::PlaceWireSegment {
             wire: Wire {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 start: Point::new(20.0, 55.0),
                 end: Point::new(105.0, 55.0),
                 ..Default::default()
@@ -621,14 +621,14 @@ fn moving_off_a_locked_wire_leaves_nothing_that_joins_nets_later() {
 fn bus_with_a_locked_wire_on_an_entry() -> (Engine, SelectedItem) {
     use signex_types::schematic::{Bus, BusEntry};
     let mut sheet = SchematicSheet::default();
-    let bus = Uuid::new_v4();
+    let bus = Uuid::now_v7();
     sheet.buses.push(Bus {
         uuid: bus,
         start: Point::new(0.0, 0.0),
         end: Point::new(0.0, 50.0),
     });
     sheet.bus_entries.push(BusEntry {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         position: Point::new(0.0, 10.0),
         size: (2.54, 2.54),
     });

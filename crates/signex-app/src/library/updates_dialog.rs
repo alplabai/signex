@@ -394,7 +394,7 @@ mod tests {
         let path = PathBuf::from("/tmp/x.standard_sch");
         let library_path = PathBuf::from("/tmp/x.snxlib");
         let mk = |refdes: &str, kind: BumpKind| LibraryUpdateEntry {
-            symbol_uuid: Uuid::new_v4(),
+            symbol_uuid: Uuid::now_v7(),
             ref_des: refdes.to_string(),
             lib_id: format!("L:{refdes}"),
             library_id: Uuid::nil(),
@@ -440,8 +440,8 @@ mod tests {
     fn toggle_flips_only_matching_uuid() {
         let path = PathBuf::from("/tmp/x.standard_sch");
         let library_path = PathBuf::from("/tmp/x.snxlib");
-        let id = Uuid::new_v4();
-        let other = Uuid::new_v4();
+        let id = Uuid::now_v7();
+        let other = Uuid::now_v7();
         let mut state = LibraryUpdatesState::new(
             path,
             vec![LibraryUpdateEntry {
@@ -472,7 +472,7 @@ mod tests {
     #[test]
     fn instances_of_one_lib_id_are_selected_together() {
         let mk = |refdes: &str, lib_id: &str, kind: BumpKind| LibraryUpdateEntry {
-            symbol_uuid: Uuid::new_v4(),
+            symbol_uuid: Uuid::now_v7(),
             ref_des: refdes.to_string(),
             lib_id: lib_id.to_string(),
             library_id: Uuid::nil(),

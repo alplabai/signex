@@ -46,7 +46,7 @@ fn two_projects() -> (Signex, PathBuf, PathBuf) {
 #[test]
 fn switching_tabs_while_the_pdf_dialog_is_open_exports_the_original_document() {
     let (mut app, a, b) = two_projects();
-    let out = std::env::temp_dir().join(format!("signex-833-{}.pdf", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-833-{}.pdf", Uuid::now_v7()));
 
     // The dialog opened on A; the user then clicks over to B's tab.
     app.document_state.active_path = Some(b);
@@ -67,7 +67,7 @@ fn switching_tabs_while_the_pdf_dialog_is_open_exports_the_original_document() {
 fn a_closed_source_document_refuses_the_pdf_export_and_says_so() {
     let (mut app, a, _b) = two_projects();
     let _ = crate::diagnostics::init_logging();
-    let out = std::env::temp_dir().join(format!("signex-833-gone-{}.pdf", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-833-gone-{}.pdf", Uuid::now_v7()));
 
     // The source tab was closed while the dialog was up.
     let request = Box::new(pdf_request_all_sheets(&app, &a));
@@ -114,7 +114,7 @@ fn the_no_netlist_warning_names_the_exported_document_not_the_current_tab() {
 #[test]
 fn netlist_finished_exports_the_document_it_started_from() {
     let (mut app, a, b) = two_projects();
-    let out = std::env::temp_dir().join(format!("signex-852-{}.net", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-852-{}.net", Uuid::now_v7()));
 
     app.document_state.active_path = Some(b);
     let task = app.handle_export_netlist_finished(a, Ok(out.clone()));
@@ -130,7 +130,7 @@ fn netlist_finished_exports_the_document_it_started_from() {
 fn a_closed_netlist_source_writes_nothing_and_says_so() {
     let (mut app, a, _b) = two_projects();
     let _ = crate::diagnostics::init_logging();
-    let out = std::env::temp_dir().join(format!("signex-852-gone-{}.net", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-852-gone-{}.net", Uuid::now_v7()));
 
     app.document_state.engines.remove(&a);
     let task = app.handle_export_netlist_finished(a, Ok(out.clone()));
@@ -148,7 +148,7 @@ fn a_closed_netlist_source_writes_nothing_and_says_so() {
 #[test]
 fn bom_finished_exports_the_document_it_started_from() {
     let (mut app, a, b) = two_projects();
-    let out = std::env::temp_dir().join(format!("signex-852-{}.csv", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-852-{}.csv", Uuid::now_v7()));
 
     app.document_state.active_path = Some(b);
     let task = app.handle_export_bom_finished(a, Default::default(), Ok(out.clone()));
@@ -163,8 +163,8 @@ fn bom_finished_exports_the_document_it_started_from() {
 #[test]
 fn overlapping_pdf_exports_each_use_their_own_request() {
     let (mut app, a, b) = two_projects();
-    let out_a = std::env::temp_dir().join(format!("signex-852-oa-{}.pdf", Uuid::new_v4()));
-    let out_b = std::env::temp_dir().join(format!("signex-852-ob-{}.pdf", Uuid::new_v4()));
+    let out_a = std::env::temp_dir().join(format!("signex-852-oa-{}.pdf", Uuid::now_v7()));
+    let out_b = std::env::temp_dir().join(format!("signex-852-ob-{}.pdf", Uuid::now_v7()));
     // Two Export clicks, both save dialogs still open: B's request picks no
     // sheets, A's picks all of its own.
     let req_a = pdf_request_all_sheets(&app, &a);
@@ -196,7 +196,7 @@ fn a_cancelled_save_dialog_writes_nothing() {
 #[test]
 fn a_detached_bom_preview_exports_the_document_it_was_built_for() {
     let (mut app, a, b) = two_projects();
-    let out = std::env::temp_dir().join(format!("signex-852-bp-{}.csv", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-852-bp-{}.csv", Uuid::now_v7()));
 
     let _ = app.handle_bom_preview_open();
     assert_eq!(
@@ -231,7 +231,7 @@ fn a_detached_print_preview_records_the_document_it_was_built_for() {
 #[test]
 fn the_pdf_is_built_off_the_ui_thread() {
     let (mut app, a, _b) = two_projects();
-    let out = std::env::temp_dir().join(format!("signex-111-{}.pdf", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-111-{}.pdf", Uuid::now_v7()));
     let mut request = pdf_request_all_sheets(&app, &a);
     // Sheet 99 is not a printed page, so the exporter refuses.
     request.options.page_range = signex_output::PageRange::Specific(vec![99]);

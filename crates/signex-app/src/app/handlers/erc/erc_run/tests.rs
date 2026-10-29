@@ -23,7 +23,7 @@ fn outcome_for(path: &str) -> ErcRunOutcome {
 
 #[test]
 fn a_superseded_erc_run_is_dropped() {
-    let dir = std::env::temp_dir().join(format!("signex-erc-gen-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-erc-gen-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
 
     let (first, _) = app.begin_erc_run();
@@ -43,7 +43,7 @@ fn a_superseded_erc_run_is_dropped() {
 
 #[test]
 fn a_failed_erc_run_clears_running_and_keeps_old_results() {
-    let dir = std::env::temp_dir().join(format!("signex-erc-fail-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-erc-fail-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
     app.ui_state
         .erc_violations_by_path

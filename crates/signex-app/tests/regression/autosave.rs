@@ -36,7 +36,7 @@ fn fixture(autosave_on: bool) -> Fixture {
     let recovery = tmp.path().join("recovery");
     std::fs::write(&doc, ORIGINAL).unwrap();
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };
@@ -443,7 +443,7 @@ fn age(path: &Path, secs_ago: u64) {
 
 fn open_from_disk(app: &mut Signex, doc: &Path) {
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };
@@ -628,7 +628,7 @@ fn a_tick_between_open_and_the_recovery_check_never_replaces_the_earlier_copy() 
         .autosave
         .set_dir(Some(f.recovery.clone()));
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };

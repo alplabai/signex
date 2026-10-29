@@ -42,7 +42,7 @@ fn sheet(refs: &[&str]) -> SchematicSheet {
         symbols: refs
             .iter()
             .map(|r| Symbol {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 lib_id: "Device:R".to_string(),
                 reference: (*r).to_string(),
                 unit: 1,

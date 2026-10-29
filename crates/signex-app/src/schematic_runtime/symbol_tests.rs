@@ -17,7 +17,7 @@ fn sheet_with_body(w: f64, h: f64, x: f64, y: f64, rotation: f64) -> (SchematicS
         },
     });
     let symbol = Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: lib.id.clone(),
         position: Point::new(x, y),
         rotation,
@@ -96,7 +96,7 @@ fn symbols_without_geometry_lists_each_missing_library_id_once() {
     let (mut sheet, sym) = sheet_with_body(20.0, 40.0, 0.0, 0.0, 0.0);
     assert!(symbols_without_geometry(&sheet).is_empty());
     let mut twin = sym.clone();
-    twin.uuid = uuid::Uuid::new_v4();
+    twin.uuid = uuid::Uuid::now_v7();
     sheet.symbols.push(twin);
     sheet.lib_symbols.clear();
     assert_eq!(symbols_without_geometry(&sheet), vec!["L:Body".to_string()]);
@@ -113,7 +113,7 @@ fn selected_symbol_box_matches_its_body_without_lowering_the_sheet() {
     let item = SelectedItem::new(sym.uuid, SelectedKind::Symbol);
     let bbox = item_aabb(&sheet, &item).expect("symbol box");
     assert!(approx(bbox, -5.0, -14.0, 15.0, 26.0), "{bbox:?}");
-    let missing = SelectedItem::new(uuid::Uuid::new_v4(), SelectedKind::Symbol);
+    let missing = SelectedItem::new(uuid::Uuid::now_v7(), SelectedKind::Symbol);
     assert!(item_aabb(&sheet, &missing).is_none());
 }
 
@@ -228,7 +228,7 @@ fn snapshot_marks_a_missing_library_entry_with_its_lib_id() {
 
 fn placed_power_port(lib_id: &str) -> (SchematicSheet, Symbol) {
     let symbol = Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: lib_id.to_string(),
         position: Point::new(50.0, 50.0),
         is_power: true,
@@ -287,7 +287,7 @@ fn the_power_port_placement_ghost_draws_the_same_geometry_as_the_placed_port() {
 #[test]
 fn a_non_power_symbol_without_a_library_entry_still_gets_the_placeholder() {
     let sym = Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: "missing".into(),
         position: Point::new(10.0, 10.0),
         ..Symbol::default()

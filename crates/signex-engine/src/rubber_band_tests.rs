@@ -111,7 +111,7 @@ pub(crate) fn lib_symbol(id: &str, pins: Vec<LibPin>) -> LibSymbol {
 }
 
 pub(crate) fn place(sheet: &mut SchematicSheet, reference: &str, lib_id: &str, at: Point) -> Uuid {
-    let uuid = Uuid::new_v4();
+    let uuid = Uuid::now_v7();
     sheet.symbols.push(Symbol {
         uuid,
         lib_id: lib_id.to_string(),
@@ -124,7 +124,7 @@ pub(crate) fn place(sheet: &mut SchematicSheet, reference: &str, lib_id: &str, a
 }
 
 pub(crate) fn add_wire(sheet: &mut SchematicSheet, a: (f64, f64), b: (f64, f64)) -> Uuid {
-    let uuid = Uuid::new_v4();
+    let uuid = Uuid::now_v7();
     sheet.wires.push(Wire {
         uuid,
         start: Point::new(a.0, a.1),
@@ -137,7 +137,7 @@ pub(crate) fn add_wire(sheet: &mut SchematicSheet, a: (f64, f64), b: (f64, f64))
 pub(crate) fn add_label(sheet: &mut SchematicSheet, text: &str, at: (f64, f64)) {
     sheet.labels.push(Label {
         unknown_columns: Default::default(),
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         text: text.to_string(),
         position: Point::new(at.0, at.1),
         rotation: 0.0,
@@ -153,7 +153,7 @@ pub(crate) fn add_label(sheet: &mut SchematicSheet, text: &str, at: (f64, f64)) 
 
 fn add_dot(sheet: &mut SchematicSheet, at: (f64, f64), minted: bool) {
     sheet.junctions.push(Junction {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         position: Point::new(at.0, at.1),
         minted,
         ..Default::default()
@@ -647,7 +647,7 @@ fn a_power_port_keeps_its_wire_and_its_net_name() {
 pub(crate) fn child_fixture() -> (Engine, Uuid, Uuid) {
     let mut sheet = test_sheet();
     let pin = SheetPin {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         name: "IN".to_string(),
         direction: "input".to_string(),
         position: Point::new(100.0, 110.0),
@@ -657,7 +657,7 @@ pub(crate) fn child_fixture() -> (Engine, Uuid, Uuid) {
     };
     let pin_id = pin.uuid;
     let child = ChildSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         name: "Child".to_string(),
         filename: "child.snxsch".to_string(),
         position: Point::new(100.0, 100.0),
@@ -847,7 +847,7 @@ pub(crate) fn add_labelled(sheet: &mut SchematicSheet, rng: &mut Lcg, at: (f64, 
     ][rng.next(4) as usize];
     sheet.labels.push(Label {
         unknown_columns: Default::default(),
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         text: text.to_string(),
         position: Point::new(at.0, at.1),
         rotation: 0.0,
@@ -913,7 +913,7 @@ pub(crate) fn random_case(rng: &mut Lcg) -> Option<Case> {
     if rng.next(100) < 25 {
         let pins: Vec<SheetPin> = (0..2)
             .map(|i| SheetPin {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 name: format!("P{i}"),
                 direction: "input".to_string(),
                 position: Point::new(100.0, 65.0 + 5.0 * i as f64),
@@ -923,7 +923,7 @@ pub(crate) fn random_case(rng: &mut Lcg) -> Option<Case> {
             })
             .collect();
         let sheet_pin = pins[0].uuid;
-        let id = Uuid::new_v4();
+        let id = Uuid::now_v7();
         sheet.child_sheets.push(ChildSheet {
             uuid: id,
             name: "Child".to_string(),
@@ -999,7 +999,7 @@ pub(crate) fn random_case(rng: &mut Lcg) -> Option<Case> {
     if rng.next(100) < 30 {
         let at = points[rng.next(points.len() as u64) as usize];
         sheet.no_connects.push(signex_types::schematic::NoConnect {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             position: Point::new(at.0, at.1),
         });
     }
@@ -1785,7 +1785,7 @@ fn a_four_way_dot_moves_with_the_tip() {
 fn a_no_connect_on_a_moved_pin_tip_moves_with_it() {
     let mut sheet = test_sheet();
     let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0)); // pins 45, 55
-    let mark = Uuid::new_v4();
+    let mark = Uuid::now_v7();
     sheet.no_connects.push(signex_types::schematic::NoConnect {
         uuid: mark,
         position: Point::new(55.0, 50.0),
@@ -1926,7 +1926,7 @@ fn a_co_selected_no_connect_moves_without_blaming_the_pass() {
     let mut sheet = test_sheet();
     let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
     add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
-    let mark = Uuid::new_v4();
+    let mark = Uuid::now_v7();
     sheet.no_connects.push(signex_types::schematic::NoConnect {
         uuid: mark,
         position: Point::new(200.0, 200.0),
@@ -1951,12 +1951,12 @@ fn a_bus_and_bus_entry_on_the_new_path_are_harmless() {
     let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
     add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
     sheet.buses.push(signex_types::schematic::Bus {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: Point::new(45.0, 52.0),
         end: Point::new(45.0, 58.0),
     });
     sheet.bus_entries.push(signex_types::schematic::BusEntry {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         position: Point::new(45.0, 55.0),
         size: (2.54, 2.54),
     });

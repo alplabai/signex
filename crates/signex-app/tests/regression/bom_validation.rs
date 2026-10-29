@@ -11,7 +11,7 @@ use std::path::PathBuf;
 
 fn symbol(reference: &str, footprint: &str) -> Symbol {
     Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: "Device:R".to_string(),
         reference: reference.to_string(),
         value: "10k".to_string(),
@@ -24,7 +24,7 @@ fn symbol(reference: &str, footprint: &str) -> Symbol {
 /// designator (plus missing-MPN, which each test switches off).
 pub(crate) fn app_with_faulty_bom() -> Signex {
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols: vec![symbol("R1", ""), symbol("R1", "R_0603")],
         ..Default::default()
@@ -101,7 +101,7 @@ fn a_rollup_change_refreshes_the_report() {
 
 #[test]
 fn export_with_issues_still_writes_and_reports_the_summary() {
-    let dir = std::env::temp_dir().join(format!("signex-bom-355-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-bom-355-{}", uuid::Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("temp dir");
     let out = dir.join("bom.csv");
 
@@ -215,7 +215,7 @@ fn a_dragged_column_takes_the_slot_of_the_header_it_is_dropped_on() {
 
 #[test]
 fn a_failed_bom_write_reaches_the_user_after_the_task_runs() {
-    let dir = std::env::temp_dir().join(format!("signex-bom-859-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-bom-859-{}", uuid::Uuid::now_v7()));
     // The parent "directory" is a regular file, so the off-thread write fails.
     std::fs::create_dir_all(&dir).expect("temp dir");
     let blocker = dir.join("blocker");

@@ -12,7 +12,7 @@ fn saving_a_newer_minor_schematic_is_refused_and_stays_dirty() {
     let tmp = TempDir::new().expect("tempdir");
     let path = tmp.path().join("Newer.snxsch");
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };

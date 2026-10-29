@@ -172,7 +172,7 @@ fn edit_row_state(path: &Path) -> crate::library::state::EditRowModalState {
         description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
-        symbol_ref: PrimitiveRef::new(uuid::Uuid::new_v4(), uuid::Uuid::new_v4()),
+        symbol_ref: PrimitiveRef::new(uuid::Uuid::now_v7(), uuid::Uuid::now_v7()),
         footprint_ref: None,
         sim_ref: None,
         pin_map_overrides: Vec::new(),

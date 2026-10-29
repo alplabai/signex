@@ -12,7 +12,7 @@ use std::path::PathBuf;
 fn wire(a: (f64, f64), b: (f64, f64)) -> Wire {
     Wire {
         unknown_columns: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
         stroke_width: 0.0,
@@ -26,7 +26,7 @@ fn app_with_wires() -> (Signex, uuid::Uuid, uuid::Uuid) {
     let crossing = wire((20.0, 5.0), (60.0, 5.0));
     let (inside_id, crossing_id) = (inside.uuid, crossing.uuid);
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         wires: vec![inside, crossing],
         ..Default::default()

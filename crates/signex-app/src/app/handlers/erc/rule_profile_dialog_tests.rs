@@ -9,7 +9,7 @@ use crate::app::state::rule_profile_ui::{QueuedWrite, WriteOutcome};
 use crate::rule_profiles::{self, SaveOutcome};
 
 fn workspace(tag: &str) -> crate::app::Signex {
-    let dir = std::env::temp_dir().join(format!("signex-dlg-{tag}-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-dlg-{tag}-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
     app.ui_state.erc_severity_override.clear();
     app.ui_state.pin_matrix_overrides.clear();

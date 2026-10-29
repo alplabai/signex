@@ -699,7 +699,7 @@ mod tests {
     fn app_with_a_child_only_on_disk() -> (Signex, std::path::PathBuf) {
         use crate::app::handlers::menu::export::tests as fx;
         let dir =
-            std::env::temp_dir().join(format!("signex-gateway-disk-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("signex-gateway-disk-{}", uuid::Uuid::now_v7()));
         std::fs::create_dir_all(&dir).expect("tempdir");
         let child = signex_types::format::SnxSchematic::new(fx::sheet_with_net(
             "R_DISK",
@@ -778,7 +778,7 @@ mod tests {
         // child invisible, so R1 looked unique, nothing was reset, and the
         // duplicate went out in the netlist and onto the board.
         use crate::app::handlers::menu::export::tests as fx;
-        let dir = std::env::temp_dir().join(format!("signex-dupe-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("signex-dupe-{}", uuid::Uuid::now_v7()));
         std::fs::create_dir_all(&dir).expect("tempdir");
         let child_path = dir.join("child.snxsch");
         let child =

@@ -15,7 +15,7 @@ fn id(n: u128) -> uuid::Uuid {
 fn app_with_first_leg() -> Signex {
     let _ = crate::diagnostics::init_logging();
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         wires: vec![Wire {
             uuid: id(1),
             start: Point::new(0.0, 25.4),

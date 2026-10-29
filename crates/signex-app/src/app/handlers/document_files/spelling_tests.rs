@@ -13,7 +13,7 @@ use crate::app::{Message, Signex};
 
 fn sheet() -> signex_types::schematic::SchematicSheet {
     signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         ..Default::default()
     }
 }
@@ -32,7 +32,7 @@ fn app_holding_lib() -> (Signex, PathBuf) {
 
 /// A folding project in a real directory holding `Lib.snxsch`, open in a tab.
 fn app_holding_real_lib() -> (Signex, PathBuf, PathBuf) {
-    let dir = std::env::temp_dir().join(format!("signex-1149-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-1149-{}", uuid::Uuid::now_v7()));
     std::fs::create_dir_all(dir.join("sub")).expect("tempdir");
     let file = dir.join("Lib.snxsch");
     let text = signex_types::format::SnxSchematic::new(sheet())

@@ -626,7 +626,7 @@ fn missing_power_flag_still_fires_on_a_bare_net_beside_a_merged_pair() {
 /// A power port whose origin is `origin` and whose single pin tip is `tip`.
 fn power_port_with_tip(value: &str, origin: Point, tip: Point) -> ErcSymbol {
     let mut port = power_port(value, origin);
-    port.uuid = Uuid::new_v4();
+    port.uuid = Uuid::now_v7();
     port.pins = vec![ErcPin {
         world_pos: tip,
         local_pos: tip,
@@ -755,12 +755,12 @@ fn power_port_short_names_every_rail_on_a_three_way_short() {
 
 fn child_sheet(filename: &str) -> ErcChildSheet {
     ErcChildSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         name: "Sub".into(),
         filename: filename.into(),
         position: pt(0.0, 0.0),
         pins: vec![ErcSheetPin {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             name: "IN".into(),
             position: pt(1.0, 1.0),
         }],
@@ -816,7 +816,7 @@ fn stacked_same_value_power_ports_are_not_reported_as_touching() {
 fn touching_power_port_is_named_by_value_with_port_advice() {
     let tip = Point::new(10.0, 10.0);
     let mut part = symbol_with_pin("R1", tip, false);
-    part.uuid = Uuid::new_v4();
+    part.uuid = Uuid::now_v7();
     let c = ctx(
         vec![],
         vec![],

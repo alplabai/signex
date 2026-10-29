@@ -62,7 +62,7 @@ pub fn new_sheet_entry(
     direction: Option<&str>,
 ) -> SheetPin {
     let mut pin = SheetPin {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         name: name.trim().to_string(),
         direction: String::new(),
         position: cursor,
@@ -133,7 +133,7 @@ pub fn child_document_for_symbol(mut blank: SchematicSheet, symbol: &ChildSheet)
         seen.push(name);
         blank.labels.push(Label {
             unknown_columns: Default::default(),
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             text: name.to_string(),
             position: Point::new(
                 20.0 * GRID_MM,

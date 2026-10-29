@@ -31,7 +31,7 @@ fn bus_entry_is_stroked_in_its_own_colour() {
         ..Default::default()
     };
     schematic.bus_entries.push(BusEntry {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         position: Point::new(50.0, 50.0),
         size: (2.54, -2.54),
     });

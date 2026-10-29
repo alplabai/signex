@@ -263,7 +263,7 @@ fn placed_symbol(
         font_family: None,
     };
     signex_types::schematic::Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: resolved.lib_id.clone(),
         reference,
         value: resolved.value.clone(),

@@ -32,7 +32,7 @@ pub(super) fn empty_snapshot() -> SchematicRenderSnapshot {
 #[test]
 fn hit_test_wire_uses_segment_tolerance() {
     let mut snapshot = empty_snapshot();
-    let wire_uuid = uuid::Uuid::new_v4();
+    let wire_uuid = uuid::Uuid::now_v7();
     snapshot.wires.push(signex_types::schematic::Wire {
         uuid: wire_uuid,
         end: Point::new(10.0, 0.0),
@@ -49,7 +49,7 @@ fn hit_test_picks_the_right_wire_and_bus_among_many() {
     let mut snapshot = empty_snapshot();
     let mut wires = Vec::new();
     for i in 0..5 {
-        let uuid = uuid::Uuid::new_v4();
+        let uuid = uuid::Uuid::now_v7();
         wires.push(uuid);
         snapshot.wires.push(signex_types::schematic::Wire {
             uuid,
@@ -59,7 +59,7 @@ fn hit_test_picks_the_right_wire_and_bus_among_many() {
             ..Default::default()
         });
     }
-    let bus_uuid = uuid::Uuid::new_v4();
+    let bus_uuid = uuid::Uuid::now_v7();
     snapshot.buses.push(signex_types::schematic::Bus {
         uuid: bus_uuid,
         start: Point::new(50.0, 0.0),
@@ -81,7 +81,7 @@ fn hit_test_picks_the_right_wire_and_bus_among_many() {
 #[test]
 fn hit_test_rect_mode_distinguishes_inside_and_touching() {
     let mut snapshot = empty_snapshot();
-    let wire_uuid = uuid::Uuid::new_v4();
+    let wire_uuid = uuid::Uuid::now_v7();
     snapshot.wires.push(signex_types::schematic::Wire {
         uuid: wire_uuid,
         start: Point::new(-4.0, 0.0),
@@ -111,8 +111,8 @@ fn hit_test_rect_mode_distinguishes_inside_and_touching() {
 #[test]
 fn hit_test_polygon_selects_wire_and_label_by_anchor() {
     let mut snapshot = empty_snapshot();
-    let wire_uuid = uuid::Uuid::new_v4();
-    let label_uuid = uuid::Uuid::new_v4();
+    let wire_uuid = uuid::Uuid::now_v7();
+    let label_uuid = uuid::Uuid::now_v7();
 
     snapshot.wires.push(signex_types::schematic::Wire {
         uuid: wire_uuid,
@@ -147,7 +147,7 @@ fn field_symbol(ref_text: Option<TextProp>) -> Symbol {
     Symbol {
         unknown_columns: Default::default(),
         unknown: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: "Device:R".into(),
         reference: "R1".into(),
         value: "10k".into(),
@@ -449,7 +449,7 @@ fn hidden_field_has_no_hit_box() {
 fn anchored_label(label_type: LabelType, rotation: f64) -> Label {
     Label {
         unknown_columns: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         text: "DATA_BUS_0".into(),
         position: Point::new(20.0, 30.0),
         rotation,
@@ -635,7 +635,7 @@ fn full_or_foreign_document_update_reclones_everything() {
     cache.update_from_sheet(&doc, RenderInvalidation::FULL, 1, 2);
     assert_eq!(cache.snapshot().wires.len(), 1);
 
-    doc.uuid = uuid::Uuid::new_v4();
+    doc.uuid = uuid::Uuid::now_v7();
     doc.wires.push(signex_types::schematic::Wire::default());
     cache.update_from_sheet(&doc, RenderInvalidation::NONE, 2, 3);
     assert_eq!(cache.snapshot().wires.len(), 2);

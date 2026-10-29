@@ -12,7 +12,7 @@ use std::path::PathBuf;
 /// A fresh app with one unmirrored symbol, selected, on the Altium keymap.
 fn app_with_selected_symbol() -> Signex {
     let symbol = Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: "Device:R".to_string(),
         reference: "R1".to_string(),
         value: "10k".to_string(),
@@ -21,7 +21,7 @@ fn app_with_selected_symbol() -> Signex {
     };
     let selected = vec![SelectedItem::new(symbol.uuid, SelectedKind::Symbol)];
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols: vec![symbol],
         ..Default::default()

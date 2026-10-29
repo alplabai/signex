@@ -8,6 +8,7 @@ use iced::widget::{
 };
 use iced::{Border, Element, Length, Theme};
 use signex_library::{ComponentClass, DatasheetRef, LifecycleState, ParameterTemplate};
+use signex_types::object_id::short_id;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
@@ -181,7 +182,7 @@ pub fn view<'a>(
         .size(TS.label);
 
     // Symbol / Footprint ref rows.
-    let symbol_short = short_uuid(&edit.draft.symbol_ref.uuid);
+    let symbol_short = short_id(&edit.draft.symbol_ref.uuid);
     let symbol_label = if edit.draft.symbol_ref.uuid.is_nil() {
         "Unbound — pick a symbol".to_string()
     } else {
@@ -204,7 +205,7 @@ pub fn view<'a>(
             });
 
     let footprint_label = match edit.draft.footprint_ref.as_ref() {
-        Some(r) => format!("footprint uuid {}", short_uuid(&r.uuid)),
+        Some(r) => format!("footprint uuid {}", short_id(&r.uuid)),
         None => "Unbound (optional)".to_string(),
     };
     let footprint_btn = button(
@@ -409,11 +410,6 @@ pub fn view<'a>(
     .style(crate::styles::modal_card(tokens))
     .clip(true)
     .into()
-}
-
-pub(crate) fn short_uuid(u: &uuid::Uuid) -> String {
-    let s = u.simple().to_string();
-    if s.len() >= 8 { s[..8].to_string() } else { s }
 }
 
 /// Delete-row confirm modal — sibling overlay launched from the

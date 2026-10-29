@@ -138,7 +138,7 @@ mod tests {
 
     fn label(family: Option<&str>) -> Label {
         Label {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             text: "N".into(),
             position: Point { x: 0.0, y: 0.0 },
             rotation: 0.0,
@@ -155,7 +155,7 @@ mod tests {
 
     fn note(family: Option<&str>) -> TextNote {
         TextNote {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             text: "n".into(),
             position: Point { x: 0.0, y: 0.0 },
             rotation: 0.0,

@@ -234,7 +234,7 @@ impl Env {
         }
         for (a, b) in segs {
             let mut wire = self.wires[template].clone();
-            wire.uuid = Uuid::new_v4();
+            wire.uuid = Uuid::now_v7();
             wire.locked = false;
             wire.start = a;
             wire.end = b;
@@ -267,7 +267,7 @@ mod tests {
 
     fn wire(a: (f64, f64), b: (f64, f64), locked: bool) -> Wire {
         Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(a.0, a.1),
             end: Point::new(b.0, b.1),
             locked,

@@ -13,7 +13,7 @@ fn app_with_engine(dir: &Path) -> (Signex, PathBuf, u64) {
     app.document_state.projects[0].data.enable_git = true;
     let path = dir.join("a.snxsch");
     let sheet = signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         ..Default::default()
     };
     let engine = signex_engine::Engine::new(sheet).expect("engine");
@@ -443,7 +443,7 @@ fn ctrl_s_after_a_successful_restore_keeps_the_restored_bytes() {
 pub(super) fn empty_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         unknown: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         version: 1,
         generator: "signex-test".into(),
         thickness: 1.6,

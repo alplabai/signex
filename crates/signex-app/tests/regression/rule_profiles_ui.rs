@@ -497,7 +497,7 @@ fn opening_a_project_reports_a_changed_profile_without_touching_the_project() {
     let _prefs = PrefsPathGuard::capture();
     let _lib = ProfilesDirGuard::empty();
     let tmp = TempDir::new().unwrap();
-    let name = format!("Drift {}", uuid::Uuid::new_v4().simple());
+    let name = format!("Drift {}", uuid::Uuid::now_v7().simple());
     rule_profiles::save_named_profile(
         &library(),
         &name,
@@ -561,7 +561,7 @@ fn opening_a_project_whose_profile_is_unchanged_says_nothing() {
     let _prefs = PrefsPathGuard::capture();
     let _lib = ProfilesDirGuard::empty();
     let tmp = TempDir::new().unwrap();
-    let name = format!("Calm {}", uuid::Uuid::new_v4().simple());
+    let name = format!("Calm {}", uuid::Uuid::now_v7().simple());
     let current = rules("unused_pin", "error");
     rule_profiles::save_named_profile(&library(), &name, "1.0", current.clone(), false).unwrap();
 

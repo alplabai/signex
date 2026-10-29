@@ -5,7 +5,7 @@ use super::*;
 
 fn summary(pn: &str, mpn: &str, description: &str) -> ComponentSummary {
     ComponentSummary {
-        row_id: Uuid::new_v4(),
+        row_id: Uuid::now_v7(),
         internal_pn: signex_library::InternalPn::new(pn),
         mpn: mpn.into(),
         state: signex_library::LifecycleState::Draft,
@@ -17,7 +17,7 @@ fn library(root: &str, components: Vec<ComponentSummary>) -> OpenLibrary {
     OpenLibrary {
         root: PathBuf::from(root),
         display_name: root.into(),
-        library_id: Uuid::new_v4(),
+        library_id: Uuid::now_v7(),
         tables: HashMap::new(),
         cached_components: components,
         cached_symbols: Vec::new(),

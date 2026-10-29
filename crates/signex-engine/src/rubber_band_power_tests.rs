@@ -177,7 +177,7 @@ fn a_conflicted_port_of_the_same_value_is_not_joined() {
     let pwr3 = add_power_port(&mut sheet, "#PWR3", "GND", Point::new(200.0, 200.0));
     add_power_port(&mut sheet, "#PWR4", "VCC", Point::new(200.0, 200.0));
     sheet.no_connects.push(NoConnect {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         position: Point::new(200.0, 200.0),
     });
     let mut e = move_with_unrelated_label(sheet, pwr1);

@@ -472,7 +472,7 @@ fn a_result_added_after_the_scan_is_left_untouched() {
     let (mut app, top, _child) = placed_twice_on_disk(&dir);
     project_search(&mut app, "top_net");
     let mut extra = app.document_state.engines[&top].document().labels[0].clone();
-    extra.uuid = uuid::Uuid::new_v4();
+    extra.uuid = uuid::Uuid::now_v7();
     extra.text = "EXTRA_TOP_NET".into();
     assert!(app.apply_engine_command(
         signex_engine::Command::PlaceLabel { label: extra },

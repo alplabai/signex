@@ -346,10 +346,10 @@ pub(crate) mod tests {
     }
 
     pub(crate) fn fixture_row() -> ComponentRow {
-        let lib = Uuid::new_v4();
+        let lib = Uuid::now_v7();
         ComponentRow {
             alternate_symbols: Vec::new(),
-            row_id: Uuid::new_v4(),
+            row_id: Uuid::now_v7(),
             internal_pn: InternalPn::new("R0805_10k"),
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::url("https://example.com"),
@@ -357,8 +357,8 @@ pub(crate) mod tests {
             description: String::new(),
             more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
-            symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
-            footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
+            symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
+            footprint_ref: Some(PrimitiveRef::new(lib, Uuid::now_v7())),
             sim_ref: None,
             pin_map_overrides: Vec::new(),
             primary_mpn: ManufacturerPart::draft("Vishay", "CRCW08051002F"),
@@ -384,7 +384,7 @@ pub(crate) mod tests {
     fn component_row_json_roundtrip() {
         let row = ComponentRow {
             alternate_symbols: Vec::new(),
-            row_id: Uuid::new_v4(),
+            row_id: Uuid::now_v7(),
             internal_pn: "R0805_10k".parse().unwrap(),
             class: ComponentClass("resistor".into()),
             datasheet: DatasheetRef::url("https://example.com"),
@@ -392,8 +392,8 @@ pub(crate) mod tests {
             description: String::new(),
             more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
-            symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
-            footprint_ref: Some(PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4())),
+            symbol_ref: PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7()),
+            footprint_ref: Some(PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7())),
             sim_ref: None,
             pin_map_overrides: vec![],
             primary_mpn: ManufacturerPart::draft("Vishay", "CRCW08051002F"),
@@ -485,7 +485,7 @@ pub(crate) mod tests {
         assert!(row.is_symbol_unbound());
         assert!(row.is_footprint_unbound());
 
-        row.footprint_ref = Some(PrimitiveRef::new(Uuid::new_v4(), Uuid::nil()));
+        row.footprint_ref = Some(PrimitiveRef::new(Uuid::now_v7(), Uuid::nil()));
         assert!(row.is_footprint_unbound(), "nil footprint uuid is unbound");
     }
 

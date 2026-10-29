@@ -57,7 +57,7 @@ fn project_with_two_sheets(dir: &Path) -> Signex {
     for (name, dirty) in [("X", true), ("Y", false)] {
         let path = dir.join(format!("{name}.snxsch"));
         let mut engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             paper_size: "A4".to_string(),
             ..Default::default()
         })

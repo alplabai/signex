@@ -72,10 +72,10 @@ mod tests {
 
     fn app_with_r1_at(x: f64, y: f64) -> (Signex, PathBuf, uuid::Uuid) {
         let mut app = app_workspace("/w/proj", &[]);
-        let id = uuid::Uuid::new_v4();
+        let id = uuid::Uuid::now_v7();
         let path = PathBuf::from("/w/proj/a.snxsch");
         let sheet = SchematicSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             symbols: vec![Symbol {
                 uuid: id,
                 lib_id: "Device:R".into(),

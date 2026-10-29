@@ -24,7 +24,7 @@ fn wire(uuid: uuid::Uuid, y: f64) -> Wire {
 pub(super) fn app_with_wires(wires: Vec<Wire>) -> (Signex, PathBuf) {
     let sheet = SchematicSheet {
         unknown: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         version: 0,
         generator: String::new(),
         generator_version: String::new(),
@@ -93,7 +93,7 @@ pub(super) fn wire_start(app: &Signex, path: &PathBuf, uuid: uuid::Uuid) -> Poin
 
 #[test]
 fn move_arms_the_object_pick_without_needing_a_selection() {
-    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::new_v4(), 10.0)]);
+    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::now_v7(), 10.0)]);
     assert!(app.interaction_state.active_canvas().selected.is_empty());
 
     act(&mut app, ActiveBarAction::Move);
@@ -113,8 +113,8 @@ fn move_arms_the_object_pick_without_needing_a_selection() {
 
 #[test]
 fn move_picked_selects_only_the_object_under_the_cursor_and_disarms() {
-    let a = uuid::Uuid::new_v4();
-    let b = uuid::Uuid::new_v4();
+    let a = uuid::Uuid::now_v7();
+    let b = uuid::Uuid::now_v7();
     let (mut app, path) = app_with_wires(vec![wire(a, 10.0), wire(b, 40.0)]);
     app.interaction_state.active_canvas_mut().selected = selection_of(b);
     act(&mut app, ActiveBarAction::Move);
@@ -147,7 +147,7 @@ fn move_picked_selects_only_the_object_under_the_cursor_and_disarms() {
 
 #[test]
 fn move_selection_with_an_empty_selection_does_not_arm() {
-    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::new_v4(), 10.0)]);
+    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::now_v7(), 10.0)]);
 
     act(&mut app, ActiveBarAction::MoveSelection);
 
@@ -157,7 +157,7 @@ fn move_selection_with_an_empty_selection_does_not_arm() {
 
 #[test]
 fn move_selection_with_a_selection_arms_the_reference_pick() {
-    let a = uuid::Uuid::new_v4();
+    let a = uuid::Uuid::now_v7();
     let (mut app, _path) = app_with_wires(vec![wire(a, 10.0)]);
     app.interaction_state.active_canvas_mut().selected = selection_of(a);
 
@@ -173,7 +173,7 @@ fn move_selection_with_a_selection_arms_the_reference_pick() {
 
 #[test]
 fn move_selection_by_xy_still_opens_the_dialog() {
-    let a = uuid::Uuid::new_v4();
+    let a = uuid::Uuid::now_v7();
     let (mut app, _path) = app_with_wires(vec![wire(a, 10.0)]);
     app.interaction_state.active_canvas_mut().selected = selection_of(a);
 
@@ -185,7 +185,7 @@ fn move_selection_by_xy_still_opens_the_dialog() {
 
 #[test]
 fn escape_clears_an_armed_pick() {
-    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::new_v4(), 10.0)]);
+    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::now_v7(), 10.0)]);
     act(&mut app, ActiveBarAction::Move);
 
     let _ = app.update(Message::Input(signex_app::app::InputMsg::EscapePressed {
@@ -198,7 +198,7 @@ fn escape_clears_an_armed_pick() {
 
 #[test]
 fn switching_back_to_select_clears_an_armed_pick() {
-    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::new_v4(), 10.0)]);
+    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::now_v7(), 10.0)]);
     act(&mut app, ActiveBarAction::Move);
 
     let _ = app.update(Message::Tool(signex_app::toolbar::ToolMessage::SelectTool(
@@ -211,7 +211,7 @@ fn switching_back_to_select_clears_an_armed_pick() {
 
 #[test]
 fn right_click_while_armed_cancels_instead_of_opening_the_context_menu() {
-    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::new_v4(), 10.0)]);
+    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::now_v7(), 10.0)]);
     act(&mut app, ActiveBarAction::Move);
 
     let _ = app.update(Message::ContextMenu(signex_app::app::ContextMenuMsg::Show(
@@ -224,7 +224,7 @@ fn right_click_while_armed_cancels_instead_of_opening_the_context_menu() {
 
 #[test]
 fn move_pick_honours_the_selection_filter() {
-    let a = uuid::Uuid::new_v4();
+    let a = uuid::Uuid::now_v7();
     let (mut app, _path) = app_with_wires(vec![wire(a, 10.0)]);
     app.interaction_state
         .selection_filters
@@ -244,7 +244,7 @@ fn move_pick_honours_the_selection_filter() {
 
 #[test]
 fn picking_a_placement_tool_clears_an_armed_pick() {
-    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::new_v4(), 10.0)]);
+    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::now_v7(), 10.0)]);
     act(&mut app, ActiveBarAction::Move);
 
     let _ = app.update(Message::Tool(signex_app::toolbar::ToolMessage::SelectTool(
@@ -260,7 +260,7 @@ fn picking_a_placement_tool_clears_an_armed_pick() {
 
 #[test]
 fn switching_tabs_cancels_an_armed_or_floating_move() {
-    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::new_v4(), 10.0)]);
+    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::now_v7(), 10.0)]);
     let window = iced::window::Id::unique();
     app.ui_state.main_window_id = Some(window);
     let other = PathBuf::from("click-click-move-b.snxsch");
@@ -304,7 +304,7 @@ fn switching_tabs_cancels_an_armed_or_floating_move() {
 
 #[test]
 fn an_escape_the_canvas_never_saw_cancels_a_floating_move_via_the_epoch() {
-    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::new_v4(), 10.0)]);
+    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::now_v7(), 10.0)]);
     app.ui_state.first_run_tour_open = false;
     act(&mut app, ActiveBarAction::Move);
     let epoch = app.interaction_state.active_canvas().move_epoch;
@@ -321,7 +321,7 @@ fn an_escape_the_canvas_never_saw_cancels_a_floating_move_via_the_epoch() {
 
 #[test]
 fn undo_cancels_a_floating_move() {
-    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::new_v4(), 10.0)]);
+    let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::now_v7(), 10.0)]);
     act(&mut app, ActiveBarAction::Move);
     let epoch = app.interaction_state.active_canvas().move_epoch;
 
@@ -333,7 +333,7 @@ fn undo_cancels_a_floating_move() {
 
 #[test]
 fn a_pick_with_no_object_under_it_cancels_the_float_instead_of_moving_the_old_selection() {
-    let a = uuid::Uuid::new_v4();
+    let a = uuid::Uuid::now_v7();
     let (mut app, _path) = app_with_wires(vec![wire(a, 10.0)]);
     app.interaction_state.active_canvas_mut().selected = selection_of(a);
     act(&mut app, ActiveBarAction::Move);
@@ -455,8 +455,8 @@ fn is_move_selected(message: &Option<Message>) -> bool {
 /// Wires `a` (y = 10) and `b` (y = 40), `a` selected, Move Selection
 /// armed, picked at (20, 100) and dragged to (32.7, 100): a live float.
 fn app_with_a_floating_selection() -> (Signex, PathBuf, CanvasState, uuid::Uuid, uuid::Uuid) {
-    let a = uuid::Uuid::new_v4();
-    let b = uuid::Uuid::new_v4();
+    let a = uuid::Uuid::now_v7();
+    let b = uuid::Uuid::now_v7();
     let (mut app, path) = app_with_wires(vec![wire(a, 10.0), wire(b, 40.0)]);
     app.interaction_state.active_canvas_mut().selected = selection_of(a);
     act(&mut app, ActiveBarAction::MoveSelection);

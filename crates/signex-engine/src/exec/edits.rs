@@ -524,7 +524,7 @@ mod tests {
     use crate::test_support::test_sheet;
 
     fn engine_with_symbol() -> (Engine, uuid::Uuid) {
-        let uuid = uuid::Uuid::new_v4();
+        let uuid = uuid::Uuid::now_v7();
         let mut sheet = test_sheet();
         sheet.symbols.push(signex_types::schematic::Symbol {
             uuid,
@@ -583,7 +583,7 @@ mod tests {
         assert!(!same.changed);
         let missing = engine
             .execute(Command::SetSymbolLocked {
-                symbol_id: uuid::Uuid::new_v4(),
+                symbol_id: uuid::Uuid::now_v7(),
                 locked: true,
             })
             .unwrap();

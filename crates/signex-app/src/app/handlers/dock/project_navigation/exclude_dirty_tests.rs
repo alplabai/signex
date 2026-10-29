@@ -91,7 +91,7 @@ fn discard_drops_a_dirty_sheet_under_a_case_variant_on_a_folding_volume() {
 fn discard_forgets_the_discarded_sheets_net_colours() {
     let _ = crate::diagnostics::init_logging();
     let (mut app, _tmp, held) = folding_project_with_dirty_lowercase_sheet();
-    let wire = uuid::Uuid::new_v4();
+    let wire = uuid::Uuid::now_v7();
     let sheet = signex_types::schematic::SchematicSheet {
         wires: vec![signex_types::schematic::Wire {
             uuid: wire,

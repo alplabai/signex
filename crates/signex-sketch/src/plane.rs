@@ -7,7 +7,7 @@ pub struct PlaneId(pub Uuid);
 
 impl PlaneId {
     pub fn new() -> Self {
-        Self(Uuid::new_v4())
+        Self(Uuid::now_v7())
     }
 }
 

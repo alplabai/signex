@@ -34,6 +34,7 @@ use crate::component::ComponentRow;
 use crate::identity::RowId;
 use crate::manifest::WorkflowMode;
 use crate::primitive::PrimitiveRef;
+use signex_types::object_id::short_id;
 use uuid::Uuid;
 
 /// Outcome of one cascade pass: which rows were auto-bumped, which were
@@ -404,7 +405,7 @@ fn row_label(row: &ComponentRow) -> String {
     let pn = row.internal_pn.to_string();
     let pn = pn.trim();
     if pn.is_empty() {
-        return short_uuid(row.row_id);
+        return short_id(&row.row_id);
     }
     let mut label: String = pn.chars().take(MESSAGE_NAME_CHARS).collect();
     if pn.chars().count() > MESSAGE_NAME_CHARS {
@@ -420,14 +421,7 @@ fn row_label(row: &ComponentRow) -> String {
 fn cascade_commit_message(saves: &[PrimitiveSave], rows: &[String]) -> String {
     let what: Vec<String> = saves
         .iter()
-        .map(|s| {
-            format!(
-                "{} {} to v{}",
-                s.kind.label(),
-                short_uuid(s.uuid),
-                s.version
-            )
-        })
+        .map(|s| format!("{} {} to v{}", s.kind.label(), short_id(&s.uuid), s.version))
         .collect();
     let mut message = format!("cascade: bump {} on {} row(s)", what.join(", "), rows.len());
     if rows.is_empty() {
@@ -440,11 +434,6 @@ fn cascade_commit_message(saves: &[PrimitiveSave], rows: &[String]) -> String {
         message.push_str(&format!(", +{} more", rows.len() - shown));
     }
     message
-}
-
-fn short_uuid(uuid: Uuid) -> String {
-    let s = uuid.to_string();
-    s.split('-').next().unwrap_or(&s).to_string()
 }
 
 #[cfg(test)]
@@ -585,7 +574,7 @@ mod tests {
             let mut row = row(&"X".repeat(100), Uuid::nil(), Uuid::nil());
             assert_eq!(row_label(&row).chars().count(), MESSAGE_NAME_CHARS + 1);
             row.internal_pn = crate::identity::InternalPn::new("  ");
-            assert_eq!(row_label(&row), short_uuid(row.row_id));
+            assert_eq!(row_label(&row), short_id(&row.row_id));
         }
 
         fn save(lib: Uuid, symbol: Uuid) -> PrimitiveSave {

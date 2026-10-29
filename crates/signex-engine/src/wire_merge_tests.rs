@@ -15,7 +15,7 @@ fn pt(x: f64, y: f64) -> Point {
 
 fn new_wire(a: (f64, f64), b: (f64, f64)) -> Wire {
     Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: pt(a.0, a.1),
         end: pt(b.0, b.1),
         ..Default::default()
@@ -171,7 +171,7 @@ fn break_wire_off_the_wire_at_an_end_or_on_a_missing_wire_does_nothing() {
         (
             "a missing wire",
             Command::BreakWire {
-                wire: Uuid::new_v4(),
+                wire: Uuid::now_v7(),
                 at: pt(8.0, 10.0),
             },
         ),
@@ -309,7 +309,7 @@ fn nothing_folds_where_something_else_attaches() {
         "a junction",
         |s| {
             s.junctions.push(Junction {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 position: pt(45.0, 50.0),
                 ..Default::default()
             });
@@ -320,7 +320,7 @@ fn nothing_folds_where_something_else_attaches() {
         "a label",
         |s| {
             s.labels.push(Label {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 text: "SIG".into(),
                 position: pt(45.0, 50.0),
                 rotation: 0.0,

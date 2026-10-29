@@ -60,7 +60,7 @@ impl Env {
             }
             for (lo, hi) in pieces {
                 let mut wire = template.clone();
-                wire.uuid = Uuid::new_v4();
+                wire.uuid = Uuid::now_v7();
                 wire.locked = false;
                 (wire.start, wire.end) = if oriented { (lo, hi) } else { (hi, lo) };
                 out.touched
@@ -123,7 +123,7 @@ impl Env {
         }
         for (lo, hi) in pieces {
             let mut wire = u.clone();
-            wire.uuid = Uuid::new_v4();
+            wire.uuid = Uuid::now_v7();
             (wire.start, wire.end) = if oriented { (lo, hi) } else { (hi, lo) };
             out.touched
                 .push(SelectedItem::new(wire.uuid, SelectedKind::Wire));
@@ -177,7 +177,7 @@ mod tests {
 
     fn horizontal(a: f64, b: f64, locked: bool) -> Wire {
         Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(a, 0.0),
             end: Point::new(b, 0.0),
             locked,

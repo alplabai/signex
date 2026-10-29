@@ -22,7 +22,7 @@ fn sheet_with(
     saved: &[(uuid::Uuid, Color)],
 ) -> SchematicSheet {
     SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         wires: vec![Wire {
             uuid: wire,
             ..Default::default()
@@ -65,7 +65,7 @@ fn make_clean(app: &mut Signex) {
 
 #[test]
 fn opening_a_sheet_loads_its_saved_colours() {
-    let (w, j) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+    let (w, j) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
     let app = app_with(sheet_with(w, j, &[(w, color(1)), (j, color(2))]));
     assert_eq!(app.ui_state.wire_color_overrides.get(&w), Some(&color(1)));
     assert_eq!(app.ui_state.wire_color_overrides.get(&j), Some(&color(2)));
@@ -74,7 +74,7 @@ fn opening_a_sheet_loads_its_saved_colours() {
 
 #[test]
 fn closing_forgets_and_reopening_restores() {
-    let (w, j) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+    let (w, j) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
     let sheet = sheet_with(w, j, &[(w, color(1))]);
     let mut app = app_with(sheet.clone());
     app.forget_net_colors_of(&path());
@@ -85,7 +85,7 @@ fn closing_forgets_and_reopening_restores() {
 
 #[test]
 fn reloading_replaces_the_old_engines_colours() {
-    let (w, j) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+    let (w, j) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
     let mut app = app_with(sheet_with(w, j, &[(w, color(1))]));
     app.apply_loaded_schematic(
         Some(sheet_with(w, j, &[(j, color(2))])),
@@ -99,7 +99,7 @@ fn reloading_replaces_the_old_engines_colours() {
 
 #[test]
 fn a_pen_change_marks_the_sheet_dirty() {
-    let (w, j) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+    let (w, j) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
     let mut app = app_with(sheet_with(w, j, &[]));
     assert!(!is_dirty(&app));
     app.record_net_color_undo();
@@ -109,7 +109,7 @@ fn a_pen_change_marks_the_sheet_dirty() {
 
 #[test]
 fn clear_all_undo_and_redo_mark_the_sheet_dirty() {
-    let (w, j) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+    let (w, j) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
     let mut app = app_with(sheet_with(w, j, &[(w, color(1))]));
     app.clear_all_net_colors_undoably();
     assert!(is_dirty(&app), "Clear All");
@@ -127,7 +127,7 @@ fn clear_all_undo_and_redo_mark_the_sheet_dirty() {
 fn a_colour_change_never_writes_to_disk() {
     let dir = tempfile::tempdir().expect("tempdir");
     let target = dir.path().join(NAME);
-    let (w, j) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+    let (w, j) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
     let mut app = app_with(sheet_with(w, j, &[]));
     app.document_state
         .engines
@@ -141,8 +141,8 @@ fn a_colour_change_never_writes_to_disk() {
 
 #[test]
 fn saving_writes_live_colours_and_prunes_the_stale() {
-    let (w, j) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
-    let stale = uuid::Uuid::new_v4();
+    let (w, j) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
+    let stale = uuid::Uuid::now_v7();
     let mut app = app_with(sheet_with(w, j, &[]));
     app.ui_state.wire_color_overrides.insert(w, color(3));
     app.ui_state.wire_color_overrides.insert(stale, color(4));
@@ -180,7 +180,7 @@ fn snapshot(app: &Signex) -> (u64, u64) {
 
 #[test]
 fn a_colour_change_during_a_save_keeps_the_sheet_dirty_until_the_next_save() {
-    let (w, j) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+    let (w, j) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
     let mut app = app_with(sheet_with(w, j, &[]));
     app.record_net_color_undo();
     app.ui_state.wire_color_overrides.insert(w, color(1));
@@ -208,7 +208,7 @@ fn a_colour_change_during_a_save_keeps_the_sheet_dirty_until_the_next_save() {
 
 #[test]
 fn a_save_with_no_colour_change_marks_the_sheet_clean() {
-    let (w, j) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+    let (w, j) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
     let mut app = app_with(sheet_with(w, j, &[]));
     app.record_net_color_undo();
     app.ui_state.wire_color_overrides.insert(w, color(1));

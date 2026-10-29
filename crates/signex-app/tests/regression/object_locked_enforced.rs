@@ -16,13 +16,13 @@ use std::path::PathBuf;
 fn app_with_locked_objects(y: f64) -> (Signex, Vec<SelectedItem>) {
     let _ = diagnostics::init_logging();
     let (wire, label, note, drawing) = (
-        uuid::Uuid::new_v4(),
-        uuid::Uuid::new_v4(),
-        uuid::Uuid::new_v4(),
-        uuid::Uuid::new_v4(),
+        uuid::Uuid::now_v7(),
+        uuid::Uuid::now_v7(),
+        uuid::Uuid::now_v7(),
+        uuid::Uuid::now_v7(),
     );
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         wires: vec![Wire {
             uuid: wire,
@@ -123,7 +123,7 @@ fn deleting_only_locked_objects_is_refused_and_reported() {
 #[test]
 fn a_mixed_delete_skips_the_locked_objects_and_removes_the_free_wire() {
     let (mut app, mut items) = app_with_locked_objects(1573.75);
-    let free = uuid::Uuid::new_v4();
+    let free = uuid::Uuid::now_v7();
     let engine = app.document_state.active_engine_mut().expect("engine");
     let mut sheet = engine.document().clone();
     sheet.wires.push(Wire {

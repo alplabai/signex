@@ -1415,12 +1415,12 @@ mod tests {
     /// in `children`.
     fn sheet_with(reference: &str, children: &[&str]) -> SchematicSheet {
         let mut sheet = SchematicSheet {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             paper_size: "A4".to_owned(),
             ..Default::default()
         };
         sheet.symbols.push(signex_types::schematic::Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             lib_id: "lib:r".to_owned(),
             reference: reference.to_owned(),
             unit: 1,

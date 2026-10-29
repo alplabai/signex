@@ -294,7 +294,7 @@ mod collides_tests {
     fn env_with(locked: bool) -> Env {
         let sheet = SchematicSheet {
             wires: vec![Wire {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 start: Point::new(0.0, 0.0),
                 end: Point::new(10.0, 0.0),
                 locked,

@@ -23,7 +23,7 @@ fn sheet(wires: Vec<Wire>, directives: Vec<NoConnect>) -> SchematicSheet {
 
 fn wire(a: Point, b: Point) -> Wire {
     Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: a,
         end: b,
         ..Default::default()
@@ -32,7 +32,7 @@ fn wire(a: Point, b: Point) -> Wire {
 
 fn directive(p: Point) -> NoConnect {
     NoConnect {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         position: p,
     }
 }
@@ -124,7 +124,7 @@ fn snxsch_with_directive_roundtrips_a_no_edit_save() {
     let original = one_wire(vec![directive(pt(0.0, 0.0))]);
     let text = SnxSchematic::new(original).write_string().expect("write");
 
-    let dir = std::env::temp_dir().join(format!("signex-349-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-349-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("temp dir");
     let path = dir.join("fixture.snxsch");
     std::fs::write(&path, &text).expect("write fixture");

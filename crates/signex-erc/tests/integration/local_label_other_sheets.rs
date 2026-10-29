@@ -12,7 +12,7 @@ type Resolutions = HashMap<SheetKey, HashMap<String, SheetKey>>;
 
 fn label(text: &str, label_type: LabelType) -> Label {
     Label {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         text: text.to_string(),
         position: Point { x: 10.0, y: 10.0 },
         rotation: 0.0,
@@ -133,7 +133,7 @@ fn clash_between_grandchildren_is_reported_once_by_the_lowest_sheet() {
 fn sheet_entry_findings(child_labels: &[(&str, LabelType)]) -> Vec<Violation> {
     use signex_types::schematic::{ChildSheet, SheetPin, Wire};
     let wire = |start, end| Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start,
         end,
         stroke_width: 0.0,
@@ -144,7 +144,7 @@ fn sheet_entry_findings(child_labels: &[(&str, LabelType)]) -> Vec<Violation> {
     let mut top = sheet(&[("SDA", Net)]);
     top.wires.push(wire(Point { x: 10.0, y: 10.0 }, pin_at));
     top.child_sheets.push(ChildSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         name: "A".to_string(),
         filename: "a.snxsch".to_string(),
         position: Point { x: 20.0, y: 5.0 },
@@ -155,7 +155,7 @@ fn sheet_entry_findings(child_labels: &[(&str, LabelType)]) -> Vec<Violation> {
         fill_color: None,
         fields_autoplaced: false,
         pins: vec![SheetPin {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             name: "SDA".to_string(),
             direction: String::new(),
             position: pin_at,

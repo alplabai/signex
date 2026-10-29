@@ -175,7 +175,7 @@ fn a_second_restore_while_a_cancelled_one_runs_says_why_it_did_nothing() {
 
 fn schematic_in(app: &mut Signex, path: &Path) {
     let engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         ..Default::default()
     })
     .expect("engine");
@@ -243,7 +243,7 @@ fn primitive_save_as_onto_a_restoring_file_is_refused_and_rolled_back() {
 fn schematic_fixture(stem: &str) -> (tempfile::TempDir, PathBuf, String, uuid::Uuid, Signex) {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join(format!("{stem}.snxsch"));
-    let restored_uuid = uuid::Uuid::new_v4();
+    let restored_uuid = uuid::Uuid::now_v7();
     let text = signex_types::format::SnxSchematic::new(signex_types::schematic::SchematicSheet {
         uuid: restored_uuid,
         ..Default::default()
@@ -411,7 +411,7 @@ fn a_restore_over_edits_marks_the_tab_and_the_dirty_set_together() {
     // A colour override changes what the tab holds without either dirty
     // marker having been told yet.
     app.ui_state.wire_color_overrides.insert(
-        uuid::Uuid::new_v4(),
+        uuid::Uuid::now_v7(),
         signex_types::theme::Color::new(9, 0, 0, 255),
     );
 
@@ -440,7 +440,7 @@ fn a_restore_finishing_on_a_background_schematic_leaves_the_users_tab_state_alon
     app.interaction_state.current_tool = crate::app::Tool::Wire;
     app.interaction_state.active_canvas_mut().move_pick = Some(crate::canvas::MovePick::Object);
     app.interaction_state.editing_text = Some(TextEditState {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         kind: signex_types::schematic::SelectedKind::Label,
         text: "half typed".into(),
         original_text: "x".into(),
@@ -478,7 +478,7 @@ fn a_restore_finishing_on_a_background_schematic_leaves_the_users_tab_state_alon
 
 fn ghost_item() -> signex_types::schematic::SelectedItem {
     signex_types::schematic::SelectedItem::new(
-        uuid::Uuid::new_v4(),
+        uuid::Uuid::now_v7(),
         signex_types::schematic::SelectedKind::Wire,
     )
 }
@@ -486,7 +486,7 @@ fn ghost_item() -> signex_types::schematic::SelectedItem {
 /// Inline text, a pending move and a selection, all on the visible canvas.
 fn arm_state_of_the_old_engine(app: &mut Signex) {
     app.interaction_state.editing_text = Some(crate::app::TextEditState {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         kind: signex_types::schematic::SelectedKind::Label,
         text: "half typed".into(),
         original_text: "x".into(),
@@ -617,9 +617,9 @@ fn inline_text_on_an_object_of_a_background_restored_sheet_is_discarded() {
     };
     let _ = crate::diagnostics::init_logging();
     let (dir, path, sha, _restored, mut app) = schematic_fixture("text-on-background");
-    let label_uuid = uuid::Uuid::new_v4();
+    let label_uuid = uuid::Uuid::now_v7();
     let mut sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         ..Default::default()
     };
     sheet.labels.push(Label {
