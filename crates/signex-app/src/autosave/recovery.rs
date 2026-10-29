@@ -62,6 +62,7 @@ pub fn reconcile(
     // current key. Journalled moves are not replayed here: the live autosave
     // state owns them once the app runs.
     sidecar::adopt_legacy(recovery_dir, document)?;
+    sidecar::log_unmatched_spellings(recovery_dir, document);
     let sidecar_file = sidecar::sidecar_path(recovery_dir, document);
     let sidecar_modified = match std::fs::metadata(&sidecar_file) {
         Ok(meta) => meta

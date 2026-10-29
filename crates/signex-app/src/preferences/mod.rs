@@ -144,6 +144,12 @@ pub enum PrefMsg {
     DraftMoveKeepsWires(bool),
     /// Toggle "Select by drag direction". Persisted on Save.
     DraftDragDirectionSelect(bool),
+    /// Toggle "Show net info on hover". Persisted on Save.
+    DraftNetHoverEnabled(bool),
+    /// Move the "Increment step" (-100..=100, never 0). Persisted on Save.
+    DraftIncrementStep(i32),
+    /// Choose what a pasted part is called. Persisted on Save.
+    DraftPasteDesignators(crate::paste_prefs::PasteDesignators),
     /// Choose where the window's minimize / maximize / close buttons go.
     /// Persisted on Save.
     DraftWindowControlsPlacement(crate::chrome::controls::WindowControlsPlacement),
@@ -297,7 +303,10 @@ pub struct PrefsView<'a> {
     pub draft_pcb_gpu_render: bool,
     pub draft_annotate_undo: crate::annotate_undo::AnnotateUndo,
     pub draft_move_keeps_wires: bool,
+    pub draft_net_hover_enabled: bool,
     pub draft_drag_direction_select: bool,
+    pub draft_increment_step: i32,
+    pub draft_paste_designators: crate::paste_prefs::PasteDesignators,
     pub draft_window_controls_placement: crate::chrome::controls::WindowControlsPlacement,
     /// Whether the drafted placement only applies after a restart (macOS).
     pub window_controls_restart_note: bool,
@@ -608,7 +617,10 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         nav,
         draft_annotate_undo,
         draft_move_keeps_wires,
+        draft_net_hover_enabled,
         draft_drag_direction_select,
+        draft_increment_step,
+        draft_paste_designators,
         draft_autosave_enabled,
         profiles,
         default_profile,
@@ -629,7 +641,10 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         PrefNav::Annotation => content_annotation(draft_annotate_undo),
         PrefNav::Editing => content_editing(
             draft_move_keeps_wires,
+            draft_net_hover_enabled,
             draft_drag_direction_select,
+            draft_increment_step,
+            draft_paste_designators,
             draft_autosave_enabled,
         ),
         PrefNav::RuleProfiles => content_profiles(profiles, default_profile, panel_tokens),

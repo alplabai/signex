@@ -26,6 +26,11 @@ pub enum EngineError {
         parts.join(", ")
     )]
     LibSymbolUnitRemoved { lib_id: String, parts: Vec<String> },
+    #[error(
+        "component change refused, the new part has no drawing for: {}; pick a part that has those units",
+        parts.join(", ")
+    )]
+    ChangeComponentUnitMissing { parts: Vec<String> },
     #[error("a sheet symbol needs a name")]
     EmptyChildSheetName,
     #[error("sheet file '{0}' must end in .snxsch")]
@@ -61,6 +66,8 @@ pub enum EngineError {
     UnrecordedEditRefused,
     #[error("this sheet was written by a newer Signex and is read-only; edit it in that version")]
     ReadOnly,
+    #[error("the clipboard fragment could not be converted: {0}")]
+    ClipboardFragment(String),
 }
 
 fn locked_message(references: &[String], action: &str) -> String {

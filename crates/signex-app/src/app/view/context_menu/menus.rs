@@ -33,6 +33,10 @@ pub(super) struct CanvasShortcuts {
     pub copy: String,
     pub paste: String,
     pub smart_paste: String,
+    pub rotate: String,
+    pub mirror_x: String,
+    pub mirror_y: String,
+    pub delete: String,
 }
 
 impl Signex {
@@ -128,12 +132,15 @@ impl Signex {
     pub(in crate::app::view) fn view_context_menu(&self) -> Element<'_, Message> {
         let tid = self.ui_state.theme_id;
         let canvas = self.interaction_state.active_canvas();
-        let has_selection = !canvas.selected.is_empty();
-        let child_sheet_selected = canvas
-            .selected
-            .iter()
-            .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet);
-        let drawing_selected = !self.selected_drawing_ids().is_empty();
+        let selection = CanvasSelection {
+            has_selection: !canvas.selected.is_empty(),
+            child_sheet_selected: canvas
+                .selected
+                .iter()
+                .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet),
+            drawing_selected: !self.selected_drawing_ids().is_empty(),
+            placed_part_selected: self.has_placed_part_selected(),
+        };
         let active_submenu = self.interaction_state.context_submenu;
         // Shortcut hints read from the active keymap profile; a command
         // it does not bind has none.
@@ -144,6 +151,10 @@ impl Signex {
             copy: self.keymap_shortcut_label("copy"),
             paste: self.keymap_shortcut_label("paste"),
             smart_paste: self.keymap_shortcut_label("smart_paste"),
+            rotate: self.keymap_shortcut_label("rotate_counterclockwise"),
+            mirror_x: self.keymap_shortcut_label("mirror_x"),
+            mirror_y: self.keymap_shortcut_label("mirror_y"),
+            delete: self.keymap_shortcut_label("delete_selection"),
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         // The project row's tree key, the same one the project tree's own
@@ -152,18 +163,7 @@ impl Signex {
             .document_state
             .active_document_project()
             .map(|p| vec![p.id.to_string()]);
-        let entries = canvas_menu_entries(
-            tid,
-            tokens,
-            CanvasSelection {
-                has_selection,
-                child_sheet_selected,
-                drawing_selected,
-            },
-            active_submenu,
-            project_key,
-            &sc,
-        );
+        let entries = canvas_menu_entries(tid, tokens, selection, active_submenu, project_key, &sc);
         signex_widgets::active_bar_dropdown::view(entries, tokens, Some(Self::CONTEXT_MENU_WIDTH))
     }
 
@@ -203,6 +203,8 @@ pub(super) struct CanvasSelection {
     pub(super) has_selection: bool,
     pub(super) child_sheet_selected: bool,
     pub(super) drawing_selected: bool,
+    /// One non-power symbol: the placed-part actions apply (#1260).
+    pub(super) placed_part_selected: bool,
 }
 
 /// Pure canvas-menu data builder. Rows and their enable state are derived
@@ -220,6 +222,7 @@ pub(super) fn canvas_menu_entries(
         has_selection,
         child_sheet_selected,
         drawing_selected,
+        placed_part_selected,
     } = selection;
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(24);
 
@@ -351,25 +354,25 @@ pub(super) fn canvas_menu_entries(
         v.push(dd_kb(
             Some(ic::icon_dd_rotate(tid)),
             "Rotate",
-            "Space",
+            &sc.rotate,
             ContextAction::RotateSelected,
         ));
         v.push(dd_kb(
             Some(ic::icon_dd_flip_x(tid)),
             &cmd_label("mirror_x", "Mirror X"),
-            "X",
+            &sc.mirror_x,
             ContextAction::MirrorX,
         ));
         v.push(dd_kb(
             Some(ic::icon_dd_flip_y(tid)),
             &cmd_label("mirror_y", "Mirror Y"),
-            "Y",
+            &sc.mirror_y,
             ContextAction::MirrorY,
         ));
         v.push(dd_kb(
             Some(ic::icon_dd_delete(tid)),
             &cmd_label("delete_selection", "Delete"),
-            "Del",
+            &sc.delete,
             ContextAction::Delete,
         ));
         v.push(DropdownEntry::Separator);
@@ -410,6 +413,25 @@ pub(super) fn canvas_menu_entries(
         Message::Preferences(PreferencesMsg::Open),
     ));
 
+    if placed_part_selected {
+        use crate::library::PlacedPartAction as A;
+        // Labels come from the catalog where the action has a command id, so
+        // the menu and the command palette cannot drift. Change Component
+        // has no command id yet.
+        for (label, action) in [
+            (
+                cmd_label("open_datasheet", "Open Datasheet"),
+                A::OpenDatasheet,
+            ),
+            (
+                cmd_label("edit_selected_symbol_in_symbol_editor", "Edit Symbol"),
+                A::EditSymbol,
+            ),
+            ("Change Component\u{2026}".to_string(), A::ChangeComponent),
+        ] {
+            v.push(dd_kb(None, &label, "", ContextAction::PlacedPart(action)));
+        }
+    }
     if has_selection {
         v.push(dd_planned(
             Some(ic::icon_dd_supplier_links(tid)),

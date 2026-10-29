@@ -28,6 +28,9 @@ mod load_gateway;
 mod mutation_gateway;
 mod project_tab;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
+pub(crate) mod designator_scan;
+#[cfg(test)]
+mod designator_scan_tests;
 pub mod palette_index;
 #[cfg(test)]
 mod palette_index_tests;
@@ -41,6 +44,8 @@ pub(crate) mod sheet_hierarchy;
 mod state;
 pub(crate) use state::library_entry;
 pub(crate) use state::rule_profile_ui;
+pub(crate) use state::scope::path_key_with;
+pub(crate) use state::volume_case::probe_directory_case;
 pub(crate) mod stitched_netlist;
 mod symbol_history;
 mod undo_groups;
@@ -52,12 +57,13 @@ pub use contracts::{
     ContextMenuMsg, ContextMenuState, ContextSubmenu, DragTarget, EditMsg, EnableVersionControlMsg,
     EnableVersionControlOutcome, EnableVersionControlState, ErcMsg, ExcludeDirtyChoice, ExportMsg,
     FileMsg, GitCommitFailure, GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg,
-    LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, OverlayMsg, ParameterManagerMsg,
-    PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg,
-    ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
-    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
-    SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
-    TextEditState, TrackItem, UiMsg, VersionControlScope, WindowMsg,
+    LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, NetNavMsg, OverlayMsg,
+    ParameterManagerMsg, PasteIntent, PasteRequest, PreferencesMsg, PrintPreviewMsg,
+    ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob, ProjectTreeAction,
+    ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,
+    RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
+    TabContextMenuState, TextEditMsg, TextEditState, TrackItem, UiMsg, VersionControlScope,
+    WindowMsg,
 };
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,

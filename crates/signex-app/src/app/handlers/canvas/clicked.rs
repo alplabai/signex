@@ -594,7 +594,7 @@ impl Signex {
                     .unwrap_or_else(|| "Text".to_string());
                 let tn = signex_types::schematic::TextNote {
                     uuid: uuid::Uuid::new_v4(),
-                    text: note_text,
+                    text: note_text.clone(),
                     position: signex_types::schematic::Point::new(wx, wy),
                     rotation: 0.0,
                     font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
@@ -602,11 +602,13 @@ impl Signex {
                     justify_v: signex_types::schematic::VAlign::default(),
                     font_family: None,
                 };
-                self.apply_engine_command(
+                if self.apply_engine_command(
                     signex_engine::Command::PlaceTextNote { text_note: tn },
                     false,
                     false,
-                );
+                ) {
+                    self.text_note_placed(&note_text);
+                }
                 self.interaction_state.current_tool = Tool::Select;
             }
             Tool::Label => {
@@ -657,6 +659,7 @@ impl Signex {
                         signex_types::schematic::HAlign::Left,
                         signex_types::schematic::VAlign::Bottom,
                     ));
+                let placed_text = text.clone();
                 let label = signex_types::schematic::Label {
                     unknown_columns: Default::default(),
                     uuid: uuid::Uuid::new_v4(),
@@ -670,11 +673,13 @@ impl Signex {
                     justify_v: pp_justify_v,
                     font_family: None,
                 };
-                self.apply_engine_command(
+                if self.apply_engine_command(
                     signex_engine::Command::PlaceLabel { label },
                     false,
                     false,
-                );
+                ) {
+                    self.label_placed(&placed_text);
+                }
             }
             _ => {
                 return self.handle_selection_request(selection_request::SelectionRequest::HitAt {

@@ -389,6 +389,11 @@ impl Signex {
                     ContextAction::ArrangeDrawings(arrange) => {
                         self.dispatch_edit_message(EditMsg::ArrangeDrawings(arrange))
                     }
+                    ContextAction::PlacedPart(action) => {
+                        self.dispatch_library_message(crate::library::LibraryMessage::PlacedPart(
+                            crate::library::PlacedPartMsg::ActionRequested(action),
+                        ))
+                    }
                     ContextAction::ActiveBar(active_bar_action) => {
                         self.handle_active_bar_action(active_bar_action)
                     }

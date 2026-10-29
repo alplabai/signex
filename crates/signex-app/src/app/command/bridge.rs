@@ -47,7 +47,14 @@ pub(crate) fn is_dispatchable(command: &AppCommandId) -> bool {
 /// entry points above are built from one table and cannot drift.
 pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
     use crate::library::editor::footprint::state::EditorMode;
+    use crate::library::{LibraryMessage, PlacedPartAction, PlacedPartMsg};
 
+    let net_nav = |msg| Message::Ui(UiMsg::NetNav(msg));
+    let placed_part = |action| {
+        Message::Library(LibraryMessage::PlacedPart(PlacedPartMsg::ActionRequested(
+            action,
+        )))
+    };
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
         "annotate_schematic_quietly" => {
@@ -102,6 +109,11 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "draw_graphic_line" => Message::Tool(ToolMessage::SelectTool(Tool::Line)),
         "draw_hierarchical_sheet" => Message::Tool(ToolMessage::SelectTool(Tool::Sheet)),
         "duplicate" => Message::Edit(EditMsg::Duplicate),
+        // The selected placed part's library actions (#1301, #1262).
+        "open_datasheet" => placed_part(PlacedPartAction::OpenDatasheet),
+        "edit_library_symbol" | "edit_selected_symbol_in_symbol_editor" => {
+            placed_part(PlacedPartAction::EditSymbol)
+        }
         "bring_drawings_to_front" => Message::Edit(EditMsg::ArrangeDrawings(
             signex_engine::DrawingArrange::ToFront,
         )),
@@ -128,6 +140,9 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         }
         "footprint_mode_sketch" => {
             Message::Input(InputMsg::FootprintModeShortcut(EditorMode::Sketch))
+        }
+        "footprint_recompute_courtyard_outline" => {
+            Message::Input(InputMsg::FootprintCourtyardOutlineRequested)
         }
         "footprint_mode_view_3d" => {
             Message::Input(InputMsg::FootprintModeShortcut(EditorMode::View3d))
@@ -159,6 +174,9 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "open_preferences" | "open_schematic_preferences" => {
             Message::Preferences(PreferencesMsg::Open)
         }
+        "repeat_last_item" => Message::Edit(EditMsg::RepeatLastItem),
+        "rubber_stamp_copy" => Message::Edit(EditMsg::RubberStampCopy),
+        "paste_array" => Message::Edit(EditMsg::PasteArrayRequested),
         "paste" => Message::Edit(EditMsg::Paste),
         "paste_special" | "smart_paste" => Message::Edit(EditMsg::SmartPaste),
         "place_bus" => Message::Tool(ToolMessage::SelectTool(Tool::Bus)),
@@ -166,6 +184,19 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
             Message::Tool(ToolMessage::SelectTool(Tool::Label))
         }
         "place_no_connect" => Message::Tool(ToolMessage::SelectTool(Tool::NoConnect)),
+        // The same Active Bar actions the buttons send, so a key and a click
+        // arm the same tool. The Place menu's Power Port row sends GND too.
+        "place_power_symbol" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+            crate::active_bar::ActiveBarAction::PlacePowerGND,
+        )),
+        // The Active Bar's "Port" arms a global label; "Off Sheet
+        // Connector" arms a hierarchical one.
+        "place_global_label" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+            crate::active_bar::ActiveBarAction::PlacePort,
+        )),
+        "place_hierarchical_label" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+            crate::active_bar::ActiveBarAction::PlaceOffSheetConnector,
+        )),
         "place_text" => Message::Tool(ToolMessage::SelectTool(Tool::Text)),
         "place_wire" => Message::Tool(ToolMessage::SelectTool(Tool::Wire)),
         "place_wire_to_bus_entry" => Message::Tool(ToolMessage::SelectTool(Tool::BusEntry)),
@@ -198,6 +229,17 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         // Zooms about the view centre, as View > Zoom In/Out does.
         "zoom_in_at_cursor" => Message::Menu(MenuMessage::ZoomIn),
         "zoom_out_at_cursor" => Message::Menu(MenuMessage::ZoomOut),
+        // Cross-sheet net navigation (#1270, #1271, #1272).
+        "sheet_navigation_back" => net_nav(NetNavMsg::SheetBackRequested),
+        "sheet_navigation_forward" => net_nav(NetNavMsg::SheetForwardRequested),
+        "go_to_net_partner" => net_nav(NetNavMsg::PartnerJumpRequested),
+        "highlight_net_under_cursor" => net_nav(NetNavMsg::NetHighlightRequested),
+        "highlight_related_net_objects" => net_nav(NetNavMsg::RelatedNetHighlightRequested),
+        "next_highlighted_net_item" => net_nav(NetNavMsg::HighlightStepRequested { forward: true }),
+        "previous_highlighted_net_item" => {
+            net_nav(NetNavMsg::HighlightStepRequested { forward: false })
+        }
+        "clear_net_highlighting" => net_nav(NetNavMsg::HighlightClearRequested),
         // BRIDGE_ARMS_END — `tests::match_block` scans for command-id
         // literals up to this marker and no further. Everything below is
         // fallthrough machinery whose own string literals must not be
@@ -369,8 +411,7 @@ mod tests {
     /// The ids listed there are a mix, and the distinction decides the fix:
     /// - **unimplemented** — the catalog entry and the binding are the only
     ///   occurrences in the tree (`break_wire`,
-    ///   `place_global_label`, `place_hierarchical_label`,
-    ///   `repeat_last_item`, `rubber_stamp_copy`). A feature, not an arm.
+    ///   `place_junction`). A feature, not an arm.
     ///   This is most of what is left. It also covers ids whose obvious
     ///   target turns out to be a STUB, where an arm would trade a logged
     ///   warning for a silent no-op. Read the handler body, not just its
@@ -392,23 +433,20 @@ mod tests {
     /// `docs/audit/command-registry-action-surface-2026-07-25.md` §5.
     #[rustfmt::skip]
     const UNMAPPED_CATALOG_IDS: &[&str] = &[
-        "autoplace_fields", "break_wire", "center_on_cursor", "clear_net_highlighting",
+        "autoplace_fields", "break_wire", "center_on_cursor",
         "close_active_document", "copy_attributes_or_add_vertex", "cycle_fast_grid",
         "cycle_wiring_mode",
         "edit_footprint_field",
-        "edit_library_symbol", "edit_reference_designator",
-        "edit_selected_symbol_in_symbol_editor",
+        "edit_reference_designator",
         "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2",
-        "highlight_net_under_cursor",
-        "highlight_related_net_objects", "import_graphics",
-        "next_highlighted_net_item", "open_datasheet",
+        "import_graphics",
         "place_design_block",
-        "place_global_label", "place_hierarchical_label", "place_junction",
-        "place_power_symbol",
-        "previous_highlighted_net_item",
-        "refresh_view", "repeat_last_item",
-        "reset_local_coordinates", "rubber_stamp_copy", "select_expand_connection",
-        "select_node_or_connection_item", "sheet_navigation_back", "sheet_navigation_forward",
+        // No junction tool exists: junctions are derived from wire topology
+        // and the engine's PlaceJunction command has no UI tool (#1666).
+        "place_junction",
+        "refresh_view",
+        "reset_local_coordinates", "select_expand_connection",
+        "select_node_or_connection_item",
         "switch_segment_posture", "toggle_cross_select_mode", "toggle_floating_panels",
         "toggle_search_panel",
         "undo_last_segment",
@@ -488,6 +526,24 @@ mod tests {
             Message::Tool(ToolMessage::SelectTool(Tool::NoConnect))
         ));
         assert!(matches!(
+            resolve("place_power_symbol"),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::PlacePowerGND
+            ))
+        ));
+        assert!(matches!(
+            resolve("place_global_label"),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::PlacePort
+            ))
+        ));
+        assert!(matches!(
+            resolve("place_hierarchical_label"),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::PlaceOffSheetConnector
+            ))
+        ));
+        assert!(matches!(
             resolve("place_wire_to_bus_entry"),
             Message::Tool(ToolMessage::SelectTool(Tool::BusEntry))
         ));
@@ -505,6 +561,27 @@ mod tests {
             resolve("center_view_at_cursor"),
             Message::CanvasEvent(CanvasEvent::CenterAtCursor)
         ));
+    }
+
+    /// #1301 / #1262: the placed-part command ids reach the library's
+    /// placed-part action, not a stub.
+    #[test]
+    fn the_placed_part_ids_reach_their_actions() {
+        use crate::library::{LibraryMessage, PlacedPartAction, PlacedPartMsg};
+        fn resolve(id: &str) -> Message {
+            let command = AppCommandId::new(id).expect("a catalog id is a valid AppCommandId");
+            core_to_message(&command).unwrap_or_else(|| panic!("'{id}' no longer resolves"))
+        }
+        let action = |id: &str| match resolve(id) {
+            Message::Library(LibraryMessage::PlacedPart(PlacedPartMsg::ActionRequested(a))) => a,
+            other => panic!("'{id}' resolved to {other:?}"),
+        };
+        assert_eq!(action("open_datasheet"), PlacedPartAction::OpenDatasheet);
+        assert_eq!(action("edit_library_symbol"), PlacedPartAction::EditSymbol);
+        assert_eq!(
+            action("edit_selected_symbol_in_symbol_editor"),
+            PlacedPartAction::EditSymbol
+        );
     }
 
     /// #103 - the cheap shortcuts that used to be dead keys now reach
@@ -548,6 +625,19 @@ mod tests {
             Some(Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
                 crate::active_bar::ActiveBarAction::Move
             )))
+        ));
+    }
+
+    /// #1473 — the courtyard-outline command id reaches the footprint
+    /// editor and is offered by the palette (it is dispatchable).
+    #[test]
+    fn courtyard_outline_command_resolves_to_the_footprint_message() {
+        let command = AppCommandId::new("footprint_recompute_courtyard_outline")
+            .expect("a catalog id is valid");
+        assert!(is_dispatchable(&command));
+        assert!(matches!(
+            core_to_message(&command),
+            Some(Message::Input(InputMsg::FootprintCourtyardOutlineRequested))
         ));
     }
 

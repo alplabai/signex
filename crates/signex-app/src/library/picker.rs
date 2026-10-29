@@ -22,9 +22,10 @@ use iced::{Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
-use super::messages::{LibraryMessage, PickerMsg};
+use super::messages::{LibraryMessage, PickerMsg, PlacedPartMsg};
 use super::modal_chrome::close_x;
-use super::state::PickerState;
+use super::placed_part::{change_preview_view, datasheet_choice_view};
+use super::state::{PickerMode, PickerState};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -40,13 +41,27 @@ pub fn view<'a>(
     tokens: &'a ThemeTokens,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
+    // Change Component and Open Datasheet reuse this modal: their later
+    // stages draw their own card.
+    match &picker.mode {
+        PickerMode::ChangePreview(change) => return change_preview_view(change, tokens, windowed),
+        PickerMode::Datasheets(choice) => return datasheet_choice_view(choice, tokens, windowed),
+        PickerMode::Place | PickerMode::ChangeComponent(_) => {}
+    }
+    let changing = matches!(picker.mode, PickerMode::ChangeComponent(_));
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
 
     let header = container(
         row![
-            text("Place Component").size(TS.heading).color(text_c),
+            text(if changing {
+                "Change Component"
+            } else {
+                "Place Component"
+            })
+            .size(TS.heading)
+            .color(text_c),
             Space::new().width(Length::Fill),
             close_x(LibraryMessage::ClosePicker, tokens),
         ]
@@ -152,7 +167,12 @@ pub fn view<'a>(
         iced::Color::from_rgba(1.0, 1.0, 1.0, 0.4)
     };
     let mut place_btn = button(
-        container(text("Place").size(TS.body).color(place_fg)).padding([SP.s, 14.0]),
+        container(
+            text(if changing { "Next" } else { "Place" })
+                .size(TS.body)
+                .color(place_fg),
+        )
+        .padding([SP.s, 14.0]),
     )
     .style(move |_: &Theme, _| iced::widget::button::Style {
         background: Some(iced::Background::Color(place_bg)),
@@ -165,7 +185,11 @@ pub fn view<'a>(
         ..iced::widget::button::Style::default()
     });
     if place_enabled {
-        place_btn = place_btn.on_press(LibraryMessage::Picker(PickerMsg::PlaceSelected));
+        place_btn = place_btn.on_press(if changing {
+            LibraryMessage::PlacedPart(PlacedPartMsg::ChangePartPicked)
+        } else {
+            LibraryMessage::Picker(PickerMsg::PlaceSelected)
+        });
     }
 
     let footer = container(

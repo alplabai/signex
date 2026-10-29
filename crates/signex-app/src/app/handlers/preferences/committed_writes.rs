@@ -14,6 +14,8 @@ impl Signex {
         let font = ui.ui_font_name.clone();
         let classes = ui.component_classes.clone();
         let drag_direction = ui.drag_direction_select;
+        let net_hover = ui.net_hover_enabled;
+        let (increment_step, paste_designators) = (ui.increment_step, ui.paste_designators);
         let (grid_style, annotate_undo, keeps_wires, placement, autosave, gpu, theme) = (
             ui.grid_style,
             ui.annotate_undo,
@@ -44,8 +46,17 @@ impl Signex {
             write("move_keeps_wires", move || {
                 crate::fonts::write_move_keeps_wires_pref(keeps_wires)
             }),
+            write("net_hover_enabled", move || {
+                crate::fonts::write_net_hover_pref(net_hover)
+            }),
             write("drag_direction_select", move || {
                 crate::fonts::write_drag_direction_select_pref(drag_direction)
+            }),
+            write("increment_step", move || {
+                crate::fonts::write_increment_step_pref(increment_step)
+            }),
+            write("paste_designators", move || {
+                crate::fonts::write_paste_designators_pref(paste_designators)
             }),
             write("window_controls_placement", move || {
                 crate::fonts::write_window_controls_placement_pref(placement)

@@ -28,6 +28,7 @@ use iced::Subscription;
 struct OpenOverlays {
     find_replace_open: bool,
     find_similar_open: bool,
+    paste_array_open: bool,
     kbd_shortcuts_open: bool,
     about_open: bool,
     first_run_tour_open: bool,
@@ -257,6 +258,11 @@ impl OpenOverlays {
                         crate::find_similar::FindSimilarMsg::Closed,
                     ),
                 )
+            }),
+            OverlayId::PasteArray => self.paste_array_open.then(|| {
+                Message::Edit(crate::app::EditMsg::PasteArray(
+                    crate::paste_array::PasteArrayMsg::Closed,
+                ))
             }),
             OverlayId::KeyboardShortcuts => self
                 .kbd_shortcuts_open
@@ -536,6 +542,7 @@ impl Signex {
             find_replace_open: self.ui_state.find_replace.open
                 && !modal_detached(crate::app::state::ModalId::FindReplace),
             find_similar_open: self.ui_state.find_similar.is_some(),
+            paste_array_open: self.ui_state.paste_array.is_some(),
             kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open
                 && !modal_detached(crate::app::state::ModalId::KeyboardShortcuts),
             about_open: self.ui_state.about_open
@@ -807,6 +814,15 @@ impl Signex {
             Subscription::none()
         };
 
+        // Net hover dwell (#1270): ticks only while a candidate waits for its
+        // dwell to pass, so an idle or hover-off session costs nothing.
+        let net_hover_tick = if self.document_state.net_nav.hover.needs_ticks() {
+            iced::time::every(std::time::Duration::from_millis(100))
+                .map(|_| Message::Ui(UiMsg::NetNav(NetNavMsg::HoverDwellTicked)))
+        } else {
+            Subscription::none()
+        };
+
         // External `.snxlib` edits (#531): a slow timer whose handler stats
         // the mounted files off-thread; `view` only reads the caches.
         let library_poll = crate::library::external_poll::subscription(
@@ -853,6 +869,7 @@ impl Signex {
             window_resize,
             hover_tick,
             hover_tooltip_tick,
+            net_hover_tick,
             library_poll,
             autosave_tick,
         ])
@@ -1028,6 +1045,12 @@ mod tests {
                     crate::find_similar::FindSimilarMsg::Closed
                 )
             ))
+        ));
+        assert!(matches!(
+            only(|o| o.paste_array_open = true),
+            Some(Message::Edit(crate::app::EditMsg::PasteArray(
+                crate::paste_array::PasteArrayMsg::Closed
+            )))
         ));
         assert!(matches!(
             only(|o| o.kbd_shortcuts_open = true),
@@ -1581,6 +1604,7 @@ mod tests {
         let field_names = open_overlays_field_names![
             find_replace_open,
             find_similar_open,
+            paste_array_open,
             kbd_shortcuts_open,
             about_open,
             first_run_tour_open,
@@ -1626,6 +1650,7 @@ mod tests {
         let setters: &[(&str, EscapeSetter)] = &[
             ("find_replace_open", |o| o.find_replace_open = true),
             ("find_similar_open", |o| o.find_similar_open = true),
+            ("paste_array_open", |o| o.paste_array_open = true),
             ("kbd_shortcuts_open", |o| o.kbd_shortcuts_open = true),
             ("about_open", |o| o.about_open = true),
             ("first_run_tour_open", |o| o.first_run_tour_open = true),

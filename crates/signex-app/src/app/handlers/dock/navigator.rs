@@ -6,7 +6,23 @@ use signex_widgets::tree_view::{TreeMsg, resolve_path, toggle};
 
 use super::super::super::*;
 use crate::app::project_sheets::assemble_project_sheets;
-use crate::app::sheet_hierarchy::{SheetNodeKind, parent_sheet, parent_sheet_placing};
+use crate::app::sheet_hierarchy::{
+    SheetNodeKind, parent_sheet, parent_sheet_placing, symbol_centre, symbol_referencing,
+};
+
+/// The sheet symbol `symbol` on `parent`, with its centre.
+fn symbol_on(
+    sheets: &std::collections::HashMap<std::path::PathBuf, signex_types::schematic::SchematicSheet>,
+    parent: &std::path::Path,
+    symbol: uuid::Uuid,
+) -> Option<(uuid::Uuid, signex_types::schematic::Point)> {
+    let found = sheets
+        .get(parent)?
+        .child_sheets
+        .iter()
+        .find(|cs| cs.uuid == symbol)?;
+    Some((found.uuid, symbol_centre(found)))
+}
 
 impl Signex {
     /// `None` when `panel_msg` is not a Navigator message, so the dock
@@ -135,17 +151,39 @@ impl Signex {
                 placement.parent(),
             ))
         });
-        match placed_parent {
-            Some((parent, placement)) => self.open_sheet_with_placement(parent, placement),
+        let (parent, symbol) = match placed_parent {
+            Some((parent, placement)) => {
+                let symbol = came_through
+                    .as_ref()
+                    .and_then(|(symbol, _)| symbol_on(&set.sheets, &parent, *symbol));
+                self.open_sheet_with_placement(parent.clone(), placement);
+                (parent, symbol)
+            }
             None => match parent_sheet(&set.sheets, &active, fold) {
                 Some(parent) => {
-                    self.open_or_focus_sheet_path(parent);
+                    let symbol = symbol_referencing(&set.sheets, &parent, &active, fold);
+                    self.open_or_focus_sheet_path(parent.clone());
+                    (parent, symbol)
                 }
-                None => crate::diagnostics::log_warning(format!(
-                    "{} has no parent sheet: it is the project root or no sheet references it",
-                    active.display()
-                )),
+                None => {
+                    crate::diagnostics::log_warning(format!(
+                        "{} has no parent sheet: it is the project root or no sheet references it",
+                        active.display()
+                    ));
+                    return;
+                }
             },
+        };
+        // Land on the sheet symbol that instantiates the sheet just left.
+        let arrived = self.resolve_held_spelling(parent);
+        if let Some((symbol, centre)) = symbol
+            && self.document_state.active_path.as_deref() == Some(arrived.as_path())
+        {
+            let item = signex_types::schematic::SelectedItem::new(
+                symbol,
+                signex_types::schematic::SelectedKind::ChildSheet,
+            );
+            self.focus_world_point(centre.x, centre.y, Some(item));
         }
     }
 }

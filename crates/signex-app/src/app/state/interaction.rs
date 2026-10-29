@@ -120,6 +120,11 @@ pub struct InteractionState {
     pub pending_power: Option<(String, String)>,
     /// A library part attached to the cursor, waiting for its click.
     pub placement: Option<super::PlacementSession>,
+    /// The last label or text note placed, for "Repeat last item" (#1253).
+    pub last_placement: Option<super::LastPlacement>,
+    /// Designator numbers for pasted parts (Next free), seeded when a paste
+    /// starts.
+    pub paste_counters: Option<super::PasteCounters>,
     /// Token for library reads. Every pick takes a new value and carries it,
     /// so only the LATEST pick may arm a session; Esc, a right-click and any
     /// tool change bump it too, so a read that finishes after a cancel arms

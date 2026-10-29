@@ -28,8 +28,10 @@ pub type Version = u32;
 
 mod datasheet;
 mod library_message;
+mod placed_part;
 pub use datasheet::{DatasheetMsg, PickedFile, PickedPdf};
 pub use library_message::{LibraryMessage, ResolvedPlacement, ResolvedSymbolChoice};
+pub use placed_part::{PlacedPartAction, PlacedPartMsg, PlacedPartTarget};
 
 /// User choice from the close-library confirmation modal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -665,6 +667,9 @@ pub enum SettingsMsg {
         connected_label: Option<String>,
         error: Option<String>,
     },
+    /// Outcome of the background keyring delete of a token that a
+    /// cancelled DigiKey flow stored before the cancel landed.
+    DigiKeyStaleTokenRemoved(Result<(), String>),
     MouserApiKeyChanged(String),
     MouserTest,
     MouserTestResult(Result<(), String>),

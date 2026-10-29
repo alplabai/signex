@@ -3,10 +3,12 @@ mod error;
 mod patch;
 
 mod annotation;
+mod clipboard_text;
 mod history;
 mod history_snapshot;
 mod lock;
 mod net_class_table;
+mod paste_edit;
 mod placement;
 mod power_port;
 mod project_general;
@@ -46,11 +48,16 @@ mod sheet_identity_tests;
 use std::path::{Path, PathBuf};
 
 pub use annotation::AnnotateScope;
+pub use clipboard_text::{CLIPBOARD_MARKER, MAX_CLIPBOARD_TEXT_BYTES};
 pub use command::{
     AnnotateMode, Command, CommandKind, DrawingArrange, MirrorAxis, ReorderDirection,
     SelectionTransform, SheetPort, SymbolTextField, TextTarget,
 };
 pub use error::EngineError;
+pub use exec::change_component::{
+    ComponentChangePreview, ComponentReplacement, DataChange, change_component_preview,
+    placed_unit_ids,
+};
 pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
 pub use find::{
     DesignatorScope, FindHit, FindKind, designator_commands, replace_all_ci, replace_commands,
@@ -430,6 +437,7 @@ impl Engine {
             | Command::PlaceSymbol { .. }
             | Command::RegisterLibSymbol { .. }
             | Command::ReplaceLibSymbol { .. }
+            | Command::ChangeComponent { .. }
             | Command::PlaceChildSheet { .. }
             | Command::PlaceSheetPin { .. }
             | Command::PlaceWireSegment { .. }
