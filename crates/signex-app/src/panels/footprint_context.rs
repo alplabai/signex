@@ -483,6 +483,10 @@ pub struct FootprintSolveSummary {
     /// descending by `residual_magnitude` so the worst offender
     /// leads. Empty when `over_constraint_count == 0`.
     pub over_constraints: Vec<OverConstraintSummary>,
+    /// #1649 — consistent constraints that restate earlier ones, in
+    /// constraint order. Same row shape as `over_constraints`; the residual
+    /// is ~0 and not shown.
+    pub redundant_constraints: Vec<OverConstraintSummary>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -140,6 +140,9 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "footprint_mode_sketch" => {
             Message::Input(InputMsg::FootprintModeShortcut(EditorMode::Sketch))
         }
+        "footprint_recompute_courtyard_outline" => {
+            Message::Input(InputMsg::FootprintCourtyardOutlineRequested)
+        }
         "footprint_mode_view_3d" => {
             Message::Input(InputMsg::FootprintModeShortcut(EditorMode::View3d))
         }
@@ -611,6 +614,19 @@ mod tests {
             Some(Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
                 crate::active_bar::ActiveBarAction::Move
             )))
+        ));
+    }
+
+    /// #1473 — the courtyard-outline command id reaches the footprint
+    /// editor and is offered by the palette (it is dispatchable).
+    #[test]
+    fn courtyard_outline_command_resolves_to_the_footprint_message() {
+        let command = AppCommandId::new("footprint_recompute_courtyard_outline")
+            .expect("a catalog id is valid");
+        assert!(is_dispatchable(&command));
+        assert!(matches!(
+            core_to_message(&command),
+            Some(Message::Input(InputMsg::FootprintCourtyardOutlineRequested))
         ));
     }
 
