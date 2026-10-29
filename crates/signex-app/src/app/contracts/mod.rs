@@ -132,7 +132,7 @@ pub enum Message {
     /// Print-preview modal — namespaced family (ADR-0001 D3). Routed to
     /// `dispatch_print_preview_message`.
     PrintPreview(PrintPreviewMsg),
-    /// v0.9 Library subsystem message — folded under one variant so
+    /// Library subsystem message — folded under one variant so
     /// the dispatcher can route to `library_dispatch::handle` in one
     /// shot. See `crate::library::LibraryMessage` for the inner
     /// shape.

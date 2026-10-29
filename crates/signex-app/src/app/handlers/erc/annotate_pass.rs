@@ -29,11 +29,6 @@ impl Signex {
             reprefix,
             label,
         } = pass;
-        // Share one per-prefix counter across every open sheet so designators
-        // don't collide across sheets of the same project.
-        let mut next_by_prefix: std::collections::HashMap<String, u32> =
-            std::collections::HashMap::new();
-
         // The project, from the one assembler: the declared pages plus
         // everything reachable down the child-sheet graph. Seeding off
         // `engines.values()` instead both over-reached (a loose tab from
@@ -54,26 +49,16 @@ impl Signex {
         // phase 2, but running a separate seed pass first ensures
         // order-independence — without this, sheet B could reuse
         // numbers it considers free that sheet A actually claims.
-        let mut all_existing: Vec<String> = Vec::new();
-        for sheet in project_set.sheets.values() {
-            for sym in &sheet.symbols {
-                if !sym.is_power && !sym.reference.starts_with('#') {
-                    all_existing.push(sym.reference.clone());
-                }
-            }
-        }
-        for refstr in &all_existing {
-            let (prefix, number) = signex_types::designator::split_reference(refstr);
-            if prefix.is_empty() {
-                continue;
-            }
-            if let Some(n) = number {
-                let e = next_by_prefix.entry(prefix.to_owned()).or_insert(0);
-                if n > *e {
-                    *e = n;
-                }
-            }
-        }
+        // One per-prefix counter shared by every project sheet, so designators
+        // don't collide across the sheets of the project.
+        let mut next_by_prefix = signex_types::designator::seed_counters(
+            project_set
+                .sheets
+                .values()
+                .flat_map(|sheet| sheet.symbols.iter())
+                .filter(|sym| !sym.is_power && !sym.reference.starts_with('#'))
+                .map(|sym| sym.reference.as_str()),
+        );
 
         // Pass B: walk every sheet the counter must cover — cached tabs,
         // unopened sheets, and the active engine alike — in the ONE order

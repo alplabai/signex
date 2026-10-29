@@ -60,6 +60,8 @@ mod refresh;
 mod registration;
 mod settings;
 #[cfg(test)]
+mod settings_tests;
+#[cfg(test)]
 mod stale_row_tests;
 mod updates;
 mod use_site;

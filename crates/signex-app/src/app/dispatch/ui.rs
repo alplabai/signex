@@ -297,11 +297,8 @@ impl Signex {
                 );
                 if let Some(opts) = editor_snap {
                     let step = opts.grid_step_mm;
-                    let s = format!("{step:.4}");
                     self.ui_state.grid_properties = Some(crate::app::GridPropertiesState {
-                        step_x_mm: s.clone(),
-                        step_y_mm: s,
-                        link_xy: true,
+                        step_mm: format!("{step:.4}"),
                         fine_display: opts.fine_grid_display,
                         coarse_display: opts.coarse_grid_display,
                         multiplier: opts.coarse_multiplier,
@@ -331,45 +328,21 @@ impl Signex {
                 self.ui_state.grid_properties = None;
                 self.finish_update()
             }
-            GridPropertiesMsg::SetStepX(value) => {
+            GridPropertiesMsg::SetStep(value) => {
                 if let Some(state) = self.ui_state.grid_properties.as_mut() {
-                    state.step_x_mm = value;
-                    if state.link_xy {
-                        state.step_y_mm = state.step_x_mm.clone();
-                    }
-                }
-                self.finish_update()
-            }
-            GridPropertiesMsg::SetStepY(value) => {
-                if let Some(state) = self.ui_state.grid_properties.as_mut() {
-                    state.step_y_mm = value;
-                    if state.link_xy {
-                        state.step_x_mm = state.step_y_mm.clone();
-                    }
-                }
-                self.finish_update()
-            }
-            GridPropertiesMsg::ToggleLink => {
-                if let Some(state) = self.ui_state.grid_properties.as_mut() {
-                    state.link_xy = !state.link_xy;
-                    if state.link_xy {
-                        // Re-link mirrors X into Y so re-enabling
-                        // doesn't keep a desynced pair.
-                        state.step_y_mm = state.step_x_mm.clone();
-                    }
+                    state.step_mm = value;
                 }
                 self.finish_update()
             }
             GridPropertiesMsg::Apply => {
-                // Validate the X step (Y is taken from X for now —
-                // single-axis steps in `SnapOptions`; the Y field
-                // exists in the dialog for forward compatibility).
+                // `SnapOptions` stores one grid step for both axes, so the
+                // dialog has a single Step field.
                 let draft = self.ui_state.grid_properties.clone();
                 // A step that is not a finite number above zero is refused
                 // with its reason in the Messages panel; the previous
                 // value is kept and the dialog stays open so the user can
                 // correct it (#972).
-                let step_x = match draft.as_ref().map(|s| validated_grid_step(&s.step_x_mm)) {
+                let step = match draft.as_ref().map(|s| validated_grid_step(&s.step_mm)) {
                     Some(Ok(step)) => Some(step),
                     Some(Err(reason)) => {
                         crate::diagnostics::log_warning(format!(
@@ -381,7 +354,7 @@ impl Signex {
                 };
                 if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
                     let opts = &mut editor.state.snap_options;
-                    if let Some(step) = step_x {
+                    if let Some(step) = step {
                         opts.grid_step_mm = step;
                     }
                     opts.fine_grid_display = d.fine_display;
