@@ -69,6 +69,10 @@ impl Default for Solver {
     }
 }
 
+/// The warning a solve carries when the redundancy check did not fit the
+/// work budget and was skipped.
+pub const REDUNDANCY_SKIPPED: &str = "redundancy check skipped (budget)";
+
 /// Bundled output of a full [`Solver::solve`] call: the LM result,
 /// DOF colour per Point entity, the list of constraint IDs flagged
 /// over-constrained, the Jacobian at the solved state (carried
@@ -82,6 +86,10 @@ pub struct FullSolveOutput {
     /// #1649 — constraints that restate what earlier ones already fix
     /// (consistent, so they do not fail the solve). See [`redundancy`].
     pub redundant_constraints: Vec<ConstraintId>,
+    /// Advisory notes about work this solve skipped (for example the
+    /// redundancy check, when its work would exceed the budget). The
+    /// solve itself succeeded; the caller shows these to the user.
+    pub warnings: Vec<String>,
     pub jacobian: Vec<Vec<f64>>,
     /// GH #599 — the resolved parameters this solve ran with.
     /// Consumers that re-evaluate residuals against the output (the
@@ -267,27 +275,36 @@ impl Solver {
         let over_constraints = over_constraint_ids(sketch, &result, params);
 
         // Advisory: a failure here must not fail a converged solve.
-        let redundant_constraints = redundant_constraint_ids(
+        let mut warnings = Vec::new();
+        let redundant_constraints = match redundant_constraint_ids(
             sketch,
             &result.state,
             &result.index,
             params,
             &over_constraints,
-        )
-        .unwrap_or_else(|e| {
-            tracing::warn!(
-                target: "signex::sketch",
-                error = %e,
-                "redundant-constraint analysis failed; none are reported for this solve"
-            );
-            Vec::new()
-        });
+            meter,
+        ) {
+            Ok(Some(ids)) => ids,
+            Ok(None) => {
+                warnings.push(REDUNDANCY_SKIPPED.to_string());
+                Vec::new()
+            }
+            Err(e) => {
+                tracing::warn!(
+                    target: "signex::sketch",
+                    error = %e,
+                    "redundant-constraint analysis failed; none are reported for this solve"
+                );
+                Vec::new()
+            }
+        };
 
         Ok(FullSolveOutput {
             result,
             colours,
             over_constraints,
             redundant_constraints,
+            warnings,
             jacobian,
             params: params.clone(),
         })
