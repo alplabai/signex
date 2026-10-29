@@ -66,6 +66,7 @@ fn waive_net_t(app: &mut Signex, reason: &str) {
         ErcWaiverMsg::Started {
             key: entry.waiver_key.expect("waivable"),
             message: entry.message,
+            sheet: entry.sheet_path,
         },
     );
     send(app, ErcWaiverMsg::ReasonChanged(reason.into()));
@@ -179,6 +180,7 @@ fn waive_where(
         ErcWaiverMsg::Started {
             key: entry.waiver_key.clone().expect("waivable"),
             message: entry.message.clone(),
+            sheet: entry.sheet_path.clone(),
         },
     );
     send(app, ErcWaiverMsg::ReasonChanged("accepted".into()));
@@ -296,6 +298,7 @@ fn confirm_fingerprints_the_sheet_as_it_is_now() {
         ErcWaiverMsg::Started {
             key: entry.waiver_key.clone().expect("waivable"),
             message: entry.message.clone(),
+            sheet: entry.sheet_path.clone(),
         },
     );
     // The wire moves after the row was drawn, before Confirm.
@@ -329,6 +332,7 @@ fn confirm_fingerprints_the_sheet_as_it_is_now() {
         ErcWaiverMsg::Started {
             key: entry.waiver_key.clone().expect("waivable"),
             message: entry.message.clone(),
+            sheet: entry.sheet_path.clone(),
         },
     );
     open_with(&mut app.document_state, &dir2.join("top.snxsch"), top);
@@ -367,6 +371,7 @@ fn a_waive_started_before_a_rerun_still_targets_its_finding() {
         ErcWaiverMsg::Started {
             key: entry.waiver_key.clone().expect("waivable"),
             message: entry.message.clone(),
+            sheet: entry.sheet_path.clone(),
         },
     );
     send(&mut app, ErcWaiverMsg::ReasonChanged("ok".into()));
@@ -386,5 +391,61 @@ fn undoing_a_waiver_reruns_erc() {
     assert!(!app.ui_state.erc_running);
     let _ = app.update(Message::Erc(ErcMsg::RulesUndone));
     assert!(app.ui_state.erc_running, "undo starts a fresh run");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// Paths whose `RULE` findings are still reported.
+fn flagged_paths(app: &Signex) -> Vec<std::path::PathBuf> {
+    let mut paths: Vec<std::path::PathBuf> = app
+        .ui_state
+        .erc_violations_by_path
+        .iter()
+        .filter(|(_, list)| list.iter().any(|v| v.rule_id.to_string() == RULE))
+        .map(|(p, _)| p.clone())
+        .collect();
+    paths.sort();
+    paths
+}
+
+#[test]
+fn one_global_net_on_two_open_sheets_is_waived_per_sheet() {
+    let (mut app, dir, _) = app_with_two_failing_nets();
+    // Both sheets open, both carrying the global net `NET_T`; distinct sheet
+    // document ids, as two real files have.
+    let (top_path, child_path) = (dir.join("top.snxsch"), dir.join("child.snxsch"));
+    let mut child = sheet_with_net("R_C", "NET_T", &[]);
+    child.uuid = Uuid::new_v4();
+    open_with(&mut app.document_state, &child_path, child);
+    app.run_erc_blocking();
+    assert_eq!(flagged_paths(&app), [child_path.clone(), top_path.clone()]);
+
+    let on = |path: &std::path::PathBuf| {
+        let path = path.clone();
+        move |e: &crate::panels::ErcDiagnosticEntry| e.rule_id == RULE && e.sheet_path == path
+    };
+    waive_where(&mut app, on(&top_path));
+    app.run_erc_blocking();
+    assert_eq!(
+        flagged_paths(&app),
+        [child_path.clone()],
+        "only the top's is hidden"
+    );
+    let entries = app.erc_violation_waiver_entries();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].status, ErcWaiverStatus::Waiving(1), "not lapsed");
+
+    waive_where(&mut app, on(&child_path));
+    app.run_erc_blocking();
+    assert!(flagged_paths(&app).is_empty());
+    let statuses: Vec<ErcWaiverStatus> = app
+        .erc_violation_waiver_entries()
+        .iter()
+        .map(|e| e.status)
+        .collect();
+    assert_eq!(
+        statuses,
+        [ErcWaiverStatus::Waiving(1); 2],
+        "neither replaced"
+    );
     std::fs::remove_dir_all(&dir).ok();
 }

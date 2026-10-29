@@ -247,7 +247,7 @@ fn a_part_joining_a_waived_net_lapses_the_waiver_rather_than_orphaning_it() {
     let waiver = waive(&v, &sheet);
     assert_eq!(
         waiver.objects,
-        vec![r1.to_string(), "net:SENSE".to_string()]
+        vec![r1.to_string(), format!("net:SENSE@{}", sheet.uuid)]
     );
     let grown = net_finding(&[(r1, "R1"), (c1, "C1"), (c2, "C2")]);
     let out = split(grown, &sheet, &[waiver]);
@@ -296,4 +296,57 @@ fn a_geometry_waiver_ignores_cosmetics_but_not_the_geometry() {
         ..wire
     };
     assert!(split(v, &wire_sheet(moved), &waivers).lapsed.contains(&0));
+}
+
+/// A DSL net-level finding: no primary object, only the net.
+fn dsl_net_finding(name: &str, pins: &[(Uuid, &str)]) -> Violation {
+    let mut v = net_finding(pins);
+    v.rule_id = RuleId::user("net_check");
+    v.primary = None;
+    if let Some(net) = v.net.as_mut() {
+        net.name = name.into();
+    }
+    v
+}
+
+fn sheet_id(n: u128) -> SchematicSheet {
+    SchematicSheet {
+        uuid: Uuid::from_u128(n),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn one_global_net_on_two_sheets_gets_two_identities() {
+    let (a, b) = (sheet_id(1), sheet_id(2));
+    let on_a = dsl_net_finding("VBUS", &[(Uuid::new_v4(), "R1")]);
+    let on_b = dsl_net_finding("VBUS", &[(Uuid::new_v4(), "R9")]);
+    let waiver_a = waive(&on_a, &a);
+    assert_ne!(key_of(&on_a, &a).objects, key_of(&on_b, &b).objects);
+    // B's run against A's waiver: B's finding stays, neither waived nor lapsed.
+    let out = split(on_b.clone(), &b, std::slice::from_ref(&waiver_a));
+    assert_eq!(
+        (out.kept.len(), out.waived.len(), out.lapsed.len()),
+        (1, 0, 0)
+    );
+    // Waiving B keeps A's waiver.
+    let both = with_waiver(std::slice::from_ref(&waiver_a), waive(&on_b, &b));
+    assert_eq!(both.len(), 2);
+    assert_eq!(split(on_a, &a, &both).waived.len(), 1);
+    assert_eq!(split(on_b, &b, &both).waived.len(), 1);
+}
+
+#[test]
+fn an_unnamed_net_without_an_object_is_waived_by_its_pin_set() {
+    let sheet = sheet_id(1);
+    let (r1, c1) = (Uuid::new_v4(), Uuid::new_v4());
+    let v = dsl_net_finding("", &[(r1, "R1"), (c1, "C1")]);
+    let key = key_of(&v, &sheet);
+    assert_eq!(key.objects, vec![format!("pins:C1.1,R1.1@{}", sheet.uuid)]);
+    let waivers = vec![waive(&v, &sheet)];
+    assert_eq!(split(v, &sheet, &waivers).waived.len(), 1);
+    // A membership change on an unnamed net orphans the waiver.
+    let grown = dsl_net_finding("", &[(r1, "R1"), (c1, "C1"), (Uuid::new_v4(), "C2")]);
+    let out = split(grown, &sheet, &waivers);
+    assert_eq!((out.kept.len(), out.lapsed.len()), (1, 0));
 }

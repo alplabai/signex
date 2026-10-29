@@ -407,3 +407,44 @@ fn units_are_grouped_by_placement_designator() {
         out[0].message
     );
 }
+
+#[test]
+fn two_power_pins_of_one_part_on_two_unnamed_nets_are_two_waiver_identities() {
+    let mut u1 = pin_at("U1", pt(0.0, 0.0), PinDirection::PowerInput);
+    u1.pins.push(ErcPin {
+        world_pos: pt(0.0, 12.7),
+        number: "2".into(),
+        electrical_type: PinDirection::PowerInput,
+        required: true,
+        connected: true,
+    });
+    let c = ctx(
+        vec![
+            wire(pt(0.0, 0.0), pt(12.7, 0.0)),
+            wire(pt(0.0, 12.7), pt(12.7, 12.7)),
+        ],
+        vec![],
+        vec![],
+        vec![
+            u1,
+            pin_at("U2", pt(12.7, 0.0), PinDirection::PowerInput),
+            pin_at("U3", pt(12.7, 12.7), PinDirection::PowerInput),
+        ],
+    );
+    let out: Vec<crate::Violation> = found(&c, RuleKind::PowerInputNotDriven)
+        .into_iter()
+        .map(crate::Violation::from)
+        .collect();
+    let sheet = signex_types::schematic::SchematicSheet::default();
+    let keys: Vec<Vec<String>> = out
+        .iter()
+        .filter(|v| v.primary.map(|p| p.uuid) == Some(c.symbols[0].uuid))
+        .map(|v| {
+            crate::waivers::violation::waiver_key(v, &sheet)
+                .expect("waivable")
+                .objects
+        })
+        .collect();
+    assert_eq!(keys.len(), 2, "{out:?}");
+    assert_ne!(keys[0], keys[1]);
+}

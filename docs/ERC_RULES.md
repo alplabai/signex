@@ -106,16 +106,22 @@ provenance. Each entry holds:
 | Field | Meaning |
 |---|---|
 | `rule_id` | Stable rule id, `builtin::...` or `user::...`. |
-| `objects` | Sorted identity of the finding: the UUIDs of the objects it names (primary and peer) and, for a net-level finding, `net:<net name>`. |
+| `objects` | Sorted identity of the finding: the UUIDs of the objects it names (primary and peer); `pin:<number>` for a finding anchored at one pin; and for a net-level finding the net on its sheet, `net:<name>@<sheet id>`, or `pins:<R1.1,U2.3>@<sheet id>` for an unnamed net. |
 | `fingerprint` | SHA-256 over the rule id and the canonical JSON (keys sorted) of each involved object. |
 | `reason`, `author` | Required; an entry missing either is kept on disk but never honoured. |
 | `date` | `YYYY-MM-DD` the waiver was made. |
 | `message` | The finding's text when waived, so a lapsed waiver still says what it was about. |
 
-The identity is `rule_id` + `objects`; positions are never part of it, and
-neither are the parts on a net: a part joining or leaving a waived net
-changes the fingerprint, so the waiver shows as LAPSED, not as matching no
-finding (which would read as fixed). The
+The identity is `rule_id` + `objects`; positions are never part of it. The
+sheet id is the sheet document's own UUID (`schematic_id`), not its path, so
+one global net (VBUS, GND) reported on two sheets gives two findings, each
+waived on its own; two placements of one sheet file share the id, so one
+waiver covers the net in both. The pin number keeps two findings on two pins
+of one part apart. A named net's parts are not part of the identity: a part
+joining or leaving a waived net changes the fingerprint, so the waiver shows
+as LAPSED, not as matching no finding (which would read as fixed). An unnamed
+net has nothing but its pins to name it by, so there a membership change
+leaves the old waiver matching no finding and the finding shows again. The
 fingerprint is what makes a waiver lapse, and it covers only what the rule
 depends on, so an unrelated edit never lapses a waiver:
 
@@ -142,14 +148,15 @@ waiver with its reason, author, date and status (waiving N findings, lapsed,
 matches no finding, or ignored as incomplete), each with a Restore button, and
 the ERC report lists them in its waivers section.
 
-The fingerprint is taken when the waiver is confirmed, from the open sheet as
-it is then, so an edit between the panel showing the row and Confirm does not
+The fingerprint is taken when the waiver is confirmed, from the open sheet the
+row belongs to as it is then (the Waive action carries that sheet), so an edit between the panel showing the row and Confirm does not
 make the new waiver lapse at once. If the newest run no longer reports the
 finding, or an object it names is gone, Confirm is refused with a line in the
 Messages panel.
 
-Limits: a finding that names neither an object nor a named net, or whose
-objects are not on the sheet it is filed under, cannot be waived. Two
+Limits: a finding that names neither an object nor a net with a name or
+pins, or whose objects are not on the sheet it is filed under, cannot be
+waived. Two
 placements of one sheet file share object UUIDs, so a waiver covers both.
 Rule-specific No-ERC markers (an optional item of #1285) are not implemented.
 Per-net waivers keep their existing shape and carry no reason; adding one

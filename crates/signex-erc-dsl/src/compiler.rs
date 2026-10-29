@@ -232,6 +232,7 @@ fn evaluate_rule(
                             primary: None,
                             peer: None,
                             net: None,
+                            anchor_pin: None,
                         }
                         .for_net(NetFinding::from_net(net)),
                     );
@@ -254,6 +255,7 @@ fn evaluate_rule(
                             primary: Some(SelectedItem::new(symbol.uuid, SelectedKind::Symbol)),
                             peer: None,
                             net: None,
+                            anchor_pin: Some(pin.number.clone()),
                         });
                     }
                 }
@@ -274,6 +276,7 @@ fn evaluate_rule(
                         primary: Some(SelectedItem::new(symbol.uuid, SelectedKind::Symbol)),
                         peer: None,
                         net: None,
+                        anchor_pin: None,
                     });
                 }
             }
@@ -293,6 +296,7 @@ fn evaluate_rule(
                         primary: Some(SelectedItem::new(sheet.uuid, SelectedKind::ChildSheet)),
                         peer: None,
                         net: None,
+                        anchor_pin: None,
                     });
                 }
             }

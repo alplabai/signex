@@ -13,10 +13,11 @@ const SP: Spacing = Spacing::DEFAULT;
 pub enum ErcWaiverMsg {
     /// The Waive chip was pressed on the finding keyed `key`. Carries the key,
     /// not the row index, so a run that lands between render and click cannot
-    /// retarget it.
+    /// retarget it, and the sheet, so Confirm re-keys it on that sheet only.
     Started {
         key: WaiverKey,
         message: String,
+        sheet: std::path::PathBuf,
     },
     ReasonChanged(String),
     AuthorChanged(String),
@@ -33,6 +34,8 @@ pub enum ErcWaiverMsg {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ErcWaiveDraft {
     pub key: WaiverKey,
+    /// The sheet the finding is filed under; Confirm re-keys it there only.
+    pub sheet: std::path::PathBuf,
     pub message: String,
     pub reason: String,
     pub author: String,
@@ -82,6 +85,7 @@ pub(super) fn waive_chip<'a>(
             .on_press(PanelMsg::ErcWaiver(ErcWaiverMsg::Started {
                 key,
                 message: entry.message.clone(),
+                sheet: entry.sheet_path.clone(),
             }))
             .style(crate::styles::menu_item(tokens)),
     ]

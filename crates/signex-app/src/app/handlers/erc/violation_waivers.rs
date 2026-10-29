@@ -64,8 +64,12 @@ impl Signex {
 
     pub(crate) fn handle_erc_waiver(&mut self, msg: &ErcWaiverMsg) -> Task<Message> {
         let follow = match msg {
-            ErcWaiverMsg::Started { key, message } => {
-                self.start_erc_waiver(key.clone(), message.clone());
+            ErcWaiverMsg::Started {
+                key,
+                message,
+                sheet,
+            } => {
+                self.start_erc_waiver(key.clone(), message.clone(), sheet.clone());
                 Task::none()
             }
             ErcWaiverMsg::ReasonChanged(reason) => {
@@ -99,6 +103,7 @@ impl Signex {
         &mut self,
         key: signex_erc::waivers::violation::WaiverKey,
         message: String,
+        sheet: std::path::PathBuf,
     ) {
         let author = self
             .ui_state
@@ -109,6 +114,7 @@ impl Signex {
             .unwrap_or_else(default_author);
         self.ui_state.erc_waive_draft = Some(ErcWaiveDraft {
             key,
+            sheet,
             message,
             reason: String::new(),
             author,
@@ -123,7 +129,7 @@ impl Signex {
         // The fingerprint is taken from the sheet as it is now, not as it was
         // when the row was drawn, so an edit in between cannot make the new
         // waiver lapse on arrival.
-        let key = match self.current_waiver_key(&draft.key) {
+        let key = match self.current_waiver_key(&draft.sheet, &draft.key) {
             Ok(key) => key,
             Err(why) => {
                 crate::diagnostics::log_warning(format!("ERC: not waived: {why}"));
@@ -164,27 +170,29 @@ impl Signex {
         self.handle_run_erc()
     }
 
-    /// `key` with its fingerprint recomputed from the open sheet the finding
-    /// is filed under. `Err` (user-facing) when the newest run no longer
-    /// reports the finding, or an object it names is gone. A sheet that is not
-    /// open cannot have changed since the run, so its key stands.
+    /// `key` with its fingerprint recomputed from the open sheet `path` the
+    /// finding is filed under (only that sheet: another sheet's finding may
+    /// share nothing but a rule). `Err` (user-facing) when the newest run no
+    /// longer reports the finding there, or an object it names is gone. A
+    /// sheet that is not open cannot have changed since the run, so its key
+    /// stands.
     fn current_waiver_key(
         &self,
+        path: &std::path::Path,
         key: &signex_erc::waivers::violation::WaiverKey,
     ) -> Result<signex_erc::waivers::violation::WaiverKey, String> {
         let same = |k: &signex_erc::waivers::violation::WaiverKey| {
             k.rule_id == key.rule_id && k.objects == key.objects
         };
-        let found = self
+        let violation = self
             .ui_state
             .erc_violations_by_path
-            .iter()
-            .find_map(|(path, list)| {
+            .get(path)
+            .and_then(|list| {
                 list.iter()
                     .find(|v| v.waiver_key.as_ref().is_some_and(same))
-                    .map(|v| (path, v))
             });
-        let Some((path, violation)) = found else {
+        let Some(violation) = violation else {
             return Err("the finding is no longer reported; run ERC again".to_string());
         };
         let Some(engine) = self.document_state.engines.get(path) else {

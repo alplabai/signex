@@ -39,6 +39,7 @@ fn at_pin(
 ) -> Diagnostic {
     Diagnostic::new(kind, message, pin.world_pos)
         .with_primary(sel(symbol.uuid, SelectedKind::Symbol))
+        .at_pin_number(pin.number.clone())
         .about_net(net.finding())
 }
 

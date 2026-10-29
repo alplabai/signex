@@ -56,25 +56,50 @@ pub fn involved_items(v: &Violation) -> Vec<SelectedItem> {
     items
 }
 
-/// A waiver's identity objects for `v`: the UUIDs of the objects it names
-/// and, for a net-level finding, `net:<name>`. The net's parts are not part
-/// of the identity, so adding or removing one lapses the waiver (through
-/// the fingerprint) instead of orphaning it.
-fn identity_objects(v: &Violation, items: &[SelectedItem]) -> Vec<String> {
+/// A waiver's identity objects for `v` on `sheet`: the UUIDs of the objects
+/// it names, `pin:<number>` for a pin-anchored finding, and for a net-level
+/// finding the net on this sheet: `net:<name>@<sheet uuid>`, or for an
+/// unnamed net its pin set `pins:<R1.1,U2.3>@<sheet uuid>`. The sheet's
+/// document id (not its path) keeps one global net's findings on two sheets
+/// apart; two placements of one sheet file share it. A named net's parts are
+/// only in the fingerprint, so a part joining it lapses the waiver; an
+/// unnamed net has nothing else to name it by, so there a membership change
+/// orphans the waiver instead. See `docs/ERC_RULES.md`, "Waivers".
+fn identity_objects(v: &Violation, items: &[SelectedItem], sheet: &SchematicSheet) -> Vec<String> {
     let mut objects: Vec<String> = items.iter().map(|i| i.uuid.to_string()).collect();
-    if let Some(net) = v.net.as_ref().filter(|n| !n.name.is_empty()) {
-        objects.push(format!("net:{}", net.name));
+    if let Some(pin) = v.anchor_pin.as_ref().filter(|p| !p.is_empty()) {
+        objects.push(format!("pin:{pin}"));
+    }
+    if let Some(net) = &v.net {
+        let at = sheet.uuid;
+        if !net.name.is_empty() {
+            objects.push(format!("net:{}@{at}", net.name));
+        } else if !net.pins.is_empty() {
+            objects.push(format!("pins:{}@{at}", pin_list(net)));
+        }
     }
     objects.sort();
     objects
 }
 
+/// The net's pins as `designator.number`, sorted and unique.
+fn pin_list(net: &crate::NetFinding) -> String {
+    let mut pins: Vec<String> = net
+        .pins
+        .iter()
+        .map(|p| format!("{}.{}", p.reference.trim(), p.number))
+        .collect();
+    pins.sort();
+    pins.dedup();
+    pins.join(",")
+}
+
 /// The finding's key on `sheet`, the sheet it is filed under. `None` when it
-/// names neither an object nor a named net, or names an object that is not
-/// on `sheet`.
+/// names neither an object nor a net with a name or pins, or names an object
+/// that is not on `sheet`.
 pub fn waiver_key(v: &Violation, sheet: &SchematicSheet) -> Option<WaiverKey> {
     let items = involved_items(v);
-    let objects = identity_objects(v, &items);
+    let objects = identity_objects(v, &items, sheet);
     if objects.is_empty() {
         return None;
     }

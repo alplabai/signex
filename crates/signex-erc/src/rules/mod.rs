@@ -133,7 +133,8 @@ pub(crate) fn unused_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                     format!("Pin on {reference} is not connected"),
                     pin.world_pos,
                 )
-                .with_primary(sel(symbol.uuid, SelectedKind::Symbol)),
+                .with_primary(sel(symbol.uuid, SelectedKind::Symbol))
+                .at_pin_number(pin.number.clone()),
             );
         }
     }

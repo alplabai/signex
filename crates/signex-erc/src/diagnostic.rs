@@ -52,6 +52,9 @@ pub struct Diagnostic {
     pub peer: Option<SelectedItem>,
     /// The net a net-level finding is about (see [`NetFinding`]).
     pub net: Option<NetFinding>,
+    /// Number of the pin a pin-anchored finding sits on, so two findings on
+    /// two pins of one part stay two findings to a waiver.
+    pub anchor_pin: Option<String>,
 }
 
 impl Diagnostic {
@@ -69,6 +72,7 @@ impl Diagnostic {
             primary: None,
             peer: None,
             net: None,
+            anchor_pin: None,
         }
     }
 
@@ -92,6 +96,12 @@ impl Diagnostic {
     /// net on click, and a per-finding waiver keys on the net's pins.
     pub fn about_net(mut self, net: NetFinding) -> Self {
         self.net = Some(net);
+        self
+    }
+
+    /// Record the number of the pin this finding is anchored at.
+    pub fn at_pin_number(mut self, number: impl Into<String>) -> Self {
+        self.anchor_pin = Some(number.into());
         self
     }
 
@@ -152,6 +162,7 @@ impl From<Diagnostic> for Violation {
             primary: d.primary,
             peer: d.peer,
             net: d.net,
+            anchor_pin: d.anchor_pin,
             waiver_key: None,
         }
     }
