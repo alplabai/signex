@@ -9,8 +9,9 @@ use signex_library::LibraryAdapter;
 /// since it was last asked. `library` names the library in the line.
 pub fn report_held_back(library: &str, adapter: &dyn LibraryAdapter) {
     for held in adapter.take_held_back_files() {
+        // The library and the file lead: the Messages panel cuts long lines.
         crate::diagnostics::log_warning(format!(
-            "Not committed, kept pending: could not read {} ({}) in library {library}",
+            "Not committed, kept pending in library {library}: could not read {} ({})",
             held.path, held.reason
         ));
     }

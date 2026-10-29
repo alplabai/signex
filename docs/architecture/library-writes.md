@@ -120,6 +120,7 @@ bad file stall the library:
 - Each file left out is returned by `LibraryAdapter::take_held_back_files`.
   The app reports it through one helper (`library::held_back`), on every
   commit it blocks: mounted adapters after each update and before an
-  unmount, adapters opened for one job (a container save, a stock copy)
+  unmount, adapters opened for one job (a container save, a stock copy,
+  the pricing walk)
   when the job ends. An adapter dropped with files nobody asked for names
   them itself, as a safety net.

@@ -30,8 +30,11 @@ fn a_container_save_past_an_unreadable_pending_file_names_it_in_messages() {
     assert!(
         crate::diagnostics::recent_entries()
             .iter()
-            .any(|entry| entry.message.contains(&name)),
-        "the file the save's commit left out is named"
+            .any(|entry| entry
+                .message
+                .starts_with("Not committed, kept pending in library Lib: could not read")
+                && entry.message.contains(&name)),
+        "the app helper names the file the save's commit left out"
     );
     std::fs::set_permissions(&bad, std::fs::Permissions::from_mode(0o644)).unwrap();
 }
