@@ -200,6 +200,22 @@ pub fn view<'a>(
     .into()
 }
 
+/// Height of the document tab strip's row: two body-text lines for the pill
+/// plus the strip's top padding. 26 px at the default scale, and it follows
+/// the type scale with the strip. The empty-window placeholder takes its
+/// height from here so the chrome does not jump when the first tab opens.
+pub const TAB_STRIP_HEIGHT: f32 = TS.body * 2.0 + SP.s;
+
+/// The strip drawn with no document open: same height and background as the
+/// tab strip, nothing in it.
+pub fn placeholder<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
+    container(iced::widget::Space::new())
+        .width(Length::Fill)
+        .height(TAB_STRIP_HEIGHT)
+        .style(styles::toolbar_strip(tokens))
+        .into()
+}
+
 /// Muted marker before the title of a read-only sheet (#1402).
 const READ_ONLY_LABEL: &str = "read-only";
 
@@ -333,6 +349,14 @@ mod tests {
     use crate::app::{TabInfo, TabKind};
     use std::collections::HashSet;
     use std::path::PathBuf;
+
+    #[test]
+    fn the_placeholder_height_is_the_tab_strip_height_token() {
+        // The window with no document open keeps the 26 px it always had at
+        // the default scale, now derived from the strip's own metrics.
+        assert_eq!(super::TAB_STRIP_HEIGHT, 26.0);
+        assert_eq!(super::TAB_STRIP_HEIGHT, super::TS.body * 2.0 + super::SP.s);
+    }
 
     fn tab(path: &str, dirty: bool) -> TabInfo {
         TabInfo {
