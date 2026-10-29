@@ -140,7 +140,7 @@ fn adding_a_waiver_replaces_one_for_the_same_finding() {
     let first = waive(&v, &sheet);
     let mut second = first.clone();
     second.reason = "updated".into();
-    let list = with_waiver(&[first.clone()], second);
+    let list = with_waiver(std::slice::from_ref(&first), second);
     assert_eq!(list.len(), 1);
     assert_eq!(list[0].reason, "updated");
     assert!(without_waiver(&list, &first.rule_id, &first.objects).is_empty());
