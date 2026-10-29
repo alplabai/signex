@@ -7,6 +7,7 @@
 //! net-class styling of the canvas) calls this instead of resolving a net on
 //! one sheet alone.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use signex_types::net::Netlist;
@@ -22,6 +23,22 @@ pub(crate) struct Stitched {
     /// One line per unreadable sheet and stitch issue, as the Messages panel
     /// shows them for the project netlist the canvas and ERC read.
     pub(crate) warnings: Vec<String>,
+    /// What sits on each net, when the caller asked for it
+    /// ([`stitched_index_from`]); `None` otherwise.
+    pub(crate) index: Option<signex_net::NetIndex>,
+    /// The file each sheet key of `index` was assembled from.
+    pub(crate) sheet_paths: HashMap<signex_net::SheetKey, PathBuf>,
+}
+
+impl Stitched {
+    fn without_netlist(warnings: Vec<String>) -> Self {
+        Self {
+            netlist: None,
+            warnings,
+            index: None,
+            sheet_paths: HashMap::new(),
+        }
+    }
 }
 
 /// The project netlist rooted at `root`, over a snapshot of the open sheets,
@@ -38,6 +55,19 @@ pub(crate) fn stitched_project_netlist_from(
     netlist_of_set(&set, project_dir)
 }
 
+/// [`stitched_project_netlist_from`] that also indexes what sits on each net,
+/// for navigation, highlight and hover. Blocking, like it.
+pub(crate) fn stitched_index_from(
+    open: &OpenSheets,
+    pages: &[PathBuf],
+    root: &Path,
+    fold: CaseFold,
+    project_dir: Option<PathBuf>,
+) -> Stitched {
+    let set = super::project_sheets::assemble_project_sheets_from(open, pages, root, fold);
+    stitch_set(&set, project_dir, true)
+}
+
 /// The Messages line for a sheet that exists but would not read or parse. The
 /// panel keeps only the first ~157 bytes and a parser error can be long, so
 /// the file name comes right after a short reason and the full path last.
@@ -52,16 +82,17 @@ fn unreadable_message(path: &Path, why: &str) -> String {
 /// The stitched netlist of an already assembled sheet set, so a caller that
 /// needs the set for other things reads the disk once.
 pub(crate) fn netlist_of_set(set: &ProjectSheetSet, project_dir: Option<PathBuf>) -> Stitched {
+    stitch_set(set, project_dir, false)
+}
+
+fn stitch_set(set: &ProjectSheetSet, project_dir: Option<PathBuf>, want_index: bool) -> Stitched {
     let mut warnings: Vec<String> = set
         .unreadable
         .iter()
         .map(|(path, why)| unreadable_message(path, why))
         .collect();
     let Some(root_path) = set.root.clone() else {
-        return Stitched {
-            netlist: None,
-            warnings,
-        };
+        return Stitched::without_netlist(warnings);
     };
     let base_dir: Option<PathBuf> = project_dir.or_else(|| root_path.parent().map(PathBuf::from));
     let fold = set.fold;
@@ -80,10 +111,7 @@ pub(crate) fn netlist_of_set(set: &ProjectSheetSet, project_dir: Option<PathBuf>
             root_path.file_name().unwrap_or_default().to_string_lossy(),
             root_path.display()
         ));
-        return Stitched {
-            netlist: None,
-            warnings,
-        };
+        return Stitched::without_netlist(warnings);
     }
     let roots =
         super::project_sheets::project_roots(root_key, set, &graph, base_dir.as_deref(), fold);
@@ -92,12 +120,23 @@ pub(crate) fn netlist_of_set(set: &ProjectSheetSet, project_dir: Option<PathBuf>
         resolved: &graph.resolved,
         roots: &roots,
     };
-    let result = signex_net::build_project_netlist(&project);
+    let (result, index) = if want_index {
+        let (result, index) = signex_net::build_project_netlist_indexed(&project);
+        (result, Some(index))
+    } else {
+        (signex_net::build_project_netlist(&project), None)
+    };
     warnings.extend(graph.issues.iter().map(stitch_issue_message));
     warnings.extend(result.issues.iter().map(stitch_issue_message));
     Stitched {
         netlist: Some(result.netlist),
         warnings,
+        index,
+        sheet_paths: if want_index {
+            graph.paths
+        } else {
+            HashMap::new()
+        },
     }
 }
 

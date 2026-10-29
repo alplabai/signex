@@ -2,11 +2,13 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, cmd_item_if, item, item_if, stub, submenu, unavailable,
+    cmd, cmd_item, cmd_item_gated, cmd_item_if, item, item_if, panel_item, stub, submenu,
+    unavailable,
 };
 use super::{MenuEntry, MenuMessage};
 use crate::app::command::enablement::cycle_grid_menu_enabled;
 use crate::menu_bar::{MenuContext, enabled};
+use crate::panels::PanelKind;
 
 const SEP: MenuEntry = MenuEntry::Separator;
 
@@ -212,13 +214,43 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         SEP,
         // Panels work without an active document (they show an empty
         // state), so these are always available.
-        item("Projects", MenuMessage::OpenProjectsPanel),
-        item("Components", MenuMessage::OpenComponentsPanel),
-        item("Navigator", MenuMessage::OpenNavigatorPanel),
-        item("Properties", MenuMessage::OpenPropertiesPanel),
-        item("ERC", MenuMessage::OpenErcPanel),
-        item("Messages", MenuMessage::OpenMessagesPanel),
-        item("Signal", MenuMessage::OpenSignalPanel),
+        panel_item(
+            ctx,
+            "Projects",
+            PanelKind::Projects,
+            MenuMessage::OpenProjectsPanel,
+        ),
+        panel_item(
+            ctx,
+            "Components",
+            PanelKind::Components,
+            MenuMessage::OpenComponentsPanel,
+        ),
+        panel_item(
+            ctx,
+            "Navigator",
+            PanelKind::Navigator,
+            MenuMessage::OpenNavigatorPanel,
+        ),
+        panel_item(
+            ctx,
+            "Properties",
+            PanelKind::Properties,
+            MenuMessage::OpenPropertiesPanel,
+        ),
+        panel_item(ctx, "ERC", PanelKind::Erc, MenuMessage::OpenErcPanel),
+        panel_item(
+            ctx,
+            "Messages",
+            PanelKind::Messages,
+            MenuMessage::OpenMessagesPanel,
+        ),
+        panel_item(
+            ctx,
+            "Signal",
+            PanelKind::Signal,
+            MenuMessage::OpenSignalPanel,
+        ),
     ]
 }
 

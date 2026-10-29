@@ -148,7 +148,13 @@ fn render_entry(entry: &MenuEntry, mc: MenuColors) -> MenuItemView {
 /// renders greyed out with no press handler.
 fn render_item(item: &MenuItem, mc: MenuColors) -> MenuItemView {
     let shortcut = item.shortcut.as_ref().map(|s| s.text.clone());
-    let row = menu_item_btn(&item.label, shortcut, item.dispatches().cloned(), mc);
+    let row = menu_item_btn(
+        &item.label,
+        item.checked,
+        shortcut,
+        item.dispatches().cloned(),
+        mc,
+    );
     if !matches!(item.state, ItemState::Placeholder) {
         return Item::new(row);
     }
