@@ -79,6 +79,17 @@ impl Signex {
     /// and its label numbers have moved `k` steps; designators follow the
     /// "Designators on paste" preference, numbered in turn across the copies.
     fn apply_paste_array(&mut self) {
+        // The copy may have changed since the dialog opened (another Copy,
+        // another window): the item cap is checked against the copy that is
+        // about to be placed, and a refusal is logged by `input()`'s reason.
+        let items = self
+            .interaction_state
+            .clipboard
+            .as_ref()
+            .map(|c| c.payload.item_count());
+        if let (Some(items), Some(state)) = (items, self.ui_state.paste_array.as_mut()) {
+            state.items_per_copy = items;
+        }
         let Some(state) = self.ui_state.paste_array.as_ref() else {
             return;
         };

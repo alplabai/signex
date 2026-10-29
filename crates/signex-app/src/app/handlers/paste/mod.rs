@@ -129,6 +129,28 @@ impl Signex {
         }
     }
 
+    /// Copy the selection and the task that mirrors the result on the system
+    /// clipboard. A copy that carried nothing empties it, so an older
+    /// fragment left there cannot be pasted in its place.
+    pub(crate) fn copy_and_write_clipboard_task(&mut self) -> Task<Message> {
+        let carried = self.handle_selection_copy_requested();
+        self.mirror_copy_on_clipboard_task(carried)
+    }
+
+    /// The system-clipboard side of a copy that returned `carried`.
+    pub(crate) fn mirror_copy_on_clipboard_task(&self, carried: bool) -> Task<Message> {
+        if carried {
+            return self.clipboard_write_task();
+        }
+        let dropped = self.interaction_state.clipboard.is_none()
+            && !self.interaction_state.active_canvas().selected.is_empty();
+        if dropped {
+            iced::clipboard::write(String::new())
+        } else {
+            Task::none()
+        }
+    }
+
     /// The task that puts the in-app copy on the system clipboard as text.
     /// When it cannot be serialised the clipboard is emptied instead, so an
     /// older fragment left there cannot be pasted in its place; the copy
