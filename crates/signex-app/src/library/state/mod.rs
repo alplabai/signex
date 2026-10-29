@@ -605,6 +605,16 @@ pub struct LibraryState {
     /// Preference-backed defaults for a library opened or created from now
     /// on; `Save Preferences` updates it, so no reader goes back to disk.
     pub new_library_defaults: NewLibraryDefaults,
+    /// The open Copy to Library dialog (#813): a stock symbol or footprint
+    /// was asked for and no usable target library is remembered.
+    pub stock_copy: Option<super::stock_copy::StockCopyState>,
+    /// The library the user chose to receive stock copies, remembered in
+    /// `prefs.json`. May name a library that is no longer mounted; it is
+    /// checked with [`LibraryState::usable_stock_copy_target`] on use.
+    pub stock_copy_target: Option<PathBuf>,
+    /// Stock files whose copy is being written, so a second open of the
+    /// same file does not start a second copy.
+    pub stock_copies_in_flight: std::collections::HashSet<PathBuf>,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the
@@ -736,6 +746,7 @@ mod refresh;
 #[cfg(test)]
 mod refresh_tests;
 mod relocate;
+mod stock_copy;
 mod symbol_choice;
 mod table_scan;
 #[cfg(test)]

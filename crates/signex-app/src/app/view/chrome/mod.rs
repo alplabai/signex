@@ -301,6 +301,7 @@ impl Signex {
             | ModalId::LibraryPrimitivePicker
             | ModalId::LibraryDocumentOptions
             | ModalId::LibraryCreateOptions
+            | ModalId::LibraryStockCopy
             | ModalId::LibraryUpdates
             | ModalId::LibraryCloseConfirm
             | ModalId::LibraryDeleteConfirm

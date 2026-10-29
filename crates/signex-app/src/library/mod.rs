@@ -52,6 +52,7 @@ pub mod resolve;
 pub mod row_documents;
 pub mod settings;
 pub mod state;
+pub mod stock_copy;
 #[cfg(test)]
 pub(crate) mod test_adapters;
 pub(crate) mod unit_picker;

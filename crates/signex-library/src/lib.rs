@@ -118,7 +118,7 @@ pub use primitive::{
     LayerId, LoadRepair, Pad, PadKind, PadShape, PinDirection, PinOrientation, PinSymbolKind,
     Polygon, PrimitiveKind, PrimitiveRef, SimKind, SimModel, StepAttachment, Symbol, SymbolFile,
     SymbolGraphic, SymbolGraphicKind, SymbolPin, chain_into_closed_contour,
-    normalize_arc_endpoints_deg,
+    normalize_arc_endpoints_deg, unique_copy_name,
 };
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]

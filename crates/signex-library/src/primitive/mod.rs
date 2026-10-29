@@ -15,6 +15,7 @@
 //! - [`PrimitiveRef`] in [`ref_`]
 
 pub mod container_merge;
+mod copy_for_library;
 pub mod footprint;
 pub mod ref_;
 pub mod sim;
@@ -22,6 +23,7 @@ pub mod symbol;
 mod tsv_cell;
 
 pub use container_merge::{ContainerMerge, DuplicatedUuid};
+pub use copy_for_library::unique_copy_name;
 pub use footprint::{
     Body3D, BodyShape, Drill, Footprint, FootprintFile, FootprintFileError, FpGraphic,
     FpGraphicKind, LayerId, LoadRepair, Pad, PadKind, PadShape, Polygon, StepAttachment,
