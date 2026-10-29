@@ -1,3 +1,4 @@
+// Standalone binary: reads the process-wide, 200-entry diagnostics ring and installs the logger, which would turn every other test's logging into ring traffic.
 //! #739 — renaming a project library's `.snxlib` from the project tree
 //! must leave nothing pointing at the old path.
 //!
@@ -14,6 +15,11 @@
     reason = "integration tests discard Results/Tasks with `let _ = ...`; test scaffolding, not production"
 )]
 
+#[expect(
+    dead_code,
+    reason = "this target includes the shared support module but uses only part of it"
+)]
+#[path = "integration/support/mod.rs"]
 mod support;
 
 use std::fs;
@@ -103,6 +109,7 @@ fn fixture() -> Fixture {
         pending_libraries: Default::default(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(project_id);
     app.library
@@ -376,6 +383,53 @@ fn a_destination_that_appeared_is_never_overwritten() {
     assert_eq!(entry_paths(&f.app)[0], PathBuf::from("alpha/alpha.snxlib"));
 }
 
+/// A Project tab save hands the `.snxprj` write to a task that runs only
+/// after `update` returns. A library rename then must be refused before the
+/// folder moves: it rewrites that file directly, and the late write would
+/// put the old path back (#1202).
+#[test]
+fn a_library_rename_while_the_project_file_is_being_written_is_refused_before_moving() {
+    use signex_app::app::{ContextMenuMsg, ProjectTreeAction};
+    let mut f = fixture();
+    f.app.document_state.dirty_paths.insert(f.prj.clone());
+    let root = vec![f.app.document_state.projects[0].id.to_string()];
+    send(
+        &mut f.app,
+        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            ProjectTreeAction::OpenProjectOptions(root),
+        )),
+    );
+    let _write_in_flight = f.app.update(Message::File(FileMsg::Save));
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "gamma.snxlib");
+
+    let dialog = f
+        .app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .expect("the dialog stays open with the reason");
+    assert!(
+        dialog
+            .error
+            .as_deref()
+            .is_some_and(|e| e.contains("still being saved")),
+        "{:?}",
+        dialog.error
+    );
+    assert!(f.alpha.exists());
+    assert!(!f.alpha.with_file_name("gamma.snxlib").exists());
+    assert!(
+        !f.app
+            .document_state
+            .panel_ctx
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("renamed back")),
+        "nothing was moved, so nothing was moved back"
+    );
+}
+
 #[test]
 fn closing_the_project_after_a_library_rename_prompts_for_the_unsaved_path() {
     use signex_app::app::{ContextMenuMsg, ProjectMsg, ProjectTreeAction};
@@ -386,10 +440,11 @@ fn closing_the_project_after_a_library_rename_prompts_for_the_unsaved_path() {
     // Close Project resolves the sheet references off-thread (#756); run
     // the task body and send its result back as the completion message.
     let project_id = f.app.document_state.projects[0].id;
+    let root = vec![project_id.to_string()];
     send(
         &mut f.app,
         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-            ProjectTreeAction::CloseProject(vec![0]),
+            ProjectTreeAction::CloseProject(root),
         )),
     );
     let result = f.app.resolve_sheet_refs_blocking();
@@ -462,6 +517,7 @@ fn a_library_listed_by_another_open_project_is_refused() {
         pending_libraries: Default::default(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
 
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
@@ -597,6 +653,7 @@ fn the_primitive_picker_target_follows_the_rename() {
         )),
         filter: String::new(),
         error: None,
+        scroll_y: 0.0,
     });
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
 
@@ -738,6 +795,7 @@ fn the_project_patch_does_not_flush_other_unsaved_edits() {
 /// project stays dirty and the Messages panel says it needs saving.
 #[test]
 fn a_never_saved_project_is_not_created_by_the_rename() {
+    let _ = diagnostics::init_logging();
     let mut f = unsaved_fixture();
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
 
@@ -824,6 +882,7 @@ fn duplicate_entries_for_the_library_are_all_repointed() {
 /// Discard and Save will do.
 #[test]
 fn a_shared_disk_entry_gets_an_explicit_warning_and_a_dirty_project() {
+    let _ = diagnostics::init_logging();
     let mut f = fixture();
     let mut on_disk = parse_project(&f.prj).unwrap();
     on_disk.libraries[0].kind = LibraryEntryKind::Shared;

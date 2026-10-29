@@ -247,6 +247,7 @@ impl LocalGitAdapter {
                 &repo,
                 removed_rel_path.map(Path::new),
                 Path::new(rel_path),
+                None,
                 &extras,
                 &sig,
                 &commit_message,
@@ -334,6 +335,45 @@ impl LocalGitAdapter {
     where
         F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
     {
+        self.save_edit(
+            |lf, _| {
+                if !f(lf)? {
+                    return Ok(None);
+                }
+                // Cached prices follow their rows: a deleted row, or a SKU
+                // edited away, takes its prices with it in this same save.
+                super::helpers::prune_stale_pricing(lf);
+                // Rebased, so what this save removed is gone from the text
+                // later saves start from.
+                let text = lf.write_and_rebase()?;
+                // Lines of rows this edit replaced or removed go now, not
+                // at the next row write.
+                self.row_lines().retain_rows(lf);
+                Ok(Some(text))
+            },
+            asset_rel_paths,
+            message,
+            fallback,
+        )
+    }
+
+    /// The one save protocol of the `.snxlib`: under both write locks,
+    /// reload, edit a clone, write it atomically, then let memory take it
+    /// and commit, with `asset_rel_paths` and every pinned PDF not yet in
+    /// HEAD (#1471). `edit` changes the clone and returns its encoded text,
+    /// or `None` when nothing changed (no write, no commit). Its flag says
+    /// whether memory holds this adapter's own last write (see
+    /// `holds_own_write`).
+    pub(super) fn save_edit<F>(
+        &self,
+        edit: F,
+        asset_rel_paths: &[String],
+        message: &str,
+        fallback: &str,
+    ) -> Result<(), LibraryError>
+    where
+        F: FnOnce(&mut LibraryFile, bool) -> Result<Option<String>, LibraryError>,
+    {
         self.ensure_commit_identity()?;
         // Another Signex process could otherwise reload and write between
         // our reload and our write (see `write_lock`). Taken before the
@@ -350,16 +390,16 @@ impl LocalGitAdapter {
         // atomic write below may return an error.
         let rel = self.snxlib_rel_path()?;
         // #831: edit a clone. An encode or write failure discards it, so
-        // memory and the `.snxlib` on disk stay exactly as they were.
+        // memory and the `.snxlib` on disk stay exactly as they were. Rows
+        // are shared, so the clone is cheap (#416).
         let mut candidate = guard.clone();
-        if !f(&mut candidate)? {
+        let Some(text) = edit(&mut candidate, self.holds_own_write())? else {
             return Ok(());
-        }
-        // Cached prices follow their rows: a deleted row, or a SKU edited
-        // away, takes its prices with it as part of this same save.
-        super::helpers::prune_stale_pricing(&mut candidate);
-        // Encode once; the same bytes are written below.
-        let text = candidate.write()?;
+        };
+        // Every row's pins are in `text`, so every pinned PDF that is on
+        // disk and not yet in HEAD goes into this commit, whichever row the
+        // edit was about (#1471). Read under the write lock.
+        let asset_rel_paths = &self.pinned_assets_to_commit(&candidate, asset_rel_paths);
         // A commit that carries assets must not fail silently (a later
         // commit would stage the `.snxlib` but not the files), so the write
         // is undone then: keep the bytes it replaces.
@@ -370,9 +410,10 @@ impl LocalGitAdapter {
         };
         // HI-6: atomic write — never half-write the manifest.
         signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
-        // Disk now holds the edit, so memory takes it too. A failed commit
-        // below keeps memory == disk, except for a commit that carries
-        // assets: that one undoes the write on disk and in memory together.
+        self.warn_plain_token_once(&candidate.manifest.mode);
+        // Disk now holds the edit, so memory takes it too. Memory and disk
+        // stay equal whatever happens next: a failed commit without assets
+        // leaves both on the edit, one with assets restores both.
         *guard = candidate;
         // A failed stamp only costs one extra reload on the next access.
         if let Err(stamp_err) = self.note_own_write(&text) {
@@ -392,31 +433,21 @@ impl LocalGitAdapter {
             // The row would otherwise be saved with a pinned PDF that no
             // commit holds. Put the previous file back, so the caller keeps
             // its edit and can save again.
-            signex_types::atomic_io::atomic_write(&self.file_path, &previous).map_err(|e| {
-                LibraryError::Backend(format!(
-                    "{commit_err}; the row was saved but its datasheet PDF was not committed, \
-                     and the library file could not be restored: {e}"
-                ))
-            })?;
-            *guard = previous_file;
-            if let Err(stamp_err) = self.note_own_write(&String::from_utf8_lossy(&previous)) {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %self.file_path.display(),
-                    "restored, but the disk stamp could not be recorded: {stamp_err}"
-                );
-            }
-            return Err(LibraryError::Backend(format!(
-                "the row was not saved: its datasheet PDF could not be committed ({commit_err})"
-            )));
+            return Err(self.undo_asset_commit(
+                &mut guard,
+                previous,
+                previous_file,
+                commit_err,
+                signex_types::atomic_io::atomic_write,
+            ));
         }
         Ok(())
     }
 
     /// The edit is saved but its commit failed (a commit without assets;
     /// one with assets is undone and returns an error instead). Nothing
-    /// is rolled back on disk or in memory. `stage_and_commit` builds the commit from HEAD's
-    /// tree and touches the on-disk index only after the commit succeeded,
+    /// is rolled back on disk or in memory. `stage_and_commit` builds the
+    /// commit from HEAD's tree and touches the on-disk index only after the commit succeeded,
     /// so the index still equals HEAD. The next commit of the `.snxlib`
     /// re-reads it from disk and picks the edit up; a commit of any other
     /// library file does not. Surfaced to the Messages panel via the log
@@ -432,8 +463,7 @@ impl LocalGitAdapter {
 
     /// Read the table named `table` as a snapshot of [`ComponentRow`]s,
     /// scoped to whatever the legacy [`TABLE_HEADER`] columns are.
-    /// Returns an empty vec for unknown tables (matches the old
-    /// `tables/<name>.tsv` "missing file = empty" semantics).
+    /// Returns an empty vec for unknown tables.
     pub(super) fn snapshot_table(&self, name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
         self.refresh_for_read();
         let guard = self
@@ -463,6 +493,7 @@ impl LocalGitAdapter {
         let dir = self.primitive_dir(PrimitiveKind::Symbol);
         if !dir.exists() {
             self.record_symbol_problems(&[]);
+            self.symbol_index.rebuild(&[]);
             return Ok(Vec::new());
         }
         let suffix = format!(".{SYMBOL_EXT}");
@@ -502,6 +533,7 @@ impl LocalGitAdapter {
         }
         out.sort_by(|a, b| a.0.cmp(&b.0));
         self.record_symbol_problems(&problems);
+        self.symbol_index.rebuild(&out);
         Ok(out)
     }
 
@@ -600,6 +632,7 @@ impl LocalGitAdapter {
                 // envelope holding every symbol; an in-place truncate by
                 // `fs::write` would destroy them all on a crash mid-save.
                 signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
+                self.symbol_index.record(&file, &path);
                 path
             }
             None => {
@@ -617,6 +650,7 @@ impl LocalGitAdapter {
                 // envelope holding every symbol; an in-place truncate by
                 // `fs::write` would destroy them all on a crash mid-save.
                 signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
+                self.symbol_index.record(&file, &path);
                 path
             }
         };
@@ -635,10 +669,13 @@ impl LocalGitAdapter {
         self.commit_path(&rel_path, message, &fallback)
     }
 
-    fn locate_symbol_file(
+    pub(super) fn locate_symbol_file(
         &self,
         uuid: Uuid,
     ) -> Result<Option<(PathBuf, SymbolFile)>, LibraryError> {
+        if let Some(hit) = self.indexed_symbol_file(uuid) {
+            return Ok(Some(hit));
+        }
         for (path, file) in self.scan_symbol_files()? {
             if file.symbols.iter().any(|s| s.uuid == uuid) {
                 return Ok(Some((path, file)));

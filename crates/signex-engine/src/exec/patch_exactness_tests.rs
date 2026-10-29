@@ -13,10 +13,10 @@ use crate::{
     SymbolTextField, TextTarget,
 };
 use signex_types::schematic::{
-    AnnotateOrder, Bus, BusEntry, ChildSheet, FillType, HAlign, Junction, Label, LabelType, LibPin,
-    LibSymbol, NoConnect, Pin, PinDirection, PinShapeStyle, Point, SchDrawing, SchematicSheet,
-    SelectedItem, SelectedKind, SheetPin, StrokeColor, Symbol, SymbolTransform, TextNote, TextProp,
-    VAlign, Wire,
+    AnnotateOrder, BodyStyle, Bus, BusEntry, ChildSheet, FillType, HAlign, Junction, Label,
+    LabelType, LibPin, LibSymbol, NoConnect, Pin, PinDirection, PinShapeStyle, Point, SchDrawing,
+    SchematicSheet, SelectedItem, SelectedKind, SheetPin, StrokeColor, Symbol, SymbolTransform,
+    TextNote, TextProp, VAlign, Wire,
 };
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -59,24 +59,28 @@ fn lib_symbol(id: &str, description: &str) -> LibSymbol {
         in_pos_files: true,
         duplicate_pin_numbers_are_jumpers: false,
         graphics: Vec::new(),
-        // One pin, away from everything, so replacing the symbol is not
-        // refused as removing a unit.
-        pins: vec![LibPin {
-            unit: 1,
-            body_style: 1,
-            pin: Pin {
-                direction: PinDirection::Passive,
-                shape_style: PinShapeStyle::Plain,
-                position: pt(-200.0, -200.0),
-                rotation: 0.0,
-                length: 2.54,
-                name: "1".into(),
-                number: "1".into(),
-                visible: true,
-                name_visible: true,
-                number_visible: true,
-            },
-        }],
+        // One pin per body, away from everything, so replacing the symbol is
+        // not refused as removing a unit; both bodies share the tip so switching
+        // body never disturbs a wire.
+        pins: [(1, -200.0), (2, -200.0)]
+            .into_iter()
+            .map(|(body_style, at)| LibPin {
+                unit: 1,
+                body_style,
+                pin: Pin {
+                    direction: PinDirection::Passive,
+                    shape_style: PinShapeStyle::Plain,
+                    position: pt(at, at),
+                    rotation: 0.0,
+                    length: 2.54,
+                    name: "1".into(),
+                    number: "1".into(),
+                    visible: true,
+                    name_visible: true,
+                    number_visible: true,
+                },
+            })
+            .collect(),
         show_pin_numbers: true,
         show_pin_names: true,
         pin_name_offset: 0.0,
@@ -281,6 +285,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         unknown: _,
         // Loaded baseline only; the app owns the live overrides and no command edits them.
         net_colors: _,
+        drawing_placements,
         paper_size,
         font_family,
         root_sheet_page,
@@ -323,7 +328,10 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         differ(bus_entries, &b.bus_entries),
         DocumentPatch::BUS_ENTRIES,
     );
-    flag(differ(drawings, &b.drawings), DocumentPatch::DRAWINGS);
+    flag(
+        differ(drawings, &b.drawings) || differ(drawing_placements, &b.drawing_placements),
+        DocumentPatch::DRAWINGS,
+    );
     flag(
         differ(no_erc_directives, &b.no_erc_directives),
         DocumentPatch::NO_ERC_DIRECTIVES,
@@ -359,7 +367,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 43] = [
+const ALL_KINDS: [CommandKind; 50] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -371,6 +379,9 @@ const ALL_KINDS: [CommandKind; 43] = [
     CommandKind::SetSymbolRotation,
     CommandKind::SetSymbolLocked,
     CommandKind::SetSymbolDnp,
+    CommandKind::SetSymbolFlag,
+    CommandKind::SetWireWidth,
+    CommandKind::SetSymbolBodyStyle,
     CommandKind::UpdateSymbolTextSize,
     CommandKind::UpdateSymbolLibId,
     CommandKind::UpdateSymbolFootprint,
@@ -381,7 +392,9 @@ const ALL_KINDS: [CommandKind; 43] = [
     CommandKind::PlaceSymbol,
     CommandKind::RegisterLibSymbol,
     CommandKind::ReplaceLibSymbol,
+    CommandKind::ChangeComponent,
     CommandKind::PlaceChildSheet,
+    CommandKind::PlaceSheetPin,
     CommandKind::PlaceJunction,
     CommandKind::PlaceNoConnect,
     CommandKind::PlaceNoErcDirective,
@@ -402,6 +415,8 @@ const ALL_KINDS: [CommandKind; 43] = [
     CommandKind::SetTextFontFamily,
     CommandKind::SetSymbolDesignatorIn,
     CommandKind::SetDocumentFontFamily,
+    CommandKind::ArrangeDrawings,
+    CommandKind::SetDrawingPlacement,
     CommandKind::MoveEach,
 ];
 
@@ -421,6 +436,9 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetSymbolRotation
         | CommandKind::SetSymbolLocked
         | CommandKind::SetSymbolDnp
+        | CommandKind::SetSymbolFlag
+        | CommandKind::SetWireWidth
+        | CommandKind::SetSymbolBodyStyle
         | CommandKind::UpdateSymbolTextSize
         | CommandKind::UpdateSymbolLibId
         | CommandKind::UpdateSymbolFootprint
@@ -431,7 +449,9 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::PlaceSymbol
         | CommandKind::RegisterLibSymbol
         | CommandKind::ReplaceLibSymbol
+        | CommandKind::ChangeComponent
         | CommandKind::PlaceChildSheet
+        | CommandKind::PlaceSheetPin
         | CommandKind::PlaceJunction
         | CommandKind::PlaceNoConnect
         | CommandKind::PlaceNoErcDirective
@@ -452,6 +472,8 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetTextFontFamily
         | CommandKind::SetSymbolDesignatorIn
         | CommandKind::SetDocumentFontFamily
+        | CommandKind::ArrangeDrawings
+        | CommandKind::SetDrawingPlacement
         | CommandKind::MoveEach => {}
     }
 }
@@ -662,6 +684,28 @@ fn samples() -> Vec<(String, Command)> {
             dnp: true,
         },
     );
+    add(
+        "SetSymbolFlag",
+        Command::SetSymbolFlag {
+            symbol_id: sym,
+            flag: crate::SymbolFlag::OnBoard,
+            value: false,
+        },
+    );
+    add(
+        "SetWireWidth",
+        Command::SetWireWidth {
+            wire_id: uid(WIRE, 1),
+            width_mm: 0.5,
+        },
+    );
+    add(
+        "SetSymbolBodyStyle",
+        Command::SetSymbolBodyStyle {
+            symbol_id: sym,
+            body_style: BodyStyle::Alternate,
+        },
+    );
     for field in [SymbolTextField::Reference, SymbolTextField::Value] {
         add(
             &format!("UpdateSymbolTextSize {field:?}"),
@@ -738,9 +782,40 @@ fn samples() -> Vec<(String, Command)> {
         },
     );
     add(
+        "ChangeComponent",
+        Command::ChangeComponent {
+            symbol_id: sym,
+            replacement: crate::ComponentReplacement {
+                lib_symbol: lib_symbol("L:NEW", "new"),
+                library_id: Some(uid(SYMBOL, 7)),
+                row_id: Some(uid(SYMBOL, 8)),
+                library_version: "2".into(),
+                value: "NEW-MPN".into(),
+                footprint: String::new(),
+                datasheet: String::new(),
+                fields: Vec::new(),
+            },
+        },
+    );
+    add(
         "PlaceChildSheet",
         Command::PlaceChildSheet {
             child_sheet: child_sheet(NEW),
+        },
+    );
+    add(
+        "PlaceSheetPin",
+        Command::PlaceSheetPin {
+            sheet_id: uid(CHILD, 1),
+            pin: SheetPin {
+                uuid: uid(SHEET_PIN, NEW),
+                name: "NEWPIN".into(),
+                direction: "output".into(),
+                position: pt(70.0, 40.0),
+                rotation: 180.0,
+                auto_generated: false,
+                user_moved: false,
+            },
         },
     );
     add(
@@ -896,6 +971,20 @@ fn samples() -> Vec<(String, Command)> {
         Command::SetTextFontFamily {
             target: crate::TextTarget::Label(uid(LABEL, 1)),
             font_family: Some("Fira Mono".into()),
+        },
+    );
+    add(
+        "ArrangeDrawings",
+        Command::ArrangeDrawings {
+            ids: vec![uid(DRAWING, 1)],
+            arrange: crate::DrawingArrange::ToFront,
+        },
+    );
+    add(
+        "SetDrawingPlacement",
+        Command::SetDrawingPlacement {
+            ids: vec![uid(DRAWING, 1)],
+            placement: signex_types::schematic::DrawingPlacement::Above,
         },
     );
     add(

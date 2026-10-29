@@ -1,14 +1,14 @@
 //! Remove-from-project / delete-file flow for the project-navigation dock.
-//!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
 
 use super::*;
+use crate::app::state::library_entry::entry_resolves_to;
 use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 
 impl Signex {
     pub(super) fn open_remove_dialog(&mut self, tree_path: Vec<usize>) {
+        if self.refuse_on_missing_child(&tree_path, "Remove", true) {
+            return;
+        }
         let Some(target_path) = self.tree_path_to_file_path(&tree_path) else {
             crate::diagnostics::log_warning(
                 "Remove cancelled: the selected project-tree row no longer resolves to a file.",
@@ -55,6 +55,58 @@ impl Signex {
         });
     }
 
+    /// Refuse a Remove the sheet hierarchy makes unsafe (#1618): excluding a
+    /// sheet that is not a `.snxprj` page does nothing yet would discard its
+    /// unsaved edits, and deleting a file other sheets place leaves their
+    /// symbols dangling. Said in the Messages panel and a notice.
+    pub(super) fn refuse_remove(
+        &mut self,
+        state: &crate::app::RemoveDialogState,
+        choice: crate::app::RemoveChoice,
+    ) -> bool {
+        use crate::app::RemoveChoice;
+        use crate::app::state::ErrorNotice;
+        let blockers = self.remove_blockers(state);
+        let (notice, why): (fn(String) -> ErrorNotice, String) = match choice {
+            RemoveChoice::ExcludeFromProject if blockers.unlisted => (
+                ErrorNotice::exclude_refused,
+                format!(
+                    "\"{}\" is placed by a sheet symbol and is not a page of this project, \
+                     so there is nothing to exclude. Remove or change the sheet symbol instead.",
+                    state.display_name
+                ),
+            ),
+            RemoveChoice::DeleteFile if !blockers.other_parents.is_empty() => (
+                ErrorNotice::delete,
+                format!(
+                    "\"{}\" was not deleted: it is also placed by {}. Remove those sheet \
+                     symbols first.",
+                    state.display_name,
+                    blockers.parent_names()
+                ),
+            ),
+            RemoveChoice::DeleteFile
+                if blockers.unknown.is_some() && !state.target_path.is_dir() =>
+            {
+                (
+                    ErrorNotice::delete,
+                    format!(
+                        "\"{}\" was not deleted: whether another sheet places it cannot be ruled \
+                     out ({}). Try again once the project has been read, or exclude it instead.",
+                        state.display_name,
+                        blockers.unknown.as_deref().unwrap_or_default()
+                    ),
+                )
+            }
+            _ => return false,
+        };
+        crate::diagnostics::log_warning(&why);
+        self.document_state.error_notice = Some(notice(why));
+        // Into the Messages panel snapshot now, whichever path asked.
+        self.refresh_panel_ctx();
+        true
+    }
+
     /// Folder holding the `.snxprj` that owns the tree row at `tree_path`.
     fn project_root_for_tree_path(&self, tree_path: &[usize]) -> Option<std::path::PathBuf> {
         let project = self.document_state.projects.get(*tree_path.first()?)?;
@@ -85,7 +137,7 @@ impl Signex {
     /// library lives outside it and belongs to other projects too, so a
     /// refusal is surfaced to the user rather than only logged. This
     /// holds even when the dialog state's `is_outside_project` is wrong.
-    fn delete_project_owned_target(&mut self, state: &crate::app::RemoveDialogState) {
+    fn delete_project_owned_target(&mut self, state: &crate::app::RemoveDialogState) -> bool {
         // F23 — three cases:
         //   1. Regular file (sheets, pcbs, primitives) → remove_file.
         //   2. `.snxlib` directory package → remove_dir_all.
@@ -100,14 +152,17 @@ impl Signex {
             Ok(false) => {
                 // Orphan entry: nothing on disk, but a tab may still hold it (#736).
                 self.drop_deleted_documents(target, fold);
-                return;
+                return true;
             }
             Err(e) => {
                 crate::diagnostics::log_error(
                     "Could not check whether the project file exists",
                     &anyhow::anyhow!("{}: {e}", target.display()),
                 );
-                return;
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                    format!("Could not delete \"{}\": {e}", state.display_name),
+                ));
+                return false;
             }
         }
         let root = self.project_root_for_tree_path(&state.tree_path);
@@ -121,7 +176,7 @@ impl Signex {
                      it was not deleted from disk. It has only been removed from the project.",
                     state.display_name
                 )));
-            return;
+            return true;
         }
         // A write still running for this file would recreate it after the
         // delete; let it finish first (same bounded wait as rename).
@@ -133,7 +188,10 @@ impl Signex {
         };
         match result {
             // The file is gone: forget any document still held for it (#736).
-            Ok(()) => self.drop_deleted_documents(target, fold),
+            Ok(()) => {
+                self.drop_deleted_documents(target, fold);
+                true
+            }
             Err(e) => {
                 crate::diagnostics::log_error(
                     "Failed to delete project file",
@@ -142,6 +200,7 @@ impl Signex {
                 self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
                     format!("Could not delete \"{}\": {e}", state.display_name),
                 ));
+                false
             }
         }
     }
@@ -177,7 +236,9 @@ impl Signex {
     /// Forget the in-memory documents of a file (or `.snxlib` directory)
     /// the user just deleted. A parked dirty engine or draft would
     /// otherwise survive in `dirty_paths` and be written back by Save All.
-    fn drop_deleted_documents(&mut self, deleted: &std::path::Path, fold: CaseFold) {
+    pub(crate) fn drop_deleted_documents(&mut self, deleted: &std::path::Path, fold: CaseFold) {
+        // The file is gone: a replace that read it earlier must not bring it back.
+        self.document_state.note_document_written_behind_engines();
         let gone = |p: &std::path::PathBuf| path_is_under(p, deleted, fold);
         let dead: Vec<_> = self
             .document_state
@@ -210,6 +271,15 @@ impl Signex {
         choice: crate::app::RemoveChoice,
     ) -> iced::Task<Message> {
         use crate::app::RemoveChoice;
+
+        // Refused before the unsaved-edits prompt, so Discard is never offered
+        // for a removal that would not happen.
+        if let Some(dialog) = self.ui_state.remove_dialog.clone()
+            && self.refuse_remove(&dialog, choice)
+        {
+            self.ui_state.remove_dialog = None;
+            return iced::Task::none();
+        }
 
         // Excluding a document (or a library / folder holding documents) with
         // unsaved edits asks first (#738): the modal stays open and moves to
@@ -258,6 +328,25 @@ impl Signex {
             return iced::Task::none();
         }
 
+        // A restore still running for a file being deleted would write it
+        // back (or leave a stray file) when its worker finishes.
+        if choice == RemoveChoice::DeleteFile
+            && let Some(dialog) = self.ui_state.remove_dialog.as_ref()
+            && let Some(restoring) = self
+                .document_state
+                .pending_restores
+                .find_under(&dialog.target_path)
+        {
+            let detail = format!(
+                "A History restore of {} is still running, so {} was not deleted. Delete it again once the restore has finished.",
+                restoring.display(),
+                dialog.display_name
+            );
+            crate::diagnostics::log_warning(&detail);
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(detail));
+            return iced::Task::none();
+        }
+
         let Some(state) = self.ui_state.remove_dialog.take() else {
             return iced::Task::none();
         };
@@ -270,11 +359,7 @@ impl Signex {
         &self,
         target: &std::path::Path,
     ) -> Option<std::path::PathBuf> {
-        self.document_state
-            .pending_opens
-            .iter()
-            .find(|p| p.starts_with(target))
-            .cloned()
+        self.document_state.pending_opens.find_under(target)
     }
 
     /// Carry out a confirmed Remove: close the file's tabs, delete it from
@@ -288,6 +373,9 @@ impl Signex {
         let Some(state) = self.repointed_dialog(state) else {
             return iced::Task::none();
         };
+        if self.refuse_remove(&state, choice) {
+            return iced::Task::none();
+        }
 
         // Close any tab backed by this file before we touch disk or
         // drop it from the project's in-memory list — otherwise the
@@ -303,10 +391,19 @@ impl Signex {
             //   3. Orphan entry (file/dir missing on disk) → no-op,
             //      Exclude semantic falls through naturally so the
             //      LibraryEntry / SheetEntry is still pruned below.
-            self.delete_project_owned_target(&state);
-            // Orphan target: silently fall through. The user's intent
-            // ("get this row out of the project") is satisfied by the
-            // in-memory entry pruning below.
+            // A failed disk delete keeps the project entry: pruning it would
+            // hide a file that is still on disk. Orphan targets and the
+            // shared-library refusal fall through to the prune below.
+            // The tabs were already closed above (before the delete), so on
+            // failure they stay closed even though the file is kept; unsaved
+            // edits were gated by the unsaved prompt, so nothing is lost.
+            if !self.delete_project_owned_target(&state) {
+                return if close_tasks.is_empty() {
+                    iced::Task::none()
+                } else {
+                    iced::Task::batch(close_tasks)
+                };
+            }
         }
 
         // Drop the sheet from the *owning* project's in-memory data so
@@ -319,28 +416,28 @@ impl Signex {
         let owner_idx = state.tree_path.first().copied();
         let mut mutated = false;
         let mut project_path: Option<std::path::PathBuf> = None;
-        if let Some(filename) = state
-            .target_path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .map(|s| s.to_string())
-            && let Some(idx) = owner_idx
+        if let Some(idx) = owner_idx
             && let Some(loaded) = self.document_state.projects.get_mut(idx)
         {
             project_path = Some(loaded.path.clone());
+            // By resolved path, not file name: a sheet registered from a
+            // subdirectory is `sub/Power.snxsch` (#1367).
+            let fold = loaded.case_fold;
+            let dir = loaded.dir().to_path_buf();
+            let is_target = |entry: &str| entry_resolves_to(&dir, entry, &state.target_path, fold);
             let before = loaded.data.sheets.len();
             loaded
                 .data
                 .sheets
-                .retain(|entry| entry.filename != filename);
+                .retain(|entry| !is_target(&entry.filename));
             if loaded.data.sheets.len() != before {
                 mutated = true;
             }
-            if loaded.data.schematic_root.as_deref() == Some(filename.as_str()) {
+            if loaded.data.schematic_root.as_deref().is_some_and(is_target) {
                 loaded.data.schematic_root = None;
                 mutated = true;
             }
-            if loaded.data.pcb_file.as_deref() == Some(filename.as_str()) {
+            if loaded.data.pcb_file.as_deref().is_some_and(is_target) {
                 loaded.data.pcb_file = None;
                 mutated = true;
             }

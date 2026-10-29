@@ -18,7 +18,7 @@ use crate::alternate_symbol::AlternateSymbol;
 use crate::component::{ComponentRow, PinPadOverride};
 use crate::lifecycle::LifecycleState;
 use crate::manufacturer::{DistributorListing, ManufacturerPart};
-use crate::param::ParamMap;
+use crate::param::{ParamMap, ParamValue};
 
 /// Field-level changed flags + grouped detail. Mirrors plan §6 step 1.7.
 ///
@@ -39,6 +39,7 @@ pub struct RowDiff {
     pub datasheet_changed: bool,
     pub state_changed: bool,
     pub plm_changed: bool,
+    pub description_changed: bool,
 
     /// Detail rows — populated only for the dimensions actually changed.
     pub parameters: ParameterDiff,
@@ -64,10 +65,20 @@ pub struct PinMapDiff {
 }
 
 /// Identity-keyed diff over a list — `String` keys (e.g. `manufacturer:mpn`).
+/// `changed` holds `(key, old, new)` for an entry present on both sides whose
+/// other fields differ (an alternate's status or notes, a listing's URL or
+/// minimum order quantity), each side rendered as a short summary.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ListDiff {
     pub added: Vec<String>,
     pub removed: Vec<String>,
+    pub changed: Vec<(String, String, String)>,
+}
+
+impl ListDiff {
+    fn is_empty(&self) -> bool {
+        self.added.is_empty() && self.removed.is_empty() && self.changed.is_empty()
+    }
 }
 
 /// Alternate-symbol diff keyed by the bound symbol's `library_id/uuid`.
@@ -154,13 +165,13 @@ pub fn diff_rows(a: &ComponentRow, b: &ComponentRow) -> RowDiff {
             || !parameters.removed.is_empty()
             || !parameters.changed.is_empty(),
         mpn_changed: mpn_key(&a.primary_mpn) != mpn_key(&b.primary_mpn),
-        alternates_changed: !alternates_detail.added.is_empty()
-            || !alternates_detail.removed.is_empty(),
+        alternates_changed: !alternates_detail.is_empty(),
         alternate_symbols_changed: !alternate_symbols_detail.is_empty(),
-        supply_changed: !supply_detail.added.is_empty() || !supply_detail.removed.is_empty(),
+        supply_changed: !supply_detail.is_empty(),
         datasheet_changed: a.documents() != b.documents(),
         state_changed: lifecycle_detail.from.is_some(),
         plm_changed: a.plm != b.plm,
+        description_changed: a.description != b.description,
         parameters,
         pin_map,
         alternates_detail,
@@ -190,13 +201,40 @@ fn diff_parameters(a: &ParamMap, b: &ParamMap) -> ParameterDiff {
         let av = &a[*k];
         let bv = &b[*k];
         if av != bv {
-            changed.push(((*k).clone(), av.display(), bv.display()));
+            let (old, new) = shown_pair(av, bv);
+            changed.push(((*k).clone(), old, new));
         }
     }
     ParameterDiff {
         added,
         removed,
         changed,
+    }
+}
+
+/// The two sides of a changed parameter as the diff shows them. The
+/// display form rounds to 15 digits and reads `{4.7, "kΩ"}` and
+/// `{4700, "ohm"}` alike, so a real change can display as `X -> X`;
+/// when the two displays are equal the raw stored values are shown
+/// instead, so a change never reads as no change.
+fn shown_pair(a: &ParamValue, b: &ParamValue) -> (String, String) {
+    let (da, db) = (a.display(), b.display());
+    if da != db {
+        return (da, db);
+    }
+    let (ra, rb) = (raw_display(a), raw_display(b));
+    if ra != rb {
+        return (ra, rb);
+    }
+    (format!("{a:?}"), format!("{b:?}"))
+}
+
+/// A parameter exactly as stored: the number and the unit string, with no
+/// prefix scaling or rounding.
+fn raw_display(v: &ParamValue) -> String {
+    match v {
+        ParamValue::Measurement { value, unit } => format!("{value} {unit}"),
+        other => other.display(),
     }
 }
 
@@ -245,13 +283,54 @@ fn diff_pin_map(a: &[PinPadOverride], b: &[PinPadOverride]) -> PinMapDiff {
 }
 
 fn diff_alternates(a: &[ManufacturerPart], b: &[ManufacturerPart]) -> ListDiff {
-    let to_key = mpn_key;
-    let a_keys: BTreeSet<String> = a.iter().map(to_key).collect();
-    let b_keys: BTreeSet<String> = b.iter().map(to_key).collect();
-    ListDiff {
-        added: b_keys.difference(&a_keys).cloned().collect(),
-        removed: a_keys.difference(&b_keys).cloned().collect(),
+    diff_keyed(a, b, mpn_key, |p| {
+        format!("{:?} {}", p.status, p.notes.as_deref().unwrap_or(""))
+    })
+}
+
+/// Diff two lists by identity key. An entry on both sides whose values
+/// differ lands in `changed` instead of vanishing from the diff; `summary`
+/// only renders the two sides for display. Entries sharing a key are
+/// compared as a group, in order, so duplicates are not collapsed.
+fn diff_keyed<T: PartialEq>(
+    a: &[T],
+    b: &[T],
+    key: impl Fn(&T) -> String,
+    summary: impl Fn(&T) -> String,
+) -> ListDiff {
+    let group = |list: &[T]| -> BTreeMap<String, Vec<usize>> {
+        let mut map: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+        for (i, t) in list.iter().enumerate() {
+            map.entry(key(t)).or_default().push(i);
+        }
+        map
+    };
+    let show = |list: &[T], idx: &[usize]| {
+        idx.iter()
+            .map(|&i| summary(&list[i]))
+            .collect::<Vec<_>>()
+            .join("; ")
+    };
+    let (a_map, b_map) = (group(a), group(b));
+    let mut out = ListDiff::default();
+    for (k, new) in &b_map {
+        match a_map.get(k) {
+            None => out.added.push(k.clone()),
+            Some(old) => {
+                let same =
+                    old.len() == new.len() && old.iter().zip(new).all(|(&i, &j)| a[i] == b[j]);
+                if !same {
+                    out.changed.push((k.clone(), show(a, old), show(b, new)));
+                }
+            }
+        }
     }
+    out.removed = a_map
+        .keys()
+        .filter(|k| !b_map.contains_key(*k))
+        .cloned()
+        .collect();
+    out
 }
 
 fn diff_alternate_symbols(a: &[AlternateSymbol], b: &[AlternateSymbol]) -> AlternateSymbolDiff {
@@ -290,13 +369,18 @@ fn diff_alternate_symbols(a: &[AlternateSymbol], b: &[AlternateSymbol]) -> Alter
 }
 
 fn diff_supply(a: &[DistributorListing], b: &[DistributorListing]) -> ListDiff {
-    let to_key = |s: &DistributorListing| format!("{}:{}", s.distributor, s.sku);
-    let a_keys: BTreeSet<String> = a.iter().map(to_key).collect();
-    let b_keys: BTreeSet<String> = b.iter().map(to_key).collect();
-    ListDiff {
-        added: b_keys.difference(&a_keys).cloned().collect(),
-        removed: a_keys.difference(&b_keys).cloned().collect(),
-    }
+    diff_keyed(
+        a,
+        b,
+        |s| format!("{}:{}", s.distributor, s.sku),
+        |s| {
+            format!(
+                "{} moq={}",
+                s.url.as_deref().unwrap_or(""),
+                s.moq.map(|m| m.to_string()).unwrap_or_default()
+            )
+        },
+    )
 }
 
 fn diff_lifecycle(a: LifecycleState, b: LifecycleState) -> LifecycleDiff {
@@ -329,6 +413,7 @@ mod tests {
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::url(""),
             datasheet_label: String::new(),
+            description: String::new(),
             more_datasheets: Vec::new(),
             state: LifecycleState::Released,
             symbol_ref: PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
@@ -402,6 +487,74 @@ mod tests {
     }
 
     #[test]
+    fn a_disqualified_alternate_is_a_change() {
+        use crate::manufacturer::AlternateStatus;
+        let mut a = row();
+        let mut b = row();
+        a.alternates.push(ManufacturerPart {
+            status: AlternateStatus::Approved,
+            ..ManufacturerPart::draft("Acme", "ALT")
+        });
+        b.alternates.push(ManufacturerPart {
+            status: AlternateStatus::Disqualified,
+            notes: Some("failed qualification".into()),
+            ..ManufacturerPart::draft("Acme", "ALT")
+        });
+        let d = diff_rows(&a, &b);
+        assert!(d.alternates_changed);
+        assert!(d.alternates_detail.added.is_empty());
+        assert_eq!(d.alternates_detail.changed.len(), 1);
+        assert_eq!(d.alternates_detail.changed[0].0, "Acme:ALT");
+    }
+
+    #[test]
+    fn none_and_empty_notes_are_different_values() {
+        let mut a = row();
+        let mut b = row();
+        a.alternates.push(ManufacturerPart::draft("Acme", "ALT"));
+        b.alternates.push(ManufacturerPart {
+            notes: Some(String::new()),
+            ..ManufacturerPart::draft("Acme", "ALT")
+        });
+        assert!(diff_rows(&a, &b).alternates_changed);
+    }
+
+    #[test]
+    fn duplicate_alternate_keys_are_compared_not_collapsed() {
+        use crate::manufacturer::AlternateStatus;
+        let dup = |status| ManufacturerPart {
+            status,
+            ..ManufacturerPart::draft("Acme", "ALT")
+        };
+        let mut a = row();
+        let mut b = row();
+        a.alternates = vec![
+            dup(AlternateStatus::Approved),
+            dup(AlternateStatus::Approved),
+        ];
+        b.alternates = vec![
+            dup(AlternateStatus::Approved),
+            dup(AlternateStatus::Disqualified),
+        ];
+        assert!(diff_rows(&a, &b).alternates_changed);
+        assert!(!diff_rows(&a, &a.clone()).alternates_changed);
+    }
+
+    #[test]
+    fn a_listing_url_or_moq_change_is_a_supply_change() {
+        let mut a = row();
+        let mut b = row();
+        a.supply.push(DistributorListing::new("DigiKey", "DK-1"));
+        let mut moved = DistributorListing::new("DigiKey", "DK-1");
+        moved.moq = Some(4000);
+        b.supply.push(moved);
+        let d = diff_rows(&a, &b);
+        assert!(d.supply_changed);
+        assert_eq!(d.supply_detail.changed.len(), 1);
+        assert!(diff_rows(&a, &a.clone()).supply_detail.changed.is_empty());
+    }
+
+    #[test]
     fn diff_detects_pin_map_added_and_changed() {
         let mut a = row();
         let mut b = row();
@@ -413,6 +566,62 @@ mod tests {
         assert_eq!(d.pin_map.changed.len(), 1);
         assert_eq!(d.pin_map.added.len(), 1);
         assert_eq!(auto_bump_kind(&d), BumpKind::Major);
+    }
+
+    /// A legacy row and its canonical form are different stored values
+    /// that print alike. The diff must not show them as `X -> X`.
+    #[test]
+    fn a_legacy_to_canonical_change_shows_the_raw_stored_values() {
+        let mut a = row();
+        let mut b = row();
+        a.parameters.insert(
+            "value".into(),
+            ParamValue::Measurement {
+                value: 4.7,
+                unit: "kΩ".into(),
+            },
+        );
+        b.parameters.insert(
+            "value".into(),
+            ParamValue::Measurement {
+                value: 4700.0,
+                unit: "ohm".into(),
+            },
+        );
+        let d = diff_rows(&a, &b);
+        let (_, old, new) = &d.parameters.changed[0];
+        assert_eq!((old.as_str(), new.as_str()), ("4.7 kΩ", "4700 ohm"));
+    }
+
+    /// Two values that differ past the 15th digit display alike too.
+    #[test]
+    fn a_change_past_the_displayed_digits_shows_the_raw_values() {
+        let mut a = row();
+        let mut b = row();
+        let m = |value| ParamValue::Measurement {
+            value,
+            unit: "ohm".into(),
+        };
+        a.parameters.insert("value".into(), m(1.234567890123456));
+        b.parameters.insert("value".into(), m(1.234567890123457));
+        let d = diff_rows(&a, &b);
+        let (_, old, new) = &d.parameters.changed[0];
+        assert_ne!(old, new);
+    }
+
+    #[test]
+    fn a_visible_change_keeps_the_engineering_display() {
+        let mut a = row();
+        let mut b = row();
+        let m = |value| ParamValue::Measurement {
+            value,
+            unit: "ohm".into(),
+        };
+        a.parameters.insert("value".into(), m(4700.0));
+        b.parameters.insert("value".into(), m(10_000.0));
+        let d = diff_rows(&a, &b);
+        let (_, old, new) = &d.parameters.changed[0];
+        assert_eq!((old.as_str(), new.as_str()), ("4.7 kΩ", "10 kΩ"));
     }
 
     #[test]
@@ -545,6 +754,16 @@ mod tests {
         b.datasheet = DatasheetRef::url("b.pdf");
         let d = diff_rows(&a, &b);
         assert!(d.datasheet_changed);
+    }
+
+    #[test]
+    fn diff_detects_description_change() {
+        let a = row();
+        let mut b = row();
+        b.description = "100 nF".into();
+        assert!(diff_rows(&a, &b).description_changed);
+        assert!(!diff_rows(&a, &row()).description_changed);
+        assert_eq!(auto_bump_kind(&diff_rows(&a, &b)), BumpKind::Minor);
     }
 
     #[test]

@@ -2,7 +2,7 @@
 
 use iced::mouse;
 use iced::widget::canvas;
-use iced::widget::{Column, Row, Space, button, container, row, scrollable, svg, text};
+use iced::widget::{Column, Space, button, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Theme};
 use iced_aw::{NumberInput, Wrap};
 use signex_types::coord::Unit;
@@ -15,16 +15,18 @@ pub mod components_panel;
 mod element_properties;
 mod footprint_editor_properties;
 pub mod history;
+mod scroll;
+pub(crate) use scroll::panel_scrollable;
 mod properties_parameters;
 mod symbol_editor_properties;
 
 // v0.14.x -- domain modules split out of the former single-file panels module.
 mod color_field;
-mod components;
 mod context;
 mod footprint_context;
 mod library;
 mod messages;
+mod multi_selection;
 mod navigator;
 mod net_class_panel;
 mod numeric_draft;
@@ -36,6 +38,12 @@ mod status;
 mod symbol_context;
 mod widgets;
 
+#[cfg(test)]
+mod planned_tests;
+
+pub(crate) use element_properties::{
+    BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
+};
 use element_properties::{
     view_child_sheet_properties, view_drawing_properties, view_selected_element_properties,
 };
@@ -64,33 +72,33 @@ use symbol_editor_properties::view_symbol_editor_properties;
 // -- Re-exports: keep the `crate::panels::*` public surface stable and the
 //    sibling `super::` / `crate::panels::` paths resolving after the split. --
 pub use color_field::{ColorFieldProps, color_field};
-pub(super) use components::view_components;
 pub use context::{PanelContext, SymbolChoiceItem};
 pub use footprint_context::{
     ArrayKindSummary, ArrayParamField, ArraySummary, BgaConfigSummary, CutoutSummary,
     FootprintEditorPanelContext, FootprintLibInternalRow, FootprintLibSibling, FootprintModeKind,
     FootprintPadSummary, FootprintSelectedSilkSummary, FootprintSketchEntitySummary,
     FootprintSolveSummary, KeepoutKindFlag, KeepoutSummary, NumberingSchemeKindUi,
-    OverConstraintSummary, PadShapeParamSummary, PourSummary, SilkKindGeometry,
-    SketchPadAttrSummary, SnapOptionFlag,
+    OverConstraintSummary, PadShapeParamSummary, PourSummary, RejectedConflictSummary,
+    SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
-pub use library::{LibraryRowDetail, LibrarySymbolEntry};
+pub use library::LibraryRowDetail;
 pub(super) use library::{view_footprint_library, view_library_row_properties, view_sch_library};
 pub use messages::{PanelMsg, SheetFrameEdit};
+pub use multi_selection::{MultiEditMsg, MultiField, edit_from_text as multi_edit_from_text};
 pub use navigator::NavigatorModel;
 pub use net_class_panel::{
-    LabelClassPick, NO_NET_CLASS, NetClassDraft, NetClassField, NetClassMsg, NetClassPanel,
+    LabelClassPick, NetClassChoice, NetClassDraft, NetClassField, NetClassMsg, NetClassPanel,
     net_class_choice, net_class_choices, view_net_classes_section,
 };
 pub use palette::PanelPalette;
 pub use paper::{PageFormatMode, PageOrigin, SheetColor, paper_dimensions, paper_size_options};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(super) use projects::{view_navigator, view_projects};
-pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind};
+pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind, PrePlacementStyle};
 pub(super) use properties::{
-    LABEL_W, PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_PORTION, PROPERTY_ROW_PAD_X, view_properties,
+    PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_PORTION, PROPERTY_ROW_PAD_X, view_properties,
 };
-pub use status::{ErcDiagnosticEntry, ErcSeverityLite};
+pub use status::{ErcDiagnosticEntry, ErcSeverityLite, ErcWaiverEntry};
 pub(super) use status::{view_erc, view_messages};
 pub use symbol_context::{
     GraphicFieldId, GraphicKindSummary, GraphicSummary, SymbolDisplayOptions,
@@ -234,13 +242,10 @@ pub type CollapsedSections = std::collections::HashSet<String>;
 
 /// Render a panel's content.
 pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    // Components has its own split scrollables — don't wrap again
-    if kind == PanelKind::Components {
-        return view_components(ctx);
-    }
-
     let content = match kind {
-        PanelKind::Components => return view_components(ctx),
+        // The Components panel is drawn by `components_panel::view` (the dock and the
+        // detached window both route it there); nothing to show here.
+        PanelKind::Components => iced::widget::Space::new().into(),
         PanelKind::Projects => view_projects(ctx),
         PanelKind::Navigator => view_navigator(ctx),
         PanelKind::Properties => view_properties(ctx),
@@ -262,9 +267,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Wiki => view_stub("Wiki", "Project documentation wiki", ctx),
         PanelKind::Library => view_stub(
             "Library",
-            "Library panel — see Signex.library state. Use the dock host's Library panel \
-             rendering path; this stub fires only if Library is mounted via PanelMsg \
-             instead of LibraryMessage routing.",
+            "Open a library from the Projects panel to browse it.",
             ctx,
         ),
         PanelKind::SchLibrary => view_sch_library(ctx),
@@ -272,5 +275,5 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::History => return history::view_history(ctx),
     };
 
-    scrollable(content).width(Length::Fill).into()
+    panel_scrollable(content).into()
 }

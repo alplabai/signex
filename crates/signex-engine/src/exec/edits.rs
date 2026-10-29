@@ -37,6 +37,36 @@ impl Engine {
         Ok(CommandResult::changed(patch_pair))
     }
 
+    fn set_wire_width(
+        &mut self,
+        before: SchematicSheet,
+        wire_id: uuid::Uuid,
+        width_mm: f64,
+    ) -> Result<CommandResult, EngineError> {
+        if !width_mm.is_finite() || width_mm < 0.0 {
+            return Err(EngineError::InvalidWireWidth(width_mm));
+        }
+        let changed = self
+            .document
+            .wires
+            .iter_mut()
+            .find(|w| w.uuid == wire_id)
+            .is_some_and(|w| {
+                let differs = (w.stroke_width - width_mm).abs() > 1e-9;
+                w.stroke_width = width_mm;
+                differs
+            });
+        if !changed {
+            return Ok(CommandResult::unchanged());
+        }
+        let patch_pair = PatchPair {
+            semantic: SemanticPatch::StyleUpdated,
+            document: DocumentPatch::WIRES,
+        };
+        self.record_history(before, patch_pair);
+        Ok(CommandResult::changed(patch_pair))
+    }
+
     pub(crate) fn exec_edits(
         &mut self,
         before: SchematicSheet,
@@ -222,6 +252,25 @@ impl Engine {
             Command::SetSymbolDnp { symbol_id, dnp } => {
                 self.set_symbol_flag(before, symbol_id, |s| &mut s.dnp, dnp)
             }
+            Command::SetSymbolFlag {
+                symbol_id,
+                flag,
+                value,
+            } => match flag {
+                SymbolFlag::InBom => {
+                    self.set_symbol_flag(before, symbol_id, |s| &mut s.in_bom, value)
+                }
+                SymbolFlag::OnBoard => {
+                    self.set_symbol_flag(before, symbol_id, |s| &mut s.on_board, value)
+                }
+            },
+            Command::SetWireWidth { wire_id, width_mm } => {
+                self.set_wire_width(before, wire_id, width_mm)
+            }
+            Command::SetSymbolBodyStyle {
+                symbol_id,
+                body_style,
+            } => self.set_symbol_body_style(before, symbol_id, body_style),
             Command::UpdateSymbolTextSize {
                 symbol_id,
                 field,

@@ -1,18 +1,20 @@
 format = "snxfpt/1"
 file_uuid = "019df45d-af64-7bb2-b787-add74d246d40"
-display_name = "R0805"
+display_name = "Chip-0805"
 created = "2026-05-04T19:01:13Z"
 updated = "2026-05-04T19:01:13Z"
 
 [[footprints]]
 uuid = "019df45d-af63-7823-b5c3-01594028ccef"
-name = "R0805"
+name = "Chip-0805"
 anchor = [
     0.0,
     0.0,
 ]
 pads_tsv = '''
 number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
+1	Smd	rect	1	1.25	-1	0	0	Top Layer|Top Solder|Top Paste			0.05	0
+2	Smd	rect	1	1.25	1	0	0	Top Layer|Top Solder|Top Paste			0.05	0
 '''
 silk_f = []
 silk_b = []

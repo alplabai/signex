@@ -48,6 +48,10 @@ pub enum TabKind {
     /// [`crate::library::state::LibraryState::library_browsers`]
     /// keyed by the same path that lives on `TabInfo.path`.
     LibraryBrowser(PathBuf),
+    /// The project's `.snxprj` opened as a Project tab (#1202). Tab state
+    /// lives in [`crate::app::DocumentState::project_tabs`] keyed by this
+    /// id; `TabInfo.path` is the `.snxprj` path.
+    Project(super::state::ProjectId),
 }
 
 impl TabKind {
@@ -83,6 +87,14 @@ impl TabKind {
     pub fn as_library_browser(&self) -> Option<&PathBuf> {
         match self {
             TabKind::LibraryBrowser(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    /// `Some(id)` if this tab is a project's Project tab.
+    pub fn as_project(&self) -> Option<super::state::ProjectId> {
+        match self {
+            TabKind::Project(id) => Some(*id),
             _ => None,
         }
     }
@@ -255,6 +267,9 @@ pub struct SymbolDocument {
     /// Zero) render on every part; pins with `part_number == active_part`
     /// render on the active part only.
     pub active_part: u8,
+    /// Which body of a De Morgan symbol the canvas shows and new items are
+    /// stamped with. Items tagged body 0 show on both.
+    pub active_body: signex_types::schematic::BodyStyle,
     pub tool: crate::library::editor::symbol::canvas::SymbolTool,
     pub selected: Option<crate::library::editor::symbol::state::SymbolSelection>,
     pub ai_preview: Option<crate::library::editor::symbol::ai_stub::AiPinoutPreview>,
@@ -348,6 +363,11 @@ pub struct SymbolDocument {
 }
 
 impl SymbolDocument {
+    /// The unit and body the editor currently shows.
+    pub fn view(&self) -> crate::library::editor::symbol::state::PartView {
+        crate::library::editor::symbol::state::PartView::new(self.active_part, self.active_body)
+    }
+
     const DEFAULT_SYMBOL_VIEWPORT_WIDTH: f32 = 800.0;
     const DEFAULT_SYMBOL_VIEWPORT_HEIGHT: f32 = 500.0;
 
@@ -361,6 +381,7 @@ impl SymbolDocument {
             file,
             active_idx: 0,
             active_part: 1,
+            active_body: signex_types::schematic::BodyStyle::Normal,
             tool: crate::library::editor::symbol::canvas::SymbolTool::Select,
             selected: None,
             ai_preview: None,
@@ -424,7 +445,7 @@ impl SymbolDocument {
 }
 
 /// Per-tab state for an open `.snxfpt` document. Mirrors the
-/// footprint-editing fields on `ComponentEditorState` but keyed by
+/// footprint-editing fields on `ComponentPreviewState` but keyed by
 /// file path. Reuses the existing
 /// [`crate::library::editor::footprint::canvas::FootprintCanvas`] +
 /// [`crate::library::editor::footprint::state::FootprintEditorState`]
@@ -548,7 +569,7 @@ impl FootprintDocument {
         );
         if log_repairs && state.legacy_pad_stack_offered {
             crate::diagnostics::log_warning(format!(
-                "{}: every sketch pad has paste disabled and direct connect (the stack builds                  before #1052 wrote), so none gets a paste stencil opening; the Properties                  panel offers to restore it",
+                "{}: every sketch pad has paste disabled and direct connect (the stack builds before #1052 wrote), so none gets a paste stencil opening; the Properties panel offers to restore it",
                 path.display()
             ));
         }
@@ -864,6 +885,8 @@ pub enum Tool {
     Component,
     Text,
     NoConnect,
+    /// One click drops a junction dot at the snapped point.
+    Junction,
     /// Generic No-ERC directive (Altium's "Place No ERC").
     NoErcDirective,
     BusEntry,
@@ -876,6 +899,10 @@ pub enum Tool {
     Polyline,
     /// Two-click corner-to-corner hierarchical sheet symbol.
     Sheet,
+    /// One click on a sheet symbol's border places an entry (pin) there.
+    SheetEntry,
+    /// Two clicks measure the offset between two points (#1256). Read-only.
+    Measure,
 }
 
 impl std::fmt::Display for Tool {
@@ -888,6 +915,7 @@ impl std::fmt::Display for Tool {
             Tool::Component => write!(f, "Place Component"),
             Tool::Text => write!(f, "Place Text"),
             Tool::NoConnect => write!(f, "Place No Connect"),
+            Tool::Junction => write!(f, "Place Junction"),
             Tool::NoErcDirective => write!(f, "Place No ERC"),
             Tool::BusEntry => write!(f, "Place Bus Entry"),
             Tool::Line => write!(f, "Draw Line"),
@@ -896,6 +924,8 @@ impl std::fmt::Display for Tool {
             Tool::Arc => write!(f, "Draw Arc"),
             Tool::Polyline => write!(f, "Draw Polygon"),
             Tool::Sheet => write!(f, "Place Sheet"),
+            Tool::SheetEntry => write!(f, "Place Sheet Entry"),
+            Tool::Measure => write!(f, "Measure Distance"),
         }
     }
 }

@@ -28,13 +28,14 @@
 //! the legacy schema in favour of user-defined columns.
 
 pub mod project;
+mod symbol_index;
 mod symbol_problems;
 
 pub use symbol_problems::SymbolFileProblem;
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 use uuid::Uuid;
 
@@ -111,6 +112,9 @@ pub struct LocalGitAdapter {
     git_lock: Mutex<()>,
     /// `.snxsym` containers the last symbol scan could not read (#690).
     symbol_problems: Mutex<symbol_problems::SymbolProblemLedger>,
+    /// uuid -> `.snxsym` container path, a hint only: every use re-reads
+    /// the file and falls back to a rescan on mismatch (#1362).
+    symbol_index: symbol_index::SymbolIndex,
     /// `.snxfpt` files already warned about, keyed by (path, mtime) (#924).
     skipped_footprints: Mutex<std::collections::HashSet<(PathBuf, std::time::SystemTime)>>,
     /// Stamp and content hash of the `.snxlib` text behind `library_file`
@@ -123,6 +127,12 @@ pub struct LocalGitAdapter {
     warned_state: Mutex<Option<disk_sync::DiskState>>,
     /// The "cannot lock on this filesystem" warning was logged (#832).
     write_lock_warned: std::sync::atomic::AtomicBool,
+    /// How many plain-text database token warnings this adapter logged: 0
+    /// or 1 (see `plain_token`).
+    plain_token_warnings: std::sync::atomic::AtomicUsize,
+    /// Encoded row lines from the last row write (#416). Lock order: after
+    /// `library_file` and `disk_stamp`.
+    row_lines: Mutex<crate::library_file::RowLines>,
 }
 
 impl LocalGitAdapter {
@@ -155,6 +165,7 @@ impl LocalGitAdapter {
         fs::create_dir_all(&root_dir)?;
 
         let library_file = LibraryFile {
+            layout: Default::default(),
             manifest: snx_manifest,
             tables: std::collections::BTreeMap::new(),
         };
@@ -220,10 +231,13 @@ impl LocalGitAdapter {
             manifest_synth,
             git_lock: Mutex::new(()),
             symbol_problems: Mutex::default(),
+            symbol_index: Default::default(),
             skipped_footprints: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
             write_lock_warned: Default::default(),
+            plain_token_warnings: Default::default(),
+            row_lines: Mutex::default(),
         })
     }
 
@@ -264,10 +278,13 @@ impl LocalGitAdapter {
             manifest_synth,
             git_lock: Mutex::new(()),
             symbol_problems: Mutex::default(),
+            symbol_index: Default::default(),
             skipped_footprints: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
             write_lock_warned: Default::default(),
+            plain_token_warnings: Default::default(),
+            row_lines: Mutex::default(),
         })
     }
 
@@ -369,10 +386,13 @@ impl LocalGitAdapter {
             manifest_synth,
             git_lock: Mutex::new(()),
             symbol_problems: Mutex::default(),
+            symbol_index: Default::default(),
             skipped_footprints: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
             write_lock_warned: Default::default(),
+            plain_token_warnings: Default::default(),
+            row_lines: Mutex::default(),
         })
     }
 
@@ -421,11 +441,24 @@ pub use write_lock::{
     write_lock_path,
 };
 mod helpers;
+pub use helpers::component_to_library_row;
 pub(crate) mod lfs;
+mod pinned_assets;
 mod primitives;
+mod row_edit;
 mod write_lock;
 
 use helpers::*;
+use row_edit::RowChange;
+
+#[cfg(test)]
+mod write_oracle_tests;
+
+#[cfg(test)]
+mod insert_row_tests;
+mod plain_token;
+#[cfg(test)]
+mod plain_token_tests;
 
 #[cfg(test)]
 mod tests {

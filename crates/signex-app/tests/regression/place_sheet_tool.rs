@@ -35,6 +35,7 @@ pub(crate) fn empty_sheet() -> SchematicSheet {
         title_block: HashMap::new(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
+        drawing_placements: Default::default(),
         frame: Default::default(),
         unknown: Default::default(),
         font_family: None,
@@ -188,6 +189,7 @@ fn defaults_are_unique_in_the_parent_and_the_project() {
         id,
         path: tmp.path().join("P.snxprj"),
         data: ProjectData {
+            description: None,
             name: "P".to_string(),
             dir: tmp.path().to_string_lossy().into_owned(),
             schematic_root: Some("root.snxsch".to_string()),
@@ -210,11 +212,13 @@ fn defaults_are_unique_in_the_parent_and_the_project() {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.tabs[0].project_id = Some(id);
 
@@ -250,6 +254,7 @@ fn defaults_are_unique_across_parents_of_one_project() {
         id,
         path: tmp.path().join("P.snxprj"),
         data: ProjectData {
+            description: None,
             name: "P".to_string(),
             dir: tmp.path().to_string_lossy().into_owned(),
             schematic_root: Some("root.snxsch".to_string()),
@@ -272,11 +277,13 @@ fn defaults_are_unique_across_parents_of_one_project() {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.tabs[0].project_id = Some(id);
     app.document_state.tabs[1].project_id = Some(id);

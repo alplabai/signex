@@ -27,6 +27,7 @@ fn symbol(uuid: uuid::Uuid, ref_text: TextProp) -> Symbol {
         mirror_x: false,
         mirror_y: false,
         unit: 1,
+        body_style: Default::default(),
         is_power: false,
         ref_text: Some(ref_text),
         val_text: None,
@@ -70,6 +71,7 @@ fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
         title_block: HashMap::new(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
+        drawing_placements: Default::default(),
         frame: Default::default(),
         font_family: None,
     }
@@ -108,6 +110,7 @@ fn dragging_the_reference_field_moves_drawn_text_and_hit_box() {
     let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
         dx: 10.0,
         dy: 5.0,
+        connections: Default::default(),
     }));
 
     let moved = app.document_state.engines[&path].document();
@@ -185,6 +188,7 @@ fn moved_tall_symbol_is_hit_on_its_library_body() {
     let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
         dx: 10.0,
         dy: 0.0,
+        connections: Default::default(),
     }));
 
     let moved = app.document_state.engines[&path].document();

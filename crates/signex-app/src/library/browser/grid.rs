@@ -5,10 +5,18 @@
 //! Extracted verbatim from the former single-file `browser` module.
 
 use super::columns::{ColumnKind, GridColumn, lifecycle_dot_color};
+use super::keyed::keyed;
+use super::size_sensor::sense_height;
+use super::window::{
+    BROWSER_HEADER_HEIGHT, BROWSER_ROW_HEIGHT, grid_scroll_id, library_key, visible_rows,
+};
 use super::*;
 use crate::library::dangling::DanglingSweep;
 use iced::widget::column;
 use signex_library::RefSlot;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// The read-only caches the grid cells draw from.
 pub(super) struct GridCaches<'a> {
@@ -57,26 +65,32 @@ pub(super) fn view_grid<'a>(
             // Wrap the header label in a borderless button so a click
             // toggles the sort. Stage 8 of `v0.9-snxlib-as-file-plan.md`.
             let library_for_sort = lib_pb.clone();
-            let header_btn = button(text(label_text).size(BROWSER_HEADER_SIZE).color(muted))
-                .padding([4, 6])
-                .on_press(LibraryMessage::BrowserSortColumn {
-                    library_path: library_for_sort,
-                    column_key,
-                })
-                .style(|_: &Theme, _| iced::widget::button::Style {
-                    background: None,
-                    text_color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.65),
-                    border: Border {
-                        width: 0.0,
-                        radius: 0.0.into(),
-                        color: iced::Color::TRANSPARENT,
-                    },
-                    ..iced::widget::button::Style::default()
-                });
+            let header_btn = button(
+                text(label_text)
+                    .size(BROWSER_HEADER_SIZE)
+                    .wrapping(iced::widget::text::Wrapping::None)
+                    .color(muted),
+            )
+            .padding([SP.s, 6.0])
+            .on_press(LibraryMessage::BrowserSortColumn {
+                library_path: library_for_sort,
+                column_key,
+            })
+            .style(|_: &Theme, _| iced::widget::button::Style {
+                background: None,
+                text_color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.65),
+                border: Border {
+                    width: 0.0,
+                    radius: 0.0.into(),
+                    color: iced::Color::TRANSPARENT,
+                },
+                ..iced::widget::button::Style::default()
+            });
             r = r.push(container(header_btn).width(Length::Fixed(c.width)));
         }
         container(r)
-            .padding([2, 4])
+            .padding([SP.xs, SP.s])
+            .height(Length::Fixed(BROWSER_HEADER_HEIGHT))
             .style(move |_: &Theme| iced::widget::container::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgba(
                     1.0, 1.0, 1.0, 0.04,
@@ -97,12 +111,23 @@ pub(super) fn view_grid<'a>(
             container(
                 text("No matching rows.")
                     .size(BROWSER_TEXT_SIZE)
+                    .wrapping(iced::widget::text::Wrapping::None)
                     .color(muted),
             )
-            .padding([12, 6]),
+            .padding([SP.l, 6.0]),
         );
     } else {
-        for r in rows {
+        // Window: only the rows near the viewport get widgets; spacers of
+        // the exact skipped height stand in for the rest (#1355).
+        let scroll = browser.grid_scroll;
+        let window = visible_rows(scroll, rows.len());
+        if window.start > 0 {
+            col = col
+                .push(Space::new().height(Length::Fixed(window.start as f32 * BROWSER_ROW_HEIGHT)));
+        }
+        for r in &rows[window.clone()] {
+            #[cfg(test)]
+            super::window::counters::ROWS_BUILT.with(|c| c.set(c.get() + 1));
             let row_id = RowId::from_uuid(r.row_id);
             let is_selected = selected == Some(row_id);
             // Lifecycle tinting — deprecated rows render with a faint
@@ -138,7 +163,7 @@ pub(super) fn view_grid<'a>(
                 .width(Length::Fixed(LIFECYCLE_DOT_GUTTER))
                 .height(Length::Fill)
                 .center_y(Length::Fill)
-                .padding([0, 4]);
+                .padding([0.0, SP.s]);
 
             let mut data_row = row![lifecycle_cell].spacing(0);
             for c in columns {
@@ -163,9 +188,14 @@ pub(super) fn view_grid<'a>(
                         theme_ext::text_secondary(tokens)
                     };
                     data_row = data_row.push(
-                        container(text(label).size(BROWSER_TEXT_SIZE).color(color))
-                            .padding([4, 6])
-                            .width(Length::Fixed(c.width)),
+                        container(
+                            text(label)
+                                .size(BROWSER_TEXT_SIZE)
+                                .wrapping(iced::widget::text::Wrapping::None)
+                                .color(color),
+                        )
+                        .padding([SP.s, 6.0])
+                        .width(Length::Fixed(c.width)),
                     );
                     continue;
                 }
@@ -177,9 +207,10 @@ pub(super) fn view_grid<'a>(
                         container(
                             text(prices.text(r))
                                 .size(BROWSER_TEXT_SIZE)
+                                .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
                         )
-                        .padding([4, 6])
+                        .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width)),
                     );
                     continue;
@@ -194,9 +225,10 @@ pub(super) fn view_grid<'a>(
                         container(
                             text(row_value)
                                 .size(BROWSER_TEXT_SIZE)
+                                .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
                         )
-                        .padding([4, 6])
+                        .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width)),
                     );
                     continue;
@@ -230,7 +262,7 @@ pub(super) fn view_grid<'a>(
                         );
                         data_row = data_row.push(
                             container(unbound_pick_button(label, kind, address, tokens))
-                                .padding([2, 2])
+                                .padding([SP.xs, SP.xs])
                                 .width(Length::Fixed(c.width)),
                         );
                         continue;
@@ -248,9 +280,14 @@ pub(super) fn view_grid<'a>(
                         (row_value, theme_ext::text_secondary(tokens))
                     };
                     data_row = data_row.push(
-                        container(text(row_value).size(BROWSER_TEXT_SIZE).color(color))
-                            .padding([4, 6])
-                            .width(Length::Fixed(c.width)),
+                        container(
+                            text(row_value)
+                                .size(BROWSER_TEXT_SIZE)
+                                .wrapping(iced::widget::text::Wrapping::None)
+                                .color(color),
+                        )
+                        .padding([SP.s, 6.0])
+                        .width(Length::Fixed(c.width)),
                     );
                     continue;
                 }
@@ -263,10 +300,44 @@ pub(super) fn view_grid<'a>(
                         container(
                             text(row_value)
                                 .size(BROWSER_TEXT_SIZE)
+                                .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
                         )
-                        .padding([4, 6])
+                        .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width)),
+                    );
+                    continue;
+                }
+
+                // A measurement is edited as a number, an SI prefix and
+                // its unit. A 90-110 px column cannot hold the number
+                // field and the prefix picker beside the cell's text, so
+                // the cell opens the Edit Component Details modal, which
+                // has both, instead of taking raw text.
+                if let Some(open) = c.kind.measurement_press(r, &lib_pb, table) {
+                    let text_c = theme_ext::text_primary(tokens);
+                    let hover = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06);
+                    let cell = iced::widget::button(
+                        text(row_value)
+                            .size(BROWSER_TEXT_SIZE)
+                            .wrapping(iced::widget::text::Wrapping::None)
+                            .color(text_c),
+                    )
+                    .padding([2, 6])
+                    .width(Length::Fill)
+                    .on_press(open)
+                    .style(move |_: &Theme, status| {
+                        iced::widget::button::Style {
+                            background: matches!(status, iced::widget::button::Status::Hovered)
+                                .then_some(iced::Background::Color(hover)),
+                            text_color: text_c,
+                            ..iced::widget::button::Style::default()
+                        }
+                    });
+                    data_row = data_row.push(
+                        container(cell)
+                            .padding([2, 2])
+                            .width(Length::Fixed(c.width)),
                     );
                     continue;
                 }
@@ -297,11 +368,11 @@ pub(super) fn view_grid<'a>(
                         row_id,
                         column: column_for_submit,
                     })
-                    .padding([2, 6])
+                    .padding([SP.xs, 6.0])
                     .size(BROWSER_TEXT_SIZE);
                 data_row = data_row.push(
                     container(input)
-                        .padding([2, 2])
+                        .padding([SP.xs, SP.xs])
                         .width(Length::Fixed(c.width)),
                 );
             }
@@ -311,6 +382,7 @@ pub(super) fn view_grid<'a>(
             let row_container = container(data_row)
                 .padding([0, 0])
                 .width(Length::Fill)
+                .height(Length::Fixed(BROWSER_ROW_HEIGHT))
                 .style(move |_: &Theme| iced::widget::container::Style {
                     background: bg_color,
                     border: Border {
@@ -321,32 +393,53 @@ pub(super) fn view_grid<'a>(
                     ..Default::default()
                 });
 
-            // Click selects; double-click opens the Edit Component
-            // Details modal (Deliverable B). The text_inputs above
-            // capture single-clicks for focus, so the row's
-            // on_press/on_double_click only fires on the gaps between
-            // cells — that's fine for selection because the user is
-            // clicking on a row, not a specific cell.
-            // F25 (2026-05-03) — double-click no longer opens an Edit
-            // Component modal. Single-click selects the row and the
-            // Properties panel surfaces the row detail; per-component
-            // custom parameters are gone (every value lives in a
-            // table column). The modal renderer + state field stay
-            // dead-coded for one release in case a regression test
-            // shows the row-edit ergonomics still need a richer
-            // surface; the on_press wiring here is the only user-
-            // facing trigger and removing it removes the feature.
+            // Click selects the row; the Properties panel surfaces its
+            // detail and the action row's "Edit Details" button opens
+            // the full Edit Component Details modal for it. The
+            // text_inputs above capture clicks for focus, so this only
+            // fires on the gaps between cells.
             let row_widget = mouse_area(row_container).on_press(LibraryMessage::BrowserSelectRow {
                 library_path: library_for_msg,
                 table: table_for_msg,
                 row_id,
             });
 
-            col = col.push(row_widget);
+            col = col.push(keyed(r.row_id, row_widget));
+        }
+        if window.end < rows.len() {
+            col = col.push(Space::new().height(Length::Fixed(
+                (rows.len() - window.end) as f32 * BROWSER_ROW_HEIGHT,
+            )));
         }
     }
 
-    container(scrollable(col).width(Length::Fill).height(Length::Fill))
+    let library_for_scroll = lib_pb.clone();
+    let scroller = scrollable(col)
+        .id(grid_scroll_id(&lib_pb))
+        .on_scroll(move |viewport| LibraryMessage::BrowserGridScrolled {
+            library_path: library_for_scroll.clone(),
+            offset_y: viewport.absolute_offset().y,
+        })
+        .width(Length::Fill)
+        .height(Length::Fill);
+    // The scrollable keeps its own offset in the widget tree. Keyed by
+    // library, so switching tabs builds a fresh one instead of showing the
+    // previous library's offset against this library's window.
+    let library_for_resize = lib_pb.clone();
+    // The sensor sits inside the key: its record of what it published
+    // belongs to this library and must not survive a switch to another.
+    let scroller = keyed(
+        library_key(&lib_pb),
+        sense_height(
+            scroller,
+            browser.grid_scroll.viewport_h,
+            move |viewport_h| LibraryMessage::BrowserGridResized {
+                library_path: library_for_resize.clone(),
+                viewport_h,
+            },
+        ),
+    );
+    container(scroller)
         .padding([0, 0])
         .width(Length::Fill)
         .height(Length::Fill)
@@ -363,21 +456,46 @@ fn unbound_pick_button<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let warning = theme_ext::warning_color(tokens);
-    iced::widget::button(text(label).size(BROWSER_TEXT_SIZE).color(warning))
-        .padding([2, 4])
-        .on_press(LibraryMessage::OpenPrimitivePicker {
-            kind,
-            target: crate::library::state::PrimitivePickerTarget::BrowserRow(address),
-        })
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: None,
-            text_color: warning,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: warning,
-            },
-            ..iced::widget::button::Style::default()
-        })
-        .into()
+    iced::widget::button(
+        text(label)
+            .size(BROWSER_TEXT_SIZE)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .color(warning),
+    )
+    .padding([SP.xs, SP.s])
+    .on_press(LibraryMessage::OpenPrimitivePicker {
+        kind,
+        target: crate::library::state::PrimitivePickerTarget::BrowserRow(address),
+    })
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: None,
+        text_color: warning,
+        border: Border {
+            width: 1.0,
+            radius: 3.0.into(),
+            color: warning,
+        },
+        ..iced::widget::button::Style::default()
+    })
+    .into()
+}
+
+#[cfg(test)]
+mod tests {
+    /// Measurement cells are routed through `ColumnKind::measurement_press`
+    /// (a button that opens the modal), not through the inline text input.
+    /// The behaviour of `measurement_press` is tested in `columns.rs`; this
+    /// pins that the grid still asks it.
+    #[test]
+    fn the_grid_routes_measurement_cells_through_measurement_press() {
+        let source = include_str!("grid.rs");
+        let code = source
+            .rsplit_once("mod tests {")
+            .map_or(source, |(code, _)| code);
+        let call = ["kind.measurement", "_press("].concat();
+        assert!(
+            code.contains(&call),
+            "grid.rs must send measurement cells to the edit modal"
+        );
+    }
 }

@@ -432,6 +432,35 @@ fn prefs_annotate_undo_round_trips_and_missing_key_is_one_step() {
     );
 }
 
+#[test]
+fn prefs_window_controls_placement_round_trips_and_unknown_is_auto() {
+    use signex_app::chrome::controls::WindowControlsPlacement;
+    let (_tmp, path) = temp_prefs_path();
+    assert_eq!(
+        signex_app::fonts::read_window_controls_placement_pref_at(&path),
+        WindowControlsPlacement::Auto,
+        "no file gives the default"
+    );
+
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, br#"{"window_controls_placement":"sideways"}"#).unwrap();
+    assert_eq!(
+        signex_app::fonts::read_window_controls_placement_pref_at(&path),
+        WindowControlsPlacement::Auto,
+        "an unknown token gives the default"
+    );
+
+    for &placement in WindowControlsPlacement::ALL {
+        signex_app::fonts::write_window_controls_placement_pref_at(&path, placement);
+        assert_eq!(
+            signex_app::fonts::read_window_controls_placement_pref_at(&path),
+            placement
+        );
+    }
+    let raw: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(raw["window_controls_placement"], "trailing");
+}
+
 // ─────────────────────────────────────────────────────────────────
 // #1469 — toggles persist off the UI thread, newest value wins
 // ─────────────────────────────────────────────────────────────────
@@ -468,4 +497,33 @@ fn ordered_pref_writes_of_different_keys_do_not_suppress_each_other() {
 
     assert!(!signex_app::fonts::read_grid_visible_pref_at(&path));
     assert!(!signex_app::fonts::read_snap_enabled_pref_at(&path));
+}
+
+/// #1253 / #1263 — the two paste preferences read back what was written, and
+/// a missing, zero or out-of-range value is made valid.
+#[test]
+fn increment_step_and_paste_designators_round_trip_through_prefs_json() {
+    use signex_app::paste_prefs::PasteDesignators;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("prefs.json");
+    let read = |path: &std::path::Path| {
+        let json = std::fs::read_to_string(path)
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok());
+        (
+            signex_app::fonts::read_increment_step_pref_from(json.as_ref()),
+            signex_app::fonts::read_paste_designators_pref_from(json.as_ref()),
+        )
+    };
+    assert_eq!(read(&path), (1, PasteDesignators::Keep), "defaults");
+
+    signex_app::fonts::write_increment_step_pref_at(&path, -7);
+    signex_app::fonts::write_paste_designators_pref_at(&path, PasteDesignators::NextFree);
+    assert_eq!(read(&path), (-7, PasteDesignators::NextFree));
+
+    for (stored, expected) in [(0, 1), (9999, 100), (-9999, -100)] {
+        signex_app::fonts::write_increment_step_pref_at(&path, stored);
+        assert_eq!(read(&path).0, expected, "stored {stored}");
+    }
 }

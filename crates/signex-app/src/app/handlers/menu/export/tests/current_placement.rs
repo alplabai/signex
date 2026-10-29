@@ -63,6 +63,8 @@ fn placed_twice_listing(dir: &tempfile::TempDir, listed: &[&str]) -> (Signex, Pa
     write(&child, child_sheet);
     let mut app = app_workspace(&dir.path().to_string_lossy(), listed);
     app.open_or_focus_sheet_path(top.clone());
+    app.refresh_panel_ctx();
+    app.settle_navigator();
     (app, top, child)
 }
 
@@ -74,6 +76,8 @@ pub(crate) fn descend_by_canvas(app: &mut Signex, placement: u128) {
         SelectedKind::ChildSheet,
     )];
     assert!(app.open_selected_child_sheet());
+    app.refresh_panel_ctx();
+    app.settle_navigator();
 }
 
 /// What "Current page" prints for the focused `child`: its first symbol's
@@ -245,6 +249,7 @@ fn double_clicking_a_sheet_symbol_records_that_placement() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _top, child) = placed_twice_on_disk(&dir);
     app.refresh_panel_ctx();
+    app.settle_navigator();
 
     // Sheet symbol B sits at x = 50..60.
     let _ = app.update(crate::app::Message::CanvasEvent(
@@ -314,6 +319,10 @@ fn renaming_the_child_file_drops_its_placement_without_a_warning() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _top, child) = placed_twice_on_disk(&dir);
     descend_by_canvas(&mut app, PLACEMENT_B);
+    // Let the recovery check the open queued report, as the runtime does
+    // after the update that opened the tab: a rename waits for it (#1323).
+    let checks = app.start_due_recovery_checks();
+    crate::app::handlers::menu::export::write::settle(&mut app, checks);
     let renamed = dir.path().join("renamed.snxsch");
     app.ui_state.rename_dialog = Some(RenameDialogState {
         project_id: None,
@@ -437,6 +446,8 @@ pub(crate) fn three_levels_on_disk(dir: &tempfile::TempDir) -> (Signex, PathBuf,
     write(&path("leaf.snxsch"), leaf);
     let mut app = app_workspace(&dir.path().to_string_lossy(), &["top.snxsch"]);
     app.open_or_focus_sheet_path(path("top.snxsch"));
+    app.refresh_panel_ctx();
+    app.settle_navigator();
     (
         app,
         path("top.snxsch"),

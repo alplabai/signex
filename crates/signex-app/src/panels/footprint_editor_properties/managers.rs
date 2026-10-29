@@ -5,6 +5,11 @@ use iced::widget::{Column, Space, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::super::{FootprintEditorPanelContext, PanelMsg, PanelPalette};
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// v0.18.21 — Grid Manager table. One row per `GridDef`. The active
 /// row is highlighted; clicking another row activates it (mirrors its
@@ -24,27 +29,30 @@ pub(super) fn render_grid_manager<'a>(
         container(
             row![
                 text("Prior")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(40.0)),
-                text("Name").size(10).color(muted).width(Length::Fill),
+                text("Name")
+                    .size(TS.caption)
+                    .color(muted)
+                    .width(Length::Fill),
                 text("Color")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(40.0)),
                 text("Origin")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(60.0)),
                 text("Enabled")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(50.0)),
             ]
-            .spacing(4)
+            .spacing(SP.s)
             .align_y(iced::Alignment::Center),
         )
-        .padding([2, 8])
+        .padding([SP.xs, SP.m])
         .width(Length::Fill),
     );
     col = col.push(super::super::thin_sep(border_c));
@@ -52,8 +60,8 @@ pub(super) fn render_grid_manager<'a>(
     let active_idx = fp.active_grid_idx;
     if fp.grids.is_empty() {
         col = col.push(
-            container(text("(no grids)").size(10).color(muted))
-                .padding([4, 8])
+            container(text("(no grids)").size(TS.caption).color(muted))
+                .padding([SP.s, SP.m])
                 .width(Length::Fill),
         );
     } else {
@@ -64,8 +72,8 @@ pub(super) fn render_grid_manager<'a>(
             } else {
                 iced::Color::TRANSPARENT
             };
-            // Color swatch — placeholder using the theme accent until
-            // GridDef.color lands. Click does nothing yet.
+            // Color swatch — placeholder white until GridDef.color lands.
+            // Click does nothing yet.
             let swatch = container(Space::new())
                 .width(Length::Fixed(20.0))
                 .height(Length::Fixed(14.0))
@@ -81,29 +89,32 @@ pub(super) fn render_grid_manager<'a>(
             // Enabled column — checkbox toggling active grid.
             let enabled_check = iced::widget::checkbox(is_active)
                 .on_toggle(move |_| PanelMsg::FpEditorGridSetActive(idx))
-                .size(12)
+                .size(TS.label)
                 .spacing(0);
             col = col.push(
                 container(
                     row![
                         text(format!("{}", (idx + 1) * 10))
-                            .size(10)
+                            .size(TS.caption)
                             .color(if is_active { primary } else { muted })
                             .width(Length::Fixed(40.0)),
                         text(g.name.as_str())
-                            .size(10)
+                            .size(TS.caption)
                             .color(if is_active { primary } else { muted })
                             .width(Length::Fill),
                         container(swatch).width(Length::Fixed(40.0)).padding([0, 0]),
-                        text("0,0").size(10).color(muted).width(Length::Fixed(60.0)),
+                        text("0,0")
+                            .size(TS.caption)
+                            .color(muted)
+                            .width(Length::Fixed(60.0)),
                         container(enabled_check)
                             .width(Length::Fixed(50.0))
                             .center_x(Length::Shrink),
                     ]
-                    .spacing(4)
+                    .spacing(SP.s)
                     .align_y(iced::Alignment::Center),
                 )
-                .padding([3, 8])
+                .padding([3.0, SP.m])
                 .width(Length::Fill)
                 .style(move |_: &Theme| iced::widget::container::Style {
                     background: Some(iced::Background::Color(row_bg)),
@@ -143,10 +154,10 @@ pub(super) fn render_grid_manager<'a>(
                     border_c,
                 ),
             ]
-            .spacing(4)
+            .spacing(SP.s)
             .align_y(iced::Alignment::Center),
         )
-        .padding([4, 8])
+        .padding([SP.s, SP.m])
         .width(Length::Fill),
     );
     col
@@ -200,7 +211,7 @@ pub(super) fn render_other_section<'a>(
             .spacing(0.0)
             .width(Length::Fill),
         )
-        .padding([2, 8]),
+        .padding([SP.xs, SP.m]),
     );
     col
 }
@@ -215,8 +226,8 @@ pub(super) fn grid_manager_btn<'a>(
     primary: Color,
     _border_c: Color,
 ) -> Element<'a, PanelMsg> {
-    let mut btn = iced::widget::button(text(label).size(10).color(primary))
-        .padding([4, 10])
+    let mut btn = iced::widget::button(text(label).size(TS.caption).color(primary))
+        .padding([SP.s, 10.0])
         .style(iced::widget::button::primary);
     if let Some(msg) = on_press {
         btn = btn.on_press(msg);

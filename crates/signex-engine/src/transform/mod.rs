@@ -1,6 +1,6 @@
 use signex_types::{
     rotation2d::normalize_angle_rad,
-    schematic::{SchDrawing, SchematicSheet, SelectedItem, SelectedKind},
+    schematic::{SchDrawing, SelectedItem, SelectedKind},
 };
 
 use crate::command::MirrorAxis;
@@ -167,48 +167,37 @@ impl Engine {
             .cloned()
             .collect();
 
+        // Wire geometry is fixed for this pass (only junctions change), so one
+        // index serves every query.
+        let index = WireIndex::new(&self.document.wires, crate::JUNCTION_TOLERANCE_MM);
         let mut changed = false;
         for wire in touched {
-            let minted =
-                autoplace::junctions_for_wire(&wire, &self.document, crate::JUNCTION_TOLERANCE_MM);
+            let minted = autoplace::junctions_for_wire(&wire, &self.document.junctions, &index);
             changed |= !minted.is_empty();
             // Extend inside the loop so the next wire's dedup sees these.
             self.document.junctions.extend(minted);
         }
 
-        changed |= self.remove_unjustified_minted_junctions();
-        changed
-    }
-
-    /// Drop every minted junction no longer justified by a genuine wire
-    /// meeting (see [`autoplace::wire_meeting_justifies_junction`]).
-    /// User-placed dots (`minted == false`) are never inspected here.
-    fn remove_unjustified_minted_junctions(&mut self) -> bool {
-        let tolerance = crate::JUNCTION_TOLERANCE_MM;
-        let stale: Vec<uuid::Uuid> = self
+        // Every minted dot is revalidated, not only those near `touched`: a
+        // deleted wire is no longer in `touched` yet is exactly what strands
+        // its neighbours' dots (issue #422). The index makes each check O(1).
+        let stale: std::collections::HashSet<uuid::Uuid> = self
             .document
             .junctions
             .iter()
             .filter(|junction| junction.minted)
             .filter(|junction| {
-                !autoplace::wire_meeting_justifies_junction(
-                    junction.position,
-                    &self.document,
-                    tolerance,
-                )
+                !autoplace::wire_meeting_justifies_junction(junction.position, &index)
             })
             .map(|junction| junction.uuid)
             .collect();
-
-        if stale.is_empty() {
-            return false;
+        if !stale.is_empty() {
+            self.document
+                .junctions
+                .retain(|junction| !stale.contains(&junction.uuid));
+            changed = true;
         }
-
-        let stale: std::collections::HashSet<uuid::Uuid> = stale.into_iter().collect();
-        self.document
-            .junctions
-            .retain(|junction| !stale.contains(&junction.uuid));
-        true
+        changed
     }
 
     pub(super) fn move_selected_item(&mut self, item: &SelectedItem, dx: f64, dy: f64) -> bool {
@@ -531,7 +520,9 @@ mod about_centre;
 mod autoplace;
 mod bus_entry;
 pub(crate) mod rubber_band;
+mod wire_index;
 use autoplace::autoplace_fields;
+use wire_index::WireIndex;
 
 // ---------------------------------------------------------------------------
 // UUID-based collection helpers

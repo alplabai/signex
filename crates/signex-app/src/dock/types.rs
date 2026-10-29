@@ -20,16 +20,6 @@ pub enum DockMessage {
     TabDragStart(PanelPosition, usize),
     /// Mouse released on a tab — if no undock happened, treat as click → select.
     TabClick(PanelPosition, usize),
-    /// Reorder tabs within a dock region. `from` is the dragged tab's
-    /// original index, `to` is the index of the tab it was released
-    /// on. Currently produced by the internal TabClick handler — not
-    /// emitted directly by the UI yet (left available for a future
-    /// pointer-tracking drop indicator).
-    ReorderTab {
-        pos: PanelPosition,
-        from: usize,
-        to: usize,
-    },
     /// Scroll tabs left/right when they overflow the panel width.
     TabScroll(PanelPosition, i32),
     /// Pointer entered a dock tab — feeds the hover highlight on

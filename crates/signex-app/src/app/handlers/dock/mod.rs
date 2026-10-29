@@ -8,6 +8,7 @@ mod child_sheet_identity;
 mod floating_layout;
 mod layout_persist;
 mod library_browser;
+mod multi_edit;
 mod navigator;
 mod net_classes;
 mod panel_controls;
@@ -38,6 +39,11 @@ impl Signex {
                 let task = self.update_symbol_from_library(*uuid);
                 return Task::batch([task, self.finish_update()]);
             }
+            if let crate::panels::PanelMsg::PlacedPartAction(action) = panel_msg {
+                return self.dispatch_library_message(crate::library::LibraryMessage::PlacedPart(
+                    crate::library::PlacedPartMsg::ActionRequested(*action),
+                ));
+            }
             if let crate::panels::PanelMsg::SwitchSymbolChoice(uuid, lib_id) = panel_msg {
                 let task = self.handle_switch_symbol_choice(*uuid, lib_id);
                 return Task::batch([task, self.finish_update()]);
@@ -52,6 +58,7 @@ impl Signex {
                 return Task::batch([task, self.finish_update()]);
             }
             if self.handle_dock_library_browser_message(panel_msg)
+                || self.handle_dock_multi_edit_message(panel_msg)
                 || self.handle_dock_property_editor_message(panel_msg)
             {
                 return self.finish_update();

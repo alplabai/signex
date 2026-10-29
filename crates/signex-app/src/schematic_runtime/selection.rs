@@ -1,5 +1,18 @@
 use super::*;
 
+/// The box that frames `selected`, the union of the boxes the selection
+/// overlay draws; `None` when no selected item is on the sheet.
+pub fn selection_bounds(
+    snapshot: &SchematicRenderSnapshot,
+    selected: &[SelectedItem],
+    designators: &Designators,
+) -> Option<Aabb> {
+    selected_aabbs(snapshot, selected, designators)
+        .into_iter()
+        .flatten()
+        .reduce(|a, b| a.union(&b))
+}
+
 pub fn draw_selection_overlay(
     frame: &mut canvas::Frame,
     snapshot: &SchematicRenderSnapshot,
@@ -86,6 +99,8 @@ pub fn draw_selection_overlay(
         parameter_texts: Vec::new(),
         overlays,
         erc_markers: Vec::new(),
+        drawings: Vec::new(),
+        drawings_front: Vec::new(),
         wire_color_overrides: HashMap::new(),
         wire_line_styles: HashMap::new(),
     };

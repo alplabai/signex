@@ -105,6 +105,7 @@ pub(crate) const ACTIVE_BAR_COMMANDS: &[(&str, ActiveBarAction)] = &[
         ActiveBarAction::PlaceHarnessConnector,
     ),
     ("place_harness_entry", ActiveBarAction::PlaceHarnessEntry),
+    ("place_junction", ActiveBarAction::PlaceJunction),
     ("place_no_erc", ActiveBarAction::PlaceNoERC),
     ("place_note", ActiveBarAction::PlaceNote),
     (
@@ -190,8 +191,7 @@ pub(crate) fn action_label(action: &ActiveBarAction, fallback: &'static str) -> 
         return fallback;
     }
     id_for_action(action)
-        .and_then(|id| crate::keymap::AppCommandId::new(id).ok())
-        .and_then(|command| crate::keymap::metadata_for(&command))
+        .and_then(crate::keymap::metadata_for_str)
         .map(|metadata| metadata.menu_label())
         .unwrap_or(fallback)
 }
@@ -213,6 +213,19 @@ mod tests {
 
     use super::*;
     use crate::keymap::{AppCommandId, metadata_for};
+
+    #[test]
+    fn action_label_equals_a_linear_catalog_scan_for_every_action() {
+        for (id, action) in ACTIVE_BAR_COMMANDS {
+            let linear = crate::keymap::all_command_ids()
+                .find(|candidate| candidate == id)
+                .and_then(|found| AppCommandId::new(found).ok())
+                .and_then(|command| metadata_for(&command))
+                .map(|metadata| metadata.menu_label())
+                .unwrap_or("fallback");
+            assert_eq!(action_label(action, "fallback"), linear, "{id}");
+        }
+    }
 
     /// Actions deliberately left without an id until `CommandArgs` exists.
     const PARAMETERISED: &[ActiveBarAction] = &[
@@ -427,8 +440,8 @@ mod tests {
         let accounted = ACTIVE_BAR_COMMANDS.len() + PARAMETERISED.len() + MAPPED_ELSEWHERE.len();
         assert_eq!(
             accounted,
-            85,
-            "ActiveBarAction accounted for {accounted} actions but held 85 \
+            86,
+            "ActiveBarAction accounted for {accounted} actions but held 86 \
              when this table was written ({} with ids, {} parameterised, {} \
              mapped elsewhere) — a new variant needs an id here, a slot in \
              PARAMETERISED, or a slot in MAPPED_ELSEWHERE",

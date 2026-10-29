@@ -73,6 +73,7 @@ fn every_field_is_accounted_for() {
         title_block: _,
         lib_symbols: _,
         net_colors: _,
+        drawing_placements: _,
         frame: _,
         unknown: _,
     } = SchematicSheet::default();
@@ -88,6 +89,7 @@ fn every_field_is_accounted_for() {
         mirror_x: _,
         mirror_y: _,
         unit: _,
+        body_style: _,
         is_power: _,
         ref_text: _,
         val_text: _,

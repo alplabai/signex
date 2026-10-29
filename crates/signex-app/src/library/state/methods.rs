@@ -15,7 +15,7 @@ use super::*;
 ///
 /// The failure itself reaches the Messages panel at `warn` — the same
 /// treatment `refresh_components` gives a failed `read_table`.
-fn apply_primitive_listing(
+pub(super) fn apply_primitive_listing(
     cache: &mut Vec<PrimitiveSummary>,
     listing: Result<Vec<PrimitiveSummary>, LibraryError>,
     library: &str,
@@ -41,7 +41,7 @@ fn apply_primitive_listing(
 
 /// True when every listing succeeded and the symbol listing is not
 /// missing unreadable containers: only then can absence be reported.
-fn listings_complete(ok: [bool; 3], symbols_partial: bool) -> bool {
+pub(super) fn listings_complete(ok: [bool; 3], symbols_partial: bool) -> bool {
     ok.iter().all(|listed| *listed) && !symbols_partial
 }
 
@@ -52,6 +52,7 @@ impl Default for LibraryState {
         // `<config_dir>/signex/distributors.toml`.
         settings.preferred_order = super::super::settings::persistence::load_preferred_order();
         Self {
+            datasheet_opener: crate::library::placed_part::opener::open,
             drift: Default::default(),
             symbol_choice_requests: Default::default(),
             set: LibrarySet::new(),
@@ -60,20 +61,23 @@ impl Default for LibraryState {
             where_used: WhereUsedIndex::new(),
             picker: None,
             settings,
-            expanded: Vec::new(),
             panel_search: String::new(),
             close_library_confirm: None,
+            batch_row_failures: HashMap::new(),
             template_registry: Arc::new(TemplateRegistry::new_with_builtins()),
             library_browsers: HashMap::new(),
+            shown_browser: None,
             primitive_picker: None,
             document_options: None,
             recovery: None,
             create_options: None,
             library_updates: None,
+            queued_library_updates: Vec::new(),
             skipped_updates_for: std::collections::HashSet::new(),
             installed_libraries: Vec::new(),
             global_libraries: Vec::new(),
             stock_library: None,
+            stock_library_root: None,
             components_panel: ComponentsPanelState::default(),
             pending_mounts: HashMap::new(),
             external_poll_in_flight: false,
@@ -82,6 +86,12 @@ impl Default for LibraryState {
             external_poll_failure_reported: false,
             pricing_refresh: None,
             clock: chrono::Utc::now(),
+            refresh_generations: HashMap::new(),
+            refresh_generation_counter: 0,
+            refresh_in_flight: HashMap::new(),
+            pending_follow_ups: HashMap::new(),
+            data_version: 0,
+            new_library_defaults: NewLibraryDefaults::default(),
         }
     }
 }
@@ -106,6 +116,19 @@ impl LibraryState {
             .iter()
             .find(|lib| lib.library_id == r.library_id)?;
         Some(lib.root_dir()?.join(dir).join(format!("{}.{ext}", r.uuid)))
+    }
+
+    /// The parameter template of `class` in the open library at `path`.
+    pub fn row_template(
+        &self,
+        path: &Path,
+        class: &str,
+    ) -> Option<&signex_library::ParameterTemplate> {
+        if class.trim().is_empty() {
+            return None;
+        }
+        let library_id = self.library_at(path)?.library_id;
+        self.template_registry.resolve(library_id, class)
     }
 
     pub fn library_at_mut(&mut self, path: &Path) -> Option<&mut OpenLibrary> {
@@ -181,6 +204,27 @@ impl LibraryState {
             .map(|lib| lib.display_name.clone())
     }
 
+    /// True when `path` is, or lies inside, a read-only mount, or is
+    /// exactly (resolved equality, no prefix match) the stock library
+    /// file recorded in `stock_library_root` even when it failed to
+    /// mount. Recovery flows that write (git re-init, binding
+    /// repair) must never run against such a path.
+    pub fn is_read_only_target(&self, path: &Path) -> bool {
+        if self.read_only_library_name_containing(path).is_some() || self.is_read_only(path) {
+            return true;
+        }
+        self.stock_library_root
+            .as_deref()
+            .is_some_and(|root| resolved_path(root) == resolved_path(path))
+    }
+
+    /// Whether `path` is the bundled stock library's file.
+    pub(crate) fn is_stock_root(&self, path: &Path) -> bool {
+        self.stock_library_root
+            .as_deref()
+            .is_some_and(|root| resolved_path(root) == resolved_path(path))
+    }
+
     fn open_library_marked(&mut self, root: PathBuf, read_only: bool) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
             return Ok(());
@@ -205,6 +249,7 @@ impl LibraryState {
         // can still resolve to whichever copy wins. Detecting and
         // surfacing that collision is the Components Panel's job at
         // presentation time.
+        let read_only = read_only || self.is_stock_root(&root);
         if read_only {
             self.set.mount_read_only(Box::new(adapter))?;
         } else {
@@ -224,7 +269,7 @@ impl LibraryState {
             dangling: Default::default(),
             pricing: Default::default(),
             own_edit_stamp: None,
-            display: LibraryDisplaySettings::default(),
+            display: LibraryDisplaySettings::seeded(&self.new_library_defaults),
         };
         if let Some(adapter) = self.set.get(library_id)
             && let Err(e) = entry.reload_tables(adapter)
@@ -236,8 +281,11 @@ impl LibraryState {
                 "open_library: reload_tables failed; library opens with empty cache"
             );
         }
+        if self.is_stock_root(&entry.root) {
+            self.stock_library = Some(entry.root.clone());
+        }
         self.open_libraries.push(entry);
-        self.expanded.push(true);
+        self.touch_data();
         self.sweep_dangling_refs();
         Ok(())
     }
@@ -276,114 +324,18 @@ impl LibraryState {
         // a preparation is in flight, and closing a library that was
         // mounted synchronously simply has nothing to remove.
         self.pending_mounts.remove(root);
+        self.refresh_generations.remove(root);
+        self.refresh_in_flight
+            .retain(|_, in_flight| in_flight.as_path() != root);
+        self.pending_follow_ups.remove(root);
         if let Some(idx) = self.open_libraries.iter().position(|lib| lib.root == root) {
             let entry = self.open_libraries.remove(idx);
+            self.touch_data();
             self.set.unmount(entry.library_id);
-            if idx < self.expanded.len() {
-                self.expanded.remove(idx);
-            }
             self.editors.retain(|key, _| key.library_path != root);
             // Names, drift rows and Update must not use an unmounted library.
             self.drift.check_pending = true;
         }
-    }
-
-    /// Refresh the cached table contents for a library — re-reads every
-    /// TSV via the mounted adapter's `list_tables` + `read_table`.
-    ///
-    /// Returns `LibraryError::NotFound` when the library at `root`
-    /// isn't mounted, otherwise the underlying adapter error. The
-    /// cached `Vec<ComponentSummary>` is rebuilt alongside `tables`
-    /// so the picker (summary tier) and the panel grid (row tier)
-    /// stay coherent.
-    pub fn refresh_components(&mut self, root: &Path) -> Result<(), LibraryError> {
-        let library_id = self
-            .library_at(root)
-            .map(|lib| lib.library_id)
-            .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?;
-        // Snapshot the table data through the adapter, then move it
-        // onto the OpenLibrary entry. Two passes keep the borrow
-        // checker happy — `set.get` and `library_at_mut` both
-        // straddle `&self`/`&mut self`.
-        let adapter = self
-            .set
-            .get(library_id)
-            .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?;
-        let stamp = signex_library::DiskStamp::of(root).ok();
-        let names = adapter.list_tables()?;
-        let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
-        let mut summaries: Vec<ComponentSummary> = Vec::new();
-        let mut pricing: HashMap<Uuid, signex_library::RowPricing> = HashMap::new();
-        for name in names {
-            match adapter.table_pricing(&name) {
-                Ok(cached) => pricing.extend(cached),
-                // To the Messages panel, not only the log: prices silently
-                // missing from the browser look like "never refreshed".
-                Err(e) => crate::diagnostics::log_warning(format!(
-                    "Library {root:?} table {name}: cached prices could not be read ({e}); none are shown.",
-                    root = root.display().to_string()
-                )),
-            }
-            match adapter.read_table(&name) {
-                Ok(rows) => {
-                    for row in &rows {
-                        summaries.push(ComponentSummary {
-                            row_id: row.row_id,
-                            internal_pn: row.internal_pn.clone(),
-                            mpn: row.primary_mpn.mpn.clone(),
-                            state: row.state,
-                            description: String::new(),
-                        });
-                    }
-                    tables.insert(name, rows);
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        table = %name,
-                        error = %e,
-                        "refresh_components: read_table failed; entry left empty"
-                    );
-                    tables.insert(name, Vec::new());
-                }
-            }
-        }
-        // Snapshot primitive listings before the second mut borrow so
-        // we don't have to call adapter methods while `library_at_mut`
-        // holds &mut self.
-        let symbols = adapter.list_symbols();
-        let symbols_partial = adapter.symbol_listing_is_partial();
-        let footprints = adapter.list_footprints();
-        let sims = adapter.list_sims();
-        let classes = adapter.library_classes();
-        self.clock = chrono::Utc::now();
-        if let Some(lib) = self.library_at_mut(root) {
-            lib.tables = tables;
-            lib.pricing = pricing;
-            lib.cached_components = summaries;
-            lib.cached_classes = classes;
-            lib.observed_stamp = stamp;
-            lib.own_edit_stamp = None;
-            // A failed listing keeps the previous cache and warns —
-            // blanking it here would render a mounted library as
-            // empty. See `apply_primitive_listing`.
-            let name = lib.display_name.clone();
-            let ok = [
-                apply_primitive_listing(&mut lib.cached_symbols, symbols, &name, "symbols"),
-                apply_primitive_listing(
-                    &mut lib.cached_footprints,
-                    footprints,
-                    &name,
-                    "footprints",
-                ),
-                apply_primitive_listing(&mut lib.cached_sims, sims, &name, "sims"),
-            ];
-            lib.dangling.listings_complete = listings_complete(ok, symbols_partial);
-        }
-        self.sweep_dangling_refs();
-        // The library's symbols may have changed on disk.
-        self.drift.check_pending = true;
-        Ok(())
     }
 
     /// Each open library with the stamp its caches were filled under — the
@@ -630,18 +582,27 @@ pub struct LibraryDisplaySettings {
     pub pin_selection: crate::render_config::PinSelectionMode,
 }
 
-impl Default for LibraryDisplaySettings {
-    fn default() -> Self {
-        // Altium SchLib defaults: cream sheet + fine 50-mil (1.27 mm)
-        // grid + visible-on. Matches the look in the user's reference
-        // screenshot of an Altium .SchLib document.
+impl LibraryDisplaySettings {
+    /// Altium SchLib defaults: cream sheet + visible grid, with the grid
+    /// size and pin selection taken from `defaults` (the model's copy of the
+    /// preferences, never a fresh disk read).
+    pub fn seeded(defaults: &NewLibraryDefaults) -> Self {
         Self {
             unit: Unit::Mm,
-            grid_size_mm: crate::fonts::read_symbol_grid_size_mm_pref(),
+            grid_size_mm: defaults.grid_size_mm,
             grid_visible: true,
             sheet_color: SheetColor::Cream,
-            pin_selection: crate::fonts::read_symbol_pin_selection_pref(),
+            pin_selection: defaults.pin_selection,
         }
+    }
+}
+
+impl Default for LibraryDisplaySettings {
+    /// Same look as [`Self::seeded`] with the shipped defaults. A placeholder
+    /// for fixtures and the off-thread mount prepare; the app seeds the real
+    /// values from `LibraryState` when the library is mounted.
+    fn default() -> Self {
+        Self::seeded(&NewLibraryDefaults::default())
     }
 }
 
@@ -673,34 +634,33 @@ impl OpenLibrary {
         // extra refresh on the next poll, never a missed one.
         let stamp = signex_library::DiskStamp::of(&self.root).ok();
         let names = adapter.list_tables()?;
-        let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
-        let mut summaries: Vec<ComponentSummary> = Vec::new();
-        for name in names {
-            match adapter.read_table(&name) {
-                Ok(rows) => {
-                    for row in &rows {
-                        summaries.push(ComponentSummary {
-                            row_id: row.row_id,
-                            internal_pn: row.internal_pn.clone(),
-                            mpn: row.primary_mpn.mpn.clone(),
-                            state: row.state,
-                            description: String::new(),
-                        });
-                    }
-                    tables.insert(name, rows);
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        table = %name,
-                        error = %e,
-                        "read_table failed; entry left empty"
-                    );
-                    tables.insert(name, Vec::new());
-                }
-            }
-        }
+        let super::table_scan::TableScan {
+            tables,
+            summaries,
+            pricing,
+        } = super::table_scan::scan_tables(
+            adapter,
+            names,
+            summarize_row,
+            |name, e| {
+                tracing::warn!(
+                    target: "signex::library",
+                    table = %name,
+                    error = %e,
+                    "reload_tables: cached prices could not be read; none are shown"
+                )
+            },
+            |name, e| {
+                tracing::warn!(
+                    target: "signex::library",
+                    table = %name,
+                    error = %e,
+                    "read_table failed; entry left empty"
+                )
+            },
+        );
         self.tables = tables;
+        self.pricing = pricing;
         self.cached_components = summaries;
         self.cached_classes = adapter.library_classes();
         self.observed_stamp = stamp;
@@ -788,5 +748,16 @@ pub(crate) fn resolved_path(path: &Path) -> PathBuf {
                 return path.to_path_buf();
             }
         }
+    }
+}
+
+/// Picker/panel summary for one table row.
+pub(super) fn summarize_row(row: &ComponentRow) -> ComponentSummary {
+    ComponentSummary {
+        row_id: row.row_id,
+        internal_pn: row.internal_pn.clone(),
+        mpn: row.primary_mpn.mpn.clone(),
+        state: row.state,
+        description: row.description.clone(),
     }
 }

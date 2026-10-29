@@ -31,7 +31,7 @@ impl SymbolCanvas<'_> {
                 if !is_graphic_selected(&self.selected, idx) {
                     continue;
                 }
-                if !state::graphic_on_part(&self.symbol.graphics[idx], self.active_part) {
+                if !state::graphic_on_part(&self.symbol.graphics[idx], self.view) {
                     continue;
                 }
                 for (handle, pos) in state::graphic_handles(self.symbol, idx) {

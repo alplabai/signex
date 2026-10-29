@@ -225,11 +225,11 @@ fn load_sheet_with(
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(format!("could not be read: {e}")),
+        Err(e) => return Err(format!("could not be read ({e})")),
     };
     match signex_types::format::SnxSchematic::parse(&text) {
         Ok(parsed) => Ok(Some(parsed.sheet)),
-        Err(e) => Err(format!("could not be parsed: {e}")),
+        Err(e) => Err(format!("could not be parsed ({e})")),
     }
 }
 
@@ -289,6 +289,40 @@ pub(crate) fn open_sheets_snapshot_of(
             Some((path.clone(), engine.document().clone()))
         })
         .collect()
+}
+
+/// Everything the assembler needs for one source document's project, owned,
+/// so the (disk-reading) assembly can run on a blocking thread.
+pub(crate) struct ProjectSheetPlan {
+    open: OpenSheets,
+    pages: Vec<PathBuf>,
+    root: PathBuf,
+    fold: CaseFold,
+}
+
+impl ProjectSheetPlan {
+    pub(crate) fn assemble(&self) -> ProjectSheetSet {
+        assemble_project_sheets_from(&self.open, &self.pages, &self.root, self.fold)
+    }
+}
+
+/// The plan for `source`'s project. Every open engine is snapshotted, so a
+/// sheet the hierarchy walk reaches that is open (declared or not) counts
+/// with its unsaved edits; only sheets that are not open are read from disk.
+pub(crate) fn plan_project_sheets_for(
+    document_state: &DocumentState,
+    source: &Path,
+) -> ProjectSheetPlan {
+    let project = document_state.document_project(source);
+    let fold = crate::app::state::project_case::fold_of(project);
+    let pages = project_pages(project);
+    let root = resolve_netlist_root_for(document_state, source);
+    ProjectSheetPlan {
+        open: open_sheets_snapshot(document_state),
+        pages,
+        root,
+        fold,
+    }
 }
 
 /// [`assemble_project_sheets`] over a snapshot instead of the live state.
@@ -643,9 +677,53 @@ pub(crate) fn project_graph_with(
 ///   requires an attacker who can already write inside the project
 ///   directory.
 pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -> Option<PathBuf> {
+    match resolve_child_reference_quiet(parent_dir, child_filename) {
+        Ok(path) => Some(path),
+        Err(ChildReferenceRefusal::Empty) => None,
+        Err(ChildReferenceRefusal::Escapes {
+            reference,
+            resolved,
+            root,
+        }) => {
+            crate::diagnostics::log_error(
+                "Rejected child-sheet reference outside its resolution root",
+                &anyhow::anyhow!(
+                    "'{reference}' resolves to {} which escapes {}",
+                    resolved.display(),
+                    if root.as_os_str().is_empty() {
+                        "an empty resolution root".to_string()
+                    } else {
+                        root.display().to_string()
+                    }
+                ),
+            );
+            None
+        }
+    }
+}
+
+/// Why [`resolve_child_reference_quiet`] gave no path.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum ChildReferenceRefusal {
+    /// Blank after trimming.
+    Empty,
+    /// The normalized path leaves the resolution root.
+    Escapes {
+        reference: String,
+        resolved: PathBuf,
+        root: PathBuf,
+    },
+}
+
+/// [`resolve_child_reference`] without the error log: the one resolution
+/// rule, for a caller that only asks where a reference leads.
+pub(crate) fn resolve_child_reference_quiet(
+    parent_dir: &Path,
+    child_filename: &str,
+) -> Result<PathBuf, ChildReferenceRefusal> {
     let trimmed = child_filename.trim();
     if trimmed.is_empty() {
-        return None;
+        return Err(ChildReferenceRefusal::Empty);
     }
     let raw = PathBuf::from(trimmed);
     let resolved = lexically_normalize(&parent_dir.join(&raw));
@@ -666,21 +744,13 @@ pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -
         && resolved.starts_with(&root);
 
     if contained {
-        Some(resolved)
+        Ok(resolved)
     } else {
-        crate::diagnostics::log_error(
-            "Rejected child-sheet reference outside its resolution root",
-            &anyhow::anyhow!(
-                "'{trimmed}' resolves to {} which escapes {}",
-                resolved.display(),
-                if root.as_os_str().is_empty() {
-                    "an empty resolution root".to_string()
-                } else {
-                    root.display().to_string()
-                }
-            ),
-        );
-        None
+        Err(ChildReferenceRefusal::Escapes {
+            reference: trimmed.to_string(),
+            resolved,
+            root,
+        })
     }
 }
 
@@ -796,6 +866,29 @@ pub(crate) fn stitch_issue_message(issue: &signex_net::StitchIssue) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_quiet_child_resolution_says_why_without_logging() {
+        let dir = Path::new("/p");
+        assert_eq!(
+            resolve_child_reference_quiet(dir, "  sub/../b.snxsch "),
+            Ok(PathBuf::from("/p/b.snxsch"))
+        );
+        assert_eq!(
+            resolve_child_reference_quiet(dir, "   "),
+            Err(ChildReferenceRefusal::Empty)
+        );
+        assert!(matches!(
+            resolve_child_reference_quiet(dir, "../x.snxsch"),
+            Err(ChildReferenceRefusal::Escapes { .. })
+        ));
+        // The logging wrapper agrees on every answer.
+        assert_eq!(
+            resolve_child_reference(dir, "sub/../b.snxsch"),
+            Some(PathBuf::from("/p/b.snxsch"))
+        );
+        assert_eq!(resolve_child_reference(dir, ""), None);
+    }
+
     use super::*;
     use signex_types::schematic::{ChildSheet, FillType, Point};
     use uuid::Uuid;

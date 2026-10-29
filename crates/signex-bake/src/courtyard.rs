@@ -11,7 +11,7 @@
 //! v0.14 scope:
 //! - One CourtyardAttr per footprint becomes the courtyard polygon.
 //! - Additional CourtyardAttr-tagged entities warn + skip.
-//! - Open / branching / arc-containing profiles surface a warning
+//! - Open / branching / circle-containing profiles surface a warning
 //!   from `signex_bake::trace_closed_profile` and skip.
 //! - Construction entities are excluded from the trace by the walker.
 
@@ -21,7 +21,8 @@ use signex_sketch::entity::EntityKind;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 
-use crate::profile::{TraceError, trace_closed_profile};
+use crate::profile::TraceError;
+use crate::traced_loops::TracedLoops;
 
 /// Bake the first CourtyardAttr-tagged closed profile into
 /// `courtyard_out`. The first non-construction Line entity carrying
@@ -36,6 +37,7 @@ pub fn bake_courtyard(
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
     let mut found_first = false;
+    let mut loops = TracedLoops::default();
     for entity in &sketch.entities {
         if entity.bake_skipped() {
             continue;
@@ -43,27 +45,31 @@ pub fn bake_courtyard(
         if entity.courtyard.is_none() {
             continue;
         }
-        // The walker takes Line + Arc seeds (Circles still skipped in
-        // v0.14.1 — Circle bake lands in v0.14.2).
+        // The walker takes Line + Arc seeds (Circle seeds are skipped:
+        // Circle profiles are not supported).
         if !matches!(
             entity.kind,
             EntityKind::Line { .. } | EntityKind::Arc { .. }
         ) {
             warnings.push(format!(
-                "entity {}: CourtyardAttr requires a Line or Arc seed (Circles land in v0.14.2); skipping",
+                "entity {}: CourtyardAttr requires a Line or Arc seed (Circle seeds are not supported); skipping",
                 entity.id
             ));
             continue;
         }
-        if found_first {
-            warnings.push(format!(
-                "entity {}: CourtyardAttr ignored — only one courtyard polygon per footprint (first closed profile wins)",
-                entity.id
-            ));
+        // The other edges of an already-traced courtyard loop are not
+        // "another courtyard".
+        if loops.contains("", entity.id) {
             continue;
         }
 
-        match trace_closed_profile(sketch, solve, entity.id) {
+        match loops.trace("", sketch, solve, entity.id) {
+            // Tracing records every edge of this loop, so an extra loop warns
+            // once, not once per tagged edge.
+            Ok(_) if found_first => warnings.push(format!(
+                "entity {}: CourtyardAttr ignored — only one courtyard polygon per footprint (first closed profile wins)",
+                entity.id
+            )),
             Ok(vertices) => {
                 *courtyard_out = Polygon::new(vertices);
                 found_first = true;
@@ -77,7 +83,7 @@ pub fn bake_courtyard(
                 entity.id
             )),
             Err(TraceError::CircleInProfile) => warnings.push(format!(
-                "entity {}: CourtyardAttr profile is a Circle — Circle bake lands in v0.14.2",
+                "entity {}: CourtyardAttr profile is a Circle — Circle profiles are not supported",
                 entity.id
             )),
             Err(other) => warnings.push(format!(
@@ -128,7 +134,7 @@ mod tests {
             .push(Entity::new(p4, plane, EntityKind::Point { x: 0.0, y: 1.0 }));
         let l1 = SketchEntityId::new();
         let mut line1 = Entity::new(l1, plane, EntityKind::Line { start: p1, end: p2 });
-        line1.courtyard = Some(CourtyardAttr);
+        line1.courtyard = Some(CourtyardAttr {});
         data.entities.push(line1);
         let l2 = SketchEntityId::new();
         let l3 = SketchEntityId::new();
@@ -166,24 +172,50 @@ mod tests {
     }
 
     #[test]
-    fn bake_courtyard_second_attr_warns() {
-        // Add a second CourtyardAttr to a different line — only the
-        // first should bake.
+    fn tagging_every_edge_is_one_courtyard_without_warnings() {
         let (mut data, _l1) = rectangle_with_courtyard();
-        // Find l2 and tag it too.
-        let second_line_id = data
-            .entities
-            .iter()
-            .filter(|e| matches!(e.kind, EntityKind::Line { .. }) && e.courtyard.is_none())
-            .map(|e| e.id)
-            .next()
-            .unwrap();
-        let second = data
+        for e in data
             .entities
             .iter_mut()
-            .find(|e| e.id == second_line_id)
-            .unwrap();
-        second.courtyard = Some(CourtyardAttr);
+            .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+        {
+            e.courtyard = Some(CourtyardAttr {});
+        }
+        let solved = solve(&data);
+        let mut courtyard = Polygon::default();
+        let mut warnings = Vec::new();
+        bake_courtyard(&data, &solved, &mut courtyard, &mut warnings).unwrap();
+        assert_eq!(courtyard.points.len(), 4);
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn bake_courtyard_second_loop_warns_once() {
+        // A second, separate loop with all four edges tagged: only the
+        // first loop bakes, and the extra loop warns once, not per edge.
+        let (mut data, _l1) = rectangle_with_courtyard();
+        let plane = data.planes[0].id;
+        let corners: Vec<SketchEntityId> = [(5.0, 5.0), (6.0, 5.0), (6.0, 6.0), (5.0, 6.0)]
+            .into_iter()
+            .map(|(x, y)| {
+                let id = SketchEntityId::new();
+                data.entities
+                    .push(Entity::new(id, plane, EntityKind::Point { x, y }));
+                id
+            })
+            .collect();
+        for i in 0..4 {
+            let mut line = Entity::new(
+                SketchEntityId::new(),
+                plane,
+                EntityKind::Line {
+                    start: corners[i],
+                    end: corners[(i + 1) % 4],
+                },
+            );
+            line.courtyard = Some(CourtyardAttr {});
+            data.entities.push(line);
+        }
 
         let solved = solve(&data);
         let mut courtyard = Polygon::default();
@@ -191,9 +223,13 @@ mod tests {
         bake_courtyard(&data, &solved, &mut courtyard, &mut warnings).unwrap();
 
         assert_eq!(courtyard.points.len(), 4);
-        assert!(
-            warnings.iter().any(|w| w.contains("only one courtyard")),
-            "expected dedup warning, got {warnings:?}"
+        assert_eq!(
+            warnings
+                .iter()
+                .filter(|w| w.contains("only one courtyard"))
+                .count(),
+            1,
+            "{warnings:?}"
         );
     }
 
@@ -220,7 +256,7 @@ mod tests {
             plane,
             EntityKind::Line { start: p1, end: p2 },
         );
-        l1.courtyard = Some(CourtyardAttr);
+        l1.courtyard = Some(CourtyardAttr {});
         data.entities.push(l1);
         data.entities.push(Entity::new(
             SketchEntityId::new(),
@@ -260,5 +296,51 @@ mod tests {
             "construction-tagged seed must not bake"
         );
         assert!(warnings.is_empty(), "construction skip is silent");
+    }
+
+    #[test]
+    fn an_extra_open_courtyard_chain_warns_with_its_real_reason() {
+        let (mut data, _l1) = rectangle_with_courtyard();
+        let plane = data.planes[0].id;
+        let pts: Vec<SketchEntityId> = [(5.0, 5.0), (6.0, 5.0), (7.0, 5.0)]
+            .into_iter()
+            .map(|(x, y)| {
+                let id = SketchEntityId::new();
+                data.entities
+                    .push(Entity::new(id, plane, EntityKind::Point { x, y }));
+                id
+            })
+            .collect();
+        let mut line = Entity::new(
+            SketchEntityId::new(),
+            plane,
+            EntityKind::Line {
+                start: pts[0],
+                end: pts[1],
+            },
+        );
+        line.courtyard = Some(CourtyardAttr {});
+        data.entities.push(line);
+        data.entities.push(Entity::new(
+            SketchEntityId::new(),
+            plane,
+            EntityKind::Line {
+                start: pts[1],
+                end: pts[2],
+            },
+        ));
+        let solved = solve(&data);
+        let mut courtyard = Polygon::default();
+        let mut warnings = Vec::new();
+        bake_courtyard(&data, &solved, &mut courtyard, &mut warnings).unwrap();
+        assert_eq!(courtyard.points.len(), 4);
+        assert!(
+            warnings.iter().any(|w| w.contains("not closed")),
+            "{warnings:?}"
+        );
+        assert!(
+            !warnings.iter().any(|w| w.contains("only one courtyard")),
+            "{warnings:?}"
+        );
     }
 }

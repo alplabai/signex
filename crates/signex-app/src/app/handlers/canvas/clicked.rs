@@ -160,8 +160,7 @@ impl Signex {
                         }
                     }
                 }
-                if diff {
-                    self.record_net_color_undo();
+                if diff && self.record_net_color_undo() {
                     for uuid in net_wire_uuids {
                         if pending.a == 0 {
                             self.ui_state.wire_color_overrides.remove(&uuid);
@@ -189,11 +188,12 @@ impl Signex {
         // Altium's "click the object to reference" convention.
         if let Some(picker) = self.ui_state.reorder_picker {
             if let Some(snapshot) = self.active_render_snapshot() {
-                let hit = crate::schematic_runtime::hit_test::hit_test(
+                let hit = crate::schematic_runtime::hit_test::hit_test_styled(
                     snapshot,
                     &self.interaction_state.active_canvas().designators,
                     world_x,
                     world_y,
+                    self.ui_state.net_class_styles.styles(),
                 );
                 if let Some(reference) = hit {
                     let direction = match picker {
@@ -236,27 +236,7 @@ impl Signex {
         // and returns to normal selection — same convention as most
         // IDEs (Escape cancels, click elsewhere confirms).
         if let Some(state) = self.interaction_state.editing_text.take() {
-            if state.text != state.original_text {
-                let stored = crate::schematic_runtime::text::escape_for_standard(&state.text);
-                let cmd = match state.kind {
-                    signex_types::schematic::SelectedKind::Label => {
-                        Some(signex_engine::Command::UpdateText {
-                            target: signex_engine::TextTarget::Label(state.uuid),
-                            value: stored,
-                        })
-                    }
-                    signex_types::schematic::SelectedKind::TextNote => {
-                        Some(signex_engine::Command::UpdateText {
-                            target: signex_engine::TextTarget::TextNote(state.uuid),
-                            value: stored,
-                        })
-                    }
-                    _ => None,
-                };
-                if let Some(cmd) = cmd {
-                    self.apply_engine_command(cmd, false, true);
-                }
-            }
+            self.commit_text_edit(state);
             return Task::none();
         }
         let (wx, wy) = if self.interaction_state.current_tool == Tool::Wire {
@@ -264,6 +244,11 @@ impl Signex {
         } else {
             self.snap_to_grid(world_x, world_y)
         };
+
+        // A part on the cursor: the click places it, whatever tool is shown.
+        if self.interaction_state.placement.is_some() {
+            return self.handle_placement_click(wx, wy);
+        }
 
         match self.interaction_state.current_tool {
             Tool::Wire => {
@@ -342,6 +327,7 @@ impl Signex {
                         mirror_x: false,
                         mirror_y: false,
                         unit: 1,
+                        body_style: Default::default(),
                         is_power: true,
                         ref_text: None,
                         val_text: Some(signex_types::schematic::TextProp {
@@ -368,15 +354,8 @@ impl Signex {
                         row_id: None,
                         library_version: String::new(),
                     };
-                    self.apply_engine_command(
-                        signex_engine::Command::PlaceSymbol { symbol: sym },
-                        false,
-                        false,
-                    );
+                    self.apply_engine_commands(signex_engine::place_power_port(sym), false, false);
                 }
-            }
-            Tool::Component => {
-                let _ = self.place_selected_component(wx, wy);
             }
             Tool::NoConnect => {
                 let nc = signex_types::schematic::NoConnect {
@@ -388,6 +367,34 @@ impl Signex {
                     false,
                     false,
                 );
+            }
+            // Placed where clicked, like the other one-click placements. The
+            // net builder accepts a dot anywhere; one off a wire joins nothing.
+            Tool::Junction => {
+                // A second dot on the same point (the net builder's 1 um key)
+                // joins nothing new and would only stack in the file.
+                let at = signex_types::schematic::Point::new(wx, wy);
+                let already_there = self.document_state.active_engine().is_some_and(|engine| {
+                    engine
+                        .document()
+                        .junctions
+                        .iter()
+                        .any(|j| signex_net::pt_key(&j.position) == signex_net::pt_key(&at))
+                });
+                if !already_there {
+                    let junction = signex_types::schematic::Junction {
+                        uuid: uuid::Uuid::new_v4(),
+                        position: signex_types::schematic::Point::new(wx, wy),
+                        diameter: 0.0,
+                        minted: false,
+                        unknown_columns: Default::default(),
+                    };
+                    self.apply_engine_command(
+                        signex_engine::Command::PlaceJunction { junction },
+                        false,
+                        false,
+                    );
+                }
             }
             Tool::NoErcDirective => {
                 let directive = signex_types::schematic::NoConnect {
@@ -468,6 +475,8 @@ impl Signex {
                 }
             }
             Tool::Sheet => self.place_sheet_click(wx, wy),
+            Tool::SheetEntry => self.place_sheet_entry_click(wx, wy),
+            Tool::Measure => self.measure_click(wx, wy),
             Tool::Rectangle => {
                 // Two-click: corner → opposite-corner →
                 // SchDrawing::Rect. Rearms blank for the
@@ -594,7 +603,7 @@ impl Signex {
                     .unwrap_or_else(|| "Text".to_string());
                 let tn = signex_types::schematic::TextNote {
                     uuid: uuid::Uuid::new_v4(),
-                    text: note_text,
+                    text: note_text.clone(),
                     position: signex_types::schematic::Point::new(wx, wy),
                     rotation: 0.0,
                     font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
@@ -602,11 +611,13 @@ impl Signex {
                     justify_v: signex_types::schematic::VAlign::default(),
                     font_family: None,
                 };
-                self.apply_engine_command(
+                if self.apply_engine_command(
                     signex_engine::Command::PlaceTextNote { text_note: tn },
                     false,
                     false,
-                );
+                ) {
+                    self.text_note_placed(&note_text);
+                }
                 self.interaction_state.current_tool = Tool::Select;
             }
             Tool::Label => {
@@ -657,6 +668,7 @@ impl Signex {
                         signex_types::schematic::HAlign::Left,
                         signex_types::schematic::VAlign::Bottom,
                     ));
+                let placed_text = text.clone();
                 let label = signex_types::schematic::Label {
                     unknown_columns: Default::default(),
                     uuid: uuid::Uuid::new_v4(),
@@ -670,11 +682,13 @@ impl Signex {
                     justify_v: pp_justify_v,
                     font_family: None,
                 };
-                self.apply_engine_command(
+                if self.apply_engine_command(
                     signex_engine::Command::PlaceLabel { label },
                     false,
                     false,
-                );
+                ) {
+                    self.label_placed(&placed_text);
+                }
             }
             _ => {
                 return self.handle_selection_request(selection_request::SelectionRequest::HitAt {

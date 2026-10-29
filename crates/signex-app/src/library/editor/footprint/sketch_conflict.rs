@@ -11,6 +11,7 @@ use signex_sketch::{SketchError, SolveError};
 
 use super::sketch_dispatch::solve_and_bake;
 use super::state::FootprintEditorState;
+use super::state::conflict::name_conflict;
 
 /// True when `error` is a named conflict, the one failure for which
 /// [`mutate_solve_or_revert`] puts the sketch back. Every other solve
@@ -40,27 +41,26 @@ pub(super) fn mutate_solve_or_revert(
         Err(SketchError::SolveFailed(SolveError::OverConstrained(ids))) if !ids.is_empty() => {
             // Read the named constraints' entities now: the rejected edit's
             // own constraint disappears with the revert below.
-            let named_entities = footprint
-                .sketch
-                .as_ref()
-                .map(|s| {
-                    s.constraints
-                        .iter()
-                        .filter(|c| ids.contains(&c.id))
-                        .flat_map(|c| c.kind.entity_refs())
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
+            let (rows, named_entities) = name_conflict(&ids, footprint.sketch.as_ref());
             footprint.sketch = before;
             drop_dangling_selection(state, footprint);
-            if let Err(e) = solve_and_bake(state, footprint) {
+            // The re-solve dedups against what is already logged, then the
+            // set is put back: it is the clean sketch's, without the
+            // conflict that is about to be reported, and keeping it would
+            // make the next identical rejection log again.
+            let logged = state.logged_solve_warnings.clone();
+            let resolved = solve_and_bake(state, footprint);
+            state.logged_solve_warnings = logged;
+            if let Err(e) = resolved {
                 tracing::warn!(
                     target: "signex::sketch",
                     error = %e,
                     "the sketch reverted after a conflict could not be re-solved"
                 );
             }
-            state.conflict.record_rejection(ids.clone(), named_entities);
+            state
+                .conflict
+                .record_rejection(ids.clone(), rows, named_entities);
             Err(SketchError::SolveFailed(SolveError::OverConstrained(ids)))
         }
         other => other,

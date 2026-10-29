@@ -9,10 +9,7 @@
 //! would defeat the "did the technical content actually change?" question
 //! the hash answers.
 //!
-//! Per `v0.9-refactor-2-plan.md` §6 step 1.6, this replaces the older
-//! `hash_revision_content`. The pattern (canonical JSON over a `Serialize`
-//! view) is identical; only the input type changed from `Revision` to
-//! `ComponentRow`.
+//! The pattern is canonical JSON over a `Serialize` view of `ComponentRow`.
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -45,6 +42,9 @@ struct CanonView<'a> {
     datasheet_label: &'a str,
     #[serde(skip_serializing_if = "<[_]>::is_empty")]
     more_datasheets: &'a [DatasheetDoc],
+    // Skipped while empty so a row without one keeps its hash.
+    #[serde(skip_serializing_if = "str::is_empty")]
+    description: &'a str,
     symbol_ref: &'a PrimitiveRef,
     footprint_ref: Option<&'a PrimitiveRef>,
     // Skipped while empty so rows from before #1234 keep their hash.
@@ -73,6 +73,7 @@ impl<'a> CanonView<'a> {
             datasheet: &row.datasheet,
             datasheet_label: &row.datasheet_label,
             more_datasheets: &row.more_datasheets,
+            description: &row.description,
             symbol_ref: &row.symbol_ref,
             footprint_ref: row.footprint_ref.as_ref(),
             alternate_footprints: &row.alternate_footprints,
@@ -161,6 +162,7 @@ mod tests {
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::url(""),
             datasheet_label: String::new(),
+            description: String::new(),
             more_datasheets: Vec::new(),
             state: LifecycleState::Released,
             symbol_ref: PrimitiveRef::new(lib, Uuid::nil()),
@@ -195,6 +197,32 @@ mod tests {
         assert_eq!(
             hex,
             "d8cc43c86aa2c893a5371ba6aa1969184a3a71306d14c8907debdc374f62a174"
+        );
+    }
+
+    /// A row holding a legacy prefixed measurement hashes exactly as it
+    /// did before the quantity core: reading it through `as_quantity`
+    /// never rewrites or re-encodes the stored value.
+    #[test]
+    fn hash_of_untouched_legacy_measurement_row_is_stable() {
+        let mut row = fixture_row();
+        row.parameters.insert(
+            "value".into(),
+            ParamValue::Measurement {
+                value: 4.7,
+                unit: "kΩ".into(),
+            },
+        );
+        let before = hex(&hash_row_content(&row).unwrap());
+        assert_eq!(
+            row.parameters["value"].as_quantity().unwrap().base(),
+            4700.0
+        );
+        let _ = row.parameters["value"].display();
+        assert_eq!(hex(&hash_row_content(&row).unwrap()), before);
+        assert_eq!(
+            before,
+            "0061c8e28d45c7338940261e03b1e1fc17b216178dbfeaa0ed1158a3b8d26db6"
         );
     }
 
@@ -242,6 +270,16 @@ mod tests {
             DatasheetRef::url("e.pdf"),
         ));
         assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&c).unwrap());
+    }
+
+    #[test]
+    fn hash_changes_with_description_and_ignores_empty() {
+        let a = fixture_row();
+        let mut b = fixture_row();
+        b.description = "100 nF".into();
+        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
+        b.description.clear();
+        assert_eq!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
     }
 
     #[test]

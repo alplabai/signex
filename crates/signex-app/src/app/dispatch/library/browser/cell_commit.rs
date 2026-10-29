@@ -2,6 +2,7 @@
 //! value and write it back through the library adapter.
 
 use super::*;
+use crate::library::refresh::RefreshFollowUp;
 
 impl Signex {
     /// Commit a per-cell inline edit to the row. Re-hashes + persists.
@@ -47,7 +48,7 @@ impl Signex {
         };
         match column.as_str() {
             "internal_pn" => {
-                row.internal_pn = signex_library::InternalPn::new(buf.clone());
+                row.internal_pn = signex_library::InternalPn::new(buf.trim());
             }
             "manufacturer" => {
                 row.primary_mpn.manufacturer = buf.clone();
@@ -61,7 +62,11 @@ impl Signex {
                 // existing value. A typed cell that cannot read the
                 // buffer refuses the commit rather than retyping the
                 // parameter to text and dropping its unit (#599).
-                match param_commit::param_value_for_commit(row.parameters.get(key), &buf) {
+                let in_slot = param_commit::is_measurement_slot(
+                    self.library.row_template(&library_path, row.class.as_str()),
+                    key,
+                );
+                match param_commit::param_value_for_commit(row.parameters.get(key), &buf, in_slot) {
                     Ok(new_value) => {
                         row.parameters.insert(key.to_string(), new_value);
                     }
@@ -124,13 +129,13 @@ impl Signex {
             .library_at(&library_path)
             .map(|lib| lib.library_id);
         let result = match library_id.and_then(|id| self.library.set.get(id)) {
-            Some(adapter) => adapter.update_row(&table, row, "edit cell"),
+            Some(adapter) => adapter.update_row(&table, row.clone(), "edit cell"),
             None => Err(signex_library::LibraryError::NotFound(
                 library_path.display().to_string(),
             )),
         };
-        match result {
-            Ok(_) => {}
+        let revision = match result {
+            Ok(revision) => revision,
             Err(e) => {
                 crate::diagnostics::log_warning(format!(
                     "Cell {column} of row {row_id} was not saved: {e} (table {table}, {})",
@@ -141,26 +146,17 @@ impl Signex {
                 }
                 // A refused write leaves the cache on the stale revision, so
                 // every retry would be refused again: re-read the rows.
-                if let Err(e) = self.library.refresh_components(&library_path) {
-                    tracing::warn!(
-                        target: "signex::library",
-                        error = %e,
-                        "browser cell commit: refresh_components failed"
-                    );
-                }
+                let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
                 // No `finish_update` here: republish so the refusal shows now.
                 self.sync_diagnostics_panel_ctx();
-                return Task::none();
+                return refresh;
             }
-        }
-        if let Err(e) = self.library.refresh_components(&library_path) {
-            tracing::warn!(
-                target: "signex::library",
-                error = %e,
-                "browser cell commit: refresh_components failed"
-            );
-        }
-        self.refresh_clean_editors(&library_path, &[row_id]);
-        Task::none()
+        };
+        // The re-read lands later; show the saved row (new revision
+        // included) right away so the cell does not flash its old value and
+        // a second commit starts from the saved revision.
+        self.library
+            .patch_cached_row(&library_path, &table, row, revision);
+        self.refresh_library_task(&library_path, RefreshFollowUp::CleanEditors(vec![row_id]))
     }
 }

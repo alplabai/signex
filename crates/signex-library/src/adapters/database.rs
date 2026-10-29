@@ -1,9 +1,10 @@
 //! `LibraryAdapter` over the HTTP API exposed by `signex-library-server`.
 //!
 //! Synchronous facade for the trait. Row CRUD speaks to the
-//! `/tables` / `/rows` routes; primitive (`/symbols` / `/footprints`
-//! / `/sims`) wiring is unchanged because primitives stay
-//! file-shaped under the DBLib model.
+//! `/tables` / `/rows` routes; primitives (`/symbols` / `/footprints`
+//! / `/sims`) are created with `POST` and replaced with `PUT` +
+//! `If-Match`, the same revision scheme as rows. The base revision travels
+//! with the caller's copy ([`Versioned`]), never in a cache on the adapter.
 //!
 //! Routes are addressed by a `library_id` query parameter — the
 //! adapter sources its own from `manifest().library.library_id`.
@@ -19,7 +20,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
 use super::database_row_schema::{RowSchemaGuard, schema_refusal};
-use crate::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
+use crate::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary, Versioned};
 use crate::component::{ComponentRow, ROW_SCHEMA, ROW_SCHEMA_HEADER};
 use crate::identity::{InternalPn, RowId};
 use crate::library_file::SnxlibManifest;
@@ -47,8 +48,7 @@ pub struct DatabaseAdapter {
     row_schema: RowSchemaGuard,
 }
 
-/// Manifest `auth` prefix that names an OS-keychain item instead of a token.
-const KEYCHAIN_SIGIL: &str = "@signex-keychain:";
+use crate::manifest::{KEYCHAIN_SIGIL, resolve_auth};
 
 /// Refuse to send a bearer token over cleartext HTTP to a non-loopback host.
 /// Loopback http (local dev server) and any https URL pass.
@@ -125,7 +125,7 @@ fn refuse_lost_documents(
 }
 
 /// Attach the row's base revision as `If-Match: "<revision>"`. Without one
-/// the server answers 428, which [`row_write_error`] reports.
+/// the server answers 428, which [`write_error`] reports.
 fn with_base_revision(
     req: reqwest::blocking::RequestBuilder,
     base_revision: Option<u64>,
@@ -136,23 +136,24 @@ fn with_base_revision(
     }
 }
 
-/// Map a refused row PUT/DELETE to a [`LibraryError`]. A 409 carrying
-/// `current_revision` means the stored row moved on since it was read.
-fn row_write_error(
+/// Map a refused row or primitive write to a [`LibraryError`]. A 409
+/// carrying `current_revision` means the stored copy moved on since it was
+/// read. `subject` names what was written (`row <table>/<id>`,
+/// `symbol <uuid>`).
+fn write_error(
     resp: reqwest::blocking::Response,
     op: &str,
-    table: &str,
-    row_id: impl std::fmt::Display,
+    subject: &str,
     row_schema: &RowSchemaGuard,
 ) -> LibraryError {
     match resp.status() {
-        reqwest::StatusCode::NOT_FOUND => LibraryError::NotFound(format!("row {table}/{row_id}")),
+        reqwest::StatusCode::NOT_FOUND => LibraryError::NotFound(subject.to_string()),
         reqwest::StatusCode::CONFLICT => {
             let body: serde_json::Value = resp.json().unwrap_or_default();
             match body["current_revision"].as_u64() {
                 Some(current_revision) => LibraryError::RowChanged { current_revision },
                 None => LibraryError::Conflict(format!(
-                    "{op} {table}/{row_id}: {}",
+                    "{op} {subject}: {}",
                     body["error"].as_str().unwrap_or("refused by the server")
                 )),
             }
@@ -165,20 +166,21 @@ fn row_write_error(
                 return refusal;
             }
             LibraryError::Backend(format!(
-                "{op} {table}/{row_id}: {}",
+                "{op} {subject}: {}",
                 body["error"].as_str().unwrap_or("400 Bad Request")
             ))
         }
         reqwest::StatusCode::PRECONDITION_REQUIRED => LibraryError::Backend(format!(
-            "{op} {table}/{row_id}: the server requires the row's base revision (If-Match); reload the row"
+            "{op} {subject}: the server requires the revision this copy was read at (If-Match); \
+             reload it and save again"
         )),
-        other => LibraryError::Backend(format!("{op} {table}/{row_id}: {other}")),
+        other => LibraryError::Backend(format!("{op} {subject}: {other}")),
     }
 }
 
 impl DatabaseAdapter {
-    /// Construct from a manifest. The manifest's `auth` field is treated as
-    /// the bearer token.
+    /// Construct from a manifest. The manifest's `auth` field is the bearer
+    /// token, or an `${env:NAME}` reference to the variable that holds it.
     pub fn new(manifest: Manifest) -> Result<Self, LibraryError> {
         let (base_url, auth) = match &manifest.mode {
             LibraryMode::Database { url, auth } => {
@@ -196,6 +198,8 @@ impl DatabaseAdapter {
              refusing to send the sigil as a bearer token (OS keychain resolution: #976)"
             )));
         }
+        let auth =
+            resolve_auth(&auth, |name| std::env::var(name).ok()).map_err(LibraryError::Backend)?;
         check_transport_security(&base_url, !auth.is_empty())?;
         let client = reqwest::blocking::Client::builder()
             .connect_timeout(HTTP_CONNECT_TIMEOUT)
@@ -316,14 +320,16 @@ impl DatabaseAdapter {
     }
 
     /// Generic GET → JSON for a primitive at `/{collection}/{uuid}` in this
-    /// library. `collection` is percent-encoded; `uuid` is hex (Display) so it
-    /// is already URL-safe.
+    /// library, with the revision from its `ETag`. `collection` is
+    /// percent-encoded; `uuid` is hex (Display) so it is already URL-safe.
     fn get_primitive_json<T: DeserializeOwned>(
         &self,
         collection: &str,
         uuid: Uuid,
         kind_label: &str,
-    ) -> Result<T, LibraryError> {
+    ) -> Result<Versioned<T>, LibraryError> {
+        self.row_schema
+            .check_primitives(&self.client, &self.url("/version"))?;
         let coll = Self::encode_segment(collection);
         let resp = self
             .auth(
@@ -331,11 +337,19 @@ impl DatabaseAdapter {
                     .get(self.url(&format!("/{coll}/{uuid}?{}", self.library_id_query()))),
             )
             .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+            .map_err(|e| self.row_write_transport_error(e))?;
         match resp.status() {
-            s if s.is_success() => resp
-                .json::<T>()
-                .map_err(|e| LibraryError::Backend(e.to_string())),
+            s if s.is_success() => {
+                let revision =
+                    primitive_revision(&resp, "get", kind_label, uuid, &self.row_schema)?;
+                let value = resp
+                    .json::<T>()
+                    .map_err(|e| LibraryError::Backend(e.to_string()))?;
+                Ok(Versioned {
+                    value,
+                    revision: Some(revision),
+                })
+            }
             reqwest::StatusCode::NOT_FOUND => {
                 Err(LibraryError::NotFound(format!("{kind_label} {uuid}")))
             }
@@ -343,36 +357,54 @@ impl DatabaseAdapter {
         }
     }
 
-    /// Generic POST primitive JSON to `/{collection}` with the supplied
-    /// commit message in the `x-signex-message` header. The server reads the
-    /// owning library from a top-level `library_id` beside the primitive's
-    /// own fields.
-    fn post_primitive_json<T: Serialize>(
+    /// Save a primitive and return the revision it now has. With the `base`
+    /// the caller's copy was read at, it replaces the primitive with `PUT` +
+    /// `If-Match`, refused with [`LibraryError::PrimitiveChanged`] when someone
+    /// saved it since. Without one it creates it with `POST`, refused with
+    /// [`LibraryError::Conflict`] when the uuid already exists. The body
+    /// carries the owning library beside the primitive's own fields, and the
+    /// commit message goes in `x-signex-message`.
+    fn save_primitive_json<T: Serialize>(
         &self,
         collection: &str,
+        kind_label: &str,
+        uuid: Uuid,
         body: &T,
+        base: Option<u64>,
         message: &str,
-    ) -> Result<(), LibraryError> {
+    ) -> Result<u64, LibraryError> {
+        self.row_schema
+            .check_primitives(&self.client, &self.url("/version"))?;
         let coll = Self::encode_segment(collection);
+        let payload = InLibrary {
+            library_id: self.manifest.library.library_id,
+            primitive: body,
+        };
+        let req = match base {
+            Some(_) => {
+                with_base_revision(self.client.put(self.url(&format!("/{coll}/{uuid}"))), base)
+            }
+            None => self.client.post(self.url(&format!("/{coll}"))),
+        };
         let resp = self
-            .auth(
-                self.client
-                    .post(self.url(&format!("/{coll}")))
-                    .header("x-signex-message", message)
-                    .json(&InLibrary {
-                        library_id: self.manifest.library.library_id,
-                        primitive: body,
-                    }),
-            )
+            .auth(req.header("x-signex-message", message).json(&payload))
             .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+            .map_err(|e| self.row_write_transport_error(e))?;
         if !resp.status().is_success() {
-            return Err(LibraryError::Backend(format!(
-                "save {collection}: {}",
-                resp.status()
-            )));
+            let subject = format!("{kind_label} {uuid}");
+            return Err(
+                match write_error(resp, "save", &subject, &self.row_schema) {
+                    LibraryError::RowChanged { current_revision } => {
+                        LibraryError::PrimitiveChanged {
+                            subject,
+                            current_revision,
+                        }
+                    }
+                    other => other,
+                },
+            );
         }
-        Ok(())
+        primitive_revision(&resp, "save", kind_label, uuid, &self.row_schema)
     }
 
     /// Generic GET → list at `/{collection}` returning this library's
@@ -385,22 +417,8 @@ impl DatabaseAdapter {
         kind: PrimitiveKind,
     ) -> Result<Vec<PrimitiveSummary>, LibraryError> {
         let coll = Self::encode_segment(collection);
-        let resp = self
-            .auth(
-                self.client
-                    .get(self.url(&format!("/{coll}?{}", self.library_id_query()))),
-            )
-            .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        if !resp.status().is_success() {
-            return Err(LibraryError::Backend(format!(
-                "list {collection}: {}",
-                resp.status()
-            )));
-        }
-        let listed = resp
-            .json::<Vec<ListedPrimitive>>()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+        let listed: Vec<ListedPrimitive> =
+            self.get_all_pages(&format!("/{coll}"), &format!("list {collection}"), None)?;
         Ok(listed
             .into_iter()
             .map(|row| PrimitiveSummary {
@@ -412,6 +430,48 @@ impl DatabaseAdapter {
             .collect())
     }
 
+    /// GET a paged list route and return every page, concatenated. Asks for
+    /// [`LIST_PAGE_SIZE`] at a time and stops at the first page shorter than
+    /// that, so callers see the full list whatever the server's default page
+    /// is. A 404 becomes `NotFound(not_found)` when given; any other failure
+    /// is `Backend("{what}: {status}")`.
+    fn get_all_pages<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        what: &str,
+        not_found: Option<&str>,
+    ) -> Result<Vec<T>, LibraryError> {
+        let mut all = Vec::new();
+        loop {
+            let url = self.url(&format!(
+                "{path}?{}&limit={LIST_PAGE_SIZE}&offset={}",
+                self.library_id_query(),
+                all.len()
+            ));
+            let resp = self
+                .auth(self.client.get(url))
+                .send()
+                .map_err(|e| LibraryError::Backend(e.to_string()))?;
+            let status = resp.status();
+            if status == reqwest::StatusCode::NOT_FOUND
+                && let Some(missing) = not_found
+            {
+                return Err(LibraryError::NotFound(missing.to_owned()));
+            }
+            if !status.is_success() {
+                return Err(LibraryError::Backend(format!("{what}: {status}")));
+            }
+            let page = resp
+                .json::<Vec<T>>()
+                .map_err(|e| LibraryError::Backend(e.to_string()))?;
+            let last = page.len() < LIST_PAGE_SIZE;
+            all.extend(page);
+            if last {
+                return Ok(all);
+            }
+        }
+    }
+
     /// `library_id` query string segment used by every row, table and
     /// primitive read. The server keys storage by `library_id`; a missing or
     /// wrong id surfaces as a 404 from the route, which we map to `NotFound`
@@ -419,6 +479,46 @@ impl DatabaseAdapter {
     fn library_id_query(&self) -> String {
         format!("library_id={}", self.manifest.library.library_id)
     }
+}
+
+/// Rows requested per list page; the server's maximum, so a list takes the
+/// fewest round trips.
+const LIST_PAGE_SIZE: usize = 1000;
+
+/// The revision a successful primitive reply carries in its `ETag`. A
+/// server that sends none predates primitive revisions and treats a `POST`
+/// as an upsert, so a save through it could silently replace someone
+/// else's version: refuse to go on, as the row-schema guard does for rows.
+fn primitive_revision(
+    resp: &reqwest::blocking::Response,
+    op: &str,
+    kind_label: &str,
+    uuid: Uuid,
+    guard: &RowSchemaGuard,
+) -> Result<u64, LibraryError> {
+    etag_revision(resp).ok_or_else(|| {
+        // The cached capability answer is stale: re-read /version next time.
+        guard.forget();
+        LibraryError::Backend(format!(
+            "{op} {kind_label} {uuid}: the library server is too old for this signex (it sends \
+             no primitive revision); this request had already reached it, so a save may have \
+             gone through and overwritten another copy; upgrade signex and the library server \
+             together"
+        ))
+    })
+}
+
+/// The revision in a response's `ETag: "<revision>"` header, if any.
+fn etag_revision(resp: &reqwest::blocking::Response) -> Option<u64> {
+    resp.headers()
+        .get(reqwest::header::ETAG)?
+        .to_str()
+        .ok()?
+        .trim()
+        .strip_prefix('"')?
+        .strip_suffix('"')?
+        .parse()
+        .ok()
 }
 
 /// One row of the server's primitive list (`GET /{collection}`).
@@ -429,7 +529,7 @@ struct ListedPrimitive {
 }
 
 /// A primitive's JSON with the owning library beside its fields — the body
-/// the server's primitive `POST` routes expect.
+/// the server's primitive `POST` and `PUT` routes expect.
 #[derive(Serialize)]
 struct InLibrary<'a, T> {
     library_id: Uuid,
@@ -482,18 +582,11 @@ impl LibraryAdapter for DatabaseAdapter {
 
     fn read_table(&self, name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
         let n = Self::encode_segment(name);
-        let url = self.url(&format!("/tables/{n}?{}", self.library_id_query()));
-        let resp = self
-            .auth(self.client.get(url))
-            .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        match resp.status() {
-            s if s.is_success() => resp
-                .json::<Vec<ComponentRow>>()
-                .map_err(|e| LibraryError::Backend(e.to_string())),
-            reqwest::StatusCode::NOT_FOUND => Err(LibraryError::NotFound(format!("table {name}"))),
-            other => Err(LibraryError::Backend(format!("read_table {name}: {other}"))),
-        }
+        self.get_all_pages(
+            &format!("/tables/{n}"),
+            &format!("read_table {name}"),
+            Some(&format!("table {name}")),
+        )
     }
 
     /// Composed from `list_tables` + `read_table` per plan §9 (the server
@@ -548,6 +641,7 @@ impl LibraryAdapter for DatabaseAdapter {
     fn insert_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
         crate::validate_row_for_write(&row)?;
         self.row_schema.check(&self.client, &self.url("/version"))?;
+        self.check_pn_free_for_insert(&row)?;
         // The DB backend has no commit log — surface the audit message at
         // the `tracing` layer so it shows up in operator logs even before
         // the planned `audit_log` table lands.
@@ -573,15 +667,7 @@ impl LibraryAdapter for DatabaseAdapter {
             .send()
             .map_err(|e| self.row_write_transport_error(e))?;
         if !resp.status().is_success() {
-            let status = resp.status();
-            let body: serde_json::Value = resp.json().unwrap_or_default();
-            if let Some(refusal) = schema_refusal(&body) {
-                self.row_schema.forget();
-                return Err(refusal);
-            }
-            return Err(LibraryError::Backend(format!(
-                "insert_row {table}: {status}"
-            )));
+            return Err(write_error(resp, "insert_row", table, &self.row_schema));
         }
         let stored = resp
             .json::<ComponentRow>()
@@ -597,6 +683,7 @@ impl LibraryAdapter for DatabaseAdapter {
     ) -> Result<Option<u64>, LibraryError> {
         crate::validate_row_for_write(&row)?;
         self.row_schema.check(&self.client, &self.url("/version"))?;
+        self.check_pn_free_for_update(table, &row)?;
         tracing::info!(
             target: "signex_library::database",
             library_id = %self.manifest.library.library_id,
@@ -622,11 +709,10 @@ impl LibraryAdapter for DatabaseAdapter {
             .send()
             .map_err(|e| self.row_write_transport_error(e))?;
         if !resp.status().is_success() {
-            return Err(row_write_error(
+            return Err(write_error(
                 resp,
                 "update_row",
-                table,
-                row_id,
+                &format!("row {table}/{row_id}"),
                 &self.row_schema,
             ));
         }
@@ -668,11 +754,10 @@ impl LibraryAdapter for DatabaseAdapter {
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
         if !resp.status().is_success() {
-            return Err(row_write_error(
+            return Err(write_error(
                 resp,
                 "delete_row",
-                table,
-                row_id,
+                &format!("row {table}/{row_id}"),
                 &self.row_schema,
             ));
         }
@@ -680,30 +765,76 @@ impl LibraryAdapter for DatabaseAdapter {
     }
 
     fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
-        self.get_primitive_json::<Symbol>("symbols", uuid, "symbol")
+        self.get_symbol_versioned(uuid).map(|read| read.value)
     }
 
     fn get_footprint(&self, uuid: Uuid) -> Result<Footprint, LibraryError> {
-        let mut footprint =
-            self.get_primitive_json::<Footprint>("footprints", uuid, "footprint")?;
-        footprint.repair_stored_sketch();
-        Ok(footprint)
+        self.get_footprint_versioned(uuid).map(|read| read.value)
     }
 
     fn get_sim(&self, uuid: Uuid) -> Result<SimModel, LibraryError> {
-        self.get_primitive_json::<SimModel>("sims", uuid, "sim")
+        self.get_sim_versioned(uuid).map(|read| read.value)
     }
 
+    fn get_symbol_versioned(&self, uuid: Uuid) -> Result<Versioned<Symbol>, LibraryError> {
+        self.get_primitive_json("symbols", uuid, "symbol")
+    }
+
+    fn get_footprint_versioned(&self, uuid: Uuid) -> Result<Versioned<Footprint>, LibraryError> {
+        let mut read = self.get_primitive_json::<Footprint>("footprints", uuid, "footprint")?;
+        read.value.repair_stored_sketch();
+        Ok(read)
+    }
+
+    fn get_sim_versioned(&self, uuid: Uuid) -> Result<Versioned<SimModel>, LibraryError> {
+        self.get_primitive_json("sims", uuid, "sim")
+    }
+
+    /// Creates the symbol; to replace one, read it with
+    /// [`get_symbol_versioned`](LibraryAdapter::get_symbol_versioned) and
+    /// save with its revision.
     fn save_symbol(&self, sym: Symbol, message: &str) -> Result<(), LibraryError> {
-        self.post_primitive_json("symbols", &sym, message)
+        self.save_symbol_versioned(sym, None, message).map(drop)
     }
 
+    /// Creates the footprint; see [`Self::save_symbol`].
     fn save_footprint(&self, fp: Footprint, message: &str) -> Result<(), LibraryError> {
-        self.post_primitive_json("footprints", &fp, message)
+        self.save_footprint_versioned(fp, None, message).map(drop)
     }
 
+    /// Creates the sim model; see [`Self::save_symbol`].
     fn save_sim(&self, sm: SimModel, message: &str) -> Result<(), LibraryError> {
-        self.post_primitive_json("sims", &sm, message)
+        self.save_sim_versioned(sm, None, message).map(drop)
+    }
+
+    fn save_symbol_versioned(
+        &self,
+        sym: Symbol,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        self.save_primitive_json("symbols", "symbol", sym.uuid, &sym, base, message)
+            .map(Some)
+    }
+
+    fn save_footprint_versioned(
+        &self,
+        fp: Footprint,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        self.save_primitive_json("footprints", "footprint", fp.uuid, &fp, base, message)
+            .map(Some)
+    }
+
+    fn save_sim_versioned(
+        &self,
+        sm: SimModel,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        self.save_primitive_json("sims", "sim", sm.uuid, &sm, base, message)
+            .map(Some)
     }
 
     fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
@@ -740,6 +871,8 @@ fn synthesize_legacy_manifest(snx: SnxlibManifest) -> Manifest {
         tables: Vec::new(),
     }
 }
+
+mod pn_unique;
 
 #[cfg(test)]
 mod tests;

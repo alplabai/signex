@@ -38,7 +38,38 @@ impl Signex {
                 .skipped_updates_for
                 .insert(state.schematic_path);
         }
+        self.show_next_queued_updates();
         Task::none()
+    }
+
+    /// Open the next sheet's queued Library Updates modal, if none is open.
+    pub(super) fn show_next_queued_updates(&mut self) {
+        if self.library.library_updates.is_none() && !self.library.queued_library_updates.is_empty()
+        {
+            self.library.library_updates = Some(self.library.queued_library_updates.remove(0));
+        }
+    }
+
+    /// Take the pending modal state for `sheet`, wherever it waits (open
+    /// modal or queue).
+    fn take_pending_updates_for(
+        &mut self,
+        sheet: &std::path::Path,
+    ) -> Option<crate::library::updates_dialog::LibraryUpdatesState> {
+        if self
+            .library
+            .library_updates
+            .as_ref()
+            .is_some_and(|open| open.schematic_path == sheet)
+        {
+            return self.library.library_updates.take();
+        }
+        let at = self
+            .library
+            .queued_library_updates
+            .iter()
+            .position(|queued| queued.schematic_path == sheet)?;
+        Some(self.library.queued_library_updates.remove(at))
     }
 
     /// Scan the schematic at `path` for placed Symbols whose
@@ -47,7 +78,9 @@ impl Signex {
     ///
     /// * **Personal** workflow mode - adopts the library's current symbol
     ///   and stamps the new version silently, without an undo step (the
-    ///   user did not ask for it), and dirty-marks the path.
+    ///   user did not ask for it), and dirty-marks the path. After a late
+    ///   mount (`only` set) it is one normal undo step, since the user may
+    ///   have edited the sheet already.
     /// * **Team** workflow mode - populates
     ///   `LibraryState::library_updates` with the entries so
     ///   `view_main_for` opens the modal on the next tick.
@@ -68,7 +101,62 @@ impl Signex {
     /// `pub` (not `pub(crate)`) because the integration tests in
     /// `tests/regression` drive the open-time scan directly.
     pub fn scan_library_updates_for_open_schematic(&mut self, schematic_path: std::path::PathBuf) {
-        let placed = self.placed_library_symbols(&schematic_path);
+        self.scan_library_updates(schematic_path, None);
+    }
+
+    /// Re-run the version scan for every open sheet that has a symbol
+    /// linked to `library_id`, now that the library has mounted (#1449).
+    /// The open-time scan skipped those symbols while it was unmounted.
+    /// Only that library's symbols are scanned, so other still-unmounted
+    /// libraries are not warned about a second time, and a sheet with no
+    /// matching link is left alone.
+    pub(super) fn rescan_library_updates_after_mount(&mut self, library_id: uuid::Uuid) {
+        let sheets: Vec<std::path::PathBuf> = self
+            .document_state
+            .engines
+            .keys()
+            .filter(|path| {
+                self.placed_library_symbols(path)
+                    .iter()
+                    .any(|s| s.library_id == library_id)
+            })
+            .cloned()
+            .collect();
+        for sheet in sheets {
+            self.scan_library_updates(sheet, Some(library_id));
+        }
+    }
+
+    /// The scan behind both entry points; `only` restricts it to the
+    /// `lib_id` groups with an instance linked to one library.
+    fn scan_library_updates(
+        &mut self,
+        schematic_path: std::path::PathBuf,
+        only: Option<uuid::Uuid>,
+    ) {
+        // A read-only sheet (written by a newer Signex) takes no update, not
+        // even a silent Personal one: it would turn dirty on open (#1402).
+        let read_only = self
+            .document_state
+            .engines
+            .get(&schematic_path)
+            .is_some_and(|engine| engine.document().is_read_only());
+        if read_only {
+            return;
+        }
+        let mut placed = self.placed_library_symbols(&schematic_path);
+        if let Some(only) = only {
+            // Every instance of a `lib_id` shares one embedded copy, so the
+            // whole group is scanned (the Personal auto-apply checks each
+            // instance), even when a sibling links to a still-unmounted
+            // library.
+            let wanted: std::collections::BTreeSet<String> = placed
+                .iter()
+                .filter(|s| s.library_id == only)
+                .map(|s| s.lib_id.clone())
+                .collect();
+            placed.retain(|s| wanted.contains(&s.lib_id));
+        }
         if placed.is_empty() {
             return;
         }
@@ -122,10 +210,12 @@ impl Signex {
         // refusal leaves both. No undo step: opening a sheet must not leave
         // something for the first Ctrl+Z to revert.
         for (lib_id, (fresh, stamps)) in personal_apply {
+            // A late mount can land after the user's first edit, which the
+            // unrecorded path refuses, so it becomes one normal undo step.
             any_failed |=
-                !self.adopt_library_symbol(&schematic_path, &lib_id, fresh, stamps, false);
+                !self.adopt_library_symbol(&schematic_path, &lib_id, fresh, stamps, only.is_some());
         }
-        self.record_scan_outcome(schematic_path, team_entries, any_failed);
+        self.record_scan_outcome(schematic_path, team_entries, any_failed, only.is_some());
     }
 
     /// Surface the Team-mode entries via the modal state, or record whether
@@ -135,23 +225,53 @@ impl Signex {
         schematic_path: std::path::PathBuf,
         team_entries: Vec<crate::library::updates_dialog::LibraryUpdateEntry>,
         any_failed: bool,
+        partial: bool,
     ) {
         if !team_entries.is_empty() {
+            // A partial (one-library) scan adds to the sheet's pending
+            // modal rather than replacing the other libraries' entries;
+            // entries already there keep their checkbox, only new ones get
+            // the default.
+            let pending = self.take_pending_updates_for(&schematic_path);
+            let mut kept = std::collections::HashMap::new();
+            let (team_entries, any_failed) = match pending {
+                Some(old) if partial => {
+                    let any_failed = any_failed || old.scan_failed;
+                    let known: std::collections::HashSet<_> =
+                        old.entries.iter().map(|e| e.symbol_uuid).collect();
+                    kept.extend(old.entries.iter().map(|e| (e.symbol_uuid, e.selected)));
+                    let fresh = team_entries
+                        .into_iter()
+                        .filter(|e| !known.contains(&e.symbol_uuid));
+                    (old.entries.into_iter().chain(fresh).collect(), any_failed)
+                }
+                _ => (team_entries, any_failed),
+            };
             let mut state = crate::library::updates_dialog::LibraryUpdatesState::new(
                 schematic_path.clone(),
                 team_entries,
             );
+            for entry in &mut state.entries {
+                if let Some(selected) = kept.get(&entry.symbol_uuid) {
+                    entry.selected = *selected;
+                }
+            }
             state.scan_failed = any_failed;
             state.engine_instance = self
                 .document_state
                 .engines
                 .get(&schematic_path)
                 .map_or(0, signex_engine::Engine::instance_id);
-            self.library.library_updates = Some(state);
+            // One modal at a time: another sheet's waits its turn.
+            if self.library.library_updates.is_none() {
+                self.library.library_updates = Some(state);
+            } else {
+                self.library.queued_library_updates.push(state);
+            }
         } else if any_failed {
             // An update that was refused or unreadable is still pending.
             self.library.skipped_updates_for.insert(schematic_path);
-        } else {
+        } else if !partial {
             // Re-scan with no drift - clear the pending-update record
             // tied to this schematic.
             self.library.skipped_updates_for.remove(&schematic_path);
@@ -307,6 +427,7 @@ impl Signex {
         let Some(state) = self.library.library_updates.take() else {
             return Task::none();
         };
+        self.show_next_queued_updates();
         let Some(doc) = self
             .document_state
             .engines

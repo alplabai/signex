@@ -7,7 +7,7 @@
 
 use super::{
     Aabb, FillType, Graphic, HAlign, LibPin, LibSymbol, PIN_LENGTH_MM, Point, SCHEMATIC_TEXT_MM,
-    Symbol, SymbolTransform, VAlign, circumcircle, readable_text_style,
+    Symbol, SymbolTransform, VAlign, circumcircle, item_shown, readable_text_style,
 };
 use std::f64::consts::{FRAC_PI_2, TAU};
 
@@ -55,17 +55,13 @@ pub enum SymbolPrimitive {
     Pin { tip: Point, body: Point },
 }
 
-/// Is a library item tagged `(unit, body_style)` drawn for `sym`? Unit 0 is
-/// shared by all units; instances always use the normal body style (0 or 1).
-fn on_instance(unit: u32, body_style: u32, sym: &Symbol) -> bool {
-    (unit == 0 || unit == sym.unit) && body_style <= 1
-}
-
 /// Library pins that belong to `sym`'s unit and body style.
 pub fn instance_pins<'a>(lib: &'a LibSymbol, sym: &'a Symbol) -> impl Iterator<Item = &'a LibPin> {
+    // The body is per instance, not per pin: resolve it once.
+    let body = lib.effective_body(sym.unit, sym.body_style);
     lib.pins
         .iter()
-        .filter(move |lp| on_instance(lp.unit, lp.body_style, sym))
+        .filter(move |lp| item_shown(lp.unit, lp.body_style, sym.unit, body))
 }
 
 /// Unit direction of a pin in library space (Y-up), from its rotation.
@@ -86,8 +82,9 @@ pub fn pin_direction(rotation_deg: f64) -> (f64, f64) {
 pub fn lower_symbol(lib: &LibSymbol, sym: &Symbol) -> Vec<SymbolPrimitive> {
     let t = SymbolTransform::from_symbol(sym);
     let mut out = Vec::with_capacity(lib.graphics.len() + lib.pins.len());
+    let body = lib.effective_body(sym.unit, sym.body_style);
     for lg in &lib.graphics {
-        if on_instance(lg.unit, lg.body_style, sym) {
+        if item_shown(lg.unit, lg.body_style, sym.unit, body) {
             lower_graphic(&lg.graphic, &t, &mut out);
         }
     }
@@ -110,7 +107,7 @@ pub fn lower_symbol(lib: &LibSymbol, sym: &Symbol) -> Vec<SymbolPrimitive> {
 
 /// Lower a placed symbol whose library entry may be missing. A library entry
 /// wins; a power port without one gets its built-in body (see
-/// `power_port_graphics`); any other symbol without an entry lowers to
+/// `power_port_lib_symbol`); any other symbol without an entry lowers to
 /// nothing. A library entry that draws nothing also falls back for a power
 /// port.
 pub fn lower_placed_symbol(lib: Option<&LibSymbol>, sym: &Symbol) -> Vec<SymbolPrimitive> {
@@ -123,12 +120,7 @@ pub fn lower_placed_symbol(lib: Option<&LibSymbol>, sym: &Symbol) -> Vec<SymbolP
     if !sym.is_power {
         return Vec::new();
     }
-    let t = SymbolTransform::from_symbol(sym);
-    let mut out = Vec::new();
-    for graphic in super::power_port_graphics(&sym.lib_id) {
-        lower_graphic(&graphic, &t, &mut out);
-    }
-    out
+    lower_symbol(&super::power_port_lib_symbol(&sym.lib_id), sym)
 }
 
 fn lower_graphic(graphic: &Graphic, t: &SymbolTransform, out: &mut Vec<SymbolPrimitive>) {

@@ -165,6 +165,59 @@ const CLAIM_ORDER: [InputConsumer; 6] = [
     InputConsumer::Keymap,
 ];
 
+/// A key the app claims before the keymap profile is consulted, whatever
+/// modifiers are held. The claim fns and the Keyboard Shortcuts pane's
+/// "overridden" marker both read these, so there is one list.
+pub(crate) struct FixedKey {
+    named: keyboard::key::Named,
+    /// What the key does, shown in the pane's "overridden by" note.
+    pub(crate) action: &'static str,
+}
+
+impl FixedKey {
+    fn matches(&self, key: &keyboard::Key) -> bool {
+        matches!(key.as_ref(), keyboard::Key::Named(named) if named == self.named)
+    }
+}
+
+const ESCAPE_KEY: FixedKey = FixedKey {
+    named: keyboard::key::Named::Escape,
+    action: "Esc (cancel / close)",
+};
+const SHORTCUTS_SHEET_KEY: FixedKey = FixedKey {
+    named: keyboard::key::Named::F1,
+    action: "F1 (Keyboard Shortcuts)",
+};
+
+/// Every fixed key, for [`shadowing_fixed_key`].
+const FIXED_APP_KEYS: [FixedKey; 2] = [ESCAPE_KEY, SHORTCUTS_SHEET_KEY];
+
+/// The fixed app key that claims `stroke` before any profile binding can
+/// see it, if any. A chord containing such a stroke is unreachable.
+pub(crate) fn shadowing_fixed_key(stroke: &KeyStroke) -> Option<&'static str> {
+    FIXED_APP_KEYS
+        .iter()
+        .find(|fixed| {
+            KeyStroke::from_iced(
+                &keyboard::Key::Named(fixed.named),
+                keyboard::Modifiers::empty(),
+            )
+            .is_some_and(|fixed_stroke| fixed_stroke.key == stroke.key)
+        })
+        .map(|fixed| fixed.action)
+}
+
+/// [`shadowing_fixed_key`] over a trigger's display text (`"Ctrl+F1"`,
+/// `"P W"`); pointer gestures and unparsable text are never shadowed.
+pub(crate) fn shadowing_fixed_key_for_trigger(trigger: &str) -> Option<&'static str> {
+    match crate::keymap::ShortcutTrigger::parse(trigger) {
+        Ok(crate::keymap::ShortcutTrigger::KeySequence(strokes)) => {
+            strokes.iter().find_map(shadowing_fixed_key)
+        }
+        _ => None,
+    }
+}
+
 impl Signex {
     /// Classify the window an input event landed in.
     ///
@@ -193,10 +246,33 @@ impl Signex {
         window: iced::window::Id,
         event: keyboard::Event,
     ) -> Task<Message> {
-        match self.route_key(window, &event) {
+        let message = self.route_key(window, &event);
+        // #1378 - a key press that is not a keymap stroke (Esc, F1, a
+        // selection slot, a palette or recorder key) abandons the pending
+        // chord instead of leaving it armed behind the user's back.
+        //
+        // A bare modifier or lock key is the exception: it is never a
+        // stroke, but it is how the user reaches `Shift+G` mid-chord, and
+        // on Windows a held one auto-repeats `KeyPressed`.
+        if matches!(&event, keyboard::Event::KeyPressed { key, .. } if !is_modifier_key(key))
+            && !matches!(message, Some(Message::Ui(UiMsg::KeymapStroke { .. })))
+        {
+            self.cancel_pending_chord();
+        }
+        match message {
             Some(message) => self.update(message),
             None => Task::none(),
         }
+    }
+
+    /// `route_key` for the lock tests in `handlers/detached_modals.rs`.
+    #[cfg(test)]
+    pub(crate) fn route_key_for_test(
+        &self,
+        window: iced::window::Id,
+        event: &keyboard::Event,
+    ) -> Option<Message> {
+        self.route_key(window, event)
     }
 
     /// Walk [`CLAIM_ORDER`] and return the one message this event earns,
@@ -207,6 +283,15 @@ impl Signex {
     /// possible while these branches lived in a subscription closure.
     fn route_key(&self, window: iced::window::Id, event: &keyboard::Event) -> Option<Message> {
         let target = self.input_target(Some(window));
+        // A confirm dialog in its own window locks the main window and the
+        // undocked tabs: no stroke reaches the keymap or a tool there.
+        // Esc still resolves, so the lock can always be dismissed.
+        if matches!(target, InputTarget::Main | InputTarget::UndockedTab)
+            && self.locking_confirm_window().is_some()
+            && !matches!(event, keyboard::Event::KeyPressed { key, .. } if ESCAPE_KEY.matches(key))
+        {
+            return None;
+        }
         for consumer in CLAIM_ORDER {
             match self.claim(consumer, target, window, event) {
                 Claim::Consume(message) => return Some(message),
@@ -345,14 +430,12 @@ impl Signex {
         let keyboard::Event::KeyPressed { key, .. } = event else {
             return Claim::Pass;
         };
-        match key.as_ref() {
-            keyboard::Key::Named(keyboard::key::Named::Escape) => {
-                Claim::Consume(Message::Input(InputMsg::EscapePressed {
-                    window: Some(window),
-                }))
-            }
-            _ => Claim::Pass,
+        if !ESCAPE_KEY.matches(key) {
+            return Claim::Pass;
         }
+        Claim::Consume(Message::Input(InputMsg::EscapePressed {
+            window: Some(window),
+        }))
     }
 
     /// F1 toggles the keyboard-shortcuts sheet: open if closed, close if
@@ -362,7 +445,7 @@ impl Signex {
         let keyboard::Event::KeyPressed { key, .. } = event else {
             return Claim::Pass;
         };
-        if !matches!(key.as_ref(), keyboard::Key::Named(keyboard::key::Named::F1)) {
+        if !SHORTCUTS_SHEET_KEY.matches(key) {
             return Claim::Pass;
         }
         // #555 — a dead key where the sheet cannot appear. Toggling it
@@ -376,7 +459,9 @@ impl Signex {
         // this consumer claims it in every window. Falling through would
         // make a profile binding for F1 suddenly reachable here, which is
         // more than the decision asked for.
-        if !target.paints_overlay_stack() {
+        let in_own_window =
+            target == InputTarget::DetachedModal(crate::app::state::ModalId::KeyboardShortcuts);
+        if !target.paints_overlay_stack() && !in_own_window {
             return Claim::Swallow;
         }
         Claim::Consume(if self.ui_state.keyboard_shortcuts_open {
@@ -437,6 +522,32 @@ impl Signex {
             None => Claim::Pass,
         }
     }
+}
+
+/// A key press that only changes modifier or lock state. iced reports these
+/// as `KeyPressed` with a named key, and `KeyStroke::from_iced` rejects
+/// them, so they route to nothing.
+fn is_modifier_key(key: &keyboard::Key) -> bool {
+    use keyboard::key::Named;
+    matches!(
+        key,
+        keyboard::Key::Named(
+            Named::Shift
+                | Named::Control
+                | Named::Alt
+                | Named::AltGraph
+                | Named::Super
+                | Named::Meta
+                | Named::Hyper
+                | Named::CapsLock
+                | Named::NumLock
+                | Named::ScrollLock
+                | Named::Fn
+                | Named::FnLock
+                | Named::Symbol
+                | Named::SymbolLock
+        )
+    )
 }
 
 /// Which selection-memory slot a digit key names, if any.
@@ -519,6 +630,10 @@ mod tests {
     /// it is always seeded from the binding being edited.
     fn recording() -> crate::app::KeymapRecorderState {
         crate::app::KeymapRecorderState::new(
+            crate::keymap::BindingSlot {
+                binding: 0,
+                trigger: 0,
+            },
             crate::keymap::AppCommandId::new("cancel_current_tool").expect("valid command id"),
             "Cancel Current Tool".to_string(),
             crate::keymap::ShortcutContext::Global,

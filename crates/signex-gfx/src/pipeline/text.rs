@@ -4,6 +4,9 @@
 //! This module was written without reference to GPL-licensed software.
 //! Sources: IPC-2612-1, IEEE 315, IEC 60617, wgpu/WGSL public docs.
 
+use std::sync::Arc;
+
+use super::text_cache::{ShapedBufferCache, ShapedKey, quantise_px};
 use crate::primitive::text::{
     LINE_HEIGHT_EM, TextHAlign, TextItem, TextSizePolicy, TextVAlign, text_px,
 };
@@ -97,7 +100,11 @@ const HEIGHT_SLACK: f32 = 2.0;
 ///
 /// Returns `true` (keep, shape it) whenever the text might wrap, because a
 /// wrapped block's height depends on shaping. Never returns `false` for an
-/// item the post-shaping test would keep.
+/// item the post-shaping test would keep, **assuming** no glyph advances more
+/// than `MAX_GLYPH_ADVANCE_EM` ems. That is a property of the fonts, not
+/// something this code enforces; a few codepoints in fallback faces (e.g.
+/// U+FDFD) are wider, so a label made of them at a viewport edge could be
+/// culled while partly visible.
 fn may_intersect_viewport(
     item: &TextItem,
     font_px: f32,
@@ -108,7 +115,9 @@ fn may_intersect_viewport(
     let (mut chars, mut tabs, mut lines) = (0usize, 0usize, 1usize);
     for ch in item.content.chars() {
         match ch {
-            '\n' => lines += 1,
+            // The shaper (cosmic-text) also breaks on a lone '\r'. Counting
+            // both halves of "\r\n" only enlarges the bound, which is safe.
+            '\n' | '\r' => lines += 1,
             '\t' => tabs += 1,
             _ => chars += 1,
         }
@@ -306,7 +315,8 @@ pub struct GlyphonTextPipeline {
     viewport: cryoglyph::Viewport,
     atlas: cryoglyph::TextAtlas,
     text_renderer: cryoglyph::TextRenderer,
-    buffers: Vec<cryoglyph::Buffer>,
+    buffers: Vec<Arc<cryoglyph::Buffer>>,
+    shaped: ShapedBufferCache,
     prepared_texts: Vec<GlyphonPreparedText>,
     text_count: u32,
     viewport_size_px: [u32; 2],
@@ -335,6 +345,7 @@ impl GlyphonTextPipeline {
             atlas,
             text_renderer,
             buffers: Vec::new(),
+            shaped: ShapedBufferCache::new(),
             prepared_texts: Vec::new(),
             text_count: 0,
             viewport_size_px: [0, 0],
@@ -392,19 +403,20 @@ impl GlyphonTextPipeline {
         for text in atlas_drawable(texts) {
             let font_px = text_size_px(text, scale_px_per_mm, size_policy);
             let line_height_px = (font_px * LINE_HEIGHT_EM).max(1.0);
+            // Shape at the snapped size so the cache key is truthful and a
+            // zoom reuses shapes (see `text_cache::quantise_px`).
+            let (font_px, line_height_px) = (quantise_px(font_px), quantise_px(line_height_px));
             let anchor_px = text_position_px(text, scale_px_per_mm, offset_px);
             if !may_intersect_viewport(text, font_px, line_height_px, anchor_px, bounds) {
                 continue;
             }
             let metrics = cryoglyph::Metrics::new(font_px, line_height_px);
             let attrs = attrs_for_item(text, family);
-            let buffer = shaped_buffer(
-                font_system,
-                text,
-                metrics,
-                &attrs,
-                [viewport_width, viewport_height],
-            );
+            let wrap_px = [viewport_width, viewport_height];
+            let key = ShapedKey::new(text, family, font_px, line_height_px, wrap_px);
+            let buffer = self.shaped.get_or_shape(font_system, key, |font_system| {
+                shaped_buffer(font_system, text, metrics, &attrs, wrap_px)
+            });
 
             let text_bounds_px = measure_text_bounds_px(&buffer);
             let top_left_px = anchored_top_left_px(text, anchor_px, text_bounds_px);
@@ -433,7 +445,7 @@ impl GlyphonTextPipeline {
                 .iter()
                 .zip(self.prepared_texts.iter())
                 .map(|(buffer, prepared)| cryoglyph::TextArea {
-                    buffer,
+                    buffer: buffer.as_ref(),
                     left: prepared.left,
                     top: prepared.top,
                     scale: prepared.scale,
@@ -505,7 +517,7 @@ mod tests {
         let font_px = 16.0;
         let line_h = font_px * crate::primitive::text::LINE_HEIGHT_EM;
         let mut culled = 0;
-        for content in ["R1", "NET_A_LONG_LABEL", "a\nbb\nccc", "x\ty"] {
+        for content in ["R1", "NET_A_LONG_LABEL", "a\nbb\nccc", "x\ty", "a\rb\rc\rd"] {
             for h in [TextHAlign::Left, TextHAlign::Center, TextHAlign::Right] {
                 for v in [TextVAlign::Top, TextVAlign::Center, TextVAlign::Bottom] {
                     let item = TextItem {

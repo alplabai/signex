@@ -223,7 +223,10 @@ fn draft_name(app: &Signex, path: &Path) -> String {
 }
 
 fn reopen(app: &mut Signex, path: &Path) {
-    let _ = app.update(Message::File(FileMsg::Opened(Some(path.to_path_buf()))));
+    crate::settle_support::settle(
+        app,
+        Message::File(FileMsg::Opened(Some(path.to_path_buf()))),
+    );
 }
 
 #[test]
@@ -327,9 +330,12 @@ fn close_library_save_all_with_a_failing_row_keeps_the_library_and_drafts() {
         library_path: address.library_path.clone(),
         dirty_editors: vec![address.clone()],
     }));
-    let _ = app.update(Message::Library(LibraryMessage::CloseLibraryConfirm(
-        CloseLibraryChoice::SaveAll,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Library(LibraryMessage::CloseLibraryConfirm(
+            CloseLibraryChoice::SaveAll,
+        )),
+    );
 
     assert!(app.library.editors[&address].dirty, "the draft survives");
     let notice = app.document_state.error_notice.as_ref().expect("a card");

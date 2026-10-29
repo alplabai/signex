@@ -111,8 +111,9 @@ fn iosevka_geometry_is_the_monospace_estimate_it_always_was() {
     let flag = label(LabelType::Global, None);
     let em = em_mm(&flag);
     let want = TEXT.chars().count() as f64 * em * 0.58 + 2.0 * em * 0.325;
-    // `em_mm` here divides by the f32 constant the renderer uses; the
-    // geometry's own estimate divides by 0.72 in f64.
+    // Both `em_mm` and the geometry's own estimate divide by
+    // `f64::from(MM_PER_EM)`; the tolerance only absorbs the different
+    // order of float operations between the two sums.
     assert!((flag_body_width(&flag, None) - want).abs() < 1e-6);
     assert_eq!(
         flag_body_width(&label(LabelType::Global, Some("Iosevka")), None),

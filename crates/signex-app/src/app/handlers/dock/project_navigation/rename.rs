@@ -1,13 +1,13 @@
-//! Rename flows for the project-navigation dock — file rename and
-//!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
+//! Rename flows for the project-navigation dock — file rename and project rename.
 
 use super::*;
+use crate::app::state::library_entry::{entry_resolves_to, with_new_leaf};
 
 impl Signex {
     pub(super) fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {
+        if self.refuse_on_missing_child(&tree_path, "Rename", false) {
+            return;
+        }
         let Some(target_path) = self.tree_path_to_file_path(&tree_path) else {
             crate::diagnostics::log_warning(
                 "Rename cancelled: the selected project-tree row no longer resolves to a file.",
@@ -117,13 +117,35 @@ impl Signex {
         }
         // An open still reading this file would land on the old path after
         // the move, and a save of that tab would recreate it (#1096).
-        if let Some(opening) = self.pending_open_under(&state.target_path) {
+        if let Some(opening) = self
+            .pending_open_under(&state.target_path)
+            .or_else(|| self.recovery_check_under(&state.target_path))
+        {
             crate::diagnostics::log_warning(format!(
                 "Rename of {} refused: {} is still opening.",
                 state.target_path.display(),
                 opening.display()
             ));
             self.set_rename_error("This file is still opening; rename it once it has opened.");
+            return iced::Task::none();
+        }
+        // A restore still running would rewrite the old path after the move,
+        // recreating the file the user just renamed.
+        if let Some(restoring) = self
+            .document_state
+            .pending_restores
+            .find_under(&state.target_path)
+        {
+            let label = restoring.file_name().map_or_else(
+                || restoring.display().to_string(),
+                |name| name.to_string_lossy().into_owned(),
+            );
+            crate::diagnostics::log_warning(format!(
+                "Rename refused: a History restore of {label} is still running."
+            ));
+            self.set_rename_error(
+                "A History restore of this file is still running; rename it once the restore has finished.",
+            );
             return iced::Task::none();
         }
         // A project library moves its entry, mount and open documents
@@ -144,6 +166,57 @@ impl Signex {
             .map(|&idx| self.plan_reference_rewrites(idx, &state.target_path, new_name))
             .unwrap_or_default();
 
+        // Another open project's sheets that place this file are not re-pointed
+        // by this rename: refuse rather than leave their symbols dangling.
+        {
+            let owner = state.project_id.or_else(|| {
+                let idx = *state.tree_path.first()?;
+                self.document_state.projects.get(idx).map(|p| p.id)
+            });
+            let users = self.sheet_users(&state.target_path, owner);
+            let refusal = if !users.parents.is_empty() {
+                let names: Vec<String> = users
+                    .parents
+                    .iter()
+                    .map(|p| p.display().to_string())
+                    .collect();
+                Some(format!(
+                    "Another open project or an open sheet places this sheet and would be left \
+                     pointing at the old name: {}",
+                    names.join(", ")
+                ))
+            } else {
+                users.unknown.map(|why| {
+                    format!(
+                        "Whether another project or open sheet places this sheet cannot be ruled \
+                         out ({why}). Try again once the project has been read."
+                    )
+                })
+            };
+            if let Some(refusal) = refusal {
+                crate::diagnostics::log_warning(format!(
+                    "Rename of {} refused: {refusal}",
+                    state.target_path.display()
+                ));
+                self.set_rename_error(&refusal);
+                return iced::Task::none();
+            }
+        }
+
+        // A read-only parent (newer Signex) would refuse the re-point after
+        // the file moved, breaking the hierarchy: refuse the whole rename
+        // while nothing has changed (#1402).
+        if !plan.read_only_parents.is_empty() {
+            let detail = super::sheet_references::read_only_parents_detail(&plan.read_only_parents);
+            crate::diagnostics::log_warning(format!(
+                "Rename of {} refused. {detail}",
+                state.target_path.display()
+            ));
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::rename(detail));
+            self.ui_state.rename_dialog = None;
+            return iced::Task::none();
+        }
+
         // A write still running for this sheet would recreate the old file
         // (or land after the move); let it finish first. Same bounded wait
         // as Save All's `try_save_dirty_path`.
@@ -157,32 +230,34 @@ impl Signex {
         // parent-sheet references are re-pointed through the engine
         // below. Nothing besides the rename itself is written to disk:
         // the touched documents are marked dirty for the user to save.
-        let old_filename = state
-            .target_path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .map(|s| s.to_string());
         // Mutate the *owning* project's data via the dialog's
         // tree_path[0], not the active project — renaming a sheet of
         // project B while project A is active should still touch B.
-        // (#54)
+        // Entries match by resolved path and keep their directory prefix
+        // (`sub/Power.snxsch` becomes `sub/Power2.snxsch`, #1367). (#54)
         let owner_idx = state.tree_path.first().copied();
-        if let (Some(old), Some(idx)) = (old_filename.as_ref(), owner_idx)
+        if let Some(idx) = owner_idx
             && let Some(loaded) = self.document_state.projects.get_mut(idx)
         {
+            let fold = loaded.case_fold;
+            let dir = loaded.dir().to_path_buf();
+            let renamed_from = |entry: &str| {
+                entry_resolves_to(&dir, entry, &state.target_path, fold)
+                    .then(|| with_new_leaf(entry, new_name))
+            };
             let mut changed = false;
             for entry in loaded.data.sheets.iter_mut() {
-                if &entry.filename == old {
-                    entry.filename = new_name.to_string();
+                if let Some(new_entry) = renamed_from(&entry.filename) {
+                    entry.filename = new_entry;
                     changed = true;
                 }
             }
-            if loaded.data.pcb_file.as_deref() == Some(old.as_str()) {
-                loaded.data.pcb_file = Some(new_name.to_string());
+            if let Some(new_entry) = loaded.data.pcb_file.as_deref().and_then(renamed_from) {
+                loaded.data.pcb_file = Some(new_entry);
                 changed = true;
             }
-            if loaded.data.schematic_root.as_deref() == Some(old.as_str()) {
-                loaded.data.schematic_root = Some(new_name.to_string());
+            if let Some(new_entry) = loaded.data.schematic_root.as_deref().and_then(renamed_from) {
+                loaded.data.schematic_root = Some(new_entry);
                 changed = true;
             }
             // The sheet list changed in memory; without the dirty bit
@@ -212,7 +287,7 @@ impl Signex {
 
         self.ui_state.rename_dialog = None;
         self.refresh_panel_ctx();
-        iced::Task::none()
+        self.autosave_flush_moves()
     }
 
     /// Move every path-keyed record of an open document from `old_path`
@@ -235,7 +310,9 @@ impl Signex {
                 continue;
             }
             tab.path = new_path.to_path_buf();
-            if let Some(title) = &new_title {
+            if tab.kind.as_project().is_some() {
+                tab.title = crate::app::project_tab::project_tab_title(new_path);
+            } else if let Some(title) = &new_title {
                 tab.title = title.clone();
             }
             match &mut tab.kind {
@@ -245,7 +322,7 @@ impl Signex {
                 _ => {}
             }
         }
-        if let Some(mut engine) = self.document_state.engines.remove(old_path) {
+        if let Some(mut engine) = self.document_state.remove_engine(old_path) {
             // `Engine::save` writes to its own path; leaving the old one
             // would write the renamed sheet back under its old filename.
             engine.set_path(Some(new_path.to_path_buf()));
@@ -284,6 +361,7 @@ impl Signex {
                 .pcb_revisions
                 .insert(new_path.to_path_buf(), revision);
         }
+        self.document_state.autosave.rekey(old_path, new_path);
         self.rekey_page_setup(old_path, new_path);
         // Renaming does not rewrite the parents' sheet symbols, so the
         // placement no longer reaches this file.
@@ -313,6 +391,12 @@ impl Signex {
         old_path: &std::path::Path,
         new_path: &std::path::Path,
     ) {
+        // A part on the cursor follows its sheet to the new path.
+        if let Some(session) = self.interaction_state.placement.as_mut()
+            && session.target_sheet == old_path
+        {
+            session.target_sheet = new_path.to_path_buf();
+        }
         for kind in self.ui_state.windows.values_mut() {
             if let crate::app::state::WindowKind::UndockedTab { path, .. } = kind
                 && path == old_path
@@ -322,9 +406,34 @@ impl Signex {
         }
     }
 
+    /// A file at or under `target` whose recovery check has not reported:
+    /// renaming it now would lose the copy the check finds (#1323).
+    fn recovery_check_under(&self, target: &std::path::Path) -> Option<std::path::PathBuf> {
+        use crate::app::state::scope::path_is_under;
+        let ds = &self.document_state;
+        let owner = ds
+            .projects
+            .iter()
+            .find(|p| path_is_under(target, p.dir(), p.case_fold));
+        let fold = crate::app::state::project_case::fold_of(owner);
+        ds.recovery_check_due
+            .iter()
+            .chain(ds.autosave.checking_paths())
+            .find(|p| path_is_under(p, target, fold))
+            .cloned()
+    }
+
     pub(super) fn set_rename_error(&mut self, msg: &str) {
         if let Some(d) = self.ui_state.rename_dialog.as_mut() {
             d.error = Some(msg.to_string());
         }
+    }
+
+    /// Refuse a rename that would race an off-thread `.snxprj` write: shown
+    /// in the dialog and logged to the Messages panel.
+    pub(super) fn refuse_rename_while_project_saving(&mut self) {
+        const REASON: &str = "The project file is still being saved; try again in a moment.";
+        self.set_rename_error(REASON);
+        crate::diagnostics::log_warning(format!("[rename] refused: {REASON}"));
     }
 }

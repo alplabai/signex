@@ -3,28 +3,32 @@
 //! Renders a LibSymbol's graphics + pins in a small preview box,
 //! auto-fitted to the available size.
 
+use std::cell::RefCell;
+
 use iced::widget::canvas::{self, Cache, Geometry, Path, Stroke, Text};
 use iced::{Color, Element, Length, Point, Rectangle, Size, Theme};
-use signex_types::schematic::{Graphic, LibSymbol, circumcircle};
+use signex_types::schematic::{BodyStyle, Graphic, LibSymbol, circumcircle, item_shown};
 
 /// Canvas program that draws a LibSymbol preview.
 pub struct SymbolPreview {
     symbol: LibSymbol,
     /// Unit drawn; items tagged unit `0` are common to every unit.
     unit: u32,
-    /// Body style drawn; items tagged body style `0` are common to all.
-    body_style: u32,
+    /// Body drawn; items tagged body style `0` are common to all.
+    body: BodyStyle,
+}
+
+/// Widget state that outlives the per-frame `view` rebuild: the geometry
+/// cache plus the inputs it was drawn from, so it is only cleared when the
+/// shown symbol or unit really changes.
+#[derive(Default)]
+pub struct PreviewState {
     cache: Cache,
+    drawn: RefCell<Option<(LibSymbol, u32, BodyStyle)>>,
 }
 
 /// Segments used to flatten an arc or a cubic Bezier into a polyline.
 const CURVE_SEGMENTS: usize = 32;
-
-/// Whether an item tagged `(unit, body_style)` belongs to the shown
-/// `(shown_unit, shown_body_style)`. Tag `0` means "common to all".
-fn is_shown(unit: u32, body_style: u32, shown_unit: u32, shown_body_style: u32) -> bool {
-    (unit == 0 || unit == shown_unit) && (body_style == 0 || body_style == shown_body_style)
-}
 
 /// Points along the circular arc that runs from `start` through `mid` to
 /// `end`, in the input's own space. Collinear points have no circle, so the
@@ -77,6 +81,20 @@ fn bezier_points(points: &[(f64, f64)]) -> Vec<(f64, f64)> {
         .collect()
 }
 
+/// Corners of a text box frame in library space (Y-up) as
+/// `((min_x, min_y), (max_x, max_y))`; its visual top-left is
+/// `(min_x, max_y)`, where the canvas anchors the text.
+fn text_box_extent(
+    position: &signex_types::schematic::Point,
+    size: &signex_types::schematic::Point,
+) -> ((f64, f64), (f64, f64)) {
+    let (fx, fy) = (position.x + size.x, position.y + size.y);
+    (
+        (position.x.min(fx), position.y.min(fy)),
+        (position.x.max(fx), position.y.max(fy)),
+    )
+}
+
 /// Direction vector for a pin's stub in **library space** (Y-up): the pin
 /// extends from its anchor position toward this unit vector, scaled by
 /// `pin.length`. Rotation is in degrees.
@@ -88,13 +106,13 @@ fn bezier_points(points: &[(f64, f64)]) -> Vec<(f64, f64)> {
 /// applies the single y-flip that turns that "up" into a smaller
 /// screen-space y, matching every other consumer of library coordinates.
 fn pin_stub_direction(rotation: f64) -> (f64, f64) {
-    match rotation as i32 {
-        0 => (1.0, 0.0),
-        90 => (0.0, 1.0),
-        180 => (-1.0, 0.0),
-        270 => (0.0, -1.0),
-        _ => (1.0, 0.0),
-    }
+    signex_types::schematic::pin_direction(rotation)
+}
+
+/// Pin rotation normalised to `0..360` whole degrees (rounded, wrapped),
+/// matching `pin_direction`'s bucketing.
+fn pin_rotation_degrees(rotation: f64) -> i32 {
+    rotation.rem_euclid(360.0).round() as i32 % 360
 }
 
 /// Map a library-space point (Y-up) to frame/screen space (Y-down),
@@ -116,20 +134,35 @@ impl SymbolPreview {
         Self {
             symbol,
             unit: 1,
-            body_style: 1,
-            cache: Cache::new(),
+            body: BodyStyle::Normal,
         }
     }
 
-    /// Draw `unit` / `body_style` instead of the default unit 1, body style 1.
-    pub fn with_unit(mut self, unit: u32, body_style: u32) -> Self {
+    /// Draw `unit` / `body` instead of the default unit 1, normal body.
+    pub fn with_unit(mut self, unit: u32, body: BodyStyle) -> Self {
         self.unit = unit;
-        self.body_style = body_style;
+        self.body = body;
         self
     }
 
+    /// Clear the cache when the symbol or shown unit differs from what it
+    /// was drawn from. Returns whether it was cleared.
+    fn invalidate_if_changed(&self, state: &PreviewState) -> bool {
+        let mut drawn = state.drawn.borrow_mut();
+        let unchanged = matches!(
+            &*drawn,
+            Some((sym, unit, body)) if *sym == self.symbol && *unit == self.unit && *body == self.body
+        );
+        if unchanged {
+            return false;
+        }
+        state.cache.clear();
+        *drawn = Some((self.symbol.clone(), self.unit, self.body));
+        true
+    }
+
     fn shows(&self, unit: u32, body_style: u32) -> bool {
-        is_shown(unit, body_style, self.unit, self.body_style)
+        item_shown(unit, body_style, self.unit, self.body)
     }
 
     /// Compute the bounding box of all graphics + pins.
@@ -190,7 +223,11 @@ impl SymbolPreview {
                         expand(x, y);
                     }
                 }
-                Graphic::TextBox { .. } => {}
+                Graphic::TextBox { position, size, .. } => {
+                    let ((x0, y0), (x1, y1)) = text_box_extent(position, size);
+                    expand(x0, y0);
+                    expand(x1, y1);
+                }
             }
         }
 
@@ -225,17 +262,18 @@ impl SymbolPreview {
 }
 
 impl canvas::Program<(), Theme> for SymbolPreview {
-    type State = ();
+    type State = PreviewState;
 
     fn draw(
         &self,
-        _state: &Self::State,
+        state: &Self::State,
         renderer: &iced::Renderer,
         _theme: &Theme,
         bounds: Rectangle,
         _cursor: iced::mouse::Cursor,
     ) -> Vec<Geometry> {
-        let geom = self.cache.draw(renderer, bounds.size(), |frame| {
+        self.invalidate_if_changed(state);
+        let geom = state.cache.draw(renderer, bounds.size(), |frame| {
             let (bx0, by0, bx1, by1) = self.bounds();
             let bw = bx1 - bx0;
             let bh = by1 - by0;
@@ -318,7 +356,33 @@ impl canvas::Program<(), Theme> for SymbolPreview {
                         let ctrl: Vec<(f64, f64)> = points.iter().map(|p| (p.x, p.y)).collect();
                         stroke_polyline(frame, &bezier_points(&ctrl), &tx, body_color);
                     }
-                    Graphic::Text { .. } | Graphic::TextBox { .. } => {}
+                    Graphic::TextBox {
+                        text,
+                        position,
+                        size,
+                        font_size,
+                        ..
+                    } => {
+                        let ((x0, y0), (x1, y1)) = text_box_extent(position, size);
+                        let p0 = tx(x0, y1);
+                        let p1 = tx(x1, y0);
+                        stroke_polyline(
+                            frame,
+                            &[(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)],
+                            &tx,
+                            body_color,
+                        );
+                        // Same anchor as the canvas: the frame's visual top-left.
+                        frame.fill_text(Text {
+                            content: text.clone(),
+                            position: p0,
+                            size: ((*font_size * scale) as f32).clamp(5.0, 14.0).into(),
+                            color: text_color,
+                            max_width: (p1.x - p0.x).abs(),
+                            ..Text::default()
+                        });
+                    }
+                    Graphic::Text { .. } => {}
                 }
             }
 
@@ -365,7 +429,7 @@ impl canvas::Program<(), Theme> for SymbolPreview {
                 // Pin name (at the tip end)
                 if self.symbol.show_pin_names && !pin.name.is_empty() && pin.name != "~" {
                     let font_sz = (6.0 * scale).clamp(5.0, 10.0) as f32;
-                    let name_pos = match pin.rotation as i32 {
+                    let name_pos = match pin_rotation_degrees(pin.rotation) {
                         0 => Point::new(tip.x + 2.0, tip.y - font_sz / 2.0),
                         180 => Point::new(tip.x - 2.0, tip.y - font_sz / 2.0),
                         _ => Point::new(tip.x + 2.0, tip.y),
@@ -472,6 +536,17 @@ mod tests {
         assert_eq!(pin_stub_direction(90.0), (0.0, 1.0));
         assert_eq!(pin_stub_direction(180.0), (-1.0, 0.0));
         assert_eq!(pin_stub_direction(270.0), (0.0, -1.0));
+    }
+
+    #[test]
+    fn pin_rotation_is_rounded_and_wrapped_not_truncated() {
+        // 89.6 deg is a "up" pin; truncation read it as 89 (no match).
+        assert_eq!(pin_stub_direction(89.6), (0.0, 1.0));
+        assert_eq!(pin_stub_direction(-90.0), (0.0, -1.0));
+        assert_eq!(pin_stub_direction(450.0), (0.0, 1.0));
+        assert_eq!(pin_rotation_degrees(179.6), 180);
+        assert_eq!(pin_rotation_degrees(-180.0), 180);
+        assert_eq!(pin_rotation_degrees(359.7), 0);
     }
 
     #[test]
@@ -609,11 +684,18 @@ mod tests {
 
     #[test]
     fn item_filter_keeps_the_shown_unit_and_common_items_only() {
-        assert!(is_shown(1, 1, 1, 1));
-        assert!(!is_shown(2, 1, 1, 1), "another unit's item is hidden");
-        assert!(!is_shown(1, 2, 1, 1), "another body style is hidden");
-        assert!(is_shown(0, 1, 2, 1), "unit 0 is common to every unit");
-        assert!(is_shown(1, 0, 1, 2), "body style 0 is common to all");
+        let (normal, alt) = (BodyStyle::Normal, BodyStyle::Alternate);
+        assert!(item_shown(1, 1, 1, normal));
+        assert!(
+            !item_shown(2, 1, 1, normal),
+            "another unit's item is hidden"
+        );
+        assert!(!item_shown(1, 2, 1, normal), "another body style is hidden");
+        assert!(
+            item_shown(0, 1, 2, normal),
+            "unit 0 is common to every unit"
+        );
+        assert!(item_shown(1, 0, 1, alt), "body style 0 is common to all");
     }
 
     #[test]
@@ -642,7 +724,57 @@ mod tests {
         });
         let unit1 = SymbolPreview::new(symbol.clone()).bounds();
         assert!(unit1.2 < 100.0 && unit1.0 > -100.0, "unit 1 box: {unit1:?}");
-        let unit2 = SymbolPreview::new(symbol).with_unit(2, 1).bounds();
+        let unit2 = SymbolPreview::new(symbol)
+            .with_unit(2, BodyStyle::Normal)
+            .bounds();
         assert!(unit2.2 > 400.0 && unit2.0 < -400.0, "unit 2 box: {unit2:?}");
+    }
+
+    #[test]
+    fn cache_is_kept_for_the_same_symbol_and_cleared_on_any_change() {
+        let state = PreviewState::default();
+        let preview = SymbolPreview::new(symbol_with_pin(0.0));
+        assert!(preview.invalidate_if_changed(&state), "first draw builds");
+        // A fresh view rebuilds an equal widget; the cache must survive it.
+        let again = SymbolPreview::new(symbol_with_pin(0.0));
+        assert!(!again.invalidate_if_changed(&state), "same symbol: hit");
+        assert!(
+            SymbolPreview::new(symbol_with_pin(90.0)).invalidate_if_changed(&state),
+            "edited symbol invalidates"
+        );
+        assert!(
+            SymbolPreview::new(symbol_with_pin(90.0))
+                .with_unit(2, BodyStyle::Normal)
+                .invalidate_if_changed(&state),
+            "another unit invalidates"
+        );
+    }
+
+    #[test]
+    fn text_box_extent_is_normalised_and_grows_bounds() {
+        let p = |x, y| LibPoint { x, y };
+        // Negative size: corners come back ordered, top-left = (min_x, max_y).
+        assert_eq!(
+            text_box_extent(&p(4.0, 2.0), &p(-3.0, -1.0)),
+            ((1.0, 1.0), (4.0, 2.0))
+        );
+        let mut symbol = symbol_with_pin(0.0);
+        symbol.graphics.push(LibGraphic {
+            unit: 0,
+            body_style: 1,
+            graphic: Graphic::TextBox {
+                text: "T".into(),
+                position: p(0.0, 0.0),
+                rotation: 0.0,
+                size: p(100.0, 40.0),
+                font_size: 1.27,
+                bold: false,
+                italic: false,
+                width: 0.0,
+                fill: Default::default(),
+            },
+        });
+        let (_, _, max_x, max_y) = SymbolPreview::new(symbol).bounds();
+        assert!(max_x >= 100.0 && max_y >= 40.0, "{max_x} {max_y}");
     }
 }

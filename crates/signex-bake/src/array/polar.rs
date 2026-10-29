@@ -87,14 +87,14 @@ pub(super) fn bake_polar(
 
     let count_ast = parse(strip_eq_prefix(count_expr)).map_err(SketchError::Expr)?;
     let sweep_ast = parse(strip_eq_prefix(sweep_angle_expr)).map_err(SketchError::Expr)?;
-    let setup_ctx = EvalContext {
+    let mut ctx = EvalContext {
         params: params_ast.clone(),
         array_index: Some((0, 0)),
     };
-    let count = eval(&count_ast, &setup_ctx)
-        .map_err(SketchError::Expr)?
-        .value
-        .round() as i64;
+    let Some(count) = super::eval_count("polar", "count_expr", source, &count_ast, &ctx, warnings)?
+    else {
+        return Ok(());
+    };
     if count <= 0 {
         warnings.push(format!(
             "polar array source {source}: count={count} — array skipped"
@@ -109,7 +109,7 @@ pub(super) fn bake_polar(
     // Sweep angle is an Altium-style degrees-or-radians value via the
     // expression's unit family. We expect rad here (the parser
     // resolves `deg` → rad). On unit error, surface and skip.
-    let sweep_q = eval(&sweep_ast, &setup_ctx).map_err(SketchError::Expr)?;
+    let sweep_q = eval(&sweep_ast, &ctx).map_err(SketchError::Expr)?;
     let sweep_rad = match sweep_q.unit.family() {
         signex_sketch::unit::UnitFamily::Angle => sweep_q.value,
         _ => {
@@ -153,11 +153,8 @@ pub(super) fn bake_polar(
         // second axis isn't meaningful for Polar). Defaults to keep
         // on eval failure (warned, never silently dropped).
         if let Some(ast) = mask_ast.as_ref() {
-            let mask_ctx = EvalContext {
-                params: params_ast.clone(),
-                array_index: Some((i, 0)),
-            };
-            match eval(ast, &mask_ctx) {
+            ctx.array_index = Some((i, 0));
+            match eval(ast, &ctx) {
                 Ok(q) => {
                     if q.value.abs() < 1e-9 {
                         continue;
@@ -180,13 +177,13 @@ pub(super) fn bake_polar(
         let extra_dx = rx - sx;
         let extra_dy = ry - sy;
 
-        let pad_number = derive_pad_number(numbering, i, params_ast, warnings, source);
+        let pad_number = derive_pad_number(numbering, i, &mut ctx, warnings, source);
+        ctx.array_index = Some((i, 0));
 
         let pad = bake_one_pad(
             source,
             pad_attr,
-            params_ast,
-            Some((i, 0)),
+            &ctx,
             extra_dx,
             extra_dy,
             Some(pad_number),

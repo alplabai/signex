@@ -3,7 +3,8 @@
 //! placement (`Symbol::designator_in`), so a copy that kept them printed and
 //! netlisted the original's designators whatever its own `reference` said.
 
-use signex_app::app::{EditMsg, Message, Signex};
+use crate::paste_support::paste;
+use signex_app::app::{Message, Signex};
 use signex_types::schematic::{Point, SchematicSheet, Symbol, SymbolInstance};
 use std::path::PathBuf;
 
@@ -38,7 +39,7 @@ fn a_pasted_symbol_does_not_inherit_the_originals_instance_entries() {
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(path);
 
-    app.interaction_state.clipboard_symbols = vec![Symbol {
+    let copied_symbols = vec![Symbol {
         uuid: uuid::Uuid::new_v4(),
         lib_id: "Device:R".to_string(),
         reference: "R2".to_string(),
@@ -48,7 +49,23 @@ fn a_pasted_symbol_does_not_inherit_the_originals_instance_entries() {
         ..Default::default()
     }];
 
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    app.interaction_state.clipboard = Some(signex_engine::CopiedSelection {
+        payload: signex_engine::PlacementPayload::new(SchematicSheet {
+            symbols: copied_symbols,
+            ..Default::default()
+        }),
+        bounds: None,
+        origin: Point::new(0.0, 0.0),
+    });
+
+    // Paste attaches the copy to the cursor; the click places it.
+    paste(&mut app);
+    let _ = app.update(Message::CanvasEvent(
+        signex_app::canvas::CanvasEvent::Clicked {
+            world_x: 10.16,
+            world_y: 10.16,
+        },
+    ));
 
     let doc = app
         .document_state

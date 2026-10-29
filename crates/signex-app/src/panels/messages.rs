@@ -415,11 +415,7 @@ pub enum PanelMsg {
     FpEditorRestorePadStackDefaults,
     /// #1073 — dismiss the open-time pad-stack offer for this editor tab.
     FpEditorDismissPadStackOffer,
-    /// v0.22 Phase E3+E4 polish — Hover state for the Properties
-    /// panel's "Conflicts (worst first)" list. `true` on row
-    /// `on_enter`, `false` on `on_exit`. The handler flips
-    /// `editor.state.hovered_over_constraint` between
-    /// v0.22 Phase E3+E4 → v0.23 — Per-row hover on a Properties
+    /// Per-row hover on a Properties
     /// panel "Conflicts" list row. `Some(constraint_id)` highlights
     /// the specific constraint at full red and dims everything else
     /// (including other over-constraints) so the user can isolate a
@@ -624,16 +620,19 @@ pub enum PanelMsg {
     /// pin, every other rule falls back to "zoom + select" (same as
     /// clicking the row body).
     ErcQuickFix(usize),
+    /// Waive (`waive`) or restore a net-level finding's (rule id, net) pair
+    /// (#1581). Stored in the project's rule set; one undo step.
+    ErcNetWaiverSet {
+        rule_id: String,
+        net: String,
+        waive: bool,
+    },
     ToggleGrid,
     ToggleSnap,
     PropertiesTab(usize),
     /// Net Classes section of the Properties panel (#1042). One nested
     /// message so the section adds no flat leaves.
     NetClass(NetClassMsg),
-    SelectLibrary(String),
-    SelectComponent(String),
-    DragComponentsSplit,
-    ComponentFilter(String),
     /// F15 — Properties panel: open the primitive picker (symbol /
     /// footprint) for the row described by the active
     /// `PanelContext.library_row_detail`. Routes to
@@ -653,6 +652,9 @@ pub enum PanelMsg {
     /// Replace the sheet's embedded library symbol with the library's
     /// current one (Properties ▸ "Update from library", #912).
     UpdateSymbolFromLibrary(uuid::Uuid),
+    /// Open Datasheet / Edit Symbol / Change Component on the selected
+    /// placed part (#1301, #1262, #1260).
+    PlacedPartAction(crate::library::PlacedPartAction),
     /// Switch a placed symbol to another drawing of its library row: the
     /// symbol's uuid and the `lib_id` of the drawing (#1230).
     SwitchSymbolChoice(uuid::Uuid, String),
@@ -664,6 +666,9 @@ pub enum PanelMsg {
     ToggleSymbolLocked(uuid::Uuid),
     /// Toggle a symbol's DNP state.
     ToggleSymbolDnp(uuid::Uuid),
+    /// The Body row of a symbol's Properties picked a body (normal or
+    /// alternate / De Morgan).
+    SymbolBodyStylePicked(uuid::Uuid, signex_types::schematic::BodyStyle),
     /// Set absolute rotation on a symbol (degrees).
     EditSymbolRotation(uuid::Uuid, f64),
     /// Set font size (Altium pt) on a symbol's value text property.
@@ -761,8 +766,7 @@ pub enum PanelMsg {
         pin_idx: usize,
         value: f64,
     },
-    /// SCH Library panel — click on a row in the Pins sub-list.
-    /// Selects the pin on the canvas (Properties panel switches
+    /// Select a pin on the canvas (Properties panel switches
     /// to pin-mode automatically via the next refresh_panel_ctx).
     SymEditorSelectPin(usize),
     /// Properties panel — edit a pin's free-text Description.
@@ -1009,6 +1013,8 @@ pub enum PanelMsg {
     CommitTitleBlockField(super::TitleBlockField),
     /// No-op placeholder for unimplemented UI controls.
     Noop,
+    /// The multi-selection form of the Properties panel (#1258).
+    MultiEdit(super::MultiEditMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

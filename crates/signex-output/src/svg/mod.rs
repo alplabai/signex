@@ -82,7 +82,6 @@ pub struct SvgRenderContext {
     pub width: f32,
     pub height: f32,
     pub elements: Vec<SvgElement>,
-    pub svg_document: String,
     /// The theme's paper colour, which Black & White maps against.
     pub paper: (f32, f32, f32),
 }
@@ -91,6 +90,9 @@ pub struct SvgEvaluatorInputs<'a> {
     pub global_refdes: &'a HashMap<String, String>,
     pub net_name_by_symbol_pin: &'a HashMap<String, HashMap<String, String>>,
     pub cell: &'a str,
+    /// Resolves `${TOKEN}` special strings in text notes, the same context
+    /// the title block resolves with. `None` leaves the text as stored.
+    pub special_strings: Option<&'a crate::SubstitutionContext<'a>>,
 }
 
 fn fill_to_rgb(
@@ -178,6 +180,8 @@ fn pt(x: f32, y: f32) -> SvgPoint {
 }
 
 #[cfg(test)]
+mod drawing_placement_tests;
+#[cfg(test)]
 mod net_class_tests;
 
 #[cfg(test)]
@@ -235,7 +239,6 @@ mod tests {
             width: 40.0,
             height: 40.0,
             elements,
-            svg_document: String::new(),
             paper,
         }
     }
@@ -290,9 +293,9 @@ mod tests {
         let opts = PdfOptions::default();
         let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);
         let svg = SvgRenderContext::from_sheet(&sheet, &opts, w_mm, h_mm, 72.0 / 25.4, None);
-        assert!(svg.svg_document.starts_with("<svg"));
-        assert!(svg.svg_document.contains("<path"));
-        assert!(svg.svg_document.contains("</svg>"));
+        assert!(svg.svg_document().starts_with("<svg"));
+        assert!(svg.svg_document().contains("<path"));
+        assert!(svg.svg_document().contains("</svg>"));
     }
 
     /// The note drawn by the exporter's rasterizer, which is where the face

@@ -6,9 +6,8 @@ pub struct ErcMarker {
     pub x: f64,
     pub y: f64,
     pub severity: ErcMarkerSeverity,
-    /// Uuid of the primary offending item (label, wire, symbol, …).
-    /// Reserved for a future halo/highlight pass; unused today.
-    pub primary_uuid: Option<uuid::Uuid>,
+    /// `true` for a net-level finding, drawn with the distinct net marker.
+    pub net_level: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

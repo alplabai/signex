@@ -18,7 +18,7 @@ pub(super) struct PriceView<'a> {
     pub(super) now: DateTime<Utc>,
     /// The currency most rows are priced in (ties: alphabetically first).
     /// Sorting compares prices only within it.
-    main_currency: String,
+    main_currency: std::borrow::Cow<'a, str>,
 }
 
 impl<'a> PriceView<'a> {
@@ -46,8 +46,27 @@ impl<'a> PriceView<'a> {
         Self {
             pricing,
             now,
-            main_currency,
+            main_currency: main_currency.into(),
         }
+    }
+
+    /// A view over `pricing` whose main currency was already worked out
+    /// (by an earlier [`Self::new`]), so no pass over the rows is repeated.
+    pub(super) fn with_main_currency(
+        pricing: &'a HashMap<Uuid, RowPricing>,
+        now: DateTime<Utc>,
+        main_currency: &'a str,
+    ) -> Self {
+        Self {
+            pricing,
+            now,
+            main_currency: main_currency.into(),
+        }
+    }
+
+    /// The currency most rows are priced in.
+    pub(super) fn main_currency(&self) -> &str {
+        &self.main_currency
     }
 
     /// Whether any of `rows` has a cached price worth a column.
@@ -108,6 +127,7 @@ mod tests {
             class: signex_library::ComponentClass::new("resistor"),
             datasheet: Default::default(),
             datasheet_label: String::new(),
+            description: String::new(),
             more_datasheets: Vec::new(),
             state: signex_library::LifecycleState::Draft,
             symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
@@ -215,7 +235,11 @@ mod tests {
         let view = PriceView::new(&pricing, Utc::now(), &rows);
         // The grid's own comparator, fed the column's own cells.
         let mut order: Vec<&ComponentRow> = rows.iter().collect();
-        super::super::sort::sort_by_cell_key(&mut order, |r| view.sort_value(r), false);
+        super::super::sort::sort_by_cell_key(
+            &mut order,
+            |r| super::super::sort::CellSortKey::from_cell(&view.sort_value(r)),
+            false,
+        );
         let skus: Vec<&str> = order.iter().map(|r| r.supply[0].sku.as_str()).collect();
         assert_eq!(
             skus,

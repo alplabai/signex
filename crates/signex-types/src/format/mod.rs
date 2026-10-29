@@ -44,7 +44,11 @@ mod unknown_columns;
 mod version;
 
 #[cfg(test)]
+mod body_style_tests;
+#[cfg(test)]
 mod bus_entry_tests;
+#[cfg(test)]
+mod drawing_placement_tests;
 #[cfg(test)]
 mod font_family_tests;
 #[cfg(test)]
@@ -332,7 +336,7 @@ impl SnxSchematic {
     /// build knows: it loaded for viewing but `write_string` refuses to
     /// save it (unknown content would be lost); the caller should warn. See `version.rs`.
     pub fn is_from_newer_minor(&self) -> bool {
-        version::is_newer_minor(&self.format, SNXSCH_FORMAT_V1)
+        version::is_newer_minor(&self.format, SNXSCH_FORMAT_V1) || self.sheet.is_read_only()
     }
 
     /// Serialise to a TOML+TSV string for writing to disk.
@@ -481,6 +485,7 @@ impl SnxSchematic {
         let labels = label_rows.into_iter().map(row_to_label).collect();
 
         let net_colors = sheet_extras.parsed_net_colors();
+        let drawing_placements = sheet_extras.parsed_drawing_placements();
         let sheet = SchematicSheet {
             uuid: raw.schematic_id,
             version: raw.version,
@@ -516,6 +521,7 @@ impl SnxSchematic {
             title_block: sheet_extras.title_block.into_iter().collect(),
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
             net_colors,
+            drawing_placements,
             frame: sheet_extras.frame.settings,
             unknown: SheetUnknown {
                 manifest: raw.unknown,

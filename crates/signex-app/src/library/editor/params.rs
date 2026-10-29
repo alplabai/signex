@@ -13,19 +13,27 @@
 //! custom rows + the add-new control.
 //!
 //! Numeric / measurement edits go through a per-row `String` buffer on
-//! `ComponentPreviewState.params_edit_buf`, following the
+//! the editor's `params_edit_buf`, following the
 //! `reference_erasable_numeric_input` pattern.
 
 use std::collections::BTreeSet;
 
 use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
 use iced::{Border, Element, Length, Theme};
-use signex_library::{ParamKind, ParamSlot, ParamValue, ParameterTemplate};
+use signex_library::{ParamKind, ParamSlot, ParamValue, ParameterTemplate, TemplateViolation};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage, ParamKindMsg};
 use super::super::state::{ComponentPreviewState, EditorAddress, LibraryState};
+use super::super::unit_picker::{unit_of_token, unit_picker};
+
+/// Width of the status column: the missing badge or a slot problem.
+const STATUS_W: f32 = 170.0;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Resolve the parameter template for a preview state by walking
 /// `LibraryState.open_libraries` for the matching `library_path`, then
@@ -38,12 +46,49 @@ fn resolve_template<'a>(
     if class.trim().is_empty() {
         return None;
     }
-    let library_id = library_state
+    let library_id = library_id_of(state, library_state)?;
+    library_state.template_registry.resolve(library_id, class)
+}
+
+fn library_id_of(
+    state: &ComponentPreviewState,
+    library_state: &LibraryState,
+) -> Option<uuid::Uuid> {
+    library_state
         .open_libraries
         .iter()
         .find(|lib| lib.root == state.library_path)
-        .map(|lib| lib.library_id)?;
-    library_state.template_registry.resolve(library_id, class)
+        .map(|lib| lib.library_id)
+}
+
+/// The short reason a slot's current value breaks its template, shown in
+/// the slot's status column. A missing required slot has its own badge.
+fn violation_text(v: &TemplateViolation) -> Option<(&str, String)> {
+    let name = match v {
+        TemplateViolation::MissingRequired { name }
+        | TemplateViolation::WrongKind { name, .. }
+        | TemplateViolation::WrongUnit { name, .. }
+        | TemplateViolation::ZeroNotAllowed { name }
+        | TemplateViolation::NegativeNotAllowed { name } => name.as_str(),
+    };
+    signex_library::violation_words(v).map(|why| (name, why))
+}
+
+/// Per slot name, what is wrong with the row's current value for it.
+fn slot_problems(
+    state: &ComponentPreviewState,
+    library_state: &LibraryState,
+) -> std::collections::BTreeMap<String, String> {
+    let Some(library_id) = library_id_of(state, library_state) else {
+        return Default::default();
+    };
+    library_state
+        .template_registry
+        .validate_params(library_id, state.row.class.as_str(), &state.row.parameters)
+        .iter()
+        .filter_map(violation_text)
+        .map(|(name, why)| (name.to_string(), why))
+        .collect()
 }
 
 pub fn view<'a>(
@@ -56,6 +101,7 @@ pub fn view<'a>(
     let muted = theme_ext::text_secondary(tokens);
 
     let template = resolve_template(state, library_state);
+    let problems = slot_problems(state, library_state);
 
     let header_label = match template {
         Some(t) => format!("Parameters (class: {})", t.class),
@@ -66,7 +112,7 @@ pub fn view<'a>(
     };
 
     let mut body = column![
-        text(header_label).size(13).color(text_c),
+        text(header_label).size(TS.title).color(text_c),
         Space::new().height(10),
     ]
     .spacing(0)
@@ -85,20 +131,34 @@ pub fn view<'a>(
     if let Some(t) = template {
         // ── Required ────────────────────────────────────────────────
         if !t.required_params.is_empty() {
-            body = body.push(text("Required").size(11).color(muted));
+            body = body.push(text("Required").size(TS.body).color(muted));
             body = body.push(Space::new().height(6));
             for slot in &t.required_params {
-                body = body.push(template_row(state, slot, true, tokens, &address));
+                body = body.push(template_row(
+                    state,
+                    slot,
+                    true,
+                    problems.get(&slot.name),
+                    tokens,
+                    &address,
+                ));
                 body = body.push(Space::new().height(4));
             }
             body = body.push(Space::new().height(8));
         }
         // ── Optional ────────────────────────────────────────────────
         if !t.optional_params.is_empty() {
-            body = body.push(text("Optional").size(11).color(muted));
+            body = body.push(text("Optional").size(TS.body).color(muted));
             body = body.push(Space::new().height(6));
             for slot in &t.optional_params {
-                body = body.push(template_row(state, slot, false, tokens, &address));
+                body = body.push(template_row(
+                    state,
+                    slot,
+                    false,
+                    problems.get(&slot.name),
+                    tokens,
+                    &address,
+                ));
                 body = body.push(Space::new().height(4));
             }
             body = body.push(Space::new().height(8));
@@ -109,7 +169,7 @@ pub fn view<'a>(
                 "No template for class `{}` — populate with custom parameters.",
                 state.row.class.as_str()
             ))
-            .size(11)
+            .size(TS.body)
             .color(muted),
         );
         body = body.push(Space::new().height(10));
@@ -123,11 +183,11 @@ pub fn view<'a>(
         .filter(|k| !template_keys.contains(k.as_str()))
         .collect();
 
-    body = body.push(text("Custom").size(11).color(muted));
+    body = body.push(text("Custom").size(TS.body).color(muted));
     body = body.push(Space::new().height(6));
 
     if custom_keys.is_empty() {
-        body = body.push(text("No custom parameters yet.").size(11).color(muted));
+        body = body.push(text("No custom parameters yet.").size(TS.body).color(muted));
         body = body.push(Space::new().height(6));
     } else {
         for key in custom_keys {
@@ -153,6 +213,7 @@ fn template_row<'a>(
     state: &'a ComponentPreviewState,
     slot: &'a ParamSlot,
     required: bool,
+    problem: Option<&String>,
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
@@ -162,15 +223,22 @@ fn template_row<'a>(
     let label_color = if required { text_c } else { muted };
     let present = state.row.parameters.contains_key(&slot.name);
 
-    let label = container(text(slot.name.clone()).size(11).color(label_color))
+    let label = container(text(slot.name.clone()).size(TS.body).color(label_color))
         .width(Length::FillPortion(3));
 
-    let editor_widget: Element<'a, LibraryMessage> =
-        slot_input(state, &slot.name, slot.kind, slot.unit.clone(), address);
+    let editor_widget: Element<'a, LibraryMessage> = slot_input(
+        state,
+        &slot.name,
+        slot.kind,
+        slot.unit.clone(),
+        Some(slot),
+        tokens,
+        address,
+    );
 
     let unit_label: Element<'a, LibraryMessage> = match (&slot.unit, slot.kind) {
-        (Some(u), ParamKind::Measurement) => container(text(u.clone()).size(11).color(muted))
-            .padding([0, 8])
+        (Some(u), ParamKind::Measurement) => container(text(u.clone()).size(TS.body).color(muted))
+            .padding([0.0, SP.m])
             .width(Length::Fixed(60.0))
             .into(),
         _ => Space::new().width(Length::Fixed(60.0)).into(),
@@ -178,11 +246,19 @@ fn template_row<'a>(
 
     let status: Element<'a, LibraryMessage> = if required && !present {
         let amber = iced::Color::from_rgb(0.95, 0.70, 0.18);
-        container(text("\u{2717} missing").size(11).color(amber))
-            .width(Length::Fixed(110.0))
+        container(text("\u{2717} missing").size(TS.body).color(amber))
+            .width(Length::Fixed(STATUS_W))
             .into()
+    } else if let Some(why) = problem {
+        container(
+            text(format!("\u{2717} {why}"))
+                .size(TS.body)
+                .color(theme_ext::error_color(tokens)),
+        )
+        .width(Length::Fixed(STATUS_W))
+        .into()
     } else {
-        Space::new().width(Length::Fixed(110.0)).into()
+        Space::new().width(Length::Fixed(STATUS_W)).into()
     };
 
     row![
@@ -192,7 +268,7 @@ fn template_row<'a>(
         status,
     ]
     .align_y(iced::Alignment::Center)
-    .spacing(8)
+    .spacing(SP.m)
     .width(Length::Fill)
     .into()
 }
@@ -221,47 +297,72 @@ fn custom_row<'a>(
     };
 
     let label =
-        container(text(name.to_string()).size(11).color(text_c)).width(Length::FillPortion(3));
+        container(text(name.to_string()).size(TS.body).color(text_c)).width(Length::FillPortion(3));
 
-    let editor_widget = slot_input(state, name, kind, unit.clone(), address);
+    let editor_widget = slot_input(state, name, kind, unit.clone(), None, tokens, address);
 
+    // No slot fixes the unit of a custom row, so it is picked, never
+    // typed. A unit string the build does not know stays a read-only label.
     let unit_label: Element<'a, LibraryMessage> = match (unit, kind) {
-        (Some(u), ParamKind::Measurement) => container(text(u).size(11).color(muted))
-            .padding([0, 8])
-            .width(Length::Fixed(60.0))
-            .into(),
-        _ => Space::new().width(Length::Fixed(60.0)).into(),
+        (Some(u), ParamKind::Measurement) => match unit_of_token(&u) {
+            Ok(selected) => {
+                let lib_path = address.library_path.clone();
+                let table = address.table.clone();
+                let row_id = address.row_id;
+                let name_owned = name.to_string();
+                let allow_none = selected.is_none();
+                container(unit_picker(selected, allow_none, TS.body, move |unit| {
+                    LibraryMessage::EditorEvent {
+                        library_path: lib_path.clone(),
+                        table: table.clone(),
+                        row_id,
+                        msg: EditorMsg::ParamUnitPicked {
+                            name: name_owned.clone(),
+                            unit,
+                        },
+                    }
+                }))
+                .width(Length::Fixed(90.0))
+                .into()
+            }
+            Err(raw) => container(text(raw.to_string()).size(TS.body).color(muted))
+                .padding([0, 8])
+                .width(Length::Fixed(90.0))
+                .into(),
+        },
+        _ => Space::new().width(Length::Fixed(90.0)).into(),
     };
 
     let lib_path = address.library_path.clone();
     let table = address.table.clone();
     let row_id = address.row_id;
     let name_owned = name.to_string();
-    let remove_btn = button(container(text("\u{00D7}").size(13).color(muted)).padding([0, 6]))
-        .on_press(LibraryMessage::EditorEvent {
-            library_path: lib_path,
-            table,
-            row_id,
-            msg: EditorMsg::ParamRemove { name: name_owned },
-        })
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => {
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10)
+    let remove_btn =
+        button(container(text("\u{00D7}").size(TS.title).color(muted)).padding([0, 6]))
+            .on_press(LibraryMessage::EditorEvent {
+                library_path: lib_path,
+                table,
+                row_id,
+                msg: EditorMsg::ParamRemove { name: name_owned },
+            })
+            .style(move |_: &Theme, status: iced::widget::button::Status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered => {
+                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10)
+                    }
+                    _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.03),
+                };
+                iced::widget::button::Style {
+                    background: Some(iced::Background::Color(bg)),
+                    text_color: muted,
+                    border: Border {
+                        width: 1.0,
+                        radius: 3.0.into(),
+                        color: theme_ext::border_color(tokens),
+                    },
+                    ..iced::widget::button::Style::default()
                 }
-                _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.03),
-            };
-            iced::widget::button::Style {
-                background: Some(iced::Background::Color(bg)),
-                text_color: muted,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: theme_ext::border_color(tokens),
-                },
-                ..iced::widget::button::Style::default()
-            }
-        });
+            });
 
     let status_block: Element<'a, LibraryMessage> =
         container(remove_btn).width(Length::Fixed(110.0)).into();
@@ -273,160 +374,134 @@ fn custom_row<'a>(
         status_block,
     ]
     .align_y(iced::Alignment::Center)
-    .spacing(8)
+    .spacing(SP.m)
     .width(Length::Fill)
     .into()
 }
 
 /// Build the kind-appropriate editor widget for one parameter cell.
+/// `slot` is the class-template slot behind it, if any.
 fn slot_input<'a>(
     state: &'a ComponentPreviewState,
     name: &str,
     kind: ParamKind,
     unit: Option<String>,
+    slot: Option<&ParamSlot>,
+    tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let lib_path = address.library_path.clone();
-    let table = address.table.clone();
-    let row_id = address.row_id;
-    let name_owned = name.to_string();
-
     match kind {
-        ParamKind::Text => {
-            let value = match state.row.parameters.get(name) {
-                Some(ParamValue::Text(s)) => s.clone(),
-                Some(ParamValue::Number(n)) => n.to_string(),
-                Some(ParamValue::Bool(b)) => b.to_string(),
-                Some(ParamValue::Measurement { value, .. }) => value.to_string(),
-                None => String::new(),
-            };
-            let name_for_input = name_owned;
-            text_input("", &value)
-                .on_input(move |s| LibraryMessage::EditorEvent {
-                    library_path: lib_path.clone(),
-                    table: table.clone(),
-                    row_id,
-                    msg: EditorMsg::ParamSetText {
-                        name: name_for_input.clone(),
-                        value: s,
-                    },
-                })
-                .padding([4, 8])
-                .size(11)
-                .into()
-        }
-        ParamKind::Number => {
-            // Per-row String buffer wins over reading f64.to_string()
-            // on every keystroke — the buffer is what the user is
-            // typing.
-            let buf = state.params_edit_buf.get(name).cloned().unwrap_or_else(|| {
-                match state.row.parameters.get(name) {
-                    Some(ParamValue::Number(n)) => n.to_string(),
-                    Some(other) => display_param(other),
-                    None => String::new(),
-                }
-            });
-            let lib_path_input = lib_path.clone();
-            let lib_path_submit = lib_path;
-            let table_input = table.clone();
-            let table_submit = table;
-            let name_for_input = name_owned.clone();
-            let name_for_submit = name_owned;
-            text_input("", &buf)
-                .on_input(move |s| LibraryMessage::EditorEvent {
-                    library_path: lib_path_input.clone(),
-                    table: table_input.clone(),
-                    row_id,
-                    msg: EditorMsg::ParamSetNumberBuf {
-                        name: name_for_input.clone(),
-                        buf: s,
-                    },
-                })
-                .on_submit(LibraryMessage::EditorEvent {
-                    library_path: lib_path_submit,
-                    table: table_submit,
-                    row_id,
-                    msg: EditorMsg::ParamCommitNumber {
-                        name: name_for_submit,
-                    },
-                })
-                .padding([4, 8])
-                .size(11)
-                .into()
-        }
-        ParamKind::Bool => {
-            let checked = matches!(state.row.parameters.get(name), Some(ParamValue::Bool(true)));
-            let name_for_toggle = name_owned;
-            iced::widget::checkbox(checked)
-                .on_toggle(move |v| LibraryMessage::EditorEvent {
-                    library_path: lib_path.clone(),
-                    table: table.clone(),
-                    row_id,
-                    msg: EditorMsg::ParamSetBool {
-                        name: name_for_toggle.clone(),
-                        value: v,
-                    },
-                })
-                .size(14)
-                .spacing(4)
-                .into()
-        }
+        ParamKind::Text => text_cell(state, name, address),
+        ParamKind::Number => number_cell(state, name, address),
+        ParamKind::Bool => bool_cell(state, name, address),
         ParamKind::Measurement => {
-            let buf = state.params_edit_buf.get(name).cloned().unwrap_or_else(|| {
-                match state.row.parameters.get(name) {
-                    Some(ParamValue::Measurement { value, .. }) => value.to_string(),
-                    Some(other) => display_param(other),
-                    None => String::new(),
-                }
-            });
-            let row_unit = match (unit, state.row.parameters.get(name)) {
-                (Some(u), _) => u,
-                (None, Some(ParamValue::Measurement { unit, .. })) => unit.clone(),
-                _ => String::new(),
-            };
-            let lib_path_input = lib_path.clone();
-            let lib_path_submit = lib_path;
-            let table_input = table.clone();
-            let table_submit = table;
-            let name_for_input = name_owned.clone();
-            let name_for_submit = name_owned;
-            let unit_for_submit = row_unit;
-            text_input("", &buf)
-                .on_input(move |s| LibraryMessage::EditorEvent {
-                    library_path: lib_path_input.clone(),
-                    table: table_input.clone(),
-                    row_id,
-                    msg: EditorMsg::ParamSetMeasurementBuf {
-                        name: name_for_input.clone(),
-                        buf: s,
-                    },
-                })
-                .on_submit(LibraryMessage::EditorEvent {
-                    library_path: lib_path_submit,
-                    table: table_submit,
-                    row_id,
-                    msg: EditorMsg::ParamCommitMeasurement {
-                        name: name_for_submit,
-                        unit: unit_for_submit,
-                    },
-                })
-                .padding([4, 8])
-                .size(11)
-                .into()
+            super::measurement_cell::view(state, name, unit, slot, tokens, address)
         }
     }
+}
+
+/// A parameter event addressed to `address`.
+pub(super) fn editor_event(address: &EditorAddress, msg: EditorMsg) -> LibraryMessage {
+    LibraryMessage::EditorEvent {
+        library_path: address.library_path.clone(),
+        table: address.table.clone(),
+        row_id: address.row_id,
+        msg,
+    }
+}
+
+fn text_cell<'a>(
+    state: &'a ComponentPreviewState,
+    name: &str,
+    address: &EditorAddress,
+) -> Element<'a, LibraryMessage> {
+    let value = match state.row.parameters.get(name) {
+        Some(ParamValue::Text(s)) => s.clone(),
+        Some(ParamValue::Number(n)) => n.to_string(),
+        Some(ParamValue::Bool(b)) => b.to_string(),
+        Some(ParamValue::Measurement { value, .. }) => value.to_string(),
+        None => String::new(),
+    };
+    let address = address.clone();
+    let name = name.to_string();
+    text_input("", &value)
+        .on_input(move |s| {
+            editor_event(
+                &address,
+                EditorMsg::ParamSetText {
+                    name: name.clone(),
+                    value: s,
+                },
+            )
+        })
+        .padding([SP.s, SP.m])
+        .size(TS.body)
+        .into()
+}
+
+fn number_cell<'a>(
+    state: &'a ComponentPreviewState,
+    name: &str,
+    address: &EditorAddress,
+) -> Element<'a, LibraryMessage> {
+    // The per-row String buffer wins over `f64::to_string()` on every
+    // keystroke: the buffer is what the user is typing.
+    let buf = state.params_edit_buf.get(name).cloned().unwrap_or_else(|| {
+        match state.row.parameters.get(name) {
+            Some(ParamValue::Number(n)) => n.to_string(),
+            Some(other) => display_param(other),
+            None => String::new(),
+        }
+    });
+    let (input_address, input_name) = (address.clone(), name.to_string());
+    let (submit_address, submit_name) = (address.clone(), name.to_string());
+    text_input("", &buf)
+        .on_input(move |s| {
+            editor_event(
+                &input_address,
+                EditorMsg::ParamSetNumberBuf {
+                    name: input_name.clone(),
+                    buf: s,
+                },
+            )
+        })
+        .on_submit(editor_event(
+            &submit_address,
+            EditorMsg::ParamCommitNumber { name: submit_name },
+        ))
+        .padding([SP.s, SP.m])
+        .size(TS.body)
+        .into()
+}
+
+fn bool_cell<'a>(
+    state: &'a ComponentPreviewState,
+    name: &str,
+    address: &EditorAddress,
+) -> Element<'a, LibraryMessage> {
+    let checked = matches!(state.row.parameters.get(name), Some(ParamValue::Bool(true)));
+    let address = address.clone();
+    let name = name.to_string();
+    iced::widget::checkbox(checked)
+        .on_toggle(move |v| {
+            editor_event(
+                &address,
+                EditorMsg::ParamSetBool {
+                    name: name.clone(),
+                    value: v,
+                },
+            )
+        })
+        .size(TS.heading)
+        .spacing(SP.s)
+        .into()
 }
 
 /// Cheap text view of a `ParamValue` for fallback rendering when the
 /// per-row buffer is empty. Replaces the previous `ParamValue::display`
 /// method whose name collided with type inference.
 fn display_param(v: &ParamValue) -> String {
-    match v {
-        ParamValue::Text(s) => s.clone(),
-        ParamValue::Number(n) => n.to_string(),
-        ParamValue::Bool(b) => b.to_string(),
-        ParamValue::Measurement { value, unit } => format!("{value} {unit}"),
-    }
+    ParamValue::display(v)
 }
 
 /// Inline "+ Add custom parameter" row — text input + four kind buttons
@@ -457,7 +532,7 @@ fn add_custom_row<'a>(
         let lib_path = lib_path.clone();
         let table = table.clone();
         let kind_for_msg = kind;
-        button(container(text(label).size(11).color(text_c)).padding([3, 10]))
+        button(container(text(label).size(TS.body).color(text_c)).padding([3, 10]))
             .on_press(LibraryMessage::EditorEvent {
                 library_path: lib_path,
                 table,
@@ -498,12 +573,12 @@ fn add_custom_row<'a>(
                 msg: EditorMsg::ParamNewNameChanged(s),
             })
             .padding([3, 6])
-            .size(11)
+            .size(TS.body)
             .width(Length::Fixed(160.0))
     };
 
     row![
-        text("[+ Add custom parameter]").size(11).color(muted),
+        text("[+ Add custom parameter]").size(TS.body).color(muted),
         Space::new().width(8),
         name_input,
         Space::new().width(8),
@@ -618,5 +693,78 @@ mod tests {
         assert!(missing.contains(&"tolerance".to_string()));
         assert!(missing.contains(&"power".to_string()));
         assert!(!missing.contains(&"value".to_string()));
+    }
+
+    /// A zero capacitor, a negative resistor and a wrong-unit value each
+    /// get a visible reason in the slot's status column.
+    #[test]
+    fn template_violations_become_slot_problems() {
+        let registry = TemplateRegistry::new_with_builtins();
+        let capacitor = registry
+            .resolve(Uuid::nil(), "capacitor")
+            .expect("capacitor template");
+        let value_slot = capacitor
+            .required_params
+            .iter()
+            .find(|s| s.kind == ParamKind::Measurement && s.unit.as_deref() == Some("F"))
+            .expect("a farad slot")
+            .name
+            .clone();
+        let mut params = ParamMap::new();
+        params.insert(
+            value_slot.clone(),
+            ParamValue::Measurement {
+                value: 0.0,
+                unit: "F".into(),
+            },
+        );
+        let zero = problem_of(&registry, "capacitor", &params, &value_slot);
+        assert_eq!(zero.as_deref(), Some("zero not allowed"));
+
+        params.insert(
+            value_slot.clone(),
+            ParamValue::Measurement {
+                value: -1e-6,
+                unit: "F".into(),
+            },
+        );
+        let negative = problem_of(&registry, "capacitor", &params, &value_slot);
+        assert_eq!(negative.as_deref(), Some("negative not allowed"));
+
+        params.insert(
+            value_slot.clone(),
+            ParamValue::Measurement {
+                value: 4.7,
+                unit: "V".into(),
+            },
+        );
+        let wrong = problem_of(&registry, "capacitor", &params, &value_slot);
+        assert_eq!(wrong.as_deref(), Some("unit V, expected F"));
+
+        params.insert(
+            value_slot.clone(),
+            ParamValue::Measurement {
+                value: 4.7e-6,
+                unit: "F".into(),
+            },
+        );
+        assert_eq!(
+            problem_of(&registry, "capacitor", &params, &value_slot),
+            None
+        );
+    }
+
+    fn problem_of(
+        registry: &signex_library::TemplateRegistry,
+        class: &str,
+        params: &ParamMap,
+        slot: &str,
+    ) -> Option<String> {
+        registry
+            .validate_params(Uuid::nil(), class, params)
+            .iter()
+            .filter_map(violation_text)
+            .find(|(name, _)| *name == slot)
+            .map(|(_, why)| why)
     }
 }

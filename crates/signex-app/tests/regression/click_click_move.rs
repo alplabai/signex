@@ -43,6 +43,7 @@ pub(super) fn app_with_wires(wires: Vec<Wire>) -> (Signex, PathBuf) {
         title_block: HashMap::new(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
+        drawing_placements: Default::default(),
         frame: Default::default(),
         font_family: None,
     };
@@ -132,6 +133,7 @@ fn move_picked_selects_only_the_object_under_the_cursor_and_disarms() {
     let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
         dx: 2.54,
         dy: 0.0,
+        connections: Default::default(),
     }));
     assert!(
         (wire_start(&app, &path, a).x - 12.54).abs() < 1e-6,
@@ -366,7 +368,7 @@ const BOUNDS: Rectangle = Rectangle {
     height: 600.0,
 };
 
-fn screen_at(app: &Signex, wx: f32, wy: f32) -> iced::Point {
+pub(super) fn screen_at(app: &Signex, wx: f32, wy: f32) -> iced::Point {
     let (ox, oy, scale) = app.interaction_state.active_canvas().live_camera();
     iced::Point::new(wx * scale + ox, wy * scale + oy)
 }
@@ -377,6 +379,27 @@ fn canvas_event(
     state: &mut CanvasState,
     event: Event,
     at: iced::Point,
+) -> Option<Message> {
+    deliver(app, state, event, at, false)
+}
+
+/// [`canvas_event`] for a canvas that shows the session's ghost, as the
+/// window of the placement's target sheet does.
+pub(super) fn canvas_event_placing(
+    app: &mut Signex,
+    state: &mut CanvasState,
+    event: Event,
+    at: iced::Point,
+) -> Option<Message> {
+    deliver(app, state, event, at, true)
+}
+
+fn deliver(
+    app: &mut Signex,
+    state: &mut CanvasState,
+    event: Event,
+    at: iced::Point,
+    with_ghost: bool,
 ) -> Option<Message> {
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
     let overrides = HashMap::new();
@@ -392,15 +415,22 @@ fn canvas_event(
             snap_enabled: false,
             snap_grid_mm: 1.27,
             snap_hotspots: false,
+            unit: signex_types::coord::Unit::Mm,
             wire_tool_active: false,
             visible_grid_mm: 1.27,
             grid_style: signex_app::render_config::GridStyle::Dots,
             auto_focus: false,
             zoom_step: 1.1,
             draw_mode: signex_app::app::DrawMode::Ortho90,
+            current_tool: signex_app::app::Tool::Select,
+            window_width: 1400.0,
             wire_color_overrides: &overrides,
             wire_class_styles: &class_styles,
+            wire_class_revision: 0,
             selection_filters: &app.interaction_state.selection_filters,
+            placement: with_ghost
+                .then(|| app.interaction_state.placement.as_ref().map(|s| &s.ghost))
+                .flatten(),
         };
         let view = SchematicCanvas::new(app.interaction_state.active_canvas(), prefs);
         view.update(state, &event, BOUNDS, mouse::Cursor::Available(at))
@@ -412,7 +442,7 @@ fn canvas_event(
     message
 }
 
-fn left_press() -> Event {
+pub(super) fn left_press() -> Event {
     Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
 }
 

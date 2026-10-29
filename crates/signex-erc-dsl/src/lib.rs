@@ -18,7 +18,7 @@ pub fn parse(src: &str) -> Result<Vec<RuleAst>, Vec<DslError>> {
         Ok(rules) => Ok(rules),
         Err(errors) => Err(errors
             .into_iter()
-            .map(|(offset, message)| DslError::Parse(offset, offset, message))
+            .map(|(start, end, message)| DslError::Parse(start, end, message))
             .collect()),
     }
 }
@@ -160,6 +160,44 @@ then warning \"hit\"
         }];
         let diagnostics = signex_erc::engine::run_all_with_dsl(&ctx, &eval_fns);
         assert!(diagnostics.iter().any(|d| d.message == "Driver net"));
+    }
+
+    #[test]
+    fn net_scoped_diagnostic_carries_the_net_and_survives_a_no_erc_on_its_pin() {
+        let src = r#"
+            rule net_rule
+            on net
+            when has_driver()
+            then warning "Driver net"
+        "#;
+        let eval_fns = parse_validate_compile_to_eval_fns(src).expect("dsl should compile");
+        let mut ctx = sample_context();
+        let sym = &ctx.symbols[0];
+        ctx.nets[0].pins = vec![signex_erc::context::ErcNetPin {
+            symbol: sym.uuid,
+            occurrence: signex_types::schematic::InstancePath::root(),
+            reference: sym.reference.clone(),
+            number: "1".into(),
+            position: sym.pins[0].world_pos,
+            direction: PinDirection::Output,
+            is_power_flag: false,
+        }];
+        let pin = sym.pins[0].world_pos;
+        ctx.no_erc_directives = vec![signex_erc::context::ErcNoErcDirective { position: pin }];
+        let diagnostics = signex_erc::engine::run_all_with_dsl(&ctx, &eval_fns);
+        let d = diagnostics
+            .iter()
+            .find(|d| d.message == "Driver net")
+            .expect("a No-ERC directive on the representative pin must not hide a net finding");
+        let net = d.net.as_ref().expect("finding carries its net");
+        assert_eq!(net.name, ctx.nets[0].name);
+        let rep = net.representative().expect("net has pins");
+        assert_eq!(d.location_space, signex_erc::LocationSpace::Net);
+        assert_eq!(
+            (d.location.x, d.location.y),
+            (rep.position.x, rep.position.y)
+        );
+        assert_eq!(rep.position, pin, "anchored at a real pin, not the origin");
     }
 
     #[test]

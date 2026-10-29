@@ -3,12 +3,22 @@ use signex_types::coord::Unit;
 
 use super::super::*;
 
+mod child_sheet_create;
+#[cfg(test)]
+mod child_sheet_create_tests;
+mod child_sheet_path;
+pub(crate) use child_sheet_path::relative_within;
 mod clicked;
 mod descend;
 mod double_clicked;
+mod field_edit;
+pub(crate) use field_edit::editor_placeholder;
+pub(crate) mod fit_view;
 mod layout_drag;
+mod measure_tool;
 mod move_pick;
 mod sheet_tool;
+mod status_activity;
 mod sync_sheet_pins;
 #[cfg(test)]
 mod tests;
@@ -54,31 +64,16 @@ impl Signex {
                         self.cursor_document_now().map(std::path::Path::to_path_buf);
                 }
                 self.ui_state.zoom = zoom_pct;
-                // Hover detection: fast hit-test against the active
-                // schematic snapshot so the tooltip overlay (in
-                // `view::collect_overlays`) can show after a 250 ms
-                // dwell on a placed symbol. Snapshot lookups are cheap
-                // (Vec scan keyed by world bounds), so doing this on
-                // every cursor tick is fine. Other hit kinds (wires,
-                // labels) intentionally fall through — only Symbol
-                // hovers carry library metadata worth surfacing.
-                let hover_uuid: Option<uuid::Uuid> = self
-                    .interaction_state
-                    .active_canvas()
-                    .active_snapshot()
-                    .and_then(|snap| {
-                        crate::schematic_runtime::hit_test::hit_test_styled(
-                            snap,
-                            &self.interaction_state.active_canvas().designators,
-                            x as f64,
-                            y as f64,
-                            self.ui_state.net_class_styles.styles(),
-                        )
-                    })
-                    .and_then(|hit| {
-                        matches!(hit.kind, signex_types::schematic::SelectedKind::Symbol)
-                            .then_some(hit.uuid)
-                    });
+                // Hover detection: one hit test against the active sheet
+                // feeds both the symbol tooltip (a 700 ms dwell on a placed
+                // symbol) and the net-insight dwell (#1270), which reads the
+                // index only once the dwell is up.
+                let hit = self.item_hit_at(x as f64, y as f64);
+                self.observe_net_hover(hit, (x as f64, y as f64));
+                let hover_uuid: Option<uuid::Uuid> = hit.and_then(|hit| {
+                    matches!(hit.kind, signex_types::schematic::SelectedKind::Symbol)
+                        .then_some(hit.uuid)
+                });
                 if hover_uuid != self.interaction_state.hover_symbol_uuid {
                     self.interaction_state.hover_symbol_uuid = hover_uuid;
                     self.interaction_state.hover_started_at =
@@ -130,7 +125,11 @@ impl Signex {
             CanvasEvent::Clicked { world_x, world_y } => {
                 return self.handle_canvas_clicked(world_x, world_y);
             }
-            CanvasEvent::MoveSelected { dx, dy } => {
+            CanvasEvent::MoveSelected {
+                dx,
+                dy,
+                connections,
+            } => {
                 // Snap so the PRIMARY selected item's connection point (its
                 // stored `position`) lands on a grid dot after the move, not
                 // just the drag delta. Snapping only the delta preserves an
@@ -143,6 +142,15 @@ impl Signex {
                     dy,
                     self.ui_state.snap_enabled,
                     crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
+                    self.ui_state.snap_hotspots.then(|| {
+                        signex_types::schematic::hotspot_capture_radius(
+                            if self.ui_state.snap_enabled {
+                                crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm)
+                            } else {
+                                0.0
+                            },
+                        )
+                    }),
                 );
                 if (dx.abs() > 0.001 || dy.abs() > 0.001)
                     && !self
@@ -156,7 +164,7 @@ impl Signex {
                             items: self.interaction_state.active_canvas().selected.clone(),
                             dx,
                             dy,
-                            keep_wires: self.ui_state.move_keeps_wires,
+                            keep_wires: connections.keeps_wires(self.ui_state.move_keeps_wires),
                         },
                         true,
                         true,
@@ -172,9 +180,21 @@ impl Signex {
                 screen_x: _,
                 screen_y: _,
             } => return self.handle_canvas_double_clicked(world_x, world_y),
-            CanvasEvent::BoxSelect { x1, y1, x2, y2 } => {
+            CanvasEvent::BoxSelect {
+                x1,
+                y1,
+                x2,
+                y2,
+                direction,
+            } => {
                 return self.handle_selection_request(
-                    selection_request::SelectionRequest::BoxSelect { x1, y1, x2, y2 },
+                    selection_request::SelectionRequest::BoxSelect {
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                        direction,
+                    },
                 );
             }
             CanvasEvent::CursorMoved => {
@@ -223,6 +243,7 @@ impl Signex {
                 }
                 self.clear_active_camera_caches();
             }
+            CanvasEvent::FitSelection => self.fit_selection(),
             CanvasEvent::CtrlClicked { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot()
                     && let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
@@ -266,14 +287,15 @@ impl Signex {
         Task::none()
     }
 
-    pub(crate) fn handle_unit_cycle_request(&mut self) {
+    pub(crate) fn handle_unit_cycle_request(&mut self) -> Task<Message> {
         self.ui_state.unit = match self.ui_state.unit {
             Unit::Mm => Unit::Mil,
             Unit::Mil => Unit::Inch,
             Unit::Inch => Unit::Micrometer,
             Unit::Micrometer => Unit::Mm,
         };
-        crate::fonts::write_unit_pref(self.ui_state.unit);
+        let unit = self.ui_state.unit;
+        crate::fonts::background_pref_write("unit", move || crate::fonts::write_unit_pref(unit))
     }
 
     pub(crate) fn resolve_child_sheet_path(
@@ -305,7 +327,7 @@ impl Signex {
     /// canvas double-click reaches here through `descend_through_sheet_symbol`.
     /// `true` when the sheet is now the focused tab.
     pub(crate) fn open_or_focus_sheet_path(&mut self, path: std::path::PathBuf) -> bool {
-        let path = self.resolve_held_spelling(path);
+        let path = self.resolve_held_spelling_now(path);
         if !path.exists() {
             crate::diagnostics::log_info(format!("Child-sheet file not found: {}", path.display()));
             return false;
@@ -425,6 +447,15 @@ impl Signex {
                 .get(self.document_state.active_tab)
                 .map(|tab| tab.path.as_path())
         })
+    }
+
+    /// The last reported cursor point on the sheet (world mm), when it belongs
+    /// to the document now in view; `None` before the first hover or after a
+    /// tab switch.
+    pub(crate) fn cursor_world_now(&self) -> Option<(f64, f64)> {
+        let known = self.ui_state.cursor_document.as_deref()?;
+        (Some(known) == self.cursor_document_now())
+            .then_some((self.ui_state.cursor_x, self.ui_state.cursor_y))
     }
 
     /// Redraw the active schematic or PCB canvas after its camera moved.

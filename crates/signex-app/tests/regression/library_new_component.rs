@@ -174,8 +174,34 @@ fn a_new_row_is_unbound_reported_once_and_binding_clears_it() {
     let _ = app.update(Message::Library(LibraryMessage::PrimitivePicker(
         PrimitivePickerMsg::Pick(picked),
     )));
+    // The re-read the bind started, landing as the runtime would.
+    app.land_pending_refresh(&snxlib);
 
     let (_, bound) = only_row(&app, &snxlib);
     assert!(!bound.is_symbol_unbound(), "binding must clear the marker");
     assert!(bound.is_footprint_unbound(), "footprint is still unbound");
+}
+
+/// #1363 — a blank part number is a draft, not a duplicate: two New
+/// Component clicks in a row both create a row.
+#[test]
+fn two_blank_new_components_in_a_row_both_succeed() {
+    let _ = diagnostics::init_logging();
+    let tmp = tempfile::Builder::new()
+        .prefix("signex-1363-two-blank-")
+        .tempdir()
+        .expect("tempdir");
+    let snxlib = init_library(tmp.path());
+    let (mut app, _boot) = Signex::new();
+    app.library.open_libraries.clear();
+    app.library
+        .open_library(snxlib.clone())
+        .expect("mount library");
+
+    let _ = app.update(Message::Library(LibraryMessage::NewComponent));
+    let _ = app.update(Message::Library(LibraryMessage::NewComponent));
+
+    let lib = app.library.library_at(&snxlib).expect("library is open");
+    let rows: usize = lib.tables.values().map(Vec::len).sum();
+    assert_eq!(rows, 2, "the second blank component must not be refused");
 }

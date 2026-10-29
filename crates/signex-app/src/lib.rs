@@ -35,9 +35,12 @@ pub mod diagnostics;
 pub mod dock;
 pub mod feature_flags;
 pub mod find_replace;
+pub mod find_similar;
 pub mod first_run_tour;
 pub mod fonts;
 pub mod icons;
+pub mod paste_array;
+pub mod paste_prefs;
 // Crate-internal: `IgnoreResult` is an in-tree convention, not part of
 // this crate's API surface, so the module stays private.
 mod ignore;
@@ -59,8 +62,10 @@ pub mod preferences;
 pub mod recent_projects;
 pub mod render_config;
 pub mod renderer_scene_canvas;
+pub mod rule_profiles;
 pub mod sample_project;
 pub mod scene_generation;
+pub mod scene_gpu_upload;
 pub mod scene_shader;
 pub mod schematic_runtime;
 pub mod start_screen;

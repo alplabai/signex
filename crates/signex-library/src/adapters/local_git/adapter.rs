@@ -66,16 +66,7 @@ impl LibraryAdapter for LocalGitAdapter {
         if new_trimmed.is_empty() {
             return Err(LibraryError::Backend("table name cannot be empty".into()));
         }
-        if new_trimmed.chars().any(|c| {
-            matches!(
-                c,
-                '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
-            )
-        }) {
-            return Err(LibraryError::Backend(format!(
-                "table name {new_trimmed:?} contains illegal characters"
-            )));
-        }
+        check_table_name(&new_trimmed)?;
         if old_owned == new_trimmed {
             return Ok(());
         }
@@ -93,8 +84,8 @@ impl LibraryAdapter for LocalGitAdapter {
                         "table {new_owned:?} already exists"
                     )));
                 }
-                let entry = lf.tables.remove(&old_owned).expect("contains_key checked");
-                lf.tables.insert(new_owned, entry);
+                // Through the file, so the table keeps its unknown keys (#1435).
+                lf.rename_table(&old_owned, &new_owned);
                 Ok(())
             },
             msg,
@@ -217,12 +208,8 @@ impl LibraryAdapter for LocalGitAdapter {
                         new_entry.key
                     )));
                 }
-                for c in lf.manifest.classes.iter_mut() {
-                    if c.key == owned_old {
-                        *c = new_entry.clone();
-                        break;
-                    }
-                }
+                // Through the file, so the class keeps its unknown keys (#1435).
+                lf.rename_class(&owned_old, new_entry.clone());
                 Ok(())
             },
             msg,
@@ -235,19 +222,7 @@ impl LibraryAdapter for LocalGitAdapter {
         if trimmed.is_empty() {
             return Err(LibraryError::Backend("table name cannot be empty".into()));
         }
-        // Reject the same characters we reject elsewhere for filenames /
-        // identifiers — avoids surprising the user with a name they can't
-        // see in their file browser.
-        if trimmed.chars().any(|c| {
-            matches!(
-                c,
-                '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
-            )
-        }) {
-            return Err(LibraryError::Backend(format!(
-                "table name {trimmed:?} contains illegal characters"
-            )));
-        }
+        check_table_name(trimmed)?;
         let owned = trimmed.to_string();
         let fallback = format!("create empty table {owned}");
         self.mutate_library_file(
@@ -311,9 +286,16 @@ impl LibraryAdapter for LocalGitAdapter {
         let table_owned = table.to_string();
         let row_id = row.row_id;
         let lib_row = component_to_library_row(&row)?;
+        let new_row_id = row_id.to_string();
+        let new_pn = row.internal_pn.to_string();
         let fallback = format!("insert row {row_id} into {table_owned}");
-        self.mutate_library_file(
-            move |lf| {
+        self.save_row_edit(
+            table,
+            |lf| {
+                if !lf.tables.contains_key(&table_owned) {
+                    check_table_name(&table_owned)?;
+                }
+                check_insert_unique(lf, &new_row_id, &new_pn)?;
                 let entry = lf
                     .tables
                     .entry(table_owned.clone())
@@ -325,9 +307,10 @@ impl LibraryAdapter for LocalGitAdapter {
                     });
                 validate_legacy_header(&table_owned, &entry.columns)?;
                 declare_alternate_symbols_column(&mut entry.columns, &lib_row);
-                entry.rows.push(lib_row);
-                Ok(())
+                entry.rows.push(Arc::new(lib_row));
+                Ok(RowChange::Wrote(entry.rows.len() - 1))
             },
+            &[],
             msg,
             &fallback,
         )
@@ -355,30 +338,33 @@ impl LibraryAdapter for LocalGitAdapter {
         let base = row.server_revision;
         let lib_row = component_to_library_row(&row)?;
         let new_base = row_base(&lib_row);
+        let new_pn = row.internal_pn.to_string();
         let fallback = format!("update row {row_id} in {table_owned}");
-        self.mutate_library_file_with_assets(
-            move |lf| {
+        self.save_row_edit(
+            table,
+            |lf| {
+                check_pn_change(lf, &table_owned, &row_id.to_string(), &new_pn)?;
                 let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
                     LibraryError::NotFound(format!("table {table_owned} not in library"))
                 })?;
                 validate_legacy_header(&table_owned, &entry.columns)?;
                 let row_id_s = row_id.to_string();
-                let target = entry.rows.iter_mut().find(|r| {
-                    r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(row_id_s.as_str())
-                });
-                match target {
-                    Some(slot) => {
-                        // Checked against the row as it is on disk now
-                        // (the write path just re-read it), not a cache.
-                        check_row_base(slot, base)?;
-                        declare_alternate_symbols_column(&mut entry.columns, &lib_row);
-                        *slot = lib_row;
-                        Ok(true)
-                    }
-                    None => Err(LibraryError::NotFound(format!(
-                        "row {row_id} in table {table_owned}"
-                    ))),
-                }
+                let index = entry
+                    .rows
+                    .iter()
+                    .position(|r| {
+                        r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str)
+                            == Some(row_id_s.as_str())
+                    })
+                    .ok_or_else(|| {
+                        LibraryError::NotFound(format!("row {row_id} in table {table_owned}"))
+                    })?;
+                // Checked against the row as it is on disk now (the write
+                // path just re-read it), not a cache.
+                check_row_base(&entry.rows[index], base)?;
+                declare_alternate_symbols_column(&mut entry.columns, &lib_row);
+                entry.rows[index] = Arc::new(lib_row);
+                Ok(RowChange::Wrote(index))
             },
             asset_rel_paths,
             msg,
@@ -396,8 +382,9 @@ impl LibraryAdapter for LocalGitAdapter {
     ) -> Result<(), LibraryError> {
         let table_owned = table.to_string();
         let fallback = format!("delete row {row_id} from {table_owned}");
-        self.mutate_library_file(
-            move |lf| {
+        self.save_row_edit(
+            table,
+            |lf| {
                 let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
                     LibraryError::NotFound(format!("table {table_owned} not in library"))
                 })?;
@@ -418,8 +405,9 @@ impl LibraryAdapter for LocalGitAdapter {
                 }
                 // A deleted row's cached prices go with it.
                 entry.pricing.remove(&target);
-                Ok(())
+                Ok(RowChange::Removed(target))
             },
+            &[],
             msg,
             &fallback,
         )
@@ -481,10 +469,10 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
-        for (_, file) in self.scan_symbol_files()? {
-            if let Some(sym) = file.get_symbol(uuid) {
-                return Ok(sym.clone());
-            }
+        if let Some((_, file)) = self.locate_symbol_file(uuid)?
+            && let Some(sym) = file.get_symbol(uuid)
+        {
+            return Ok(sym.clone());
         }
         if let Some(err) = self.symbol_lookup_undetermined(uuid) {
             return Err(err);
@@ -574,34 +562,66 @@ impl LibraryAdapter for LocalGitAdapter {
         // The row is found and rewritten under the write lock, after the
         // reload, so a field another writer changed since the caller read
         // the row is kept.
-        self.mutate_library_file_if_changed(
+        self.save_row_edit(
+            table,
             |lf| {
                 let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
                     LibraryError::NotFound(format!("table {table_owned} not in library"))
                 })?;
                 validate_legacy_header(&table_owned, &entry.columns)?;
-                let slot = entry
+                let index = entry
                     .rows
-                    .iter_mut()
-                    .find(|r| {
+                    .iter()
+                    .position(|r| {
                         r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(target.as_str())
                     })
                     .ok_or_else(|| {
                         LibraryError::NotFound(format!("row {target} in table {table_owned}"))
                     })?;
-                let mut row = library_row_to_component(slot)?;
+                let mut row = library_row_to_component(&entry.rows[index])?;
                 if !crate::cascade::needs_bump(&row, save) {
-                    return Ok(false);
+                    return Ok(RowChange::None);
                 }
                 crate::cascade::apply_cascade_bump(&mut row, save);
-                *slot = component_to_library_row(&row)?;
+                entry.rows[index] = Arc::new(component_to_library_row(&row)?);
                 changed = true;
-                Ok(true)
+                Ok(RowChange::Wrote(index))
             },
+            &[],
             message,
             &fallback,
         )?;
         Ok(changed)
+    }
+
+    /// The whole batch in one `.snxlib` write and one commit. A target
+    /// that is missing or unreadable is that target's `Err` and the rest
+    /// still land; a failed write or commit refuses the whole batch.
+    fn update_rows(
+        &self,
+        targets: &[(String, RowId)],
+        edit: &mut crate::adapter::RowEdit<'_>,
+        message: &str,
+    ) -> Result<Vec<crate::adapter::RowEditOutcome>, LibraryError> {
+        let mut outcomes: Vec<crate::adapter::RowEditOutcome> = Vec::with_capacity(targets.len());
+        let fallback = format!("update {} rows", targets.len());
+        self.mutate_library_file_if_changed(
+            |lf| {
+                // Rows are found and edited under the write lock, after the
+                // reload, so a field another writer changed since the
+                // caller's scan is kept.
+                let mut any = false;
+                for (table, row_id) in targets {
+                    let outcome = edit_one_row(lf, table, *row_id, edit);
+                    any |= matches!(outcome, Ok(true));
+                    outcomes.push((*row_id, outcome));
+                }
+                Ok(any)
+            },
+            message,
+            &fallback,
+        )?;
+        Ok(outcomes)
     }
 
     fn root_path(&self) -> Option<PathBuf> {
@@ -653,7 +673,7 @@ impl LibraryAdapter for LocalGitAdapter {
     fn history(&self, primitive_path: &Path) -> Result<Vec<HistoryEntry>, LibraryError> {
         // Stage 17 scaffold: walk the repo's commit graph newest-first
         // and keep commits whose tree differs from at least one parent
-        // at `primitive_path`. Mirrors `git log --follow --max-count 50
+        // at `primitive_path`. Mirrors `git log --max-count 50
         // -- <path>` semantics (per `v0.9-snxlib-as-file-plan.md` §3
         // "Performance"), minus the rename-follow heuristic — git2
         // doesn't expose `--follow` directly so a future stage layers
@@ -686,44 +706,55 @@ impl LibraryAdapter for LocalGitAdapter {
         }
         let repo = git2::Repository::open(&self.root_dir)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
-
-        let mut walk = repo
-            .revwalk()
-            .map_err(|e| LibraryError::Backend(format!("git revwalk: {e}")))?;
-        // Topological + time so that on equal-second timestamps (the
-        // common case in tests + back-to-back saves on Windows where
-        // git2 stamps to one-second precision) child commits still
-        // come before parents — matches `git log`'s default visual
-        // order.
-        walk.set_sorting(git2::Sort::TIME | git2::Sort::TOPOLOGICAL)
-            .map_err(|e| LibraryError::Backend(format!("git revwalk sort: {e}")))?;
-
-        // Unborn HEAD (fresh repo, no commits yet) is a legitimate
-        // "no history" answer rather than an error — the editor
-        // should render an empty list, not a red banner.
-        match walk.push_head() {
-            Ok(()) => {}
-            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => return Ok(Vec::new()),
-            Err(e) => return Err(LibraryError::Backend(format!("git push head: {e}"))),
-        }
-
-        let mut entries: Vec<HistoryEntry> = Vec::new();
-        for oid_res in walk {
-            if entries.len() >= MAX_ENTRIES {
-                break;
-            }
-            let oid =
-                oid_res.map_err(|e| LibraryError::Backend(format!("git revwalk oid: {e}")))?;
-            let commit = repo
-                .find_commit(oid)
-                .map_err(|e| LibraryError::Backend(format!("git find commit: {e}")))?;
-
-            if !commit_touches_path(&repo, &commit, &rel_str)? {
-                continue;
-            }
-
-            entries.push(commit_to_history_entry(&commit));
-        }
-        Ok(entries)
+        crate::git_history::path_history(&repo, &rel_str, MAX_ENTRIES)
     }
+}
+
+/// Refuse a table name that is empty or holds a character a file browser
+/// or the `.snxlib` table header cannot carry; shared by every table
+/// write so a bad name fails the same way everywhere.
+fn check_table_name(name: &str) -> Result<(), LibraryError> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err(LibraryError::Backend("table name cannot be empty".into()));
+    }
+    if trimmed.chars().any(|c| {
+        matches!(
+            c,
+            '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
+        )
+    }) {
+        return Err(LibraryError::Backend(format!(
+            "table name {trimmed:?} contains illegal characters"
+        )));
+    }
+    Ok(())
+}
+
+/// Edit one row of an open library file for `update_rows`: `Ok(true)` when
+/// the edit changed it and the row was replaced, `Ok(false)` when it left
+/// the row alone.
+fn edit_one_row(
+    lf: &mut LibraryFile,
+    table: &str,
+    row_id: RowId,
+    edit: &mut crate::adapter::RowEdit<'_>,
+) -> Result<bool, LibraryError> {
+    let target = row_id.as_uuid().to_string();
+    let entry = lf
+        .tables
+        .get_mut(table)
+        .ok_or_else(|| LibraryError::NotFound(format!("table {table} not in library")))?;
+    validate_legacy_header(table, &entry.columns)?;
+    let index = entry
+        .rows
+        .iter()
+        .position(|r| r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(target.as_str()))
+        .ok_or_else(|| LibraryError::NotFound(format!("row {target} in table {table}")))?;
+    let mut row = library_row_to_component(&entry.rows[index])?;
+    if !edit(&mut row) {
+        return Ok(false);
+    }
+    entry.rows[index] = Arc::new(component_to_library_row(&row)?);
+    Ok(true)
 }

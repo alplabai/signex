@@ -74,6 +74,7 @@ mod tests {
             class: signex_library::ComponentClass::new("resistor"),
             datasheet: Default::default(),
             datasheet_label: String::new(),
+            description: String::new(),
             more_datasheets: Vec::new(),
             state: signex_library::LifecycleState::Draft,
             symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::nil()),

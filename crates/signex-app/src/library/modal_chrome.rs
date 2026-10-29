@@ -15,6 +15,15 @@ use signex_widgets::theme_ext;
 use super::messages::LibraryMessage;
 use crate::styles::{Spacing, TypeScale};
 
+/// Fixed widths of the Library modals that size themselves (the others
+/// take the picker / dialog default). One home so a resize is one edit.
+pub(crate) const CLOSE_PROMPT_W: f32 = 520.0;
+pub(crate) const CLOSE_PROMPT_H: f32 = 380.0;
+pub(crate) const CREATE_OPTIONS_W: f32 = 480.0;
+pub(crate) const DOCUMENT_OPTIONS_W: f32 = 460.0;
+pub(crate) const EDIT_ROW_W: f32 = 720.0;
+pub(crate) const EDIT_ROW_H: f32 = 640.0;
+
 /// Header close ("x") button emitting `message` when pressed.
 pub(crate) fn close_x<'a>(
     message: LibraryMessage,

@@ -7,51 +7,38 @@
 //!   intersection. Drives the snap "Intersection" priority and
 //!   the constraint solver's residual computation for tangency /
 //!   intersection constraints.
-//! - [`hull`] — convex hull, O(n log n) on the input size.
 //! - [`triangulate`] — polygon triangulation for the sketch
 //!   overlay's filled-loop renderer.
 //!
 //! Public entry point: re-exports below.
 
 pub mod aabb_index;
-pub mod boolean;
 pub mod boolean_general;
 pub mod curves;
-pub mod fixed;
-pub mod halfedge;
 mod hole_ring;
 mod holes;
 #[cfg(test)]
 mod holes_reference_tests;
 #[cfg(test)]
 mod holes_touching_tests;
-pub mod hull;
 pub mod offset;
-pub mod offset_arc;
 pub mod point;
 mod point_grid;
-pub mod polylabel;
 pub mod predicates;
 pub mod segment;
-pub mod simplify;
 mod tolerant_clip;
 pub mod triangulate;
 
 pub use aabb_index::{Aabb, AabbIndex};
-pub use boolean::intersect_convex_clip;
-pub use boolean_general::{BoolOp, polygon_op};
+pub use boolean_general::{BoolOp, PolygonOpError, polygon_op};
 pub use curves::{arc_arc_intersections, arc_circle_intersections, circle_circle_intersections};
-pub use hull::convex_hull;
 pub use offset::{CornerStyle, offset_polygon};
-pub use offset_arc::{PolyElement, offset_arc_polyline};
 pub use point::{point_in_polygon, point_to_segment_distance, point_to_segment_distance_sq};
-pub use polylabel::pole_of_inaccessibility;
 pub use predicates::{Sign, orient2d, signed_area};
 pub use segment::{
     Arc2, Circle2, Segment2, SegmentIntersection, segment_arc_intersections,
     segment_circle_intersections, segment_segment_intersection,
 };
-pub use simplify::{MultiContour, dedup, merge_colinear, simplify_polygon, snap_to_grid};
 pub use triangulate::{ear_clip, ear_clip_with_holes};
 
 /// Plain-old 2D point in plane-local mm. The crate's `EntityKind::Point`

@@ -278,7 +278,10 @@ fn saving_reprobes_a_file_that_broke_while_the_dialog_was_open() {
     // the workflow the banner's own "repair it by hand" advice invites,
     // then save without ever closing the dialog.
     guard.seed_broken();
-    let _ = app.update(inner(PrefMsg::Save));
+    {
+        let task = app.update(inner(PrefMsg::Save));
+        crate::drive::drive(&mut app, task);
+    }
 
     // Assert
     let reported = app
@@ -356,8 +359,7 @@ fn reopening_preferences_clears_the_reset_status() {
 /// #346 — an ERC severity override is stored verbatim, even when it equals
 /// the rule's default. `BadHierSheetPin` grades its own findings, so picking
 /// its default level is a real choice that must flatten them; dropping the
-/// entry would silently discard it. Drives both entry points: the ERC dialog
-/// handler and the Preferences draft message.
+/// entry would silently discard it.
 #[test]
 fn erc_severity_override_equal_to_the_default_is_stored_verbatim() {
     use signex_app::app::ErcMsg;
@@ -372,7 +374,10 @@ fn erc_severity_override_equal_to_the_default_is_stored_verbatim() {
     app.ui_state.erc_severity_override.clear();
 
     // Act: ERC dialog
-    let _ = app.update(Message::Erc(ErcMsg::SeverityChanged(rule, default)));
+    {
+        let task = app.update(Message::Erc(ErcMsg::SeverityChanged(rule, default)));
+        crate::drive::drive(&mut app, task);
+    }
 
     // Assert
     assert_eq!(
@@ -380,23 +385,13 @@ fn erc_severity_override_equal_to_the_default_is_stored_verbatim() {
         Some(&default),
         "the ERC dialog must keep an override equal to the default"
     );
-
-    // Act: Preferences chip
-    app.ui_state.erc_severity_override.clear();
-    let _ = app.update(inner(PrefMsg::DraftErcSeverity(rule, default)));
-
-    // Assert
-    assert_eq!(
-        app.ui_state.erc_severity_override.get(&rule),
-        Some(&default),
-        "the Preferences chip must keep an override equal to the default"
-    );
 }
 
 /// #348 — a pin-matrix cell the user cycles in the ERC dialog reaches the
-/// persisted prefs, survives a restart (a fresh read of the prefs file), and
-/// the matrix rebuilt from that read is what the rule consults: Output/Output
-/// goes Error -> Warning -> Info -> Off, and the mirrored cell moves with it.
+/// persisted `User Default` rule profile (#1608), survives a restart (a fresh
+/// read of that file), and the matrix rebuilt from that read is what the rule
+/// consults: Output/Output goes Error -> Warning -> Info -> Off, and the
+/// mirrored cell moves with it.
 #[test]
 fn pin_matrix_cell_cycle_persists_and_drives_the_rule_matrix() {
     use signex_app::app::ErcMsg;
@@ -405,17 +400,21 @@ fn pin_matrix_cell_cycle_persists_and_drives_the_rule_matrix() {
     // Arrange
     let _serial = serial();
     let _guard = PrefsPathGuard::capture();
+    let _profiles = crate::rule_profiles_ui::ProfilesDirGuard::empty();
     let (mut app, _t) = Signex::new();
     app.ui_state.pin_matrix_overrides.clear();
     let output_output = |m: &PinMatrix| m.pair_severity(PinAxis::Output, PinAxis::Output);
-    let restart_matrix =
-        || PinMatrix::with_overrides(&signex_app::fonts::read_pin_matrix_overrides());
+    let restart_matrix = || {
+        let stored = crate::rule_profiles_ui::stored_machine_rules();
+        PinMatrix::with_overrides(&signex_erc::project_rules::resolve(&stored).pin_matrix)
+    };
 
     // The write runs in the returned Task (#1469), the way the iced runtime
-    // would run it; `update` itself leaves the prefs file alone.
+    // would run it; `update` itself leaves the disk alone.
     let cycle = |app: &mut Signex| {
-        crate::library_symbol_drift::run_task(
-            app.update(Message::Erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 1 })),
+        crate::rule_profiles_ui::drive(
+            app,
+            Message::Erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 1 }),
         )
     };
 
@@ -424,20 +423,24 @@ fn pin_matrix_cell_cycle_persists_and_drives_the_rule_matrix() {
     assert_eq!(
         output_output(&restart_matrix()),
         Severity::Error,
-        "update must not write prefs.json inline"
+        "update must not write the profile inline"
     );
-    let _ = crate::library_symbol_drift::run_task(task);
+    crate::rule_profiles_ui::finish(&mut app, task);
     assert_eq!(output_output(&restart_matrix()), Severity::Warning);
 
     // -> Info -> Off
-    let _ = cycle(&mut app);
-    let _ = cycle(&mut app);
+    cycle(&mut app);
+    cycle(&mut app);
     assert_eq!(output_output(&restart_matrix()), Severity::Off);
 
     // -> back to the baseline Error, which drops the override entirely.
-    let _ = cycle(&mut app);
+    cycle(&mut app);
     assert_eq!(output_output(&restart_matrix()), Severity::Error);
-    assert!(signex_app::fonts::read_pin_matrix_overrides().is_empty());
+    assert!(
+        signex_erc::project_rules::resolve(&crate::rule_profiles_ui::stored_machine_rules())
+            .pin_matrix
+            .is_empty()
+    );
 }
 
 /// #348 — cycling an off-diagonal cell writes its mirror too, so the dialog
@@ -450,6 +453,7 @@ fn pin_matrix_cell_cycle_keeps_the_mirror_cell_in_step() {
     // Arrange
     let _serial = serial();
     let _guard = PrefsPathGuard::capture();
+    let _profiles = crate::rule_profiles_ui::ProfilesDirGuard::empty();
     let (mut app, _t) = Signex::new();
     app.ui_state.pin_matrix_overrides.clear();
 

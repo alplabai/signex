@@ -23,8 +23,12 @@ pub enum DatasheetMsg {
     UploadResult(Box<PickedPdf>),
     /// The staged PDFs of a row save were written to the library on a
     /// worker: the paths (relative to the library root) on success, or
-    /// why a write failed. The row is saved and committed next.
-    AssetsStored(Result<Vec<String>, String>),
+    /// why a write failed. The row is saved and committed next. `generation`
+    /// is the stamp of the save that started the write.
+    AssetsStored {
+        generation: u64,
+        result: Result<Vec<String>, String>,
+    },
     /// Append an empty URL document.
     Add,
     /// Remove a document; removing the primary promotes the next one.

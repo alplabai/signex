@@ -13,13 +13,18 @@ use crate::app::state::AnnotateOrder;
 
 use super::widgets::{
     close_x_button, draggable_header, fit_modal_size, os_title_bar_slot, primary_button,
-    secondary_button, wrap_modal,
+    secondary_button, secondary_button_maybe, wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
 mod controls;
+mod reprefix_confirm;
 
 use controls::{bordered_style, check_pip, order_preview, order_radio};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 impl Signex {
     pub(in crate::app::view) fn view_annotate_dialog(&self) -> Element<'_, Message> {
@@ -104,11 +109,13 @@ impl Signex {
 
         // ── Left column: Schematic Annotation Configuration ──
         let left_title = text("Schematic Annotation Configuration")
-            .size(12)
+            .size(TS.label)
             .color(text_c);
 
         let order_row = column![
-            text("Order of Processing").size(10).color(text_muted),
+            text("Order of Processing")
+                .size(TS.caption)
+                .color(text_muted),
             row![
                 column![
                     row![
@@ -157,25 +164,27 @@ impl Signex {
             .align_y(iced::Alignment::Start)
             .spacing(0),
         ]
-        .spacing(4);
+        .spacing(SP.s);
 
         let process_location = column![
-            text("Process Location of").size(10).color(text_muted),
-            container(text("Designator").size(11).color(text_c),)
+            text("Process Location of")
+                .size(TS.caption)
+                .color(text_muted),
+            container(text("Designator").size(TS.body).color(text_c),)
                 .padding([5, 10])
                 .width(Length::Fill)
                 .style(bordered_style(border_c)),
         ]
-        .spacing(4);
+        .spacing(SP.s);
 
         let replace_sub = column![
-            text("Replace Sub-Parts").size(10).color(text_muted),
-            container(text("Off").size(11).color(text_muted))
+            text("Replace Sub-Parts").size(TS.caption).color(text_muted),
+            container(text("Off").size(TS.body).color(text_muted))
                 .padding([5, 10])
                 .width(Length::Fill)
                 .style(bordered_style(border_c)),
         ]
-        .spacing(4);
+        .spacing(SP.s);
 
         // Component-parameter matching list. Altium shows every parameter
         // name that appears on any symbol in the project, with a "Strictly"
@@ -201,15 +210,15 @@ impl Signex {
         let mut param_rows: iced::widget::Column<'_, Message> = column![
             row![
                 text("Component Parameter")
-                    .size(10)
+                    .size(TS.caption)
                     .color(text_muted)
                     .width(Length::FillPortion(5)),
                 text("Strictly")
-                    .size(10)
+                    .size(TS.caption)
                     .color(text_muted)
                     .width(Length::FillPortion(1)),
             ]
-            .padding([4, 8]),
+            .padding([SP.s, SP.m]),
         ]
         .spacing(0);
         for name in &param_names {
@@ -218,7 +227,7 @@ impl Signex {
                     row![
                         check_pip(false, border_c),
                         Space::new().width(6),
-                        text(name.clone()).size(11).color(text_c),
+                        text(name.clone()).size(TS.body).color(text_c),
                     ]
                     .align_y(iced::Alignment::Center)
                     .width(Length::FillPortion(5)),
@@ -226,7 +235,7 @@ impl Signex {
                         .align_x(iced::alignment::Horizontal::Right)
                         .width(Length::FillPortion(1)),
                 ]
-                .padding([3, 8])
+                .padding([3.0, SP.m])
                 .align_y(iced::Alignment::Center),
             );
         }
@@ -234,23 +243,23 @@ impl Signex {
             param_rows = param_rows.push(
                 container(
                     text("No custom parameters on any symbol yet.")
-                        .size(11)
+                        .size(TS.body)
                         .color(text_muted),
                 )
-                .padding([10, 8]),
+                .padding([10.0, SP.m]),
             );
         }
 
         let matching = column![
-            text("Matching Options").size(12).color(text_c),
+            text("Matching Options").size(TS.label).color(text_c),
             Space::new().height(4),
             row![
                 text("Complete Existing Packages")
-                    .size(10)
+                    .size(TS.caption)
                     .color(text_muted)
                     .width(Length::FillPortion(2)),
-                container(text("None").size(11).color(text_muted))
-                    .padding([4, 8])
+                container(text("None").size(TS.body).color(text_muted))
+                    .padding([SP.s, SP.m])
                     .width(Length::FillPortion(3))
                     .style(bordered_style(border_c)),
             ]
@@ -258,14 +267,14 @@ impl Signex {
             .spacing(6),
             Space::new().height(6),
             container(scrollable(param_rows).height(280))
-                .padding(2)
+                .padding(SP.xs)
                 .style(bordered_style(border_c)),
             Space::new().height(4),
             text("Parameter matching is visual grouping only — the annotation engine ignores these checkboxes for now.")
-                .size(10)
+                .size(TS.caption)
                 .color(text_muted),
         ]
-        .spacing(4);
+        .spacing(SP.s);
 
         // Sheets list: include every open tab so the multi-sheet view is
         // visible. All but the active sheet render greyed because only the
@@ -285,77 +294,81 @@ impl Signex {
                     row![
                         check_pip(is_active, border_c),
                         Space::new().width(6),
-                        text(tab.title.clone()).size(11).color(row_color),
+                        text(tab.title.clone()).size(TS.body).color(row_color),
                     ]
                     .align_y(iced::Alignment::Center)
                     .width(Length::FillPortion(6)),
                     text("All")
-                        .size(11)
+                        .size(TS.body)
                         .color(row_color)
                         .width(Length::FillPortion(1)),
                     text(format!("{idx}"))
-                        .size(11)
+                        .size(TS.body)
                         .color(row_color)
                         .width(Length::FillPortion(1)),
                     text(format!("{}", idx + 1))
-                        .size(11)
+                        .size(TS.body)
                         .color(row_color)
                         .width(Length::FillPortion(1)),
                     row![
                         check_pip(false, border_c),
                         Space::new().width(6),
                         text(suffix_placeholder.to_string())
-                            .size(11)
+                            .size(TS.body)
                             .color(row_color),
                     ]
                     .align_y(iced::Alignment::Center)
                     .width(Length::FillPortion(2)),
                 ]
-                .padding([3, 8])
+                .padding([3.0, SP.m])
                 .align_y(iced::Alignment::Center),
             );
         }
         if self.document_state.tabs.is_empty() {
             sheet_rows = sheet_rows.push(
-                container(text("No schematic tab open.").size(11).color(text_muted))
-                    .padding([6, 8]),
+                container(
+                    text("No schematic tab open.")
+                        .size(TS.body)
+                        .color(text_muted),
+                )
+                .padding([6.0, SP.m]),
             );
         }
 
         let sheets_table = column![
-            text("Schematic Sheets To Annotate").size(12).color(text_c),
+            text("Schematic Sheets To Annotate").size(TS.label).color(text_c),
             Space::new().height(4),
             row![
                 text("Schematic Sheet")
-                    .size(10)
+                    .size(TS.caption)
                     .color(text_muted)
                     .width(Length::FillPortion(6)),
                 text("Scope")
-                    .size(10)
+                    .size(TS.caption)
                     .color(text_muted)
                     .width(Length::FillPortion(1)),
                 text("Ord...")
-                    .size(10)
+                    .size(TS.caption)
                     .color(text_muted)
                     .width(Length::FillPortion(1)),
                 text("Start")
-                    .size(10)
+                    .size(TS.caption)
                     .color(text_muted)
                     .width(Length::FillPortion(1)),
                 text("Add Suffix")
-                    .size(10)
+                    .size(TS.caption)
                     .color(text_muted)
                     .width(Length::FillPortion(2)),
             ]
-            .padding([2, 8]),
+            .padding([SP.xs, SP.m]),
             container(scrollable(sheet_rows).height(180))
                 .style(bordered_style(border_c)),
             Space::new().height(4),
             text("Scope / Start / Suffix columns are visual for v0.7 — multi-sheet wiring lands in v1.1.")
-                .size(10)
+                .size(TS.caption)
                 .color(text_muted),
         ]
-        .spacing(4);
+        .spacing(SP.s);
 
         let left_col = column![
             left_title,
@@ -374,28 +387,28 @@ impl Signex {
         .width(Length::FillPortion(10));
 
         // ── Right column: Proposed Change List ──
-        let right_title = text("Proposed Change List").size(12).color(text_c);
+        let right_title = text("Proposed Change List").size(TS.label).color(text_c);
 
         // Column headers
         let list_headers = row![
             text("Lock")
-                .size(10)
+                .size(TS.caption)
                 .color(text_muted)
                 .width(Length::Fixed(42.0)),
             text("Current")
-                .size(10)
+                .size(TS.caption)
                 .color(text_muted)
                 .width(Length::FillPortion(2)),
             text("Proposed")
-                .size(10)
+                .size(TS.caption)
                 .color(text_muted)
                 .width(Length::FillPortion(2)),
             text("Location")
-                .size(10)
+                .size(TS.caption)
                 .color(text_muted)
                 .width(Length::FillPortion(3)),
         ]
-        .padding([4, 8]);
+        .padding([SP.s, SP.m]);
 
         let locked_set = &self.ui_state.annotate_locked;
         let mut rows_col: iced::widget::Column<'_, Message> =
@@ -410,10 +423,10 @@ impl Signex {
                     } else {
                         "No symbols need annotation — every reference has a number."
                     })
-                    .size(11)
+                    .size(TS.body)
                     .color(text_muted),
                 )
-                .padding([10, 12]),
+                .padding([10.0, SP.l]),
             );
         } else {
             for entry in proposed {
@@ -438,7 +451,7 @@ impl Signex {
                 let lock_tick = if is_locked { "\u{2713}" } else { "" };
                 let uuid = entry.uuid;
                 let lock_btn: Element<'_, Message> = button(
-                    container(text(lock_tick.to_string()).size(11).color(text_c))
+                    container(text(lock_tick.to_string()).size(TS.body).color(text_c))
                         .width(22)
                         .height(16)
                         .align_x(iced::alignment::Horizontal::Center)
@@ -467,27 +480,27 @@ impl Signex {
                             .width(Length::Fixed(42.0))
                             .padding([0, 6]),
                         text(entry.current.clone())
-                            .size(11)
+                            .size(TS.body)
                             .color(cur_color)
                             .width(Length::FillPortion(2)),
                         text(proposed_display)
-                            .size(11)
+                            .size(TS.body)
                             .color(new_color)
                             .width(Length::FillPortion(2)),
                         text(entry.sheet.clone())
-                            .size(11)
+                            .size(TS.body)
                             .color(text_muted)
                             .width(Length::FillPortion(3)),
                     ]
                     .align_y(iced::Alignment::Center)
-                    .padding([2, 8]),
+                    .padding([SP.xs, SP.m]),
                 );
             }
         }
 
         let right_list = container(scrollable(rows_col).height(Length::Fill))
             .height(Length::Fill)
-            .padding(4)
+            .padding(SP.s)
             .style(bordered_style(border_c));
 
         // Count only rows where proposed != current (actual changes).
@@ -501,7 +514,13 @@ impl Signex {
                 "Annotation will assign new designators to {changes} of {total_symbols} symbols on '{current_sheet_name}'. The list updates live. Click Accept Changes to apply, or Reset All to clear every number first.",
             )
         };
-        let summary = container(text(summary_text).size(10).color(text_muted)).padding([4, 4]);
+        let summary =
+            container(text(summary_text).size(TS.caption).color(text_muted)).padding([SP.s, SP.s]);
+        let standard = self
+            .document_state
+            .active_document_project()
+            .and_then(|p| p.data.designator_standard());
+        let reprefix_note = controls::reprefix_note(standard);
 
         let right_col = column![
             right_title,
@@ -509,8 +528,9 @@ impl Signex {
             list_headers,
             right_list,
             Space::new().height(6),
-            text("Annotation Summary").size(10).color(text_c),
+            text("Annotation Summary").size(TS.caption).color(text_c),
             summary,
+            container(text(reprefix_note).size(TS.caption).color(text_muted)).padding([SP.s, SP.s]),
         ]
         .spacing(0)
         .width(Length::FillPortion(11))
@@ -532,6 +552,14 @@ impl Signex {
                 border_c,
             ),
             Space::new().width(Length::Fill),
+            secondary_button_maybe(
+                "Re-prefix to standard",
+                (standard.is_some() && !self.ui_state.annotate_preview.loading)
+                    .then_some(Message::Annotate(AnnotateMsg::ReprefixPressed)),
+                text_c,
+                border_c,
+            ),
+            Space::new().width(4),
             secondary_button(
                 "Reset All",
                 Message::Annotate(AnnotateMsg::Run(signex_engine::AnnotateMode::ResetOnly)),
@@ -659,7 +687,7 @@ impl Signex {
                     text(
                         "Every reference designator will be reset to '?', then the sheet will be renumbered from 1.\nThis cannot be undone through Ctrl+Z alone — consider saving first.",
                     )
-                    .size(11)
+                    .size(TS.body)
                     .color(text_muted),
                 )
                 .padding([14, 14]),
@@ -680,7 +708,7 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(420),
+            .width(self.dialog_width(super::super::super::state::ModalId::AnnotateResetConfirm, 420.0)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

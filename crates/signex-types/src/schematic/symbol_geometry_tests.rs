@@ -1,5 +1,5 @@
 use super::*;
-use crate::schematic::{LibGraphic, Pin, PinDirection, PinShapeStyle};
+use crate::schematic::{BodyStyle, LibGraphic, Pin, PinDirection, PinShapeStyle};
 
 fn lib(graphics: Vec<Graphic>, pins: Vec<Pin>) -> LibSymbol {
     let mut lib: LibSymbol = serde_json::from_value(serde_json::json!({ "id": "L:S" })).unwrap();
@@ -324,6 +324,55 @@ fn caller_width_replaces_the_monospace_estimate() {
     assert_box(estimate, same.min_x, same.min_y, same.max_x, same.max_y);
     let wide = text_aabb_with_width(10.0, size, anchor, 0.0, HAlign::Right, VAlign::Top);
     assert_box(wide, 0.0, 5.0, 10.0, 5.0 + text_height_mm(size));
+}
+
+/// A symbol with a 2x2 normal body and a 6x6 alternate body (#1233).
+fn two_bodies() -> LibSymbol {
+    let mut lib = lib(vec![rect(2.0, 2.0)], vec![]);
+    lib.graphics.push(LibGraphic {
+        unit: 0,
+        body_style: 2,
+        graphic: rect(6.0, 6.0),
+    });
+    lib
+}
+
+fn alternate() -> Symbol {
+    Symbol {
+        body_style: BodyStyle::Alternate,
+        ..Symbol::default()
+    }
+}
+
+#[test]
+fn bounds_follow_the_selected_body() {
+    let lib = two_bodies();
+    let normal = bounds(&lib, &Symbol::default());
+    let alt = bounds(&lib, &alternate());
+    assert!((normal.max_x - normal.min_x - 2.0).abs() < 1e-9);
+    assert!((alt.max_x - alt.min_x - 6.0).abs() < 1e-9);
+}
+
+#[test]
+fn an_alternate_request_falls_back_to_normal_when_the_unit_has_no_alternate() {
+    let lib = lib(vec![rect(2.0, 2.0)], vec![pin(0.0, 0.0, 0.0, 1.0)]);
+    assert!(!lib.has_alternate_body(1));
+    assert_eq!(
+        lib.effective_body(1, BodyStyle::Alternate),
+        BodyStyle::Normal
+    );
+    assert_eq!(
+        lower_symbol(&lib, &alternate()),
+        lower_symbol(&lib, &Symbol::default())
+    );
+}
+
+#[test]
+fn alternate_presence_is_judged_per_unit() {
+    let mut lib = two_bodies();
+    lib.graphics[1].unit = 2;
+    assert!(lib.has_alternate_body(2));
+    assert!(!lib.has_alternate_body(1));
 }
 
 #[test]

@@ -41,13 +41,7 @@ impl Signex {
             );
             return Task::none();
         }
-        let rules = ProjectRules {
-            erc: signex_erc::project_rules::seed_from_overrides(
-                &self.ui_state.erc_severity_override,
-                &self.ui_state.pin_matrix_overrides,
-            ),
-            ..ProjectRules::default()
-        };
+        let rules = self.seeded_project_rules();
         self.replace_project_rules(Some(rules), true);
         Task::none()
     }
@@ -107,7 +101,10 @@ impl Signex {
 
     /// Swap the active project's rule set, flip it dirty (the explicit save
     /// writes it) and, for a fresh edit, remember the prior state for undo.
-    fn replace_project_rules(&mut self, rules: Option<ProjectRules>, record: bool) {
+    pub(super) fn replace_project_rules(&mut self, rules: Option<ProjectRules>, record: bool) {
+        // Any change to the rules (edit, undo, redo, store) outdates a diff
+        // computed against the old ones.
+        self.invalidate_pending_profile_update();
         let ds = &mut self.document_state;
         let Some((id, path, before)) = ds
             .active_document_project()

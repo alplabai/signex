@@ -11,6 +11,7 @@ repository.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
+toml_edit = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 sha2 = { workspace = true }
@@ -77,6 +78,9 @@ local-git = ["dep:git2", "dep:walkdir", "dep:dirs"]
 # Hermetic commit identity for tests that make real git commits; see
 # `git_identity::test_identity`. Enabled only through dev-dependencies.
 test-identity = ["local-git"]
+# Exposes seams that bypass the OS keyring (injected token sink). Enabled only
+# through dev-dependencies; never part of a shipped build.
+test-support = []
 database = ["dep:reqwest"]
 distributors-community = [
     "dep:keyring",
@@ -87,7 +91,7 @@ distributors-community = [
 ]
 
 [dev-dependencies]
-signex-library = { path = ".", features = ["test-identity"] }
+signex-library = { path = ".", features = ["test-identity", "test-support"] }
 tempfile = "3"
 pdf-writer = { workspace = true }
 tokio = { workspace = true }

@@ -1,3 +1,4 @@
+// Standalone binary: ci.yml runs it by name (`--test integration_db -- --ignored`).
 //! Integration tests covering DB schema migrations + the `/tables`
 //! and `/rows` HTTP routes for the DBLib row model.
 //!
@@ -16,7 +17,7 @@ use signex_library::lifecycle::LifecycleState;
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::PrimitiveRef;
-use signex_library_server::db::AppState;
+use signex_library_server::db::{AppState, RowInsert};
 use signex_library_server::{API_TOKEN_ENV, router_with_state};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -49,6 +50,7 @@ fn fixture_row(internal_pn: &str) -> ComponentRow {
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Released,
         symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
@@ -461,7 +463,10 @@ async fn store_refuses_non_finite_parameter() {
     let state = fresh_state().await;
     let lib = Uuid::now_v7();
     let good = fixture_row("R1");
-    assert!(state.insert_row(lib, "resistors", &good).await.unwrap());
+    assert_eq!(
+        state.insert_row(lib, "resistors", &good).await.unwrap(),
+        RowInsert::Created
+    );
 
     let mut bad = fixture_row("R_BAD");
     bad.parameters
@@ -705,6 +710,34 @@ async fn alternate_symbols_round_trip_through_the_server() {
     assert_eq!(got.alternate_symbols, row.alternate_symbols);
 }
 
+#[tokio::test]
+async fn description_round_trips_through_the_server() {
+    let app = router_with_state(fresh_state().await);
+    let library_id = Uuid::now_v7();
+    let mut row = fixture_row("R-DESC");
+    row.description = "100 nF 50 V X7R µ".into();
+    post_row_with(&app, library_id, &row).await;
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/tables/resistors/rows/{}?library_id={library_id}",
+                    row.row_id
+                ))
+                .header("authorization", bearer_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let got: ComponentRow = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(got.description, row.description);
+}
+
 async fn post_row_with(app: &axum::Router, library_id: Uuid, row: &ComponentRow) {
     let current = ROW_SCHEMA.to_string();
     let resp = app
@@ -713,4 +746,333 @@ async fn post_row_with(app: &axum::Router, library_id: Uuid, row: &ComponentRow)
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
+}
+
+/// POST `row` into `table` of `library_id` and return the status.
+async fn post_row_status(
+    app: &axum::Router,
+    library_id: Uuid,
+    table: &str,
+    row: &ComponentRow,
+) -> StatusCode {
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/tables/{table}/rows?library_id={library_id}"))
+                .header("content-type", "application/json")
+                .header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string())
+                .header("authorization", bearer_header())
+                .body(Body::from(serde_json::to_vec(row).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+        .status()
+}
+
+/// #1613: two writers racing the same new part number (different rows,
+/// different tables) - exactly one is created, the other gets 409, and the
+/// library keeps one row with that PN. A different library may reuse it.
+async fn assert_racing_same_pn_has_one_winner(state: AppState) {
+    let app = router_with_state(state.clone());
+    let library_id = Uuid::now_v7();
+    let (a, b) = (fixture_row("R-1613"), fixture_row(" R-1613 "));
+    let (ra, rb) = tokio::join!(
+        post_row_status(&app, library_id, "resistors", &a),
+        post_row_status(&app, library_id, "capacitors", &b),
+    );
+    let mut statuses = [ra, rb];
+    statuses.sort();
+    assert_eq!(statuses, [StatusCode::CREATED, StatusCode::CONFLICT]);
+
+    let tables = ["resistors", "capacitors"];
+    let mut held = 0;
+    for (table, row) in tables.iter().zip([&a, &b]) {
+        let id = RowId::from_uuid(row.row_id);
+        held += usize::from(
+            state
+                .fetch_row(library_id, table, id)
+                .await
+                .unwrap()
+                .is_some(),
+        );
+    }
+    assert_eq!(held, 1);
+
+    // Other library, blank PNs and a different case are all free.
+    let other = Uuid::now_v7();
+    for (table, pn, lib) in [
+        ("resistors", "R-1613", other),
+        ("resistors", "", library_id),
+        ("capacitors", "", library_id),
+        ("resistors", "r-1613", library_id),
+    ] {
+        let status = post_row_status(&app, lib, table, &fixture_row(pn)).await;
+        assert_eq!(status, StatusCode::CREATED, "{table} {pn:?}");
+    }
+
+    // A PUT that moves a row onto a taken PN is refused too, row unchanged.
+    let mover = fixture_row("R-MOVE");
+    post_row(&app, library_id, &mover).await;
+    let mut moved = mover.clone();
+    moved.internal_pn = InternalPn::new("R-1613");
+    let resp = app
+        .clone()
+        .oneshot(put_request(library_id, &moved, Some("\"1\"")))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CONFLICT);
+    let stored = state
+        .fetch_row(library_id, "resistors", RowId::from_uuid(mover.row_id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.internal_pn, InternalPn::new("R-MOVE"));
+    assert_eq!(stored.server_revision, Some(1));
+}
+
+#[tokio::test]
+async fn racing_posts_of_one_part_number_have_one_winner() {
+    assert_racing_same_pn_has_one_winner(fresh_state().await).await;
+}
+
+#[tokio::test]
+#[ignore = "requires SIGNEX_TEST_PG_URL"]
+async fn postgres_racing_posts_of_one_part_number_have_one_winner() {
+    ensure_test_token();
+    let url = std::env::var("SIGNEX_TEST_PG_URL")
+        .expect("SIGNEX_TEST_PG_URL must be set to run the ignored Postgres tests");
+    let state = AppState::connect(&url).await.expect("pg connect");
+    state.migrate().await.expect("pg migrations apply");
+    // Fresh library ids per run, so a reused database stays valid.
+    assert_racing_same_pn_has_one_winner(state).await;
+}
+
+async fn exec(state: &AppState, sql: &str) {
+    match state.pool() {
+        signex_library_server::db::DbPool::Sqlite(p) => {
+            sqlx::query(sql).execute(p).await.map(|_| ())
+        }
+        signex_library_server::db::DbPool::Postgres(p) => {
+            sqlx::query(sql).execute(p).await.map(|_| ())
+        }
+    }
+    .unwrap_or_else(|e| panic!("{sql}: {e}"));
+}
+
+/// Store `pn` as `row`'s part number the way an older server would have: no
+/// uniqueness check, `pn_key` left blank.
+async fn seed_row(
+    state: &AppState,
+    library: Uuid,
+    mut row: ComponentRow,
+    pn: &str,
+) -> ComponentRow {
+    row.internal_pn = InternalPn::new(pn);
+    let payload = serde_json::to_string(&row).unwrap().replace('\'', "''");
+    let pn_sql = pn.replace('\'', "''");
+    exec(
+        state,
+        &format!(
+            "INSERT INTO component_rows \
+             (library_id, table_name, row_id, internal_pn, payload, created_at, updated_at) \
+             VALUES ('{library}', 'resistors', '{}', '{pn_sql}', '{payload}', 'x', 'x')",
+            row.row_id
+        ),
+    )
+    .await;
+    row
+}
+
+async fn stored_pn_key(state: &AppState, row: &ComponentRow) -> String {
+    let sql = format!(
+        "SELECT pn_key FROM component_rows WHERE row_id = '{}'",
+        row.row_id
+    );
+    match state.pool() {
+        signex_library_server::db::DbPool::Sqlite(p) => {
+            sqlx::query_scalar(&sql).fetch_one(p).await.unwrap()
+        }
+        signex_library_server::db::DbPool::Postgres(p) => {
+            sqlx::query_scalar(&sql).fetch_one(p).await.unwrap()
+        }
+    }
+}
+
+/// #1613: a database already holding rows with one part number (a padded
+/// copy counts: tab and NBSP are white space to Rust) is refused by the
+/// migration with every clash named and the operator's fix spelled out; no
+/// row is lost, and after the fix is applied to the payload the migration
+/// goes through, `pn_key` follows the payload, and a description-only PUT of
+/// a padded, non-duplicate row is accepted.
+async fn assert_migration_refuses_duplicates_then_accepts_the_fix(state: AppState) {
+    state.migrate().await.expect("fresh migrate");
+    exec(&state, "DROP INDEX idx_component_rows_pn_key").await;
+    exec(&state, "DELETE FROM _sqlx_migrations WHERE version = 10").await;
+    let pg = state.pool().postgres().is_some();
+    let library = Uuid::now_v7();
+    let mut rows = Vec::new();
+    for pn in ["DUP-1", "DUP-1\t", "OK-1", "NB\u{a0}", "NB", "PAD\t"] {
+        rows.push(seed_row(&state, library, fixture_row(pn), pn).await);
+    }
+
+    let err = state.migrate().await.expect_err("duplicates are refused");
+    let msg = err.to_string();
+    assert!(msg.contains("\"DUP-1\"") && msg.contains("\"NB\""), "{msg}");
+    assert!(msg.contains(&library.to_string()), "{msg}");
+    assert!(
+        msg.contains(if pg { "jsonb_set" } else { "json_set" }),
+        "{msg}"
+    );
+    assert!(!msg.contains("OK-1") && !msg.contains("PAD"), "{msg}");
+    for row in &rows {
+        let kept = state
+            .fetch_row(library, "resistors", RowId::from_uuid(row.row_id))
+            .await
+            .unwrap();
+        assert!(kept.is_some(), "no row may be lost");
+    }
+
+    // The documented fix: renumber in the payload (and the column).
+    for (row, new_pn) in [(&rows[1], "DUP-2"), (&rows[3], "NB-2")] {
+        let (set, updated) = if pg {
+            (
+                format!(
+                    "jsonb_set(payload::jsonb, '{{internal_pn}}', to_jsonb('{new_pn}'::text))::text"
+                ),
+                "to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"+00:00\"')",
+            )
+        } else {
+            (
+                format!("json_set(payload, '$.internal_pn', '{new_pn}')"),
+                "strftime('%Y-%m-%dT%H:%M:%f+00:00', 'now')",
+            )
+        };
+        exec(
+            &state,
+            &format!(
+                "UPDATE component_rows SET payload = {set}, internal_pn = '{new_pn}', \
+                 revision = revision + 1, updated_at = {updated} WHERE row_id = '{}'",
+                row.row_id
+            ),
+        )
+        .await;
+    }
+    state.migrate().await.expect("migrates after renumbering");
+    let renumbered = state
+        .fetch_row(library, "resistors", RowId::from_uuid(rows[1].row_id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(renumbered.internal_pn, InternalPn::new("DUP-2"));
+    assert_eq!(renumbered.server_revision, Some(2));
+    assert_eq!(stored_pn_key(&state, &rows[1]).await, "DUP-2");
+    assert_eq!(stored_pn_key(&state, &rows[5]).await, "PAD");
+
+    // The padded row is alone in its library: editing only its description works.
+    let app = router_with_state(state.clone());
+    let mut edited = state
+        .fetch_row(library, "resistors", RowId::from_uuid(rows[5].row_id))
+        .await
+        .unwrap()
+        .unwrap();
+    edited.description = "edited".into();
+    let resp = app
+        .oneshot(put_request(library, &edited, Some("\"1\"")))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn migration_refuses_existing_duplicate_part_numbers_without_losing_rows() {
+    assert_migration_refuses_duplicates_then_accepts_the_fix(fresh_state().await).await;
+}
+
+/// Same, on Postgres, in a schema of its own so the dropped index and seeded
+/// duplicates never touch the other Postgres tests.
+#[tokio::test]
+#[ignore = "requires SIGNEX_TEST_PG_URL"]
+async fn postgres_migration_refuses_existing_duplicate_part_numbers_without_losing_rows() {
+    ensure_test_token();
+    let url = std::env::var("SIGNEX_TEST_PG_URL")
+        .expect("SIGNEX_TEST_PG_URL must be set to run the ignored Postgres tests");
+    let schema = format!("pn_dup_{}", Uuid::now_v7().simple());
+    let admin = AppState::connect(&url).await.expect("pg connect");
+    exec(&admin, &format!("CREATE SCHEMA {schema}")).await;
+    let sep = if url.contains('?') { '&' } else { '?' };
+    let scoped = format!("{url}{sep}options=-c%20search_path%3D{schema}");
+    let state = AppState::connect(&scoped).await.expect("pg connect");
+    assert_migration_refuses_duplicates_then_accepts_the_fix(state).await;
+    exec(&admin, &format!("DROP SCHEMA {schema} CASCADE")).await;
+}
+
+/// #1613: with the index in place, a row whose `pn_key` no longer matches its
+/// payload (an older replica wrote it) is repaired at the next start; if the
+/// repair would clash with another row, start-up is refused naming the clash
+/// and changes nothing.
+async fn assert_restart_repairs_or_refuses_a_stale_key(state: AppState) {
+    state.migrate().await.expect("fresh migrate");
+    let library = Uuid::now_v7();
+    let app = router_with_state(state.clone());
+    let (a, b) = (fixture_row("K-1"), fixture_row("K-2"));
+    post_row(&app, library, &a).await;
+    post_row(&app, library, &b).await;
+
+    exec(
+        &state,
+        &format!(
+            "UPDATE component_rows SET pn_key = '' WHERE row_id = '{}'",
+            a.row_id
+        ),
+    )
+    .await;
+    state.migrate().await.expect("restart repairs a stale key");
+    assert_eq!(stored_pn_key(&state, &a).await, "K-1");
+    assert_eq!(stored_pn_key(&state, &b).await, "K-2");
+
+    // b's payload now claims a's number while its key still says K-2.
+    let pg = state.pool().postgres().is_some();
+    let set = if pg {
+        "jsonb_set(payload::jsonb, '{internal_pn}', to_jsonb('K-1'::text))::text"
+    } else {
+        "json_set(payload, '$.internal_pn', 'K-1')"
+    };
+    exec(
+        &state,
+        &format!(
+            "UPDATE component_rows SET payload = {set} WHERE row_id = '{}'",
+            b.row_id
+        ),
+    )
+    .await;
+    let err = state.migrate().await.expect_err("clash is refused");
+    assert!(err.to_string().contains("\"K-1\""), "{err}");
+    assert_eq!(
+        stored_pn_key(&state, &b).await,
+        "K-2",
+        "a refusal changes nothing"
+    );
+}
+
+#[tokio::test]
+async fn restart_repairs_a_stale_part_number_key() {
+    assert_restart_repairs_or_refuses_a_stale_key(fresh_state().await).await;
+}
+
+#[tokio::test]
+#[ignore = "requires SIGNEX_TEST_PG_URL"]
+async fn postgres_restart_repairs_a_stale_part_number_key() {
+    ensure_test_token();
+    let url = std::env::var("SIGNEX_TEST_PG_URL")
+        .expect("SIGNEX_TEST_PG_URL must be set to run the ignored Postgres tests");
+    let schema = format!("pn_key_{}", Uuid::now_v7().simple());
+    let admin = AppState::connect(&url).await.expect("pg connect");
+    exec(&admin, &format!("CREATE SCHEMA {schema}")).await;
+    let sep = if url.contains('?') { '&' } else { '?' };
+    let scoped = format!("{url}{sep}options=-c%20search_path%3D{schema}");
+    let state = AppState::connect(&scoped).await.expect("pg connect");
+    assert_restart_repairs_or_refuses_a_stale_key(state).await;
+    exec(&admin, &format!("DROP SCHEMA {schema} CASCADE")).await;
 }

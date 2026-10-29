@@ -112,6 +112,7 @@ fn confirm_runs_off_the_ui_thread_and_the_result_closes_the_dialog() {
             id,
             path: tmp.path().join("demo.snxprj"),
             data: signex_types::project::ProjectData {
+                description: None,
                 name: "demo".to_string(),
                 dir: tmp.path().to_string_lossy().into_owned(),
                 schematic_root: None,
@@ -124,11 +125,13 @@ fn confirm_runs_off_the_ui_thread_and_the_result_closes_the_dialog() {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                parameters: Default::default(),
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         });
 
     let task = app.handle_enable_version_control_confirm();

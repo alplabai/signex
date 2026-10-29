@@ -108,7 +108,7 @@ impl Signex {
                     self.document_state.dirty_paths.remove(&new_path);
                 }
 
-                self.document_state.engines.insert(new_path.clone(), engine);
+                self.document_state.insert_engine(new_path.clone(), engine);
                 self.document_state.active_path = Some(new_path);
                 Some(result)
             }
@@ -155,22 +155,73 @@ impl Signex {
             .map(|tab| tab.path.clone())
     }
 
+    /// Install a reloaded `sheet` as the engine of the (non-active) schematic
+    /// at `path`, leaving the canvas and the user's tool alone. A sheet the
+    /// engine rejects drops the stale engine, so a save cannot undo it.
+    pub(crate) fn install_schematic_at(&mut self, path: &std::path::Path, sheet: SchematicSheet) {
+        // Inline text typed into a window on this sheet targets an object of
+        // the engine being replaced.
+        if self.text_edit_targets_sheet_at(path) {
+            self.interaction_state.editing_text = None;
+        }
+        match signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf())) {
+            Ok(engine) => {
+                self.forget_net_colors_of(path);
+                self.document_state
+                    .engines
+                    .insert(path.to_path_buf(), engine);
+                self.adopt_net_colors_of(path);
+                self.clear_net_color_steps(path);
+                // An undocked window on this sheet must not keep drawing the
+                // replaced engine, nor select its objects.
+                self.refresh_slots_from_engine(
+                    path,
+                    false,
+                    crate::schematic_runtime::RenderInvalidation::FULL,
+                    true,
+                );
+            }
+            Err(error) => {
+                self.document_state.engines.remove(path);
+                crate::diagnostics::log_warning(format!(
+                    "[git] restore: {} was restored but its engine could not start: {error}",
+                    path.display()
+                ));
+            }
+        }
+    }
+
+    /// Make `result` the engine of the active tab at `p`. A failed engine is
+    /// reported to the Messages panel and the engine already open there is
+    /// kept: it may hold unsaved edits that dropping it would lose silently.
+    fn install_active_engine(
+        &mut self,
+        p: PathBuf,
+        result: Result<signex_engine::Engine, signex_engine::EngineError>,
+    ) {
+        match result {
+            Ok(engine) => {
+                // The incoming sheet's saved colours replace those
+                // of the engine it stands in for.
+                self.forget_net_colors_of(&p);
+                self.document_state.insert_engine(p.clone(), engine);
+                self.adopt_net_colors_of(&p);
+                self.clear_net_color_steps(&p);
+                self.document_state.active_path = Some(p);
+            }
+            Err(error) => crate::diagnostics::log_warning(format!(
+                "{} could not be loaded into the editor ({error}); the sheet already open was kept",
+                p.display()
+            )),
+        }
+    }
+
     fn sync_engine_from_schematic(&mut self, schematic: Option<SchematicSheet>) {
         let path = self.active_tab_path();
         match (path, schematic) {
             (Some(p), Some(sheet)) => {
-                match signex_engine::Engine::new_with_path(sheet, Some(p.clone())) {
-                    Ok(engine) => {
-                        // The incoming sheet's saved colours replace those
-                        // of the engine it stands in for.
-                        self.forget_net_colors_of(&p);
-                        self.document_state.engines.insert(p.clone(), engine);
-                        self.adopt_net_colors_of(&p);
-                        self.clear_net_color_steps(&p);
-                        self.document_state.active_path = Some(p);
-                    }
-                    Err(_) => self.document_state.clear_active_engine(),
-                }
+                let result = signex_engine::Engine::new_with_path(sheet, Some(p.clone()));
+                self.install_active_engine(p, result);
             }
             _ => self.document_state.clear_active_engine(),
         }
@@ -184,45 +235,98 @@ impl Signex {
         // cache is cleared. There is no parked-schematic fallback with
         // HashMap storage: an open schematic tab always has its engine
         // resident in `document_state.engines`.
-        if let Some(engine) = self.document_state.active_engine() {
-            // An undocked window showing the same sheet keeps its own slot
-            // and cache; refresh it too or it goes stale (#171).
-            let active_path = self.document_state.active_path.as_deref();
-            let sheet = engine.document();
-            let (base, revision) = (engine.base_revision(), engine.revision());
-            let windows = &self.ui_state.windows;
-            let slots = self
-                .interaction_state
-                .canvases
-                .iter_mut()
-                .filter(|(id, _)| {
-                    matches!(
-                        windows.get(id),
-                        Some(super::state::WindowKind::UndockedTab { path, .. })
-                            if Some(path.as_path()) == active_path
-                    )
-                })
-                .map(|(_, slot)| slot)
-                .chain(std::iter::once(&mut self.interaction_state.canvas));
-            for slot in slots {
-                if let Some(cache) = slot.render_cache.as_mut() {
-                    cache.update_from_sheet(sheet, invalidation, base, revision);
-                } else {
-                    slot.set_render_cache(Some(
-                        crate::schematic_runtime::SchematicRenderCache::from_sheet_at(
-                            sheet, revision,
-                        ),
-                    ));
-                }
-                // The drawn geometry rebuilds only on a clear or a camera move.
-                slot.clear_content_cache();
-            }
+        if let Some(path) = self
+            .document_state
+            .active_path
+            .clone()
+            .filter(|p| self.document_state.engines.contains_key(p))
+        {
+            self.refresh_slots_from_engine(&path, true, invalidation, false);
             return;
         }
 
         self.interaction_state
             .active_canvas_mut()
             .set_render_cache(None);
+    }
+
+    /// Redraw every canvas slot showing the engine at `path` from it: the
+    /// undocked windows on that sheet (#171) and, with `include_main`, the
+    /// main window's slot. `clear_selection` also drops each slot's
+    /// selection, for an engine that was replaced wholesale: its UUIDs may
+    /// not exist in the new document (#102).
+    pub(crate) fn refresh_slots_from_engine(
+        &mut self,
+        path: &std::path::Path,
+        include_main: bool,
+        invalidation: crate::schematic_runtime::RenderInvalidation,
+        clear_selection: bool,
+    ) {
+        let Some(engine) = self.document_state.engines.get(path) else {
+            return;
+        };
+        let sheet = engine.document();
+        let (base, revision) = (engine.base_revision(), engine.revision());
+        let windows = &self.ui_state.windows;
+        let main = include_main.then_some(&mut self.interaction_state.canvas);
+        let slots = self
+            .interaction_state
+            .canvases
+            .iter_mut()
+            .filter(|(id, _)| {
+                matches!(
+                    windows.get(id),
+                    Some(super::state::WindowKind::UndockedTab { path: shown, .. })
+                        if shown == path
+                )
+            })
+            .map(|(_, slot)| slot)
+            .chain(main);
+        for slot in slots {
+            if let Some(cache) = slot.render_cache.as_mut() {
+                cache.update_from_sheet(sheet, invalidation, base, revision);
+            } else {
+                slot.set_render_cache(Some(
+                    crate::schematic_runtime::SchematicRenderCache::from_sheet_at(sheet, revision),
+                ));
+            }
+            if clear_selection {
+                slot.selected.clear();
+            }
+            // The drawn geometry rebuilds only on a clear or a camera move.
+            slot.clear_content_cache();
+        }
+    }
+
+    /// Whether the open inline text edit targets an object of the engine at
+    /// `path`.
+    fn text_edit_targets_sheet_at(&self, path: &std::path::Path) -> bool {
+        use signex_types::schematic::SelectedKind;
+        let (Some(edit), Some(engine)) = (
+            self.interaction_state.editing_text.as_ref(),
+            self.document_state.engines.get(path),
+        ) else {
+            return false;
+        };
+        let sheet = engine.document();
+        match edit.kind {
+            SelectedKind::Label => sheet.labels.iter().any(|l| l.uuid == edit.uuid),
+            SelectedKind::TextNote => sheet.text_notes.iter().any(|t| t.uuid == edit.uuid),
+            SelectedKind::SymbolRefField | SelectedKind::SymbolValField | SelectedKind::Symbol => {
+                sheet.symbols.iter().any(|s| s.uuid == edit.uuid)
+            }
+            _ => false,
+        }
+    }
+
+    /// A restore is about to replace (or drop) the engine behind the visible
+    /// schematic. Inline text, a pending move and the selection point into
+    /// the old document, so they must not outlive it.
+    pub(crate) fn discard_state_of_replaced_engine(&mut self) {
+        self.interaction_state.editing_text = None;
+        self.cancel_move_pick();
+        self.interaction_state.active_canvas_mut().selected.clear();
+        self.update_selection_info();
     }
 
     /// Refresh only the main window's canvas from the engine at `path` after
@@ -344,6 +448,7 @@ impl Signex {
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
 
         self.apply_loaded_schematic(Some(sheet), true, true, true);
+        self.note_sheet_focused();
         // Every schematic open funnels through here; `finish_update` starts
         // the (once per project) per-placement designator note off-thread.
         self.document_state.instance_note_due = true;
@@ -406,6 +511,7 @@ impl Signex {
         // existing engine.
         self.document_state.active_path = Some(path);
         self.apply_loaded_schematic(None, true, true, true);
+        self.note_sheet_focused();
     }
 
     pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
@@ -414,6 +520,10 @@ impl Signex {
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         self.document_state.stamp_pcb_revision(&path);
+        // An earlier run's recovery copy of this board (#1185): hold
+        // autosave back and let `update` start the check, as for a sheet.
+        self.document_state.autosave.begin_check(&path);
+        self.document_state.recovery_check_due.push(path.clone());
         self.document_state.tabs.push(TabInfo {
             title,
             path,
@@ -453,6 +563,9 @@ impl Signex {
                         .clear_overlay_cache();
                     // In-flight drawing buffers belong to the document too.
                     self.clear_drawing_buffers();
+                    // So does a part on the cursor: it was armed for the
+                    // sheet that is no longer showing.
+                    self.cancel_placement_session();
                     self.cancel_move_pick();
                     // Also resets the mirrored panel_ctx selection fields.
                     self.update_selection_info();
@@ -476,6 +589,7 @@ impl Signex {
         // `handlers/document_tabs.rs`, which explicitly prunes the
         // closing tab's entry. GitHub issue #51.
         self.document_state.active_path = None;
+        self.cancel_placement_session();
         self.interaction_state
             .active_canvas_mut()
             .set_render_cache(None);
@@ -582,69 +696,48 @@ impl Signex {
         self.document_state.panel_ctx.has_schematic = self.has_active_schematic();
         self.document_state.panel_ctx.has_pcb = self.has_active_pcb();
 
-        let document_summary = if let Some(snapshot) = self.active_render_snapshot() {
+        // Counts and paper label for whichever document is visible; the
+        // per-row symbol lists come from the same builder `refresh_panel_ctx`
+        // uses, so the two paths cannot disagree about what a row holds.
+        let (counts, paper_size) = if let Some(snapshot) = self.active_render_snapshot() {
             (
-                snapshot.symbols.len(),
-                snapshot.wires.len(),
-                snapshot.labels.len(),
-                snapshot.junctions.len(),
-                snapshot.lib_symbols.len(),
-                snapshot.lib_symbols.keys().cloned().collect(),
-                snapshot
-                    .symbols
-                    .iter()
-                    .map(|symbol| {
-                        (
-                            symbol.reference.clone(),
-                            symbol.value.clone(),
-                            symbol.footprint.clone(),
-                            symbol.lib_id.clone(),
-                        )
-                    })
-                    .collect(),
+                (
+                    snapshot.symbols.len(),
+                    snapshot.wires.len(),
+                    snapshot.labels.len(),
+                    snapshot.junctions.len(),
+                    snapshot.lib_symbols.len(),
+                ),
                 // Older documents may carry an empty paper_size (serde
                 // default); normalize so the Page Options selector and the
                 // drawn sheet agree on the effective A4 fallback.
-                if snapshot.paper_size.is_empty() {
-                    "A4".to_string()
-                } else {
-                    snapshot.paper_size.clone()
-                },
+                effective_paper_size(&snapshot.paper_size),
             )
         } else if let Some(snapshot) = self.active_pcb_snapshot() {
             (
-                snapshot.footprints.len(),
-                snapshot.segments.len(),
-                snapshot.texts.len(),
-                snapshot.vias.len(),
-                0,
-                Vec::new(),
-                snapshot
-                    .footprints
-                    .iter()
-                    .map(|footprint| {
-                        (
-                            footprint.reference.clone(),
-                            footprint.value.clone(),
-                            footprint.footprint_id.clone(),
-                            footprint.layer.clone(),
-                        )
-                    })
-                    .collect(),
+                (
+                    snapshot.footprints.len(),
+                    snapshot.segments.len(),
+                    snapshot.texts.len(),
+                    snapshot.vias.len(),
+                    0,
+                ),
                 format!("PCB • {} layers", snapshot.layers.len()),
             )
         } else {
-            (0, 0, 0, 0, 0, Vec::new(), Vec::new(), "A4".to_string())
+            ((0, 0, 0, 0, 0), "A4".to_string())
         };
 
-        self.document_state.panel_ctx.sym_count = document_summary.0;
-        self.document_state.panel_ctx.wire_count = document_summary.1;
-        self.document_state.panel_ctx.label_count = document_summary.2;
-        self.document_state.panel_ctx.junction_count = document_summary.3;
-        self.document_state.panel_ctx.lib_symbol_count = document_summary.4;
-        self.document_state.panel_ctx.lib_symbol_names = document_summary.5;
-        self.document_state.panel_ctx.placed_symbols = document_summary.6;
-        self.document_state.panel_ctx.paper_size = document_summary.7;
+        {
+            let ctx = &mut self.document_state.panel_ctx;
+            ctx.sym_count = counts.0;
+            ctx.wire_count = counts.1;
+            ctx.label_count = counts.2;
+            ctx.junction_count = counts.3;
+            ctx.lib_symbol_count = counts.4;
+            ctx.paper_size = paper_size;
+        }
+        self.fill_symbol_lists(None);
         // Written outside `fill_symbol_lists`; the next refresh must rebuild.
         self.document_state.panel_ctx.symbol_lists_key = None;
 
@@ -693,6 +786,16 @@ pub(crate) fn report_unusable_zone_holes(path: &std::path::Path, board: &PcbBoar
             path.display(),
             zones.join("; ")
         ));
+    }
+}
+
+/// Paper token for the panel context: older documents carry an empty
+/// `paper_size` (serde default), which every reader treats as A4.
+pub(crate) fn effective_paper_size(paper_size: &str) -> String {
+    if paper_size.is_empty() {
+        "A4".to_string()
+    } else {
+        paper_size.to_string()
     }
 }
 
@@ -766,5 +869,43 @@ mod sheet_size_report_tests {
             let name = format!("known_size_{}", token.replace(' ', "_"));
             assert_eq!(open(token, &name), 0, "{token}");
         }
+    }
+}
+
+#[cfg(test)]
+mod effective_paper_size_tests {
+    use super::effective_paper_size;
+
+    #[test]
+    fn an_empty_paper_size_reads_as_a4_everywhere() {
+        assert_eq!(effective_paper_size(""), "A4");
+        assert_eq!(effective_paper_size("A3"), "A3");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// #1470 — an engine that fails to start must not displace the open one
+    /// (and its unsaved edits); the failure reaches the Messages panel.
+    #[test]
+    fn a_failed_engine_keeps_the_open_one_and_is_logged() {
+        let path = PathBuf::from("keep-1470.snxsch");
+        let needle = "keep-1470.snxsch could not be loaded";
+        let before = crate::diagnostics::logged_count(needle);
+        let (mut app, _boot) = Signex::new();
+        let engine =
+            signex_engine::Engine::new_with_path(SchematicSheet::default(), Some(path.clone()))
+                .unwrap();
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.active_path = Some(path.clone());
+
+        let failure = signex_engine::EngineError::MissingPath;
+        app.install_active_engine(path.clone(), Err(failure));
+
+        assert!(app.document_state.engines.contains_key(&path));
+        assert_eq!(app.document_state.active_path, Some(path));
+        assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
     }
 }

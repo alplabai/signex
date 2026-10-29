@@ -23,6 +23,7 @@ pub(super) fn empty_snapshot() -> SchematicRenderSnapshot {
         title_block: HashMap::new(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
+        drawing_placements: Default::default(),
         frame: Default::default(),
         font_family: None,
     }
@@ -156,6 +157,7 @@ fn field_symbol(ref_text: Option<TextProp>) -> Symbol {
         mirror_x: false,
         mirror_y: false,
         unit: 1,
+        body_style: Default::default(),
         is_power: false,
         ref_text,
         val_text: None,

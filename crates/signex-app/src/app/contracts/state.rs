@@ -15,6 +15,9 @@ pub enum ContextAction {
     Paste,
     SmartPaste,
     OpenChildSheet,
+    /// Write the missing child file of the selected sheet symbol, with one
+    /// port per entry, then open it.
+    CreateChildSheet,
     /// Reconcile the selected sheet symbol's pins with the child schematic's
     /// hierarchical / global labels (#359). Gated like `OpenChildSheet`.
     SyncSheetPins,
@@ -29,6 +32,13 @@ pub enum ContextAction {
     /// existing Active Bar handler so all the placement / transform
     /// logic stays in one place.
     ActiveBar(crate::active_bar::ActiveBarAction),
+    /// Reorder the selected drawings from the Arrange submenu (#1583).
+    ArrangeDrawings(signex_engine::DrawingArrange),
+    /// Open Datasheet / Edit Symbol / Change Component on the selected
+    /// placed part (#1301, #1262, #1260).
+    PlacedPart(crate::library::PlacedPartAction),
+    /// Find Similar Objects for the object the menu was opened over (#1257).
+    FindSimilar,
 }
 
 /// Which click-to-open submenu is currently expanded inside the right-
@@ -38,12 +48,22 @@ pub enum ContextAction {
 pub enum ContextSubmenu {
     Place,
     Align,
+    /// "Arrange ›": order the selected drawings (#1583). Shown only when the
+    /// selection holds a drawing.
+    Arrange,
     /// Project-tree → "Add New to Project ›" launcher. Items are
-    /// version-tagged placeholders today — actual document creation
-    /// lands with project-write support in v0.9.
+    /// version-tagged placeholders today; they do not create documents yet.
     AddNewToProject,
 }
 
+/// Widget id of the in-place editor, so opening it can focus it.
+pub static TEXT_EDIT_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::widget::Id::new("signex.text_edit"));
+
+/// The in-place editor. `kind` says which text of `uuid` it edits: a label
+/// or text note, a part's designator (`SymbolRefField`) or value
+/// (`SymbolValField`), or, as `Symbol`, the part's footprint, which has no
+/// text on the canvas.
 #[derive(Debug, Clone)]
 pub struct TextEditState {
     pub uuid: uuid::Uuid,
@@ -54,12 +74,20 @@ pub struct TextEditState {
     /// screen coords at render time so the inline editor tracks pan/zoom.
     pub world_x: f64,
     pub world_y: f64,
+    /// The sheet the editor opened on and, for a designator, the placement
+    /// it showed. A commit that finds either changed is refused: it would
+    /// write to a different copy than the one the user typed into.
+    pub sheet: Option<std::path::PathBuf>,
+    pub placement: Option<signex_types::schematic::InstancePath>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ContextMenuState {
     pub x: f32,
     pub y: f32,
+    /// Where on the sheet the menu was opened, in world mm; `None` when the
+    /// cursor position was not known to belong to this document.
+    pub world: Option<(f64, f64)>,
 }
 
 /// v0.18.10 — Altium-style grid picker popup state. Anchors the
@@ -77,9 +105,8 @@ pub struct GridPickerState {
 /// v0.18.19 added Fine / Coarse display + Multiplier draft fields.
 #[derive(Debug, Clone)]
 pub struct GridPropertiesState {
-    pub step_x_mm: String,
-    pub step_y_mm: String,
-    pub link_xy: bool,
+    /// Grid step in mm; one value drives both axes.
+    pub step_mm: String,
     pub fine_display: crate::library::editor::footprint::state::GridDisplay,
     pub coarse_display: crate::library::editor::footprint::state::GridDisplay,
     pub multiplier: u32,
@@ -151,6 +178,36 @@ pub struct ProjectCloseConfirmState {
     pub sheet_refs: crate::app::state::sheet_refs::SheetRefs,
 }
 
+/// Why a child sheet could not be written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChildSheetWriteError {
+    /// The file was already there; it was left alone.
+    AlreadyExists,
+    Failed(String),
+}
+
+/// The "Create Sheet" dialog: the file a sheet symbol points at does not
+/// exist, and the user picks where to write it. Held by the parent sheet's
+/// path and the symbol's id, so the answer acts on THAT document whatever tab
+/// is active by then.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateChildSheetConfirmState {
+    pub symbol: uuid::Uuid,
+    /// The symbol's name, for the dialog text.
+    pub name: String,
+    /// The sheet that carries the symbol.
+    pub parent: std::path::PathBuf,
+    /// The project folder the file must stay inside (the parent's folder for
+    /// a loose sheet).
+    pub project_dir: std::path::PathBuf,
+    /// The editable file path: relative to the parent's folder, or absolute.
+    pub path_text: String,
+    /// Why Create refused, shown under the field.
+    pub error: Option<String>,
+    /// The typed path names a file that already exists: offer to open it.
+    pub exists: bool,
+}
+
 /// State for the "Exit Signex — Unsaved Edits" confirmation modal.
 /// Opens when the user requests app exit (chrome ✕, File ▸ Exit,
 /// Alt+F4) while `DocumentState.dirty_paths` is non-empty. Lists
@@ -179,6 +236,8 @@ pub enum SaveAllNext {
     },
     /// Close the main window; the tail of the app-quit Save All.
     Quit,
+    /// Close a library; the tail of the close-library Save All.
+    CloseLibrary { library_path: std::path::PathBuf },
 }
 
 /// A Save All whose loose documents' volumes have been probed off-thread;
@@ -192,6 +251,12 @@ pub struct SaveAllPlan {
     /// Directory -> whether its volume ignores case, for every directory
     /// the probe could decide. An undecided one is absent.
     pub probes: std::collections::HashMap<std::path::PathBuf, bool>,
+    /// The directories the probe could not decide, with its answer; the
+    /// Save All reports each from `update` and falls back to the host rule.
+    pub undecided: Vec<(
+        std::path::PathBuf,
+        crate::app::state::project_case::CaseProbeOutcome,
+    )>,
 }
 
 /// The tail of a Save All, sent when its writes have completed.
@@ -203,10 +268,34 @@ pub struct SaveAllSettle {
     /// `(label, reason)` of what already failed before a write started
     /// (Component Preview rows).
     pub failed: Vec<(String, String)>,
+    /// The Component Preview rows the Save All started: those whose write
+    /// ran off-thread report a failure into `LibraryState::batch_row_failures`.
+    pub rows: Vec<crate::library::state::EditorAddress>,
+    /// This Save All's id, the key of its rows' entries in
+    /// `LibraryState::batch_row_failures`.
+    pub batch: u64,
     /// Files held under several case-variant spellings: the spelling that
     /// was written, and the others it stands for. The others' dirty markers
     /// go once the written one is clean.
-    pub case_variants: Vec<(std::path::PathBuf, Vec<std::path::PathBuf>)>,
+    pub case_variants: Vec<CaseVariants>,
+}
+
+/// A file held under several case-variant spellings: the one written and
+/// the others it stands for, each pinned as it was when the write began.
+#[derive(Debug, Clone)]
+pub struct CaseVariants {
+    pub written: std::path::PathBuf,
+    pub others: Vec<PinnedSpelling>,
+}
+
+/// A spelling's state when a write began. One edited since (its engine
+/// revision or its net-colour revision moved) is not on disk, so its dirty
+/// marker stays.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PinnedSpelling {
+    pub path: std::path::PathBuf,
+    pub revision: u64,
+    pub net_color_revision: u64,
 }
 
 /// User choice from the project-close confirmation modal.
@@ -251,9 +340,9 @@ pub enum TabContextAction {
 #[derive(Debug, Clone)]
 pub enum ProjectTreeAction {
     /// Open the file backed by this leaf in the current document slot.
-    OpenNode(Vec<usize>),
+    OpenNode(signex_widgets::tree_view::TreeKey),
     /// Expand (or collapse) a specific branch node.
-    ToggleNode(Vec<usize>),
+    ToggleNode(signex_widgets::tree_view::TreeKey),
     /// Recursively expand every node in the tree.
     ExpandAll,
     /// Recursively collapse every node in the tree.
@@ -270,58 +359,59 @@ pub enum ProjectTreeAction {
     /// against — leaves nested under project B reveal in B's dir
     /// even when project A is active. A single-element path means
     /// the project root row was clicked.
-    RevealInExplorer(Vec<usize>),
+    RevealInExplorer(signex_widgets::tree_view::TreeKey),
     /// Fire the print preview flow — only surfaced on leaves that are
     /// already the active tab.
     PrintActive,
     /// Open the sheet-rename modal for this leaf, preloaded with the
     /// current filename.
-    OpenRenameDialog(Vec<usize>),
+    OpenRenameDialog(signex_widgets::tree_view::TreeKey),
     /// Open the "Remove from Project" modal (Delete / Exclude / Cancel)
     /// for this leaf.
-    OpenRemoveDialog(Vec<usize>),
+    OpenRemoveDialog(signex_widgets::tree_view::TreeKey),
     /// Close the entire project whose root is at this tree path. Closes
     /// every open tab backed by the project, drops the `LoadedProject`
     /// from the workspace, and promotes another project (or `None`) to
     /// active. The tree path's first index selects the project; other
     /// indices are ignored so the action is safe to fire from any node
     /// underneath a project root.
-    CloseProject(Vec<usize>),
-    /// v0.9 project-root: run ERC across the project. Promotes the
+    CloseProject(signex_widgets::tree_view::TreeKey),
+    /// Project root: run ERC across the project. Promotes the
     /// project to active, opens its `schematic_root` if no schematic
     /// from this project is currently active, then dispatches the
     /// existing ERC dialog.
-    ValidateProject(Vec<usize>),
-    /// v0.9 project-root: open the rename modal seeded with the
+    ValidateProject(signex_widgets::tree_view::TreeKey),
+    /// Project root: open the rename modal seeded with the
     /// project name (the `.snxprj` stem). Submit renames the trio
     /// `<old>.snxprj` / `<old>.snxsch` / `<old>.snxpcb` in lockstep.
-    OpenProjectRenameDialog(Vec<usize>),
-    /// v0.9 project-root: open the Project Options metadata modal.
-    OpenProjectOptions(Vec<usize>),
-    /// v0.9 project-root: open a file dialog and add the picked file
+    OpenProjectRenameDialog(signex_widgets::tree_view::TreeKey),
+    /// Project root: Project Options… opens (or focuses) the project's
+    /// Project tab (#1202).
+    OpenProjectOptions(signex_widgets::tree_view::TreeKey),
+    /// Project root: open a file dialog and add the picked file
     /// to the project. Files outside the project directory are copied
     /// in; files already inside just trigger a tree refresh.
-    AddExistingToProject(Vec<usize>),
-    /// v0.9 project-root → Add New ▸ Schematic. Spawns a Save-As
+    AddExistingToProject(signex_widgets::tree_view::TreeKey),
+    /// Project root → Add New ▸ Schematic. Spawns a Save-As
     /// dialog scoped to the project directory; the result writes a
     /// blank `.snxsch`, registers it as a SheetEntry, marks the
     /// project dirty, and refreshes the tree (no tab opens).
-    AddNewSchematic(Vec<usize>),
+    AddNewSchematic(signex_widgets::tree_view::TreeKey),
     /// project-root → Add New ▸ Symbol Library. Save-As dialog
     /// scoped to the project dir, writes an empty `.snxsym`, opens
     /// the file as a primitive editor tab. Altium parity: Schematic
     /// Library is a top-level project document.
-    AddProjectSymbolLibrary(Vec<usize>),
+    AddProjectSymbolLibrary(signex_widgets::tree_view::TreeKey),
     /// project-root → Add New ▸ PCB Library. Save-As dialog
     /// scoped to the project dir, writes an empty `.snxfpt`, opens
     /// the file as a primitive editor tab.
-    AddProjectFootprintLibrary(Vec<usize>),
+    AddProjectFootprintLibrary(signex_widgets::tree_view::TreeKey),
     /// v0.11 project-root: open the Enable Version Control confirm
     /// modal. Runs `git init` at the project dir, optionally seeds
     /// `.gitattributes` for binary-model LFS, and creates the
     /// initial commit covering the entire project tree. Only
     /// enabled when the project dir has no `.git/` already.
-    OpenEnableVersionControl(Vec<usize>),
+    OpenEnableVersionControl(signex_widgets::tree_view::TreeKey),
     /// Right-click on a plain-files `.snxlib` node → opens the
     /// Enable Version Control modal scoped to that library directory.
     OpenLibraryEnableVersionControl(LibraryRowRef),
@@ -331,6 +421,37 @@ pub enum ProjectTreeAction {
     /// Right-click on a library node → Refresh All Pricing. Runs in the
     /// background; resolved by the library's identity like the rest.
     RefreshLibraryPricing(LibraryRowRef),
+}
+
+impl ProjectTreeAction {
+    /// The tree row this action targets, when it targets one.
+    pub fn row_key(&self) -> Option<&signex_widgets::tree_view::TreeKey> {
+        use ProjectTreeAction::*;
+        match self {
+            OpenNode(k)
+            | ToggleNode(k)
+            | RevealInExplorer(k)
+            | OpenRenameDialog(k)
+            | OpenRemoveDialog(k)
+            | CloseProject(k)
+            | ValidateProject(k)
+            | OpenProjectRenameDialog(k)
+            | OpenProjectOptions(k)
+            | AddExistingToProject(k)
+            | AddNewSchematic(k)
+            | AddProjectSymbolLibrary(k)
+            | AddProjectFootprintLibrary(k)
+            | OpenEnableVersionControl(k) => Some(k),
+            ExpandAll
+            | CollapseAll
+            | Refresh
+            | CloseAllDocuments
+            | PrintActive
+            | OpenLibraryEnableVersionControl(_)
+            | RemoveLibrary(_)
+            | RefreshLibraryPricing(_) => None,
+        }
+    }
 }
 
 /// Stable identity of a library row in the project tree: the owning
@@ -437,20 +558,6 @@ pub struct EnableVersionControlState {
     /// A confirmed run is on the blocking pool: the dialog shows it as
     /// working and ignores edits and a second Confirm until it finishes.
     pub working: bool,
-}
-
-/// State for the read-only "Project Options" modal — the v0.9 surface
-/// is a metadata summary (name / dir / schematic root / pcb file /
-/// libraries). Editing happens through the dedicated rename / library
-/// flows; a future revision can promote this to a full editor.
-#[derive(Debug, Clone)]
-pub struct ProjectOptionsState {
-    pub project_idx: usize,
-    pub name: String,
-    pub directory: String,
-    pub schematic_root: Option<String>,
-    pub pcb_file: Option<String>,
-    pub library_count: usize,
 }
 
 /// State for the "Remove from Project" modal. `Delete` removes the file

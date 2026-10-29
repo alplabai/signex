@@ -5,7 +5,8 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 
 use super::super::super::*;
-use super::new_project::{new_project_parts, write_new_project_files};
+use super::new_project::{RuleSeed, new_project_parts, write_new_project_files};
+use super::spelling::OpenGate;
 
 impl Signex {
     /// An async read+parse of a document came back failed: log it and
@@ -58,10 +59,15 @@ impl Signex {
                 if !self.document_state.pending_opens.insert(path.clone()) {
                     return iced::Task::none();
                 }
+                let seed = RuleSeed {
+                    dir: crate::rule_profiles::profiles_dir(),
+                    selected: self.ui_state.default_rule_profile.clone(),
+                    pending: self.pending_profile_writes(),
+                };
                 iced::Task::perform(
                     super::super::dock::project_navigation::add_io::on_blocking_pool({
                         let path = path.clone();
-                        move || write_new_project_files(&path).map_err(|e| format!("{e:#}"))
+                        move || write_new_project_files(&path, &seed).map_err(|e| format!("{e:#}"))
                     }),
                     move |result| Message::File(FileMsg::NewProjectWritten { path, result }),
                 )
@@ -90,7 +96,9 @@ impl Signex {
         project_path: PathBuf,
         result: Result<PathBuf, String>,
     ) -> iced::Task<Message> {
-        self.document_state.pending_opens.remove(&project_path);
+        self.document_state
+            .pending_opens
+            .remove_untracked(&project_path);
         let written = match result {
             Ok(written) => written,
             Err(error) => {
@@ -238,7 +246,12 @@ impl Signex {
             "standard_pro" | "snxprj" => self.open_project_file(path)?,
             "standard_sch" | "snxsch" => self.open_schematic_file(path)?,
             "standard_pcb" | "snxpcb" => self.open_pcb_file(path)?,
-            "snxsym" | "snxfpt" => self.handle_open_primitive(path),
+            "snxsym" | "snxfpt" => match self.gate_open(path) {
+                OpenGate::Proceed { path, probe } => {
+                    iced::Task::batch([probe, self.handle_open_primitive(path)])
+                }
+                OpenGate::Deferred(probe) => probe,
+            },
             // `.snxlib/` is a directory package — open it as a Library
             // Browser tab in the main canvas area. The handler mounts
             // the library if not already mounted and pushes the tab
@@ -255,9 +268,9 @@ impl Signex {
         let (_, mount_task) = self.load_or_activate_project(&path)?;
         // Success path only: `?` above returns before a project that
         // failed to load can be recorded.
-        self.record_recent_project(&path);
+        let recent_task = self.record_recent_project(&path);
         self.refresh_panel_ctx();
-        Ok(mount_task)
+        Ok(iced::Task::batch([mount_task, recent_task]))
     }
 
     /// Append a `LoadedProject` for `project_path` to the workspace if
@@ -288,6 +301,15 @@ impl Signex {
             let id = existing.id;
             self.document_state.active_project = Some(id);
             return Ok((id, iced::Task::none()));
+        }
+        // A write of this file is still running (its project may have been
+        // closed since): parsing now would load the old bytes as clean.
+        if self.document_state.document_saves.is_saving(project_path) {
+            anyhow::bail!(
+                "A save to that project file is still running, so it was not opened; \
+                 try again once it finishes: {}",
+                super::save::file_label(project_path)
+            );
         }
         let data = signex_types::project::parse_project(project_path)
             .with_context(|| format!("parse project {}", project_path.display()))?;
@@ -330,9 +352,13 @@ impl Signex {
                 pending_libraries: std::collections::HashMap::new(),
                 case_fold: crate::app::state::scope::CaseFold::host_default(),
                 case_probed: false,
+                case_decided: false,
             });
         self.document_state.active_project = Some(id);
-        Ok((id, mount_task))
+        // A project that recorded a rule profile learns, off the update loop,
+        // whether the local copy of that profile has changed since (#1608).
+        let drift = self.check_profile_drift_task_for(id);
+        Ok((id, iced::Task::batch([mount_task, drift])))
     }
 
     /// Whether a document already owns `path`: it has a tab, or its engine
@@ -365,10 +391,10 @@ impl Signex {
     /// there first, #1089): applying it would push a second tab and replace
     /// the owner's engine with disk content, losing its edits. The caller
     /// drops the result; this logs why, including that an `Err` was dropped.
-    pub(crate) fn is_open_result_superseded<T>(
+    pub(crate) fn is_open_result_superseded<T, E>(
         &self,
         path: &std::path::Path,
-        result: &Result<T, String>,
+        result: &Result<T, E>,
     ) -> bool {
         if !self.path_is_owned_by_open_document(path) {
             return false;
@@ -425,7 +451,15 @@ impl Signex {
     }
 
     fn open_schematic_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
-        let path = self.resolve_held_spelling(path);
+        let (path, probe) = match self.gate_open(path) {
+            OpenGate::Proceed { path, probe } => (path, probe),
+            OpenGate::Deferred(probe) => return Ok(probe),
+        };
+        let task = self.open_schematic_resolved(path)?;
+        Ok(iced::Task::batch([probe, task]))
+    }
+
+    fn open_schematic_resolved(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
         if self.activate_or_skip_duplicate_open(&path) {
             return Ok(iced::Task::none());
         }
@@ -449,7 +483,7 @@ impl Signex {
                     // neither waits on the other.
                     Ok((_, mount_task)) => companion_mounts = mount_task,
                     Err(error) => {
-                        crate::diagnostics::log_error("Failed to parse companion project", &error);
+                        crate::diagnostics::log_error("Failed to load companion project", &error);
                     }
                 }
             }
@@ -501,7 +535,15 @@ impl Signex {
     }
 
     fn open_pcb_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
-        let path = self.resolve_held_spelling(path);
+        let (path, probe) = match self.gate_open(path) {
+            OpenGate::Proceed { path, probe } => (path, probe),
+            OpenGate::Deferred(probe) => return Ok(probe),
+        };
+        let task = self.open_pcb_resolved(path)?;
+        Ok(iced::Task::batch([probe, task]))
+    }
+
+    fn open_pcb_resolved(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
         if self.activate_or_skip_duplicate_open(&path) {
             return Ok(iced::Task::none());
         }
@@ -524,7 +566,7 @@ impl Signex {
                     // neither waits on the other.
                     Ok((_, mount_task)) => companion_mounts = mount_task,
                     Err(error) => {
-                        crate::diagnostics::log_error("Failed to parse companion project", &error);
+                        crate::diagnostics::log_error("Failed to load companion project", &error);
                     }
                 }
             }
@@ -612,5 +654,64 @@ mod tests {
             0,
             "an already loaded project is not probed again"
         );
+    }
+
+    /// Write a project whose rules record a profile (or none).
+    fn project_recording_profile(
+        dir: &std::path::Path,
+        profile: Option<&str>,
+    ) -> std::path::PathBuf {
+        let path = dir.join("P.snxprj");
+        std::fs::write(&path, b"").expect("marker");
+        let mut data = signex_types::project::parse_project(&path).expect("parse");
+        if let Some(name) = profile {
+            let rules = signex_types::project::ProjectRules {
+                profile: Some(signex_types::project::RuleProfileRef {
+                    name: name.into(),
+                    source: "user".into(),
+                    sha256: "recorded".into(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            data.rules = Some(rules);
+        }
+        signex_types::project::write_project(&path, &data).expect("write");
+        path
+    }
+
+    #[test]
+    fn opening_a_project_that_recorded_a_profile_starts_the_drift_check_once() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let project = project_recording_profile(dir.path(), Some("Company"));
+        let (mut app, _task) = Signex::new();
+
+        let (_id, first) = app.load_or_activate_project(&project).expect("load");
+        assert_eq!(
+            first.units(),
+            2,
+            "the volume probe plus the off-thread drift check"
+        );
+        let (_id, again) = app.load_or_activate_project(&project).expect("reactivate");
+        assert_eq!(again.units(), 0, "re-activating checks nothing again");
+    }
+
+    #[test]
+    fn opening_a_project_without_a_recorded_profile_checks_nothing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let project = project_recording_profile(dir.path(), None);
+        let (mut app, _task) = Signex::new();
+        let (_id, task) = app.load_or_activate_project(&project).expect("load");
+        assert_eq!(task.units(), 1, "only the volume probe");
+    }
+
+    #[test]
+    fn a_project_already_told_about_drift_is_not_checked_again() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let project = project_recording_profile(dir.path(), Some("Company"));
+        let (mut app, _task) = Signex::new();
+        let (id, _) = app.load_or_activate_project(&project).expect("load");
+        app.document_state.profile_drift_noted.insert(id);
+        assert_eq!(app.check_profile_drift_task().units(), 0);
     }
 }

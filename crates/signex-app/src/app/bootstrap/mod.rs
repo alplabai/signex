@@ -21,8 +21,12 @@ fn bundled_window_icon() -> Option<iced::window::Icon> {
 // `selection_slot_from_key` moved to `app/dispatch/input.rs` with its
 // only consumer when the keyboard branches left the subscription (#557).
 
+#[cfg(test)]
+mod boot_tests;
 mod new;
 mod subscription;
+pub(crate) use subscription::modal_overlay_id;
+mod window_subscriptions;
 
 impl Signex {
     pub(super) const CONTEXT_MENU_WIDTH: f32 = 248.0;
@@ -39,10 +43,14 @@ impl Signex {
         // tell it from the main window.
         if let Some(super::state::WindowKind::DetachedModal(modal)) = self.ui_state.windows.get(&id)
         {
-            return format!(
-                "{} — Signex",
-                crate::app::view::detached_title::detached_modal_title(*modal)
-            );
+            // The dialog's own name, no application suffix: the notice
+            // names itself, the rest read "Quit Signex", "Rename", ...
+            if *modal == super::state::ModalId::ErrorNotice
+                && let Some(notice) = self.document_state.error_notice.as_ref()
+            {
+                return notice.title.clone();
+            }
+            return crate::app::view::detached_title::detached_modal_title(*modal).to_owned();
         }
         let version = env!("CARGO_PKG_VERSION");
         let dirty_count = self.document_state.dirty_paths.len();
@@ -60,8 +68,17 @@ impl Signex {
         self.ui_state.ui_scale
     }
 
-    pub fn theme(&self, _id: iced::window::Id) -> Option<Theme> {
-        Some(self.resolve_theme())
+    pub fn theme(&self, id: iced::window::Id) -> Option<Theme> {
+        let theme = self.resolve_theme();
+        // A dialog in its own window draws flat (the OS window is the frame).
+        if matches!(
+            self.ui_state.windows.get(&id),
+            Some(super::state::WindowKind::DetachedModal(_))
+        ) {
+            let paper = crate::styles::ti(self.document_state.panel_ctx.tokens.paper);
+            return Some(crate::styles::dialog_window_theme(&theme, paper));
+        }
+        Some(theme)
     }
 
     fn resolve_theme(&self) -> Theme {

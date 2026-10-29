@@ -30,9 +30,8 @@ impl Signex {
             // Recoverable failures open their recovery dialog; anything
             // else must still reach the user, so raise the error card.
             if !route_open_error(&mut self.library, &path, &e) {
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
-                    format!("Cannot open library {}: {e}", path.display()),
-                ));
+                self.document_state.error_notice =
+                    Some(open_error_notice(&self.library, &path, "open library", &e));
             }
         }
         Task::none()
@@ -96,11 +95,18 @@ impl Signex {
         };
         match result {
             Ok(prepared) => {
+                let library_id = prepared.entry.library_id;
+                let newly_mounted = self.library.library_at(&prepared.entry.root).is_none();
                 if let Err(e) = self.library.mount_prepared(prepared) {
                     report(&path, &e.to_string());
                     return Task::none();
                 }
                 self.library.drift.check_pending = true;
+                // Sheets opened before this library mounted skipped its
+                // symbols; scan them now (#1449).
+                if newly_mounted {
+                    self.rescan_library_updates_after_mount(library_id);
+                }
             }
             Err(e) => {
                 report(&path, &e);
@@ -117,7 +123,7 @@ impl Signex {
 
     /// Close an open library — diverts to the confirm modal when any
     /// Component Preview editor against it is dirty.
-    pub(super) fn handle_close_library(&mut self, path: std::path::PathBuf) -> Task<Message> {
+    pub(crate) fn handle_close_library(&mut self, path: std::path::PathBuf) -> Task<Message> {
         // If any Component Preview editors against this library
         // are dirty, divert to the confirm modal so the user
         // can Save All / Discard All / Cancel rather than
@@ -195,28 +201,21 @@ impl Signex {
                 self.library.close_library(&confirm.library_path);
             }
             CloseLibraryChoice::SaveAll => {
-                // Persist every dirty editor's row through the
-                // adapter, then close the library. A failed save
-                // keeps the library open with its drafts and raises
-                // the Save Failed card: closing anyway would turn
-                // "Save All" into a silent discard (#110). The user
-                // can retry, or pick Discard All.
-                for address in &confirm.dirty_editors {
-                    if let Err(e) = self.try_save_row(address) {
-                        self.report_save_row_failure(&e);
-                        return Task::none();
-                    }
-                }
-                self.library.close_library(&confirm.library_path);
+                // Persist every dirty editor's row through the adapter
+                // (staged PDFs are written on a worker first), then close
+                // the library. A failed save keeps the library open with
+                // its drafts and raises the Save Failed card: closing
+                // anyway would turn "Save All" into a silent discard
+                // (#110). The user can retry, or pick Discard All.
+                return self.begin_save_all(
+                    "Close Library",
+                    &[],
+                    &confirm.dirty_editors,
+                    crate::app::contracts::SaveAllNext::CloseLibrary {
+                        library_path: confirm.library_path,
+                    },
+                );
             }
-        }
-        Task::none()
-    }
-
-    /// Toggle the Library left-dock panel's library tree node at `idx`.
-    pub(super) fn handle_toggle_library_tree_node(&mut self, idx: usize) -> Task<Message> {
-        if let Some(slot) = self.library.expanded.get_mut(idx) {
-            *slot = !*slot;
         }
         Task::none()
     }

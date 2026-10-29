@@ -7,13 +7,23 @@ use iced::widget::{button, svg, text};
 use iced::{Background, Border, Color, Element, Theme};
 use signex_types::theme::{ThemeId, ThemeTokens};
 
-use crate::styles;
+use crate::styles::{self, TypeScale};
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
 
 mod dropdown;
+mod layout;
+mod planned;
 
 // Re-exported so `crate::active_bar::view_dropdown` / `dropdown_x_offset`
 // paths (overlays/mod.rs) resolve unchanged after the folder split.
 pub use dropdown::{dropdown_x_offset, view_dropdown};
+pub use layout::BAR_WIDTH_PX;
+pub(crate) use layout::{
+    BAR_DROPDOWN_GAP_PX, BAR_HEIGHT_PX, BAR_TOP_MARGIN_PX, BAR_ZONE_HEIGHT_PX, bar_left_in_window,
+    bar_width_for, menu_at,
+};
+pub use planned::{PLANNED_TOOLS, PLANNED_TOOLTIP, is_planned, planned_name, refusal_line};
 
 /// Whether `action` needs at least one selected item to make sense.
 /// Transform / align / distribute family — Altium greys these out when
@@ -54,14 +64,6 @@ pub fn requires_selection(action: &ActiveBarAction) -> bool {
 pub fn requires_net_color(action: &ActiveBarAction) -> bool {
     use ActiveBarAction::*;
     matches!(action, ClearNetColor | ClearAllNetColors)
-}
-
-/// Whether `action` is a placeholder for a feature that has not landed.
-/// #1248 — Parameter Set used to arm a `LabelType::Net` label, which joins
-/// connectivity; a rule directive must never do that, so the tool stays
-/// greyed out until a non-electrical directive object exists.
-pub fn is_planned(action: &ActiveBarAction) -> bool {
-    matches!(action, ActiveBarAction::PlaceParameterSet)
 }
 
 /// What the Directives group button does on a left click before any
@@ -138,13 +140,6 @@ impl AbColors {
 // and `DD_*` const-byte declarations now live in that module.
 
 use crate::icons as ic;
-
-/// Active Bar total width in pixels.
-///
-/// Layout: 13 buttons (26 px) + 4 separators (2 px wide) = 17 cells
-/// with 2 px spacing between each (16 gaps) and 2 px padding per edge.
-/// 13·26 + 4·2 + 16·2 + 4 = 338 + 8 + 32 + 4 = 382 px.
-pub const BAR_WIDTH_PX: f32 = 382.0;
 
 // ─── Messages ────────────────────────────────────────────────
 
@@ -330,6 +325,7 @@ pub enum ActiveBarAction {
     DrawBus,
     PlaceBusEntry,
     PlaceNetLabel,
+    PlaceJunction,
     // Power
     PlacePowerGND,
     PlacePowerVCC,
@@ -443,6 +439,7 @@ fn action_icon(action: &ActiveBarAction, tid: ThemeId) -> svg::Handle {
         ActiveBarAction::DrawBus => ic::icon_dd_bus(tid),
         ActiveBarAction::PlaceBusEntry => ic::icon_dd_bus_entry(tid),
         ActiveBarAction::PlaceNetLabel => ic::icon_dd_net_label(tid),
+        ActiveBarAction::PlaceJunction => ic::icon_dd_junction(tid),
         // Power
         ActiveBarAction::PlacePowerGND => ic::icon_dd_gnd(tid),
         ActiveBarAction::PlacePowerVCC => ic::icon_dd_vcc(tid),
@@ -495,6 +492,18 @@ fn action_icon(action: &ActiveBarAction, tid: ThemeId) -> svg::Handle {
 
 // ─── View: Active Bar ────────────────────────────────────────
 
+/// Hover text for a bar button: its name, plus the shared "planned" note
+/// when the button's left-click action is a placeholder tool (#1249), so a
+/// greyed Harness button explains itself like the rows in its dropdown.
+fn button_tooltip(left: &ActiveBarMsg, name: &str) -> String {
+    match left {
+        ActiveBarMsg::Action(action) if is_planned(action) => {
+            format!("{name} — {PLANNED_TOOLTIP}")
+        }
+        _ => name.to_string(),
+    }
+}
+
 /// Action behind the draw-mode pill: re-select the tool that is
 /// already active, so a click never flips Bus drawing over to Wire.
 fn draw_mode_pill_action(current_tool: crate::app::Tool) -> ActiveBarAction {
@@ -514,6 +523,29 @@ pub fn view_bar<'a>(
     has_selection: bool,
     has_net_colors: bool,
 ) -> Element<'a, ActiveBarMsg> {
+    let items = bar_items(
+        current_tool,
+        draw_mode,
+        last_tool,
+        tokens,
+        tid,
+        has_selection,
+        has_net_colors,
+    );
+    signex_widgets::active_bar::view(items, tokens)
+}
+
+/// The bar's slots in draw order. The leading slots must match
+/// `layout::SCHEMATIC_BAR_SLOTS` (pinned by `bar_items_follow_the_slot_table`).
+fn bar_items(
+    current_tool: crate::app::Tool,
+    draw_mode: crate::app::DrawMode,
+    last_tool: &std::collections::HashMap<String, ActiveBarAction>,
+    tokens: &ThemeTokens,
+    tid: ThemeId,
+    has_selection: bool,
+    has_net_colors: bool,
+) -> Vec<signex_widgets::active_bar::ActiveBarItem<ActiveBarMsg>> {
     use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
     // Helper: get last-used action for a group, or use default.
@@ -560,7 +592,7 @@ pub fn view_bar<'a>(
         };
         ActiveBarItem::Button(ActiveBarButton {
             icon: ActiveBarIcon::Svg(icon),
-            tooltip: tooltip.to_string(),
+            tooltip: button_tooltip(&left, tooltip),
             enabled,
             selected,
             on_press: Some(left),
@@ -677,7 +709,7 @@ pub fn view_bar<'a>(
     // Draw-mode indicator (only visible while wire/bus is the active
     // tool). Drops in as a Custom variant so the standard button
     // styling doesn't apply.
-    if matches!(current_tool, crate::app::Tool::Wire | crate::app::Tool::Bus) {
+    if layout::shows_draw_mode_pill(current_tool) {
         items.push(ActiveBarItem::Separator);
         let mode_label = match draw_mode {
             crate::app::DrawMode::Ortho90 => "90\u{00B0}",
@@ -687,7 +719,7 @@ pub fn view_bar<'a>(
         let pill_text = styles::ti(tokens.text);
         let pill_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Pressed);
         let pill: Element<'static, ActiveBarMsg> =
-            button(text(mode_label.to_string()).size(12).color(pill_text))
+            button(text(mode_label.to_string()).size(TS.label).color(pill_text))
                 .padding([5, 7])
                 .on_press(ActiveBarMsg::Action(draw_mode_pill_action(current_tool)))
                 .style(move |_: &Theme, _| button::Style {
@@ -700,17 +732,16 @@ pub fn view_bar<'a>(
                     ..button::Style::default()
                 })
                 .into();
-        // 42 px fits the widest label ("90°" / "45°" / "Any") at size
-        // 12 plus the 7 px side padding. Declared rather than measured
+        // Declared width (see `DRAW_MODE_PILL_WIDTH_PX`), not measured
         // because `slot_offsets` places every dropdown from these
         // widths — see `ActiveBarItem::Custom`. This pill sits AFTER
         // every dropdown trigger on this bar, so an error here would
         // only shift the bar's centring, not the panels; state it
         // correctly anyway.
-        items.push(ActiveBarItem::custom(pill, 42.0));
+        items.push(ActiveBarItem::custom(pill, layout::DRAW_MODE_PILL_WIDTH_PX));
     }
 
-    signex_widgets::active_bar::view(items, tokens)
+    items
 }
 
 #[cfg(test)]
@@ -730,5 +761,134 @@ mod pill_tests {
             draw_mode_pill_action(Tool::Wire),
             ActiveBarAction::DrawWire
         ));
+    }
+}
+
+/// Window-space centre x of every dropdown trigger the view draws for
+/// `tool` in a window `window_width` wide, derived from the drawn items
+/// and the widget's own row maths (not from `layout`'s slot table).
+#[cfg(test)]
+pub(crate) fn drawn_trigger_centres(
+    tool: crate::app::Tool,
+    window_width: f32,
+) -> Vec<(ActiveBarMenu, f32)> {
+    use signex_widgets::active_bar::{ActiveBarItem, slot_offsets};
+    let tokens = signex_types::theme::theme_tokens(ThemeId::Signex);
+    let items = bar_items(
+        tool,
+        crate::app::DrawMode::Ortho90,
+        &std::collections::HashMap::new(),
+        &tokens,
+        ThemeId::Signex,
+        false,
+        false,
+    );
+    let (offsets, total) = slot_offsets(&items);
+    let bar_left = (window_width - total) / 2.0;
+    items
+        .iter()
+        .zip(offsets)
+        .filter_map(|(item, left)| match item {
+            ActiveBarItem::Button(b) => match b.on_right_press {
+                Some(ActiveBarMsg::ToggleMenu(menu)) => {
+                    Some((menu, bar_left + left + item.width() / 2.0))
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::layout::{BarSlot, SCHEMATIC_BAR_SLOTS, bar_slots, slot_rects};
+    use super::*;
+    use crate::app::{DrawMode, Tool};
+    use signex_widgets::active_bar::{BTN_SIZE, slot_offsets};
+
+    fn drawn_items(tool: Tool) -> Vec<signex_widgets::active_bar::ActiveBarItem<ActiveBarMsg>> {
+        let tokens = signex_types::theme::theme_tokens(ThemeId::Signex);
+        bar_items(
+            tool,
+            DrawMode::Ortho90,
+            &std::collections::HashMap::new(),
+            &tokens,
+            ThemeId::Signex,
+            false,
+            false,
+        )
+    }
+
+    /// The view's item list and the slot table must describe the same bar.
+    #[test]
+    fn bar_items_follow_the_slot_table() {
+        use signex_widgets::active_bar::ActiveBarItem;
+        let slots: Vec<BarSlot> = drawn_items(Tool::Select)
+            .iter()
+            .map(|item| match item {
+                ActiveBarItem::Separator => BarSlot::Separator,
+                ActiveBarItem::Button(b) => match b.on_right_press {
+                    Some(ActiveBarMsg::ToggleMenu(menu)) => BarSlot::Trigger(menu),
+                    _ => panic!("bar button without a dropdown trigger"),
+                },
+                ActiveBarItem::Custom { .. } => panic!("unexpected custom slot"),
+            })
+            .collect();
+        assert_eq!(slots, SCHEMATIC_BAR_SLOTS);
+    }
+
+    /// Hit rects are the rects the renderer lays out (same row maths),
+    /// also while the draw-mode pill widens the bar.
+    #[test]
+    fn hit_rects_equal_drawn_rects() {
+        for tool in [Tool::Select, Tool::Wire, Tool::Bus] {
+            let items = drawn_items(tool);
+            let (drawn, total) = slot_offsets(&items);
+            assert_eq!(total, bar_width_for(tool), "{tool:?} total width");
+            if tool == Tool::Select {
+                assert_eq!(total, BAR_WIDTH_PX);
+            } else {
+                assert_eq!(total, BAR_WIDTH_PX + 1.0 + 2.0 + 2.0 + 42.0);
+            }
+            let rects = slot_rects(tool);
+            assert_eq!(rects.len(), items.len(), "{tool:?} slot count");
+            for (i, (left, width)) in rects.iter().copied().enumerate() {
+                assert_eq!(left, drawn[i], "slot {i} left edge");
+                assert_eq!(width, items[i].width(), "slot {i} width");
+                let BarSlot::Trigger(menu) = bar_slots(tool)[i] else {
+                    assert_eq!(menu_at(tool, left + width / 2.0), None, "non-trigger {i}");
+                    continue;
+                };
+                assert_eq!(menu_at(tool, left), Some(menu));
+                assert_eq!(menu_at(tool, left + width - 0.01), Some(menu));
+                assert_ne!(menu_at(tool, left + width), Some(menu));
+                assert_ne!(menu_at(tool, left - 0.01), Some(menu));
+                assert_eq!(dropdown_x_offset(menu), left);
+            }
+        }
+    }
+
+    /// #1509: with the pill shown the dropdown anchor (window-space left
+    /// edge of the trigger) lands on the drawn button, not 23.5 px off.
+    #[test]
+    fn dropdown_anchor_matches_drawn_button_with_pill() {
+        for window_width in [1400.0_f32, 1117.0] {
+            for (menu, centre) in drawn_trigger_centres(Tool::Wire, window_width) {
+                let anchor = dropdown_x_offset(menu) + bar_left_in_window(Tool::Wire, window_width);
+                assert_eq!(
+                    anchor + BTN_SIZE / 2.0,
+                    centre,
+                    "{menu:?} at {window_width}"
+                );
+            }
+        }
+    }
+
+    /// Pre-#1495 literal for the right-click zone.
+    #[test]
+    fn active_bar_zone_height_is_unchanged() {
+        assert_eq!(BAR_ZONE_HEIGHT_PX, 46.0);
+        assert_eq!(BAR_TOP_MARGIN_PX, 4.0);
     }
 }

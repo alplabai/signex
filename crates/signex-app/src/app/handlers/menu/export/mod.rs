@@ -19,7 +19,7 @@ mod placements;
 mod print_preview;
 mod raster_job;
 mod sheet_numbers;
-mod write;
+pub(crate) mod write;
 #[cfg(test)]
 pub(crate) use write::settle;
 #[cfg(test)]
@@ -208,18 +208,20 @@ impl ExportIssues {
     }
 }
 
-/// Tell the user which characters none of the bundled PDF fonts cover; the
-/// page shows an empty box for each.
-fn log_uncovered_chars(chars: &[char]) {
+/// The warning telling the user which characters none of the bundled PDF
+/// fonts cover (the page shows an empty box for each); `None` when all are
+/// covered. It travels with the export's write outcome and reaches the
+/// Messages panel once the file is written.
+fn uncovered_chars_warning(chars: &[char]) -> Option<String> {
     if chars.is_empty() {
-        return;
+        return None;
     }
     let listed: String = chars.iter().take(20).collect();
     let more = if chars.len() > 20 { "..." } else { "" };
-    crate::diagnostics::log_warning(format!(
+    Some(format!(
         "PDF export: {} character(s) have no glyph in the bundled fonts and were drawn as empty boxes: {listed}{more}",
         chars.len()
-    ));
+    ))
 }
 
 /// Put the stitch issues in front of the user — called once per *user action*
@@ -320,36 +322,33 @@ fn loose_pages(
         .collect()
 }
 
-/// Title-block metadata for the export, plus the project's active variant.
-/// The canvas title block resolves with the same values (#1079).
+/// Title-block metadata for the export: the project's parameters with the
+/// active sheet's own `title_block` laid over them, plus the project's active
+/// variant and name. The canvas title block resolves with the same values
+/// (#1079); `ProjectMetadata::project_parameters` lets every other exported
+/// page start from the project's values (#1080).
 pub(crate) fn export_metadata(
     active_engine: &signex_engine::Engine,
     owning_project: Option<&crate::app::state::LoadedProject>,
 ) -> ProjectMetadata {
-    let tb = &active_engine.document().title_block;
-    let comment = |n: usize| tb.get(&format!("comment{n}")).cloned().unwrap_or_default();
-    let mut custom_fields = std::collections::BTreeMap::new();
+    let mut base = ProjectMetadata::default();
     let active_variant = owning_project
         .and_then(|p| p.data.active_variant.clone())
         .unwrap_or_else(|| "Base".to_string());
     if !active_variant.eq_ignore_ascii_case("Base") {
-        custom_fields.insert("active_variant".to_string(), active_variant);
+        base.custom_fields
+            .insert("active_variant".to_string(), active_variant);
     }
-    // Title-block fields beyond the four with their own metadata slot
-    // (#1080); `${DOCUMENTNUMBER}`, `${DRAWNBY}`, … read them from here.
-    for key in ["document_number", "drawn_by", "checked_by", "approved_by"] {
-        if let Some(value) = tb.get(key) {
-            custom_fields.insert(key.to_string(), value.clone());
-        }
+    base.project_parameters = Some(
+        owning_project
+            .map(|p| p.data.parameters.clone())
+            .unwrap_or_default(),
+    );
+    if let Some(project) = owning_project {
+        base.custom_fields
+            .insert("project_name".to_string(), project.data.name.clone());
     }
-    ProjectMetadata {
-        title: tb.get("title").cloned().unwrap_or_default(),
-        revision: tb.get("rev").cloned().unwrap_or_default(),
-        date: tb.get("date").cloned().unwrap_or_default(),
-        company: tb.get("company").cloned().unwrap_or_default(),
-        comments: [comment(1), comment(2), comment(3), comment(4)],
-        custom_fields,
-    }
+    base.for_sheet(&active_engine.document().title_block)
 }
 
 /// The export's page set + metadata + project netlist, alongside the stitch

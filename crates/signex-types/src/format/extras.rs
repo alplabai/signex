@@ -108,6 +108,13 @@ pub(in crate::format) struct SymbolExtras {
     pub(in crate::format) ref_font_family: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(in crate::format) val_font_family: Option<String>,
+    /// Library body-style tag (`2` = alternate / De Morgan). Written only
+    /// for a symbol showing the alternate body, so every file that has none
+    /// stays byte-identical. A value other than 1 or 2, or one that is
+    /// not an integer, is not a body this build knows; it loads as the normal body with a warning and is kept
+    /// verbatim in `Symbol.unknown` until the user picks a body.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(in crate::format) body_style: Option<toml::Value>,
     /// Library row this symbol was placed from and the row version it is
     /// pinned to (#1338). Declared in key order (`library_id`,
     /// `library_version`, `row_id`) because an older build re-saves them
@@ -161,6 +168,7 @@ impl Default for SymbolExtras {
             val_text: None,
             ref_font_family: None,
             val_font_family: None,
+            body_style: None,
             library_id: None,
             row_id: None,
             library_version: String::new(),
@@ -195,6 +203,7 @@ impl SymbolExtras {
             && self.val_text.is_none()
             && self.ref_font_family.is_none()
             && self.val_font_family.is_none()
+            && self.body_style.is_none()
             && self.library_id.is_none()
             && self.row_id.is_none()
             && self.library_version.is_empty()
@@ -232,10 +241,20 @@ impl SymbolExtras {
             val_text: s.val_text.clone().map(without_font_family),
             ref_font_family: s.ref_text.as_ref().and_then(|t| t.font_family.clone()),
             val_font_family: s.val_text.as_ref().and_then(|t| t.font_family.clone()),
+            body_style: (!s.body_style.is_normal())
+                .then(|| toml::Value::Integer(i64::from(s.body_style.tag()))),
             library_id: s.library_id,
             row_id: s.row_id,
             library_version: s.library_version.clone(),
-            unknown: s.unknown.clone(),
+            unknown: {
+                // A chosen body owns the key; a preserved unreadable value
+                // must not be written beside it.
+                let mut unknown = s.unknown.clone();
+                if !s.body_style.is_normal() {
+                    unknown.remove("body_style");
+                }
+                unknown
+            },
         }
     }
 }
@@ -282,6 +301,15 @@ pub(in crate::format) struct SheetExtras {
     /// so are gone after the next save.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(in crate::format) note_font_families: BTreeMap<String, String>,
+    /// Drawing placements by drawing uuid; only `"above"` is written, because
+    /// no entry means behind. Kept beside the drawings, not in them: a build
+    /// that predates the field drops unknown keys nested in the typed
+    /// `drawings` array on re-save but keeps unknown keys of this table
+    /// (builds since #658; v0.15.0 drops them).
+    /// Entries for drawings that no longer exist are ignored on load and so
+    /// are gone after the next save.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(in crate::format) drawing_placements: BTreeMap<String, String>,
     /// Frame settings (`[extras.sheet.frame]`); omitted at the default so a
     /// sheet that never changed them re-saves byte-identical.
     #[serde(default, skip_serializing_if = "FrameExtras::is_default")]
@@ -305,6 +333,7 @@ impl SheetExtras {
             && self.net_colors.is_empty()
             && self.font_family.is_none()
             && self.note_font_families.is_empty()
+            && self.drawing_placements.is_empty()
             && self.frame.is_default()
             && self.unknown.is_empty()
     }
@@ -346,6 +375,13 @@ impl SheetExtras {
                 .text_notes
                 .iter()
                 .filter_map(|note| Some((note.uuid.to_string(), note.font_family.clone()?)))
+                .collect(),
+            drawing_placements: s
+                .drawing_placements
+                .iter()
+                .filter(|(_, placement)| **placement == crate::schematic::DrawingPlacement::Above)
+                .filter(|(id, _)| s.drawings.iter().any(|d| d.uuid() == **id))
+                .map(|(id, _)| (id.to_string(), "above".to_string()))
                 .collect(),
             frame: FrameExtras {
                 settings: s.frame,
@@ -525,6 +561,23 @@ impl SheetExtras {
                     crate::theme::Color::parse_hex(hex)?,
                 ))
             })
+            .collect()
+    }
+}
+
+impl SheetExtras {
+    /// The placements of drawings that exist and sit above the circuit. A key
+    /// that is not a uuid, a value other than `"above"` and an entry for a
+    /// missing drawing are dropped: each means "behind".
+    pub(in crate::format) fn parsed_drawing_placements(
+        &self,
+    ) -> BTreeMap<Uuid, crate::schematic::DrawingPlacement> {
+        self.drawing_placements
+            .iter()
+            .filter(|(_, value)| value.as_str() == "above")
+            .filter_map(|(id, _)| Uuid::parse_str(id).ok())
+            .filter(|id| self.drawings.iter().any(|d| d.uuid() == *id))
+            .map(|id| (id, crate::schematic::DrawingPlacement::Above))
             .collect()
     }
 }

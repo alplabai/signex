@@ -44,12 +44,14 @@ impl SchematicCanvas<'_> {
             self.draw_wire_preview(&mut frame, bounds, cursor_pos, hotspot);
             self.draw_hotspot_marker(&mut frame, bounds, hotspot);
             self.draw_ghost_symbol(&mut frame, bounds, cursor_pos);
+            self.draw_placement_ghost(&mut frame, bounds, cursor_pos);
             self.draw_ghost_text(&mut frame, bounds, cursor_pos);
             self.draw_ghost_bus_entry(&mut frame, bounds, cursor_pos);
             self.draw_ghost_label(&mut frame, bounds, cursor_pos);
             self.draw_tool_chip(&mut frame, cursor_pos);
         }
 
+        self.draw_measure_result(&mut frame, bounds);
         self.draw_move_guides(&mut frame, state, bounds);
         self.draw_select_rect(&mut frame, state, bounds);
 
@@ -122,6 +124,7 @@ impl SchematicCanvas<'_> {
             || self.tool_preview.is_some()
             || self.ghost_label.is_some()
             || self.ghost_symbol.is_some()
+            || self.prefs.placement.is_some()
             || self.ghost_text.is_some()
             || !self.arc_points.is_empty()
             || !self.polyline_points.is_empty()
@@ -211,8 +214,10 @@ impl SchematicCanvas<'_> {
         // that DON'T already have a ghost preview of what's being
         // placed — the ghost shows the click target for those,
         // and doubling up with an X clutters the cursor.
-        let has_ghost =
-            self.ghost_label.is_some() || self.ghost_symbol.is_some() || self.ghost_text.is_some();
+        let has_ghost = self.ghost_label.is_some()
+            || self.ghost_symbol.is_some()
+            || self.ghost_text.is_some()
+            || self.prefs.placement.is_some();
         if let Some(ref label) = self.tool_preview
             && !has_ghost
         {
@@ -222,20 +227,14 @@ impl SchematicCanvas<'_> {
             // every tool. Keep only the tool-name chip.
             // Tool-name tag beside the marker. Dark text on a
             // semi-opaque light chip so it reads on any canvas bg.
-            let tag_x = cursor_pos.x + 14.0;
-            let tag_y = cursor_pos.y - 16.0;
-            let tag_w = (label.chars().count() as f32) * 7.0 + 10.0;
-            let tag_h = 16.0;
-            let chip = canvas::Path::rectangle(
-                iced::Point::new(tag_x - 2.0, tag_y - 2.0),
-                iced::Size::new(tag_w, tag_h),
-            );
+            let tag = super::hud_tag::layout(cursor_pos, label);
+            let chip = canvas::Path::rectangle(tag.chip.position(), tag.chip.size());
             frame.fill(&chip, Color::from_rgba(0.0, 0.0, 0.0, 0.65));
             frame.fill_text(canvas::Text {
                 content: label.clone(),
-                position: iced::Point::new(tag_x + 3.0, tag_y + 1.0),
+                position: tag.text_origin,
                 color: Color::from_rgba(1.0, 1.0, 1.0, 0.95),
-                size: iced::Pixels(11.0),
+                size: iced::Pixels(super::hud_tag::FONT_SIZE),
                 font: crate::render_config::IOSEVKA,
                 ..canvas::Text::default()
             });

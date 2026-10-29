@@ -5,7 +5,12 @@
 //! module.
 
 use super::super::*;
+use crate::styles::{Spacing, TypeScale};
 use iced::widget::column;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// Value-text colour for an input drawn on `bg`: white whenever it
 /// reaches 4.5:1 against `bg`, otherwise whichever of black / white
@@ -32,8 +37,8 @@ pub fn thin_sep<'a, M: 'a>(border_c: Color) -> Element<'a, M> {
 /// Section header: bold label + separator line.
 pub fn section_hdr<'a, M: 'a>(title: &str, text_c: Color, border_c: Color) -> Column<'a, M> {
     column![
-        container(text(title.to_string()).size(12).color(text_c))
-            .padding([6, 8])
+        container(text(title.to_string()).size(TS.label).color(text_c))
+            .padding([6.0, SP.m])
             .width(Length::Fill),
         container(Space::new())
             .height(1.0)
@@ -60,7 +65,7 @@ pub fn form_input_row<'a, M: 'a>(
             container(
                 container(
                     text(value.to_string())
-                        .size(11)
+                        .size(TS.body)
                         .color(text_on(input_bg))
                         .wrapping(iced::widget::text::Wrapping::None),
                 )
@@ -79,7 +84,7 @@ pub fn form_input_row<'a, M: 'a>(
                 ..container::Style::default()
             }),
         ]
-        .spacing(8.0)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center),
     )
     .padding([2, PROPERTY_ROW_PAD_X])
@@ -133,7 +138,7 @@ pub fn form_mm_edit_row<'a>(
             iced::widget::text_input("", &text_value)
                 .on_input(move |s| PanelMsg::CustomPaperEdgeTyping(edge, s))
                 .on_submit(PanelMsg::CommitCustomPaperEdge(edge))
-                .size(11)
+                .size(TS.body)
                 .padding([3, 6])
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
                 .style(move |_: &Theme, _| iced::widget::text_input::Style {
@@ -149,7 +154,7 @@ pub fn form_mm_edit_row<'a>(
                     selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
                 }),
         ]
-        .spacing(8.0)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center),
     )
     .padding([2, PROPERTY_ROW_PAD_X])
@@ -173,33 +178,10 @@ where
             property_label(label.to_string(), label_c),
             iced::widget::pick_list(options, Some(selected), on_change)
                 .text_size(11)
-                .padding([2, 6])
+                .padding([SP.xs, 6.0])
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Form row: label | custom widget.
-#[expect(
-    dead_code,
-    reason = "form-row builder kept for panels still being migrated to the shared rows"
-)]
-pub fn form_label_row<'a>(
-    label: &str,
-    control: Row<'a, PanelMsg>,
-    label_c: Color,
-) -> Element<'a, PanelMsg> {
-    container(
-        row![
-            property_label(label.to_string(), label_c),
-            container(control).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
-        ]
-        .spacing(8.0)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center),
     )
     .padding([2, PROPERTY_ROW_PAD_X])
@@ -220,63 +202,19 @@ pub fn form_check_row<'a>(
             row![
                 iced::widget::checkbox(checked)
                     .on_toggle(move |_| msg.clone())
-                    .size(14)
-                    .spacing(4),
+                    .size(TS.heading)
+                    .spacing(SP.s),
                 text(if checked { "On" } else { "Off" })
-                    .size(11)
+                    .size(TS.body)
                     .color(if checked { Color::WHITE } else { label_c }),
             ]
-            .spacing(8)
+            .spacing(SP.m)
             .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
-        .spacing(8.0)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center),
     )
     .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Form row: label | pick_list for grid size presets (2.54 mm multiples).
-#[expect(
-    dead_code,
-    reason = "grid-size preset row kept for panels still being migrated to the shared rows"
-)]
-pub fn form_grid_size_row(current_mm: f32, label_c: Color) -> Element<'static, PanelMsg> {
-    use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZES_MM};
-    // Find the label that matches the current value (fallback to first).
-    let selected: Option<&'static str> = GRID_SIZES_MM
-        .iter()
-        .zip(GRID_SIZE_LABELS.iter())
-        .find(|(sz, _)| (**sz - current_mm).abs() < 1e-4)
-        .map(|(_, lbl)| *lbl);
-    container(
-        row![
-            container(
-                text("Visible Grid".to_string())
-                    .size(11)
-                    .color(label_c)
-                    .wrapping(iced::widget::text::Wrapping::None),
-            )
-            .width(LABEL_W)
-            .clip(true),
-            iced::widget::pick_list(GRID_SIZE_LABELS, selected, |lbl: &'static str| {
-                // Map label back to mm value
-                let mm = GRID_SIZES_MM
-                    .iter()
-                    .zip(GRID_SIZE_LABELS.iter())
-                    .find(|(_, l)| **l == lbl)
-                    .map(|(v, _)| *v)
-                    .unwrap_or(2.54);
-                PanelMsg::SetGridSize(mm)
-            },)
-            .text_size(11)
-            .width(Length::Fill),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, 8])
     .width(Length::Fill)
     .into()
 }
@@ -327,7 +265,7 @@ pub fn form_grid_row(
     .width(Length::Fill);
 
     let label_widget = text(label.to_string())
-        .size(11)
+        .size(TS.body)
         .color(label_c)
         .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
         .wrapping(iced::widget::text::Wrapping::None);
@@ -338,11 +276,11 @@ pub fn form_grid_row(
             label_widget,
             iced::widget::checkbox(active)
                 .on_toggle(move |_| on_toggle.clone())
-                .size(12)
-                .spacing(4),
+                .size(TS.label)
+                .spacing(SP.s),
             container(pick).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center)
         .into()
     } else {
@@ -351,7 +289,7 @@ pub fn form_grid_row(
             label_widget,
             container(pick).width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center)
         .into()
     };
@@ -374,25 +312,25 @@ pub fn form_check_row_shortcut<'a>(
     container(
         row![
             text(label.to_string())
-                .size(11)
+                .size(TS.body)
                 .color(label_c)
                 .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
                 .wrapping(iced::widget::text::Wrapping::Word),
             row![
                 iced::widget::checkbox(value)
                     .on_toggle(move |_| on_toggle.clone())
-                    .size(12)
-                    .spacing(4),
+                    .size(TS.label)
+                    .spacing(SP.s),
                 Space::new().width(Length::Fill),
                 text(shortcut_owned)
                     .size(9)
                     .color(label_c)
                     .wrapping(iced::widget::text::Wrapping::None),
             ]
-            .spacing(4)
+            .spacing(SP.s)
             .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
     .padding([2, PROPERTY_ROW_PAD_X])
@@ -414,13 +352,13 @@ pub fn form_font_link_row<'a>(
     container(
         row![
             text(label)
-                .size(11)
+                .size(TS.body)
                 .color(label_c)
                 .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
                 .wrapping(iced::widget::text::Wrapping::None),
             iced::widget::button(
                 text(summary)
-                    .size(11)
+                    .size(TS.body)
                     .color(Color::from_rgb(0.35, 0.7, 1.0))
                     .width(Length::Fill),
             )
@@ -442,7 +380,7 @@ pub fn form_font_link_row<'a>(
                 }
             }),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .width(Length::Fill)
         .align_y(iced::Alignment::Center),
     )
@@ -472,49 +410,52 @@ pub fn canvas_font_popup<'a>(
     let size_input = NumberInput::new(&current_size_px, 6.0..=36.0, PanelMsg::SetCanvasFontSize)
         .step(1.0)
         .width(Length::Fill)
-        .padding(4);
+        .padding(SP.s);
 
     container(
         column![
             row![
-                text("Canvas Font Settings").size(11).color(label_c),
+                text("Canvas Font Settings").size(TS.body).color(label_c),
                 Space::new().width(Length::Fill),
-                iced::widget::button(text("Close").size(10))
+                iced::widget::button(text("Close").size(TS.caption))
                     .on_press(PanelMsg::CloseCanvasFontPopup)
-                    .padding([2, 6])
+                    .padding([SP.xs, 6.0])
             ]
             .align_y(iced::Alignment::Center),
             row![
-                text("Family").size(10).color(label_c).width(56),
+                text("Family").size(TS.caption).color(label_c).width(56),
                 family_pick,
             ]
-            .spacing(8)
+            .spacing(SP.m)
             .align_y(iced::Alignment::Center),
-            row![text("Size").size(10).color(label_c).width(56), size_input,]
-                .spacing(8)
-                .align_y(iced::Alignment::Center),
             row![
-                text("Style").size(10).color(label_c).width(56),
+                text("Size").size(TS.caption).color(label_c).width(56),
+                size_input,
+            ]
+            .spacing(SP.m)
+            .align_y(iced::Alignment::Center),
+            row![
+                text("Style").size(TS.caption).color(label_c).width(56),
                 row![
                     iced::widget::checkbox(bold)
                         .on_toggle(PanelMsg::SetCanvasFontBold)
-                        .size(12)
-                        .spacing(4),
-                    text("Bold").size(10).color(label_c),
+                        .size(TS.label)
+                        .spacing(SP.s),
+                    text("Bold").size(TS.caption).color(label_c),
                 ]
-                .spacing(4)
+                .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
                 row![
                     iced::widget::checkbox(italic)
                         .on_toggle(PanelMsg::SetCanvasFontItalic)
-                        .size(12)
-                        .spacing(4),
-                    text("Italic").size(10).color(label_c),
+                        .size(TS.label)
+                        .spacing(SP.s),
+                    text("Italic").size(TS.caption).color(label_c),
                 ]
-                .spacing(4)
+                .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
             ]
-            .spacing(12)
+            .spacing(SP.l)
             .align_y(iced::Alignment::Center),
             text("Applies immediately to canvas text rendering.")
                 .size(9)
@@ -522,7 +463,7 @@ pub fn canvas_font_popup<'a>(
         ]
         .spacing(6),
     )
-    .padding([6, 8])
+    .padding([6.0, SP.m])
     .style(move |_: &Theme| iced::widget::container::Style {
         background: Some(Background::Color(input_bg)),
         border: Border {
@@ -532,45 +473,6 @@ pub fn canvas_font_popup<'a>(
         },
         ..Default::default()
     })
-    .width(Length::Fill)
-    .into()
-}
-
-/// Form row: label | NumberInput (iced_aw) with step/bounds.
-#[expect(
-    dead_code,
-    reason = "NumberInput row kept for panels still being migrated to the shared rows"
-)]
-fn form_number_row<'a, T>(
-    label: &str,
-    value: T,
-    bounds: impl std::ops::RangeBounds<T> + 'a,
-    step: T,
-    on_change: impl Fn(T) -> PanelMsg + 'static + Clone,
-    label_c: Color,
-) -> Element<'a, PanelMsg>
-where
-    T: num_traits::Num
-        + num_traits::NumAssignOps
-        + PartialOrd
-        + std::fmt::Display
-        + std::str::FromStr
-        + Clone
-        + num_traits::Bounded
-        + 'static,
-{
-    container(
-        row![
-            property_label(label.to_string(), label_c),
-            NumberInput::new(&value, bounds, on_change)
-                .step(step)
-                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-                .padding(4),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
 }
@@ -587,11 +489,11 @@ pub fn form_edit_row<'a>(
             property_label(label.to_string(), label_c),
             iced::widget::text_input("", value)
                 .on_input(on_input)
-                .size(11)
-                .padding(4)
+                .size(TS.body)
+                .padding(SP.s)
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
-        .spacing(8.0)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center),
     )
     .padding([2, PROPERTY_ROW_PAD_X])
@@ -601,8 +503,8 @@ pub fn form_edit_row<'a>(
 
 /// Standalone label row (no value, used before segmented controls).
 pub fn form_label<'a, M: 'a>(label: &str, label_c: Color) -> Element<'a, M> {
-    container(text(label.to_string()).size(11).color(label_c))
-        .padding([4, 8])
+    container(text(label.to_string()).size(TS.body).color(label_c))
+        .padding([SP.s, SP.m])
         .width(Length::Fill)
         .into()
 }
@@ -617,7 +519,7 @@ pub fn font_style_row<'a>(
     let btn = |glyph: &'static str, style: iced::font::Weight| -> Element<'static, PanelMsg> {
         iced::widget::button(
             text(glyph.to_string())
-                .size(12)
+                .size(TS.label)
                 .color(primary)
                 .font(iced::Font {
                     weight: style,
@@ -626,7 +528,7 @@ pub fn font_style_row<'a>(
                 .align_x(iced::alignment::Horizontal::Center),
         )
         .width(Length::Fill)
-        .padding([4, 6])
+        .padding([SP.s, 6.0])
         .on_press(PanelMsg::Noop)
         .style(move |_: &Theme, status: iced::widget::button::Status| {
             let hovered = matches!(status, iced::widget::button::Status::Hovered);
@@ -654,7 +556,7 @@ pub fn font_style_row<'a>(
             btn("U", iced::font::Weight::Normal),
             btn("T", iced::font::Weight::Normal),
         ]
-        .spacing(2.0)
+        .spacing(SP.xs)
         .width(Length::Fill),
     )
     .padding([2, PROPERTY_ROW_PAD_X])

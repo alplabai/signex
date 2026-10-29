@@ -26,17 +26,16 @@ use crate::app::state::net_class_styles::{
     ProjectKey, ResolveFailed, ResolvedProject, ResolvedStyles,
 };
 use crate::app::state::project_case::fold_of;
-use crate::app::state::scope;
 use crate::app::state::{DocumentState, ProjectId};
 
 use super::Signex;
 
 /// A project with open sheets, and the key its resolution is cached under.
-struct PlannedProject {
-    project: ProjectId,
-    key: ProjectKey,
-    open_paths: Vec<PathBuf>,
-    project_dir: PathBuf,
+pub(in crate::app) struct PlannedProject {
+    pub(in crate::app) project: ProjectId,
+    pub(in crate::app) key: ProjectKey,
+    pub(in crate::app) open_paths: Vec<PathBuf>,
+    pub(in crate::app) project_dir: PathBuf,
 }
 
 /// Everything a worker needs to stitch one project: owned, so it can leave
@@ -106,7 +105,7 @@ fn resolve_project(open: &OpenSheets, job: ProjectJob) -> ResolvedProject {
 /// Stamp over every open sheet's identity and connectivity revision. Moves on
 /// any edit that can change a net, and on a sheet opening, closing or being
 /// replaced; not on an edit that leaves connectivity alone.
-fn connectivity_stamp(document: &DocumentState) -> u64 {
+pub(in crate::app) fn connectivity_stamp(document: &DocumentState) -> u64 {
     document.engines.iter().fold(0u64, |acc, (path, engine)| {
         let mut hasher = DefaultHasher::new();
         (path, engine.instance_id(), engine.connectivity_revision()).hash(&mut hasher);
@@ -115,15 +114,14 @@ fn connectivity_stamp(document: &DocumentState) -> u64 {
 }
 
 /// Every project that owns an open sheet, with the key to resolve it under.
-fn plan_projects(document: &DocumentState) -> Vec<PlannedProject> {
+pub(in crate::app) fn plan_projects(document: &DocumentState) -> Vec<PlannedProject> {
     struct Open {
         stamp: u64,
         paths: Vec<PathBuf>,
     }
-    let refs = document.child_sheet_refs();
     let mut open: std::collections::HashMap<ProjectId, Open> = Default::default();
     for (path, engine) in &document.engines {
-        let Some(project) = scope::project_owning_sheet(&document.projects, &refs, path) else {
+        let Some(project) = document.document_project(path) else {
             continue;
         };
         let mut hasher = DefaultHasher::new();
@@ -231,7 +229,11 @@ impl Signex {
             self.apply_net_class_styles(&Ok(resolved));
             return Task::none();
         }
-        let projects = job.jobs.iter().map(|j| j.project).collect::<Vec<_>>();
+        let projects = job
+            .jobs
+            .iter()
+            .map(|j| (j.project, j.key.clone()))
+            .collect::<Vec<_>>();
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || job.run())
@@ -262,8 +264,30 @@ impl Signex {
             }
         };
         let applied = self.ui_state.net_class_styles.apply(resolved);
+        // The net index stitches the same project: each warning is said once,
+        // whichever of the two meets it first.
         for warning in &applied.warnings {
-            crate::diagnostics::log_warning(warning);
+            let owner = resolved
+                .projects
+                .iter()
+                .find(|p| p.warnings.contains(warning))
+                .map(|p| p.project);
+            let reported = &mut self.document_state.net_nav.reported;
+            if owner.is_none_or(|project| reported.claim(project, warning)) {
+                crate::diagnostics::log_warning(warning);
+            }
+        }
+        // Only a project the job stitched says what is currently wrong with
+        // it; one without classes was not, and the index owns its warnings.
+        for entry in resolved
+            .projects
+            .iter()
+            .filter(|e| !e.key.classes.is_empty())
+        {
+            self.document_state
+                .net_nav
+                .reported
+                .settle(entry.project, &entry.warnings);
         }
         if applied.styles_changed {
             self.clear_schematic_content_caches();
@@ -279,6 +303,22 @@ impl Signex {
         }
     }
 
+    /// The failure a dead worker would report for `project`'s current request,
+    /// for a regression test that cannot name a [`ProjectKey`].
+    #[doc(hidden)]
+    #[must_use]
+    pub fn net_class_failure_of_current_request(
+        &self,
+        project: ProjectId,
+        reason: &str,
+    ) -> Option<ResolveFailed> {
+        let key = self.ui_state.net_class_styles.wanted_key(project)?.clone();
+        Some(ResolveFailed {
+            projects: vec![(project, key)],
+            reason: reason.to_string(),
+        })
+    }
+
     /// Resolve and apply the net-class styles on this thread, for a regression
     /// test that has no async runtime to run the spawned task.
     #[doc(hidden)]
@@ -286,7 +326,6 @@ impl Signex {
         // The update that came before planned a task this test never ran;
         // treat it as lost so the same inputs are planned again.
         self.ui_state.net_class_styles.give_up_pending();
-        self.ui_state.net_class_styles.reopen_gate();
         if let Some(job) = self.plan_net_class_refresh() {
             let resolved = job.run();
             self.apply_net_class_styles(&Ok(resolved));

@@ -28,6 +28,7 @@ fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
         mirror_x: false,
         mirror_y: false,
         unit: 1,
+        body_style: Default::default(),
         is_power: false,
         ref_text: None,
         val_text: None,
@@ -71,6 +72,7 @@ fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
         title_block: HashMap::new(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
+        drawing_placements: Default::default(),
         frame: Default::default(),
         font_family: None,
     }
@@ -429,7 +431,7 @@ fn an_undocked_pcb_window_moves_its_own_camera_not_the_main_one() {
         title: "board".to_string(),
         result: Ok(Box::new(empty_pcb_board())),
     }));
-    let window_id = iced::window::Id::unique();
+    let window_id = undock_active_tab(&mut app);
     let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
         path,
         id: window_id,
@@ -481,7 +483,7 @@ fn an_undocked_pcb_window_still_centres_while_the_main_window_shows_a_schematic(
         title: "board".to_string(),
         result: Ok(Box::new(empty_pcb_board())),
     }));
-    let window_id = iced::window::Id::unique();
+    let window_id = undock_active_tab(&mut app);
     let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
         path,
         id: window_id,
@@ -529,7 +531,7 @@ fn an_event_from_a_closed_pcb_tabs_window_leaves_the_main_view_alone() {
         title: "board".to_string(),
         result: Ok(Box::new(empty_pcb_board())),
     }));
-    let window_id = iced::window::Id::unique();
+    let window_id = undock_active_tab(&mut app);
     let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
         path,
         id: window_id,
@@ -581,7 +583,7 @@ fn an_undocked_pcb_canvas_follows_the_grid_toggle_and_is_dropped_on_reattach() {
         title: "board".to_string(),
         result: Ok(Box::new(empty_pcb_board())),
     }));
-    let window_id = iced::window::Id::unique();
+    let window_id = undock_active_tab(&mut app);
     let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
         path,
         id: window_id,
@@ -634,7 +636,7 @@ fn a_point_hovered_in_an_undocked_window_does_not_centre_the_main_view() {
     let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
     app.interaction_state.active_canvas().set_viewport(VIEWPORT);
     let other = add_second_sheet(&mut app);
-    let window_id = iced::window::Id::unique();
+    let window_id = undock_active_tab(&mut app);
     let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
         path: other,
         id: window_id,
@@ -667,7 +669,7 @@ fn home_in_an_undocked_window_centres_that_window_not_the_main_one() {
     let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
     app.interaction_state.active_canvas().set_viewport(VIEWPORT);
     let other = add_second_sheet(&mut app);
-    let window_id = iced::window::Id::unique();
+    let window_id = undock_active_tab(&mut app);
     let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
         path: other,
         id: window_id,
@@ -731,4 +733,12 @@ fn zoom_to_all_objects_frames_object_extents_not_the_paper() {
     // Object extents plus the 10 mm margin: x 290..330, far smaller than A4.
     assert!((rect.x - 290.0).abs() < 1e-3, "{rect:?}");
     assert!((rect.width - 40.0).abs() < 1e-3, "{rect:?}");
+}
+
+/// Requests the undock the way the menu does, so the window entry exists
+/// before the OS-open callback (`UndockedTabOpened`) lands, as in the app.
+fn undock_active_tab(app: &mut Signex) -> iced::window::Id {
+    let idx = app.document_state.active_tab;
+    let _ = app.update(Message::Window(WindowMsg::UndockTab(idx)));
+    *app.ui_state.windows.keys().next().expect("undocked window")
 }

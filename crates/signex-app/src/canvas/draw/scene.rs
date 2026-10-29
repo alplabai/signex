@@ -1,6 +1,16 @@
 use super::super::*;
 
 impl SchematicCanvas<'_> {
+    /// Whether the retained content layer was drawn at the camera as it is now,
+    /// within a sub-pixel pan and a negligible zoom.
+    pub(in crate::canvas) fn content_cache_fits_camera(&self) -> bool {
+        let cam = self.camera();
+        let (x, y, scale) = self.content_cache_camera.get();
+        (x - cam.offset.x).abs() < 0.01
+            && (y - cam.offset.y).abs() < 0.01
+            && (scale - cam.scale).abs() < 0.0001
+    }
+
     /// Layer 2 — the schematic content (cached unless panning/dragging).
     pub(in crate::canvas) fn draw_content(
         &self,
@@ -21,10 +31,7 @@ impl SchematicCanvas<'_> {
         // place world-anchored overlays. `view` now reads
         // `CanvasSlot::live_camera()` off the same cell `draw` reads,
         // so there is nothing to publish and nothing that can lag a frame.
-        let (cached_offset_x, cached_offset_y, cached_scale) = self.content_cache_camera.get();
-        let camera_matches_cache = (cached_offset_x - cam.offset.x).abs() < 0.01
-            && (cached_offset_y - cam.offset.y).abs() < 0.01
-            && (cached_scale - cam.scale).abs() < 0.0001;
+        let camera_matches_cache = self.content_cache_fits_camera();
         // The frame is local; cull against the widget size, not its
         // window-space origin.
         let bounds = crate::schematic_runtime::frame_local_bounds(bounds);
@@ -93,7 +100,7 @@ impl SchematicCanvas<'_> {
 
         let static_layer = {
             let mut layers = self.drag_layers.borrow_mut();
-            layers.static_is_stale(
+            layers.refresh_static_key(
                 &super::super::drag_layers::StaticView {
                     transform: &transform,
                     colors,
@@ -128,7 +135,7 @@ impl SchematicCanvas<'_> {
     }
 
     /// Draw `snapshot` through the camera-independent scene cache.
-    fn render_content_scene(
+    pub(in crate::canvas) fn render_content_scene(
         &self,
         frame: &mut canvas::Frame,
         snapshot: &crate::schematic_runtime::SchematicRenderSnapshot,
@@ -145,7 +152,15 @@ impl SchematicCanvas<'_> {
             focus_set,
             self.scene_overrides(),
         ) {
-            crate::schematic_runtime::draw_built_scene(frame, scene, transform);
+            match self.mode {
+                ContentMode::Cpu => {
+                    crate::schematic_runtime::draw_built_scene(frame, scene, transform);
+                }
+                // The GPU shader beneath draws everything else.
+                ContentMode::GpuOverlay => {
+                    crate::schematic_runtime::draw_rotated_text_fallback(frame, scene, transform);
+                }
+            }
         }
     }
 
@@ -351,8 +366,10 @@ impl SchematicCanvas<'_> {
         // travels with the dragged items instead of staying behind.
         // ERC markers live on this layer too, so it must draw whenever there
         // is a marker, not only while something is selected (#1333).
-        if self.selection_layer_needed()
-            && let Some(snapshot) = effective_snapshot
+        // Locked symbols carry a padlock, so they need the layer too (#1250).
+        if let Some(snapshot) = effective_snapshot
+            && (self.selection_layer_needed()
+                || crate::schematic_runtime::lock_indicator::has_locked_symbol(snapshot))
         {
             // During a drag we can't rely on overlay_cache — it must redraw
             // with the shifted positions every frame.
@@ -370,12 +387,20 @@ impl SchematicCanvas<'_> {
                     &self.prefs.canvas_colors,
                     &self.designators,
                 );
+                crate::schematic_runtime::lock_indicator::draw_lock_indicators(
+                    frame,
+                    snapshot,
+                    &transform,
+                    &self.prefs.canvas_colors,
+                    &self.designators,
+                );
                 let erc_overlay: Vec<crate::schematic_runtime::overlay::ErcMarker> = self
                     .erc_markers
                     .iter()
                     .map(|marker| crate::schematic_runtime::overlay::ErcMarker {
                         x_mm: marker.x,
                         y_mm: marker.y,
+                        net_level: marker.net_level,
                         severity: match marker.severity {
                             ErcMarkerSeverity::Error => {
                                 crate::schematic_runtime::overlay::ErcSeverity::Error

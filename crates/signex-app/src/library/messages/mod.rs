@@ -12,8 +12,8 @@
 use std::path::PathBuf;
 
 use signex_library::{
-    AlternateStatus, BodyShape, ComponentClass, ComponentSummary, DistributorSource,
-    LifecycleState, PrimitiveRef, SimKind, SimModel,
+    AlternateStatus, BodyShape, ComponentClass, DistributorSource, LifecycleState, PrimitiveRef,
+    SimKind, SimModel,
 };
 use uuid::Uuid;
 
@@ -28,8 +28,12 @@ pub type Version = u32;
 
 mod datasheet;
 mod library_message;
+mod placed_part;
+mod range_filter;
 pub use datasheet::{DatasheetMsg, PickedFile, PickedPdf};
 pub use library_message::{LibraryMessage, ResolvedPlacement, ResolvedSymbolChoice};
+pub use placed_part::{PlacedPartAction, PlacedPartMsg, PlacedPartTarget};
+pub use range_filter::{RangeBound, RangeFilterMsg};
 
 /// User choice from the close-library confirmation modal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -234,7 +238,7 @@ pub enum EditorMsg {
         value: String,
     },
     /// Live-update the per-row edit buffer for a `ParamValue::Number`
-    /// row. The buffer lives on `ComponentEditorState.params_edit_buf`;
+    /// row. The buffer lives on `ComponentPreviewState.params_edit_buf`;
     /// the value is committed via `ParamCommitNumber`.
     ParamSetNumberBuf {
         name: String,
@@ -249,9 +253,26 @@ pub enum EditorMsg {
     ParamSetMeasurementBuf {
         name: String,
         buf: String,
+        /// The class-template slot behind the row, if any.
+        slot: Option<signex_library::ParamSlot>,
     },
     /// Commit the live buffer for a `ParamValue::Measurement` row.
     ParamCommitMeasurement {
+        name: String,
+        unit: String,
+    },
+    /// The user picked an SI prefix for a `ParamValue::Measurement` row.
+    /// `unit` is the slot's unit token; the pick commits the buffered
+    /// number (or the stored one) in that prefix.
+    ParamPrefixPicked {
+        name: String,
+        unit: String,
+        prefix: signex_types::quantity::SiPrefix,
+        slot: Option<signex_library::ParamSlot>,
+    },
+    /// The user picked a unit for a custom measurement row (a template
+    /// slot fixes its own unit). `unit` is the unit's canonical token.
+    ParamUnitPicked {
         name: String,
         unit: String,
     },
@@ -572,8 +593,10 @@ pub enum PickerMsg {
     /// Left-dock library panel search box edited.
     PanelSearchChanged(String),
     FilterChanged(String),
-    SelectComponent(ComponentSummary),
+    SelectComponent(uuid::Uuid),
     PlaceSelected,
+    /// A range filter on a parameter column of the picker's list.
+    RangeFilter(RangeFilterMsg),
 }
 
 /// Edit Component Details modal sub-message tree — keeps
@@ -587,6 +610,7 @@ pub enum BrowserEditMsg {
     SetDatasheetUrl(String),
     SetManufacturer(String),
     SetMpn(String),
+    SetDescription(String),
     /// Live edit of a parameter row's value or unit. The dispatcher
     /// keeps the buffer keyed by `key`; commit happens on
     /// `BrowserEditMsg::CommitParam`.
@@ -594,9 +618,16 @@ pub enum BrowserEditMsg {
         key: String,
         value: String,
     },
+    /// The user picked a unit for a parameter row: its canonical token,
+    /// or an empty string for no unit. Applied to the draft at once.
     SetParamUnit {
         key: String,
         unit: String,
+    },
+    /// The user picked an SI prefix for a measurement row's number.
+    ParamPrefixPicked {
+        key: String,
+        prefix: signex_types::quantity::SiPrefix,
     },
     /// Commit the live param buffer for `key` to the draft.
     CommitParam {
@@ -635,6 +666,8 @@ pub enum BrowserEditMsg {
 pub enum PrimitivePickerMsg {
     /// Live update of the filter text input.
     SetFilter(String),
+    /// The list scrolled to this offset (pixels from the top).
+    Scrolled(f32),
     /// Commit a picked `PrimitiveRef` — applies to the picker's
     /// configured target.
     Pick(PrimitiveRef),
@@ -662,6 +695,9 @@ pub enum SettingsMsg {
         connected_label: Option<String>,
         error: Option<String>,
     },
+    /// Outcome of the background keyring delete of a token that a
+    /// cancelled DigiKey flow stored before the cancel landed.
+    DigiKeyStaleTokenRemoved(Result<(), String>),
     MouserApiKeyChanged(String),
     MouserTest,
     MouserTestResult(Result<(), String>),

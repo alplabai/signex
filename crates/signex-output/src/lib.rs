@@ -27,7 +27,7 @@ pub use bom::{
 };
 pub use erc::{
     ErcReportError, ErcReportExporter, ErcReportFormat, ErcReportOptions, ErcReportOutput,
-    ErcReportRow, ErcReportSeverity,
+    ErcReportRow, ErcReportRuleSet, ErcReportSeverity,
 };
 pub use netlist::{NetlistExporter, NetlistFormat, NetlistOptions, NetlistOutput};
 pub use pdf::{
@@ -37,7 +37,8 @@ pub use pdf::{
     check_page_range, parse_custom_edge_mm, parse_mm, parse_percent,
 };
 pub use preview::{
-    MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewRasterizer, preview_raster_size,
+    MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewPageInfo, PreviewRasterizer,
+    preview_raster_size,
 };
 pub use substitution::{SubstitutionContext, resolve};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
@@ -170,7 +171,12 @@ pub struct SheetSnapshot {
 
 /// Title-block / project-file metadata used to resolve `${TITLE}`, `${REV}`,
 /// etc. and to stamp the exported artifact.
-#[derive(Debug, Clone, Default)]
+///
+/// `title`..`comments` and the title-block entries of `custom_fields` are the
+/// values for one sheet: the project's parameters with that sheet's own
+/// `title_block` laid over them ([`Self::for_sheet`]). `project_parameters`
+/// keeps the project-level values alone, so another sheet can start from them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProjectMetadata {
     pub title: String,
     pub revision: String,
@@ -178,6 +184,87 @@ pub struct ProjectMetadata {
     pub company: String,
     pub comments: [String; 4],
     pub custom_fields: std::collections::BTreeMap<String, String>,
+    /// The project's parameters (`.snxprj` `parameters`), before any sheet
+    /// override. `None` for metadata built by hand, whose own values then
+    /// stand in for the project's.
+    pub project_parameters: Option<std::collections::BTreeMap<String, String>>,
+}
+
+/// Entries of `custom_fields` that describe the export, not a title-block
+/// value; a sheet's metadata keeps them from the metadata it derives from.
+const EXPORT_FIELDS: [&str; 2] = ["active_variant", "project_name"];
+
+impl ProjectMetadata {
+    /// Metadata from title-block `values`: the keys `title`, `rev`, `date`,
+    /// `company` and `comment1`-`comment4` fill their slots; every other key
+    /// (`document_number`, `drawn_by`, user parameters, ...) is a custom field.
+    pub fn from_values(values: &std::collections::BTreeMap<String, String>) -> Self {
+        let mut out = Self::default();
+        for (key, value) in values {
+            let slot = match key.as_str() {
+                "title" => &mut out.title,
+                "rev" => &mut out.revision,
+                "date" => &mut out.date,
+                "company" => &mut out.company,
+                "comment1" => &mut out.comments[0],
+                "comment2" => &mut out.comments[1],
+                "comment3" => &mut out.comments[2],
+                "comment4" => &mut out.comments[3],
+                _ => {
+                    out.custom_fields.insert(key.clone(), value.clone());
+                    continue;
+                }
+            };
+            *slot = value.clone();
+        }
+        out
+    }
+
+    /// The title-block values this metadata holds, keyed as a sheet's
+    /// `title_block` (the inverse of [`Self::from_values`]).
+    fn values(&self) -> std::collections::BTreeMap<String, String> {
+        let mut out: std::collections::BTreeMap<String, String> = self
+            .custom_fields
+            .iter()
+            .filter(|(k, _)| !EXPORT_FIELDS.contains(&k.as_str()))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        for (key, value) in [
+            ("title", &self.title),
+            ("rev", &self.revision),
+            ("date", &self.date),
+            ("company", &self.company),
+        ] {
+            out.insert(key.to_string(), value.clone());
+        }
+        for (n, value) in self.comments.iter().enumerate() {
+            out.insert(format!("comment{}", n + 1), value.clone());
+        }
+        out
+    }
+
+    /// This metadata for one sheet: the project parameters, each overridden by
+    /// the sheet's `title_block` value when that is not empty (an empty value
+    /// falls back to the project's).
+    pub fn for_sheet(&self, sheet_title_block: &std::collections::HashMap<String, String>) -> Self {
+        let mut values = self
+            .project_parameters
+            .clone()
+            .unwrap_or_else(|| self.values());
+        for (key, value) in sheet_title_block {
+            if !value.is_empty() {
+                values.insert(key.clone(), value.clone());
+            }
+        }
+        let mut out = Self::from_values(&values);
+        for key in EXPORT_FIELDS {
+            if let Some(value) = self.custom_fields.get(key) {
+                out.custom_fields.insert(key.to_string(), value.clone());
+            }
+        }
+        out.project_parameters = self.project_parameters.clone();
+        out
+    }
 }
 
 #[derive(Debug, Error)]

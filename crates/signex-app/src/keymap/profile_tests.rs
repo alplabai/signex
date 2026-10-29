@@ -315,14 +315,14 @@ fn back_up_preserves_the_original_profiles() {
 
 /// The double-Apply hazard: the second Apply would copy the already
 /// overwritten file over the backup and destroy the only surviving copy
-/// of the user's profiles. An existing `.bak` is the original — never
-/// clobber it.
+/// of the user's profiles. An existing `.bak` is never clobbered — and
+/// (#1378) it no longer stops the current file being backed up either:
+/// the new copy goes to the next free slot.
 #[test]
-fn back_up_refuses_to_overwrite_an_existing_backup() {
+fn back_up_never_overwrites_an_existing_backup_and_still_makes_a_new_one() {
     let tmp = tempfile::tempdir().unwrap();
     let path = config_path_for_dir(tmp.path());
-    let bak = back_up_profile_file_at(&path).unwrap();
-    assert!(bak.is_none(), "nothing to back up yet");
+    assert!(back_up_profile_file_at(&path).unwrap().is_none());
 
     let mut bak_name = path.file_name().unwrap().to_os_string();
     bak_name.push(".bak");
@@ -334,20 +334,33 @@ fn back_up_refuses_to_overwrite_an_existing_backup() {
     let rescued = std::fs::read(&path).unwrap();
     std::fs::rename(&path, &bak_path).unwrap();
     seed_saved_profiles(&path, "built-in-fallback");
-    let clobberer = std::fs::read(&path).unwrap();
-    assert_ne!(rescued, clobberer, "fixture must differ from the backup");
+    let current = std::fs::read(&path).unwrap();
+    assert_ne!(rescued, current, "fixture must differ from the backup");
 
-    let result = back_up_profile_file_at(&path).unwrap();
+    let second = back_up_profile_file_at(&path)
+        .unwrap()
+        .expect("a new backup is made even though a .bak exists");
 
-    assert!(
-        result.is_none(),
-        "an existing backup must be reported as nothing-to-do, got {result:?}"
-    );
+    assert_ne!(second, bak_path, "the existing backup must not be reused");
     assert_eq!(
         std::fs::read(&bak_path).unwrap(),
         rescued,
         "the existing backup was clobbered — the user's only surviving copy is gone"
     );
+    assert_eq!(std::fs::read(&second).unwrap(), current);
+}
+
+/// A name that cannot be stat'ed is not "absent". A path whose parent is
+/// a regular file fails with `NotADirectory`, not `NotFound`.
+#[cfg(unix)]
+#[test]
+fn back_up_surfaces_a_stat_error_instead_of_treating_the_file_as_absent() {
+    let tmp = tempfile::tempdir().unwrap();
+    let blocker = tmp.path().join("not-a-dir");
+    std::fs::write(&blocker, b"x").unwrap();
+    let path = blocker.join("keyboard_shortcuts.toml");
+
+    assert!(back_up_profile_file_at(&path).is_err());
 }
 
 /// No file, nothing to preserve — and no stray `.bak` left behind.
@@ -425,13 +438,12 @@ fn the_users_profiles_survive_an_apply_after_a_failed_load() {
         "the backup must be the user's original file, byte for byte"
     );
 
-    // Act again — the second Apply, which is what used to be survivable
-    // only by accident.
-    assert_eq!(
-        back_up_profile_file_at(&path).unwrap(),
-        None,
-        "a second Apply must find the backup already taken"
-    );
+    // Act again — a second Apply. It gets its own backup slot (#1378)
+    // rather than being skipped, and must not touch the first one.
+    let second = back_up_profile_file_at(&path)
+        .unwrap()
+        .expect("a second Apply makes its own backup");
+    assert_ne!(second, bak, "the first backup must not be reused");
     save_profile_set_at(&path, &fallback).unwrap();
 
     // Assert — the backup still holds the originals.
@@ -572,4 +584,171 @@ fn discarding_removes_the_backup_and_is_a_no_op_when_there_is_none() {
         path.exists(),
         "discarding the backup must never touch the live file"
     );
+}
+
+// #1378 — `T A` / `T A E` in altium.toml. A prefix pair is a legitimate
+// "waits for the next key (or the chord timeout)" pair, not a conflict: the
+// built-in profile is read-only, so a warning on it could never be cleared.
+#[test]
+fn a_chord_that_prefixes_a_longer_one_is_not_a_conflict() {
+    let set = ShortcutProfileSet::built_ins().unwrap();
+    let keymap = set.compile_active();
+    let lookup = keymap.lookup(
+        &[
+            KeyStroke::from_str("T").unwrap(),
+            KeyStroke::from_str("A").unwrap(),
+        ],
+        &[ShortcutContext::Global],
+    );
+    assert!(
+        lookup.command.is_some() && lookup.pending,
+        "fixture check: altium really has the prefix pair"
+    );
+    assert!(
+        keymap
+            .conflicts()
+            .iter()
+            .all(|conflict| conflict.trigger != "T A"),
+        "{:?}",
+        keymap.conflicts()
+    );
+}
+
+// #1378 — only a live `Command` can make a chord wait. An `Unbind` that
+// happens to start with the same strokes must not stall the shorter one.
+#[test]
+fn an_unbind_binding_does_not_make_a_shorter_chord_wait() {
+    let bind = |action, trigger: &str| ShortcutBinding {
+        action,
+        context: ShortcutContext::Global,
+        triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+    };
+    let save = AppCommandId::new("save_document").unwrap();
+    let undo = AppCommandId::new("undo").unwrap();
+    let profile = ShortcutProfile {
+        id: "t".to_string(),
+        name: "T".to_string(),
+        kind: ShortcutProfileKind::Custom,
+        schema_version: 1,
+        description: None,
+        base_profile: None,
+        bindings: vec![
+            bind(ShortcutBindingAction::Command(save.clone()), "F8"),
+            bind(ShortcutBindingAction::Unbind(undo), "F8 F9"),
+        ],
+    };
+    let lookup = CompiledKeymap::compile(&profile).lookup(
+        &[KeyStroke::from_str("F8").unwrap()],
+        &[ShortcutContext::Global],
+    );
+    assert_eq!(lookup.command.as_ref(), Some(&save));
+    assert!(!lookup.pending, "an Unbind must not hold the command back");
+}
+
+/// #1379 - a built-in profile must not bind one stroke to two commands in
+/// the same context; the later one silently wins at lookup.
+#[test]
+fn no_built_in_profile_binds_a_stroke_to_two_commands() {
+    for id in ["classic", "altium"] {
+        let mut set = ShortcutProfileSet::built_ins().unwrap();
+        set.set_active_profile(id).unwrap();
+        let conflicts = set.compile_active().conflicts();
+        assert!(
+            conflicts.is_empty(),
+            "{id} has conflicting bindings: {conflicts:?}"
+        );
+    }
+}
+
+#[test]
+fn shortcut_label_index_equals_the_reverse_scan_for_every_catalog_id() {
+    let set = ShortcutProfileSet::built_ins().unwrap();
+    for id in set.profiles().map(|profile| profile.id.clone()) {
+        let mut set = set.clone();
+        set.set_active_profile(id).unwrap();
+        let keymap = set.compile_active();
+        let mut labelled = 0;
+        for command_id in crate::keymap::all_command_ids() {
+            let command = AppCommandId::new(command_id).unwrap();
+            let indexed = keymap.shortcut_label(&command);
+            assert_eq!(
+                indexed,
+                keymap.shortcut_label_linear(&command),
+                "{command_id}"
+            );
+            labelled += usize::from(indexed.is_some());
+        }
+        assert!(labelled > 20, "too few labelled commands: {labelled}");
+    }
+}
+
+#[test]
+fn shortcut_label_index_follows_a_recompiled_keymap() {
+    let mut set = ShortcutProfileSet::built_ins().unwrap();
+    let save = AppCommandId::new("save_document").unwrap();
+    let before = set.compile_active().shortcut_label(&save);
+    set.active_profile_mut()
+        .bindings
+        .retain(|binding| binding.action.command() != Some(&save));
+    let after = set.compile_active().shortcut_label(&save);
+    assert!(before.is_some());
+    assert_eq!(after, None);
+}
+
+fn bind(action: ShortcutBindingAction, trigger: &str) -> ShortcutBinding {
+    ShortcutBinding {
+        action,
+        context: ShortcutContext::Global,
+        triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+    }
+}
+
+fn custom_profile(bindings: Vec<ShortcutBinding>) -> ShortcutProfile {
+    ShortcutProfile {
+        id: "t".to_string(),
+        name: "T".to_string(),
+        kind: ShortcutProfileKind::Custom,
+        schema_version: 1,
+        description: None,
+        base_profile: None,
+        bindings,
+    }
+}
+
+// An unbind of one trigger must not hide the hint of a trigger that still
+// works (Ctrl+P unbound, F7 live).
+#[test]
+fn an_unbind_of_one_trigger_keeps_the_hint_of_the_surviving_one() {
+    let print = AppCommandId::new("print").unwrap();
+    let keymap = CompiledKeymap::compile(&custom_profile(vec![
+        bind(ShortcutBindingAction::Command(print.clone()), "Ctrl+P"),
+        bind(ShortcutBindingAction::Command(print.clone()), "F7"),
+        bind(ShortcutBindingAction::Unbind(print.clone()), "Ctrl+P"),
+    ]));
+    assert_eq!(keymap.shortcut_label(&print).as_deref(), Some("F7"));
+    assert_eq!(
+        keymap.shortcut_label(&print),
+        keymap.shortcut_label_linear(&print)
+    );
+}
+
+#[test]
+fn a_command_whose_every_binding_is_unbound_has_no_hint() {
+    let print = AppCommandId::new("print").unwrap();
+    let keymap = CompiledKeymap::compile(&custom_profile(vec![
+        bind(ShortcutBindingAction::Command(print.clone()), "Ctrl+P"),
+        bind(ShortcutBindingAction::Unbind(print.clone()), "Ctrl+P"),
+    ]));
+    assert_eq!(keymap.shortcut_label(&print), None);
+    assert_eq!(keymap.shortcut_label_linear(&print), None);
+}
+
+#[test]
+fn a_rebind_after_an_unbind_shows_the_rebound_stroke() {
+    let print = AppCommandId::new("print").unwrap();
+    let keymap = CompiledKeymap::compile(&custom_profile(vec![
+        bind(ShortcutBindingAction::Unbind(print.clone()), "Ctrl+P"),
+        bind(ShortcutBindingAction::Command(print.clone()), "Ctrl+P"),
+    ]));
+    assert_eq!(keymap.shortcut_label(&print).as_deref(), Some("Ctrl+P"));
 }

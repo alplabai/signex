@@ -17,7 +17,10 @@ use uuid::Uuid;
 pub enum StockKind {
     Soic8,
     Qfn16,
-    R0805,
+    /// Generic symmetric 0805 two-pad chip land.
+    Chip0805,
+    /// The same land with a cathode mark; pad 1 is the cathode.
+    Chip0805Polarised,
     MountingHole3p2,
     Fiducial1mm,
 }
@@ -119,13 +122,26 @@ pub const STOCK_IDS: &[StockIds] = &[
         ],
     },
     StockIds {
-        kind: StockKind::R0805,
+        kind: StockKind::Chip0805,
         file_uuid: "019df45d-af64-7bb2-b787-add74d246d40",
         footprint_uuid: "019df45d-af63-7823-b5c3-01594028ccef",
         plane: "cdbf6963-91f5-44b7-9f96-a2e01a046265",
         entities: &[
             "7c39d334-33d5-41a9-be67-8df6b3b0f382",
             "321de7ce-bd80-4bef-9fc4-a2a8fe6bc82c",
+        ],
+    },
+    StockIds {
+        kind: StockKind::Chip0805Polarised,
+        file_uuid: "019df45d-af67-7c20-9d3e-5a1b6e0c4f11",
+        footprint_uuid: "019df45d-af67-7c20-9d3e-8b2f1d7a3c05",
+        plane: "8a342c96-d25f-4908-b59a-7f6af7468ca1",
+        entities: &[
+            "b708e751-f11f-4bbc-8100-c75df9fdec73",
+            "d454d0c0-8993-44dc-bbc6-ddee08f74868",
+            "c28fd9f3-638f-4440-9ed8-190c58a6f17e",
+            "58ea49eb-0a16-407d-b677-1a20322ad110",
+            "7fff648f-930d-4e7e-a1e8-ddcc9023e196",
         ],
     },
     StockIds {

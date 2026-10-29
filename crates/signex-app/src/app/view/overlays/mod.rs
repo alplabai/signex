@@ -10,8 +10,14 @@
 
 use super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 mod bars;
 mod modals;
+mod net_hover;
+pub(super) mod read_only_badge;
 
 impl Signex {
     /// Hover tooltip card showing the placed symbol's designator,
@@ -25,6 +31,11 @@ impl Signex {
         use iced::widget::{column, container, text};
         use iced::{Background, Border};
 
+        // A net card (a wire, pin or label, #1270) takes the place of the
+        // symbol card while the pointer rests on a pin.
+        if let Some(card) = &self.document_state.net_nav.hover.card {
+            return Some(self.view_net_hover_card(card));
+        }
         let interaction = &self.interaction_state;
         let uuid = interaction.hover_symbol_uuid?;
         let started = interaction.hover_started_at?;
@@ -68,16 +79,16 @@ impl Signex {
             iced::widget::row![
                 text(label)
                     .font(canvas_font)
-                    .size(11)
+                    .size(TS.body)
                     .color(muted_c)
                     .width(LABEL_W),
                 text(value)
                     .font(canvas_font)
-                    .size(12)
+                    .size(TS.label)
                     .color(text_c)
                     .width(Length::Fill),
             ]
-            .spacing(4)
+            .spacing(SP.s)
             .width(Length::Fill)
             .align_y(iced::Alignment::Start)
             .into()
@@ -178,26 +189,31 @@ impl Signex {
             let source_label = match entry.source {
                 CommandSource::Command => "Command",
                 CommandSource::Symbol => "Symbol",
+                CommandSource::Net => "Net",
+                CommandSource::Sheet => "Sheet",
                 CommandSource::File => "File",
             };
             let label_col = column![
-                text(entry.label.clone()).size(12).color(text_c),
+                text(entry.label.clone()).size(TS.label).color(text_c),
                 text(if entry.detail.is_empty() {
                     String::new()
                 } else {
                     entry.detail.clone()
                 })
-                .size(10)
+                .size(TS.caption)
                 .color(muted_c),
             ]
-            .spacing(2)
+            .spacing(SP.xs)
             .width(Length::Fill);
-            let row_inner = row![label_col, text(source_label).size(10).color(muted_c),]
-                .spacing(10)
-                .align_y(Alignment::Center);
+            let row_inner = row![
+                label_col,
+                text(source_label).size(TS.caption).color(muted_c),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center);
             let btn = button(row_inner)
                 .width(Length::Fill)
-                .padding([6, 12])
+                .padding([6.0, SP.l])
                 .on_press(Message::CommandPalette(CommandPaletteMsg::Select(
                     display_idx,
                 )))
@@ -227,12 +243,12 @@ impl Signex {
         }
 
         let body: Element<'_, Message> = if total == 0 {
-            container(text("No results").size(12).color(muted_c))
-                .padding([12, 14])
+            container(text("No results").size(TS.label).color(muted_c))
+                .padding([SP.l, 14.0])
                 .width(Length::Fill)
                 .into()
         } else {
-            let list = column(rows).spacing(2).padding(4);
+            let list = column(rows).spacing(SP.xs).padding(SP.s);
             scrollable(list).height(Length::Shrink).into()
         };
 
@@ -243,10 +259,10 @@ impl Signex {
                     "{} more results — refine query",
                     total - MAX_RESULTS
                 ))
-                .size(10)
+                .size(TS.caption)
                 .color(muted_c),
             )
-            .padding([4, 14])
+            .padding([SP.s, 14.0])
             .width(Length::Fill)
             .into()
         } else {
@@ -257,8 +273,7 @@ impl Signex {
         // lays the input out with, so the dropdown reads as an extension
         // of the input rather than a floating popup that happens to be
         // nearby — including after a resize shrinks the bar.
-        let (ww, _wh) = self.ui_state.window_size;
-        let (card_x, card_w) = super::chrome_search_bar_geometry(ww);
+        let (card_x, card_w) = self.chrome_search_bar_geometry();
         let card = container(column![body, footer])
             .width(card_w)
             .max_height(360.0)
@@ -337,15 +352,16 @@ impl Signex {
         )
         .map(Message::ActiveBar);
         let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
-        // Bar: MENU_BAR_HEIGHT + tabs + 4 top-margin + bar-height ≈ bottom of bar.
-        // Bar-height = 28 button + 6 vertical padding + 2 border = 36, plus 4
-        // top margin = 40. Add a small gap so the dropdown visually touches.
+        // Bar bottom: MENU_BAR_HEIGHT + tabs + top margin + bar height,
+        // plus a small gap so the dropdown visually touches.
         let ab_y: f32 = crate::menu_bar::MENU_BAR_HEIGHT
             + if document.tabs.is_empty() { 0.0 } else { 28.0 }
-            + 40.0;
-        let bar_w: f32 = crate::active_bar::BAR_WIDTH_PX;
+            + crate::active_bar::BAR_TOP_MARGIN_PX
+            + crate::active_bar::BAR_HEIGHT_PX
+            + crate::active_bar::BAR_DROPDOWN_GAP_PX;
         let (ww, _) = ui.window_size;
-        let adjusted_x = x_off + (ww - bar_w) / 2.0;
+        let adjusted_x =
+            x_off + crate::active_bar::bar_left_in_window(interaction.current_tool, ww);
         vec![
             Self::dismiss_layer(Message::ActiveBar(
                 crate::active_bar::ActiveBarMsg::CloseMenus,
@@ -436,6 +452,9 @@ impl Signex {
                 // above Align: the same 3 rows + 1 sep, then
                 // Place / Part Actions / Sheet Actions / References.
                 ContextSubmenu::Align => TOP_PAD + 7.0 * ROW_H + SEP_H,
+                // Arrange sits right under Align, but only when a drawing is
+                // selected (#1583).
+                ContextSubmenu::Arrange => TOP_PAD + 8.0 * ROW_H + SEP_H,
                 // AddNewToProject only fires from the project-tree
                 // menu, never from the canvas menu — fall through
                 // to a safe placeholder if the state somehow leaks

@@ -63,21 +63,11 @@ pub struct PanelContext {
     pub properties_tab: usize, // 0=General, 1=Parameters
     /// Net Classes section of the General tab (#1042).
     pub net_classes: NetClassPanel,
-    // Components panel
-    pub standard_libraries: Vec<String>,
-    pub active_library: Option<String>,
-    /// Browser entries from the selected library or aggregated catalog.
-    pub library_symbols: Vec<LibrarySymbolEntry>,
-    /// Selected component lib_id.
-    pub selected_component: Option<String>,
-    /// (pin_number, pin_name, pin_type) for the selected component.
-    pub selected_pins: Vec<(String, String, String)>,
-    /// Full LibSymbol data for canvas preview.
-    pub selected_lib_symbol: Option<signex_types::schematic::LibSymbol>,
-    /// Height in px for the Components list section (details gets the rest).
-    pub components_split: f32,
     /// Persistent project tree — toggle state survives across renders.
     pub project_tree: Vec<TreeNode>,
+    /// How many times `project_tree` has been rebuilt; `refresh_panel_ctx`
+    /// rebuilds it only when `projects` changed (#1383).
+    pub project_tree_builds: u32,
     /// Path of the currently single-clicked tree row, used to drive
     /// the row highlight independently of which document is active.
     /// Set on `TreeMsg::Select`, cleared when the tree resets.
@@ -101,6 +91,11 @@ pub struct PanelContext {
     pub selected_kind: Option<signex_types::schematic::SelectedKind>,
     /// Description of the selected item (for single selection).
     pub selection_info: Vec<(String, String)>,
+    /// The fields a multi-selection shares, per kind (#1258); empty unless
+    /// more than one object is selected.
+    pub multi_groups: signex_engine::SelectionGroups,
+    /// The multi-selection text box being typed in, with its text.
+    pub multi_draft: Option<(super::MultiField, String)>,
     /// The drawings the selected placed symbol's library row offers, when
     /// it has alternates; empty otherwise (#1230).
     pub symbol_choices: Vec<SymbolChoiceItem>,
@@ -116,6 +111,8 @@ pub struct PanelContext {
     /// drawing is selected. Feeds the mini preview canvas in the
     /// Properties panel so the shape renders true-to-life.
     pub selected_drawing: Option<signex_types::schematic::SchDrawing>,
+    /// Where that drawing sits against the circuit (#1583).
+    pub selected_drawing_placement: signex_types::schematic::DrawingPlacement,
     /// The live ChildSheet matching `selected_uuid` when a single
     /// hierarchical sheet is selected. Powers the editable
     /// border/fill colour pickers and stroke-width input.
@@ -144,6 +141,9 @@ pub struct PanelContext {
     /// The active sheet's title-block fields (#1080), keyed as stored in
     /// `SchematicSheet::title_block`.
     pub title_block: std::collections::BTreeMap<String, String>,
+    /// The parameters of the project that owns the active sheet (#1080): the
+    /// values a field falls back to while the sheet leaves it empty.
+    pub project_parameters: std::collections::BTreeMap<String, String>,
     /// Half-typed title-block fields, one per (sheet, field), each
     /// committed on Enter. Moving to another field keeps the first one's
     /// draft; switching sheets hides a sheet's drafts until it is active
@@ -156,19 +156,19 @@ pub struct PanelContext {
     pub numeric_draft: Option<super::NumericDraft>,
     /// The sheet `title_block` and the shown drafts belong to.
     pub title_block_sheet: Option<std::path::PathBuf>,
-    /// Component search filter text.
-    pub component_filter: String,
     /// Which sections are collapsed (by section name key).
     pub collapsed_sections: CollapsedSections,
     /// Pre-placement configuration (shown when Tab pressed during placement tool).
     pub pre_placement: Option<PrePlacementData>,
-    /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
     /// Flattened ERC diagnostics from the most recent Run-ERC pass.
     pub erc_diagnostics: Vec<ErcDiagnosticEntry>,
+    /// Net waivers stored in the active project (#1581).
+    pub erc_waivers: Vec<super::ErcWaiverEntry>,
     /// Focused ERC diagnostic index used by prev/next navigation arrows.
     pub erc_focus_index: Option<usize>,
     /// An ERC run is in flight (the panel shows "Running…").
     pub erc_running: bool,
+    /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.
     pub diagnostics: Vec<crate::diagnostics::DiagnosticEntry>,

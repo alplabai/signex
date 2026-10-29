@@ -11,6 +11,11 @@ fn outcome_for(path: &str) -> ErcRunOutcome {
         by_path: HashMap::from([(PathBuf::from(path), Vec::new())]),
         warnings: Vec::new(),
         infos: Vec::new(),
+        rule_set: signex_output::ErcReportRuleSet {
+            profile_name: None,
+            sha256: "outcome-set".into(),
+        },
+        waived_hidden: Default::default(),
     }
 }
 
@@ -51,4 +56,36 @@ fn a_failed_erc_run_clears_running_and_keeps_old_results() {
             .erc_violations_by_path
             .contains_key(&PathBuf::from("kept.snxsch"))
     );
+}
+
+/// #859 — the project's `erc.dsl` is read by the worker, not by `update`: the
+/// read failure is reported only when the run's completion lands.
+#[test]
+fn the_erc_dsl_is_read_by_the_worker_not_in_update() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    // A directory named like the rules file: it exists, but cannot be read.
+    std::fs::create_dir(dir.path().join("erc.dsl")).expect("dsl dir");
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["a.snxsch"]);
+    let sheet = dir.path().join("a.snxsch");
+    let engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default())
+        .expect("engine");
+    app.document_state.engines.insert(sheet.clone(), engine);
+    app.document_state.active_path = Some(sheet);
+
+    let task = app.handle_run_erc();
+    let reported = || {
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("ERC DSL: failed to read"))
+    };
+    assert!(app.ui_state.erc_running);
+    assert!(!reported(), "update() did not read the rules file");
+
+    let mut messages =
+        crate::app::handlers::document_files::restore_commit_tests::collect_messages(task);
+    assert_eq!(messages.len(), 1);
+    let _ = app.update(messages.remove(0));
+    assert!(!app.ui_state.erc_running);
+    assert!(reported(), "the worker reported the unreadable rules file");
 }

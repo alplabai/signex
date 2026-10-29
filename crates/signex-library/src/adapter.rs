@@ -32,6 +32,17 @@ pub enum LibraryError {
     /// a server counter or, for a local library, a content hash.
     #[error("changed by someone else since you read it; reload to see their version")]
     RowChanged { current_revision: u64 },
+    /// Like [`Self::RowChanged`], for a symbol, footprint or sim model.
+    /// `subject` names it (`symbol <uuid>`) so the caller can keep the
+    /// local edit and offer save-as as well as reload.
+    #[error(
+        "{subject} was changed by someone else since you read it; save your edit as a new copy, \
+         or reload to see their version"
+    )]
+    PrimitiveChanged {
+        subject: String,
+        current_revision: u64,
+    },
     /// The version-control guard refused to start a repository in a folder
     /// that holds more than the project (#1205). The text says why.
     #[error("{0}")]
@@ -133,6 +144,62 @@ pub struct HistoryEntry {
     pub deletions: u32,
 }
 
+#[cfg(feature = "local-git")]
+impl HistoryEntry {
+    /// Project a `git2::Commit` onto an entry with no diff stats. The
+    /// author timestamp is preferred over the committer's so rebases and
+    /// cherry-picks do not skew the "12 minutes ago" labels; the subject
+    /// is the first line and the body the rest, minus the blank separator.
+    pub(crate) fn from_commit(commit: &git2::Commit<'_>) -> Self {
+        let author = commit.author();
+        let time =
+            DateTime::<Utc>::from_timestamp(author.when().seconds(), 0).unwrap_or_else(Utc::now);
+        let full = commit.message().unwrap_or_default();
+        let (subject, body) = match full.split_once('\n') {
+            Some((s, rest)) => (
+                s.trim_end().to_string(),
+                rest.trim_start_matches(['\r', '\n']).to_string(),
+            ),
+            None => (full.trim_end().to_string(), String::new()),
+        };
+        Self {
+            sha: commit.id().to_string(),
+            author_name: author.name().unwrap_or_default().to_string(),
+            author_email: author.email().unwrap_or_default().to_string(),
+            time,
+            subject,
+            body,
+            parent_shas: commit.parent_ids().map(|id| id.to_string()).collect(),
+            files_changed: Vec::new(),
+            additions: 0,
+            deletions: 0,
+        }
+    }
+}
+
+/// A primitive together with the revision this copy was read at — the
+/// primitive tier's counterpart of `ComponentRow::server_revision`. The
+/// caller that holds the copy keeps the revision with it and hands it back
+/// as the base of its save, so the base is always "what this copy was read
+/// at", never "what someone last read". `None` for a backend that does not
+/// version primitives (a local library) and for a primitive being created.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Versioned<T> {
+    pub value: T,
+    pub revision: Option<u64>,
+}
+
+/// Refuse a base revision on a backend that hands none out: silently
+/// dropping it would turn a conditional save into an unconditional one.
+fn refuse_unversioned_base(base: Option<u64>) -> Result<(), LibraryError> {
+    match base {
+        None => Ok(()),
+        Some(_) => Err(LibraryError::Backend(
+            "this library does not version primitives; save without a base revision".into(),
+        )),
+    }
+}
+
 /// Storage backend abstraction. All flavours (LocalGit, Database, Plm)
 /// implement this.
 ///
@@ -141,7 +208,7 @@ pub struct HistoryEntry {
 /// actually support. `LocalGitAdapter` and `DatabaseAdapter` supply
 /// real implementations.
 pub trait LibraryAdapter: Send + Sync {
-    /// Stable UUID of this library, sourced from `library.toml::library.library_id`.
+    /// Stable UUID of this library, sourced from the `library_id` at the root of the `.snxlib` document.
     ///
     /// Used by [`crate::adapters::library_set::LibrarySet`] to key resolution
     /// of cross-library [`crate::primitive::PrimitiveRef`]s. The default
@@ -405,6 +472,55 @@ pub trait LibraryAdapter: Send + Sync {
         Ok(true)
     }
 
+    /// Apply `edit` to every row in `targets` (`(table, row)` pairs) as one
+    /// batch, returning one outcome per target in order: `Ok(true)` when
+    /// the edit changed the row, `Ok(false)` when it left it alone, `Err`
+    /// when that row could not be read or written.
+    ///
+    /// Each row is re-read at write time, so the edit keeps any other
+    /// field changed since a caller's snapshot. The edit must not change a
+    /// row's identity or part number: a batch is for re-pinning versions,
+    /// so it skips the part-number uniqueness check `update_row` runs on a
+    /// changed part number. An `Err` for the whole call means nothing was
+    /// written.
+    ///
+    /// The default is `read_row` + `update_row` per target, in order,
+    /// stopping at the first failure: the targets after it are reported as
+    /// not attempted. An adapter that can write the whole batch at once
+    /// (one file write and one commit, one transaction) overrides it.
+    fn update_rows(
+        &self,
+        targets: &[(String, RowId)],
+        edit: &mut RowEdit<'_>,
+        message: &str,
+    ) -> Result<Vec<RowEditOutcome>, LibraryError> {
+        let mut outcomes: Vec<RowEditOutcome> = Vec::with_capacity(targets.len());
+        let mut failed: Option<String> = None;
+        for (table, row_id) in targets {
+            if let Some(first) = &failed {
+                outcomes.push((
+                    *row_id,
+                    Err(LibraryError::Backend(format!(
+                        "not attempted: an earlier row failed ({first})"
+                    ))),
+                ));
+                continue;
+            }
+            let outcome = self.read_row(table, *row_id).and_then(|mut row| {
+                if !edit(&mut row) {
+                    return Ok(false);
+                }
+                self.update_row(table, row, message)?;
+                Ok(true)
+            });
+            if let Err(e) = &outcome {
+                failed = Some(e.to_string());
+            }
+            outcomes.push((*row_id, outcome));
+        }
+        Ok(outcomes)
+    }
+
     // ── Row CRUD ────────────────────────────────────────────────────────
 
     fn read_row(&self, _table: &str, _row_id: RowId) -> Result<ComponentRow, LibraryError> {
@@ -549,6 +665,72 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
+    // ── Versioned primitive reads / saves ───────────────────────────────
+    //
+    // A shared library server versions every primitive. `get_*_versioned`
+    // returns the revision the copy was read at; `save_*_versioned` sends it
+    // back as the base, and the save is refused with
+    // `LibraryError::RowChanged` when the stored primitive has moved on.
+    // On a versioned backend a `None` base creates the primitive
+    // (`Conflict` if it exists). The saved revision comes back so the next
+    // save of the same copy can use it. The defaults carry `None` both ways
+    // and call the plain `save_*`, so a `None`-base save is only create-only
+    // when the plain `save_*` is. A shared backend must therefore make its
+    // plain `save_*` create-only (as `DatabaseAdapter` does); a local
+    // single-writer backend such as `LocalGitAdapter` overwrites, which is
+    // fine there because nobody else writes the copy.
+
+    fn get_symbol_versioned(&self, uuid: Uuid) -> Result<Versioned<Symbol>, LibraryError> {
+        self.get_symbol(uuid).map(|value| Versioned {
+            value,
+            revision: None,
+        })
+    }
+
+    fn get_footprint_versioned(&self, uuid: Uuid) -> Result<Versioned<Footprint>, LibraryError> {
+        self.get_footprint(uuid).map(|value| Versioned {
+            value,
+            revision: None,
+        })
+    }
+
+    fn get_sim_versioned(&self, uuid: Uuid) -> Result<Versioned<SimModel>, LibraryError> {
+        self.get_sim(uuid).map(|value| Versioned {
+            value,
+            revision: None,
+        })
+    }
+
+    fn save_symbol_versioned(
+        &self,
+        sym: Symbol,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        refuse_unversioned_base(base)?;
+        self.save_symbol(sym, message).map(|()| None)
+    }
+
+    fn save_footprint_versioned(
+        &self,
+        fp: Footprint,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        refuse_unversioned_base(base)?;
+        self.save_footprint(fp, message).map(|()| None)
+    }
+
+    fn save_sim_versioned(
+        &self,
+        sm: SimModel,
+        base: Option<u64>,
+        message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        refuse_unversioned_base(base)?;
+        self.save_sim(sm, message).map(|()| None)
+    }
+
     fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
         Ok(Vec::new())
     }
@@ -622,7 +804,7 @@ pub trait LibraryAdapter: Send + Sync {
 
     /// Per-primitive git history.
     ///
-    /// Returns up to 50 entries from `git log --follow --max-count 50
+    /// Returns up to 50 entries from `git log --max-count 50
     /// -- <primitive_path>`, newest first. `primitive_path` may be
     /// absolute or relative to [`Self::root_dir`]; absolute paths
     /// outside `root_dir` are rejected with
@@ -642,6 +824,13 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 }
+
+/// The edit of [`LibraryAdapter::update_rows`]: changes the row it is given
+/// and returns whether it did.
+pub type RowEdit<'a> = dyn FnMut(&mut ComponentRow) -> bool + 'a;
+
+/// One target's outcome from [`LibraryAdapter::update_rows`].
+pub type RowEditOutcome = (RowId, Result<bool, LibraryError>);
 
 /// The rewrite step of [`LibraryAdapter::rewrite_file_locked`]: given the
 /// file's current bytes (`None` when it does not exist), the bytes to write,

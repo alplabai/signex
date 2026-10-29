@@ -13,11 +13,12 @@ impl Signex {
         // navigates into the referenced schematic.
         let child_filename_to_open = if self.interaction_state.current_tool == Tool::Select
             && let Some(snapshot) = self.active_render_snapshot()
-            && let Some(hit) = crate::schematic_runtime::hit_test::hit_test(
+            && let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
                 snapshot,
                 &self.interaction_state.active_canvas().designators,
                 world_x,
                 world_y,
+                self.ui_state.net_class_styles.styles(),
             )
             && hit.kind == signex_types::schematic::SelectedKind::ChildSheet
         {
@@ -218,57 +219,17 @@ impl Signex {
                 .wire_preview
                 .clear();
             self.interaction_state.active_canvas_mut().drawing_mode = false;
-        } else if let Some(snapshot) = self.active_render_snapshot() {
-            use signex_types::schematic::SelectedKind;
-            if let Some(hit) = crate::schematic_runtime::hit_test::hit_test(
+        } else if let Some(snapshot) = self.active_render_snapshot()
+            && let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
                 snapshot,
                 &self.interaction_state.active_canvas().designators,
                 world_x,
                 world_y,
-            ) {
-                use crate::schematic_runtime::text::expand_char_escapes;
-                let edit_info =
-                    match hit.kind {
-                        SelectedKind::Label => snapshot
-                            .labels
-                            .iter()
-                            .find(|l| l.uuid == hit.uuid)
-                            .map(|l| {
-                                (
-                                    l.text.clone(),
-                                    SelectedKind::Label,
-                                    l.position.x,
-                                    l.position.y,
-                                )
-                            }),
-                        SelectedKind::TextNote => snapshot
-                            .text_notes
-                            .iter()
-                            .find(|t| t.uuid == hit.uuid)
-                            .map(|t| {
-                                (
-                                    t.text.clone(),
-                                    SelectedKind::TextNote,
-                                    t.position.x,
-                                    t.position.y,
-                                )
-                            }),
-                        _ => None,
-                    };
-                if let Some((raw_text, kind, wx, wy)) = edit_info {
-                    // Show the user the visible form (e.g. "/OE"), not
-                    // the Standard-escaped storage form ("{slash}OE").
-                    let display_text = expand_char_escapes(&raw_text);
-                    self.interaction_state.editing_text = Some(TextEditState {
-                        uuid: hit.uuid,
-                        kind,
-                        original_text: display_text.clone(),
-                        text: display_text,
-                        world_x: wx,
-                        world_y: wy,
-                    });
-                }
-            }
+                self.ui_state.net_class_styles.styles(),
+            )
+            && let Some(focus) = self.open_text_edit_on_double_click(hit)
+        {
+            return focus;
         }
         Task::none()
     }

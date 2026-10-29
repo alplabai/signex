@@ -68,12 +68,9 @@ impl crate::app::Signex {
                 .any(|p| p.id == step.project)
     }
 
-    /// Whether the active sheet has a pick Ctrl+Z / Ctrl+Y would move: some
-    /// recorded pick that is still its project's newest class edit.
-    pub(crate) fn has_net_class_pick(&self, undoing: bool) -> bool {
-        let Some(path) = self.document_state.active_path.as_ref() else {
-            return false;
-        };
+    /// Whether the sheet at `path` has a pick Ctrl+Z / Ctrl+Y would move:
+    /// some recorded pick that is still its project's newest class edit.
+    pub(crate) fn has_net_class_pick(&self, path: &std::path::Path, undoing: bool) -> bool {
         let Some(steps) = self.document_state.net_class_picks.get(path) else {
             return false;
         };

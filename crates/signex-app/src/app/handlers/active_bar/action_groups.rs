@@ -10,6 +10,13 @@ impl Signex {
         use crate::active_bar::ActiveBarAction;
 
         self.interaction_state.active_bar_menu = None;
+        // A planned tool is greyed everywhere it is shown, but the keymap,
+        // the palette and a group button's last tool can still name it
+        // (#1249). Refuse before anything is armed or remembered.
+        if let Some(name) = crate::active_bar::planned_name(&action) {
+            crate::diagnostics::log_info(crate::active_bar::refusal_line(name));
+            return Task::none();
+        }
         self.remember_active_bar_group(&action);
 
         match action {
@@ -96,8 +103,10 @@ impl Signex {
             ActiveBarAction::RotateSelectionCW => {
                 self.update(Message::Edit(EditMsg::RotateSelectedClockwise))
             }
-            ActiveBarAction::FlipSelectedX => self.update(Message::Edit(EditMsg::MirrorSelectedX)),
-            ActiveBarAction::FlipSelectedY => self.update(Message::Edit(EditMsg::MirrorSelectedY)),
+            // Axes are crossed on purpose, like the `mirror_x` / `mirror_y`
+            // keys: see the "Visual-flip semantics" note in command/bridge.rs.
+            ActiveBarAction::FlipSelectedX => self.update(Message::Edit(EditMsg::MirrorSelectedY)),
+            ActiveBarAction::FlipSelectedY => self.update(Message::Edit(EditMsg::MirrorSelectedX)),
             // "Select → Connection": if a wire/bus/junction/label is already
             // selected, expand immediately. Otherwise fall through to Select
             // tool so the next click triggers the net walk via the hit-test

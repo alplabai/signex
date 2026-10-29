@@ -167,6 +167,7 @@ pub(crate) fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
         id,
         path: PathBuf::from(dir).join("ProjectA.snxprj"),
         data: ProjectData {
+            description: None,
             name: "ProjectA".to_string(),
             dir: dir.to_string(),
             schematic_root: listed.first().map(|f| (*f).to_string()),
@@ -189,11 +190,13 @@ pub(crate) fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     // The sticky pointer every one of these regressions is about.
     app.document_state.active_project = Some(id);
@@ -986,19 +989,13 @@ fn a_child_that_exists_but_will_not_parse_is_not_called_missing() {
 mod diagnosis;
 
 #[test]
-fn uncovered_pdf_characters_reach_the_messages_panel() {
+fn uncovered_pdf_characters_are_named_in_the_export_warning() {
     let marker = Uuid::new_v4().simple().to_string()[..8].to_string();
     let chars: Vec<char> = format!("\u{4E2D}\u{6587}{marker}").chars().collect();
-    let before = diagnostic_count(&marker);
-    super::log_uncovered_chars(&chars);
-    assert_eq!(diagnostic_count(&marker) - before, 1);
-    let before_all = diagnostic_count("have no glyph");
-    super::log_uncovered_chars(&[]);
-    assert_eq!(
-        diagnostic_count("have no glyph"),
-        before_all,
-        "nothing to say"
-    );
+    let warning = super::uncovered_chars_warning(&chars).expect("a warning");
+    assert!(warning.contains(&marker), "{warning}");
+    assert!(warning.contains("have no glyph"), "{warning}");
+    assert_eq!(super::uncovered_chars_warning(&[]), None, "nothing to say");
 }
 
 mod case_probe;
@@ -1009,7 +1006,9 @@ mod protel_hierarchy;
 mod bom_hierarchy;
 pub(crate) mod current_placement;
 
+mod lazy_preview;
 mod sheet_numbering;
+mod tree_nesting_pins;
 
 /// Append a second loaded project (`listed` sheets under `dir`) to `app`.
 pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
@@ -1018,6 +1017,7 @@ pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
         id,
         path: PathBuf::from(dir).join("Other.snxprj"),
         data: ProjectData {
+            description: None,
             name: "Other".to_string(),
             dir: dir.to_string(),
             schematic_root: listed.first().map(|f| (*f).to_string()),
@@ -1040,11 +1040,13 @@ pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
 }
 

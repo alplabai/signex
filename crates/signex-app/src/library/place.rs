@@ -76,7 +76,31 @@ pub fn resolve_placement_of(
         is_power,
         prefix: signex_types::designator::placement_prefix(&symbol.designator),
         class: row.class.as_str().to_owned(),
+        prefix_override: row.designator_prefix_override().map(str::to_owned),
+        datasheet: match &row.datasheet {
+            signex_library::DatasheetRef::Url { url } => url.trim().to_string(),
+            signex_library::DatasheetRef::HashPinned { .. } => String::new(),
+        },
+        fields: part_fields(&row),
     })
+}
+
+/// The identity fields a placed part carries for `row`: its manufacturer
+/// and part number (an empty one clears the field) and every parameter.
+fn part_fields(row: &signex_library::ComponentRow) -> Vec<(String, String)> {
+    let mut fields = vec![
+        (
+            "Manufacturer".to_string(),
+            row.primary_mpn.manufacturer.clone(),
+        ),
+        ("MPN".to_string(), row.primary_mpn.mpn.clone()),
+    ];
+    fields.extend(
+        row.parameters
+            .iter()
+            .map(|(key, value)| (key.clone(), value.display())),
+    );
+    fields
 }
 
 /// `"<library uuid>:<symbol uuid>"` for a symbol reference.

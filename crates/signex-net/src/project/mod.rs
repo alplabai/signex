@@ -45,19 +45,23 @@ use signex_types::schematic::{
 use uuid::Uuid;
 
 use crate::build::{
-    POWER_PORT_PRIORITY, anchor_point, collect_membership, collect_net_labels, collect_terminals,
-    dedup_net_names, label_priority, merged_sheet_parent, name_outranks, power_name_carriers,
-    pt_key,
+    POWER_PORT_PRIORITY, SegmentIndex, anchor_point, collect_membership, collect_net_labels,
+    collect_terminals_at, dedup_net_names, label_priority, merged_sheet_parent, name_outranks,
+    power_name_carriers, pt_key,
 };
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
 mod buses;
 mod designators;
+mod members;
 mod names;
+mod net_index;
 mod root_order;
 mod sheet_numbers;
 
+pub use members::{NetMember, NetMemberKind, NetMembers};
 pub use names::{MultiNamedNet, NetNameSource};
+pub use net_index::{HoverPin, NetAnchor, NetHover, NetIndex, is_auto_name};
 
 pub use designators::instance_entry_designators;
 pub use sheet_numbers::{NumberingIssue, SheetNumbering, SheetPage, sheet_numbering};
@@ -224,6 +228,10 @@ struct Occ<'a> {
 struct Analysis<'a> {
     /// Net root → terminals landing on it.
     terminals: HashMap<Key, Vec<Terminal>>,
+    /// Net root → the world position of each of `terminals`' pin tips, in step.
+    terminal_at: HashMap<Key, Vec<Point>>,
+    /// Net root → the named sheet entries anchored on it.
+    sheet_pins: HashMap<Key, Vec<members::SheetPinAt>>,
     /// Net root → labels on it (for naming).
     net_labels: HashMap<Key, Vec<&'a Label>>,
     /// Net root → power-port carrier `(value, pin tip, symbol uuid)` on it.
@@ -273,19 +281,47 @@ pub fn project_occurrences(graph: &ProjectGraph) -> Vec<SheetOccurrence> {
 /// and for the byte-identity contract with `build_netlist` for a single-root,
 /// unresolved graph.
 pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
-    stitch_project(graph, false).0
+    stitch_project(graph, Want::Netlist).netlist
+}
+
+/// [`build_project_netlist`] plus the [`NetIndex`] of what sits on each net.
+pub fn build_project_netlist_indexed(graph: &ProjectGraph) -> (ProjectNetlist, NetIndex) {
+    let stitched = stitch_project(graph, Want::Members);
+    (
+        stitched.netlist,
+        NetIndex::from_members(stitched.members, stitched.placements),
+    )
 }
 
 /// Every net of the stitched project that carries two or more different names,
 /// with each name's sheet and position and the name the export uses (#1061).
 /// Derived by the same stitch as [`build_project_netlist`], so the two agree.
 pub fn multi_named_nets(graph: &ProjectGraph) -> Vec<MultiNamedNet> {
-    stitch_project(graph, true).1
+    stitch_project(graph, Want::Names).reports
 }
 
-/// `want_names` also collects the name sources behind [`multi_named_nets`];
-/// the netlist refresh passes `false` and skips that work.
-fn stitch_project(graph: &ProjectGraph, want_names: bool) -> (ProjectNetlist, Vec<MultiNamedNet>) {
+/// What a stitch collects besides the netlist; the netlist refresh asks for
+/// nothing extra and skips that work.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Want {
+    Netlist,
+    /// The name sources behind [`multi_named_nets`].
+    Names,
+    /// The members of every net, for [`NetIndex`].
+    Members,
+}
+
+struct Stitched {
+    netlist: ProjectNetlist,
+    reports: Vec<MultiNamedNet>,
+    members: Vec<NetMembers>,
+    /// Every placement the walk reached, in walk order.
+    placements: Vec<(SheetKey, InstancePath)>,
+}
+
+fn stitch_project(graph: &ProjectGraph, want: Want) -> Stitched {
+    let want_names = want == Want::Names;
+    let want_members = want == Want::Members;
     let mut issues: Vec<StitchIssue> = Vec::new();
 
     detect_duplicate_uuids(graph.sheets, &mut issues);
@@ -295,7 +331,10 @@ fn stitch_project(graph: &ProjectGraph, want_names: bool) -> (ProjectNetlist, Ve
     detect_shared_references(&occs, &mut issues);
 
     // ---- Level 1: per-occurrence analysis (all unions before any sampling) --
-    let analyses: Vec<Analysis> = occs.iter().map(|o| analyze(o.sheet, &o.path)).collect();
+    let analyses: Vec<Analysis> = occs
+        .iter()
+        .map(|o| analyze(o.sheet, &o.path, want_members))
+        .collect();
 
     // ---- Level 2: union net roots across occurrences ------------------------
     let mut l2: HashMap<L2, L2> = HashMap::new();
@@ -396,11 +435,28 @@ fn stitch_project(graph: &ProjectGraph, want_names: bool) -> (ProjectNetlist, Ve
     // Multi-named groups with no terminal: no net is exported for them, but a
     // bare wire with two labels is still a naming problem to report.
     let mut pinless = Vec::new();
-    for members in groups.into_values() {
-        let net = assemble_net(members, &occs, &analyses, want_names);
+    // Groups with no terminal still join labels and sheet entries across
+    // sheets, so navigation keeps them: (sort key, name, members).
+    let mut pinless_members: Vec<(L2, String, Vec<NetMember>)> = Vec::new();
+    let mut points = members::ElementPoints::default();
+    for nodes in groups.into_values() {
+        let mut listed = Vec::new();
+        if want_members {
+            let mut sorted = nodes.clone();
+            sorted.sort_unstable();
+            listed = members::collect_members(&sorted, &occs, &analyses, &mut points);
+        }
+        let mut net = assemble_net(nodes, &occs, &analyses, want_names);
         if !net.terminals.is_empty() {
+            net.members = listed;
             raw.push(net);
-        } else if let Some(report) = net.names {
+            continue;
+        }
+        if want_members {
+            let name = net.name.clone().unwrap_or_default();
+            pinless_members.push((net.sort_key, name, listed));
+        }
+        if let Some(report) = net.names {
             pinless.push((net.name.unwrap_or_default(), report));
         }
     }
@@ -409,6 +465,7 @@ fn stitch_project(graph: &ProjectGraph, want_names: bool) -> (ProjectNetlist, Ve
     raw.sort_by_key(|r| r.sort_key);
 
     let mut multi = Vec::new();
+    let mut listed_nets: Vec<NetMembers> = Vec::new();
     let mut nets: Vec<Net> = raw
         .into_iter()
         .enumerate()
@@ -417,6 +474,13 @@ fn stitch_project(graph: &ProjectGraph, want_names: bool) -> (ProjectNetlist, Ve
                 multi.push((idx, report));
             }
             let id = NetId(idx as u32 + 1);
+            if want_members {
+                listed_nets.push(NetMembers {
+                    net: Some(id),
+                    name: String::new(),
+                    members: r.members,
+                });
+            }
             let name = r.name.unwrap_or_else(|| format!("N${}", id.0));
             let mut terminals = r.terminals;
             terminals.sort_by(|a, b| {
@@ -442,14 +506,37 @@ fn stitch_project(graph: &ProjectGraph, want_names: bool) -> (ProjectNetlist, Ve
         issues.push(StitchIssue::NameCollision { name });
     }
 
+    // The names settle only after the dedup pass above.
+    for (listing, net) in listed_nets.iter_mut().zip(&nets) {
+        listing.name = net.name.clone();
+    }
+    pinless_members.sort_by_key(|(sort_key, ..)| *sort_key);
+    listed_nets.extend(
+        pinless_members
+            .into_iter()
+            .map(|(_, name, members)| NetMembers {
+                net: None,
+                name,
+                members,
+            }),
+    );
+
     let reports = names::collect_reports(multi, pinless, &nets);
-    (
-        ProjectNetlist {
+    Stitched {
+        netlist: ProjectNetlist {
             netlist: Netlist { nets },
             issues,
         },
         reports,
-    )
+        members: listed_nets,
+        placements: if want_members {
+            occs.iter()
+                .map(|o| (o.key.clone(), o.path.clone()))
+                .collect()
+        } else {
+            Vec::new()
+        },
+    }
 }
 
 /// A net assembled from a level-2 group, before id assignment and dedup.
@@ -463,6 +550,8 @@ struct RawNet {
     name: Option<String>,
     /// Every name source, when the net has two or more different names.
     names: Option<names::NameReport>,
+    /// Every element on the net; filled only when a [`NetIndex`] is wanted.
+    members: Vec<NetMember>,
 }
 
 /// Assemble one final net from its level-2 member nodes. A group with no
@@ -547,24 +636,31 @@ fn assemble_net(
         junctions,
         name,
         names,
+        members: Vec::new(),
     }
 }
 
 /// Level-1 analysis for one sheet: the per-sheet derivation plus sheet-pin
 /// anchoring, sampled into the tables the stitcher reads.
-fn analyze<'a>(sheet: &'a SchematicSheet, path: &InstancePath) -> Analysis<'a> {
+fn analyze<'a>(sheet: &'a SchematicSheet, path: &InstancePath, want_members: bool) -> Analysis<'a> {
     let mut parent = merged_sheet_parent(sheet);
 
     // Anchor every child-sheet pin to the wire it sits on (endpoint or
     // interior), like a label — before sampling any root.
     let wire_pairs: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
+    let wire_index = SegmentIndex::new(&wire_pairs);
     for cs in &sheet.child_sheets {
         for sp in &cs.pins {
-            anchor_point(&mut parent, pt_key(&sp.position), &wire_pairs);
+            anchor_point(&mut parent, pt_key(&sp.position), &wire_index);
         }
     }
 
-    let terminals = collect_terminals(sheet, path, &mut parent);
+    let mut terminals: HashMap<Key, Vec<Terminal>> = HashMap::new();
+    let mut terminal_at: HashMap<Key, Vec<Point>> = HashMap::new();
+    for (root, found) in collect_terminals_at(sheet, path, &mut parent) {
+        terminal_at.insert(root, found.iter().map(|(_, at)| *at).collect());
+        terminals.insert(root, found.into_iter().map(|(t, _)| t).collect());
+    }
     let net_labels = collect_net_labels(sheet, &mut parent);
     let membership = collect_membership(sheet, &mut parent);
 
@@ -590,6 +686,26 @@ fn analyze<'a>(sheet: &'a SchematicSheet, path: &InstancePath) -> Analysis<'a> {
         })
         .collect();
 
+    // Only a net index needs the entries' uuids; the plain netlist skips this.
+    let mut sheet_pins: HashMap<Key, Vec<members::SheetPinAt>> = HashMap::new();
+    for cs in sheet.child_sheets.iter().filter(|_| want_members) {
+        for sp in &cs.pins {
+            let Some(name) = normalize_port_name(&sp.name) else {
+                continue;
+            };
+            let root = uf_find(&mut parent, pt_key(&sp.position));
+            sheet_pins
+                .entry(root)
+                .or_default()
+                .push(members::SheetPinAt {
+                    sheet_symbol: cs.uuid,
+                    pin: sp.uuid,
+                    name: name.to_string(),
+                    at: sp.position,
+                });
+        }
+    }
+
     let mut port_labels: HashMap<String, Vec<Key>> = HashMap::new();
     for (root, labels) in &net_labels {
         for l in labels {
@@ -604,6 +720,8 @@ fn analyze<'a>(sheet: &'a SchematicSheet, path: &InstancePath) -> Analysis<'a> {
 
     Analysis {
         terminals,
+        terminal_at,
+        sheet_pins,
         net_labels,
         power_by_root,
         pin_roots,

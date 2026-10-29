@@ -47,7 +47,15 @@ pub(crate) fn is_dispatchable(command: &AppCommandId) -> bool {
 /// entry points above are built from one table and cannot drift.
 pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
     use crate::library::editor::footprint::state::EditorMode;
+    use crate::library::{LibraryMessage, PlacedPartAction, PlacedPartMsg};
 
+    let net_nav = |msg| Message::Ui(UiMsg::NetNav(msg));
+    let placed_part = |action| {
+        Message::Library(LibraryMessage::PlacedPart(PlacedPartMsg::ActionRequested(
+            action,
+        )))
+    };
+    let text_edit = |target| Message::TextEdit(TextEditMsg::Requested(target));
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
         "annotate_schematic_quietly" => {
@@ -62,9 +70,35 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "show_all_design_objects" | "zoom_to_all_objects" | "zoom_to_fit" => {
             Message::CanvasEvent(CanvasEvent::FitAll)
         }
+        "drag_keep_connections" => {
+            Message::Selection(selection_request::SelectionRequest::DragKeepingConnections)
+        }
+        "find_similar_objects" => {
+            Message::Selection(selection_request::SelectionRequest::FindSimilar(
+                crate::find_similar::FindSimilarMsg::OpenRequested { at: None },
+            ))
+        }
+        "zoom_to_selection_area" => Message::CanvasEvent(CanvasEvent::FitSelection),
+        "measure_distance" => Message::Tool(ToolMessage::SelectTool(Tool::Measure)),
         "copy" => Message::Edit(EditMsg::Copy),
         "cycle_selection_mode" => {
             Message::Selection(selection_request::SelectionRequest::CycleMode)
+        }
+        "previous_grid" | "cycle_snap_grid_backward" => Message::Ui(UiMsg::GridCycleBackward),
+        "toggle_properties_panel" => Message::Overlay(OverlayMsg::PanelToggled(
+            crate::panels::PanelKind::Properties,
+        )),
+        "toggle_schematic_filter_panel" => Message::Overlay(OverlayMsg::PanelToggled(
+            crate::panels::PanelKind::SchFilter,
+        )),
+        "toggle_schematic_list_panel" => {
+            Message::Overlay(OverlayMsg::PanelToggled(crate::panels::PanelKind::SchList))
+        }
+        "next_document_tab" => Message::Menu(MenuMessage::NextDocumentTab),
+        "previous_document_tab" => Message::Menu(MenuMessage::PreviousDocumentTab),
+        "find_next" => Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::NextRequested),
+        "find_previous" => {
+            Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::PreviousRequested)
         }
         "next_grid" => Message::Ui(UiMsg::GridCycle),
         "cycle_snap_grid_forward" | "open_grid_picker" => Message::Ui(UiMsg::GridPickerOpen),
@@ -76,11 +110,30 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "draw_graphic_line" => Message::Tool(ToolMessage::SelectTool(Tool::Line)),
         "draw_hierarchical_sheet" => Message::Tool(ToolMessage::SelectTool(Tool::Sheet)),
         "duplicate" => Message::Edit(EditMsg::Duplicate),
+        // The selected placed part's library actions (#1301, #1262).
+        "open_datasheet" => placed_part(PlacedPartAction::OpenDatasheet),
+        "edit_library_symbol" | "edit_selected_symbol_in_symbol_editor" => {
+            placed_part(PlacedPartAction::EditSymbol)
+        }
+        "bring_drawings_to_front" => Message::Edit(EditMsg::ArrangeDrawings(
+            signex_engine::DrawingArrange::ToFront,
+        )),
+        "send_drawings_to_back" => Message::Edit(EditMsg::ArrangeDrawings(
+            signex_engine::DrawingArrange::ToBack,
+        )),
+        "bring_drawings_forward" => Message::Edit(EditMsg::ArrangeDrawings(
+            signex_engine::DrawingArrange::Forward,
+        )),
+        "send_drawings_backward" => Message::Edit(EditMsg::ArrangeDrawings(
+            signex_engine::DrawingArrange::Backward,
+        )),
         // Docking the Properties panel IS how this app shows the
         // selection's properties: the status bar's
         // `OpenPropertiesForSelection` and the canvas context menu's
         // "Properties..." row both send this same message.
-        "edit_selected_object_properties" => Message::Menu(MenuMessage::OpenPropertiesPanel),
+        "edit_object_properties" | "edit_selected_object_properties" => {
+            Message::Menu(MenuMessage::OpenPropertiesPanel)
+        }
         "find" | "find_text" => Message::Overlay(OverlayMsg::OpenFind),
         "find_and_replace" => Message::Overlay(OverlayMsg::OpenReplace),
         "footprint_mode_pads" => {
@@ -88,6 +141,9 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         }
         "footprint_mode_sketch" => {
             Message::Input(InputMsg::FootprintModeShortcut(EditorMode::Sketch))
+        }
+        "footprint_recompute_courtyard_outline" => {
+            Message::Input(InputMsg::FootprintCourtyardOutlineRequested)
         }
         "footprint_mode_view_3d" => {
             Message::Input(InputMsg::FootprintModeShortcut(EditorMode::View3d))
@@ -119,6 +175,9 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "open_preferences" | "open_schematic_preferences" => {
             Message::Preferences(PreferencesMsg::Open)
         }
+        "repeat_last_item" => Message::Edit(EditMsg::RepeatLastItem),
+        "rubber_stamp_copy" => Message::Edit(EditMsg::RubberStampCopy),
+        "paste_array" => Message::Edit(EditMsg::PasteArrayRequested),
         "paste" => Message::Edit(EditMsg::Paste),
         "paste_special" | "smart_paste" => Message::Edit(EditMsg::SmartPaste),
         "place_bus" => Message::Tool(ToolMessage::SelectTool(Tool::Bus)),
@@ -126,6 +185,19 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
             Message::Tool(ToolMessage::SelectTool(Tool::Label))
         }
         "place_no_connect" => Message::Tool(ToolMessage::SelectTool(Tool::NoConnect)),
+        // The same Active Bar actions the buttons send, so a key and a click
+        // arm the same tool. The Place menu's Power Port row sends GND too.
+        "place_power_symbol" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+            crate::active_bar::ActiveBarAction::PlacePowerGND,
+        )),
+        // The Active Bar's "Port" arms a global label; "Off Sheet
+        // Connector" arms a hierarchical one.
+        "place_global_label" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+            crate::active_bar::ActiveBarAction::PlacePort,
+        )),
+        "place_hierarchical_label" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+            crate::active_bar::ActiveBarAction::PlaceOffSheetConnector,
+        )),
         "place_text" => Message::Tool(ToolMessage::SelectTool(Tool::Text)),
         "place_wire" => Message::Tool(ToolMessage::SelectTool(Tool::Wire)),
         "place_wire_to_bus_entry" => Message::Tool(ToolMessage::SelectTool(Tool::BusEntry)),
@@ -133,11 +205,8 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "placement_properties" => Message::Tool(ToolMessage::PrePlacementTab),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
-        // `ExportBom`, NOT `GenerateBom`. The latter is the stub behind
-        // the greyed-out "Generate BOM" menu row — it logs "Generate BOM
-        // is v0.8 scope" and returns `Task::none()`. `ExportBom` reaches
-        // `handle_bom_preview_open`, which is the BOM this app actually
-        // has.
+        // `ExportBom` reaches `handle_bom_preview_open`, the BOM dialog;
+        // Design > Generate BOM opens the same one.
         "report_manager_bom" => Message::Menu(MenuMessage::ExportBom),
         "reset_schematic_designators" => Message::Annotate(AnnotateMsg::OpenResetConfirm),
         "rotate_clockwise" => Message::Edit(EditMsg::RotateSelectedClockwise),
@@ -154,11 +223,30 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "toggle_electrical_grid" => Message::Ui(UiMsg::ToggleSnapHotspots),
         "undo" => Message::Edit(EditMsg::Undo),
         "unselect_all" => Message::Selection(selection_request::SelectionRequest::ClearAll),
+        // Tools > Up Hierarchy: the sheet that references the focused one.
+        "leave_sheet" | "navigate_up_hierarchy" => Message::Menu(MenuMessage::AscendToParentSheet),
         "next_sheet" => Message::Menu(MenuMessage::NextSheet),
         "previous_sheet" => Message::Menu(MenuMessage::PreviousSheet),
         // Zooms about the view centre, as View > Zoom In/Out does.
         "zoom_in_at_cursor" => Message::Menu(MenuMessage::ZoomIn),
         "zoom_out_at_cursor" => Message::Menu(MenuMessage::ZoomOut),
+        // Cross-sheet net navigation (#1270, #1271, #1272).
+        "sheet_navigation_back" => net_nav(NetNavMsg::SheetBackRequested),
+        "sheet_navigation_forward" => net_nav(NetNavMsg::SheetForwardRequested),
+        "go_to_net_partner" => net_nav(NetNavMsg::PartnerJumpRequested),
+        "highlight_net_under_cursor" => net_nav(NetNavMsg::NetHighlightRequested),
+        "highlight_related_net_objects" => net_nav(NetNavMsg::RelatedNetHighlightRequested),
+        "next_highlighted_net_item" => net_nav(NetNavMsg::HighlightStepRequested { forward: true }),
+        "previous_highlighted_net_item" => {
+            net_nav(NetNavMsg::HighlightStepRequested { forward: false })
+        }
+        "clear_net_highlighting" => net_nav(NetNavMsg::HighlightClearRequested),
+        // In-place field edits (#1255, #1670): the object under the cursor,
+        // else the single selection; Messages says so when there is none.
+        "edit_value" => text_edit(TextEditTarget::Value),
+        "edit_reference_designator" => text_edit(TextEditTarget::Designator),
+        "edit_footprint_field" => text_edit(TextEditTarget::FootprintField),
+        "edit_text_in_place" => text_edit(TextEditTarget::Text),
         // BRIDGE_ARMS_END — `tests::match_block` scans for command-id
         // literals up to this marker and no further. Everything below is
         // fallthrough machinery whose own string literals must not be
@@ -193,10 +281,10 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
 /// or leaves the app wrong, and neither is actionable mid-edit.
 fn log_unmapped(command: &AppCommandId) {
     let id = command.as_str();
-    if crate::keymap::metadata_for(command).is_some() {
+    if let Some(metadata) = crate::keymap::metadata_for(command) {
         crate::diagnostics::log_warning(format!(
-            "command '{id}' is a catalog command with no dispatch arm yet — \
-             invoking it did nothing"
+            "command '{id}': {} is not available yet",
+            metadata.label
         ));
     } else {
         crate::diagnostics::log_warning(format!(
@@ -320,7 +408,7 @@ mod tests {
     /// Catalog ids that `core_to_message` has no arm for, as measured on
     /// `trunk` @ `f211e7d1` (2026-07-25). Every one of them is bound to a
     /// trigger in the shipped `assets/keyboard-shortcuts/{altium,classic}.toml`
-    /// — 72 by a key sequence, 3 by a pointer gesture — so the user presses
+    /// (a key sequence or a pointer gesture), so the user presses
     /// the key, `take_keymap_match` consumes the stroke, and nothing happens.
     ///
     /// This list may only SHRINK. Adding a catalog entry without a bridge
@@ -329,9 +417,7 @@ mod tests {
     ///
     /// The ids listed there are a mix, and the distinction decides the fix:
     /// - **unimplemented** — the catalog entry and the binding are the only
-    ///   occurrences in the tree (`measure_distance`, `break_wire`,
-    ///   `place_global_label`, `place_hierarchical_label`,
-    ///   `repeat_last_item`, `rubber_stamp_copy`). A feature, not an arm.
+    ///   occurrences in the tree (`break_wire`). A feature, not an arm.
     ///   This is most of what is left. It also covers ids whose obvious
     ///   target turns out to be a STUB, where an arm would trade a logged
     ///   warning for a silent no-op. Read the handler body, not just its
@@ -344,42 +430,30 @@ mod tests {
     /// - **not addressable from a bare id** — the operation exists but
     ///   only in a form this entry point cannot name. `DockMessage` does
     ///   have `ClosePanel` and `ToggleCollapse`, but both are addressed
-    ///   by `(PanelPosition, index)`, and no kind-addressed toggle
-    ///   exists — so every `toggle_*_panel` id could only ever open,
-    ///   never toggle. `unselect_all` is stranded for the neighbouring
-    ///   reason: every `selected.clear()` in the tree is a step inside
+    ///   by `(PanelPosition, index)`; the panel toggles go through the
+    ///   kind-addressed `OverlayMsg::PanelToggled`. `unselect_all` is
+    ///   stranded for the opposite reason: every `selected.clear()` in the tree is a step inside
     ///   some larger operation, never a message of its own.
     ///
     /// Full analysis:
     /// `docs/audit/command-registry-action-surface-2026-07-25.md` §5.
     #[rustfmt::skip]
     const UNMAPPED_CATALOG_IDS: &[&str] = &[
-        "autoplace_fields", "break_wire", "center_on_cursor", "clear_net_highlighting",
+        "autoplace_fields", "break_wire", "center_on_cursor",
         "close_active_document", "copy_attributes_or_add_vertex", "cycle_fast_grid",
-        "cycle_snap_grid_backward", "cycle_wiring_mode", "drag_keep_connections",
-        "edit_footprint_field",
-        "edit_library_symbol", "edit_object_properties", "edit_reference_designator",
-        "edit_selected_symbol_in_symbol_editor",
-        "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2", "find_next",
-        "find_previous", "find_similar_objects", "highlight_net_under_cursor",
-        "highlight_related_net_objects", "import_graphics", "leave_sheet", "measure_distance",
-        "navigate_up_hierarchy", "next_document_tab",
-        "next_highlighted_net_item", "open_datasheet",
+        "cycle_wiring_mode",
+        "fast_grid_1", "fast_grid_2",
+        "import_graphics",
         "place_design_block",
-        "place_global_label", "place_hierarchical_label", "place_junction",
-        "place_power_symbol",
-        "previous_document_tab", "previous_grid", "previous_highlighted_net_item",
-        "refresh_view", "repeat_last_item",
-        "reset_local_coordinates", "rubber_stamp_copy", "select_expand_connection",
-        "select_node_or_connection_item", "sheet_navigation_back", "sheet_navigation_forward",
+        "refresh_view",
+        "reset_local_coordinates", "select_expand_connection",
+        "select_node_or_connection_item",
         "switch_segment_posture", "toggle_cross_select_mode", "toggle_floating_panels",
-        "toggle_properties_panel", "toggle_schematic_filter_panel",
-        "toggle_schematic_list_panel", "toggle_search_panel",
+        "toggle_search_panel",
         "undo_last_segment",
         // Forward annotation does not exist yet. Aliasing this to ERC made the
         // update-PCB shortcut run a rule check under the wrong name (#1247).
         "update_pcb_from_schematic",
-        "zoom_to_selection_area",
     ];
 
     /// Coverage ratchet: the set of catalog ids with no dispatch arm may
@@ -388,7 +462,7 @@ mod tests {
     /// The bridge's `_ => return None` fallthrough makes an unmapped id
     /// indistinguishable from a mapped one at the call site — the keymap
     /// resolves it, consumes the stroke, and no-ops. Nothing measured that
-    /// gap before this test, so it grew to 75 of 134 unnoticed before anything measured it.
+    /// gap before this test, so it grew unnoticed.
     ///
     /// Deliberately two assertions rather than one set equality: the
     /// "no longer unmapped" direction is a fix and gets its own message
@@ -453,11 +527,35 @@ mod tests {
             Message::Tool(ToolMessage::SelectTool(Tool::NoConnect))
         ));
         assert!(matches!(
+            resolve("place_power_symbol"),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::PlacePowerGND
+            ))
+        ));
+        assert!(matches!(
+            resolve("place_global_label"),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::PlacePort
+            ))
+        ));
+        assert!(matches!(
+            resolve("place_hierarchical_label"),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::PlaceOffSheetConnector
+            ))
+        ));
+        // The key reaches the Active Bar button, which arms Tool::Junction.
+        assert!(matches!(
+            resolve("place_junction"),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::PlaceJunction
+            ))
+        ));
+        assert!(matches!(
             resolve("place_wire_to_bus_entry"),
             Message::Tool(ToolMessage::SelectTool(Tool::BusEntry))
         ));
-        // `ExportBom`, not the `GenerateBom` stub — pinned because the
-        // two are one variant apart and the wrong one is silent.
+        // The BOM command opens the BOM dialog (`ExportBom`).
         assert!(matches!(
             resolve("report_manager_bom"),
             Message::Menu(MenuMessage::ExportBom)
@@ -471,6 +569,49 @@ mod tests {
             resolve("center_view_at_cursor"),
             Message::CanvasEvent(CanvasEvent::CenterAtCursor)
         ));
+    }
+
+    /// #1301 / #1262: the placed-part command ids reach the library's
+    /// placed-part action, not a stub.
+    #[test]
+    fn the_placed_part_ids_reach_their_actions() {
+        use crate::library::{LibraryMessage, PlacedPartAction, PlacedPartMsg};
+        fn resolve(id: &str) -> Message {
+            let command = AppCommandId::new(id).expect("a catalog id is a valid AppCommandId");
+            core_to_message(&command).unwrap_or_else(|| panic!("'{id}' no longer resolves"))
+        }
+        let action = |id: &str| match resolve(id) {
+            Message::Library(LibraryMessage::PlacedPart(PlacedPartMsg::ActionRequested(a))) => a,
+            other => panic!("'{id}' resolved to {other:?}"),
+        };
+        assert_eq!(action("open_datasheet"), PlacedPartAction::OpenDatasheet);
+        assert_eq!(action("edit_library_symbol"), PlacedPartAction::EditSymbol);
+        assert_eq!(
+            action("edit_selected_symbol_in_symbol_editor"),
+            PlacedPartAction::EditSymbol
+        );
+    }
+
+    /// #1670: the in-place edit ids ask the in-place editor for their field.
+    #[test]
+    fn the_field_edit_ids_request_their_target() {
+        let target = |id: &str| {
+            let command = AppCommandId::new(id).expect("a catalog id is a valid AppCommandId");
+            match core_to_message(&command) {
+                Some(Message::TextEdit(TextEditMsg::Requested(target))) => target,
+                other => panic!("'{id}' resolved to {other:?}"),
+            }
+        };
+        assert_eq!(target("edit_value"), TextEditTarget::Value);
+        assert_eq!(
+            target("edit_reference_designator"),
+            TextEditTarget::Designator
+        );
+        assert_eq!(
+            target("edit_footprint_field"),
+            TextEditTarget::FootprintField
+        );
+        assert_eq!(target("edit_text_in_place"), TextEditTarget::Text);
     }
 
     /// #103 - the cheap shortcuts that used to be dead keys now reach
@@ -514,6 +655,19 @@ mod tests {
             Some(Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
                 crate::active_bar::ActiveBarAction::Move
             )))
+        ));
+    }
+
+    /// #1473 — the courtyard-outline command id reaches the footprint
+    /// editor and is offered by the palette (it is dispatchable).
+    #[test]
+    fn courtyard_outline_command_resolves_to_the_footprint_message() {
+        let command = AppCommandId::new("footprint_recompute_courtyard_outline")
+            .expect("a catalog id is valid");
+        assert!(is_dispatchable(&command));
+        assert!(matches!(
+            core_to_message(&command),
+            Some(Message::Input(InputMsg::FootprintCourtyardOutlineRequested))
         ));
     }
 
@@ -657,6 +811,78 @@ mod tests {
 
         assert!(!is_dispatchable(&update_pcb));
         assert!(matches!(resolve(&run_erc), Some(Message::Erc(ErcMsg::Run))));
+    }
+
+    /// #103 - ids that gained an existing handler resolve; the rest of the
+    /// pinned set stays unresolved.
+    #[test]
+    fn the_103_wired_ids_resolve_to_their_handlers() {
+        for (id, expect_properties) in [
+            ("edit_object_properties", true),
+            ("leave_sheet", false),
+            ("navigate_up_hierarchy", false),
+        ] {
+            let command = AppCommandId::new(id).unwrap();
+            let message = resolve(&command).unwrap_or_else(|| panic!("'{id}' must resolve"));
+            if expect_properties {
+                assert!(matches!(
+                    message,
+                    Message::Menu(MenuMessage::OpenPropertiesPanel)
+                ));
+            } else {
+                assert!(matches!(
+                    message,
+                    Message::Menu(MenuMessage::AscendToParentSheet)
+                ));
+            }
+        }
+        for id in UNMAPPED_CATALOG_IDS {
+            assert!(!is_dispatchable(&AppCommandId::new(*id).unwrap()), "{id}");
+        }
+    }
+
+    /// #1256 / #1257 / #1266 - the canvas commands resolve to their messages.
+    #[test]
+    fn the_canvas_commands_resolve() {
+        let resolve_id = |id: &str| resolve(&AppCommandId::new(id).unwrap());
+        assert!(matches!(
+            resolve_id("measure_distance"),
+            Some(Message::Tool(ToolMessage::SelectTool(Tool::Measure)))
+        ));
+        assert!(matches!(
+            resolve_id("find_similar_objects"),
+            Some(Message::Selection(
+                selection_request::SelectionRequest::FindSimilar(
+                    crate::find_similar::FindSimilarMsg::OpenRequested { at: None }
+                )
+            ))
+        ));
+        assert!(matches!(
+            resolve_id("drag_keep_connections"),
+            Some(Message::Selection(
+                selection_request::SelectionRequest::DragKeepingConnections
+            ))
+        ));
+        assert!(matches!(
+            resolve_id("zoom_to_selection_area"),
+            Some(Message::CanvasEvent(CanvasEvent::FitSelection))
+        ));
+    }
+
+    /// #103 - pressing an unmapped command's key says "<label> is not
+    /// available yet" in the Messages panel instead of doing nothing.
+    #[test]
+    fn an_unmapped_command_reports_that_it_is_not_available_yet() {
+        let _guard = serial();
+        let _ = crate::diagnostics::init_logging();
+        let command = AppCommandId::new("break_wire").unwrap();
+
+        assert!(core_to_message(&command).is_none());
+
+        assert!(crate::diagnostics::recent_entries().iter().any(|entry| {
+            entry.message.contains("command 'break_wire'")
+                && entry.message.contains("Break wire is not available yet")
+        }));
     }
 
     /// The other half: dispatching an unmapped command still reports, so

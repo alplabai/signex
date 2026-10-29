@@ -131,6 +131,35 @@ fn other_units_are_left_out_like_on_the_canvas() {
     assert_eq!(emit(&lib, &sym).len(), 1);
 }
 
+/// An alternate-body symbol draws the alternate graphics and not the normal
+/// ones (#1233), exactly as the shared lowering does.
+#[test]
+fn the_alternate_body_draws_the_alternate_graphics() {
+    let mut lib = lib_text();
+    lib.graphics[0].body_style = 1;
+    lib.graphics.push(LibGraphic {
+        unit: 0,
+        body_style: 2,
+        graphic: text_graphic("&", 0.0),
+    });
+    let texts = |sym: &Symbol| -> Vec<String> {
+        emit(&lib, sym)
+            .into_iter()
+            .filter_map(|e| match e {
+                SvgElement::Text { text, .. } => Some(text),
+                _ => None,
+            })
+            .collect()
+    };
+    let normal = Symbol::default();
+    let alt = Symbol {
+        body_style: signex_types::schematic::BodyStyle::Alternate,
+        ..Symbol::default()
+    };
+    assert_eq!(texts(&normal), vec!["+".to_string()]);
+    assert_eq!(texts(&alt), vec!["&".to_string()]);
+}
+
 #[test]
 fn a_power_port_without_a_library_entry_is_drawn_from_its_built_in_body() {
     let sym = Symbol {
@@ -159,4 +188,37 @@ fn a_power_port_without_a_library_entry_is_drawn_from_its_built_in_body() {
         &SchematicPalette::classic(),
     );
     assert!(plain.is_empty());
+}
+
+/// A power port's library entry (#1408) draws through its pin, and the SVG
+/// shows the same elements as the entry-less built-in body.
+#[test]
+fn power_port_library_entry_draws_its_pin_like_the_built_in_body() {
+    for lib_id in ["power:GND", "power:+5V", "power:arrow"] {
+        let sym = Symbol {
+            lib_id: lib_id.to_string(),
+            is_power: true,
+            unit: 1,
+            ..Symbol::default()
+        };
+        let lib = signex_types::schematic::power_port_lib_symbol(lib_id);
+        let mut with_entry: Vec<String> =
+            emit(&lib, &sym).iter().map(|e| format!("{e:?}")).collect();
+        let mut xform_out = Vec::new();
+        push_symbol_lib_graphics(
+            &mut xform_out,
+            &sym,
+            None,
+            &PageTransform {
+                mm_to_unit: 1.0,
+                translate_x: 0.0,
+                translate_y: 0.0,
+            },
+            &SchematicPalette::classic(),
+        );
+        let mut built_in: Vec<String> = xform_out.iter().map(|e| format!("{e:?}")).collect();
+        with_entry.sort();
+        built_in.sort();
+        assert_eq!(with_entry, built_in, "{lib_id}");
+    }
 }

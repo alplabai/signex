@@ -40,8 +40,12 @@ mod component_preview;
 mod components_panel;
 mod datasheet_save;
 mod document_options;
+#[cfg(test)]
+mod edit_modal_tests;
 mod editor;
 mod external_edits;
+#[cfg(test)]
+mod grid_window_tests;
 mod lifecycle;
 mod new_component;
 mod pricing;
@@ -50,15 +54,21 @@ mod pricing_tests;
 mod primitive_picker;
 mod read_only;
 mod recovery;
+#[cfg(test)]
+mod recovery_read_only_tests;
+mod refresh;
 mod registration;
 mod settings;
 #[cfg(test)]
+mod settings_tests;
+#[cfg(test)]
 mod stale_row_tests;
 mod updates;
+mod use_site;
 
 use recovery::{
     handle_recovery_broken_binding, handle_recovery_git_missing, handle_recovery_library_missing,
-    handle_recovery_library_missing_locate_result, route_open_error,
+    handle_recovery_library_missing_locate_result, open_error_notice, route_open_error,
 };
 
 impl Signex {
@@ -94,6 +104,7 @@ impl Signex {
             LibraryMessage::CloseLibrary(path) => self.handle_close_library(path),
             LibraryMessage::OpenPicker => {
                 self.library.picker = Some(PickerState::default());
+                self.library.sync_view_caches();
                 Task::none()
             }
             LibraryMessage::ClosePicker => {
@@ -139,43 +150,6 @@ impl Signex {
             LibraryMessage::BrowserCancelRenameTable { library_path } => {
                 self.handle_browser_cancel_rename_table(library_path)
             }
-            LibraryMessage::BrowserBeginAddClass { library_path } => {
-                self.handle_browser_begin_add_class(library_path)
-            }
-            LibraryMessage::BrowserSetNewClassKey {
-                library_path,
-                value,
-            } => self.handle_browser_set_new_class_key(library_path, value),
-            LibraryMessage::BrowserSetNewClassLabel {
-                library_path,
-                value,
-            } => self.handle_browser_set_new_class_label(library_path, value),
-            LibraryMessage::BrowserCancelAddClass { library_path } => {
-                self.handle_browser_cancel_add_class(library_path)
-            }
-            LibraryMessage::BrowserConfirmAddClass { library_path } => {
-                self.handle_browser_confirm_add_class(library_path)
-            }
-            LibraryMessage::BrowserDeleteClass { library_path, key } => {
-                self.handle_browser_delete_class(library_path, key)
-            }
-            LibraryMessage::BrowserBeginRenameClass { library_path, key } => {
-                self.handle_browser_begin_rename_class(library_path, key)
-            }
-            LibraryMessage::BrowserSetRenameClassKey {
-                library_path,
-                value,
-            } => self.handle_browser_set_rename_class_key(library_path, value),
-            LibraryMessage::BrowserSetRenameClassLabel {
-                library_path,
-                value,
-            } => self.handle_browser_set_rename_class_label(library_path, value),
-            LibraryMessage::BrowserCancelRenameClass { library_path } => {
-                self.handle_browser_cancel_rename_class(library_path)
-            }
-            LibraryMessage::BrowserConfirmRenameClass { library_path } => {
-                self.handle_browser_confirm_rename_class(library_path)
-            }
             LibraryMessage::BrowserConfirmRenameTable { library_path } => {
                 self.handle_browser_confirm_rename_table(library_path)
             }
@@ -183,7 +157,6 @@ impl Signex {
                 self.handle_browser_confirm_add_table(library_path)
             }
 
-            LibraryMessage::ToggleLibraryTreeNode(idx) => self.handle_toggle_library_tree_node(idx),
             LibraryMessage::OpenComponentRow {
                 library_path,
                 table,
@@ -198,10 +171,7 @@ impl Signex {
             } => self.handle_editor_event(EditorAddress::new(library_path, table, row_id), msg),
             LibraryMessage::Picker(msg) => self.handle_picker_message(msg),
             LibraryMessage::Settings(msg) => self.handle_library_settings_message(msg),
-            LibraryMessage::JumpToUseSite(site) => {
-                commands::jump_to_use_site(&site);
-                Task::none()
-            }
+            LibraryMessage::JumpToUseSite(site) => self.handle_jump_to_use_site(site),
             LibraryMessage::Noop => Task::none(),
 
             LibraryMessage::ConfirmCloseLibrary {
@@ -222,9 +192,20 @@ impl Signex {
             }
             LibraryMessage::LibraryComponentResolved {
                 target_sheet,
+                arm_epoch,
                 library_path,
                 result,
-            } => self.handle_library_component_resolved(target_sheet, library_path, result),
+            } => self.handle_library_component_resolved(
+                target_sheet,
+                arm_epoch,
+                library_path,
+                result,
+            ),
+            LibraryMessage::DesignatorsScanned { generation, result } => {
+                self.apply_designator_scan(generation, &result);
+                Task::none()
+            }
+            LibraryMessage::PlacedPart(msg) => self.dispatch_placed_part_message(msg),
             LibraryMessage::SymbolChoiceResolved {
                 target_sheet,
                 engine_instance,
@@ -286,6 +267,14 @@ impl Signex {
             LibraryMessage::MountFinished { path, prepared } => {
                 self.handle_mount_finished(path, prepared)
             }
+            LibraryMessage::RefreshFinished {
+                path,
+                generation,
+                snapshot,
+            } => {
+                self.handle_refresh_finished(path, generation, snapshot);
+                Task::none()
+            }
             LibraryMessage::BrowserSelectTable {
                 library_path,
                 table,
@@ -294,6 +283,9 @@ impl Signex {
                 library_path,
                 value,
             } => self.handle_browser_search_changed(library_path, value),
+            LibraryMessage::BrowserRangeFilter { library_path, msg } => {
+                self.handle_browser_range_filter(library_path, msg)
+            }
             LibraryMessage::BrowserSortColumn {
                 library_path,
                 column_key,
@@ -303,6 +295,14 @@ impl Signex {
                 table,
                 row_id,
             } => self.handle_browser_select_row(library_path, table, row_id),
+            LibraryMessage::BrowserGridScrolled {
+                library_path,
+                offset_y,
+            } => self.handle_browser_grid_scrolled(library_path, offset_y),
+            LibraryMessage::BrowserGridResized {
+                library_path,
+                viewport_h,
+            } => self.handle_browser_grid_resized(library_path, viewport_h),
             LibraryMessage::BrowserAddComponent {
                 library_path,
                 table,
@@ -394,6 +394,7 @@ impl Signex {
             LibraryMessage::LibraryUpdatesSkipAll => self.handle_library_updates_skip_all(),
             LibraryMessage::LibraryUpdatesCancel => {
                 self.library.library_updates = None;
+                self.show_next_queued_updates();
                 Task::none()
             }
 

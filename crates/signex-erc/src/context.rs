@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use signex_net::{ConnectedPoints, SheetConnectivity, best_net_name_of, pt_key};
 use signex_types::schematic::{InstancePath, SchematicSheet};
-use signex_types::schematic::{LabelType, PinDirection, Point, SymbolTransform};
+use signex_types::schematic::{LabelType, PinDirection, Point, SymbolTransform, instance_pins};
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
@@ -181,6 +181,9 @@ pub struct ErcNetPin {
     pub occurrence: InstancePath,
     /// That symbol's reference designator, for messages.
     pub reference: String,
+    /// The pin's number (or name when it has none): the `pin` half of
+    /// `reference.pin`.
+    pub number: String,
     /// World-space position of the pin tip.
     pub position: Point,
     pub direction: PinDirection,
@@ -383,11 +386,8 @@ impl ErcContext {
             .symbols
             .iter()
             .filter_map(|sym| {
-                let lib_sym = snapshot.lib_symbols.get(&sym.lib_id)?;
-                let pins = lib_sym
-                    .pins
-                    .iter()
-                    .filter(|lp| lp.unit == 0 || lp.unit == sym.unit)
+                let lib_sym = snapshot.resolve_lib_symbol(sym)?;
+                let pins = instance_pins(&lib_sym, sym)
                     .map(|lp| {
                         let world = SymbolTransform::from_symbol(sym).apply(lp.pin.position);
                         ErcPin {
@@ -542,6 +542,7 @@ fn summarize_nets(
                 symbol: sym.uuid,
                 occurrence: InstancePath::root(),
                 reference: sym.reference.clone(),
+                number: pin.number.clone(),
                 position: pin.world_pos,
                 direction: pin.electrical_type,
                 is_power_flag: sym.is_power && signex_net::is_power_flag(&sym.lib_id),

@@ -1,0 +1,427 @@
+//! #1202 — the Project document tab (General section) replaces the read-only
+//! Project Options modal. Each test drives `Signex::update` the way the UI
+//! does; the off-thread `.snxprj` write is run by hand (`settle_task`).
+
+use signex_app::app::{
+    ContextMenuMsg, EditMsg, FileMsg, Message, ProjectCloseChoice, ProjectGeneralFacts, ProjectMsg,
+    TabContextAction, UiMsg, WindowMsg,
+};
+use signex_app::dock::DockMessage;
+use signex_app::panels::PanelMsg;
+
+use crate::project_tab_support::{
+    add_net_class, edit_description, fixture, is_dirty, on_disk, open_dirty_root_sheet, open_tab,
+    project_id, save, within_watchdog,
+};
+
+#[test]
+fn project_options_opens_the_project_tab_and_focuses_it_again() {
+    let mut f = fixture();
+    let id = project_id(&f.app);
+    open_tab(&mut f.app);
+
+    let tabs = &f.app.document_state.tabs;
+    assert_eq!(tabs.len(), 1);
+    assert_eq!(tabs[0].kind.as_project(), Some(id));
+    assert_eq!(tabs[0].path, f.prj);
+    assert_eq!(tabs[0].project_id, Some(id));
+    assert_eq!(f.app.document_state.active_tab, 0);
+
+    // A second Project Options focuses the same tab instead of adding one.
+    open_tab(&mut f.app);
+    assert_eq!(f.app.document_state.tabs.len(), 1);
+}
+
+#[test]
+fn general_facts_show_the_project_files() {
+    let f = fixture();
+    let facts = ProjectGeneralFacts::of(&f.app.document_state.projects[0]);
+    assert_eq!(
+        facts.directory,
+        f.prj.parent().unwrap().display().to_string()
+    );
+    assert_eq!(facts.schematic_root.as_deref(), Some("Oscar.snxsch"));
+    assert_eq!(facts.pcb_file.as_deref(), Some("Oscar.snxpcb"));
+    assert_eq!(facts.library_count, 1);
+}
+
+#[test]
+fn ctrl_s_writes_the_description_off_thread_and_clears_dirty() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "Motor controller");
+
+    let task = f.app.update(Message::File(FileMsg::Save));
+    assert_eq!(
+        on_disk(&f.prj).description,
+        None,
+        "the write runs in the returned task, not inside update"
+    );
+    assert!(is_dirty(&f), "nothing is clean before the write lands");
+    crate::settle_support::settle_task(&mut f.app, task);
+
+    assert_eq!(
+        on_disk(&f.prj).description.as_deref(),
+        Some("Motor controller")
+    );
+    assert!(!is_dirty(&f), "the landed write clears the marker");
+}
+
+#[test]
+fn closing_the_project_with_tab_edits_prompts() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "unsaved");
+
+    crate::close_support::close_first_project(&mut f.app);
+
+    let prompt = f
+        .app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("unsaved Project tab edits must prompt on close");
+    assert!(prompt.dirty_paths.contains(&f.prj));
+}
+
+#[test]
+fn closing_the_tab_parks_the_edits_and_reopening_keeps_undo() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "parked");
+    let _ = f.app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::Close(0),
+    )));
+    assert!(f.app.document_state.tabs.is_empty());
+    assert!(is_dirty(&f), "a closed dirty tab keeps its marker");
+
+    open_tab(&mut f.app);
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(f.app.document_state.projects[0].data.description, None);
+}
+
+#[test]
+fn quit_save_all_writes_the_project_tab_edits() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "saved at quit");
+    let _ = f.app.update(Message::Window(WindowMsg::CloseMainWindow));
+    let modal = f
+        .app
+        .ui_state
+        .app_quit_confirm
+        .as_ref()
+        .expect("quit with Project tab edits prompts");
+    assert!(modal.dirty_paths.contains(&f.prj));
+
+    crate::settle_support::settle(
+        &mut f.app,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    );
+    assert_eq!(
+        on_disk(&f.prj).description.as_deref(),
+        Some("saved at quit")
+    );
+    assert!(!is_dirty(&f));
+}
+
+#[test]
+fn another_project_writer_while_the_tab_is_dirty_keeps_both_changes() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "mine");
+    add_net_class(&mut f.app);
+
+    // Undo in the Project tab takes back only its own field.
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    let data = &f.app.document_state.projects[0].data;
+    assert_eq!(data.description, None);
+    assert_eq!(data.net_classes.len(), 1, "the other writer's change stays");
+    let _ = f.app.update(Message::Edit(EditMsg::Redo));
+
+    save(&mut f.app);
+    let disk = on_disk(&f.prj);
+    assert_eq!(disk.description.as_deref(), Some("mine"));
+    assert_eq!(disk.net_classes.len(), 1);
+    assert!(!is_dirty(&f));
+}
+
+#[test]
+fn a_writer_during_an_in_flight_save_keeps_the_project_dirty() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "first");
+    let task = f.app.update(Message::File(FileMsg::Save));
+    // Another writer lands while the snapshot is being written.
+    add_net_class(&mut f.app);
+    crate::settle_support::settle_task(&mut f.app, task);
+
+    assert_eq!(on_disk(&f.prj).description.as_deref(), Some("first"));
+    assert!(
+        is_dirty(&f),
+        "the written snapshot lacks the net class: the project must stay dirty"
+    );
+    save(&mut f.app);
+    let disk = on_disk(&f.prj);
+    assert_eq!(disk.description.as_deref(), Some("first"));
+    assert_eq!(disk.net_classes.len(), 1);
+    assert!(!is_dirty(&f));
+}
+
+#[test]
+fn description_edits_undo_and_redo_as_one_typing_run() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    for text in ["M", "Mo", "Motor"] {
+        edit_description(&mut f.app, text);
+    }
+    assert!(is_dirty(&f));
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(f.app.document_state.projects[0].data.description, None);
+    let _ = f.app.update(Message::Edit(EditMsg::Redo));
+    assert_eq!(
+        f.app.document_state.projects[0].data.description.as_deref(),
+        Some("Motor")
+    );
+}
+
+#[test]
+fn typing_after_a_save_is_a_new_undo_step() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "saved");
+    save(&mut f.app);
+    edit_description(&mut f.app, "saved and more");
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(
+        f.app.document_state.projects[0].data.description.as_deref(),
+        Some("saved"),
+        "undo stops at what was saved"
+    );
+}
+
+#[test]
+fn a_tab_switch_ends_the_description_typing_run() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "a");
+    edit_description(&mut f.app, "ab");
+    open_dirty_root_sheet(&mut f);
+    let window = iced::window::Id::unique();
+    f.app.ui_state.main_window_id = Some(window);
+    let select = |app: &mut signex_app::app::Signex, idx| {
+        let _ = app.update(Message::Tab {
+            window_id: window,
+            msg: signex_app::tab_bar::TabMessage::Select(idx),
+        });
+    };
+    select(&mut f.app, 0);
+    assert_eq!(f.app.document_state.active_tab, 0);
+    edit_description(&mut f.app, "abc");
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(
+        f.app.document_state.projects[0].data.description.as_deref(),
+        Some("ab"),
+        "undo removes only the run typed after the switch"
+    );
+}
+
+#[test]
+fn picking_a_designator_standard_ends_the_description_typing_run() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "a");
+    let project_id = project_id(&f.app);
+    let _ = f.app.update(Message::Project(ProjectMsg::Tab(
+        signex_app::app::ProjectTabMsg::DesignatorStandardPicked {
+            project_id,
+            standard: Some(signex_types::designator::DesignatorStandard::Iec81346_2),
+        },
+    )));
+    edit_description(&mut f.app, "ab");
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(
+        f.app.document_state.projects[0].data.description.as_deref(),
+        Some("a"),
+        "the pick separates the two typing runs"
+    );
+}
+
+fn pick_standard(
+    f: &mut crate::project_tab_support::Fixture,
+    standard: Option<signex_types::designator::DesignatorStandard>,
+) {
+    let project_id = project_id(&f.app);
+    let _ = f.app.update(Message::Project(ProjectMsg::Tab(
+        signex_app::app::ProjectTabMsg::DesignatorStandardPicked {
+            project_id,
+            standard,
+        },
+    )));
+}
+
+#[test]
+fn a_standard_pick_is_an_undo_step_in_order_with_description_edits() {
+    use signex_types::designator::DesignatorStandard::Iec81346_2;
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "Motor");
+    pick_standard(&mut f, Some(Iec81346_2));
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    let data = &f.app.document_state.projects[0].data;
+    assert_eq!(data.designator_standard(), None);
+    assert_eq!(data.description.as_deref(), Some("Motor"));
+    assert!(is_dirty(&f));
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(f.app.document_state.projects[0].data.description, None);
+    let _ = f.app.update(Message::Edit(EditMsg::Redo));
+    let _ = f.app.update(Message::Edit(EditMsg::Redo));
+    let data = &f.app.document_state.projects[0].data;
+    assert_eq!(data.description.as_deref(), Some("Motor"));
+    assert_eq!(data.designator_standard(), Some(Iec81346_2));
+}
+
+#[test]
+fn a_save_between_a_pick_and_an_edit_keeps_them_separate_steps() {
+    use signex_types::designator::DesignatorStandard::Ieee315;
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    pick_standard(&mut f, Some(Ieee315));
+    save(&mut f.app);
+    edit_description(&mut f.app, "after");
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    let data = &f.app.document_state.projects[0].data;
+    assert_eq!(data.description, None);
+    assert_eq!(data.designator_standard(), Some(Ieee315));
+}
+
+#[test]
+fn the_project_tab_stays_docked() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    let _ = f.app.update(Message::Window(WindowMsg::UndockTab(0)));
+    assert!(
+        f.app.ui_state.windows.is_empty(),
+        "a Project tab is not undocked in this slice"
+    );
+    assert_eq!(f.app.document_state.tabs.len(), 1);
+}
+
+#[test]
+fn ctrl_s_in_a_dirty_sheet_with_project_tab_edits_writes_both_and_returns() {
+    within_watchdog("Ctrl+S from the sheet", || {
+        let mut f = fixture();
+        open_tab(&mut f.app);
+        edit_description(&mut f.app, "from the sheet");
+        let sheet = open_dirty_root_sheet(&mut f);
+        save(&mut f.app);
+        assert!(sheet.exists(), "the sheet was written");
+        assert_eq!(
+            on_disk(&f.prj).description.as_deref(),
+            Some("from the sheet")
+        );
+        assert!(f.app.document_state.dirty_paths.is_empty());
+    });
+}
+
+#[test]
+fn quit_save_all_with_a_dirty_sheet_and_project_tab_edits_writes_both_and_returns() {
+    within_watchdog("quit Save All", || {
+        let mut f = fixture();
+        open_tab(&mut f.app);
+        edit_description(&mut f.app, "at quit");
+        let sheet = open_dirty_root_sheet(&mut f);
+        let _ = f.app.update(Message::Window(WindowMsg::CloseMainWindow));
+        crate::settle_support::settle(
+            &mut f.app,
+            Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+        );
+        assert!(sheet.exists());
+        assert_eq!(on_disk(&f.prj).description.as_deref(), Some("at quit"));
+        assert!(f.app.document_state.dirty_paths.is_empty());
+    });
+}
+
+#[test]
+fn a_history_restore_of_the_project_tab_is_refused_and_changes_nothing() {
+    let _ = signex_app::diagnostics::init_logging();
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "unsaved edit");
+    assert!(is_dirty(&f));
+    let bytes = std::fs::read(&f.prj).unwrap();
+
+    let _restore_task = f.app.update(Message::Dock(DockMessage::Panel(
+        PanelMsg::HistoryRestoreClicked {
+            sha: "0000000000000000000000000000000000000000".to_string(),
+        },
+    )));
+
+    assert!(
+        !f.app.document_state.pending_restores.contains(&f.prj),
+        "no restore worker was started"
+    );
+    assert_eq!(
+        std::fs::read(&f.prj).unwrap(),
+        bytes,
+        "the file is untouched"
+    );
+    assert!(is_dirty(&f), "the unsaved-edit marker stays");
+    assert_eq!(
+        f.app.document_state.projects[0].data.description.as_deref(),
+        Some("unsaved edit"),
+        "the loaded project keeps its in-memory data"
+    );
+    let prj = f.prj.display().to_string();
+    assert!(
+        signex_app::diagnostics::recent_entries().iter().any(|e| {
+            e.message.contains("was not restored")
+                && e.message
+                    .contains("restoring a project file from History is not supported")
+                && e.message.contains(&prj)
+        }),
+        "the refusal reaches Messages"
+    );
+}
+
+/// The messages `task` emits, without feeding them back.
+fn emitted(task: iced::Task<Message>) -> Vec<Message> {
+    let Some(stream) = iced_runtime::task::into_stream(task) else {
+        return Vec::new();
+    };
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime
+        .block_on(futures::StreamExt::collect::<Vec<_>>(stream))
+        .into_iter()
+        .filter_map(|action| match action {
+            iced_runtime::Action::Output(message) => Some(message),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn dragging_the_project_tab_past_the_edge_asks_to_undock_once() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    f.app.ui_state.window_size = (800.0, 600.0);
+    f.app.ui_state.tab_dragging = Some((0, 10.0, 10.0));
+
+    let mut undock_requests = 0;
+    for x in [-100.0, -120.0, -140.0] {
+        let task = f.app.update(Message::Ui(UiMsg::DragMove(x, 10.0)));
+        for message in emitted(task) {
+            if matches!(message, Message::Window(WindowMsg::UndockTab(0))) {
+                undock_requests += 1;
+            }
+            let _ = f.app.update(message);
+        }
+    }
+
+    assert_eq!(undock_requests, 1, "one refusal per drag, not per move");
+    assert!(
+        f.app.ui_state.tab_dragging.is_none(),
+        "the refusal ends the drag"
+    );
+    assert_eq!(f.app.document_state.tabs.len(), 1, "the tab stays docked");
+}

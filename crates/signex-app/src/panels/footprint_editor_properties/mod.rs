@@ -12,15 +12,22 @@ use iced::{Color, Element, Length};
 use super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
 };
+use crate::styles::{Spacing, TypeScale};
 use pad::{
     PadEditTarget, PadFormValues, render_pad_form_pad_features, render_pad_form_pad_stack,
     render_pad_form_properties,
 };
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
+
 // Submodule declarations (split from the original 4570-line file).
+mod conflicts;
 mod managers;
 mod pad;
 mod pad_stack_check;
+mod redundant;
 mod sections;
 mod selection;
 mod snap_options;
@@ -72,18 +79,22 @@ pub(super) fn view_footprint_editor_properties<'a>(
     };
 
     let mut header_row = row![
-        text(&fp.footprint_name).size(12).color(primary),
-        text("·").size(12).color(muted),
-        text(mode_label).size(11).color(muted),
+        text(&fp.footprint_name).size(TS.label).color(primary),
+        text("·").size(TS.label).color(muted),
+        text(mode_label).size(TS.body).color(muted),
     ]
     .spacing(6)
     .align_y(iced::Alignment::Center);
     if let Some(tag) = multi_select_tag {
-        header_row = header_row.push(text("·").size(12).color(muted));
-        header_row = header_row.push(text(tag).size(11).color(accent_c));
+        header_row = header_row.push(text("·").size(TS.label).color(muted));
+        header_row = header_row.push(text(tag).size(TS.body).color(accent_c));
     }
 
-    col = col.push(container(header_row).padding([6, 8]).width(Length::Fill));
+    col = col.push(
+        container(header_row)
+            .padding([6.0, SP.m])
+            .width(Length::Fill),
+    );
     col = col.push(super::thin_sep(border_c));
 
     // v0.20 — Altium-parity context-aware Properties panel for the
@@ -138,12 +149,12 @@ pub(super) fn view_footprint_editor_properties<'a>(
             let pad_idx = pad.idx;
             col = col.push(
                 container(
-                    iced::widget::button(text("Edit in Sketch ▸").size(10).color(primary))
-                        .padding([4, 10])
+                    iced::widget::button(text("Edit in Sketch ▸").size(TS.caption).color(primary))
+                        .padding([SP.s, 10.0])
                         .on_press(PanelMsg::FpEditorEditPadInSketch { pad_idx })
                         .style(iced::widget::button::primary),
                 )
-                .padding([6, 8])
+                .padding([6.0, SP.m])
                 .width(Length::Fill),
             );
             // v0.25 polish — reserve 12 px on the right so the
@@ -256,8 +267,8 @@ fn render_fp_settings_and_hint<'a>(
             FootprintModeKind::View3d => "3D View — use the 3D preview pane to inspect the body.",
         };
         col = col.push(
-            container(text(hint).size(10).color(muted))
-                .padding([4, 8])
+            container(text(hint).size(TS.caption).color(muted))
+                .padding([SP.s, SP.m])
                 .width(Length::Fill),
         );
     }

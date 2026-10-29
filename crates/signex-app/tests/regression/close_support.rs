@@ -12,7 +12,7 @@ use signex_app::app::{ContextMenuMsg, Message, ProjectMsg, ProjectTreeAction, Si
 pub fn close_first_project(app: &mut Signex) {
     let project_id = app.document_state.projects[0].id;
     let task = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::CloseProject(vec![0]),
+        ProjectTreeAction::CloseProject(vec![app.document_state.projects[0].id.to_string()]),
     )));
     assert_eq!(task.units(), 1, "Close Project must start the resolve task");
     assert!(

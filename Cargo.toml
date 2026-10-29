@@ -68,6 +68,9 @@ iced_aw = { version = "0.13", default-features = false, features = [
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 toml = "0.8"
+# Format-preserving edit of a .snxlib that holds unknown keys (#1435). Same
+# version and features `toml` already builds, so it adds no crate.
+toml_edit = "0.22"
 
 # Identity
 uuid = { version = "1.23.1", features = ["v4", "v7", "serde"] }
@@ -109,7 +112,7 @@ sha2 = "0.10"
 # Library subsystem — Phase 1 (adapters: local-git, database server, distributor APIs, search, AI-stub)
 git2 = { version = "0.21", default-features = false, features = ["vendored-libgit2"] }
 keyring = "3"
-tantivy = "0.22"
+tantivy = "0.27"
 # NOTE: oauth2 is declared directly in signex-library (it needs
 # default-features = false + the reqwest-blocking feature set, which cannot
 # be expressed by inheriting a workspace entry). No crate inherits an

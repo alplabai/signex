@@ -6,7 +6,13 @@ use super::*;
 #[derive(Debug, Clone, Default)]
 pub struct PickerState {
     pub filter: String,
+    /// Range filters on parameter columns of the list (#1572).
+    pub range_filters: crate::library::range_filter::RangeFilters,
     pub selected: Option<(PathBuf, ComponentSummary)>,
+    /// The list the picker draws; kept current by `sync_view_caches`.
+    pub rows: PickerRows,
+    /// What the modal is for; see [`PickerMode`].
+    pub mode: super::placed_part::PickerMode,
 }
 
 /// Inline form state for "+ New Table…" on the Library Browser
@@ -122,6 +128,23 @@ pub struct ComponentPreviewState {
     /// directly to `f64` fights typing.
     pub params_edit_buf: HashMap<String, String>,
 
+    /// The SI prefix picked next to a measurement's number buffer, by
+    /// parameter name. Absent = the prefix the stored value displays.
+    pub params_prefix: HashMap<String, signex_types::quantity::SiPrefix>,
+
+    /// The class-template slot behind a measurement's pending edit, by
+    /// parameter name, so a commit (Enter, a prefix pick, Save) enforces
+    /// the slot's unit and sign rules.
+    pub params_slot: HashMap<String, signex_library::ParamSlot>,
+
+    /// Why a measurement's pending edit was refused, by parameter name.
+    /// Shown next to the field; Save is blocked while one is pending.
+    pub params_error: HashMap<String, String>,
+
+    /// A neutral one-line notice beside a measurement (not a refusal), by
+    /// parameter name: a unit change reinterprets the number.
+    pub params_note: HashMap<String, String>,
+
     /// Name typed into the "Add custom parameter" input, consumed by the
     /// kind pills.
     pub new_param_name: String,
@@ -160,6 +183,14 @@ pub struct ComponentPreviewState {
     /// a reload are refused, and the save commits this copy, so edits made
     /// meanwhile stay unsaved and the editor stays dirty.
     pub saving_row: Option<ComponentRow>,
+    /// Stamp of the save `saving_row` belongs to (`DocumentSaves::mint_generation`),
+    /// so the completion of an older save (the editor was closed and
+    /// reopened meanwhile) cannot act on a newer one. `0` until a save starts.
+    pub saving_generation: u64,
+    /// The Save All (its batch id) the running save belongs to: its outcome
+    /// is recorded for that flow's settle step
+    /// (`LibraryState::batch_row_failures`) instead of raising its own card.
+    pub saving_batch: Option<u64>,
 }
 
 impl ComponentPreviewState {
@@ -175,6 +206,10 @@ impl ComponentPreviewState {
             sim_body: None,
             active_tab: PreviewTab::Preview,
             params_edit_buf: HashMap::new(),
+            params_prefix: HashMap::new(),
+            params_slot: HashMap::new(),
+            params_error: HashMap::new(),
+            params_note: HashMap::new(),
             new_param_name: String::new(),
             pin_map_state: PinMapInlineState::default(),
             alternate_error: None,
@@ -184,7 +219,25 @@ impl ComponentPreviewState {
             staged_datasheets: HashMap::new(),
             datasheet_errors: HashMap::new(),
             saving_row: None,
+            saving_generation: 0,
+            saving_batch: None,
         }
+    }
+
+    /// The prefix the picker beside a measurement's number shows: the one
+    /// picked, else the one the stored value displays with, else none.
+    pub fn measurement_prefix(&self, name: &str) -> signex_types::quantity::SiPrefix {
+        self.params_prefix
+            .get(name)
+            .copied()
+            .or_else(|| {
+                self.row
+                    .parameters
+                    .get(name)
+                    .and_then(|v| v.measurement_parts())
+                    .map(|p| p.prefix)
+            })
+            .unwrap_or(signex_types::quantity::SiPrefix::One)
     }
 
     /// Unsaved work: the dirty flag, or a half-typed numeric value still in
@@ -237,18 +290,19 @@ impl ComponentPreviewState {
     }
 }
 
-/// Backwards-compatible alias — other slices still refer to
-/// `ComponentEditorState` while their own retarget passes land. Once
-/// every consumer (panel / documents / commands /
-/// dispatch) is on `ComponentPreviewState`, this alias goes away.
-pub type ComponentEditorState = ComponentPreviewState;
-
 /// Distributor APIs Settings panel state.
 #[derive(Debug, Clone)]
 pub struct DistributorSettings {
     pub digikey_account_email: Option<String>,
     pub digikey_status: Option<String>,
     pub digikey_in_flight: bool,
+    /// A DigiKey worker (or the keyring delete of a token a cancelled one
+    /// stored) is still outstanding. Unlike `digikey_in_flight` it survives
+    /// Cancel: the keyring has one slot, so a new Connect is refused until
+    /// the previous worker's result - and any stale-token delete it
+    /// triggered - has been processed. That keeps at most one writer
+    /// alive, which is what makes the stale cleanup race-free.
+    pub digikey_worker_busy: bool,
     pub digikey_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// Monotonic counter bumped on every `DigiKeyConnect`. The OAuth
     /// worker carries its generation through the `DigiKeyOAuthResult`
@@ -257,6 +311,10 @@ pub struct DistributorSettings {
     /// reconnect could let the first worker's eventual outcome
     /// overwrite the second flow's credentials.
     pub digikey_flow_generation: u64,
+    /// Deletes the stored DigiKey refresh token. A field, not a hard-wired
+    /// call, so a test can observe the request without touching the OS
+    /// credential store.
+    pub digikey_token_remover: fn() -> Result<(), String>,
     pub mouser_api_key_buf: String,
     pub mouser_status: Option<String>,
     pub mouser_in_flight: bool,
@@ -273,8 +331,10 @@ impl Default for DistributorSettings {
             digikey_account_email: None,
             digikey_status: None,
             digikey_in_flight: false,
+            digikey_worker_busy: false,
             digikey_cancel: None,
             digikey_flow_generation: 0,
+            digikey_token_remover: crate::library::settings::digikey_oauth::remove_stored_token,
             mouser_api_key_buf: String::new(),
             mouser_status: None,
             mouser_in_flight: false,
@@ -288,7 +348,3 @@ impl Default for DistributorSettings {
         }
     }
 }
-
-// `ComponentPreviewState::from_row` is the canonical builder; the legacy
-// `from_head` helper that constructed an editor from a `Component` chain
-// is gone with the v0.9-refactor-2 DBLib model.

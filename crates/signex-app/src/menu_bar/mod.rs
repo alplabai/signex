@@ -18,6 +18,9 @@ use signex_types::theme::ThemeTokens;
 use crate::keymap::{AppCommandId, CompiledKeymap};
 use crate::styles;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Wordmark PNGs pre-rasterised from `signex-logo-{white,black}.svg` at
 /// 1× / 2× / 3× the on-screen 96×31 logical size. Picked at view-time by
 /// window scale factor so the lockup renders 1:1 with device pixels —
@@ -157,6 +160,11 @@ pub enum MenuMessage {
     Delete,
     SelectAll,
     Duplicate,
+    // Edit ▸ Arrange (drawings only, #1583)
+    BringDrawingsToFront,
+    SendDrawingsToBack,
+    BringDrawingsForward,
+    SendDrawingsBackward,
     Find,
     Replace,
     // View
@@ -177,6 +185,14 @@ pub enum MenuMessage {
     PlaceBus,
     PlaceLabel,
     PlaceComponent,
+    /// Place ▸ Power Port — arms the Active Bar's default (GND) power port.
+    PlacePowerPort,
+    /// Place ▸ Text — the text-note tool.
+    PlaceText,
+    /// Place ▸ No Connect — the no-connect tool.
+    PlaceNoConnect,
+    /// Place ▸ Junction — the junction tool.
+    PlaceJunction,
     // Design
     Annotate,
     AnnotateQuietly,
@@ -187,7 +203,6 @@ pub enum MenuMessage {
     AnnotateSheets,
     Erc,
     ToggleAutoFocus,
-    GenerateBom,
     // Tools
     /// Open the Preferences dialog.
     OpenPreferences,
@@ -219,7 +234,26 @@ pub enum MenuMessage {
     AscendToParentSheet,
     /// Activate the next / previous schematic tab (wraps).
     NextSheet,
+    /// Activate the next / previous main-window document tab of any kind.
+    NextDocumentTab,
+    PreviousDocumentTab,
     PreviousSheet,
+}
+
+impl MenuMessage {
+    /// Whether this is a View-menu panel row, which carries a check mark.
+    pub(crate) fn is_panel_row(&self) -> bool {
+        matches!(
+            self,
+            Self::OpenProjectsPanel
+                | Self::OpenComponentsPanel
+                | Self::OpenNavigatorPanel
+                | Self::OpenPropertiesPanel
+                | Self::OpenErcPanel
+                | Self::OpenMessagesPanel
+                | Self::OpenSignalPanel
+        )
+    }
 }
 
 /// Context passed into `view` so each menu leaf can decide whether to
@@ -227,7 +261,7 @@ pub enum MenuMessage {
 /// context-aware — e.g. Annotate / ERC / Save are unclickable when no
 /// schematic is open.
 #[derive(Debug, Clone)]
-pub struct MenuContext {
+pub struct MenuContext<'a> {
     /// The enablement facts for this window; rows keyed on a command id
     /// grey themselves through [`crate::app::command::is_enabled`] (#368).
     pub(crate) commands: crate::app::command::CommandContext,
@@ -245,17 +279,21 @@ pub struct MenuContext {
     /// Active committed shortcut profile for menu shortcut labels.
     pub active_keymap: Option<std::sync::Arc<CompiledKeymap>>,
     /// File ▸ Open Recent entries, most recent first.
-    pub recent_projects: Vec<std::path::PathBuf>,
+    pub recent_projects: &'a [std::path::PathBuf],
+    /// Panels open somewhere (docked, floating or detached): the View
+    /// menu's panel rows show a check mark for these (#103).
+    pub(crate) open_panels: Vec<crate::panels::PanelKind>,
 }
 
-impl Default for MenuContext {
+impl Default for MenuContext<'_> {
     fn default() -> Self {
         Self {
             commands: Default::default(),
             has_project: false,
             scale_factor: 1.0,
             active_keymap: None,
-            recent_projects: Vec::new(),
+            recent_projects: &[],
+            open_panels: Vec::new(),
         }
     }
 }
@@ -275,13 +313,6 @@ const MENU_LABEL_SIZE: f32 = 12.0;
 const MENU_SHORTCUT_SIZE: f32 = 11.0;
 const MENU_CHEVRON_SIZE: f32 = 18.0;
 
-/// Root menu labels rendered by `view`. Listed here so chrome
-/// layout code can estimate the menu bar's natural width without
-/// re-laying out the actual widgets.
-const MENU_ROOT_LABELS: &[&str] = &[
-    "File", "Edit", "View", "Place", "Design", "Tools", "Window", "Help",
-];
-
 /// Approximate visible width of the menu bar in pixels. Includes the
 /// Signex wordmark on the left, plus the sum of root button widths
 /// (label glyphs at `MENU_LABEL_SIZE` + horizontal padding from
@@ -298,7 +329,7 @@ pub fn approx_menu_bar_width() -> f32 {
     const CHROME_LEFT_PAD: f32 = 8.0;
     // Gap between wordmark and the first menu root button.
     const WORDMARK_TO_MENU_GAP: f32 = 8.0;
-    let labels_total: f32 = MENU_ROOT_LABELS
+    let labels_total: f32 = model::ROOT_TITLES
         .iter()
         .map(|l| l.chars().count() as f32 * PX_PER_CHAR + PER_BTN_PADDING)
         .sum();
@@ -334,18 +365,24 @@ impl MenuColors {
     }
 }
 
+pub mod model;
+pub(crate) mod native;
 mod view;
 
+#[cfg(test)]
+pub(crate) mod panel_check_tests;
+#[cfg(test)]
+mod planned_tests;
+
 pub use view::view;
+
 /// Menu-display label for `command_id`, sourced from the command table's
 /// terse `menu_label` (which falls back to the descriptive `label`). The
 /// `fallback` literal covers a command with no catalog entry so the visible
 /// menu text is never changed by the lookup. Pairs with [`shortcut_for`] so
 /// a menu row's label and keybinding come from the same `AppCommandId`.
 pub(crate) fn cmd_label(command_id: &str, fallback: &str) -> String {
-    AppCommandId::new(command_id)
-        .ok()
-        .and_then(|command| crate::keymap::metadata_for(&command))
+    crate::keymap::metadata_for_str(command_id)
         .map(|meta| meta.menu_label().to_string())
         .unwrap_or_else(|| fallback.to_string())
 }
@@ -361,26 +398,30 @@ pub(crate) fn run_erc_menu_path() -> String {
 
 /// Whether the row for `command_id` is enabled: the same predicate the
 /// keyboard path dispatches by.
-fn enabled(ctx: &MenuContext, command_id: &str) -> bool {
+fn enabled(ctx: &MenuContext<'_>, command_id: &str) -> bool {
     crate::keymap::AppCommandId::new(command_id)
         .is_ok_and(|id| crate::app::command::is_enabled(&id, &ctx.commands))
 }
 
-fn shortcut_for(ctx: &MenuContext, command_id: &str, fallback: &str) -> Option<String> {
+/// Shortcut text for a menu row. The hardcoded `fallback` stands in only
+/// when there is no active keymap at all; with one, a command it does not
+/// bind (or the user unbound) shows no hint (#1378).
+fn shortcut_for(ctx: &MenuContext<'_>, command_id: &str, fallback: &str) -> Option<String> {
+    let Some(keymap) = ctx.active_keymap.as_ref() else {
+        return Some(fallback.to_string());
+    };
     let command = AppCommandId::new(command_id).ok()?;
-    Some(
-        ctx.active_keymap
-            .as_ref()
-            .and_then(|keymap| keymap.shortcut_label(&command))
-            .unwrap_or_else(|| fallback.to_string()),
-    )
+    keymap.shortcut_label(&command)
 }
+
+#[cfg(test)]
+mod shortcut_tests;
 
 /// Wrap a menu element in the toolbar-strip styled container used on
 /// secondary (undocked-tab) windows that keep their OS title bar.
 pub fn wrap_plain<'a, M: 'a>(menu: Element<'a, M>, tokens: &ThemeTokens) -> Element<'a, M> {
     container(menu)
-        .padding([0, 8])
+        .padding([0.0, SP.m])
         .width(Length::Fill)
         .style(styles::toolbar_strip(tokens))
         .into()
@@ -438,25 +479,6 @@ fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
         .into()
 }
 
-/// Leaf menu item with an action.
-fn leaf(
-    label: &str,
-    shortcut: Option<String>,
-    msg: MenuMessage,
-    mc: MenuColors,
-) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
-    Item::new(menu_item_btn(label, shortcut, Some(msg), mc))
-}
-
-/// Leaf menu item — disabled/stub (no action yet).
-fn leaf_stub(
-    label: &str,
-    shortcut: Option<String>,
-    mc: MenuColors,
-) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
-    Item::new(menu_item_btn(label, shortcut, None, mc))
-}
-
 /// Menu row that acts as a submenu header — label on the left, right
 /// chevron on the right, no shortcut. Does not dispatch on click; the
 /// menu framework opens the nested submenu on hover.
@@ -469,12 +491,12 @@ fn submenu_item_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage
             .size(MENU_CHEVRON_SIZE)
             .color(mc.text_muted),
     ]
-    .spacing(8)
+    .spacing(SP.m)
     .align_y(iced::Alignment::Center);
     button(r)
         // Match the padding used by `menu_item_btn` so Export sits on the
         // same left/right grid as the normal leaf rows (Save, Open…).
-        .padding([4, 12])
+        .padding([SP.s, SP.l])
         .width(Length::Fill)
         .on_press(MenuMessage::NoOp)
         .style(move |_: &Theme, status: button::Status| {
@@ -500,7 +522,7 @@ fn separator(mc: MenuColors) -> Item<'static, MenuMessage, Theme, iced::Renderer
         container(iced::widget::Space::new())
             .height(1)
             .width(Length::Fill)
-            .padding([2, 8])
+            .padding([SP.xs, SP.m])
             .style(move |_: &Theme| container::Style {
                 background: Some(Background::Color(mc.border)),
                 ..container::Style::default()
@@ -511,6 +533,7 @@ fn separator(mc: MenuColors) -> Item<'static, MenuMessage, Theme, iced::Renderer
 /// Build a single menu item button with label + shortcut text.
 fn menu_item_btn(
     label: &str,
+    checked: Option<bool>,
     shortcut: Option<String>,
     msg: Option<MenuMessage>,
     mc: MenuColors,
@@ -519,15 +542,27 @@ fn menu_item_btn(
     let text_c = if enabled { mc.text } else { mc.text_disabled };
 
     let label = label.to_owned();
-    let mut r = row![
+    // A toggle row reserves the mark column whether or not it is checked,
+    // so the labels of a group line up.
+    let mark = checked.map(|on| {
+        text(if on { "\u{2713}" } else { "" })
+            .size(MENU_LABEL_SIZE)
+            .color(text_c)
+            .width(Length::Fixed(14.0))
+    });
+    let mut r = iced::widget::Row::new()
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center)
+        .width(Length::Fill);
+    if let Some(mark) = mark {
+        r = r.push(mark);
+    }
+    r = r.push(
         text(label)
             .size(MENU_LABEL_SIZE)
             .color(text_c)
             .wrapping(iced::widget::text::Wrapping::None),
-    ]
-    .spacing(8)
-    .align_y(iced::Alignment::Center)
-    .width(Length::Fill);
+    );
 
     if let Some(sc) = shortcut {
         r = r.push(iced::widget::Space::new().width(Length::Fill));
@@ -540,7 +575,7 @@ fn menu_item_btn(
     }
 
     let hover_bg = mc.hover;
-    let btn = button(r).padding([4, 12]).width(Length::Fill).style(
+    let btn = button(r).padding([SP.s, SP.l]).width(Length::Fill).style(
         move |_: &Theme, status: button::Status| {
             let bg = if enabled {
                 match status {
@@ -570,3 +605,6 @@ fn menu_item_btn(
         btn.into()
     }
 }
+
+#[cfg(test)]
+mod golden_tests;

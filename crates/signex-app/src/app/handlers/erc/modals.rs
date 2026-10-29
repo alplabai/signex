@@ -5,15 +5,21 @@ use iced::Task;
 use super::super::super::state::ModalId;
 use super::super::super::*;
 
+use crate::library::messages::LibraryMessage;
+
 impl Signex {
     pub(crate) fn handle_open_erc_dialog(&mut self) -> Task<Message> {
         self.ui_state.erc_dialog_open = true;
         self.interaction_state.context_menu = None;
-        self.handle_detach_modal(super::super::super::state::ModalId::ErcDialog)
+        let drift = self.check_profile_drift_task();
+        let detach = self.handle_detach_modal(super::super::super::state::ModalId::ErcDialog);
+        Task::batch([detach, drift])
     }
 
     pub(crate) fn handle_close_erc_dialog(&mut self) -> Task<Message> {
         self.ui_state.erc_dialog_open = false;
+        self.ui_state.pending_profile_update = None;
+        self.ui_state.save_profile_dialog = None;
         self.close_detached_modal(super::super::super::state::ModalId::ErcDialog)
     }
 
@@ -23,23 +29,15 @@ impl Signex {
         severity: signex_erc::Severity,
     ) -> Task<Message> {
         // A project that stores its own rules is edited in place (undoable,
-        // saved with the `.snxprj`); the machine preferences stay untouched.
+        // saved with the `.snxprj`); the machine's rules stay untouched.
         if self.edit_project_erc_rules(|rules| {
             signex_erc::project_rules::set_severity(rules, rule, severity)
         }) {
             return Task::none();
         }
-        // Store the choice verbatim: a rule that grades its own findings
-        // (BadHierSheetPin) must be flattenable to its default level too. The
-        // one exception is an on/off-only row (Pin type conflict), whose
-        // severities come from the pin matrix.
-        self.ui_state
-            .erc_severity_override
-            .insert(rule, rule.normalize_override(severity));
-        // Persist so the override survives restart. Silent on I/O errors —
-        // this is a preference, not critical state.
-        crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
-        Task::none()
+        // No rules in the project: the edit goes to the machine's rules, the
+        // `User Default` profile (#1608).
+        self.set_machine_severity(rule, severity)
     }
 
     pub(crate) fn handle_open_annotate_reset_confirm(&mut self) -> Task<Message> {
@@ -76,6 +74,18 @@ impl Signex {
         let Some(tab) = self.document_state.tabs.get(idx) else {
             return Task::none();
         };
+        // A Project tab stays docked (#1202): commands typed in an undocked
+        // window act on the main window's active tab, so Ctrl+Z / Ctrl+S
+        // there would reach another document.
+        if tab.kind.as_project().is_some() {
+            // End the tab drag so the next move past the edge does not ask
+            // (and log the refusal) again.
+            self.ui_state.tab_dragging = None;
+            crate::diagnostics::log_warning(
+                "The Project tab stays in the main window; it cannot be undocked yet",
+            );
+            return Task::none();
+        }
         let path = tab.path.clone();
         // Component Preview tabs undock to a window with
         // `WindowKind::ComponentEditor` so the editor view dispatch
@@ -121,6 +131,7 @@ impl Signex {
             size,
             resizable: true,
             decorations: true,
+            exit_on_close_request: false,
             ..Default::default()
         });
         // Stash immediately so the first frame in the new window has a
@@ -171,6 +182,7 @@ impl Signex {
             size,
             resizable: true,
             decorations: true,
+            exit_on_close_request: false,
             ..Default::default()
         });
         self.ui_state.windows.insert(
@@ -196,6 +208,7 @@ impl Signex {
             ModalId::AnnotateResetConfirm => {
                 Some(Message::Annotate(AnnotateMsg::CloseResetConfirm))
             }
+            ModalId::ReprefixConfirm => Some(Message::Annotate(AnnotateMsg::ReprefixCancelled)),
             ModalId::ErcDialog => Some(Message::Erc(ErcMsg::CloseDialog)),
             ModalId::MoveSelection => Some(Message::MoveSelection(MoveSelectionMsg::Close)),
             ModalId::NetColorPalette => Some(Message::NetColor(NetColorMsg::Close)),
@@ -205,13 +218,72 @@ impl Signex {
             ModalId::Preferences => Some(Message::Preferences(PreferencesMsg::Close)),
             ModalId::PrintPreview => Some(Message::PrintPreview(PrintPreviewMsg::Close)),
             ModalId::BomPreview => Some(Message::BomPreview(BomPreviewMsg::Close)),
-            ModalId::FindReplace
-            | ModalId::RenameDialog
-            | ModalId::RemoveDialog
-            | ModalId::ProjectOptions
-            | ModalId::EnableVersionControl
-            | ModalId::GridProperties
-            | ModalId::SelectionFilterCustom => None,
+            ModalId::FindReplace => Some(Message::FindReplaceMsg(
+                crate::find_replace::FindReplaceMsg::Close,
+            )),
+            ModalId::RenameDialog => Some(Message::Rename(RenameMsg::Close)),
+            ModalId::RemoveDialog => Some(Message::Remove(RemoveMsg::Close)),
+            ModalId::EnableVersionControl => Some(Message::EnableVersionControl(
+                EnableVersionControlMsg::Close,
+            )),
+            ModalId::GridProperties => Some(Message::GridProperties(GridPropertiesMsg::Close)),
+            ModalId::SelectionFilterCustom => {
+                Some(Message::SelectionFilter(SelectionFilterMsg::CloseCustom))
+            }
+            ModalId::About => Some(Message::Overlay(OverlayMsg::CloseAbout)),
+            ModalId::KeyboardShortcuts => {
+                Some(Message::Overlay(OverlayMsg::CloseKeyboardShortcuts))
+            }
+            ModalId::PassiveCalculator => {
+                Some(Message::Overlay(OverlayMsg::ClosePassiveCalculator))
+            }
+            ModalId::FirstRunTour => Some(Message::Overlay(OverlayMsg::DismissFirstRunTour)),
+            ModalId::CreateChildSheet => {
+                Some(Message::Project(ProjectMsg::CreateChildSheetAnswered {
+                    create: false,
+                }))
+            }
+            ModalId::ErrorNotice => Some(Message::Overlay(OverlayMsg::DismissErrorNotice)),
+            ModalId::NetlistIncompletePrompt => {
+                Some(Message::Export(ExportMsg::NetlistCancelIncomplete))
+            }
+            // The safe choice for each: the copy is kept, nothing is saved,
+            // discarded or exited by closing the window.
+            ModalId::AutosaveRecovery => Some(Message::Autosave(
+                crate::autosave::AutosaveMsg::Recovery(crate::autosave::RecoveryChoice::Later),
+            )),
+            ModalId::ProjectCloseConfirm => Some(Message::Project(ProjectMsg::CloseConfirm(
+                ProjectCloseChoice::Cancel,
+            ))),
+            ModalId::AppQuitConfirm => Some(Message::Project(ProjectMsg::AppQuitConfirm(
+                ProjectCloseChoice::Cancel,
+            ))),
+            // Library dialogs: Cancel, never a write or a delete. The
+            // per-browser ones and the recovery prompt (whose choice depends
+            // on which recovery is open) are answered by
+            // `window_close_message`, which knows the window.
+            ModalId::LibraryPicker => Some(Message::Library(LibraryMessage::ClosePicker)),
+            ModalId::LibraryPrimitivePicker => {
+                Some(Message::Library(LibraryMessage::PrimitivePicker(
+                    crate::library::messages::PrimitivePickerMsg::Cancel,
+                )))
+            }
+            ModalId::LibraryDocumentOptions => {
+                Some(Message::Library(LibraryMessage::DocumentOptionsCancel))
+            }
+            ModalId::LibraryCreateOptions => {
+                Some(Message::Library(LibraryMessage::LibraryCreateOptionsCancel))
+            }
+            ModalId::LibraryUpdates => Some(Message::Library(LibraryMessage::LibraryUpdatesCancel)),
+            ModalId::LibraryCloseConfirm => {
+                Some(Message::Library(LibraryMessage::CloseLibraryConfirm(
+                    crate::library::messages::CloseLibraryChoice::Cancel,
+                )))
+            }
+            ModalId::NetColorCustom => Some(Message::NetColor(NetColorMsg::CustomShow(false))),
+            ModalId::LibraryEditRow | ModalId::LibraryDeleteConfirm | ModalId::LibraryRecovery => {
+                None
+            }
         }
     }
 
@@ -234,6 +306,7 @@ impl Signex {
         });
         if let Some(id) = maybe_id {
             self.ui_state.windows.remove(&id);
+            self.ui_state.modal_window_sizes.remove(&id);
             iced::window::close(id)
         } else {
             Task::none()
@@ -248,7 +321,6 @@ impl Signex {
         &mut self,
         modal: super::super::super::state::ModalId,
     ) -> Task<Message> {
-        use super::super::super::state::ModalId;
         // Don't open a second window for the same modal — treat detach
         // on an already-detached modal as a no-op.
         if self.ui_state.windows.values().any(
@@ -257,26 +329,8 @@ impl Signex {
             return Task::none();
         }
 
-        let size = match modal {
-            ModalId::AnnotateDialog => iced::Size::new(1100.0, 760.0),
-            ModalId::ErcDialog => iced::Size::new(1000.0, 600.0),
-            ModalId::AnnotateResetConfirm => iced::Size::new(420.0, 180.0),
-            ModalId::MoveSelection => iced::Size::new(420.0, 240.0),
-            ModalId::NetColorPalette => iced::Size::new(520.0, 480.0),
-            ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
-            ModalId::Preferences => iced::Size::new(900.0, 620.0),
-            ModalId::FindReplace => iced::Size::new(420.0, 180.0),
-            ModalId::RenameDialog => iced::Size::new(420.0, 200.0),
-            ModalId::RemoveDialog => iced::Size::new(560.0, 260.0),
-            ModalId::PrintPreview => iced::Size::new(1100.0, 780.0),
-            ModalId::BomPreview => iced::Size::new(1180.0, 760.0),
-            ModalId::ProjectOptions => iced::Size::new(520.0, 400.0),
-            ModalId::EnableVersionControl => iced::Size::new(560.0, 480.0),
-            ModalId::GridProperties => iced::Size::new(480.0, 280.0),
-            ModalId::SelectionFilterCustom => iced::Size::new(440.0, 380.0),
-        };
-
-        let (id, open_task) = iced::window::open(detached_modal_settings(size));
+        let (id, open_task) =
+            iced::window::open(modal_window_settings(modal, self.modal_window_size(modal)));
         // Stash the mapping right away — view(id) for the new window
         // fires before open_task resolves on some platforms, and without
         // the entry the detached window would render empty.
@@ -386,6 +440,106 @@ fn move_offset(field: &str, text: &str) -> Option<f64> {
     }
 }
 
+/// The initial window size of `modal`: its in-window dimensions, so the user
+/// sees continuity.
+pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
+    match modal {
+        ModalId::AnnotateDialog => iced::Size::new(1000.0, 680.0),
+        ModalId::ErcDialog => iced::Size::new(1000.0, 600.0),
+        ModalId::AnnotateResetConfirm => iced::Size::new(440.0, 200.0),
+        ModalId::ReprefixConfirm => iced::Size::new(560.0, 520.0),
+        ModalId::MoveSelection => iced::Size::new(420.0, 240.0),
+        ModalId::NetColorPalette => iced::Size::new(520.0, 480.0),
+        ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
+        ModalId::Preferences => iced::Size::new(900.0, 620.0),
+        ModalId::FindReplace => iced::Size::new(440.0, 320.0),
+        ModalId::RenameDialog => iced::Size::new(420.0, 160.0),
+        ModalId::RemoveDialog => iced::Size::new(520.0, 240.0),
+        ModalId::PrintPreview => iced::Size::new(1000.0, 700.0),
+        ModalId::BomPreview => iced::Size::new(1080.0, 700.0),
+        ModalId::EnableVersionControl => iced::Size::new(560.0, 480.0),
+        ModalId::GridProperties => iced::Size::new(480.0, 290.0),
+        ModalId::SelectionFilterCustom => iced::Size::new(440.0, 330.0),
+        ModalId::About => iced::Size::new(400.0, 200.0),
+        ModalId::KeyboardShortcuts => iced::Size::new(520.0, 600.0),
+        ModalId::PassiveCalculator => iced::Size::new(640.0, 480.0),
+        ModalId::FirstRunTour => iced::Size::new(360.0, 170.0),
+        ModalId::CreateChildSheet => iced::Size::new(560.0, 215.0),
+        ModalId::ErrorNotice => iced::Size::new(520.0, 260.0),
+        ModalId::NetlistIncompletePrompt => iced::Size::new(580.0, 360.0),
+        ModalId::AutosaveRecovery => iced::Size::new(540.0, 200.0),
+        ModalId::ProjectCloseConfirm => iced::Size::new(540.0, 310.0),
+        ModalId::AppQuitConfirm => iced::Size::new(540.0, 310.0),
+        ModalId::LibraryPicker => iced::Size::new(560.0, 540.0),
+        ModalId::LibraryEditRow => iced::Size::new(640.0, 600.0),
+        ModalId::LibraryPrimitivePicker => iced::Size::new(760.0, 600.0),
+        ModalId::LibraryDocumentOptions => iced::Size::new(580.0, 360.0),
+        ModalId::LibraryCreateOptions => iced::Size::new(520.0, 310.0),
+        ModalId::LibraryUpdates => iced::Size::new(680.0, 460.0),
+        ModalId::LibraryCloseConfirm => iced::Size::new(560.0, 410.0),
+        ModalId::LibraryDeleteConfirm => iced::Size::new(520.0, 240.0),
+        ModalId::LibraryRecovery => iced::Size::new(600.0, 280.0),
+        ModalId::NetColorCustom => iced::Size::new(600.0, 480.0),
+    }
+}
+
+/// Dialogs that are fixed-size: the confirm and warning class, and the small
+/// dialogs. They are not resizable (which disables the maximise / zoom button
+/// in winit) and cannot be minimised. The large tool windows (Preferences, ERC,
+/// BOM, Print Preview, Annotate, Parameter Manager, Find / Replace, shortcuts,
+/// calculator, edit row) keep the normal window behaviour.
+pub(crate) fn modal_is_fixed(modal: ModalId) -> bool {
+    match modal {
+        ModalId::AppQuitConfirm
+        | ModalId::ProjectCloseConfirm
+        | ModalId::ErrorNotice
+        | ModalId::NetlistIncompletePrompt
+        | ModalId::AutosaveRecovery
+        | ModalId::LibraryRecovery
+        | ModalId::RenameDialog
+        | ModalId::RemoveDialog
+        | ModalId::AnnotateResetConfirm
+        | ModalId::ReprefixConfirm
+        | ModalId::CreateChildSheet
+        | ModalId::LibraryCloseConfirm
+        | ModalId::LibraryDeleteConfirm
+        | ModalId::About
+        | ModalId::GridProperties
+        | ModalId::SelectionFilterCustom
+        | ModalId::EnableVersionControl
+        | ModalId::NetColorCustom
+        | ModalId::LibraryPicker
+        | ModalId::LibraryPrimitivePicker
+        | ModalId::LibraryDocumentOptions
+        | ModalId::LibraryCreateOptions => true,
+        ModalId::AnnotateDialog
+        | ModalId::ErcDialog
+        | ModalId::MoveSelection
+        | ModalId::NetColorPalette
+        | ModalId::ParameterManager
+        | ModalId::Preferences
+        | ModalId::FindReplace
+        | ModalId::PrintPreview
+        | ModalId::BomPreview
+        | ModalId::KeyboardShortcuts
+        | ModalId::PassiveCalculator
+        | ModalId::FirstRunTour
+        | ModalId::LibraryEditRow
+        | ModalId::LibraryUpdates => false,
+    }
+}
+
+/// The settings `modal`'s window opens with: its size, and fixed (not
+/// resizable, not minimisable) when [`modal_is_fixed`].
+pub(crate) fn modal_window_settings(modal: ModalId, size: iced::Size) -> iced::window::Settings {
+    let fixed = modal_is_fixed(modal);
+    iced::window::Settings {
+        resizable: !fixed,
+        minimizable: !fixed,
+        ..detached_modal_settings(size)
+    }
+}
+
 /// Window settings for a detached modal.
 ///
 /// The level is `Normal` and the window keeps the OS decorations. A
@@ -406,7 +560,13 @@ pub(crate) fn detached_modal_settings(size: iced::Size) -> iced::window::Setting
         size,
         resizable: true,
         decorations: true,
+        // The close request must reach `WindowCloseRequested`, which runs
+        // the modal's own close message (the Preferences dirty guard).
+        exit_on_close_request: false,
         level: iced::window::Level::Normal,
+        // iced 0.14 can centre on the screen, not on the owner window (the
+        // main window's position is not tracked); see docs/DETACHED_MODALS.md.
+        position: iced::window::Position::Centered,
         ..Default::default()
     }
 }
@@ -437,11 +597,36 @@ mod tests {
     }
 
     #[test]
+    fn confirms_and_small_dialogs_are_fixed_and_tool_windows_are_not() {
+        use crate::app::state::ModalId;
+        for fixed in [
+            ModalId::AppQuitConfirm,
+            ModalId::ErrorNotice,
+            ModalId::CreateChildSheet,
+            ModalId::About,
+            ModalId::LibraryDeleteConfirm,
+        ] {
+            let s = super::modal_window_settings(fixed, super::modal_size(fixed));
+            assert!(!s.resizable && !s.minimizable, "{fixed:?}");
+        }
+        for tool in [
+            ModalId::Preferences,
+            ModalId::ErcDialog,
+            ModalId::BomPreview,
+            ModalId::LibraryEditRow,
+        ] {
+            let s = super::modal_window_settings(tool, super::modal_size(tool));
+            assert!(s.resizable && s.minimizable, "{tool:?}");
+        }
+    }
+
+    #[test]
     fn detached_modal_keeps_requested_size_and_native_decorations() {
         let size = iced::Size::new(900.0, 620.0);
         let s = detached_modal_settings(size);
         assert_eq!(s.size, size);
         assert!(s.resizable);
         assert!(s.decorations);
+        assert!(!s.exit_on_close_request);
     }
 }

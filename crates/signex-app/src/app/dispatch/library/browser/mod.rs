@@ -5,18 +5,18 @@
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 //!
-//! The folder carries the `browser` namespace: class handlers live in
-//! `classes`, grid/row handlers in `grid`, and table handlers in
+//! The folder carries the `browser` namespace: grid/row handlers live in
+//! `grid`, and table handlers in
 //! `tables`; this `mod.rs` keeps the browser-tab handlers.
 
 mod cell_commit;
-mod classes;
 mod grid;
 mod modal_reload;
 mod param_commit;
 mod tables;
 
 use super::*;
+use crate::library::refresh::RefreshFollowUp;
 
 impl Signex {
     /// Open `.snxlib` at `path` as a Library Browser tab.
@@ -45,6 +45,15 @@ impl Signex {
             already_mounted = self.library.library_at(&path).is_some(),
             "open_library_browser: enter"
         );
+        // A mount of a library in a project whose folder is moving would
+        // read a path about to vanish.
+        if self.refuse_with_notice_while_project_moves(
+            &path,
+            "open",
+            crate::app::state::ErrorNotice::open,
+        ) {
+            return Task::none();
+        }
         match self
             .library
             .request_mount(&path, MountIntent::OpenBrowserTab)
@@ -267,6 +276,8 @@ impl Signex {
                     row_id = %row_id,
                     "browser: minted draft row inline"
                 );
+                // The new row may sort outside the built window.
+                return self.reveal_selected_browser_row(&library_path);
             }
             Err(e) => {
                 tracing::warn!(
@@ -360,14 +371,7 @@ impl Signex {
                     row = %row_id,
                     "browser delete: row removed"
                 );
-                if let Err(e) = self.library.refresh_components(&library_path) {
-                    tracing::warn!(
-                        target: "signex::library",
-                        path = %library_path.display(),
-                        error = %e,
-                        "browser delete: refresh_components failed"
-                    );
-                }
+                let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                     if state.selected_row == Some(row_id) {
                         state.selected_row = None;
@@ -376,6 +380,7 @@ impl Signex {
                     // Drop any cached cell-edit buffers for the gone row.
                     state.cell_edit.retain(|(rid, _), _| *rid != row_id);
                 }
+                refresh
             }
             Err(e) => {
                 crate::diagnostics::log_warning(format!(
@@ -384,20 +389,14 @@ impl Signex {
                 ));
                 // The cache holds the revision the refusal was based on, so
                 // a retry would be refused again: re-read the rows.
-                if let Err(e) = self.library.refresh_components(&library_path) {
-                    tracing::warn!(
-                        target: "signex::library",
-                        error = %e,
-                        "browser delete: refresh_components failed"
-                    );
-                }
+                let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
                 self.sync_diagnostics_panel_ctx();
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                     state.delete_confirm = None;
                 }
+                refresh
             }
         }
-        Task::none()
     }
 
     /// Open the Edit Component Details modal for a row. Loads the row
@@ -453,6 +452,19 @@ impl Signex {
         let mut close_modal = false;
         // Replace the draft with the stored row once the borrow is released.
         let mut reload_address: Option<EditorAddress> = None;
+        // The class template of the row in the modal: its slots fix units
+        // and carry the sign rules.
+        let template: Option<signex_library::ParameterTemplate> = self
+            .library
+            .library_browsers
+            .get(&library_path)
+            .and_then(|b| b.edit_modal.as_ref())
+            .and_then(|m| {
+                self.library
+                    .row_template(&library_path, m.draft.class.as_str())
+            })
+            .cloned();
+        let template = template.as_ref();
         if let Some(state) = self.library.library_browsers.get_mut(&library_path)
             && let Some(modal) = state.edit_modal.as_mut()
         {
@@ -469,6 +481,11 @@ impl Signex {
                     modal.draft.state = state_v;
                     modal.error = None;
                 }
+                BrowserEditMsg::SetDatasheetUrl(_)
+                    if !matches!(
+                        modal.draft.datasheet,
+                        signex_library::DatasheetRef::Url { .. }
+                    ) => {}
                 BrowserEditMsg::SetDatasheetUrl(s) => {
                     // The modal shows no label: the primary keeps its
                     // label while it points where it did when the modal
@@ -490,28 +507,48 @@ impl Signex {
                     modal.draft.primary_mpn.mpn = s;
                     modal.error = None;
                 }
+                BrowserEditMsg::SetDescription(s) => {
+                    let s = single_line(&s);
+                    // `'''` ends the table's TOML literal string, so save
+                    // would refuse it; refuse the keystroke instead.
+                    if s.contains("'''") {
+                        modal.error = Some("A description cannot contain '''.".to_string());
+                    } else {
+                        modal.draft.description = s;
+                        modal.error = None;
+                    }
+                }
                 BrowserEditMsg::SetParamValue { key, value } => {
                     let entry = modal
                         .param_buf
-                        .entry(key)
+                        .entry(key.clone())
                         .or_insert_with(|| (String::new(), String::new()));
                     entry.0 = value;
+                    // A prefix or unit typed into the number is refused at
+                    // once. Another reason that is showing stays until its
+                    // own field changes.
+                    let prefix = format!("Parameter \"{key}\"");
+                    match param_commit::number_field_problem(modal, &key, template) {
+                        Some(problem) => modal.error = Some(problem),
+                        None if modal
+                            .error
+                            .as_deref()
+                            .is_some_and(|e| e.starts_with(&prefix)) =>
+                        {
+                            modal.error = None;
+                        }
+                        None => {}
+                    }
                 }
                 BrowserEditMsg::SetParamUnit { key, unit } => {
-                    let entry = modal
-                        .param_buf
-                        .entry(key)
-                        .or_insert_with(|| (String::new(), String::new()));
-                    entry.1 = unit;
+                    param_commit::pick_unit(modal, &key, unit, template);
+                }
+                BrowserEditMsg::ParamPrefixPicked { key, prefix } => {
+                    modal.param_prefix.insert(key.clone(), prefix);
+                    param_commit::commit_param_buffer(modal, &key, template);
                 }
                 BrowserEditMsg::CommitParam { key } => {
-                    if let Some((value, unit)) = modal.param_buf.get(&key).cloned() {
-                        // A refused entry leaves the draft untouched.
-                        let Some(pv) = param_commit::modal_param_value(value, &unit) else {
-                            return Task::none();
-                        };
-                        modal.draft.parameters.insert(key, pv);
-                    }
+                    param_commit::commit_param_buffer(modal, &key, template)
                 }
                 BrowserEditMsg::AddParam => {
                     // Find a unique key like "param_N".
@@ -532,6 +569,7 @@ impl Signex {
                 BrowserEditMsg::DeleteParam { key } => {
                     modal.draft.parameters.remove(&key);
                     modal.param_buf.remove(&key);
+                    modal.param_prefix.remove(&key);
                 }
                 BrowserEditMsg::SetTags(s) => {
                     modal.tags_buf = s;
@@ -554,6 +592,23 @@ impl Signex {
                     )));
                 }
                 BrowserEditMsg::Save => {
+                    // Typed-but-not-Entered parameter edits live only in
+                    // `param_buf`; commit them before the draft snapshot,
+                    // and refuse the save if one is invalid.
+                    match param_commit::uncommitted_param_edits(
+                        &modal.draft.parameters,
+                        &modal.param_buf,
+                        &modal.param_prefix,
+                        template,
+                    ) {
+                        Ok(edits) => modal.draft.parameters.extend(edits),
+                        Err((key, reason)) => {
+                            modal.error = Some(format!(
+                                "Parameter \"{key}\" has an invalid value ({reason}); fix it before saving."
+                            ));
+                            return Task::none();
+                        }
+                    }
                     // Flush the tags buffer to `parameters["tags"]`
                     // before snapshotting the draft. Empty buffer drops
                     // the entry so we don't keep a dangling empty
@@ -585,6 +640,7 @@ impl Signex {
         if let Some(address) = reload_address {
             self.reload_edit_modal_from_server(&library_path, address);
         }
+        let mut refresh = Task::none();
         if let Some((address, mut draft)) = save_request {
             // Refresh content_hash before saving.
             match signex_library::hash_row_content(&draft) {
@@ -612,20 +668,15 @@ impl Signex {
             };
             match result {
                 Ok(_) => {
-                    if let Err(e) = self.library.refresh_components(&address.library_path) {
-                        tracing::warn!(
-                            target: "signex::library",
-                            path = %address.library_path.display(),
-                            error = %e,
-                            "browser edit: refresh_components failed"
-                        );
-                    }
+                    refresh = self.refresh_library_task(
+                        &address.library_path,
+                        RefreshFollowUp::CleanEditors(vec![address.row_id]),
+                    );
                     if let Some(state) =
                         self.library.library_browsers.get_mut(&address.library_path)
                     {
                         state.edit_modal = None;
                     }
-                    self.refresh_clean_editors(&address.library_path, &[address.row_id]);
                 }
                 Err(e) => {
                     if let Some(state) = self.library.library_browsers.get_mut(&library_path)
@@ -638,7 +689,7 @@ impl Signex {
                 }
             }
         }
-        next.unwrap_or_else(Task::none)
+        Task::batch([refresh, next.unwrap_or_else(Task::none)])
     }
 
     /// Open the Component Preview tab for `(library_path, table, row_id)`.
@@ -730,4 +781,14 @@ impl Signex {
         self.refresh_panel_ctx();
         Task::none()
     }
+}
+
+/// `s` with each run of control characters replaced by one space: a tab or
+/// newline cannot live in a table cell, so pasted multi-line text stays
+/// readable instead of running together.
+fn single_line(s: &str) -> String {
+    s.split(char::is_control)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
 }

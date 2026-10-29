@@ -25,7 +25,12 @@ pub(super) struct ErcRunInputs {
     pub root: Option<PathBuf>,
     pub project_dir: Option<PathBuf>,
     pub overrides: HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    /// Identity of the rule set `overrides`/`config` came from, carried to the
+    /// outcome so the report header names the set that produced the rows.
+    pub rule_set: signex_output::ErcReportRuleSet,
     pub config: signex_erc::ErcConfig,
+    /// The project's net waivers (#1581); empty without stored rules.
+    pub net_waivers: signex_erc::waivers::NetWaivers,
     /// The owning project's key rules, chosen once by whoever picked the project.
     pub fold: crate::app::state::scope::CaseFold,
 }
@@ -37,9 +42,14 @@ pub struct ErcRunOutcome {
     pub by_path: ViolationsByPath,
     pub warnings: Vec<String>,
     pub infos: Vec<String>,
+    /// The rule set the run used.
+    pub rule_set: signex_output::ErcReportRuleSet,
+    /// Findings each waived (rule id, net) pair hid in this run (#1581).
+    pub waived_hidden: std::collections::BTreeMap<(String, String), usize>,
 }
 
 pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
+    let inputs_rule_set = inputs.rule_set.clone();
     let mut warnings = Vec::new();
     let mut infos = Vec::new();
     let dsl_eval_fns =
@@ -141,6 +151,19 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
     refile_child_sheet_violations(&mut by_path);
     dedupe_descendant_clashes(&mut by_path);
 
+    // Last, so every pass above (including the project-wide net-name pass)
+    // is waivable. Hidden findings are counted, not lost: the panel lists
+    // the waivers and offers to restore them.
+    let mut waived_hidden = std::collections::BTreeMap::new();
+    for list in by_path.values_mut() {
+        let (kept, hidden) =
+            signex_erc::waivers::split_waived(std::mem::take(list), &inputs.net_waivers);
+        *list = kept;
+        for (key, n) in hidden {
+            *waived_hidden.entry(key).or_default() += n;
+        }
+    }
+
     let total: usize = by_path.values().map(Vec::len).sum();
     infos.push(format!(
         "ERC: {total} total violations across {} sheet(s)",
@@ -150,6 +173,8 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         by_path,
         warnings,
         infos,
+        rule_set: inputs_rule_set,
+        waived_hidden,
     }
 }
 

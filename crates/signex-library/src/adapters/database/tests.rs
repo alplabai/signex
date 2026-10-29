@@ -34,6 +34,42 @@ fn keychain_sigil_is_rejected_with_the_sigil_error() {
     assert!(err.to_string().contains("not resolved"), "{err}");
 }
 
+fn manifest_with_auth(auth: &str) -> Manifest {
+    Manifest {
+        library: LibraryMeta {
+            name: "remote".into(),
+            library_id: Uuid::nil(),
+            description: None,
+        },
+        mode: LibraryMode::Database {
+            url: "https://lib.example.com".into(),
+            auth: auth.into(),
+        },
+        workflow: Default::default(),
+        users: Default::default(),
+        tables: Vec::new(),
+    }
+}
+
+#[test]
+fn an_unset_signex_variable_is_an_error_naming_it() {
+    let err = DatabaseAdapter::new(manifest_with_auth("${env:SIGNEX_TEST_UNSET_VAR_9F3A}"))
+        .err()
+        .expect("an unset variable must refuse the connection");
+    assert!(
+        err.to_string().contains("SIGNEX_TEST_UNSET_VAR_9F3A"),
+        "{err}"
+    );
+}
+
+#[test]
+fn a_variable_outside_the_signex_prefix_is_refused_before_it_is_read() {
+    let err = DatabaseAdapter::new(manifest_with_auth("${env:HOME}"))
+        .err()
+        .expect("HOME must not be readable from a manifest");
+    assert!(err.to_string().contains("SIGNEX_"), "{err}");
+}
+
 #[test]
 fn redirect_downgrade_to_cleartext_is_refused() {
     let u = |s: &str| url::Url::parse(s).unwrap();
@@ -171,4 +207,21 @@ fn encode_segment_escapes_path_breakers() {
 fn encode_segment_handles_utf8() {
     // Multi-byte UTF-8 must escape every byte.
     assert_eq!(DatabaseAdapter::encode_segment("π"), "%CF%80");
+}
+
+#[test]
+fn pn_uniqueness_is_trimmed_case_sensitive_and_blank_exempt() {
+    use super::pn_unique::ensure_pn_free;
+    let row = |pn: &str| {
+        let mut r = crate::component::tests::fixture_row();
+        r.internal_pn = InternalPn::new(pn);
+        r
+    };
+    let a = row("PN-A");
+    let rows = vec![("t".to_string(), a.clone())];
+    assert!(ensure_pn_free(&rows, "PN-A", None).is_err());
+    assert!(ensure_pn_free(&rows, " PN-A ", None).is_err());
+    assert!(ensure_pn_free(&rows, "pn-a", None).is_ok());
+    assert!(ensure_pn_free(&rows, "  ", None).is_ok());
+    assert!(ensure_pn_free(&rows, "PN-A", Some(a.row_id)).is_ok());
 }

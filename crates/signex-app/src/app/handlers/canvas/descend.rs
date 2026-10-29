@@ -16,6 +16,11 @@ impl Signex {
         let Some(path) = self.resolve_child_sheet_path(filename) else {
             return;
         };
+        if !path.exists() {
+            // No silent no-op: offer to create the file (#1275).
+            self.open_create_child_sheet_dialog(sheet_symbol, true);
+            return;
+        }
         let placement = self
             .focused_sheet_placement()
             .map(|placement| placement.child(sheet_symbol));
@@ -33,11 +38,18 @@ impl Signex {
     ) {
         // Record under the spelling the tab is held at (#1149), not the
         // spelling the hierarchy resolved.
-        let path = self.resolve_held_spelling(path);
+        let path = self.resolve_held_spelling_now(path);
         if self.open_or_focus_sheet_path(path.clone()) {
+            let switched = self.document_state.tab_placements.get(&path) != placement.as_ref();
             self.document_state.tab_placements.record(&path, placement);
+            // Jumping within the shown placement keeps an open edit's text.
+            if switched {
+                self.close_text_edit("the sheet is shown through another placement now");
+            }
             // The canvas draws the designators of the placement just recorded.
             self.refresh_canvas_designators();
+            // The net highlight is per placement: show it for this one.
+            self.sync_net_highlight_to_canvases();
         }
     }
 

@@ -199,6 +199,7 @@ canonical_icon!(
     "dropdown/net_color_clear_all.svg"
 );
 canonical_icon!(icon_dd_net_color_custom, "dropdown/net_color_custom.svg");
+canonical_icon!(icon_dd_junction, "dropdown/junction.svg");
 canonical_icon!(icon_dd_net_label, "dropdown/net_label.svg");
 canonical_icon!(icon_dd_no_erc, "dropdown/no_erc.svg");
 canonical_icon!(icon_dd_note, "dropdown/note.svg");

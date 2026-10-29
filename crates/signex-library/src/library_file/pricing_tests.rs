@@ -28,7 +28,7 @@ fn table_with_row() -> LibraryTable {
     row.cells.insert("mpn".into(), "RC0603".into());
     LibraryTable {
         columns,
-        rows: vec![row],
+        rows: vec![Arc::new(row)],
         ..Default::default()
     }
 }
@@ -68,6 +68,7 @@ fn library(pricing: Option<(&str, CachedPricing)>) -> LibraryFile {
             .insert(cached.sku.clone(), cached);
     }
     LibraryFile {
+        layout: Default::default(),
         manifest: manifest(),
         tables: BTreeMap::from([("resistors".to_string(), table)]),
     }
