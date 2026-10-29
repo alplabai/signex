@@ -157,6 +157,7 @@ impl Signex {
         // cursor when it finishes: a paste is the newest gesture.
         self.interaction_state.placement_epoch += 1;
         self.arm_placement_session(payload, &target, kind);
+        self.refresh_paste_ghost();
     }
 
     /// Smart Paste and Duplicate: place the copy now, shifted by a fixed

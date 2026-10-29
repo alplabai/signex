@@ -189,3 +189,52 @@ fn choosing_keep_or_reset_in_the_dialog_reads_nothing() {
         assert!(seeded_message(task).is_none());
     }
 }
+
+fn ghost_references(app: &Signex) -> Vec<String> {
+    let session = app.interaction_state.placement.as_ref().expect("armed");
+    session
+        .ghost
+        .fragment()
+        .symbols
+        .iter()
+        .map(|s| s.reference.clone())
+        .collect()
+}
+
+#[test]
+fn the_paste_ghost_shows_the_designators_the_click_will_give() {
+    let mut app = app_with_sheet(populated_sheet());
+    app.ui_state.paste_designators = PasteDesignators::NextFree;
+    select(&mut app, &[("R1", 1)], false);
+    let _ = app.update(Message::Edit(EditMsg::Copy));
+    crate::paste_support::paste(&mut app);
+    assert_eq!(ghost_references(&app), ["R4"], "not the copied R1");
+
+    crate::paste_support::sheet::click(&mut app, (80.0, 80.0));
+    assert_eq!(references(&app).last().map(String::as_str), Some("R4"));
+}
+
+#[test]
+fn a_stamp_ghost_moves_on_to_the_next_number_after_each_click() {
+    let mut app = app_with_sheet(populated_sheet());
+    app.ui_state.paste_designators = PasteDesignators::NextFree;
+    select(&mut app, &[("R1", 1)], false);
+    crate::paste_support::send_and_settle(
+        &mut app,
+        EditMsg::RubberStampCopy,
+        signex_app::app::PasteIntent::Stamp,
+    );
+    assert_eq!(ghost_references(&app), ["R4"]);
+    crate::paste_support::sheet::click(&mut app, (80.0, 80.0));
+    assert_eq!(ghost_references(&app), ["R5"]);
+}
+
+#[test]
+fn a_reset_paste_ghost_shows_the_unnumbered_designator() {
+    let mut app = app_with_sheet(populated_sheet());
+    app.ui_state.paste_designators = PasteDesignators::Reset;
+    select(&mut app, &[("R1", 1)], false);
+    let _ = app.update(Message::Edit(EditMsg::Copy));
+    crate::paste_support::paste(&mut app);
+    assert_eq!(ghost_references(&app), ["R?"]);
+}
