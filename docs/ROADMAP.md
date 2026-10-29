@@ -161,7 +161,7 @@ plan. Detail lives in `CHANGELOG.md`.
 | v0.1.0 – v0.6.4 | ✅ | Shell, canvas, schematic viewer, schematic editor, installers |
 | v0.7.x | ✅ | ERC (11 rules), annotation, pin matrix, multi-window |
 | v0.8.0 | ✅ | PDF / BOM / netlist export, multi-project workspaces |
-| v0.9.x | ✅ | **Apache-clean cutover (#62)** — native `.snx*`, KiCad I/O → companion repo |
+| v0.9.x | ✅ | **Apache-clean cutover (#62)** — native `.snx*`, external-format I/O → companion repo |
 | v0.10.0 – v0.11.0 | ✅ | Library browser, `.snxlib` classes, master-detail browser |
 | v0.12.0 | ⚠️ | Cleanroom renderer rewrite — merged, **never released** (see §2) |
 | v0.13.0 | ✅ | Sketch mode α — Newton-LM constraint solver, footprint pad-bake |
@@ -509,7 +509,7 @@ composition workspace separate from the schematic editor. See
 Each foreign-format importer is a **separate companion repo / binary**,
 licensed appropriately for its source-format constraints and distributed
 independently of the main workspace — the same architectural pattern as
-`signex-kicad-import` shipped at v0.9.0. One-way conversion to native
+the [import companion repository](https://github.com/alplabai/signex-kicad-import) shipped at v0.9.0. One-way conversion to native
 `.snx*`, no compile-time dependency from the main repo.
 
 | Version | Scope |

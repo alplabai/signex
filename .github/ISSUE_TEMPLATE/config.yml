@@ -6,9 +6,9 @@ contact_links:
   - name: Codebase overview
     url: https://github.com/alplabai/signex/blob/trunk/docs/REPOSITORY_AND_CODEBASE.md
     about: How the repo and crates are laid out
-  - name: Licensing & the KiCad split
+  - name: Licensing & the companion repo split
     url: https://github.com/alplabai/signex/blob/trunk/docs/LICENSING.md
-    about: Why KiCad-related work goes in the signex-kicad-import companion repo
+    about: Why work on GPL-based EDA tool formats goes in the import companion repository
   - name: Discussions
     url: https://github.com/alplabai/signex/discussions
     about: General questions and design conversations
