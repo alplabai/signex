@@ -475,6 +475,23 @@ fn a_placement_switch_closes_the_open_designator_editor_and_writes_nothing() {
 }
 
 #[test]
+fn a_jump_within_the_shown_placement_keeps_the_typed_text() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _top, child) = placed_twice_on_disk(&dir);
+    descend_by_canvas(&mut app, PLACEMENT_B);
+    open_designator_editor(&mut app, "R557");
+
+    let b = InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_B)]);
+    app.open_sheet_with_placement(child, Some(b));
+    let _ = app.update(crate::app::Message::TextEdit(
+        crate::app::TextEditMsg::Submit,
+    ));
+
+    assert_eq!(designator_in(&app, PLACEMENT_A), "R1");
+    assert_eq!(designator_in(&app, PLACEMENT_B), "R557");
+}
+
+#[test]
 fn a_commit_after_the_placement_changed_underneath_is_refused_and_logged() {
     let _ = crate::diagnostics::init_logging();
     let dir = tempfile::tempdir().unwrap();
