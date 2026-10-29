@@ -43,7 +43,7 @@ impl FootprintCanvas<'_> {
     ) {
         if self.state.layer_visibility.get(FpLayer::EdgeCuts) {
             let edge_color = FpLayer::EdgeCuts.color();
-            if let Some(outline) = self.state.courtyard_outline_mm.as_ref() {
+            if let Some(outline) = self.state.courtyard_outline() {
                 if outline.len() >= 3 {
                     let path = Path::new(|b| {
                         let first = cstate.world_to_screen(outline[0]);

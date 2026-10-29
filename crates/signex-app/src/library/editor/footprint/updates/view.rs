@@ -279,11 +279,10 @@ fn set_name(editor: &mut crate::app::FootprintDocument, new_name: String) {
 }
 
 fn recompute_courtyard_outline(editor: &mut crate::app::FootprintDocument) {
-    // v0.27 — outline-following courtyard. Pure read-write
-    // on the editor state; the new polygon lands on
-    // `state.courtyard_outline_mm` and the canvas draws it
-    // in preference to the bbox.
-    editor.state.recompute_courtyard_outline();
+    // The outline is view state: nothing savable changes, so the document
+    // is not marked dirty.
+    if let Err(error) = editor.state.recompute_courtyard_outline() {
+        crate::diagnostics::log_warning(format!("Courtyard outline: {error}"));
+    }
     editor.canvas_cache.clear();
-    editor.dirty = true;
 }

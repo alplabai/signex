@@ -27,6 +27,7 @@ mod conflicts;
 mod managers;
 mod pad;
 mod pad_stack_check;
+mod redundant;
 mod sections;
 mod selection;
 mod snap_options;
