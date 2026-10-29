@@ -1,68 +1,63 @@
-use iced::widget::{Column, Row, Space, container, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::widget::container;
+use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::tree_view::{TreeIcon, TreeNode, TreeView};
 
 use crate::catalog::Message;
-use crate::theme;
 
-pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
-    let mut rows: Column<'a, Message> = Column::new().spacing(2);
-    for (label, open, dirty, active) in [
+/// One leaf per open / dirty / active combination, as the project tree
+/// draws them.
+fn sample_nodes() -> Vec<TreeNode> {
+    [
         ("clean.standard_sch", false, false, false),
         ("open.standard_sch", true, false, false),
         ("dirty.standard_sch", true, true, false),
         ("active.standard_sch", true, false, true),
         ("active+dirty.standard_sch", true, true, true),
-    ] {
-        rows = rows.push(tree_row(label, open, dirty, active, tokens));
-    }
-    rows.into()
+    ]
+    .into_iter()
+    .map(|(label, open, dirty, active)| {
+        TreeNode::leaf(label, TreeIcon::for_path(label))
+            .with_open(open)
+            .with_dirty(dirty)
+            .with_active(active)
+    })
+    .collect()
 }
 
-fn tree_row<'a>(
-    label: &str,
-    is_open: bool,
-    is_dirty: bool,
-    is_active: bool,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    let text_color = theme::color(tokens.text);
-    let active_bg = Color {
-        a: 0.45,
-        ..theme::color(tokens.selection)
-    };
-    let dirty_red = Color::from_rgba(0.85, 0.30, 0.30, 1.0);
-    let dot_size = 6.0;
-    let mut content: Row<'a, Message> = Row::new().spacing(8).align_y(iced::Alignment::Center);
-    content = content.push(text(label.to_string()).size(11).color(text_color));
-    content = content.push(Space::new().width(Length::Fill));
-    if is_open || is_dirty {
-        let dot_color = if is_dirty { dirty_red } else { Color::WHITE };
-        content = content.push(
-            container(Space::new().width(dot_size).height(dot_size))
-                .width(dot_size)
-                .height(dot_size)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(dot_color)),
-                    border: Border {
-                        radius: (dot_size / 2.0).into(),
-                        ..Border::default()
-                    },
-                    ..container::Style::default()
-                }),
-        );
-    }
-    let background = is_active.then_some(Background::Color(active_bg));
-    container(content)
+/// The real project-tree widget, so this section can never drift from it.
+/// The rows are static samples: tree events are ignored.
+pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
+    let nodes = sample_nodes();
+    let tree = TreeView::new(&nodes, tokens)
+        .view()
+        .map(|_| Message::TreeInteracted);
+    container(tree)
         .width(Length::Fixed(360.0))
-        .padding([4, 8])
-        .style(move |_: &Theme| container::Style {
-            background,
-            border: Border {
-                radius: 2.0.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        })
+        .height(Length::Fixed(120.0))
         .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn samples_cover_every_indicator_combination() {
+        let flags: Vec<_> = sample_nodes()
+            .iter()
+            .map(|n| (n.is_open, n.is_dirty, n.is_active))
+            .collect();
+        assert_eq!(
+            flags,
+            [
+                (false, false, false),
+                (true, false, false),
+                (true, true, false),
+                (true, false, true),
+                (true, true, true),
+            ]
+        );
+        assert!(sample_nodes().iter().all(|n| n.children.is_empty()));
+    }
 }

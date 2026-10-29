@@ -15,6 +15,7 @@
 pub mod arc_snap;
 pub mod array;
 pub mod attr;
+pub mod baked_kinds;
 pub mod constraint;
 pub mod entity;
 pub mod error;

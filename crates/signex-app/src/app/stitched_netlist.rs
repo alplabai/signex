@@ -35,14 +35,27 @@ pub(crate) fn stitched_project_netlist_from(
     project_dir: Option<PathBuf>,
 ) -> Stitched {
     let set = super::project_sheets::assemble_project_sheets_from(open, pages, root, fold);
-    netlist_of_set(set, project_dir)
+    netlist_of_set(&set, project_dir)
 }
 
-fn netlist_of_set(set: ProjectSheetSet, project_dir: Option<PathBuf>) -> Stitched {
+/// The Messages line for a sheet that exists but would not read or parse. The
+/// panel keeps only the first ~157 bytes and a parser error can be long, so
+/// the file name comes right after a short reason and the full path last.
+fn unreadable_message(path: &Path, why: &str) -> String {
+    format!(
+        "Netlist: {} {why}; net-class styles missing: '{}'",
+        path.file_name().unwrap_or_default().to_string_lossy(),
+        path.display()
+    )
+}
+
+/// The stitched netlist of an already assembled sheet set, so a caller that
+/// needs the set for other things reads the disk once.
+pub(crate) fn netlist_of_set(set: &ProjectSheetSet, project_dir: Option<PathBuf>) -> Stitched {
     let mut warnings: Vec<String> = set
         .unreadable
         .iter()
-        .map(|(path, why)| format!("Netlist: sheet '{}' {why}", path.display()))
+        .map(|(path, why)| unreadable_message(path, why))
         .collect();
     let Some(root_path) = set.root.clone() else {
         return Stitched {
@@ -62,8 +75,9 @@ fn netlist_of_set(set: ProjectSheetSet, project_dir: Option<PathBuf>) -> Stitche
     if !graph.sheets.contains_key(&root_key) {
         warnings.extend(graph.issues.iter().map(stitch_issue_message));
         warnings.push(format!(
-            "Netlist: root sheet '{}' is not part of the assembled project, so its \
-             net-class styles were not refreshed",
+            "Netlist: {} is not part of the assembled project; net-class styles not \
+             refreshed: '{}'",
+            root_path.file_name().unwrap_or_default().to_string_lossy(),
             root_path.display()
         ));
         return Stitched {
@@ -72,7 +86,7 @@ fn netlist_of_set(set: ProjectSheetSet, project_dir: Option<PathBuf>) -> Stitche
         };
     }
     let roots =
-        super::project_sheets::project_roots(root_key, &set, &graph, base_dir.as_deref(), fold);
+        super::project_sheets::project_roots(root_key, set, &graph, base_dir.as_deref(), fold);
     let project = signex_net::ProjectGraph {
         sheets: &graph.sheets,
         resolved: &graph.resolved,
@@ -103,3 +117,6 @@ pub(crate) fn stitched_for_active_project(document: &super::state::DocumentState
         project_dir,
     )
 }
+
+#[cfg(test)]
+mod tests;

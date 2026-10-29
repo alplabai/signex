@@ -36,13 +36,18 @@ pub(in crate::canvas) struct Float {
     /// would pass for "the pick has not landed yet" and the next press
     /// would drop the old selection instead of the picked item.
     before: Option<SelectionSet>,
+    /// How the float treats wires, fixed by what armed it (#1266).
+    pub(super) connections: MoveConnections,
 }
 
 /// A selection compared as a set: an edit that only reorders the same
 /// items is not a different selection.
-type SelectionSet = std::collections::HashSet<signex_types::schematic::SelectedItem>;
+pub(super) type SelectionSet = std::collections::HashSet<signex_types::schematic::SelectedItem>;
 
-fn same_selection(set: &SelectionSet, selected: &[signex_types::schematic::SelectedItem]) -> bool {
+pub(super) fn same_selection(
+    set: &SelectionSet,
+    selected: &[signex_types::schematic::SelectedItem],
+) -> bool {
     selected.len() == set.len() && selected.iter().all(|item| set.contains(item))
 }
 
@@ -61,6 +66,7 @@ impl CanvasState {
         epoch: u64,
         lifted: Vec<signex_types::schematic::SelectedItem>,
         before: Vec<signex_types::schematic::SelectedItem>,
+        connections: MoveConnections,
     ) {
         self.click_on_selected = false;
         self.select_drag_start = None;
@@ -71,6 +77,7 @@ impl CanvasState {
             epoch,
             lifted: lifted.into_iter().collect(),
             before: Some(before.into_iter().collect()),
+            connections,
         });
     }
 
@@ -135,12 +142,14 @@ impl SchematicCanvas<'_> {
                 .move_origin
                 .zip(state.move_current)
                 .map(|((ox, oy), (cx, cy))| (cx - ox, cy - oy));
+            let connections = state.move_connections();
             state.clear_move();
             return Some(match delta {
                 Some((dx, dy)) if dx.abs() > 0.01 || dy.abs() > 0.01 => {
                     canvas::Action::publish(Message::CanvasEvent(CanvasEvent::MoveSelected {
                         dx,
                         dy,
+                        connections,
                     }))
                 }
                 _ => canvas::Action::capture(),
@@ -175,7 +184,18 @@ impl SchematicCanvas<'_> {
             };
             lifted = vec![hit];
         }
-        state.start_floating_move((wx, wy), self.move_epoch, lifted, self.selected.clone());
+        let connections = if self.keep_connections_next {
+            MoveConnections::Keep
+        } else {
+            MoveConnections::Preference
+        };
+        state.start_floating_move(
+            (wx, wy),
+            self.move_epoch,
+            lifted,
+            self.selected.clone(),
+            connections,
+        );
         Some(
             canvas::Action::publish(Message::CanvasEvent(CanvasEvent::MovePicked {
                 world_x: wx,
@@ -231,6 +251,7 @@ mod tests {
             title_block: Default::default(),
             lib_symbols: Default::default(),
             net_colors: Default::default(),
+            drawing_placements: Default::default(),
             frame: Default::default(),
             font_family: None,
         };
@@ -334,7 +355,9 @@ mod tests {
 
     fn moved_by(message: &Option<Message>) -> Option<(f64, f64)> {
         match message {
-            Some(Message::CanvasEvent(CanvasEvent::MoveSelected { dx, dy })) => Some((*dx, *dy)),
+            Some(Message::CanvasEvent(CanvasEvent::MoveSelected { dx, dy, .. })) => {
+                Some((*dx, *dy))
+            }
             _ => None,
         }
     }
@@ -634,5 +657,153 @@ mod tests {
             moved_by(&message).is_none(),
             "a selection swapped under the float must not move: {message:?}"
         );
+    }
+
+    // ── #1266: wire behaviour per gesture ───────────────────────────
+
+    fn modifiers(mods: keyboard::Modifiers) -> Event {
+        Event::Keyboard(keyboard::Event::ModifiersChanged(mods))
+    }
+
+    /// The `connections` of the `MoveSelected` a message carries.
+    fn connections_of(message: &Option<Message>) -> Option<MoveConnections> {
+        match message {
+            Some(Message::CanvasEvent(CanvasEvent::MoveSelected { connections, .. })) => {
+                Some(*connections)
+            }
+            _ => None,
+        }
+    }
+
+    /// Press on the selected wire and drag 12 mm right, optionally under
+    /// `mods`; returns the slot and state mid-drag.
+    fn mid_drag(mods: keyboard::Modifiers) -> (CanvasSlot, CanvasState) {
+        let mut slot = slot_with_wire();
+        land_pick(&mut slot);
+        let mut state = CanvasState::default();
+        let _ = send(
+            &slot,
+            &mut state,
+            modifiers(mods),
+            screen(&slot, 20.0, 10.0),
+        );
+        let _ = press(&slot, &mut state, screen(&slot, 20.0, 10.0));
+        move_to(&slot, &mut state, screen(&slot, 32.0, 10.0));
+        assert!(state.move_dragging, "precondition: the drag is live");
+        (slot, state)
+    }
+
+    #[test]
+    fn a_plain_drag_follows_the_preference() {
+        let (slot, mut state) = mid_drag(keyboard::Modifiers::default());
+        assert_eq!(slot.move_behaviour.get(), Some(true), "preference is on");
+        let message = release(&slot, &mut state, screen(&slot, 32.0, 10.0));
+        assert_eq!(connections_of(&message), Some(MoveConnections::Preference));
+        assert_eq!(slot.move_behaviour.get(), None, "no drag, no status");
+    }
+
+    #[test]
+    fn alt_held_through_the_drag_flips_the_preference_for_that_gesture() {
+        let (slot, mut state) = mid_drag(keyboard::Modifiers::ALT);
+        assert_eq!(slot.move_behaviour.get(), Some(false));
+        let message = release(&slot, &mut state, screen(&slot, 32.0, 10.0));
+        assert_eq!(connections_of(&message), Some(MoveConnections::Flipped));
+
+        // The next drag, Alt released, is back on the preference.
+        let _ = send(
+            &slot,
+            &mut state,
+            modifiers(keyboard::Modifiers::default()),
+            screen(&slot, 25.0, 10.0),
+        );
+        // A different spot, so the press is not read as a double-click.
+        let _ = press(&slot, &mut state, screen(&slot, 25.0, 10.0));
+        move_to(&slot, &mut state, screen(&slot, 37.0, 10.0));
+        let message = release(&slot, &mut state, screen(&slot, 37.0, 10.0));
+        assert_eq!(connections_of(&message), Some(MoveConnections::Preference));
+    }
+
+    #[test]
+    fn pressing_alt_mid_drag_flips_the_live_behaviour_and_releasing_flips_it_back() {
+        let (slot, mut state) = mid_drag(keyboard::Modifiers::default());
+        let at = screen(&slot, 32.0, 10.0);
+        let _ = send(&slot, &mut state, modifiers(keyboard::Modifiers::ALT), at);
+        assert_eq!(slot.move_behaviour.get(), Some(false));
+        let _ = send(
+            &slot,
+            &mut state,
+            modifiers(keyboard::Modifiers::default()),
+            at,
+        );
+        assert_eq!(slot.move_behaviour.get(), Some(true));
+    }
+
+    #[test]
+    fn alt_pressed_mid_drag_publishes_an_event_so_the_status_bar_rebuilds() {
+        let (slot, mut state) = mid_drag(keyboard::Modifiers::default());
+        let at = screen(&slot, 32.0, 10.0);
+        let (message, _) = send(&slot, &mut state, modifiers(keyboard::Modifiers::ALT), at);
+        assert!(matches!(
+            message,
+            Some(Message::CanvasEvent(CanvasEvent::CursorMoved))
+        ));
+        // Outside a drag the modifier change is silent.
+        let slot = slot_with_wire();
+        let mut state = CanvasState::default();
+        let (message, _) = send(&slot, &mut state, modifiers(keyboard::Modifiers::ALT), at);
+        assert!(message.is_none());
+    }
+
+    #[test]
+    fn a_keep_connections_float_keeps_wires_even_with_alt_held() {
+        let mut slot = slot_with_wire();
+        slot.move_pick = Some(MovePick::Object);
+        slot.keep_connections_next = true;
+        let mut state = CanvasState::default();
+        let on_wire = screen(&slot, 20.0, 10.0);
+        let _ = send(
+            &slot,
+            &mut state,
+            modifiers(keyboard::Modifiers::ALT),
+            on_wire,
+        );
+        let picked = press(&slot, &mut state, on_wire);
+        assert!(is_picked(&picked), "precondition: picked: {picked:?}");
+        land_pick(&mut slot);
+        slot.move_pick = None;
+        slot.keep_connections_next = false;
+        let target = screen(&slot, 32.0, 10.0);
+        move_to(&slot, &mut state, target);
+        assert_eq!(slot.move_behaviour.get(), Some(true));
+
+        let message = press(&slot, &mut state, target);
+        assert_eq!(connections_of(&message), Some(MoveConnections::Keep));
+    }
+
+    // ── #1257: the box's direction travels with the selection ───────
+
+    /// Drag a box from world `from` to world `to` over empty space and return
+    /// the direction the published `BoxSelect` carries.
+    fn dragged_box(from: f32, to: f32) -> Option<BoxDirection> {
+        let slot = slot_with_wire();
+        let mut state = CanvasState::default();
+        let start = screen(&slot, from, 80.0);
+        let end = screen(&slot, to, 90.0);
+        let _ = press(&slot, &mut state, start);
+        move_to(&slot, &mut state, end);
+        match release(&slot, &mut state, end) {
+            Some(Message::CanvasEvent(CanvasEvent::BoxSelect { direction, .. })) => Some(direction),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn a_box_dragged_rightwards_reports_left_to_right() {
+        assert_eq!(dragged_box(40.0, 60.0), Some(BoxDirection::LeftToRight));
+    }
+
+    #[test]
+    fn a_box_dragged_leftwards_reports_right_to_left() {
+        assert_eq!(dragged_box(60.0, 40.0), Some(BoxDirection::RightToLeft));
     }
 }

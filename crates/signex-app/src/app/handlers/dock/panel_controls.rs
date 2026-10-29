@@ -126,6 +126,13 @@ impl Signex {
             crate::panels::PanelMsg::ErcQuickFix(idx) => {
                 follow = self.handle_erc_quick_fix(*idx);
             }
+            crate::panels::PanelMsg::ErcNetWaiverSet {
+                rule_id,
+                net,
+                waive,
+            } => {
+                follow = self.handle_erc_net_waiver_set(rule_id, net, *waive);
+            }
             crate::panels::PanelMsg::FocusPrevErcDiagnostic => {
                 follow = self.handle_focus_erc_diagnostic_offset(-1);
             }
@@ -145,12 +152,6 @@ impl Signex {
             }
             crate::panels::PanelMsg::PropertiesTab(index) => {
                 self.document_state.panel_ctx.properties_tab = *index;
-            }
-            crate::panels::PanelMsg::ComponentFilter(filter) => {
-                self.document_state.panel_ctx.component_filter = filter.clone();
-                // Persisted debounced and off-thread so the next session
-                // opens the panel with the same filter (#859).
-                follow = self.persist_component_filter_soon(filter);
             }
             crate::panels::PanelMsg::ToggleSection(key) => {
                 let key = key.clone();
@@ -178,11 +179,13 @@ impl Signex {
                 if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_text {
                     g.text = text.clone();
                 }
+                self.set_placement_value(text);
             }
             crate::panels::PanelMsg::SetPrePlacementDesignator(text) => {
                 if let Some(pre_placement) = &mut self.document_state.panel_ctx.pre_placement {
                     pre_placement.designator = text.clone();
                 }
+                self.set_placement_designator(text);
             }
             crate::panels::PanelMsg::SetPrePlacementRotation(rotation) => {
                 if let Some(pre_placement) = &mut self.document_state.panel_ctx.pre_placement {
@@ -197,6 +200,7 @@ impl Signex {
                 if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_text {
                     g.rotation = *rotation;
                 }
+                self.set_placement_rotation(*rotation);
             }
             crate::panels::PanelMsg::SetPrePlacementFont(font) => {
                 if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
@@ -367,7 +371,10 @@ impl Signex {
                 self.document_state.panel_ctx.grid_size_mm = *size;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
-                crate::fonts::write_grid_size_mm_pref(*size);
+                let size = *size;
+                follow = crate::fonts::background_pref_write("grid_size_mm", move || {
+                    crate::fonts::write_grid_size_mm_pref(size)
+                });
             }
             crate::panels::PanelMsg::SetVisibleGridSize(size) => {
                 self.ui_state.visible_grid_mm = *size;
@@ -382,7 +389,10 @@ impl Signex {
             crate::panels::PanelMsg::SetUiFont(name) => {
                 self.ui_state.ui_font_name = name.clone();
                 self.document_state.panel_ctx.ui_font_name = name.clone();
-                crate::fonts::write_ui_font_pref(name);
+                let name = name.clone();
+                follow = crate::fonts::background_pref_write("ui_font", move || {
+                    crate::fonts::write_ui_font_pref(&name)
+                });
             }
             crate::panels::PanelMsg::SetCanvasFont(name) => {
                 self.ui_state.canvas_font_name = name.clone();
@@ -493,12 +503,6 @@ impl Signex {
                 self.document_state.panel_ctx.sheet_color = *color;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
             }
-            crate::panels::PanelMsg::DragComponentsSplit => {
-                self.interaction_state.dragging = Some(DragTarget::ComponentsSplit);
-                self.interaction_state.drag_start_pos = None;
-                self.interaction_state.drag_start_size =
-                    self.document_state.panel_ctx.components_split;
-            }
             crate::panels::PanelMsg::ToggleSelectionFilter(filter) => {
                 follow = self.handle_active_bar_filter_toggle(*filter);
             }
@@ -506,22 +510,22 @@ impl Signex {
                 follow = self.handle_active_bar_all_filters_toggle();
             }
             crate::panels::PanelMsg::AddCustomFilterPreset => {
-                self.handle_add_custom_filter_preset();
+                follow = self.handle_add_custom_filter_preset();
             }
             crate::panels::PanelMsg::RemoveCustomFilterPreset(idx) => {
-                self.handle_remove_custom_filter_preset(*idx);
+                follow = self.handle_remove_custom_filter_preset(*idx);
             }
             crate::panels::PanelMsg::RenameCustomFilterPreset(idx, name) => {
-                self.handle_rename_custom_filter_preset(*idx, name.clone());
+                follow = self.handle_rename_custom_filter_preset(*idx, name.clone());
             }
             crate::panels::PanelMsg::ToggleCustomFilterPresetMember(idx, filter) => {
-                self.handle_toggle_custom_filter_preset_member(*idx, *filter);
+                follow = self.handle_toggle_custom_filter_preset_member(*idx, *filter);
             }
             crate::panels::PanelMsg::CaptureCustomFilterPreset(idx) => {
-                self.handle_capture_custom_filter_preset(*idx);
+                follow = self.handle_capture_custom_filter_preset(*idx);
             }
             crate::panels::PanelMsg::SelectCustomFilterTab(idx) => {
-                self.handle_select_custom_filter_tab(*idx);
+                follow = self.handle_select_custom_filter_tab(*idx);
             }
             _ => return None,
         }

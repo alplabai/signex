@@ -16,6 +16,46 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "bring_drawings_forward",
+        category: "edit",
+        label: "Bring drawings forward",
+        menu_label: Some("Bring Forward"),
+        group: CommandGroup::General,
+        enable: Enablement::RequiresSelection,
+        flags: CommandFlags::MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "bring_drawings_to_front",
+        category: "edit",
+        label: "Bring drawings to front",
+        menu_label: Some("Bring to Front"),
+        group: CommandGroup::General,
+        enable: Enablement::RequiresSelection,
+        flags: CommandFlags::MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "send_drawings_backward",
+        category: "edit",
+        label: "Send drawings backward",
+        menu_label: Some("Send Backward"),
+        group: CommandGroup::General,
+        enable: Enablement::RequiresSelection,
+        flags: CommandFlags::MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "send_drawings_to_back",
+        category: "edit",
+        label: "Send drawings to back",
+        menu_label: Some("Send to Back"),
+        group: CommandGroup::General,
+        enable: Enablement::RequiresSelection,
+        flags: CommandFlags::MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "break_wire",
         category: "modify",
         label: "Break wire",
@@ -251,7 +291,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         id: "edit_selected_symbol_in_symbol_editor",
         category: "library",
         label: "Edit selected symbol in Symbol Editor",
-        menu_label: None,
+        menu_label: Some("Edit Symbol"),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::GUI_ONLY,
@@ -461,7 +501,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         id: "open_datasheet",
         category: "edit",
         label: "Open datasheet",
-        menu_label: None,
+        menu_label: Some("Open Datasheet"),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::GUI_ONLY,

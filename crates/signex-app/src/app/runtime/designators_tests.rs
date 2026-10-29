@@ -123,7 +123,7 @@ fn write_sheet(path: &std::path::Path, sheet: signex_types::schematic::Schematic
 
 /// `top` places `child` once, as A; the child's symbol is R1 with an entry
 /// giving placement A the designator R7. Only `top` is open.
-fn placed_once_with_an_entry(
+pub(crate) fn placed_once_with_an_entry(
     dir: &tempfile::TempDir,
 ) -> (Signex, std::path::PathBuf, std::path::PathBuf) {
     use crate::app::handlers::menu::export::tests::{app_workspace, sheet_with_net};
@@ -147,6 +147,8 @@ fn placed_once_with_an_entry(
     write_sheet(&child, child_sheet);
     let mut app = app_workspace(&dir.path().to_string_lossy(), &["top.snxsch"]);
     app.open_or_focus_sheet_path(top.clone());
+    app.refresh_panel_ctx();
+    app.settle_navigator();
     (app, top, child)
 }
 
@@ -158,6 +160,7 @@ fn a_child_opened_without_a_placement_shows_what_its_page_prints() {
     // Opened from the project, not by descending: no recorded placement.
     app.open_or_focus_sheet_path(child.clone());
     app.refresh_panel_ctx();
+    app.settle_navigator();
     assert_eq!(app.document_state.tab_placements.get(&child), None);
     assert_eq!(shown(&app).as_deref(), Some("R7"));
     assert_eq!(current_page(&app, &child).0, "R7");
@@ -172,6 +175,7 @@ fn a_designator_edit_on_a_singly_placed_child_writes_the_reference() {
     let (mut app, _top, child) = placed_once_with_an_entry(&dir);
     app.open_or_focus_sheet_path(child.clone());
     app.refresh_panel_ctx();
+    app.settle_navigator();
     let id = child_symbol(&app);
 
     let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
@@ -212,6 +216,7 @@ fn a_recorded_placement_the_walk_no_longer_reaches_is_not_shown() {
         .execute(signex_engine::Command::ReplaceDocument { document })
         .expect("replace");
     app.refresh_panel_ctx();
+    app.settle_navigator();
 
     assert_eq!(
         app.document_state.active_path.as_deref(),
@@ -262,6 +267,7 @@ fn a_designator_edit_on_a_loose_page_that_another_loose_page_places_writes_the_r
     app.open_or_focus_sheet_path(root);
     app.open_or_focus_sheet_path(y.clone());
     app.refresh_panel_ctx();
+    app.settle_navigator();
     let placements = app
         .document_state
         .panel_ctx
@@ -311,6 +317,8 @@ fn an_incomplete_walk_never_edits_the_reference() {
     std::fs::write(&sub, "this is not a schematic").unwrap();
     let mut app = app_workspace(&dir.path().to_string_lossy(), &["top.snxsch"]);
     app.open_or_focus_sheet_path(top);
+    app.refresh_panel_ctx();
+    app.settle_navigator();
     descend_by_canvas(&mut app, PLACEMENT_A);
     assert_eq!(shown(&app).as_deref(), Some("R7"));
     assert!(
@@ -340,6 +348,7 @@ fn a_child_opened_directly_shows_its_smallest_placement() {
     let (mut app, _top, child) = placed_twice_on_disk(&dir);
     app.open_or_focus_sheet_path(child.clone());
     app.refresh_panel_ctx();
+    app.settle_navigator();
     assert_eq!(app.document_state.tab_placements.get(&child), None);
     assert_eq!(shown(&app), None, "A's R1, not B's R101");
     assert_eq!(
@@ -371,6 +380,7 @@ fn a_designator_edit_on_a_sheet_another_project_shares_writes_the_entry() {
     app.open_or_focus_sheet_path(top_b_path);
     app.open_or_focus_sheet_path(child.clone());
     app.refresh_panel_ctx();
+    app.settle_navigator();
     let id = child_symbol(&app);
 
     let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
@@ -381,4 +391,49 @@ fn a_designator_edit_on_a_sheet_another_project_shares_writes_the_entry() {
     assert_eq!(symbol.reference, "R1", "the base designator is untouched");
     assert_eq!(symbol.designator_in(&b), "R1", "the other project keeps R1");
     assert_eq!(shown(&app).as_deref(), Some("R9"));
+}
+
+// ---------------------------------------------------------------------------
+// #1383 — the early-out never serves a stale answer
+// ---------------------------------------------------------------------------
+
+#[test]
+fn unchanged_inputs_skip_the_recompute_and_a_placement_or_edit_change_redoes_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _top, child) = placed_twice_on_disk(&dir);
+    descend_by_canvas(&mut app, PLACEMENT_B);
+    let id = child_symbol(&app);
+    assert_eq!(shown(&app).as_deref(), Some("R101"));
+
+    // No change: a recompute would overwrite the sentinel.
+    app.interaction_state
+        .active_canvas_mut()
+        .designators
+        .insert(id, "SENTINEL".into());
+    app.refresh_canvas_designators();
+    assert_eq!(shown(&app).as_deref(), Some("SENTINEL"), "no rebuild");
+
+    // A different shown placement invalidates it.
+    app.document_state.tab_placements.record(
+        &child,
+        Some(InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_A)])),
+    );
+    app.refresh_canvas_designators();
+    assert_eq!(shown(&app), None, "placement A draws the base designator");
+
+    // A real edit moves the engine revision and invalidates it.
+    app.document_state.tab_placements.record(
+        &child,
+        Some(InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_B)])),
+    );
+    app.refresh_canvas_designators();
+    assert_eq!(shown(&app).as_deref(), Some("R101"));
+    app.interaction_state
+        .active_canvas_mut()
+        .designators
+        .insert(id, "SENTINEL".into());
+    let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
+        PanelMsg::EditSymbolDesignator(id, "R205".into()),
+    )));
+    assert_eq!(shown(&app).as_deref(), Some("R205"));
 }

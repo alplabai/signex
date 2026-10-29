@@ -7,7 +7,7 @@
 //! holds raw TSV inside a TOML literal multi-line string so the data is
 //! line-diffable in git and editable in any spreadsheet.
 //!
-//! Stage 1 (this module) lands the storage shape only:
+//! This module owns the storage shape:
 //!  * [`SnxlibManifest`] — the manifest header (everything outside the
 //!    `[tables.*]` blocks). `library_id` lives at the document root, not
 //!    inside `[library]`, matching the v0.9 format.
@@ -18,10 +18,10 @@
 //!    with a map of parsed tables. [`LibraryFile::parse`] and
 //!    [`LibraryFile::write`] are the round-trip entrypoints.
 //!
-//! Reserved-core-column validation, typed accessors for fields like
-//! `row_id` / `version` / `released`, and the cascade engine are later
-//! stages of `v0.9-snxlib-as-file-plan.md` — Stage 1 only establishes
-//! the storage shape and the round-trip contract.
+//! This module is the storage shape and the round-trip contract only.
+//! Reserved-core-column validation and typed accessors for fields like
+//! `row_id` / `version` / `released` live with the adapters, and the
+//! cascade engine in [`crate::cascade`].
 
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
@@ -36,7 +36,7 @@ pub use layout::SourceLayout;
 
 /// Format token written at the top of every `.snxlib`. Bumping this is a
 /// wire-format break — older Signex versions refuse to open the file.
-pub const FORMAT_TOKEN: &str = "snxlib/1";
+pub const FORMAT_TOKEN: &str = "snxlib/2";
 
 /// Top-level on-disk shape of a `.snxlib` file.
 ///

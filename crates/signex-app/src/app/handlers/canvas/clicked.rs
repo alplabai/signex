@@ -160,8 +160,7 @@ impl Signex {
                         }
                     }
                 }
-                if diff {
-                    self.record_net_color_undo();
+                if diff && self.record_net_color_undo() {
                     for uuid in net_wire_uuids {
                         if pending.a == 0 {
                             self.ui_state.wire_color_overrides.remove(&uuid);
@@ -189,11 +188,12 @@ impl Signex {
         // Altium's "click the object to reference" convention.
         if let Some(picker) = self.ui_state.reorder_picker {
             if let Some(snapshot) = self.active_render_snapshot() {
-                let hit = crate::schematic_runtime::hit_test::hit_test(
+                let hit = crate::schematic_runtime::hit_test::hit_test_styled(
                     snapshot,
                     &self.interaction_state.active_canvas().designators,
                     world_x,
                     world_y,
+                    self.ui_state.net_class_styles.styles(),
                 );
                 if let Some(reference) = hit {
                     let direction = match picker {
@@ -263,6 +263,11 @@ impl Signex {
         } else {
             self.snap_to_grid(world_x, world_y)
         };
+
+        // A part on the cursor: the click places it, whatever tool is shown.
+        if self.interaction_state.placement.is_some() {
+            return self.handle_placement_click(wx, wy);
+        }
 
         match self.interaction_state.current_tool {
             Tool::Wire => {
@@ -341,6 +346,7 @@ impl Signex {
                         mirror_x: false,
                         mirror_y: false,
                         unit: 1,
+                        body_style: Default::default(),
                         is_power: true,
                         ref_text: None,
                         val_text: Some(signex_types::schematic::TextProp {
@@ -369,9 +375,6 @@ impl Signex {
                     };
                     self.apply_engine_commands(signex_engine::place_power_port(sym), false, false);
                 }
-            }
-            Tool::Component => {
-                let _ = self.place_selected_component(wx, wy);
             }
             Tool::NoConnect => {
                 let nc = signex_types::schematic::NoConnect {
@@ -463,6 +466,8 @@ impl Signex {
                 }
             }
             Tool::Sheet => self.place_sheet_click(wx, wy),
+            Tool::SheetEntry => self.place_sheet_entry_click(wx, wy),
+            Tool::Measure => self.measure_click(wx, wy),
             Tool::Rectangle => {
                 // Two-click: corner → opposite-corner →
                 // SchDrawing::Rect. Rearms blank for the

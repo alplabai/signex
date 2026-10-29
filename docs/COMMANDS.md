@@ -8,11 +8,11 @@ for the file format.
 **Generated — do not edit by hand.** Produced from
 `crates/signex-app/src/keymap/catalog/` and
 `crates/signex-app/assets/keyboard-shortcuts/` by
-`crates/signex-app/tests/command_reference.rs`, which fails if this
+`crates/signex-app/tests/integration/command_reference.rs`, which fails if this
 file drifts. Regenerate with:
 
 ```sh
-UPDATE_DOCS=1 cargo test -p signex-app --test command_reference
+UPDATE_DOCS=1 cargo test -p signex-app --test integration command_reference
 ```
 
 A command listed here resolves in the keymap. Not all of them reach an
@@ -26,6 +26,8 @@ shrink.
 | --- | --- | --- | --- | --- |
 | `autoplace_fields` | Autoplace fields | edit | — | `O` |
 | `break_wire` | Break wire | modify | `E W` | — |
+| `bring_drawings_forward` | Bring drawings forward | edit | — | — |
+| `bring_drawings_to_front` | Bring drawings to front | edit | — | — |
 | `cancel_current_tool` | Cancel current stage / exit placement mode | interactive | `Escape` | `Escape` |
 | `center_on_cursor` | Center on cursor | view | — | `F4` |
 | `center_view_at_cursor` | Center/redraw view around cursor | view | `Home` | — |
@@ -53,19 +55,19 @@ shrink.
 | `edit_value` | Edit value | edit | — | `V` |
 | `fast_grid_1` | Fast grid 1 | view | — | `Alt+1` |
 | `fast_grid_2` | Fast grid 2 | view | — | `Alt+2` |
-| `find` | Find | search | — | `Ctrl+F` |
+| `find` | Find | search | `Ctrl+F` | `Ctrl+F` |
 | `find_and_replace` | Find and replace | search | `Ctrl+H` | — |
 | `find_next` | Find next | search | `F3` | `F3` |
-| `find_previous` | Find previous | search | — | `Shift+F3` |
+| `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
 | `find_similar_objects` | Find Similar Objects | select | `Shift+F` | — |
-| `find_text` | Find text | search | `Ctrl+F` | — |
+| `find_text` | Find text | search | — | — |
 | `import_graphics` | Import graphics | library | — | `Ctrl+Shift+F` |
 | `measure_distance` | Measure distance | view | `Ctrl+M` | — |
 | `mirror_x` | Mirror along X-axis | modify | `X` | `X` |
 | `mirror_y` | Mirror along Y-axis | modify | `Y` | `Y` |
 | `move_object` | Move object | modify | `M M` | — |
 | `move_selection` | Move selection | modify | — | `M` |
-| `new_document` | New | file | — | `Ctrl+N` |
+| `new_document` | New | file | `Ctrl+N` | `Ctrl+N` |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |
 | `open_command_palette` | Open command palette | commands | `Ctrl+Shift+P` | `Ctrl+Shift+P` |
@@ -84,7 +86,7 @@ shrink.
 | `print` | Print | file | `Ctrl+P` | `Ctrl+P` |
 | `redo` | Redo | edit | `Ctrl+Y` | `Ctrl+Y` |
 | `refresh_view` | Refresh/redraw | view | `End` | `F5` |
-| `remove_last_vertex` | Remove last placed vertex while drawing | interactive | `Backspace`, `Delete` | — |
+| `remove_last_vertex` | Remove last placed vertex while drawing | interactive | `Backspace` | — |
 | `repeat_last_item` | Repeat last item | edit | — | `Insert` |
 | `report_manager_bom` | Report Manager / BOM | reports | `R I` | — |
 | `reset_local_coordinates` | Reset local coordinates | view | — | `Space` |
@@ -92,11 +94,13 @@ shrink.
 | `rotate_counterclockwise` | Rotate counterclockwise by 90 degrees | modify | `Space` | `R` |
 | `rubber_stamp_copy` | Rubber-stamp copy / repeated paste | edit | `Ctrl+R` | — |
 | `save_document` | Save document | file | `Ctrl+S` | `Ctrl+S` |
-| `save_document_as` | Save as | file | — | `Ctrl+Shift+S` |
+| `save_document_as` | Save as | file | `Ctrl+Shift+S` | `Ctrl+Shift+S` |
 | `select_all` | Select all | select | `Ctrl+A` | `Ctrl+A` |
 | `select_expand_connection` | Select / expand connection | select | — | `Ctrl+4` |
 | `select_node_or_connection_item` | Select node / connection item under cursor | select | — | `Alt+3` |
-| `show_all_design_objects` | Show all design objects | view | `Ctrl+PageDown` | — |
+| `send_drawings_backward` | Send drawings backward | edit | — | — |
+| `send_drawings_to_back` | Send drawings to back | edit | — | — |
+| `show_all_design_objects` | Show all design objects | view | — | — |
 | `show_current_command_hotkeys` | Show graphical editing hotkey list for current command | help | `F1` | — |
 | `show_current_command_shortcuts` | Show valid shortcuts for the current interactive command | help | `Shift+F1` | — |
 | `smart_paste` | Smart Paste | edit | `Ctrl+Shift+V` | — |
@@ -117,7 +121,7 @@ shrink.
 | `zoom_in_at_cursor` | Zoom in at cursor | view | `PageUp` | `F1` |
 | `zoom_out_at_cursor` | Zoom out at cursor | view | `PageDown` | `F2` |
 | `zoom_to_all_objects` | Zoom to all objects | view | — | `Ctrl+Home` |
-| `zoom_to_fit` | Zoom to fit | view | — | `Home` |
+| `zoom_to_fit` | Zoom to fit | view | `Ctrl+PageDown` | `Home` |
 | `zoom_to_selection_area` | Zoom to selection area | view | — | `Ctrl+F5` |
 
 ## Schematic
@@ -170,7 +174,7 @@ shrink.
 | `open_components_panel` | Open Components panel / place components | panels | `P P` | — |
 | `open_net_color_palette` | Open net color palette | view | `F5` | — |
 | `place_blanket` | Place blanket | place | — | — |
-| `place_bus` | Draw bus | place | — | `B` |
+| `place_bus` | Draw bus | place | `P B` | `B` |
 | `place_bus_entry` | Place bus entry | place | — | — |
 | `place_compile_mask` | Place Compile Mask directive | place | `P V K` | — |
 | `place_component` | Place component | place | — | — |
@@ -227,3 +231,4 @@ _No commands in this group yet._
 | `footprint_mode_pads` | Switch footprint editor to Pads mode | library | `2` | `2` |
 | `footprint_mode_sketch` | Switch footprint editor to Sketch mode | library | `1` | `1` |
 | `footprint_mode_view_3d` | Switch footprint editor to 3D View mode | library | `3` | `3` |
+| `footprint_recompute_courtyard_outline` | Recompute footprint courtyard outline from pads | library | — | — |

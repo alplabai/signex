@@ -17,7 +17,7 @@
 //! `primitive_to_rows` reverse index is rebuilt by adapters via
 //! `iter_rows()` — see [`Self::rebuild_from_rows`].
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
@@ -73,6 +73,13 @@ pub struct WhereUsedIndex {
     /// [`Self::rebuild_from_rows`]. Used by the
     /// "where-is-this-symbol-used" editor surfaces.
     primitive_to_rows: HashMap<PrimitiveRef, Vec<RowId>>,
+    /// Inverse of `primitive_to_rows`: the primitives each row links, so
+    /// replacing one row touches only its own links, not every bucket.
+    row_to_primitives: HashMap<RowId, Vec<PrimitiveRef>>,
+    /// `row_id` → the `(project, sheet)` pairs that hold at least one
+    /// instance of it, so [`Self::where_used`] visits only those sheets
+    /// instead of scanning every indexed project.
+    row_to_sheets: HashMap<RowId, HashSet<(PathBuf, PathBuf)>>,
     /// `Cell<()>` is `!Sync`, which propagates through `PhantomData`. No
     /// runtime cost; the field is zero-sized.
     _not_sync: PhantomData<std::cell::Cell<()>>,
@@ -100,12 +107,35 @@ impl WhereUsedIndex {
             .collect();
 
         let project_map = self.by_project.entry(project.to_path_buf()).or_default();
-        if entries.is_empty() {
+        let previous: Option<Vec<Entry>> = if entries.is_empty() {
             // Empty refs ⇒ sheet contains no library rows: still erase any
             // previous entries so the (project, sheet) bucket reflects truth.
-            project_map.remove(sheet);
+            project_map.remove(sheet)
         } else {
-            project_map.insert(sheet.to_path_buf(), entries);
+            for entry in &entries {
+                self.row_to_sheets
+                    .entry(entry.row_id)
+                    .or_default()
+                    .insert((project.to_path_buf(), sheet.to_path_buf()));
+            }
+            let kept: HashSet<RowId> = entries.iter().map(|e| e.row_id).collect();
+            project_map.insert(sheet.to_path_buf(), entries).map(|old| {
+                old.into_iter()
+                    .filter(|e| !kept.contains(&e.row_id))
+                    .collect()
+            })
+        };
+        for entry in previous.unwrap_or_default() {
+            self.forget_sheet_row(entry.row_id, project, sheet);
+        }
+    }
+
+    fn forget_sheet_row(&mut self, row_id: RowId, project: &Path, sheet: &Path) {
+        if let Some(sheets) = self.row_to_sheets.get_mut(&row_id) {
+            sheets.remove(&(project.to_path_buf(), sheet.to_path_buf()));
+            if sheets.is_empty() {
+                self.row_to_sheets.remove(&row_id);
+            }
         }
     }
 
@@ -113,7 +143,14 @@ impl WhereUsedIndex {
     ///
     /// No-op if the project is not currently indexed.
     pub fn drop_project(&mut self, project: &Path) {
-        self.by_project.remove(project);
+        let Some(sheets) = self.by_project.remove(project) else {
+            return;
+        };
+        for (sheet, entries) in sheets {
+            for entry in entries {
+                self.forget_sheet_row(entry.row_id, project, &sheet);
+            }
+        }
     }
 
     /// Rebuild the `primitive_to_rows` reverse index from a row scan
@@ -126,6 +163,7 @@ impl WhereUsedIndex {
     /// that the consumer hasn't otherwise tracked through `ingest_row`.
     pub fn rebuild_from_rows(&mut self, rows: &[(String, ComponentRow)]) {
         self.primitive_to_rows.clear();
+        self.row_to_primitives.clear();
         for (_table, row) in rows {
             self.add_primitive_links(row);
         }
@@ -138,10 +176,14 @@ impl WhereUsedIndex {
     pub fn ingest_row(&mut self, row: &ComponentRow) {
         let row_id = RowId::from_uuid(row.row_id);
         // Drop any prior entries pointing back to this row id.
-        for sites in self.primitive_to_rows.values_mut() {
-            sites.retain(|id| *id != row_id);
+        for target in self.row_to_primitives.remove(&row_id).unwrap_or_default() {
+            if let Some(rows) = self.primitive_to_rows.get_mut(&target) {
+                rows.retain(|id| *id != row_id);
+                if rows.is_empty() {
+                    self.primitive_to_rows.remove(&target);
+                }
+            }
         }
-        self.primitive_to_rows.retain(|_, sites| !sites.is_empty());
         self.add_primitive_links(row);
     }
 
@@ -155,6 +197,10 @@ impl WhereUsedIndex {
             let rows = self.primitive_to_rows.entry(target).or_default();
             if !rows.contains(&row_id) {
                 rows.push(row_id);
+                self.row_to_primitives
+                    .entry(row_id)
+                    .or_default()
+                    .push(target);
             }
         }
     }
@@ -172,18 +218,23 @@ impl WhereUsedIndex {
     /// unspecified — callers should sort if they need determinism.
     pub fn where_used(&self, row_id: RowId) -> Vec<UseSite> {
         let mut sites = Vec::new();
-        for (project_path, sheets) in &self.by_project {
-            for (sheet_path, entries) in sheets {
-                for entry in entries {
-                    if entry.row_id != row_id {
-                        continue;
-                    }
-                    sites.push(UseSite {
-                        project_path: project_path.clone(),
-                        sheet_path: sheet_path.clone(),
-                        instance_id: entry.instance_id.clone(),
-                    });
-                }
+        let Some(sheets) = self.row_to_sheets.get(&row_id) else {
+            return sites;
+        };
+        for (project_path, sheet_path) in sheets {
+            let Some(entries) = self
+                .by_project
+                .get(project_path)
+                .and_then(|project| project.get(sheet_path))
+            else {
+                continue;
+            };
+            for entry in entries.iter().filter(|e| e.row_id == row_id) {
+                sites.push(UseSite {
+                    project_path: project_path.clone(),
+                    sheet_path: sheet_path.clone(),
+                    instance_id: entry.instance_id.clone(),
+                });
             }
         }
         sites
@@ -215,6 +266,7 @@ mod tests {
             class: ComponentClass::generic(),
             datasheet: DatasheetRef::url(""),
             datasheet_label: String::new(),
+            description: String::new(),
             more_datasheets: Vec::new(),
             state: LifecycleState::Released,
             symbol_ref: symbol,
@@ -336,5 +388,63 @@ mod tests {
         idx.ingest_row(&row);
         assert!(idx.rows_for_primitive(&old_sym).is_empty());
         assert_eq!(idx.rows_for_primitive(&new_sym), &[row_id]);
+    }
+
+    #[test]
+    fn reingesting_a_sheet_moves_a_row_between_sheets() {
+        let project = PathBuf::from("/p.snxprj");
+        let (sheet_a, sheet_b) = (PathBuf::from("/p/a.snxsch"), PathBuf::from("/p/b.snxsch"));
+        let (kept, moved) = (RowId::new(), RowId::new());
+
+        let mut idx = WhereUsedIndex::new();
+        idx.ingest_sheet(
+            &project,
+            &sheet_a,
+            &[(kept, "R1".into()), (moved, "R2".into())],
+        );
+        idx.ingest_sheet(&project, &sheet_a, &[(kept, "R1".into())]);
+        idx.ingest_sheet(&project, &sheet_b, &[(moved, "R9".into())]);
+
+        assert_eq!(idx.where_used(kept).len(), 1);
+        let sites = idx.where_used(moved);
+        assert_eq!(sites.len(), 1);
+        assert_eq!(sites[0].sheet_path, sheet_b);
+        assert_eq!(sites[0].instance_id, "R9");
+    }
+
+    #[test]
+    fn a_row_used_twice_on_one_sheet_reports_both_instances() {
+        let (project, sheet) = (PathBuf::from("/p.snxprj"), PathBuf::from("/p/a.snxsch"));
+        let row_id = RowId::new();
+        let mut idx = WhereUsedIndex::new();
+        idx.ingest_sheet(
+            &project,
+            &sheet,
+            &[(row_id, "R1".into()), (row_id, "R2".into())],
+        );
+        let mut ids: Vec<String> = idx
+            .where_used(row_id)
+            .into_iter()
+            .map(|s| s.instance_id)
+            .collect();
+        ids.sort();
+        assert_eq!(ids, ["R1", "R2"]);
+    }
+
+    #[test]
+    fn dropping_a_project_forgets_only_its_sites() {
+        let (p1, p2) = (PathBuf::from("/1.snxprj"), PathBuf::from("/2.snxprj"));
+        let sheet = PathBuf::from("/s.snxsch");
+        let row_id = RowId::new();
+        let mut idx = WhereUsedIndex::new();
+        idx.ingest_sheet(&p1, &sheet, &[(row_id, "R1".into())]);
+        idx.ingest_sheet(&p2, &sheet, &[(row_id, "R1".into())]);
+
+        idx.drop_project(&p1);
+        let sites = idx.where_used(row_id);
+        assert_eq!(sites.len(), 1);
+        assert_eq!(sites[0].project_path, p2);
+        idx.drop_project(&p2);
+        assert!(idx.where_used(row_id).is_empty());
     }
 }

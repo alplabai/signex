@@ -5,6 +5,12 @@ use std::path::PathBuf;
 use super::super::*;
 
 mod altium_import;
+#[cfg(test)]
+mod commit_bytes_tests;
+mod dir_case;
+pub(crate) use dir_case::FoldAnswer;
+#[cfg(test)]
+mod dir_case_tests;
 mod git;
 #[cfg(test)]
 mod git_tests;
@@ -15,6 +21,7 @@ mod open;
 mod open_read;
 #[cfg(test)]
 mod open_read_tests;
+mod project_save;
 mod recent;
 #[cfg(test)]
 mod restore_cancel_tests;
@@ -137,6 +144,7 @@ fn blank_schematic_sheet() -> signex_types::schematic::SchematicSheet {
         title_block: Default::default(),
         lib_symbols: Default::default(),
         net_colors: Default::default(),
+        drawing_placements: Default::default(),
         frame: Default::default(),
         font_family: None,
     }

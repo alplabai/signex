@@ -7,11 +7,12 @@
 //! each carries.
 //!
 //! Resolution order (§4.3):
-//! 1. per-library override (inside `*.snxlib/templates/<class>.toml`),
-//! 2. global override (`<config_dir>/signex/templates/<class>.toml`) — *not
-//!    loaded by this crate; `TemplateRegistry::load_global_dir` is called by
-//!    the app shell during start-up*,
+//! 1. per-library override ([`TemplateRegistry::insert_for_library`]),
+//! 2. global override ([`TemplateRegistry::insert_global`]),
 //! 3. the bundled built-in.
+//!
+//! This crate reads no template files; the caller parses a
+//! [`ParameterTemplate`] and registers it.
 //!
 //! `TemplateRegistry::new_with_builtins` ships with five starter classes:
 //! resistor, capacitor, inductor, opamp, generic. Anything else falls through
@@ -23,6 +24,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::param::{ParamMap, ParamValue};
+use signex_types::quantity::Unit;
 
 /// Kind of value a parameter slot accepts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -42,6 +44,23 @@ pub struct ParamSlot {
     /// Required for `kind = measurement`, optional otherwise.
     #[serde(default)]
     pub unit: Option<String>,
+    /// A zero value is legitimate. Without it, a zero measurement is
+    /// rejected for capacitance and inductance slots (`ZeroNotAllowed`).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub allow_zero: bool,
+    /// A negative value is legitimate (offsets, temperature coefficients).
+    /// Without it, a negative measurement is rejected for resistance,
+    /// capacitance and inductance slots (`NegativeNotAllowed`).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub allow_negative: bool,
+    /// Render the value with a leading `±` (tolerances). Display only; not
+    /// a validation rule.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub display_plus_minus: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 /// Class-typed parameter schema.
@@ -79,6 +98,11 @@ pub enum TemplateViolation {
         expected: String,
         found: String,
     },
+    /// A capacitance or inductance is zero and the slot lacks `allow_zero`.
+    ZeroNotAllowed { name: String },
+    /// A resistance, capacitance or inductance is negative and the slot
+    /// lacks `allow_negative`.
+    NegativeNotAllowed { name: String },
 }
 
 impl std::fmt::Display for TemplateViolation {
@@ -103,6 +127,12 @@ impl std::fmt::Display for TemplateViolation {
                 f,
                 "parameter {name} has wrong unit: expected {expected}, found {found}"
             ),
+            TemplateViolation::ZeroNotAllowed { name } => {
+                write!(f, "parameter {name} must not be zero")
+            }
+            TemplateViolation::NegativeNotAllowed { name } => {
+                write!(f, "parameter {name} must not be negative")
+            }
         }
     }
 }
@@ -110,9 +140,9 @@ impl std::fmt::Display for TemplateViolation {
 /// Per-library + global template registry.
 ///
 /// `global` keeps one entry per class — populated by `new_with_builtins` and
-/// optionally augmented by `load_global_dir`.
-/// `per_lib` overrides per `(library_id, class)` pair — populated by
-/// `LibrarySet` when a library exposes its own `templates/<class>.toml`.
+/// optionally replaced through `insert_global`.
+/// `per_lib` overrides per `(library_id, class)` pair — populated through
+/// `insert_for_library`.
 #[derive(Clone, Debug, Default)]
 pub struct TemplateRegistry {
     global: HashMap<String, ParameterTemplate>,
@@ -221,13 +251,30 @@ fn check_slot(slot: &ParamSlot, v: &ParamValue, out: &mut Vec<TemplateViolation>
         });
         return;
     }
-    if let (ParamValue::Measurement { unit, .. }, Some(expected_unit)) = (v, &slot.unit)
-        && unit != expected_unit
-    {
+    let (ParamValue::Measurement { unit, .. }, Some(expected_unit)) = (v, &slot.unit) else {
+        return;
+    };
+    if !signex_types::quantity::unit_string_matches(unit, expected_unit) {
         out.push(TemplateViolation::WrongUnit {
             name: slot.name.clone(),
             expected: expected_unit.clone(),
             found: unit.clone(),
+        });
+        return;
+    }
+    // Sign rules apply to the base value, so `-4.7 kΩ` and `-4700 ohm`
+    // are judged alike.
+    let Some(q) = v.as_quantity() else { return };
+    let base = q.base();
+    let unit = q.unit();
+    let is_value_unit = matches!(unit, Unit::Ohm | Unit::Farad | Unit::Henry);
+    if base == 0.0 && matches!(unit, Unit::Farad | Unit::Henry) && !slot.allow_zero {
+        out.push(TemplateViolation::ZeroNotAllowed {
+            name: slot.name.clone(),
+        });
+    } else if base < 0.0 && is_value_unit && !slot.allow_negative {
+        out.push(TemplateViolation::NegativeNotAllowed {
+            name: slot.name.clone(),
         });
     }
 }
@@ -273,6 +320,9 @@ mod tests {
                 name: "custom_value".into(),
                 kind: ParamKind::Text,
                 unit: None,
+                allow_zero: false,
+                allow_negative: false,
+                display_plus_minus: false,
             }],
             optional_params: Vec::new(),
         };
@@ -370,6 +420,150 @@ mod tests {
         )));
     }
 
+    fn resistor_value_with_unit(unit: &str, value: f64) -> Vec<TemplateViolation> {
+        let r = TemplateRegistry::new_with_builtins();
+        let mut params = ParamMap::new();
+        params.insert(
+            "value".into(),
+            ParamValue::Measurement {
+                value,
+                unit: unit.into(),
+            },
+        );
+        r.validate_params(Uuid::nil(), "resistor", &params)
+            .into_iter()
+            .filter(|v| matches!(v, TemplateViolation::WrongUnit { .. }))
+            .collect()
+    }
+
+    /// A prefixed legacy unit satisfies the template's base unit; a
+    /// prefix on a different unit does not.
+    #[test]
+    fn prefixed_unit_satisfies_base_unit_but_wrong_family_does_not() {
+        assert!(resistor_value_with_unit("kΩ", 4.7).is_empty());
+        assert!(resistor_value_with_unit("ohm", 4700.0).is_empty());
+        assert!(resistor_value_with_unit("Mohm", 1.0).is_empty());
+        assert!(!resistor_value_with_unit("kF", 4.7).is_empty());
+        assert!(!resistor_value_with_unit("F", 4.7).is_empty());
+    }
+
+    fn violations_for(class: &str, name: &str, value: f64, unit: &str) -> Vec<TemplateViolation> {
+        let r = TemplateRegistry::new_with_builtins();
+        let mut params = ParamMap::new();
+        params.insert(
+            name.into(),
+            ParamValue::Measurement {
+                value,
+                unit: unit.into(),
+            },
+        );
+        r.validate_params(Uuid::nil(), class, &params)
+            .into_iter()
+            .filter(|v| !matches!(v, TemplateViolation::MissingRequired { .. }))
+            .collect()
+    }
+
+    #[test]
+    fn zero_is_rejected_for_capacitance_and_inductance_but_not_resistance() {
+        assert!(violations_for("resistor", "value", 0.0, "ohm").is_empty());
+        assert_eq!(
+            violations_for("capacitor", "value", 0.0, "F"),
+            vec![TemplateViolation::ZeroNotAllowed {
+                name: "value".into()
+            }]
+        );
+        assert_eq!(
+            violations_for("inductor", "value", 0.0, "uH").len(),
+            1,
+            "legacy prefixed zero is judged alike"
+        );
+    }
+
+    #[test]
+    fn negative_is_rejected_for_r_c_l_values() {
+        for (class, unit) in [("resistor", "kΩ"), ("capacitor", "uF"), ("inductor", "H")] {
+            assert_eq!(
+                violations_for(class, "value", -1.0, unit),
+                vec![TemplateViolation::NegativeNotAllowed {
+                    name: "value".into()
+                }],
+                "{class}"
+            );
+        }
+        assert!(violations_for("resistor", "value", 1.0, "kΩ").is_empty());
+    }
+
+    #[test]
+    fn allow_zero_and_allow_negative_lift_the_rules() {
+        let slot = |allow_zero, allow_negative| ParamSlot {
+            name: "x".into(),
+            kind: ParamKind::Measurement,
+            unit: Some("F".into()),
+            allow_zero,
+            allow_negative,
+            display_plus_minus: false,
+        };
+        let check = |slot: &ParamSlot, value: f64| {
+            let mut out = Vec::new();
+            check_slot(
+                slot,
+                &ParamValue::Measurement {
+                    value,
+                    unit: "F".into(),
+                },
+                &mut out,
+            );
+            out
+        };
+        assert_eq!(check(&slot(false, false), 0.0).len(), 1);
+        assert!(check(&slot(true, false), 0.0).is_empty());
+        assert_eq!(check(&slot(true, false), -1.0).len(), 1);
+        assert!(check(&slot(false, true), -1.0).is_empty());
+    }
+
+    #[test]
+    fn builtin_templates_flag_nothing_for_ordinary_values() {
+        for (class, name, value, unit) in [
+            ("resistor", "value", 4.7, "kΩ"),
+            ("capacitor", "value", 100.0, "nF"),
+            ("capacitor", "esr", 0.0, "ohm"),
+            ("inductor", "dcr", 0.0, "ohm"),
+            ("inductor", "value", 10.0, "µH"),
+        ] {
+            assert!(
+                violations_for(class, name, value, unit).is_empty(),
+                "{class}.{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn new_slot_keys_default_off_and_parse_when_set() {
+        let t = ParameterTemplate::parse(
+            r#"
+class = "x"
+[[required_params]]
+name = "a"
+kind = "measurement"
+unit = "%"
+[[optional_params]]
+name = "b"
+kind = "measurement"
+unit = "V"
+allow_zero = true
+allow_negative = true
+display_plus_minus = true
+"#,
+        )
+        .unwrap();
+        let a = &t.required_params[0];
+        assert!(!a.allow_zero && !a.allow_negative && !a.display_plus_minus);
+        let b = &t.optional_params[0];
+        assert!(b.allow_zero && b.allow_negative && b.display_plus_minus);
+        // Unset keys are not written back.
+        assert!(!toml::to_string_pretty(a).unwrap().contains("allow"));
+    }
+
     #[test]
     fn template_round_trip_through_toml() {
         let t = ParameterTemplate {
@@ -379,11 +573,17 @@ mod tests {
                 name: "a".into(),
                 kind: ParamKind::Measurement,
                 unit: Some("V".into()),
+                allow_zero: false,
+                allow_negative: false,
+                display_plus_minus: false,
             }],
             optional_params: vec![ParamSlot {
                 name: "b".into(),
                 kind: ParamKind::Text,
                 unit: None,
+                allow_zero: false,
+                allow_negative: false,
+                display_plus_minus: false,
             }],
         };
         let text = toml::to_string_pretty(&t).unwrap();

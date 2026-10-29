@@ -1,8 +1,7 @@
 //! In-memory state for the Library subsystem (DBLib model).
 //!
-//! Owned by [`crate::app::Signex::library`]. In the v0.9-refactor-2
-//! model, components are rows inside per-category TSV tables under
-//! `<lib>/tables/<category>.tsv`, addressed by
+//! Owned by [`crate::app::Signex::library`]. Components are rows inside per-category TSV
+//! tables under `<lib>/tables/<category>.tsv`, addressed by
 //! `(library_path, table, row_id)`. The main pieces:
 //!
 //! * `set` — `signex_library::LibrarySet`, the cross-library resolver
@@ -21,7 +20,6 @@
 //!   stable identity, not the window id.
 //! * `picker` — component picker modal state (used by schematic
 //!   placement; flattens across every open library).
-//!   (library + table + class + InternalPN).
 //! * `template_registry` — bundled + per-library parameter templates,
 //!   resolved at component-class lookup time.
 
@@ -76,14 +74,15 @@ impl EditorAddress {
 ///
 /// Mirrors plan §6 "Lifecycle, tagging, distributors": rows tagged
 /// `Released`/`InReview`/`Draft` count as "active" for filtering, while
-/// `Deprecated` rows are tinted yellow when shown and `Obsolete` rows
-/// are hidden by default. Stage 18 surfaces these as a single dropdown
-/// pill in the browser header so users can pivot the visible row set
-/// without touching every row's lifecycle field.
+/// `Deprecated` and `Obsolete` rows are both hidden by default
+/// (`Deprecated` rows are tinted yellow once `IncludeDeprecated` shows
+/// them). Stage 18 surfaces these as a single dropdown pill in the
+/// browser header so users can pivot the visible row set without
+/// touching every row's lifecycle field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum LifecycleFilter {
-    /// Default — show `Released` / `InReview` / `Draft` and tint
-    /// `Deprecated`. Hides `Obsolete`.
+    /// Default — show `Released` / `InReview` / `Draft`. Hides
+    /// `Deprecated` and `Obsolete`.
     #[default]
     ActiveAndPreferred,
     /// Show only `Released` (the "preferred for new designs" subset
@@ -118,10 +117,10 @@ impl LifecycleFilter {
     ];
 
     /// Whether a row in `state` should render under this filter.
-    /// Deprecated rows render in the default filter but render tinted
-    /// (see `lifecycle_dot_color`). `LifecycleState` is
-    /// `#[non_exhaustive]` so the match falls through to the default
-    /// (active-but-not-preferred) bucket for any future variant.
+    /// Deprecated rows are hidden by default and render tinted when
+    /// `IncludeDeprecated` shows them (see `lifecycle_dot_color`).
+    /// `LifecycleState` is `#[non_exhaustive]`, so any future variant
+    /// falls through to hidden.
     pub fn allows(self, state: signex_library::LifecycleState) -> bool {
         use signex_library::LifecycleState as L;
         match (self, state) {
@@ -134,7 +133,6 @@ impl LifecycleFilter {
             ) => true,
             (Self::IncludeDeprecated, L::Deprecated) => true,
             (Self::ActiveAndPreferred, L::Deprecated) => false,
-            (_, L::Obsolete) => false,
             _ => false,
         }
     }
@@ -219,28 +217,13 @@ pub struct LibraryBrowserState {
     /// Most recent rename error (e.g. duplicate target name).
     /// Surfaces inline next to the rename input.
     pub rename_error: Option<String>,
-    /// In-flight `+ Class` form — `Some` while the user is typing
-    /// a new class key + label. Confirm dispatches
-    /// `update_library_classes` with the appended row.
-    pub adding_class: Option<NewClassDraft>,
-    /// In-flight class rename — `(original_key, key_buffer, label_buffer)`.
-    pub renaming_class: Option<(String, String, String)>,
-    /// Most recent class-edit error (validation, duplicate key, etc).
-    pub class_error: Option<String>,
     /// Filtered, sorted rows and derived columns of the active table (#1374),
     /// kept current by `LibraryState::sync_view_caches`; `view` reads it
     /// instead of recomputing every frame.
     pub view_cache: Option<super::browser::BrowserViewCache>,
-}
-
-/// `+ Class` inline form state — separate key + label inputs since
-/// the canonical class identifier (`key`) is distinct from the
-/// human-readable display label.
-#[derive(Debug, Clone, Default)]
-pub struct NewClassDraft {
-    pub key: String,
-    pub label: String,
-    pub error: Option<String>,
+    /// Where the grid is scrolled to, as reported by its scrollable. The
+    /// grid builds only the rows in this window (#1355).
+    pub grid_scroll: super::browser::GridScroll,
 }
 
 /// Active sort key + direction for the Library Browser grid.
@@ -268,10 +251,8 @@ impl LibraryBrowserState {
             delete_error: None,
             renaming_table: None,
             rename_error: None,
-            adding_class: None,
-            renaming_class: None,
-            class_error: None,
             view_cache: None,
+            grid_scroll: super::browser::GridScroll::default(),
         }
     }
 
@@ -383,6 +364,9 @@ pub struct PrimitivePickerState {
     /// Inline error, e.g. when filesystem-picked file isn't inside a
     /// `.snxlib`.
     pub error: Option<String>,
+    /// Scroll offset of the list, in pixels, as last reported by its
+    /// scrollable; drives which rows get built.
+    pub scroll_y: f32,
 }
 
 /// Where the picker should write the picked `PrimitiveRef`.
@@ -420,6 +404,9 @@ impl PrimitivePickerTarget {
 /// [`crate::app::Signex`] as a single field so the dispatcher can
 /// borrow it independently of the rest of `DocumentState`.
 pub struct LibraryState {
+    /// Shows a datasheet in the platform's viewer. A field so a test can
+    /// record what would open instead of launching a browser (#1301).
+    pub datasheet_opener: crate::library::placed_part::OpenDatasheet,
     /// Embedded-vs-library symbol drift per open sheet (#912).
     pub drift: super::drift::DriftState,
     /// Latest switch request per placed symbol (#1230).
@@ -444,13 +431,14 @@ pub struct LibraryState {
     pub picker: Option<PickerState>,
     /// Distributor APIs settings panel state.
     pub settings: DistributorSettings,
-    /// True while the Library left-dock panel's expanded library node
-    /// at index `i` is open.
-    pub expanded: Vec<bool>,
     /// Library left-dock search box buffer.
     pub panel_search: String,
     /// "Close Library — Unsaved Drafts" modal state — `None` while closed.
     pub close_library_confirm: Option<CloseLibraryConfirmState>,
+    /// `(label, reason)` of each Save-All row whose off-thread datasheet
+    /// store or commit failed, keyed by `(batch id, row)`, until that Save
+    /// All settles and reports it. Another Save All never touches them.
+    pub batch_row_failures: HashMap<(u64, EditorAddress), (String, String)>,
     /// Bundled + per-library parameter templates. Reference-counted
     /// because both the editor and the validator borrow it. The
     /// Component Preview tab + the validator both read through this
@@ -460,6 +448,9 @@ pub struct LibraryState {
     /// per `TabKind::LibraryBrowser(path)` tab in the main window's
     /// tab bar; insert on tab open, drop on tab close.
     pub library_browsers: HashMap<PathBuf, LibraryBrowserState>,
+    /// The library whose browser tab was showing at the last update, so a
+    /// switch to another tab can be told apart from a repeat of the same one.
+    pub shown_browser: Option<PathBuf>,
     /// Primitive picker modal state — `None` while closed. Opened from
     /// the Component Preview tab's Symbol/Footprint pane, the New
     /// Component modal, and the Edit Component Details modal.
@@ -489,9 +480,9 @@ pub struct LibraryState {
     /// Updates modals for other sheets, waiting for the open one to close
     /// (one modal at a time). Promoted by `show_next_queued_updates`.
     pub queued_library_updates: Vec<super::updates_dialog::LibraryUpdatesState>,
-    /// Set of schematic paths the user explicitly skipped updates on
-    /// — drives the persistent "Library Updates" status-bar indicator.
-    /// Cleared on apply / re-scan / close-tab.
+    /// Set of schematic paths the user explicitly skipped updates on.
+    /// Nothing renders this set yet (no status-bar indicator). Cleared
+    /// on apply / re-scan / close-tab.
     pub skipped_updates_for: std::collections::HashSet<PathBuf>,
     /// Session-scoped "Installed" libraries — opened via the
     /// Components Panel's "+ Add Library…" button (Stage 9 of
@@ -507,6 +498,10 @@ pub struct LibraryState {
     /// Mounted path of the bundled stock library; `None` when it was not
     /// found or failed to mount. Set once at bootstrap.
     pub stock_library: Option<PathBuf>,
+    /// Where the bundled stock library was resolved, mounted or not. A
+    /// stock library that fails to open is never mounted, so only this
+    /// field lets the open-failure recovery flows recognise it (#814).
+    pub stock_library_root: Option<PathBuf>,
     /// Components Panel UI state — collapsed sections + substring
     /// filter. Stage 9 ships the simple substring matcher; the full
     /// search syntax (plan §5) is polish work.
@@ -578,6 +573,9 @@ pub struct LibraryState {
     /// libraries changes. Caches derived from them (the picker list, the
     /// browser grid) rebuild when it moves — see `touch_data`.
     pub data_version: u64,
+    /// Preference-backed defaults for a library opened or created from now
+    /// on; `Save Preferences` updates it, so no reader goes back to disk.
+    pub new_library_defaults: NewLibraryDefaults,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the
@@ -621,8 +619,8 @@ impl ComponentsMountSource {
         }
     }
 
-    /// Every section in stable display order — Project on top,
-    /// Installed in the middle, Global last.
+    /// Every section in stable display order — Project, Installed,
+    /// Global, then Stock last.
     pub const ORDER: &'static [ComponentsMountSource] = &[
         ComponentsMountSource::Project,
         ComponentsMountSource::Installed,
@@ -637,7 +635,8 @@ impl ComponentsMountSource {
 #[derive(Debug, Clone, Default)]
 pub struct ComponentsPanelState {
     /// `true` while the named section is collapsed. Sections are
-    /// `"project"`, `"installed"`, `"global"`.
+    /// `"project"`, `"installed"`, `"global"` (stock has its own
+    /// `collapsed_stock`).
     pub collapsed_project: bool,
     pub collapsed_installed: bool,
     pub collapsed_global: bool,
@@ -648,6 +647,9 @@ pub struct ComponentsPanelState {
     /// the rich `mpn:LM317 lifecycle:preferred` syntax (plan §5) is
     /// a follow-up.
     pub filter: String,
+    /// Searchable row list the panel draws; kept current by
+    /// `LibraryState::sync_view_caches` (#1353).
+    pub rows: PanelRows,
 }
 
 /// State for the Tools ▸ Document Options modal — keyed by the
@@ -692,21 +694,30 @@ pub struct LibraryCreateOptionsState {
 }
 
 mod methods;
+mod new_library_defaults;
+mod panel_rows;
+#[cfg(test)]
+mod panel_rows_tests;
 mod picker_cache;
 #[cfg(test)]
 mod picker_cache_tests;
+mod placed_part;
 mod preview;
 mod refresh;
 #[cfg(test)]
 mod refresh_tests;
 mod relocate;
 mod symbol_choice;
+mod table_scan;
 #[cfg(test)]
 mod tests;
 mod under_folder;
 
 pub use methods::*;
+pub use new_library_defaults::NewLibraryDefaults;
+pub use panel_rows::PanelRows;
 pub use picker_cache::{PickerEntry, PickerRows};
+pub use placed_part::{ChangePreview, DatasheetChoice, PickerMode};
 pub use preview::*;
 pub use refresh::{LibrarySnapshot, RefreshFinish, RefreshStart};
 pub use relocate::rebase_path;

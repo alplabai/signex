@@ -293,8 +293,8 @@ pub(super) fn emit_static_polygons(
 
 pub(super) fn drc_slot(severity: Severity) -> ColorSlot {
     match severity {
-        Severity::Error => ColorSlot::ErcError,
-        Severity::Warning => ColorSlot::ErcWarning,
+        Severity::Error => ColorSlot::DrcError,
+        Severity::Warning => ColorSlot::DrcWarning,
         Severity::Info => ColorSlot::ErcInfo,
     }
 }

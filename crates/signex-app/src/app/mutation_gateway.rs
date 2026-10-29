@@ -100,7 +100,7 @@ impl Signex {
     }
 
     /// Tell the user which locked symbols an edit passed over.
-    fn report_locked_skips(skipped: &[String]) {
+    pub(crate) fn report_locked_skips(skipped: &[String]) {
         if skipped.is_empty() {
             return;
         }
@@ -130,19 +130,38 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> CommandOutcome {
+        self.apply_engine_commands_reporting(commands, clear_overlay_cache, update_selection_info)
+            .0
+    }
+
+    /// [`Self::apply_engine_commands_checked`] that also hands back the
+    /// refusal text of a failed batch, so a caller can print the reason even
+    /// when the gateway's own line was already shown (or throttled).
+    pub(crate) fn apply_engine_commands_reporting(
+        &mut self,
+        commands: Vec<signex_engine::Command>,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> (CommandOutcome, Option<String>) {
         if commands.is_empty() {
-            return CommandOutcome::Unchanged;
+            return (CommandOutcome::Unchanged, None);
         }
 
+        if let Some(reason) = self.refuse_if_active_read_only() {
+            return (CommandOutcome::Failed, Some(reason));
+        }
         let Some(engine) = self.document_state.active_engine_mut() else {
-            return CommandOutcome::Failed;
+            return (
+                CommandOutcome::Failed,
+                Some("There is no active schematic.".to_string()),
+            );
         };
 
         // A locked symbol is skipped, not allowed to cancel the batch.
         let (commands, skipped) = Self::without_locked_symbols(engine, commands);
         Self::report_locked_skips(&skipped);
         if commands.is_empty() {
-            return CommandOutcome::Unchanged;
+            return (CommandOutcome::Unchanged, None);
         }
 
         // One engine history entry for the whole batch, with the patches
@@ -156,9 +175,10 @@ impl Signex {
                 .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
                 .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE),
             Err(error) => {
+                let reason = error.to_string();
                 let error = anyhow::Error::new(error);
                 crate::diagnostics::log_error("Engine command execution failed", &error);
-                return CommandOutcome::Failed;
+                return (CommandOutcome::Failed, Some(reason));
             }
         };
 
@@ -169,9 +189,9 @@ impl Signex {
         );
         if changed {
             self.clear_active_net_color_redo();
-            CommandOutcome::Changed
+            (CommandOutcome::Changed, None)
         } else {
-            CommandOutcome::Unchanged
+            (CommandOutcome::Unchanged, None)
         }
     }
 
@@ -232,6 +252,9 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> (CommandOutcome, Option<String>) {
+        if let Some(reason) = self.refuse_if_active_read_only() {
+            return (CommandOutcome::Failed, Some(reason));
+        }
         let Some(engine) = self.document_state.active_engine_mut() else {
             return (
                 CommandOutcome::Failed,
@@ -425,7 +448,7 @@ impl Signex {
         if invalidation.intersects(crate::schematic_runtime::RenderInvalidation::PAPER)
             && let Some(token) = self
                 .active_render_snapshot()
-                .map(|snapshot| snapshot.paper_size.clone())
+                .map(|snapshot| super::load_gateway::effective_paper_size(&snapshot.paper_size))
         {
             self.document_state.panel_ctx.paper_size = token;
             self.apply_page_dimensions_to_canvas();
@@ -555,7 +578,11 @@ mod tests {
     }
 
     fn drag_selection(app: &mut Signex, window_id: iced::window::Id) {
-        let event = crate::canvas::CanvasEvent::MoveSelected { dx: 10.0, dy: 0.0 };
+        let event = crate::canvas::CanvasEvent::MoveSelected {
+            dx: 10.0,
+            dy: 0.0,
+            connections: Default::default(),
+        };
         let _task = app.dispatch_update(Message::CanvasEventInWindow { window_id, event });
     }
 

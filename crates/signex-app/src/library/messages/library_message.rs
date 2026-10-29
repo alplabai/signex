@@ -158,60 +158,7 @@ pub enum LibraryMessage {
     BrowserConfirmRenameTable {
         library_path: PathBuf,
     },
-    /// Sidebar `+ Class` — opens the inline create form on
-    /// `LibraryBrowserState.adding_class`.
-    BrowserBeginAddClass {
-        library_path: PathBuf,
-    },
-    BrowserSetNewClassKey {
-        library_path: PathBuf,
-        value: String,
-    },
-    BrowserSetNewClassLabel {
-        library_path: PathBuf,
-        value: String,
-    },
-    BrowserCancelAddClass {
-        library_path: PathBuf,
-    },
-    /// Append the new class to the library's `[[classes]]` block via
-    /// `update_library_classes` and refresh.
-    BrowserConfirmAddClass {
-        library_path: PathBuf,
-    },
-    /// Per-row `×` delete — drops the matching class from the
-    /// library's `[[classes]]` block. Components referencing the
-    /// class by key keep their stored class string; the dropdown
-    /// just stops surfacing it.
-    BrowserDeleteClass {
-        library_path: PathBuf,
-        key: String,
-    },
-    /// Sidebar `✎` rename for a class row — flips the matching row
-    /// into edit mode (key + label inputs).
-    BrowserBeginRenameClass {
-        library_path: PathBuf,
-        key: String,
-    },
-    BrowserSetRenameClassKey {
-        library_path: PathBuf,
-        value: String,
-    },
-    BrowserSetRenameClassLabel {
-        library_path: PathBuf,
-        value: String,
-    },
-    BrowserCancelRenameClass {
-        library_path: PathBuf,
-    },
-    /// Confirm — writes the renamed class via `update_library_classes`.
-    BrowserConfirmRenameClass {
-        library_path: PathBuf,
-    },
     // ─────────────────────────────────────────────────────────────────
-    /// Toggle the Library left-dock panel's library tree node at
-    /// `path` (path relative to the open libraries list).
-    ToggleLibraryTreeNode(usize),
     /// Open a Component Preview tab for the row identified by
     /// `(library_path, table, row_id)`.
     OpenComponentRow {
@@ -252,9 +199,11 @@ pub enum LibraryMessage {
     },
     /// Completion of the off-thread read behind `PlaceLibraryComponent`.
     /// `target_sheet` is the sheet that was active when the gesture
-    /// started; the handler refuses to place anywhere else.
+    /// started; the handler refuses to arm anywhere else, and `arm_epoch`
+    /// (the placement epoch then) lets it ignore a read the user cancelled.
     LibraryComponentResolved {
         target_sheet: PathBuf,
+        arm_epoch: u64,
         library_path: PathBuf,
         result: Result<Box<ResolvedPlacement>, String>,
     },
@@ -273,6 +222,9 @@ pub enum LibraryMessage {
         label: String,
         result: Result<Box<ResolvedSymbolChoice>, String>,
     },
+    /// An action on the selected placed part: Open Datasheet, Edit Symbol,
+    /// Change Component (#1301, #1262, #1260), and their follow-ups.
+    PlacedPart(super::PlacedPartMsg),
     /// Internal trace-only signal: a Component Preview tab was
     /// opened for the given address. Fired alongside
     /// `OpenComponentRow` so downstream observers can attach to a
@@ -350,6 +302,18 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         table: String,
         row_id: RowId,
+    },
+    /// The browser grid's scrollable moved. Carries the scroll offset the
+    /// grid windows its rows from.
+    BrowserGridScrolled {
+        library_path: PathBuf,
+        offset_y: f32,
+    },
+    /// The browser grid was laid out at a new height (a resize, including
+    /// one the scrollable does not report because the rows now fit).
+    BrowserGridResized {
+        library_path: PathBuf,
+        viewport_h: f32,
     },
     /// User clicked the Add Component button (inside the empty-state
     /// CTA, the action row, or the "+" tab). Pre-sets the New
@@ -564,6 +528,16 @@ pub struct ResolvedPlacement {
     /// The row's component class key (`"diode"`, `"generic"`), for the
     /// project's designator standard (#1232).
     pub class: String,
+    /// The row's raw `designator_prefix` parameter, not yet validated: it
+    /// beats the standard's table entry for `class` (#1315).
+    pub prefix_override: Option<String>,
+    /// The part's primary datasheet link and identity fields (Manufacturer,
+    /// MPN and the row's parameters). A placement does not stamp them;
+    /// Change Component replaces the old part's with them. The footprint is
+    /// not among them: the row owns it through `row_id`, and a placed
+    /// symbol's footprint text stays empty as on a fresh placement.
+    pub datasheet: String,
+    pub fields: Vec<(String, String)>,
 }
 
 /// The drawing a placed symbol is switched to, read off-thread: the

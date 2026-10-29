@@ -1,3 +1,4 @@
+// Standalone binary: sends unauthenticated requests, so SIGNEX_API_TOKEN must stay unset; the other server tests set it process-wide.
 //! `DatabaseAdapter` against the real server router (#688).
 //!
 //! The client's own tests in signex-library use wiremock stubs, which only
@@ -19,14 +20,15 @@ use signex_library::manifest::{LibraryMeta, LibraryMode, Manifest};
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{Footprint, PrimitiveRef, SimKind, SimModel, Symbol};
-use signex_library_server::db::AppState;
+use signex_library_server::db::{AppState, RowInsert};
 use signex_library_server::{API_TOKEN_ENV, router_with_state};
 use uuid::Uuid;
 
 /// A real server on a loopback port. The runtime lives as long as the value.
 struct TestServer {
     url: String,
-    _runtime: tokio::runtime::Runtime,
+    state: AppState,
+    runtime: tokio::runtime::Runtime,
 }
 
 impl TestServer {
@@ -36,12 +38,12 @@ impl TestServer {
             .enable_all()
             .build()
             .expect("runtime");
-        let url = runtime.block_on(async {
+        let (url, state) = runtime.block_on(async {
             let state = AppState::new_sqlite_memory()
                 .await
                 .expect("sqlite memory state");
             state.migrate().await.expect("migrations apply");
-            let router = router_with_state(state);
+            let router = router_with_state(state.clone());
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
                 .await
                 .expect("bind loopback");
@@ -49,11 +51,12 @@ impl TestServer {
             tokio::spawn(async move {
                 axum::serve(listener, router).await.expect("serve");
             });
-            url
+            (url, state)
         });
         Self {
             url,
-            _runtime: runtime,
+            state,
+            runtime,
         }
     }
 
@@ -173,6 +176,7 @@ fn test_row(pn: &str) -> ComponentRow {
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
@@ -359,7 +363,7 @@ fn an_older_clients_write_is_refused_and_keeps_the_stored_documents() {
         server.url, row.row_id
     );
     for schema in [None, Some(signex_library::ROW_SCHEMA - 1)] {
-        let (status, reply) = server._runtime.block_on(async {
+        let (status, reply) = server.runtime.block_on(async {
             let mut req = reqwest::Client::new()
                 .put(&url)
                 .header("if-match", "\"1\"")
@@ -557,5 +561,78 @@ fn stale_footprint_and_sim_saves_are_refused() {
     let err = bob
         .save_sim(sm, "recreate")
         .expect_err("create over an existing sim");
+    assert!(matches!(err, LibraryError::Conflict(_)), "{err:?}");
+}
+
+/// More rows than one page holds: the client pages through all of them, in
+/// order and without repeats, for both primitives and table rows.
+#[test]
+fn lists_longer_than_one_page_come_back_whole() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let adapter = server.adapter(library);
+    let total = 2 * signex_library_server::db::MAX_PAGE_LIMIT as usize + 1;
+
+    let mut want_symbols = Vec::new();
+    let mut want_rows = Vec::new();
+    server.runtime.block_on(async {
+        for i in 0..total {
+            let mut sym = Symbol::empty(format!("S{i:05}"));
+            sym.uuid = Uuid::now_v7();
+            assert!(server.state.insert_symbol(library, &sym).await.unwrap());
+            want_symbols.push(sym.uuid);
+
+            let row = test_row(&format!("R{i:05}"));
+            assert_eq!(
+                server
+                    .state
+                    .insert_row(library, "resistors", &row)
+                    .await
+                    .unwrap(),
+                RowInsert::Created
+            );
+            want_rows.push(row.row_id);
+        }
+    });
+
+    assert_eq!(
+        uuids(adapter.list_symbols().expect("list_symbols")),
+        want_symbols
+    );
+    let rows: Vec<Uuid> = adapter
+        .read_table("resistors")
+        .expect("read_table")
+        .into_iter()
+        .map(|row| row.row_id)
+        .collect();
+    assert_eq!(rows, want_rows);
+}
+
+/// #1613: two clients racing the same new part number through the real
+/// adapter - the adapter's own check can pass for both, the server's index
+/// lets exactly one in and the other gets `Conflict`.
+#[test]
+fn racing_inserts_of_one_part_number_have_one_winner() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let barrier = std::sync::Barrier::new(2);
+    let results: Vec<Result<(), LibraryError>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = [("resistors", "R-1613"), ("capacitors", " R-1613")]
+            .into_iter()
+            .map(|(table, pn)| {
+                let adapter = server.adapter(library);
+                let barrier = &barrier;
+                scope.spawn(move || {
+                    let row = test_row(pn);
+                    barrier.wait();
+                    adapter.insert_row(table, row, "add")
+                })
+            })
+            .collect();
+        handles.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let ok = results.iter().filter(|r| r.is_ok()).count();
+    assert_eq!(ok, 1, "{results:?}");
+    let err = results.into_iter().find_map(Result::err).unwrap();
     assert!(matches!(err, LibraryError::Conflict(_)), "{err:?}");
 }

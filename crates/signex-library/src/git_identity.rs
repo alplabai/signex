@@ -161,8 +161,12 @@ pub mod test_identity {
 ",
             )
             .expect("write test .gitconfig");
-            // SAFETY: runs once, before any test of this process commits;
-            // it only sets libgit2's config search path.
+            // SAFETY: `Once` makes this the only writer. It sets libgit2's
+            // global config search path, which libgit2 reads without
+            // synchronisation, so the caller must run it before any test
+            // thread starts git work. Tests that do git work without calling
+            // `install()` (several share these binaries) may race this write
+            // and fall back to the real global config.
             unsafe {
                 git2::opts::set_search_path(git2::ConfigLevel::Global, &dir)
                     .expect("set libgit2 global config path");

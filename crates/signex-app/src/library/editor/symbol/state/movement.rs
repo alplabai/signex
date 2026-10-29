@@ -23,19 +23,19 @@ pub fn move_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, x: f64, y: 
     }
 }
 
-/// Shift every pin and graphic visible on `active_part` by `(dx, dy)` mm.
+/// Shift every pin and graphic visible on `view` by `(dx, dy)` mm.
 ///
 /// Used when the user drags with `SymbolSelection::All` active (Ctrl+A
 /// select-all, or a box over everything on the unit). `All` names the
 /// ACTIVE unit's items, like box-select, delete and rotate do, so other
 /// units' items stay put. Field positions follow the policy documented
 /// on [`move_multiple`]. The caller computes the delta and snaps it.
-pub fn move_all(sym: &mut Symbol, active_part: u8, dx: f64, dy: f64) {
+pub fn move_all(sym: &mut Symbol, view: PartView, dx: f64, dy: f64) {
     let pins: Vec<usize> = (0..sym.pins.len())
-        .filter(|&i| pin_on_part(&sym.pins[i], active_part))
+        .filter(|&i| pin_on_part(&sym.pins[i], view))
         .collect();
     let graphics: Vec<usize> = (0..sym.graphics.len())
-        .filter(|&i| graphic_on_part(&sym.graphics[i], active_part))
+        .filter(|&i| graphic_on_part(&sym.graphics[i], view))
         .collect();
     move_multiple(sym, &pins, &graphics, dx, dy);
 }
@@ -213,7 +213,7 @@ pub fn select_in_box(
     x1: f64,
     y1: f64,
     kind: BoxSelectKind,
-    active_part: u8,
+    view: PartView,
     filter: &SymbolSelectionFilter,
 ) -> Option<SymbolSelection> {
     let xmin = x0.min(x1);
@@ -223,7 +223,7 @@ pub fn select_in_box(
 
     let mut pin_indices = Vec::new();
     for (i, pin) in sym.pins.iter().enumerate() {
-        if !filter.pins || !super::pin_on_part(pin, active_part) {
+        if !filter.pins || !super::pin_on_part(pin, view) {
             continue;
         }
         let hit = match kind {
@@ -253,7 +253,7 @@ pub fn select_in_box(
 
     let mut graphic_indices = Vec::new();
     for (i, g) in sym.graphics.iter().enumerate() {
-        if !super::graphic_on_part(g, active_part) || !filter.allows_graphic(&g.kind) {
+        if !super::graphic_on_part(g, view) || !filter.allows_graphic(&g.kind) {
             continue;
         }
         let hit = match kind {
@@ -276,12 +276,12 @@ pub fn select_in_box(
     let visible_pins = sym
         .pins
         .iter()
-        .filter(|p| super::pin_on_part(p, active_part))
+        .filter(|p| super::pin_on_part(p, view))
         .count();
     let visible_graphics = sym
         .graphics
         .iter()
-        .filter(|g| super::graphic_on_part(g, active_part))
+        .filter(|g| super::graphic_on_part(g, view))
         .count();
     // `All` means "every item", so a box taken under a restricted
     // filter must stay `Multiple` - `All` would move/delete the
@@ -434,6 +434,7 @@ mod tests {
             p.part_number = part;
             s.pins.push(p);
             s.graphics.push(SymbolGraphic {
+                body_style: 1,
                 kind: SymbolGraphicKind::Rectangle {
                     from: [x, -5.08],
                     to: [x + 10.16, 5.08],
@@ -474,7 +475,7 @@ mod tests {
     fn one_unit_move_leaves_the_stored_fields_alone() {
         let mut s = two_unit_symbol();
 
-        move_all(&mut s, 1, 2.54, 0.0);
+        move_all(&mut s, PartView::normal(1), 2.54, 0.0);
 
         assert_eq!(s.pins[0].position, [2.54, 0.0]);
         assert_eq!(s.pins[1].position, [40.0, 0.0]);
@@ -487,7 +488,7 @@ mod tests {
         s.designator_pos = Some([0.0, 7.62]);
         s.comment_pos = Some([0.0, -7.62]);
 
-        move_all(&mut s, 1, 2.54, 2.54);
+        move_all(&mut s, PartView::normal(1), 2.54, 2.54);
         move_multiple(&mut s, &[], &[], 2.54, 2.54);
 
         assert_eq!(s.designator_pos, Some([0.0, 7.62]));

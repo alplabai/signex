@@ -21,7 +21,7 @@ use crate::primitive::PrimitiveRef;
 const TABLE: &str = "parts";
 
 /// xorshift64*: reproducible without a dependency.
-struct Rng(u64);
+pub(super) struct Rng(pub(super) u64);
 
 impl Rng {
     fn next(&mut self) -> u64 {
@@ -36,7 +36,7 @@ impl Rng {
     fn one_in(&mut self, n: usize) -> bool {
         self.below(n) == 0
     }
-    fn uuid(&mut self) -> Uuid {
+    pub(super) fn uuid(&mut self) -> Uuid {
         Uuid::from_u64_pair(self.next(), self.next())
     }
 }
@@ -45,14 +45,14 @@ const NAMES: &[&str] = &["R-1", "Ω-10k", "µF 日本", "C 0603", "L'1", "Ü2"];
 const BAD: &[&str] = &["bad\u{7f}", "tab\there", "quote'''s", "nl\nx"];
 const SKUS: &[&str] = &["DK-1", "DK-2", "DK-3"];
 
-struct World {
-    lib: Uuid,
+pub(super) struct World {
+    pub(super) lib: Uuid,
     /// Symbol uuids rows bind to (one of them is the default).
-    symbols: Vec<Uuid>,
-    footprints: Vec<Uuid>,
+    pub(super) symbols: Vec<Uuid>,
+    pub(super) footprints: Vec<Uuid>,
 }
 
-fn random_row(rng: &mut Rng, w: &World, row_id: Uuid) -> ComponentRow {
+pub(super) fn random_row(rng: &mut Rng, w: &World, row_id: Uuid) -> ComponentRow {
     let mut pn = NAMES[rng.below(NAMES.len())].to_string();
     if rng.one_in(12) {
         pn = BAD[rng.below(BAD.len())].to_string();
@@ -67,6 +67,11 @@ fn random_row(rng: &mut Rng, w: &World, row_id: Uuid) -> ComponentRow {
             "IEC",
         ));
     }
+    let description = if rng.one_in(3) {
+        "100 nF \"X7R\" µ".to_string()
+    } else {
+        String::new()
+    };
     let at = chrono::DateTime::from_timestamp(1_700_000_000 + rng.below(1000) as i64, 0).unwrap();
     ComponentRow {
         alternate_symbols,
@@ -100,6 +105,7 @@ fn random_row(rng: &mut Rng, w: &World, row_id: Uuid) -> ComponentRow {
         content_hash: [0u8; 32],
         server_revision: None,
         datasheet_label: String::new(),
+        description,
         more_datasheets: Vec::new(),
     }
 }
@@ -142,6 +148,7 @@ fn model_apply(lf: &mut LibraryFile, edit: &Edit) -> Result<bool, LibraryError> 
     match edit {
         Edit::Insert(table, row) => {
             let lib_row = component_to_library_row(row)?;
+            check_insert_unique(lf, &row.row_id.to_string(), &row.internal_pn.to_string())?;
             let entry = lf
                 .tables
                 .entry(table.clone())
@@ -155,9 +162,10 @@ fn model_apply(lf: &mut LibraryFile, edit: &Edit) -> Result<bool, LibraryError> 
         }
         Edit::Update(table, row) => {
             let lib_row = component_to_library_row(row)?;
+            let id = row.row_id.to_string();
+            check_pn_change(lf, table, &id, &row.internal_pn.to_string())?;
             let entry = table_of(lf, table)?;
             validate_legacy_header(table, &entry.columns)?;
-            let id = row.row_id.to_string();
             let slot = find(entry, &id)
                 .ok_or_else(|| LibraryError::NotFound(format!("row {id} in table {table}")))?;
             check_row_base(slot, row.server_revision)?;
@@ -294,7 +302,7 @@ fn random_edit(rng: &mut Rng, w: &World, model: &LibraryFile) -> Edit {
 
 /// A library seeded straight on disk: `rows` random parts (one id used
 /// twice) and a `notes` table without a `row_id` column.
-fn seeded(dir: &Path, rng: &mut Rng, w: &World, rows: usize, git: bool) -> PathBuf {
+pub(super) fn seeded(dir: &Path, rng: &mut Rng, w: &World, rows: usize, git: bool) -> PathBuf {
     crate::git_identity::test_identity::install();
     let file = dir.join("lib").join("lib.snxlib");
     let manifest = SnxlibManifest {
@@ -542,8 +550,9 @@ fn row_writes_need_an_own_write_and_the_same_columns() {
     let clean = |rng: &mut Rng| {
         let id = rng.uuid();
         let mut row = random_row(rng, &w, id);
-        row.internal_pn = InternalPn::new("ok");
-        row.primary_mpn = ManufacturerPart::draft("Acme", "ok");
+        let pn = format!("ok-{}", id.as_u128() % 100_000);
+        row.internal_pn = InternalPn::new(pn.clone());
+        row.primary_mpn = ManufacturerPart::draft("Acme", &pn);
         row.alternate_symbols.clear();
         row
     };
@@ -694,8 +703,9 @@ fn a_poisoned_row_line_cache_does_not_block_row_writes() {
     let clean = |rng: &mut Rng| {
         let id = rng.uuid();
         let mut row = random_row(rng, &w, id);
-        row.internal_pn = InternalPn::new("ok");
-        row.primary_mpn = ManufacturerPart::draft("Acme", "ok");
+        let pn = format!("ok-{}", id.as_u128() % 100_000);
+        row.internal_pn = InternalPn::new(pn.clone());
+        row.primary_mpn = ManufacturerPart::draft("Acme", &pn);
         row.alternate_symbols.clear();
         row
     };

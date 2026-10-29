@@ -1,6 +1,7 @@
+use crate::exec::change_component::ComponentReplacement;
 use signex_types::schematic::{
     AnnotateOrder, Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LibSymbol, NoConnect,
-    SchematicSheet, SelectedItem, StrokeColor, Symbol, TextNote, Wire,
+    SchematicSheet, SelectedItem, SheetPin, StrokeColor, Symbol, TextNote, Wire,
 };
 use uuid::Uuid;
 
@@ -55,6 +56,7 @@ pub enum CommandKind {
     SetSymbolRotation,
     SetSymbolLocked,
     SetSymbolDnp,
+    SetSymbolBodyStyle,
     UpdateSymbolTextSize,
     UpdateSymbolLibId,
     UpdateSymbolFootprint,
@@ -65,7 +67,9 @@ pub enum CommandKind {
     PlaceSymbol,
     RegisterLibSymbol,
     ReplaceLibSymbol,
+    ChangeComponent,
     PlaceChildSheet,
+    PlaceSheetPin,
     PlaceJunction,
     PlaceNoConnect,
     PlaceNoErcDirective,
@@ -86,6 +90,8 @@ pub enum CommandKind {
     SetTextFontFamily,
     SetSymbolDesignatorIn,
     SetDocumentFontFamily,
+    ArrangeDrawings,
+    SetDrawingPlacement,
 }
 
 #[derive(Debug, Clone)]
@@ -168,6 +174,13 @@ pub enum Command {
         symbol_id: Uuid,
         dnp: bool,
     },
+    /// Show the normal or the alternate (De Morgan) body of a symbol's library
+    /// symbol. Refused with `EngineError::SymbolBodyPinsConnected` when a wired
+    /// pin would be lost, moved or land on a new connection.
+    SetSymbolBodyStyle {
+        symbol_id: Uuid,
+        body_style: signex_types::schematic::BodyStyle,
+    },
     /// Set the font size of a symbol's value/reference text property.
     /// `field` is "value" or "reference".
     UpdateSymbolTextSize {
@@ -233,10 +246,27 @@ pub enum Command {
         /// truth (#950).
         library_versions: Vec<(uuid::Uuid, String)>,
     },
+    /// Swap the placed symbol `symbol_id` for another library part
+    /// ("Change Component...", #1260): register the part's drawing, re-key
+    /// the symbol to it and stamp the part's library identity and value.
+    /// The designator, position, orientation and parameters stay. One undo
+    /// step. It does not refuse over connected pins: the caller shows
+    /// [`change_component_preview`] first and the user confirms.
+    ChangeComponent {
+        symbol_id: Uuid,
+        replacement: ComponentReplacement,
+    },
     /// Add a hierarchical sheet symbol. Rejected with
     /// [`EngineError::EmptyChildSheetFilename`] when `filename` is blank.
     PlaceChildSheet {
         child_sheet: ChildSheet,
+    },
+    /// Add a hand-placed entry (pin) to the sheet symbol `sheet_id`. Refused
+    /// with a name error when the name is blank or the symbol already has an
+    /// entry of that name; an unknown `sheet_id` changes nothing. Undoable.
+    PlaceSheetPin {
+        sheet_id: Uuid,
+        pin: SheetPin,
     },
     PlaceJunction {
         junction: Junction,
@@ -365,6 +395,33 @@ pub enum Command {
     SetDocumentFontFamily {
         font_family: Option<String>,
     },
+    /// Move the drawings `ids` within the sheet's drawing list, as one undo
+    /// step: the selected drawings keep their order among themselves, and an
+    /// id that names no drawing is ignored. Unchanged when nothing moves (the
+    /// selection is already at that end). See [`DrawingArrange`].
+    ArrangeDrawings {
+        ids: Vec<Uuid>,
+        arrange: DrawingArrange,
+    },
+    /// Put the drawings `ids` behind or above the circuit (#1583).
+    SetDrawingPlacement {
+        ids: Vec<Uuid>,
+        placement: signex_types::schematic::DrawingPlacement,
+    },
+}
+
+/// How [`Command::ArrangeDrawings`] moves the selected drawings. The list is
+/// painted first to last, so the end of the list is the front.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DrawingArrange {
+    /// Bring to Front: to the end of the list.
+    ToFront,
+    /// Send to Back: to the start of the list.
+    ToBack,
+    /// Bring Forward: past the next unselected drawing toward the front.
+    Forward,
+    /// Send Backward: past the previous unselected drawing toward the back.
+    Backward,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -392,6 +449,20 @@ pub enum AnnotateMode {
 }
 
 impl Command {
+    /// Whether executing this command reads the pre-edit sheet beyond
+    /// recording it: the move/turn commands check their rubber-banded result
+    /// against the nets as they were.
+    pub(crate) fn reads_pre_image(&self) -> bool {
+        matches!(
+            self,
+            Self::MoveSelection { .. }
+                | Self::MoveEach { .. }
+                | Self::RotateSelection { .. }
+                | Self::MirrorSelection { .. }
+                | Self::TransformSelection { .. }
+        )
+    }
+
     pub fn kind(&self) -> CommandKind {
         match self {
             Command::ReplaceDocument { .. } => CommandKind::ReplaceDocument,
@@ -406,6 +477,7 @@ impl Command {
             Command::SetSymbolRotation { .. } => CommandKind::SetSymbolRotation,
             Command::SetSymbolLocked { .. } => CommandKind::SetSymbolLocked,
             Command::SetSymbolDnp { .. } => CommandKind::SetSymbolDnp,
+            Command::SetSymbolBodyStyle { .. } => CommandKind::SetSymbolBodyStyle,
             Command::UpdateSymbolTextSize { .. } => CommandKind::UpdateSymbolTextSize,
             Command::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,
             Command::UpdateSymbolFootprint { .. } => CommandKind::UpdateSymbolFootprint,
@@ -417,7 +489,9 @@ impl Command {
             Command::PlaceSymbol { .. } => CommandKind::PlaceSymbol,
             Command::RegisterLibSymbol { .. } => CommandKind::RegisterLibSymbol,
             Command::ReplaceLibSymbol { .. } => CommandKind::ReplaceLibSymbol,
+            Command::ChangeComponent { .. } => CommandKind::ChangeComponent,
             Command::PlaceChildSheet { .. } => CommandKind::PlaceChildSheet,
+            Command::PlaceSheetPin { .. } => CommandKind::PlaceSheetPin,
             Command::PlaceJunction { .. } => CommandKind::PlaceJunction,
             Command::PlaceNoConnect { .. } => CommandKind::PlaceNoConnect,
             Command::PlaceNoErcDirective { .. } => CommandKind::PlaceNoErcDirective,
@@ -438,6 +512,8 @@ impl Command {
             Command::SetTextFontFamily { .. } => CommandKind::SetTextFontFamily,
             Command::SetSymbolDesignatorIn { .. } => CommandKind::SetSymbolDesignatorIn,
             Command::SetDocumentFontFamily { .. } => CommandKind::SetDocumentFontFamily,
+            Command::ArrangeDrawings { .. } => CommandKind::ArrangeDrawings,
+            Command::SetDrawingPlacement { .. } => CommandKind::SetDrawingPlacement,
         }
     }
 }

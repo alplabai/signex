@@ -29,7 +29,7 @@ pub(crate) use pins_touch_not_connected::pins_touch_not_connected;
 
 use std::collections::HashMap;
 
-use signex_net::{SheetConnectivity, point_on_segment, pt_key};
+use signex_net::{SegmentIndex, SheetConnectivity, pt_key};
 use signex_types::schematic::{
     LabelType, PartKey, PinDirection, Point, SelectedKind, group_into_parts, normalize_port_name,
     normalized_lib_id,
@@ -69,11 +69,11 @@ fn wire_connectivity(ctx: &ErcContext) -> SheetConnectivity {
 /// via the shared [`point_on_segment`], the same anchoring `build_netlist`
 /// applies to labels (issue #388). Replaces the endpoint-only `same()` gate
 /// that missed mid-wire label/pin placements.
-fn on_any_wire(pos: &Point, wires: &[(Point, Point)]) -> bool {
-    let pk = pt_key(pos);
-    wires
-        .iter()
-        .any(|(a, b)| point_on_segment(pk, pt_key(a), pt_key(b)))
+///
+/// Takes a [`SegmentIndex`] built once per rule pass (issue #1366), so a pass
+/// over N labels no longer scans every wire per label.
+fn on_any_wire(pos: &Point, index: &SegmentIndex) -> bool {
+    index.contains(pt_key(pos))
 }
 
 /// True when `pos` sits on a bus **endpoint** — buses are member bundles, not
@@ -252,7 +252,7 @@ fn collect_descendants<'a>(
 // ---------------------------------------------------------------------------
 
 pub(crate) fn hier_port_disconnected(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let wires = wire_pairs(ctx);
+    let wires = SegmentIndex::new(&wire_pairs(ctx));
     for label in &ctx.labels {
         if !matches!(
             label.label_type,
@@ -290,35 +290,81 @@ fn pt_of(x: f64, y: f64) -> Point {
     Point { x, y }
 }
 
-pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let touched_non_wire = |p: &Point| -> bool {
-        ctx.symbols
-            .iter()
-            .flat_map(|s| s.pins.iter())
-            .any(|pin| same(&pin.world_pos, p))
-            || ctx.junctions.iter().any(|j| same(&j.position, p))
-            || ctx.labels.iter().any(|l| same(&l.position, p))
-            || ctx.no_connects.iter().any(|nc| same(&nc.position, p))
-            || ctx.bus_entries.iter().any(|be| {
-                // An entry meets a wire at either end: the bus end
-                // (`position`) or the far end (`position + size`).
-                same(&be.position, p)
-                    || same(
-                        &pt_of(be.position.x + be.size.0, be.position.y + be.size.1),
-                        p,
-                    )
+/// Points bucketed on an `ENDPOINT_EPS` grid so a "is anything within
+/// `same()` of here" query probes 9 cells instead of scanning every element.
+/// The grid only narrows candidates; the exact [`same`] test decides.
+struct EpsPointIndex<T> {
+    cells: HashMap<(i64, i64), Vec<(Point, T)>>,
+}
+
+impl<T: Copy> EpsPointIndex<T> {
+    fn new() -> Self {
+        Self {
+            cells: HashMap::new(),
+        }
+    }
+
+    fn cell(p: &Point) -> (i64, i64) {
+        (
+            (p.x / ENDPOINT_EPS).floor() as i64,
+            (p.y / ENDPOINT_EPS).floor() as i64,
+        )
+    }
+
+    fn insert(&mut self, p: Point, tag: T) {
+        self.cells.entry(Self::cell(&p)).or_default().push((p, tag));
+    }
+
+    /// Tags of every indexed point `same()` as `p`.
+    fn near<'a>(&'a self, p: &'a Point) -> impl Iterator<Item = T> + 'a {
+        let (cx, cy) = Self::cell(p);
+        (-1i64..=1).flat_map(move |dx| {
+            (-1i64..=1).flat_map(move |dy| {
+                self.cells
+                    .get(&(cx.saturating_add(dx), cy.saturating_add(dy)))
+                    .into_iter()
+                    .flatten()
+                    .filter(move |(q, _)| same(q, p))
+                    .map(|&(_, t)| t)
             })
-    };
+        })
+    }
+}
+
+pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+    // Everything a wire end can legitimately land on besides another wire.
+    let mut non_wire: EpsPointIndex<()> = EpsPointIndex::new();
+    for pin in ctx.symbols.iter().flat_map(|s| s.pins.iter()) {
+        non_wire.insert(pin.world_pos, ());
+    }
+    for j in &ctx.junctions {
+        non_wire.insert(j.position, ());
+    }
+    for l in &ctx.labels {
+        non_wire.insert(l.position, ());
+    }
+    for nc in &ctx.no_connects {
+        non_wire.insert(nc.position, ());
+    }
+    for be in &ctx.bus_entries {
+        // An entry meets a wire at either end: the bus end (`position`) or
+        // the far end (`position + size`).
+        non_wire.insert(be.position, ());
+        non_wire.insert(
+            pt_of(be.position.x + be.size.0, be.position.y + be.size.1),
+            (),
+        );
+    }
+    let mut wire_ends = EpsPointIndex::new();
+    for w in &ctx.wires {
+        wire_ends.insert(w.start, w.uuid);
+        wire_ends.insert(w.end, w.uuid);
+    }
 
     for wire in &ctx.wires {
         for endpoint in [wire.start, wire.end] {
-            let other_wire_count = ctx
-                .wires
-                .iter()
-                .filter(|w| w.uuid != wire.uuid)
-                .filter(|w| same(&w.start, &endpoint) || same(&w.end, &endpoint))
-                .count();
-            if other_wire_count > 0 || touched_non_wire(&endpoint) {
+            let touches_other_wire = wire_ends.near(&endpoint).any(|id| id != wire.uuid);
+            if touches_other_wire || non_wire.near(&endpoint).next().is_some() {
                 continue;
             }
             out.push(
@@ -418,7 +464,7 @@ pub(crate) fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // ---------------------------------------------------------------------------
 
 pub(crate) fn orphan_label(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let wires = wire_pairs(ctx);
+    let wires = SegmentIndex::new(&wire_pairs(ctx));
     for label in &ctx.labels {
         // MD-13: Hierarchical and Global labels are handled by
         // `hier_port_disconnected`. Power labels DO need orphan
@@ -616,8 +662,9 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 
     // Map each label text → set of net roots its labels sit on.
     let mut label_nets: HashMap<&str, std::collections::HashSet<(i64, i64)>> = HashMap::new();
+    let wire_index = SegmentIndex::new(&wires);
     for lbl in named_labels {
-        let root = conn.root_of_anchored(&lbl.position, &wires);
+        let root = conn.root_of_anchored_in(&lbl.position, &wire_index);
         label_nets
             .entry(lbl.text.as_str())
             .or_default()

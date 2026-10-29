@@ -6,6 +6,9 @@
 use super::*;
 use iced::widget::column;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+
 pub(super) fn view_empty_state<'a>(
     library_path: &'a std::path::Path,
     lib: &'a OpenLibrary,
@@ -50,8 +53,8 @@ pub(super) fn view_empty_state<'a>(
                 .size(15)
                 .color(text_c),
             Space::new().height(4),
-            text("No categories — Add Component to begin")
-                .size(12)
+            text("No components — Add Component to begin")
+                .size(TS.label)
                 .color(muted),
             Space::new().height(14),
             add_btn,

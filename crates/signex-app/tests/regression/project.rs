@@ -31,7 +31,6 @@ fn signex_new_constructs_with_default_state() {
     assert!(app.ui_state.rename_dialog.is_none());
     assert!(app.ui_state.remove_dialog.is_none());
     assert!(app.ui_state.project_close_confirm.is_none());
-    assert!(app.ui_state.project_options.is_none());
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -57,6 +56,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
 
     let id = app.document_state.mint_project_id();
     let data = ProjectData {
+        description: None,
         name: stem.to_string(),
         dir: dir.to_string_lossy().into_owned(),
         schematic_root: Some(format!("{stem}.snxsch")),
@@ -69,6 +69,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         net_classes: Vec::new(),
         rules: None,
         annotation: None,
+        parameters: Default::default(),
         unknown: Default::default(),
     };
     app.document_state.projects.push(LoadedProject {
@@ -78,6 +79,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         pending_libraries: std::collections::HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
 
@@ -403,8 +405,10 @@ fn open_remove_dialog_for_label(app: &mut Signex, label: &str) {
         &mut Vec::new(),
     )
     .unwrap_or_else(|| panic!("tree row {label} must exist"));
+    let key = signex_widgets::tree_view::key_of(&app.document_state.panel_ctx.project_tree, &path)
+        .expect("row key");
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::OpenRemoveDialog(path),
+        ProjectTreeAction::OpenRemoveDialog(key),
     )));
 }
 
@@ -692,45 +696,7 @@ fn add_new_schematic_cancelled_picker_is_a_clean_noop() {
     assert!(app.document_state.tabs.is_empty());
 }
 
-// ─────────────────────────────────────────────────────────────────
-// §3.5 — Project Options modal (open + close lifecycle)
-// ─────────────────────────────────────────────────────────────────
-
-#[test]
-fn project_options_modal_opens_with_metadata_then_closes() {
-    let (mut app, tmp, _prj) = fixture_project_with_companions("Oscar");
-    // Add some sheets and libraries so library_count is meaningful.
-    {
-        let proj = &mut app.document_state.projects[0];
-        proj.data.sheets.push(SheetEntry {
-            name: "Power".into(),
-            filename: "Power.snxsch".into(),
-            symbols_count: 3,
-            wires_count: 5,
-            labels_count: 2,
-            unknown: Default::default(),
-        });
-    }
-
-    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::OpenProjectOptions(vec![0]),
-    )));
-
-    let state = app.ui_state.project_options.as_ref().expect("modal opened");
-    assert_eq!(state.project_idx, 0);
-    assert_eq!(state.name, "Oscar");
-    assert_eq!(state.directory, tmp.path().to_string_lossy().to_string());
-    assert_eq!(state.schematic_root.as_deref(), Some("Oscar.snxsch"));
-    assert_eq!(state.pcb_file.as_deref(), Some("Oscar.snxpcb"));
-    assert_eq!(state.library_count, 0);
-
-    // Close-X / Esc both fire CloseProjectOptions.
-    let _ = app.update(Message::Project(ProjectMsg::CloseOptions));
-    assert!(
-        app.ui_state.project_options.is_none(),
-        "Project Options modal closed after CloseProjectOptions"
-    );
-}
+// §3.5 — Project Options now opens the Project tab: see `project_tab.rs`.
 
 // ─────────────────────────────────────────────────────────────────
 // Modal lifecycle (rename / remove): buffer edit + close-without-submit
@@ -845,6 +811,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join("Hotel.snxprj");
     let data = ProjectData {
+        description: None,
         name: "Hotel".into(),
         dir: tmp.path().to_string_lossy().into_owned(),
         schematic_root: Some("Hotel.snxsch".into()),
@@ -857,6 +824,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
         net_classes: Vec::new(),
         rules: None,
         annotation: None,
+        parameters: Default::default(),
         unknown: Default::default(),
     };
 
@@ -1009,6 +977,45 @@ fn app_exit_with_dirty_paths_opens_confirm_modal_instead_of_exiting() {
     // Data-loss guard: the dirty entry must still be present — nothing
     // was discarded by merely asking to exit.
     assert!(app.document_state.dirty_paths.contains(&dirty));
+}
+
+/// Every window opens with `exit_on_close_request: false`, so an OS close of
+/// the main window arrives as `WindowCloseRequested` and must hit the guard.
+#[test]
+fn os_close_of_the_main_window_with_dirty_paths_asks_before_quitting() {
+    let (mut app, _t) = Signex::new();
+    let main = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(main);
+    let dirty = PathBuf::from("/tmp/does-not-matter/board.snxsch");
+    app.document_state.dirty_paths.insert(dirty.clone());
+
+    let task = app.update(Message::Window(WindowMsg::WindowCloseRequested(main)));
+
+    let modal = app
+        .ui_state
+        .app_quit_confirm
+        .as_ref()
+        .expect("an OS close with unsaved edits must open the quit confirm modal");
+    assert!(modal.dirty_paths.contains(&dirty));
+    assert!(app.document_state.dirty_paths.contains(&dirty));
+    assert_eq!(
+        task.units(),
+        0,
+        "the window must not be closed or the app exited behind the modal"
+    );
+}
+
+#[test]
+fn os_close_of_the_main_window_with_no_dirty_paths_closes_it() {
+    let (mut app, _t) = Signex::new();
+    let main = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(main);
+    assert!(app.document_state.dirty_paths.is_empty());
+
+    let task = app.update(Message::Window(WindowMsg::WindowCloseRequested(main)));
+
+    assert!(app.ui_state.app_quit_confirm.is_none());
+    assert!(task.units() > 0, "a clean workspace proceeds to close");
 }
 
 #[test]
@@ -1378,6 +1385,7 @@ fn fixture_schematic_with_symbol_and_child_sheet()
             mirror_x: false,
             mirror_y: false,
             unit: 1,
+            body_style: Default::default(),
             is_power: false,
             ref_text: None,
             val_text: None,
@@ -1460,12 +1468,17 @@ fn cut_leaves_non_cuttable_child_sheet_in_place_and_selected() {
         doc.symbols.is_empty(),
         "Cut must remove the cuttable Symbol from the engine document"
     );
+    let clipboard = app
+        .interaction_state
+        .clipboard
+        .as_ref()
+        .expect("Cut must populate the clipboard");
     assert_eq!(
-        app.interaction_state.clipboard_symbols.len(),
+        clipboard.payload.fragment().symbols.len(),
         1,
         "Cut must populate the clipboard with the cuttable Symbol"
     );
-    assert_eq!(app.interaction_state.clipboard_symbols[0].uuid, symbol_uuid);
+    assert_eq!(clipboard.payload.fragment().symbols[0].uuid, symbol_uuid);
 
     // The ChildSheet is not cuttable: still in the document, still selected.
     assert_eq!(
@@ -1537,6 +1550,7 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
             id,
             path: prj.clone(),
             data: ProjectData {
+                description: None,
                 name: "Other".to_string(),
                 dir: tmp.path().to_string_lossy().into_owned(),
                 schematic_root: None,
@@ -1549,11 +1563,13 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                parameters: Default::default(),
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         },
     );
     (tmp, prj)
@@ -1567,7 +1583,9 @@ fn rename_dialog_follows_its_project_when_another_is_opened_before_it() {
     let mine = app.document_state.projects[0].id;
     // Opened through the real tree action, so the id capture is exercised.
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::OpenProjectRenameDialog(vec![0]),
+        ProjectTreeAction::OpenProjectRenameDialog(vec![
+            app.document_state.projects[0].id.to_string(),
+        ]),
     )));
     let dialog = app.ui_state.rename_dialog.as_mut().expect("dialog opened");
     assert_eq!(dialog.project_id, Some(mine));

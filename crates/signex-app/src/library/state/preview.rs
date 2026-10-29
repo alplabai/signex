@@ -9,6 +9,8 @@ pub struct PickerState {
     pub selected: Option<(PathBuf, ComponentSummary)>,
     /// The list the picker draws; kept current by `sync_view_caches`.
     pub rows: PickerRows,
+    /// What the modal is for; see [`PickerMode`].
+    pub mode: super::placed_part::PickerMode,
 }
 
 /// Inline form state for "+ New Table…" on the Library Browser
@@ -166,6 +168,10 @@ pub struct ComponentPreviewState {
     /// so the completion of an older save (the editor was closed and
     /// reopened meanwhile) cannot act on a newer one. `0` until a save starts.
     pub saving_generation: u64,
+    /// The Save All (its batch id) the running save belongs to: its outcome
+    /// is recorded for that flow's settle step
+    /// (`LibraryState::batch_row_failures`) instead of raising its own card.
+    pub saving_batch: Option<u64>,
 }
 
 impl ComponentPreviewState {
@@ -191,6 +197,7 @@ impl ComponentPreviewState {
             datasheet_errors: HashMap::new(),
             saving_row: None,
             saving_generation: 0,
+            saving_batch: None,
         }
     }
 
@@ -243,12 +250,6 @@ impl ComponentPreviewState {
         self.dirty = false;
     }
 }
-
-/// Backwards-compatible alias — other slices still refer to
-/// `ComponentEditorState` while their own retarget passes land. Once
-/// every consumer (panel / documents / commands /
-/// dispatch) is on `ComponentPreviewState`, this alias goes away.
-pub type ComponentEditorState = ComponentPreviewState;
 
 /// Distributor APIs Settings panel state.
 #[derive(Debug, Clone)]
@@ -308,7 +309,3 @@ impl Default for DistributorSettings {
         }
     }
 }
-
-// `ComponentPreviewState::from_row` is the canonical builder; the legacy
-// `from_head` helper that constructed an editor from a `Component` chain
-// is gone with the v0.9-refactor-2 DBLib model.

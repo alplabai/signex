@@ -42,6 +42,7 @@ fn app_with_libraries(
         id,
         path: project_path.to_path_buf(),
         data: ProjectData {
+            description: None,
             name: "Board".into(),
             dir: project_dir.to_string_lossy().into_owned(),
             schematic_root: None,
@@ -54,11 +55,13 @@ fn app_with_libraries(
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
     // Any message that republishes the panel context builds the tree.
@@ -112,6 +115,12 @@ fn tree_action(app: &mut Signex, action: ProjectTreeAction) {
     )));
 }
 
+/// The key of the tree row at index path `path`.
+fn row_key(app: &Signex, path: &[usize]) -> Vec<String> {
+    signex_widgets::tree_view::key_of(app.document_state.panel_ctx.project_tree.as_slice(), path)
+        .expect("row exists")
+}
+
 /// The stable identity a row carries once the context menu is open.
 fn row_ref(f: &Fixture, root: &Path) -> LibraryRowRef {
     LibraryRowRef {
@@ -134,10 +143,8 @@ fn library_paths(app: &Signex) -> Vec<PathBuf> {
 fn remove_dialog_targets_the_clicked_library_row() {
     let mut f = two_libraries_one_name();
 
-    tree_action(
-        &mut f.app,
-        ProjectTreeAction::OpenRemoveDialog(SHARED_ROW.to_vec()),
-    );
+    let key = row_key(&f.app, &SHARED_ROW);
+    tree_action(&mut f.app, ProjectTreeAction::OpenRemoveDialog(key));
 
     let dialog = f.app.ui_state.remove_dialog.as_ref().expect("dialog open");
     assert_eq!(dialog.target_path, f.shared_lib);
@@ -147,10 +154,8 @@ fn remove_dialog_targets_the_clicked_library_row() {
 fn rename_dialog_targets_the_clicked_library_row() {
     let mut f = two_libraries_one_name();
 
-    tree_action(
-        &mut f.app,
-        ProjectTreeAction::OpenRenameDialog(SHARED_ROW.to_vec()),
-    );
+    let key = row_key(&f.app, &SHARED_ROW);
+    tree_action(&mut f.app, ProjectTreeAction::OpenRenameDialog(key));
 
     let dialog = f.app.ui_state.rename_dialog.as_ref().expect("dialog open");
     assert_eq!(dialog.target_path, f.shared_lib);
@@ -179,10 +184,8 @@ fn delete_on_second_library_row_leaves_the_first_untouched() {
         vec![local("Power.snxlib"), local("sub/Power.snxlib")],
     );
 
-    tree_action(
-        &mut app,
-        ProjectTreeAction::OpenRemoveDialog(SECOND_ROW.to_vec()),
-    );
+    let key = row_key(&app, &SECOND_ROW);
+    tree_action(&mut app, ProjectTreeAction::OpenRemoveDialog(key));
     let _ = app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::DeleteFile,
     )));
@@ -199,10 +202,8 @@ fn delete_on_second_library_row_leaves_the_first_untouched() {
 fn exclude_on_first_library_row_keeps_the_second_entry() {
     let mut f = two_libraries_one_name();
 
-    tree_action(
-        &mut f.app,
-        ProjectTreeAction::OpenRemoveDialog(LOCAL_ROW.to_vec()),
-    );
+    let key = row_key(&f.app, &LOCAL_ROW);
+    tree_action(&mut f.app, ProjectTreeAction::OpenRemoveDialog(key));
     let _ = f.app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::ExcludeFromProject,
     )));
@@ -218,10 +219,8 @@ fn stale_row_is_refused_and_a_surviving_row_keeps_its_own_library() {
     f.app.document_state.projects[0].data.libraries.remove(0);
 
     // The removed library's row no longer resolves: no destructive dialog.
-    tree_action(
-        &mut f.app,
-        ProjectTreeAction::OpenRemoveDialog(LOCAL_ROW.to_vec()),
-    );
+    let key = row_key(&f.app, &LOCAL_ROW);
+    tree_action(&mut f.app, ProjectTreeAction::OpenRemoveDialog(key));
     assert!(
         f.app.ui_state.remove_dialog.is_none(),
         "a row whose library left the project must not open a dialog"
@@ -229,10 +228,8 @@ fn stale_row_is_refused_and_a_surviving_row_keeps_its_own_library() {
 
     // The surviving row is addressed by identity, so it still targets its
     // own library even though its position shifted.
-    tree_action(
-        &mut f.app,
-        ProjectTreeAction::OpenRemoveDialog(SHARED_ROW.to_vec()),
-    );
+    let key = row_key(&f.app, &SHARED_ROW);
+    tree_action(&mut f.app, ProjectTreeAction::OpenRemoveDialog(key));
     let dialog = f.app.ui_state.remove_dialog.as_ref().expect("dialog open");
     assert_eq!(dialog.target_path, f.shared_lib);
 }

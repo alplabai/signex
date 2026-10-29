@@ -620,16 +620,19 @@ pub enum PanelMsg {
     /// pin, every other rule falls back to "zoom + select" (same as
     /// clicking the row body).
     ErcQuickFix(usize),
+    /// Waive (`waive`) or restore a net-level finding's (rule id, net) pair
+    /// (#1581). Stored in the project's rule set; one undo step.
+    ErcNetWaiverSet {
+        rule_id: String,
+        net: String,
+        waive: bool,
+    },
     ToggleGrid,
     ToggleSnap,
     PropertiesTab(usize),
     /// Net Classes section of the Properties panel (#1042). One nested
     /// message so the section adds no flat leaves.
     NetClass(NetClassMsg),
-    SelectLibrary(String),
-    SelectComponent(String),
-    DragComponentsSplit,
-    ComponentFilter(String),
     /// F15 — Properties panel: open the primitive picker (symbol /
     /// footprint) for the row described by the active
     /// `PanelContext.library_row_detail`. Routes to
@@ -649,6 +652,9 @@ pub enum PanelMsg {
     /// Replace the sheet's embedded library symbol with the library's
     /// current one (Properties ▸ "Update from library", #912).
     UpdateSymbolFromLibrary(uuid::Uuid),
+    /// Open Datasheet / Edit Symbol / Change Component on the selected
+    /// placed part (#1301, #1262, #1260).
+    PlacedPartAction(crate::library::PlacedPartAction),
     /// Switch a placed symbol to another drawing of its library row: the
     /// symbol's uuid and the `lib_id` of the drawing (#1230).
     SwitchSymbolChoice(uuid::Uuid, String),
@@ -660,6 +666,9 @@ pub enum PanelMsg {
     ToggleSymbolLocked(uuid::Uuid),
     /// Toggle a symbol's DNP state.
     ToggleSymbolDnp(uuid::Uuid),
+    /// The Body row of a symbol's Properties picked a body (normal or
+    /// alternate / De Morgan).
+    SymbolBodyStylePicked(uuid::Uuid, signex_types::schematic::BodyStyle),
     /// Set absolute rotation on a symbol (degrees).
     EditSymbolRotation(uuid::Uuid, f64),
     /// Set font size (Altium pt) on a symbol's value text property.

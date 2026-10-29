@@ -8,6 +8,7 @@
 //! never touches the flag and reaches the Messages panel.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use iced::Task;
@@ -115,6 +116,8 @@ impl Signex {
         save_as_from: Option<PathBuf>,
         hold: crate::autosave::SaveHold,
     ) -> Task<Message> {
+        let bytes = job.bytes();
+        let sequence = job.sequence();
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || job.run())
@@ -128,6 +131,8 @@ impl Signex {
                     revision,
                     net_color_revision,
                     save_as_from: save_as_from.clone(),
+                    bytes: Arc::clone(&bytes),
+                    sequence,
                     result,
                     recovery_hold: Some(hold.clone()),
                 }))
@@ -146,11 +151,14 @@ impl Signex {
             revision,
             net_color_revision,
             save_as_from,
+            bytes,
+            sequence,
             result,
             // Dropped when this function returns, i.e. after the copy
             // removal below was registered with the quit barrier.
             recovery_hold: _recovery_hold,
         } = done;
+        let saved = crate::app::state::CommitBytes { bytes, sequence };
         let reason = match result {
             Ok(SaveOutcome::Written) => None,
             // A newer snapshot of this path reached disk first; its own
@@ -183,8 +191,8 @@ impl Signex {
         // the document it was saved from (or over).
         let recovery_keys = [Some(path.clone()), save_as_from.clone()];
         match save_as_from {
-            None if is_pcb_path(&path) => self.mark_pcb_saved(&path, revision),
-            None => self.mark_saved(&path, revision, net_color_revision),
+            None if is_pcb_path(&path) => self.mark_pcb_saved(&path, revision, saved),
+            None => self.mark_saved(&path, revision, net_color_revision, saved),
             Some(from) => self.apply_saved_as(&from, path, revision, net_color_revision),
         }
         self.warn_unwritten_spellings(&outcome_path);
@@ -236,8 +244,16 @@ impl Signex {
         .chain(next)
     }
 
-    fn mark_saved(&mut self, path: &std::path::Path, revision: u64, net_color_revision: u64) {
+    pub(crate) fn mark_saved(
+        &mut self,
+        path: &std::path::Path,
+        revision: u64,
+        net_color_revision: u64,
+        saved: crate::app::state::CommitBytes,
+    ) {
         crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
+        // The file on disk now differs from what any earlier read saw.
+        self.document_state.note_documents_changed();
         // No engine backs `path` any more (renamed or closed meanwhile): the
         // bytes landed, but there is nothing to mark clean or to commit
         // under a name that no longer describes the document.
@@ -254,13 +270,18 @@ impl Signex {
         if self.net_color_revision_of(path) != net_color_revision {
             return;
         }
-        self.finish_clean_save(path);
+        self.finish_clean_save(path, saved);
     }
 
     /// A PCB write landed. Like `mark_saved`, a changed board revision means
     /// the bytes are stale: stay dirty and queue no "Save" commit. Routed by
     /// path, so a tab closed mid-write (no tab left) still commits.
-    fn mark_pcb_saved(&mut self, path: &std::path::Path, revision: u64) {
+    fn mark_pcb_saved(
+        &mut self,
+        path: &std::path::Path,
+        revision: u64,
+        saved: crate::app::state::CommitBytes,
+    ) {
         crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
         let tab_open = self.document_state.tabs.iter().any(|tab| tab.path == path);
         // A missing key reads as 0 on both sides (begin uses the same
@@ -274,13 +295,13 @@ impl Signex {
         if tab_open && current != revision {
             return;
         }
-        self.finish_clean_save(path);
+        self.finish_clean_save(path, saved);
     }
 
     /// The bytes for `path` landed and match the document: clear its dirty
     /// markers, release a parked engine nothing holds open, and queue the
     /// project git commit.
-    fn finish_clean_save(&mut self, path: &std::path::Path) {
+    fn finish_clean_save(&mut self, path: &std::path::Path, saved: crate::app::state::CommitBytes) {
         self.document_state.dirty_paths.remove(path);
         for tab in self
             .document_state
@@ -294,13 +315,13 @@ impl Signex {
         // dirty; now it is clean nothing needs it.
         if !self.document_is_held_open(path) {
             self.forget_net_colors_of(path);
-            self.document_state.engines.remove(path);
+            self.document_state.remove_engine(path);
         }
         let label = path
             .file_name()
             .map(|f| f.to_string_lossy().into_owned())
             .unwrap_or_else(|| path.display().to_string());
-        self.commit_save_to_project_git(path, &format!("Save {label}"));
+        self.commit_bytes_to_project_git(path, &format!("Save {label}"), saved);
     }
 
     pub(crate) fn document_is_held_open(&self, path: &std::path::Path) -> bool {

@@ -1,3 +1,4 @@
+// Own process: builds a wgpu device; two in one process SIGSEGV on lavapipe, #889.
 //! Phase 6 regression and golden fixtures for renderer hardening.
 //!
 //! CLEAN ROOM DECLARATION
@@ -13,6 +14,7 @@ use signex_gfx::debug_pass::{
 use signex_gfx::primitive::arc::Arc;
 use signex_gfx::primitive::circle::Circle;
 use signex_gfx::primitive::line::LineSegment;
+use signex_gfx::primitive::ordered::OrderedItem;
 use signex_gfx::primitive::polygon::GpuPolygon;
 use signex_gfx::primitive::text::{TextHAlign, TextItem, TextVAlign};
 use signex_gfx::scene::{
@@ -91,6 +93,8 @@ struct MockUploadTarget {
     uploaded_arcs: usize,
     uploaded_polygons: usize,
     uploaded_top_polygons: usize,
+    uploaded_drawings: usize,
+    uploaded_drawings_front: usize,
     uploaded_texts: usize,
     uploaded_overlay_lines: usize,
     uploaded_overlay_circles: usize,
@@ -125,6 +129,15 @@ impl SceneUploadTarget for MockUploadTarget {
 
     fn upload_top_polygons(&mut self, polygons: &[GpuPolygon]) {
         self.uploaded_top_polygons = polygons.len();
+    }
+
+    fn upload_drawings(&mut self, drawings: &[OrderedItem]) {
+        self.uploaded_drawings = drawings.len();
+        self.calls.drawing_uploads += 1;
+    }
+
+    fn upload_drawings_front(&mut self, drawings: &[OrderedItem]) {
+        self.uploaded_drawings_front = drawings.len();
     }
 
     fn upload_texts(

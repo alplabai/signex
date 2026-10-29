@@ -89,6 +89,11 @@ pub enum SaveOutcome {
     Superseded,
 }
 
+/// A snapshot shared between the write job, its completion message and the
+/// commit that records it. One allocation, moved in from the serializer; a
+/// clone is a reference count, never a copy of the document.
+pub type SharedBytes = Arc<Vec<u8>>;
+
 /// Outcome of one write, carried back to `update`. `revision` is the engine
 /// revision the snapshot was taken at. `save_as_from` is the document's old
 /// path when this was a Save As (the re-key happens only on success).
@@ -100,6 +105,15 @@ pub struct DocumentSaveDone {
     /// `UiState::net_color_revision`); `0` for documents without colours.
     pub net_color_revision: u64,
     pub save_as_from: Option<PathBuf>,
+    /// The bytes of the snapshot this write was handed. When `result` is
+    /// [`SaveOutcome::Written`] these are what reached disk, so the project
+    /// git commit records them rather than whatever the file holds by the
+    /// time the commit worker runs.
+    pub bytes: SharedBytes,
+    /// The write's position in the save ledger, so completions that arrive
+    /// out of order can be told apart (a commit of an older write must not
+    /// replace a newer one's).
+    pub sequence: u64,
     pub result: Result<SaveOutcome, String>,
     /// Keeps quit's autosave wait open from the moment the save starts until
     /// this completion is handled (the copy removal it owes is registered
@@ -174,13 +188,25 @@ pub struct DocumentSaveJob {
     sink: Arc<dyn DocumentSink>,
     path: PathBuf,
     key: String,
-    bytes: Vec<u8>,
+    bytes: SharedBytes,
     sequence: u64,
     ledger: Arc<Ledger>,
     _in_flight: InFlight,
 }
 
 impl DocumentSaveJob {
+    /// The snapshot this job writes, shared so the completion message can
+    /// carry it back without a copy.
+    pub fn bytes(&self) -> SharedBytes {
+        Arc::clone(&self.bytes)
+    }
+
+    /// This write's place in the ledger's order; pass it back to
+    /// [`DocumentSaves::is_newest_begun`] when the completion arrives.
+    pub fn sequence(&self) -> u64 {
+        self.sequence
+    }
+
     /// Write the snapshot unless a newer one for the same file already
     /// reached the sink: that one holds more recent content, so this one
     /// reports [`SaveOutcome::Superseded`] and can never clobber it.
@@ -245,6 +271,8 @@ pub struct DocumentSaves {
     sink: Arc<dyn DocumentSink>,
     ledger: Arc<Ledger>,
     next_sequence: u64,
+    /// Sequence of the newest write begun, per ledger key.
+    newest_begun: HashMap<String, u64>,
     /// Writes begun whose completion message has not been handled yet.
     saving: HashMap<String, usize>,
     /// Why the last write to a path failed, until a later one succeeds.
@@ -267,6 +295,7 @@ impl DocumentSaves {
             sink,
             ledger: Arc::default(),
             next_sequence: 0,
+            newest_begun: HashMap::new(),
             saving: HashMap::new(),
             failures: HashMap::new(),
             follow_ups: HashMap::new(),
@@ -279,16 +308,25 @@ impl DocumentSaves {
     /// always win over earlier ones, whatever order the jobs get scheduled.
     pub fn begin(&mut self, path: PathBuf, bytes: Vec<u8>) -> DocumentSaveJob {
         self.next_sequence += 1;
+        self.newest_begun
+            .insert(ledger_key(&path), self.next_sequence);
         let in_flight = self.begin_work(path.clone());
         DocumentSaveJob {
             sink: Arc::clone(&self.sink),
             key: ledger_key(&path),
             path,
-            bytes,
+            bytes: Arc::new(bytes),
             sequence: self.next_sequence,
             ledger: Arc::clone(&self.ledger),
             _in_flight: in_flight,
         }
+    }
+
+    /// Whether `sequence` is the newest write begun for `path`'s file. Only
+    /// that write may declare the in-memory document saved: an older one
+    /// finishing says nothing about edits made after the newer began.
+    pub fn is_newest_begun(&self, path: &Path, sequence: u64) -> bool {
+        self.newest_begun.get(&ledger_key(path)) == Some(&sequence)
     }
 
     /// Register a write the caller performs itself (a library container

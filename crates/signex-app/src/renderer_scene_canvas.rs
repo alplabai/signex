@@ -6,6 +6,7 @@ use iced::{Color, Point};
 use signex_gfx::primitive::arc::Arc;
 use signex_gfx::primitive::circle::Circle;
 use signex_gfx::primitive::line::LineSegment;
+use signex_gfx::primitive::ordered::OrderedItem;
 use signex_gfx::primitive::polygon::GpuPolygon;
 use signex_gfx::primitive::text::{TextHAlign, TextItem, TextVAlign};
 use signex_gfx::scene::{CPU_SCHEMATIC_DRAW_ORDER, Scene, SceneBucket};
@@ -123,6 +124,16 @@ pub fn arc_screen_span(start_angle: f32, end_angle: f32, world_is_y_up: bool) ->
 /// floor radii identically.
 pub const MIN_RADIUS_PX: f32 = 0.5;
 
+/// Thinnest line the PCB and footprint CPU replays draw, in logical pixels.
+/// Shared with [`crate::scene_shader::PcbSurface`] so the canvas and GPU paths
+/// floor strokes identically.
+pub const MIN_STROKE_PX: f32 = 0.5;
+
+/// Clamp a screen-space stroke width to [`MIN_STROKE_PX`] so hairlines stay visible.
+pub fn min_stroke_px(width_px: f32) -> f32 {
+    width_px.max(MIN_STROKE_PX)
+}
+
 impl SceneDrawOptions {
     fn stroke_px(self, width_mm: f32) -> f32 {
         (width_mm * self.scale_px_per_mm).max(self.min_stroke_px)
@@ -141,7 +152,7 @@ impl SceneDrawOptions {
     }
 }
 
-fn color_from_rgba(rgba: [f32; 4]) -> Color {
+pub(crate) fn color_from_rgba(rgba: [f32; 4]) -> Color {
     Color::from_rgba(rgba[0], rgba[1], rgba[2], rgba[3])
 }
 
@@ -176,6 +187,36 @@ pub(crate) fn draw_dashed_line(
                 .with_color(color),
         );
         dist += dash + gap;
+    }
+}
+
+/// Replay the ordered drawings one item at a time, so list order is the paint
+/// order across kinds (#1579). Each item goes through its kind's bucket drawer
+/// as a one-element slice, which keeps the per-kind look identical.
+fn draw_drawings<F>(
+    frame: &mut canvas::Frame,
+    drawings: &[OrderedItem],
+    world_to_screen: F,
+    options: SceneDrawOptions,
+) where
+    F: Fn([f32; 2]) -> Point + Copy,
+{
+    use std::slice::from_ref;
+    for item in drawings {
+        match item {
+            OrderedItem::Line(line) => {
+                draw_line_bucket(frame, from_ref(line), world_to_screen, options);
+            }
+            OrderedItem::Circle(circle) => {
+                draw_circle_bucket(frame, from_ref(circle), world_to_screen, options);
+            }
+            OrderedItem::Arc(arc) => {
+                draw_arc_bucket(frame, from_ref(arc), world_to_screen, options);
+            }
+            OrderedItem::Polygon(polygon) => {
+                draw_polygon_bucket(frame, from_ref(polygon), world_to_screen, options);
+            }
+        }
     }
 }
 
@@ -470,6 +511,12 @@ pub fn draw_scene_with_world_to_screen<F>(
     // the surface #199 is about to move onto the GPU (#645).
     for &bucket in CPU_SCHEMATIC_DRAW_ORDER {
         match bucket {
+            SceneBucket::Drawings => {
+                draw_drawings(frame, &scene.drawings, world_to_screen, options);
+            }
+            SceneBucket::DrawingsFront => {
+                draw_drawings(frame, &scene.drawings_front, world_to_screen, options);
+            }
             SceneBucket::Lines => draw_line_bucket(frame, &scene.lines, world_to_screen, options),
             SceneBucket::Circles => {
                 draw_circle_bucket(frame, &scene.circles, world_to_screen, options);
@@ -864,5 +911,17 @@ mod rotated_text_tests {
     #[test]
     fn axis_aligned_labels_are_placed_directly() {
         assert!(rotated_text_transform(&item(0.0), Point::ORIGIN).is_none());
+    }
+}
+
+#[cfg(test)]
+mod min_stroke_tests {
+    use super::*;
+
+    #[test]
+    fn min_stroke_px_floors_hairlines_and_keeps_wide_strokes() {
+        assert_eq!(min_stroke_px(0.0), MIN_STROKE_PX);
+        assert_eq!(min_stroke_px(0.2), 0.5);
+        assert_eq!(min_stroke_px(2.5), 2.5);
     }
 }

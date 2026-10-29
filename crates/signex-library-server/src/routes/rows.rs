@@ -36,7 +36,7 @@ use signex_library::component::{ComponentRow, ROW_SCHEMA, ROW_SCHEMA_HEADER};
 use signex_library::identity::RowId;
 use uuid::Uuid;
 
-use crate::db::{AppState, RowWrite};
+use crate::db::{AppState, RowInsert, RowWrite};
 use crate::routes::error::ApiError;
 
 pub fn router() -> Router<AppState> {
@@ -63,14 +63,22 @@ async fn create_row(
     require_row_schema(&headers)?;
     signex_library::validate_row_for_write(&row)
         .map_err(|e| ApiError::bad_request(e.to_string()))?;
-    let inserted = state.insert_row(q.library_id, &name, &row).await?;
-    if !inserted {
+    match state.insert_row(q.library_id, &name, &row).await? {
+        RowInsert::Created => {}
         // POST is create-only; an existing row must not be silently
         // overwritten. Clients replace via PUT.
-        return Err(ApiError::conflict(format!(
-            "row {} already exists in table {name}",
-            row.row_id
-        )));
+        RowInsert::RowExists => {
+            return Err(ApiError::conflict(format!(
+                "row {} already exists in table {name}",
+                row.row_id
+            )));
+        }
+        RowInsert::PnTaken => {
+            return Err(ApiError::conflict(format!(
+                "internal_pn {:?} already exists in the library",
+                row.internal_pn.as_str()
+            )));
+        }
     }
     row.server_revision = Some(1);
     Ok((StatusCode::CREATED, Json(row)))
@@ -178,6 +186,9 @@ pub(crate) fn applied(write: RowWrite, subject: &str) -> Result<i64, ApiError> {
             current_revision,
         )),
         RowWrite::Missing => Err(ApiError::not_found(subject.to_string())),
+        RowWrite::PnTaken => Err(ApiError::conflict(format!(
+            "{subject}: that internal_pn already exists in the library"
+        ))),
     }
 }
 

@@ -28,6 +28,7 @@ fn add_project(app: &mut Signex, prj_path: &Path, sheet: &str) -> ProjectId {
         id,
         path: prj_path.to_path_buf(),
         data: ProjectData {
+            description: None,
             name: prj_path.file_stem().unwrap().to_string_lossy().into_owned(),
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: Some(sheet.to_string()),
@@ -47,11 +48,13 @@ fn add_project(app: &mut Signex, prj_path: &Path, sheet: &str) -> ProjectId {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     id
 }
@@ -994,12 +997,18 @@ fn a_project_opened_while_the_resolve_runs_triggers_a_fresh_resolve() {
     open_dirty_sheet(&mut app, &tmp.path().join("a.snxsch"), a);
     let project_id = app.document_state.projects[0].id;
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::CloseProject(vec![0]),
+        ProjectTreeAction::CloseProject(vec![app.document_state.projects[0].id.to_string()]),
     )));
     let stale = app.resolve_sheet_refs_blocking();
     add_project(&mut app, &tmp.path().join("C.snxprj"), "c.snxsch");
 
-    // Park the probe: in-flight blocks new ones, so `units()` is exact.
+    // Park the probe: in-flight blocks new ones, so `units()` is exact. The
+    // open sheet's folder gets its case answer too, or the update would also
+    // start that probe.
+    let _ = app.update(Message::File(signex_app::app::FileMsg::DirCaseProbed {
+        dir: tmp.path().to_path_buf(),
+        answer: signex_app::app::CaseProbeOutcome::Decided(false),
+    }));
     let _claimed = app.document_state.project_fs.begin_probe(true);
     crate::settle_support::settle_history_panel(&mut app);
     let task = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
@@ -1140,7 +1149,7 @@ fn an_engine_edit_made_while_the_resolve_ran_is_seen_at_completion() {
     quiet.set_path(Some(b_path.clone()));
     app.document_state.engines.insert(b_path.clone(), quiet);
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::CloseProject(vec![0]),
+        ProjectTreeAction::CloseProject(vec![app.document_state.projects[0].id.to_string()]),
     )));
     let result = app.resolve_sheet_refs_blocking();
     // The gap: B's open sheet now references `c`.

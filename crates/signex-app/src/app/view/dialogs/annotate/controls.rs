@@ -13,6 +13,10 @@ use iced::{Background, Border, Color, Element, Theme};
 
 use crate::app::state::AnnotateOrder;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Tiny inline checkbox pip — read-only indicator used inside the Annotate
 /// dialog's parameter list and sheet table.
 pub(super) fn check_pip(on: bool, border: Color) -> Element<'static, Message> {
@@ -77,7 +81,7 @@ pub(super) fn order_preview(
         AnnotateOrder::AcrossThenUp => ("R3", "R4", "R1", "R2"),
     };
     let cell = |label: &'static str| -> Element<'static, Message> {
-        container(text(label.to_string()).size(10).color(text_c))
+        container(text(label.to_string()).size(TS.caption).color(text_c))
             .width(34)
             .height(20)
             .align_x(iced::alignment::Horizontal::Center)
@@ -107,7 +111,7 @@ pub(super) fn order_preview(
             Space::new().height(4),
             row![cell(slots.2), Space::new().width(4), cell(slots.3),].spacing(0),
             Space::new().height(2),
-            text(arrow).size(11).color(text_muted),
+            text(arrow).size(TS.body).color(text_muted),
         ]
         .spacing(0)
         .align_x(iced::Alignment::Center),
@@ -143,7 +147,7 @@ pub(super) fn order_radio(
         Color::from_rgba(1.0, 1.0, 1.0, 0.04)
     };
     let fg = if selected { Color::WHITE } else { text_c };
-    button(container(text(label.to_string()).size(11).color(fg)).padding([4, 10]))
+    button(container(text(label.to_string()).size(TS.body).color(fg)).padding([SP.s, 10.0]))
         .on_press(Message::Annotate(AnnotateMsg::OrderChanged(value)))
         .style(move |_: &Theme, _| button::Style {
             background: Some(Background::Color(bg)),
@@ -156,4 +160,24 @@ pub(super) fn order_radio(
             ..button::Style::default()
         })
         .into()
+}
+
+/// The line under the Annotation Summary that says what "Re-prefix to
+/// standard" will do, or why it is unavailable (#1315).
+pub(super) fn reprefix_note(
+    standard: Option<signex_types::designator::DesignatorStandard>,
+) -> String {
+    match standard {
+        None => "Re-prefix to standard is unavailable: this project follows no designator \
+                 standard. Pick one in Project Options."
+            .to_string(),
+        Some(standard) => format!(
+            "Re-prefix to standard re-issues the prefix of every placed part under {standard} \
+             and renumbers them, across the whole project, as one undo step, after you confirm a \
+             list of the changes. Sheets that are not open are loaded unsaved; nothing is \
+             written until you save. Locked parts, hand-edited prefixes and parts without a \
+             library link are left alone and listed in Messages. PCB references are not \
+             updated."
+        ),
+    }
 }

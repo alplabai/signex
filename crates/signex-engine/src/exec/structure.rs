@@ -247,11 +247,27 @@ impl Engine {
                                 }
                             }
                         }
-                        // Signex schematics have no explicit z-order for
-                        // drawings, junctions, no-connects, or bus entries —
-                        // render order is file order. Left out intentionally.
+                        // Drawings are arranged below, once for the whole selection.
+                        // Junctions, no-connects and bus entries have no z-order.
                         _ => {}
                     }
+                }
+                let drawing_arrange = match direction {
+                    ReorderDirection::ToFront => Some(DrawingArrange::ToFront),
+                    ReorderDirection::ToBack => Some(DrawingArrange::ToBack),
+                    ReorderDirection::JustAbove(_) | ReorderDirection::JustBelow(_) => None,
+                };
+                if let Some(arrange) = drawing_arrange {
+                    let selected: std::collections::HashSet<uuid::Uuid> = items
+                        .iter()
+                        .filter(|i| i.kind == SelectedKind::Drawing)
+                        .map(|i| i.uuid)
+                        .collect();
+                    changed |= super::drawings::arrange_drawings(
+                        &mut self.document.drawings,
+                        &selected,
+                        arrange,
+                    );
                 }
                 if !changed {
                     return Ok(CommandResult::unchanged());

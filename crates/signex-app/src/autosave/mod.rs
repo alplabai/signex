@@ -33,6 +33,8 @@
 //!    copy is older than the file. From open until that check resolves, and
 //!    while its offer is unanswered, no write may replace the copy.
 
+mod keys;
+pub mod pending_move;
 pub mod recovery;
 pub mod sidecar;
 
@@ -91,6 +93,8 @@ pub enum AutosaveMsg {
     /// A recovery copy followed its document to a new path (rename or
     /// project folder move), or failed to.
     Moved(AutosaveMoved),
+    /// A dropped owed move's journal entry was cleared off-thread.
+    JournalCleared,
 }
 
 /// The user's answer to the recovery prompt.
@@ -180,6 +184,10 @@ pub struct SidecarMove {
     /// `new` is already held as "removing" by this move, so no autosave
     /// write lands there before the copy does.
     held: bool,
+    /// Every target this move was journalled or repointed to, so dropping it
+    /// clears only an entry that still names one of them.
+    #[serde(skip)]
+    targets: Vec<PathBuf>,
     /// Set by a discarding quit while the rename runs: the task removes the
     /// copy it just moved.
     #[serde(skip)]
@@ -313,6 +321,10 @@ pub struct AutosaveState {
     /// Sidecar renames not started yet: queued by a document move, or
     /// failed and retried on the next tick.
     moves: Vec<SidecarMove>,
+    /// Sources whose owed move was dropped (the document came back): their
+    /// journal entries are cleared by the next flush.
+    #[serde(skip)]
+    journal_clears: Vec<(PathBuf, Vec<PathBuf>)>,
     /// Documents whose recovery copy a Restore is reading right now: the
     /// path the read was issued for, and where the document lives now.
     restoring: HashMap<PathBuf, PathBuf>,
@@ -566,6 +578,7 @@ impl AutosaveState {
         let mut repointed = false;
         for owed in self.moves.iter_mut().filter(|m| m.new == old) {
             owed.new = new.to_path_buf();
+            owed.targets.push(new.to_path_buf());
             owed.this_run &= this_run;
             repointed = true;
             if owed.held {
@@ -574,11 +587,14 @@ impl AutosaveState {
             }
         }
         // Renamed back to where the copy sits: nothing left to move.
-        let removing = &mut self.removing;
+        let (removing, journal_clears) = (&mut self.removing, &mut self.journal_clears);
         self.moves.retain(|m| {
             let back_home = m.old == m.new;
             if back_home && m.held {
                 Self::release(removing, &m.new);
+            }
+            if back_home {
+                journal_clears.push((m.old.clone(), m.targets.clone()));
             }
             !back_home
         });
@@ -600,6 +616,7 @@ impl AutosaveState {
                 new: new.to_path_buf(),
                 this_run,
                 held: true,
+                targets: vec![new.to_path_buf()],
                 discard: Arc::default(),
             });
         }
@@ -626,6 +643,11 @@ impl AutosaveState {
     /// recover, so it is removed instead of moved.
     fn is_obsolete(&self, owed: &SidecarMove) -> bool {
         owed.this_run && !self.tracks(&owed.new)
+    }
+
+    /// The sources whose journal entries must be cleared now.
+    pub fn take_journal_clears(&mut self) -> Vec<(PathBuf, Vec<PathBuf>)> {
+        std::mem::take(&mut self.journal_clears)
     }
 
     /// Whether a sidecar move is owed or running: the quit and the timer
@@ -663,6 +685,7 @@ impl AutosaveState {
         if let Some(i) = self.moves.iter().position(|m| m.old == failed.new) {
             let onward = self.moves.remove(i);
             Self::release(&mut self.removing, &failed.new);
+            failed.targets.extend(onward.targets);
             failed.new = onward.new;
             failed.this_run &= onward.this_run;
             failed.held = onward.held;

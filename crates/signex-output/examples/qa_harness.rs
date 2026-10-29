@@ -99,6 +99,7 @@ fn main() {
         company: tb.get("company").cloned().unwrap_or_default(),
         comments: [comment(1), comment(2), comment(3), comment(4)],
         custom_fields: std::collections::BTreeMap::new(),
+        project_parameters: None,
     };
     let ctx = ExportContext {
         sheets: snapshots,

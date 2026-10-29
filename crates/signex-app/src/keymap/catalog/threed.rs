@@ -34,4 +34,14 @@ pub(super) const THREE_D: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    CommandMetadata {
+        id: "footprint_recompute_courtyard_outline",
+        category: "library",
+        label: "Recompute footprint courtyard outline from pads",
+        menu_label: None,
+        group: CommandGroup::ThreeD,
+        enable: Enablement::RequiresDocument(DocumentKind::Footprint),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
 ];

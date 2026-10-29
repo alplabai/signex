@@ -11,6 +11,10 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use super::ProjectId;
+use super::project_hierarchy::{HierarchyJob, HierarchyRequest, walk_hierarchies};
+use crate::app::sheet_hierarchy::SheetHierarchy;
+
 /// A probe still unanswered after this long is presumed hung (a dead network
 /// mount) and abandoned so the next one can start.
 const PROBE_DEADLINE: Duration = crate::library::external_poll::POLL_TIMEOUT;
@@ -20,12 +24,19 @@ const PROBE_DEADLINE: Duration = crate::library::external_poll::POLL_TIMEOUT;
 pub struct ProjectFsRequest {
     /// Paths whose existence marks a `(missing)` row.
     pub exists: Vec<PathBuf>,
+    /// The sheet hierarchy of each open project (#1618).
+    pub hierarchy: HierarchyRequest,
 }
 
 /// The answer to a [`ProjectFsRequest`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProjectFsFacts {
     exists: HashMap<PathBuf, bool>,
+    /// Modification time of each probed path that exists: a closed sheet
+    /// edited outside Signex (a `git pull`) changes it, which sends the
+    /// projects that placed it back through the walk (#1618).
+    mtimes: HashMap<PathBuf, std::time::SystemTime>,
+    hierarchies: HashMap<ProjectId, SheetHierarchy>,
 }
 
 impl ProjectFsFacts {
@@ -35,10 +46,21 @@ impl ProjectFsFacts {
         self.exists.get(path) == Some(&false)
     }
 
+    /// True once a probe saw that `path` exists. Unprobed is not known.
+    pub fn knows_present(&self, path: &Path) -> bool {
+        self.exists.get(path) == Some(&true)
+    }
+
     /// True once a probe saw that `dir` has no `.git`. Unprobed reads as
     /// "has one", so nothing offers Enable Version Control before the answer.
     pub fn lacks_git(&self, dir: &Path) -> bool {
         self.is_missing(&git_marker(dir))
+    }
+
+    /// The sheet hierarchy last walked for `project`; `None` until the first
+    /// walk lands, which leaves the tree flat.
+    pub fn hierarchy_of(&self, project: ProjectId) -> Option<&SheetHierarchy> {
+        self.hierarchies.get(&project)
     }
 
     /// Record a fact the app itself just made true (a repository it created),
@@ -66,8 +88,19 @@ pub fn dir_has_git(dir: &Path) -> bool {
 pub fn probe(request: &ProjectFsRequest) -> ProjectFsFacts {
     let mut facts = ProjectFsFacts::default();
     for path in request.exists.iter().collect::<HashSet<_>>() {
-        facts.exists.insert(path.clone(), path.exists());
+        match std::fs::metadata(path) {
+            Ok(meta) => {
+                facts.exists.insert(path.clone(), true);
+                if let Ok(modified) = meta.modified() {
+                    facts.mtimes.insert(path.clone(), modified);
+                }
+            }
+            Err(_) => {
+                facts.exists.insert(path.clone(), false);
+            }
+        }
     }
+    facts.hierarchies = walk_hierarchies(&request.hierarchy);
     facts
 }
 
@@ -98,6 +131,7 @@ pub fn message_touches_disk(message: &crate::app::Message) -> bool {
                 | ProjectMsg::AddExistingFilePicked { .. }
                 | ProjectMsg::AddExistingFilesCopied { .. }
                 | ProjectMsg::AddNewSchematicWritten { .. }
+                | ProjectMsg::FileSaved(_)
         ),
         Message::Library(m) => matches!(
             m,
@@ -109,9 +143,6 @@ pub fn message_touches_disk(message: &crate::app::Message) -> bool {
                 | L::BrowserConfirmAddTable { .. }
                 | L::BrowserDeleteTable { .. }
                 | L::BrowserConfirmRenameTable { .. }
-                | L::BrowserConfirmAddClass { .. }
-                | L::BrowserDeleteClass { .. }
-                | L::BrowserConfirmRenameClass { .. }
                 | L::BrowserDeleteRowConfirm { .. }
                 | L::RecoveryLibraryMissing(_)
                 | L::RecoveryLibraryMissingLocateResult(_)
@@ -134,6 +165,13 @@ pub struct ProjectFsCache {
     generation: u64,
     /// The last finished probe's worker died; warn once per streak.
     failing: bool,
+    /// The job each project's hierarchy was last walked for. A probe walks a
+    /// project only when its wanted job differs (or a file the walk placed
+    /// appeared or went): the poll tick and a save would otherwise parse every
+    /// sheet of every project each time.
+    hierarchy_done: HashMap<ProjectId, HierarchyJob>,
+    /// The jobs the running probe walks, recorded as done when it lands.
+    hierarchy_inflight: Vec<HierarchyJob>,
 }
 
 /// What a finished probe means for the caller.
@@ -174,7 +212,13 @@ impl ProjectFsCache {
         self.generation += 1;
         self.in_flight = Some((self.generation, Instant::now()));
         self.stale = false;
-        Some((self.generation, self.wanted.clone()))
+        let mut request = self.wanted.clone();
+        request
+            .hierarchy
+            .jobs
+            .retain(|job| self.hierarchy_done.get(&job.id) != Some(job));
+        self.hierarchy_inflight = request.hierarchy.jobs.clone();
+        Some((self.generation, request))
     }
 
     /// A probe ended; `facts` is `Err` when its worker died (the next poll
@@ -191,6 +235,7 @@ impl ProjectFsCache {
             return ProbeFinish::default();
         }
         self.in_flight = None;
+        let walked = std::mem::take(&mut self.hierarchy_inflight);
         match facts {
             Err(reason) => {
                 let first = !std::mem::replace(&mut self.failing, true);
@@ -199,8 +244,9 @@ impl ProjectFsCache {
                     warning: first.then_some(reason),
                 }
             }
-            Ok(f) => {
+            Ok(mut f) => {
                 self.failing = false;
+                self.keep_unwalked_hierarchies(&mut f, walked);
                 let changed = f != self.facts;
                 if changed {
                     self.facts = f;
@@ -211,6 +257,51 @@ impl ProjectFsCache {
                 }
             }
         }
+    }
+
+    /// A project not walked this time keeps its last hierarchy, unless a file
+    /// that hierarchy placed appeared or went since: then it is walked again
+    /// on the next probe, which `stale` brings forward.
+    fn keep_unwalked_hierarchies(&mut self, f: &mut ProjectFsFacts, walked: Vec<HierarchyJob>) {
+        let wanted: HashSet<ProjectId> = self.wanted.hierarchy.jobs.iter().map(|j| j.id).collect();
+        self.hierarchy_done.retain(|id, _| wanted.contains(id));
+        let walked_ids: HashSet<ProjectId> = walked.iter().map(|j| j.id).collect();
+        for job in walked {
+            self.hierarchy_done.insert(job.id, job);
+        }
+        for (id, hierarchy) in std::mem::take(&mut self.facts.hierarchies) {
+            if walked_ids.contains(&id) || !wanted.contains(&id) {
+                continue;
+            }
+            // A file the walk placed appeared, went, or was rewritten.
+            let flipped = hierarchy.node_paths().into_iter().any(|path| {
+                let known = self.facts.exists.get(path);
+                known.is_some()
+                    && (known != f.exists.get(path)
+                        || self.facts.mtimes.get(path) != f.mtimes.get(path))
+            });
+            if flipped {
+                self.hierarchy_done.remove(&id);
+                self.stale = true;
+            }
+            f.hierarchies.insert(id, hierarchy);
+        }
+    }
+
+    /// Does the stored hierarchy of `project` describe the project as it is
+    /// now? An edit made outside Signex to a closed sheet still reads as
+    /// current until the next 2 s poll sees its new mtime.
+    /// `None` when the project has no walk wanted (no sheets); otherwise
+    /// false while its job is still to be walked, running, or out of date.
+    pub fn hierarchy_current(&self, project: ProjectId) -> Option<bool> {
+        let wanted = self
+            .wanted
+            .hierarchy
+            .jobs
+            .iter()
+            .find(|job| job.id == project)?;
+        let running = self.hierarchy_inflight.iter().any(|j| j.id == project);
+        Some(self.hierarchy_done.get(&project) == Some(wanted) && !running)
     }
 
     /// True while there is something to probe, i.e. while the poll should
@@ -233,6 +324,7 @@ mod tests {
         let mut cache = ProjectFsCache::default();
         cache.want(ProjectFsRequest {
             exists: vec![PathBuf::from("a")],
+            ..ProjectFsRequest::default()
         });
         cache
     }
@@ -326,5 +418,121 @@ mod tests {
         }
         assert!(!message_touches_disk(&Message::Rename(RenameMsg::Close)));
         assert!(!message_touches_disk(&Message::Remove(RemoveMsg::Close)));
+    }
+
+    fn job(id: ProjectId) -> HierarchyJob {
+        HierarchyJob {
+            id,
+            root: PathBuf::from("/p/root.snxsch"),
+            pages: vec![PathBuf::from("/p/root.snxsch")],
+            fold: Default::default(),
+            open_refs: Vec::new(),
+        }
+    }
+
+    fn watching_jobs(ids: &[ProjectId]) -> ProjectFsCache {
+        let mut cache = ProjectFsCache::default();
+        cache.want(ProjectFsRequest {
+            exists: vec![PathBuf::from("/p/root.snxsch")],
+            hierarchy: HierarchyRequest {
+                jobs: ids.iter().copied().map(job).collect(),
+            },
+        });
+        cache
+    }
+
+    /// 1618: a save, or a poll tick, walks no project whose job is unchanged;
+    /// a changed job walks only its own project.
+    #[test]
+    fn only_a_project_whose_job_changed_is_walked_again() {
+        let (a, b) = (ProjectId(1), ProjectId(2));
+        let mut cache = watching_jobs(&[a, b]);
+        let (generation, request) = cache.begin_probe(false).unwrap();
+        assert_eq!(request.hierarchy.jobs.len(), 2);
+        cache.finish_probe(generation, Ok(probe(&request)));
+
+        cache.invalidate();
+        let (generation, request) = cache.begin_probe(true).unwrap();
+        assert!(request.hierarchy.jobs.is_empty(), "a save re-walks nothing");
+        cache.finish_probe(generation, Ok(probe(&request)));
+
+        let mut changed = job(b);
+        changed.pages.push(PathBuf::from("/p/more.snxsch"));
+        cache.want(ProjectFsRequest {
+            exists: vec![PathBuf::from("/p/root.snxsch")],
+            hierarchy: HierarchyRequest {
+                jobs: vec![job(a), changed],
+            },
+        });
+        let (_, request) = cache.begin_probe(false).unwrap();
+        let walked: Vec<ProjectId> = request.hierarchy.jobs.iter().map(|j| j.id).collect();
+        assert_eq!(walked, [b]);
+    }
+
+    /// 1618: a disk-changing message arriving while a probe runs is not lost,
+    /// and a placed file that went in between sends its project back through
+    /// the walk.
+    #[test]
+    fn a_change_during_a_running_probe_is_picked_up_by_the_next() {
+        let a = ProjectId(1);
+        let mut cache = watching_jobs(&[a]);
+        let (generation, request) = cache.begin_probe(false).unwrap();
+        cache.invalidate();
+        cache.finish_probe(generation, Ok(probe(&request)));
+        assert!(cache.begin_probe(false).is_some(), "the invalidate stands");
+    }
+
+    /// 1618: the file a hierarchy placed appearing sends it back through the
+    /// walk, so a missing child that was created stops reading as missing.
+    #[test]
+    fn a_placed_file_appearing_walks_its_project_again() {
+        let a = ProjectId(1);
+        let mut cache = watching_jobs(&[a]);
+        let (generation, request) = cache.begin_probe(false).unwrap();
+        cache.finish_probe(generation, Ok(probe(&request)));
+        assert!(cache.begin_probe(false).is_none(), "settled");
+
+        let (generation, request) = cache.begin_probe(true).unwrap();
+        assert!(request.hierarchy.jobs.is_empty());
+        let mut created = probe(&request);
+        created.exists.insert(PathBuf::from("/p/root.snxsch"), true);
+        cache.finish_probe(generation, Ok(created));
+        let (_, request) = cache.begin_probe(false).expect("a re-walk is due");
+        assert_eq!(request.hierarchy.jobs.len(), 1);
+    }
+
+    /// 1618: a closed sheet rewritten outside Signex (a `git pull` adding a
+    /// placing symbol) changes its mtime, which sends its project back
+    /// through the walk although the file existed all along.
+    #[test]
+    fn a_changed_closed_sheet_is_walked_again() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let sheet = tmp.path().join("root.snxsch");
+        std::fs::write(&sheet, "x").expect("write");
+        let mut one = job(ProjectId(1));
+        one.root = sheet.clone();
+        one.pages = vec![sheet.clone()];
+        let mut cache = ProjectFsCache::default();
+        cache.want(ProjectFsRequest {
+            exists: vec![sheet.clone()],
+            hierarchy: HierarchyRequest { jobs: vec![one] },
+        });
+        let (generation, request) = cache.begin_probe(false).unwrap();
+        cache.finish_probe(generation, Ok(probe(&request)));
+        let (generation, request) = cache.begin_probe(true).unwrap();
+        assert!(request.hierarchy.jobs.is_empty(), "unchanged: no walk");
+        cache.finish_probe(generation, Ok(probe(&request)));
+        assert!(cache.begin_probe(false).is_none(), "settled");
+
+        let file = std::fs::File::options()
+            .write(true)
+            .open(&sheet)
+            .expect("open");
+        file.set_modified(std::time::SystemTime::now() + Duration::from_secs(60))
+            .expect("set mtime");
+        let (generation, request) = cache.begin_probe(true).unwrap();
+        cache.finish_probe(generation, Ok(probe(&request)));
+        let (_, request) = cache.begin_probe(false).expect("a re-walk is due");
+        assert_eq!(request.hierarchy.jobs.len(), 1);
     }
 }

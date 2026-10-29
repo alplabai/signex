@@ -5,6 +5,10 @@ use crate::*;
 use signex_types::schematic::{InstancePath, Point, SelectedKind, Symbol};
 use uuid::Uuid;
 
+fn lib_symbol_named(id: &str) -> signex_types::schematic::LibSymbol {
+    serde_json::from_value(serde_json::json!({ "id": id })).unwrap()
+}
+
 fn id(n: u128) -> Uuid {
     Uuid::from_u128(n)
 }
@@ -172,6 +176,22 @@ fn refused_commands() -> Vec<(&'static str, Command)> {
                 symbol: id(1),
                 placement: InstancePath::from_chain(vec![id(100), id(101)]),
                 reference: "R9".into(),
+            },
+        ),
+        (
+            "change the component",
+            Command::ChangeComponent {
+                symbol_id: id(1),
+                replacement: crate::ComponentReplacement {
+                    lib_symbol: lib_symbol_named("Device:C"),
+                    library_id: None,
+                    row_id: None,
+                    library_version: String::new(),
+                    value: String::new(),
+                    footprint: String::new(),
+                    datasheet: String::new(),
+                    fields: Vec::new(),
+                },
             },
         ),
         (
@@ -394,4 +414,95 @@ fn the_drag_ghost_skips_a_locked_item_like_the_commit() {
         ghost.symbols[1].position.x,
         engine.document().symbols[1].position.x + 5.0
     );
+}
+
+/// Locked `R1` at (50, 50) with a wire into its left pin, and a free wire
+/// elsewhere.
+fn locked_with_wires() -> (Engine, Uuid, Uuid, Uuid) {
+    use crate::rubber_band_tests::{add_resistor, add_wire};
+    let mut sheet = SchematicSheet::default();
+    let symbol = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    sheet.symbols[0].locked = true;
+    let attached = add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    let free = add_wire(&mut sheet, (0.0, 0.0), (10.0, 0.0));
+    (Engine::new(sheet).expect("engine"), symbol, attached, free)
+}
+
+fn wire_item(uuid: Uuid) -> SelectedItem {
+    SelectedItem::new(uuid, SelectedKind::Wire)
+}
+
+#[test]
+fn a_group_move_leaves_wires_on_a_locked_pin_where_they_are() {
+    let (mut engine, symbol, attached, free) = locked_with_wires();
+    let (pruned, skipped) = engine.without_locked(Command::MoveSelection {
+        items: vec![item_of(symbol), wire_item(attached), wire_item(free)],
+        dx: 0.0,
+        dy: 5.0,
+        keep_wires: true,
+    });
+    assert_eq!(skipped, vec!["R1".to_string()]);
+    engine
+        .execute(pruned.expect("the free wire moves"))
+        .unwrap();
+
+    let doc = engine.document();
+    let wire = |id| doc.wires.iter().find(|w| w.uuid == id).unwrap();
+    assert_eq!((wire(attached).start.y, wire(attached).end.y), (50.0, 50.0));
+    assert_eq!(wire(free).start.y, 5.0);
+    assert_eq!(doc.symbols[0].position, Point::new(50.0, 50.0));
+}
+
+#[test]
+fn deleting_a_wire_on_a_locked_pin_is_still_allowed() {
+    let (engine, _, attached, _) = locked_with_wires();
+    let (pruned, skipped) = engine.without_locked(Command::DeleteSelection {
+        items: vec![wire_item(attached)],
+    });
+    assert!(skipped.is_empty());
+    assert!(pruned.is_some());
+}
+
+fn item_of(uuid: Uuid) -> SelectedItem {
+    SelectedItem::new(uuid, SelectedKind::Symbol)
+}
+
+/// U1 unit 1 (free) and unit 2 (locked), one part drawn as two units.
+fn engine_with_a_locked_second_unit() -> Engine {
+    let unit = |n: u128, unit: u32, locked: bool| Symbol {
+        uuid: id(n),
+        reference: "U1".into(),
+        lib_id: "L:OLD".into(),
+        position: Point::new(10.0 * n as f64, 10.0),
+        unit,
+        locked,
+        ..Default::default()
+    };
+    let sheet = SchematicSheet {
+        symbols: vec![unit(1, 1, false), unit(2, 2, true)],
+        ..Default::default()
+    };
+    Engine::new(sheet).expect("engine")
+}
+
+#[test]
+fn changing_the_component_of_a_free_unit_is_refused_while_a_sibling_unit_is_locked() {
+    let mut engine = engine_with_a_locked_second_unit();
+    let before = format!("{:?}", engine.document());
+    let message = locked_error(engine.execute(Command::ChangeComponent {
+        symbol_id: id(1),
+        replacement: crate::ComponentReplacement {
+            lib_symbol: lib_symbol_named("L:NEW"),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
+            value: "NEW".into(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            fields: Vec::new(),
+        },
+    }));
+    assert!(message.contains("U1 is locked"), "{message}");
+    assert_eq!(format!("{:?}", engine.document()), before);
+    assert!(engine.undo().is_ok_and(|undone| undone.is_none()));
 }

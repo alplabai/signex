@@ -27,6 +27,10 @@ impl Signex {
                 // chrome bar into a live palette.
                 self.ui_state.command_palette.open = true;
                 self.refresh_command_palette_results();
+                self.start_palette_index()
+            }
+            CommandPaletteMsg::IndexBuilt { generation, result } => {
+                self.apply_palette_index(generation, &result);
                 Task::none()
             }
             CommandPaletteMsg::MoveSelection(delta) => {
@@ -50,12 +54,14 @@ impl Signex {
         Task::batch([
             operation::focus(COMMAND_PALETTE_INPUT_ID.clone()),
             operation::select_all(COMMAND_PALETTE_INPUT_ID.clone()),
+            // The project-wide rows come from an index built off-thread.
+            self.start_palette_index(),
         ])
     }
 
     /// Rebuild the catalog and rank it against the live query, keeping the
     /// top [`MAX_RESULTS`] for the dropdown to render.
-    fn refresh_command_palette_results(&mut self) {
+    pub(in crate::app) fn refresh_command_palette_results(&mut self) {
         let catalog = build_catalog(self);
         let ranked = rank_results(&catalog, &self.ui_state.command_palette.query);
         let stamp = catalog_stamp(self);
@@ -127,22 +133,65 @@ impl Signex {
             // between `build_catalog` and here is a no-op rather than a
             // panic; `core_to_message` logs which one and why.
             CommandAction::Command(command) => {
-                // `bridge::` rather than the `command::core_to_message`
-                // re-export — #367 (PR #504) makes that re-export private.
-                // Once #504 lands this becomes
-                // `self.dispatch_command(&command, CommandArgs::none(), None)`,
-                // which is the single funnel the epic is aiming at.
-                match crate::app::command::bridge::core_to_message(&command) {
-                    Some(message) => self.dispatch_update(message),
-                    None => Task::none(),
-                }
+                self.dispatch_command(&command, crate::app::command::CommandArgs::none(), None)
             }
             CommandAction::Panel(panel) => {
                 Task::done(Message::Overlay(OverlayMsg::OpenPanel(panel)))
             }
             CommandAction::OpenFile(path) => Task::done(Message::File(FileMsg::Opened(Some(path)))),
             CommandAction::FocusSymbol { reference } => self.focus_symbol_by_reference(&reference),
+            CommandAction::Reveal {
+                path,
+                placement,
+                select,
+            } => self.reveal_in_project(path, placement, select),
         }
+    }
+
+    /// Open `path` at `placement` and focus the item a search row names. A
+    /// row can outlive what it pointed at (a sheet closed, renamed or
+    /// deleted, a symbol removed): the file is looked up by path, so a stale
+    /// row never opens a different file, and a missing item opens the sheet
+    /// and says so. Nothing in any document is changed.
+    ///
+    /// Opening a sheet nobody holds goes through the normal open path, which
+    /// reads that one file on the UI thread, exactly as descending into a
+    /// child sheet does.
+    fn reveal_in_project(
+        &mut self,
+        path: std::path::PathBuf,
+        placement: Option<signex_types::schematic::InstancePath>,
+        select: Option<signex_types::schematic::SelectedItem>,
+    ) -> Task<Message> {
+        self.open_sheet_with_placement(path.clone(), placement);
+        let opened = self.resolve_held_spelling(path.clone());
+        if self.document_state.active_path.as_deref() != Some(opened.as_path()) {
+            crate::diagnostics::log_warning(format!(
+                "Search: could not open {}; the list may be out of date.",
+                path.display()
+            ));
+            return Task::none();
+        }
+        let Some(item) = select else {
+            return Task::none();
+        };
+        // Where the symbol is now, not where it was when the index was built.
+        let position = self.document_state.active_engine().and_then(|engine| {
+            engine
+                .document()
+                .symbols
+                .iter()
+                .find(|s| s.uuid == item.uuid)
+                .map(|s| s.position)
+        });
+        let Some(position) = position else {
+            crate::diagnostics::log_info(format!(
+                "Search: that item is no longer on {}.",
+                path.display()
+            ));
+            return Task::none();
+        };
+        self.handle_focus_at(position.x, position.y, Some(item))
     }
 
     /// Resolve a placed symbol's world position from the active
@@ -246,5 +295,29 @@ mod tests {
         app.refresh_command_palette_if_stale();
 
         assert_eq!(app.ui_state.command_palette.total_matches, 2);
+    }
+
+    /// #1351 - a palette row goes through the same funnel as a keystroke,
+    /// so a command with nothing to act on is dropped, not run.
+    #[test]
+    fn a_palette_command_obeys_the_enablement_gate() {
+        use crate::app::command_palette::{CommandEntry, CommandSource};
+        let (mut app, _task) = Signex::new();
+        assert!(app.document_state.active_engine().is_none());
+        let before = app.interaction_state.current_tool;
+        let palette = &mut app.ui_state.command_palette;
+        palette.open = true;
+        palette.results = vec![CommandEntry {
+            source: CommandSource::Command,
+            label: "Place Wire".into(),
+            detail: String::new(),
+            action: CommandAction::Command(crate::keymap::AppCommandId::new("place_wire").unwrap()),
+        }];
+        palette.selected_index = 0;
+
+        let _ = app.execute_command_palette_selected();
+
+        assert_eq!(app.interaction_state.current_tool, before);
+        assert!(!app.ui_state.command_palette.open);
     }
 }

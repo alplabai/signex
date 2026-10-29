@@ -15,6 +15,7 @@ bitflags::bitflags! {
         const GRID = 1 << 5;
         const OVERLAY = 1 << 6;
         const THEME = 1 << 7;
+        const DRAWINGS = 1 << 8;
         const ALL = 0xFFFF;
     }
 }

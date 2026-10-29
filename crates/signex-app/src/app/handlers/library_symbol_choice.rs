@@ -40,7 +40,7 @@ impl Signex {
     /// The row a placed symbol came from, with the path and table of the
     /// open library holding it. `None` for a symbol placed without a row, or
     /// whose library is not open.
-    fn row_of_placed_symbol(
+    pub(crate) fn row_of_placed_symbol(
         &self,
         symbol: &signex_types::schematic::Symbol,
     ) -> Option<(PathBuf, String, &ComponentRow)> {

@@ -3,7 +3,8 @@
 //! registry's dispatch entry point ([`Signex::dispatch_command`]) and
 //! its argument type ([`CommandArgs`]). Slice 3 gates it on
 //! [`enablement::is_enabled`], which the menu bar reads too; rewiring
-//! menus/palette onto the registry (slice 4) is still ahead.
+//! menus/palette onto the registry (slice 4) is not done yet; the
+//! palette still calls `bridge::core_to_message` directly.
 
 pub(crate) mod active_bar;
 mod args;
@@ -54,6 +55,17 @@ impl Signex {
         _args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
+        // Undo / Redo typed in an undocked tab step that window's document
+        // and are gated by its history, not the main window's active tab
+        // (#1546).
+        if let Some(window_id) = window
+            && matches!(command.as_str(), "undo" | "redo")
+            && self.undocked_tab_has_canvas(window)
+        {
+            return self.run_in_window(window_id, true, |app| {
+                app.dispatch_command(command, _args, None)
+            });
+        }
         if !is_enabled(command, &self.command_context(window))
             && !enablement::explains_when_unavailable(command)
         {
@@ -82,6 +94,12 @@ impl Signex {
         }
     }
 }
+
+#[cfg(test)]
+mod arrange_tests;
+
+#[cfg(test)]
+mod shortcut_tests;
 
 #[cfg(test)]
 mod tests {
@@ -144,17 +162,17 @@ mod tests {
         assert_eq!(task.units(), 0);
     }
 
-    /// `clear_net_highlighting` is a real catalog entry
-    /// (`keymap/catalog/schematic.rs`) with no arm in `core_to_message`
+    /// `break_wire` is a real catalog entry
+    /// (`keymap/catalog`) with no arm in `core_to_message`
     /// yet — it must resolve to a no-op too, not panic.
     #[test]
     fn catalog_id_with_no_bridge_arm_is_a_no_op_and_does_not_panic() {
         let (mut app, _task) = Signex::new();
 
-        let command = AppCommandId::new("clear_net_highlighting").unwrap();
+        let command = AppCommandId::new("break_wire").unwrap();
         assert!(
             crate::keymap::metadata_for(&command).is_some(),
-            "test fixture drifted: clear_net_highlighting is no longer a catalog id"
+            "test fixture drifted: break_wire is no longer a catalog id"
         );
 
         let task = app.dispatch_command(&command, CommandArgs::none(), None);
@@ -224,6 +242,42 @@ mod tests {
         let _ = app.update(core_message(&next));
 
         assert_eq!(app.document_state.active_tab, 1);
+    }
+
+    fn run(app: &mut Signex, id: &str) {
+        let _ = app.update(core_message(&AppCommandId::new(id).unwrap()));
+    }
+
+    /// #103 - `next_document_tab` / `previous_document_tab` step through
+    /// every tab kind, wrapping at both ends.
+    #[test]
+    fn document_tab_commands_cycle_all_tabs_and_wrap() {
+        let mut app = app_with_tabs(vec![TabKind::Schematic, TabKind::Pcb, TabKind::Schematic]);
+        run(&mut app, "next_document_tab");
+        assert_eq!(app.document_state.active_tab, 1, "lands on the PCB tab");
+        run(&mut app, "next_document_tab");
+        run(&mut app, "next_document_tab");
+        assert_eq!(app.document_state.active_tab, 0, "wraps forward");
+        run(&mut app, "previous_document_tab");
+        assert_eq!(app.document_state.active_tab, 2, "wraps backward");
+    }
+
+    /// #103 - `previous_grid` and `cycle_snap_grid_backward` undo `next_grid`.
+    #[test]
+    fn previous_grid_commands_step_the_grid_back() {
+        let sizes = crate::canvas::grid::GRID_SIZES_MM;
+        for id in ["previous_grid", "cycle_snap_grid_backward"] {
+            let (mut app, _task) = Signex::new();
+            app.ui_state.grid_size_mm = sizes[1];
+            run(&mut app, id);
+            assert_eq!(app.ui_state.grid_size_mm, sizes[0], "{id}");
+            run(&mut app, id);
+            assert_eq!(
+                app.ui_state.grid_size_mm,
+                sizes[sizes.len() - 1],
+                "{id} wraps"
+            );
+        }
     }
 
     fn core_message(command: &AppCommandId) -> Message {

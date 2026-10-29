@@ -1,5 +1,5 @@
-//! Debounced persistence of the search boxes (#859): the Components-panel
-//! filter and the per-library Library Browser queries.
+//! Debounced persistence of the search boxes (#859): the per-library
+//! Library Browser queries.
 //!
 //! Typing used to rewrite `prefs.json` inside `update` on every keystroke.
 //! The in-memory state still changes immediately; only the disk write is
@@ -18,12 +18,10 @@ pub const SEARCH_PREFS_SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
 /// What this session changed in the search boxes, applied key by key onto
 /// whatever `prefs.json` holds at write time. It is a delta on purpose:
 /// replacing the whole map from an in-memory copy would erase entries this
-/// session never touched (another library's query, a filter typed by a
+/// session never touched (another library's query, a query typed by a
 /// second instance, or anything lost to an unreadable file at boot).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SearchPrefsChange {
-    /// The Components filter, `Some` only once this session changed it.
-    pub component_filter: Option<String>,
     /// Touched library queries; an empty query clears that library's
     /// on-disk entry.
     pub library_searches: BTreeMap<PathBuf, String>,
@@ -66,13 +64,6 @@ impl SearchPrefsSync {
     /// means cleared). `None` means the caller should consult the disk.
     pub fn library_search(&self, library: &Path) -> Option<String> {
         self.changes.library_searches.get(library).cloned()
-    }
-
-    /// Record the Components-panel filter. Returns the generation to arm
-    /// a debounce timer for.
-    pub fn set_component_filter(&mut self, filter: &str) -> Option<u64> {
-        self.changes.component_filter = Some(filter.to_string());
-        self.observe()
     }
 
     /// Record one library's browser query (empty clears its entry).

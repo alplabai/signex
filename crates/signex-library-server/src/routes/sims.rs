@@ -15,7 +15,7 @@ use serde::Deserialize;
 use signex_library::primitive::SimModel;
 use uuid::Uuid;
 
-use crate::db::{AppState, PrimitiveSummary};
+use crate::db::{AppState, Page, PrimitiveSummary};
 use crate::routes::error::ApiError;
 use crate::routes::primitives::{already_exists, require_same_uuid, subject, with_etag};
 use crate::routes::rows::{applied, base_revision};
@@ -29,6 +29,9 @@ pub fn router() -> Router<AppState> {
 #[derive(Debug, Deserialize, Default)]
 struct ListQuery {
     library_id: Option<Uuid>,
+    /// Page size; defaults to and is capped by the server.
+    limit: Option<i64>,
+    offset: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -83,6 +86,8 @@ async fn list_sims(
     State(state): State<AppState>,
     Query(q): Query<ListQuery>,
 ) -> Result<Json<Vec<PrimitiveSummary>>, ApiError> {
-    let summaries = state.list_sims(q.library_id).await?;
+    let summaries = state
+        .list_sims(q.library_id, Page::new(q.limit, q.offset))
+        .await?;
     Ok(Json(summaries))
 }

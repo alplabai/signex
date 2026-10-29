@@ -2,6 +2,7 @@ use iced::Task;
 
 use super::*;
 
+pub(crate) mod chord;
 mod command_palette;
 mod document;
 mod escape;
@@ -9,7 +10,11 @@ pub(crate) mod input;
 mod keyboard;
 mod keymap;
 pub(crate) mod library;
+#[cfg(test)]
+mod net_color_tests;
 mod overlay;
+#[cfg(test)]
+mod prefs_async_tests;
 mod text_edit;
 mod tool;
 mod ui;
@@ -26,6 +31,7 @@ impl Signex {
             Message::Menu(msg) => self.handle_menu_message(msg),
             Message::Tab { window_id, msg } => {
                 let task = self.handle_document_tab_message(window_id, msg);
+                self.close_find_similar_if_sheet_changed();
                 Task::batch([self.finish_update(), task])
             }
             Message::Dock(msg) => self.handle_dock_message(msg),
@@ -106,8 +112,8 @@ impl Signex {
     /// Window lifecycle, docking, and native-chrome message family
     /// (namespaced, ADR-0001 D3). Main + secondary window open / close /
     /// resize / scale, detach + reattach of modals, undocked tabs and
-    /// floating panels, and the borderless-chrome drag / resize / minimize
-    /// / maximize buttons. Routed from `dispatch_update`.
+    /// floating panels, and the borderless-chrome drag / resize /
+    /// minimize / maximize buttons. Routed from `dispatch_update`.
     pub(crate) fn dispatch_window_message(&mut self, message: WindowMsg) -> Task<Message> {
         match message {
             WindowMsg::WindowResizedFor(id, w, h) => {
@@ -121,8 +127,9 @@ impl Signex {
                     // re-querying the scale factor here keeps the
                     // wordmark-PNG tier picker in sync after a
                     // cross-monitor drag.
-                    return iced::window::scale_factor(id)
+                    let scale_task = iced::window::scale_factor(id)
                         .map(|s| Message::Window(WindowMsg::MainWindowScaleChanged(s)));
+                    return Task::batch([scale_task, self.main_window_mode_task(id)]);
                 }
                 Task::none()
             }
@@ -132,6 +139,11 @@ impl Signex {
             }
             WindowMsg::MainWindowOpened(id) => {
                 self.ui_state.main_window_id = Some(id);
+                self.ui_state.main_window_opened = true;
+                // winit's default menu exists now; ours replaces it on the
+                // sync that ends this update.
+                #[cfg(target_os = "macos")]
+                self.native_menu.arm();
                 // Pull the real initial size from winit — opening the
                 // window at Settings.size doesn't always land at
                 // exactly that size (OS DPI scaling, display clamps).
@@ -157,12 +169,17 @@ impl Signex {
                 if self.ui_state.main_window_id == Some(id) {
                     return self.flush_quit_writes_then(iced::exit());
                 }
+                if self.ui_state.focused_window == Some(id) {
+                    self.ui_state.focused_window = None;
+                }
                 let mut layout_persist = Task::none();
                 // Drop the entry and dismiss the backing modal state so
                 // closing the OS window fully exits the modal instead of
                 // reattaching a phantom copy to the main window on the
                 // next view frame. Phase 3 will add undocked-tab cleanup
                 // here too.
+                let owner = self.ui_state.library_modal_owners.remove(&id);
+                self.ui_state.modal_window_sizes.remove(&id);
                 if let Some(kind) = self.ui_state.windows.remove(&id) {
                     use super::state::{ModalId, WindowKind};
                     match kind {
@@ -171,6 +188,7 @@ impl Signex {
                             ModalId::AnnotateResetConfirm => {
                                 self.ui_state.annotate_reset_confirm = false
                             }
+                            ModalId::ReprefixConfirm => self.ui_state.reprefix_confirm = None,
                             ModalId::ErcDialog => self.ui_state.erc_dialog_open = false,
                             ModalId::Preferences => {
                                 // Backstop for a Preferences window destroyed
@@ -201,9 +219,6 @@ impl Signex {
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
                             ModalId::PrintPreview => self.dismiss_print_preview(),
                             ModalId::BomPreview => self.document_state.bom_preview = None,
-                            ModalId::ProjectOptions => {
-                                self.ui_state.project_options = None;
-                            }
                             ModalId::EnableVersionControl => {
                                 self.close_enable_version_control_dialog();
                             }
@@ -212,6 +227,68 @@ impl Signex {
                             }
                             ModalId::SelectionFilterCustom => {
                                 self.ui_state.selection_filter_custom = None;
+                            }
+                            ModalId::About => self.ui_state.about_open = false,
+                            ModalId::KeyboardShortcuts => {
+                                self.ui_state.keyboard_shortcuts_open = false
+                            }
+                            ModalId::PassiveCalculator => {
+                                self.ui_state.passive_calculator_open = false
+                            }
+                            ModalId::FirstRunTour => self.ui_state.first_run_tour_open = false,
+                            ModalId::CreateChildSheet => {
+                                self.ui_state.create_child_sheet_confirm = None
+                            }
+                            // A window that went away without a close
+                            // request is a Cancel, never a Discard.
+                            ModalId::ErrorNotice => self.document_state.error_notice = None,
+                            ModalId::NetlistIncompletePrompt => {
+                                self.document_state.netlist_incomplete_prompt = None
+                            }
+                            ModalId::AutosaveRecovery => self.note_recovery_window_vanished(),
+                            ModalId::ProjectCloseConfirm => {
+                                self.ui_state.project_close_confirm = None
+                            }
+                            ModalId::AppQuitConfirm => self.ui_state.app_quit_confirm = None,
+                            // A window that vanished without a close request
+                            // is a Cancel: nothing is written or deleted.
+                            ModalId::LibraryPicker => self.library.picker = None,
+                            ModalId::LibraryPrimitivePicker => self.library.primitive_picker = None,
+                            ModalId::LibraryDocumentOptions => self.library.document_options = None,
+                            ModalId::LibraryCreateOptions => self.library.create_options = None,
+                            ModalId::LibraryUpdates => self.library.library_updates = None,
+                            ModalId::LibraryCloseConfirm => {
+                                self.library.close_library_confirm = None
+                            }
+                            ModalId::NetColorCustom => self.ui_state.net_color_custom.show = false,
+                            // Never auto-decided: the sync shows it again.
+                            ModalId::LibraryRecovery => self.note_recovery_window_vanished(),
+                            // The edit form keeps its typed text: the window comes
+                            // back, twice at most, then it stays in the window.
+                            ModalId::LibraryEditRow => {
+                                if let Some(path) = owner {
+                                    let count = self
+                                        .ui_state
+                                        .edit_row_window_vanished
+                                        .entry(path)
+                                        .or_insert(0);
+                                    *count += 1;
+                                    if *count == 2 {
+                                        crate::diagnostics::log_warning(
+                                            "An Edit Component Details window closed twice \
+                                             unanswered; it now stays in the main window",
+                                        );
+                                    }
+                                }
+                            }
+                            // A confirm that vanished is a Cancel.
+                            ModalId::LibraryDeleteConfirm => {
+                                if let Some(path) = owner
+                                    && let Some(browser) =
+                                        self.library.library_browsers.get_mut(&path)
+                                {
+                                    browser.delete_confirm = None;
+                                }
                             }
                         },
                         // Closing an undocked-tab window is the reattach
@@ -290,6 +367,12 @@ impl Signex {
             }
             WindowMsg::UndockTab(idx) => self.handle_undock_tab(idx),
             WindowMsg::UndockedTabOpened { path, id } => {
+                // The entry was inserted when the open was requested; if
+                // the window closed before the OS confirmed the open, do
+                // not resurrect it (stale window + canvas leak).
+                if !self.ui_state.windows.contains_key(&id) {
+                    return Task::none();
+                }
                 let title = self
                     .document_state
                     .tabs
@@ -334,6 +417,7 @@ impl Signex {
                     per_window.paper_width_mm,
                     per_window.paper_height_mm,
                 );
+                per_window.special_strings = self.special_strings_for_path(&path);
                 per_window.designators = self.designators_for_path(&path);
                 per_window.fit_to_content();
                 self.interaction_state.canvases.insert(id, per_window);
@@ -363,6 +447,12 @@ impl Signex {
             }
             WindowMsg::DetachFloatingPanel(idx) => self.handle_detach_floating_panel(idx),
             WindowMsg::DetachedPanelOpened { kind, id } => {
+                // The entry was inserted when the open was requested; if
+                // the window closed before the OS confirmed the open, do
+                // not resurrect it (stale window + canvas leak).
+                if !self.ui_state.windows.contains_key(&id) {
+                    return Task::none();
+                }
                 self.ui_state
                     .windows
                     .insert(id, super::state::WindowKind::DetachedPanel(kind));
@@ -387,16 +477,42 @@ impl Signex {
                 None => Task::none(),
             },
             WindowMsg::CloseMainWindow => self.handle_app_quit_requested(),
+            WindowMsg::LockedWindowClicked => match self.locking_confirm_window() {
+                Some(id) => iced::window::gain_focus(id),
+                None => Task::none(),
+            },
+            WindowMsg::WindowFocused(id) => {
+                self.ui_state.focused_window = Some(id);
+                Task::none()
+            }
+            WindowMsg::WindowUnfocused(id) => {
+                if self.ui_state.focused_window == Some(id) {
+                    self.ui_state.focused_window = None;
+                }
+                Task::none()
+            }
+            WindowMsg::NativeMenuItemActivated(id) => self.handle_native_menu_activated(&id),
+            WindowMsg::ControlsLayoutDetected(layout) => {
+                self.handle_controls_layout_detected(layout)
+            }
+            WindowMsg::MainWindowMonitorSizeRead(size) => {
+                self.ui_state.main_window_monitor_size = size;
+                Task::none()
+            }
+            WindowMsg::MainWindowModeRead(mode) => {
+                self.ui_state.main_window_mode = mode;
+                Task::none()
+            }
             WindowMsg::WindowCloseRequested(id) => {
-                // OS close request (Alt+F4 / native close). Daemon mode
-                // does not auto-close, so route the main window through
+                // OS close request (Alt+F4 / native close). Windows are
+                // opened with `exit_on_close_request: false`, so route the main window through
                 // the unsaved-changes guard, a detached modal through its
                 // own close message, and close any other window directly.
                 if self.ui_state.main_window_id == Some(id) {
                     self.handle_app_quit_requested()
                 } else if let Some(super::state::WindowKind::DetachedModal(modal)) =
                     self.ui_state.windows.get(&id).cloned()
-                    && let Some(close) = Self::detached_modal_close_message(modal)
+                    && let Some(close) = self.window_close_message(id, modal)
                 {
                     // The native close button of a detached modal runs
                     // the modal's own close message, so the dirty guard
@@ -451,15 +567,21 @@ impl Signex {
                     b: (c.b * 255.0).round() as u8,
                     a: 255,
                 };
+                self.cancel_placement_session();
                 self.ui_state.pending_net_color = Some(color);
                 self.interaction_state.active_canvas_mut().pending_net_color = Some(color);
                 Task::none()
             }
             NetColorMsg::CustomChannel(chan, s) => {
-                // Parse as u8; silently ignore invalid input so the
-                // text_input doesn't reject intermediate values like
-                // the empty string while the user types.
-                let parsed = s.trim().parse::<u16>().unwrap_or(0).min(255) as u8;
+                // Parse as u8: values above 255 (however large) clamp to
+                // 255. Input that does not parse (e.g. the empty string
+                // while the user types) keeps the channel's previous value,
+                // so the text_input never rejects an intermediate value and
+                // a half-typed edit never zeroes the channel.
+                let Ok(parsed) = s.trim().parse::<u64>() else {
+                    return Task::none();
+                };
+                let parsed = parsed.min(255) as u8;
                 let draft = &mut self.ui_state.net_color_custom.draft;
                 let v = parsed as f32 / 255.0;
                 match chan {

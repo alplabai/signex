@@ -26,20 +26,27 @@ pub type WireClassStyles = HashMap<Uuid, NetClassStyle>;
 pub struct WireStyling<'a> {
     pub color_overrides: &'a HashMap<Uuid, ThemeColor>,
     pub class_styles: &'a WireClassStyles,
+    /// Moves whenever `class_styles` changes (the scene cache compares this
+    /// instead of the whole map every frame).
+    pub class_revision: u64,
 }
 
 /// An owned copy, kept by the scene cache to tell when a rebuild is due.
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub(super) struct OwnedWireStyling {
     color_overrides: HashMap<Uuid, ThemeColor>,
-    class_styles: WireClassStyles,
+    class_revision: u64,
+    /// Whether the class map had no entry, for the comparison with "no
+    /// styling at all", which draws the same.
+    class_empty: bool,
 }
 
 impl WireStyling<'_> {
     pub(super) fn to_owned_styling(self) -> OwnedWireStyling {
         OwnedWireStyling {
             color_overrides: self.color_overrides.clone(),
-            class_styles: self.class_styles.clone(),
+            class_revision: self.class_revision,
+            class_empty: self.class_styles.is_empty(),
         }
     }
 }
@@ -49,9 +56,9 @@ impl OwnedWireStyling {
         match other {
             Some(styling) => {
                 self.color_overrides == *styling.color_overrides
-                    && self.class_styles == *styling.class_styles
+                    && self.class_revision == styling.class_revision
             }
-            None => self.color_overrides.is_empty() && self.class_styles.is_empty(),
+            None => self.color_overrides.is_empty() && self.class_empty,
         }
     }
 }
@@ -126,6 +133,7 @@ mod tests {
         let only_class = WireStyling {
             color_overrides: &overrides,
             class_styles: &classes,
+            class_revision: 0,
         };
         assert_eq!(wire_color(Some(only_class), id), Some(blue));
         assert_eq!(wire_color(None, id), None);
@@ -134,6 +142,7 @@ mod tests {
         let both = WireStyling {
             color_overrides: &overrides,
             class_styles: &classes,
+            class_revision: 0,
         };
         assert_eq!(wire_color(Some(both), id), Some(red));
     }
@@ -147,6 +156,7 @@ mod tests {
         let styling = WireStyling {
             color_overrides: &overrides,
             class_styles: &classes,
+            class_revision: 0,
         };
         assert_eq!(wire_color(Some(styling), id), None);
     }

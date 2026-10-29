@@ -1,14 +1,18 @@
+pub mod derivatives;
 pub mod dim_cache;
 pub mod dof;
 pub mod jacobian;
 pub mod linalg;
 pub mod lm;
 pub mod math;
+pub mod redundancy;
 pub mod residual;
 pub mod residuals;
 pub mod state;
 pub mod work;
 
+#[cfg(test)]
+mod derivatives_tests;
 #[cfg(test)]
 mod shrink_tests;
 
@@ -19,10 +23,11 @@ use crate::id::{ConstraintId, SketchEntityId};
 use crate::sketch::SketchData;
 
 use self::dof::{DofColor, entity_colours, over_constraint_ids};
-use self::jacobian::numerical_jacobian;
+use self::jacobian::jacobian;
 use self::lm::{
     LmFailure, SolveResult, solve_lm_keeping_state, solve_lm_perturbed, undo_retry_offset,
 };
+use self::redundancy::redundant_constraint_ids;
 use self::residual::{ResolvedParams, total_residual};
 use self::work::WorkMeter;
 
@@ -74,6 +79,9 @@ pub struct FullSolveOutput {
     pub result: SolveResult,
     pub colours: HashMap<SketchEntityId, DofColor>,
     pub over_constraints: Vec<ConstraintId>,
+    /// #1649 — constraints that restate what earlier ones already fix
+    /// (consistent, so they do not fail the solve). See [`redundancy`].
+    pub redundant_constraints: Vec<ConstraintId>,
     pub jacobian: Vec<Vec<f64>>,
     /// GH #599 — the resolved parameters this solve ran with.
     /// Consumers that re-evaluate residuals against the output (the
@@ -249,7 +257,7 @@ impl Solver {
         // free sketch has no Jacobian rows (m=0); we still build it
         // so the API surface is consistent. The analysis runs outside the
         // work pool and cannot fail a converged solve.
-        let jacobian = numerical_jacobian(sketch, &result.state, &result.index, params)
+        let jacobian = jacobian(sketch, &result.state, &result.index, params)
             .map_err(|e| lm::residual_failure("post-solve jacobian", e))?;
         meter.record_analysis(result.state.len(), jacobian.len());
 
@@ -258,10 +266,28 @@ impl Solver {
         let colours = entity_colours(sketch, &result, &jacobian, &result.index, params);
         let over_constraints = over_constraint_ids(sketch, &result, params);
 
+        // Advisory: a failure here must not fail a converged solve.
+        let redundant_constraints = redundant_constraint_ids(
+            sketch,
+            &result.state,
+            &result.index,
+            params,
+            &over_constraints,
+        )
+        .unwrap_or_else(|e| {
+            tracing::warn!(
+                target: "signex::sketch",
+                error = %e,
+                "redundant-constraint analysis failed; none are reported for this solve"
+            );
+            Vec::new()
+        });
+
         Ok(FullSolveOutput {
             result,
             colours,
             over_constraints,
+            redundant_constraints,
             jacobian,
             params: params.clone(),
         })

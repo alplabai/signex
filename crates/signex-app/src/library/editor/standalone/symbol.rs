@@ -16,6 +16,10 @@ use crate::library::messages::{
 use crate::library::state::LibraryDisplaySettings;
 use crate::panels::PanelContext;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 // ── Symbol ──────────────────────────────────────────────────────────
 
 /// Render the standalone Symbol editor for a `.snxsym` tab. Altium
@@ -85,7 +89,7 @@ fn view_symbol_status<'a>(
     let pin_count = format!("{} pins", editor.primitive().pins.len());
     let tool_text = format!("Tool: {}", editor.tool.label());
 
-    let sep = || text("|").size(10).color(muted);
+    let sep = || text("|").size(TS.caption).color(muted);
 
     // Grid toggle button.
     let grid_vis_label = if display.grid_visible {
@@ -93,8 +97,8 @@ fn view_symbol_status<'a>(
     } else {
         "Grid: OFF"
     };
-    let grid_toggle = button(text(grid_vis_label).size(11).color(text_c))
-        .padding([2, 6])
+    let grid_toggle = button(text(grid_vis_label).size(TS.body).color(text_c))
+        .padding([SP.xs, 6.0])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: path.to_path_buf(),
             msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ToggleGrid),
@@ -103,8 +107,8 @@ fn view_symbol_status<'a>(
 
     // Grid size cycle button.
     let grid_size_label = format!("{:.3} mm", display.grid_size_mm);
-    let grid_cycle = button(text(grid_size_label).size(11).color(muted))
-        .padding([2, 6])
+    let grid_cycle = button(text(grid_size_label).size(TS.body).color(muted))
+        .padding([SP.xs, 6.0])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: path.to_path_buf(),
             msg: PrimitiveEdit::Symbol(SymbolEditorMsg::CycleGridSize),
@@ -113,34 +117,34 @@ fn view_symbol_status<'a>(
 
     container(
         row![
-            text(coord_text).size(11).color(text_c),
+            text(coord_text).size(TS.body).color(text_c),
             sep(),
-            text(zoom_text).size(11).color(muted),
+            text(zoom_text).size(TS.body).color(muted),
             sep(),
-            text(pin_count).size(11).color(muted),
+            text(pin_count).size(TS.body).color(muted),
             sep(),
-            text(tool_text).size(11).color(muted),
+            text(tool_text).size(TS.body).color(muted),
             sep(),
             grid_toggle,
             grid_cycle,
             Space::new().width(Length::Fill),
             match &editor.status_message {
                 Some(msg) => text(msg.clone())
-                    .size(10)
+                    .size(TS.caption)
                     .color(theme_ext::error_color(tokens)),
                 None => text(if editor.selected.is_some() {
                     "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
                 } else {
                     "Ctrl+Z undo · Ctrl+Y redo · scroll zooms · right-drag pans · Home fits"
                 })
-                .size(10)
+                .size(TS.caption)
                 .color(muted),
             },
         ]
-        .spacing(8)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center),
     )
-    .padding([4, 12])
+    .padding([SP.s, SP.l])
     .style(crate::styles::status_bar(tokens))
     .width(Length::Fill)
     .into()
@@ -174,8 +178,8 @@ fn view_symbol_toolbar<'a>(
 
     // Helper: create a small toolbar button that emits a PrimitiveEditorEvent.
     let btn = |label: &'static str, msg: PrimitiveEdit| {
-        button(text(label).size(11).color(text_c))
-            .padding([4, 10])
+        button(text(label).size(TS.body).color(text_c))
+            .padding([SP.s, 10.0])
             .on_press(LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
                 msg,
@@ -187,14 +191,17 @@ fn view_symbol_toolbar<'a>(
     let active_part = editor.active_part;
 
     let save_label = if editor.dirty { "Save *" } else { "Save" };
+    let body_controls = body_toolbar(editor, &path, text_c, border);
 
     container(
         row![
             btn("Fit", PrimitiveEdit::Symbol(SymbolEditorMsg::Fit)),
             Space::new().width(Length::Fill),
+            body_controls,
+            Space::new().width(12),
             btn("\u{2190}", PrimitiveEdit::Symbol(SymbolEditorMsg::PrevPart)),
             text(format!("Part {active_part} / {max_part}"))
-                .size(11)
+                .size(TS.body)
                 .color(text_c),
             btn("\u{2192}", PrimitiveEdit::Symbol(SymbolEditorMsg::NextPart)),
             Space::new().width(6),
@@ -214,6 +221,54 @@ fn view_symbol_toolbar<'a>(
     )
     .padding([6, 10])
     .style(crate::styles::tab_bar_strip(tokens))
+    .into()
+}
+
+/// The De Morgan body controls: which body to show (Normal / Alternate) and
+/// whether the selection belongs to both bodies or only the shown one.
+fn body_toolbar<'a>(
+    editor: &SymbolDocument,
+    path: &std::path::Path,
+    text_c: iced::Color,
+    border: iced::Color,
+) -> Element<'a, LibraryMessage> {
+    use signex_types::schematic::BodyStyle;
+    let send = |msg: SymbolEditorMsg| LibraryMessage::PrimitiveEditorEvent {
+        path: path.to_path_buf(),
+        msg: PrimitiveEdit::Symbol(msg),
+    };
+    let button_for = |label: &'static str, active: bool, msg: SymbolEditorMsg| {
+        button(text(label).size(11).color(text_c))
+            .padding([4, 10])
+            .on_press(send(msg))
+            .style(symbol_tool_button_style(active, border))
+    };
+    let view = editor.view();
+    row![
+        text("Body").size(11).color(text_c),
+        button_for(
+            "Normal",
+            view.body == BodyStyle::Normal,
+            SymbolEditorMsg::BodyStyleSelected(BodyStyle::Normal),
+        ),
+        button_for(
+            "Alternate",
+            view.body == BodyStyle::Alternate,
+            SymbolEditorMsg::BodyStyleSelected(BodyStyle::Alternate),
+        ),
+        button_for(
+            "Both bodies",
+            false,
+            SymbolEditorMsg::SelectionBodyAssigned(signex_library::BODY_COMMON),
+        ),
+        button_for(
+            "This body only",
+            false,
+            SymbolEditorMsg::SelectionBodyAssigned(view.body_tag()),
+        ),
+    ]
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
     .into()
 }
 
@@ -247,7 +302,7 @@ fn view_symbol_canvas<'a>(
         editor.selected.clone(),
         editor.tool,
         &editor.polygon_vertices,
-        editor.active_part,
+        editor.view(),
         editor.context_menu.is_some(),
         &editor.camera,
         crate::canvas::grid::pitch_mm_exact(display.grid_size_mm),

@@ -33,9 +33,31 @@ pub fn placement_prefix(designator: &str) -> String {
     }
 }
 
+/// Validate a library row's prefix override: non-empty, ASCII letters only
+/// (so no `#`, digits or spaces), returned upper-cased. `Err` carries the
+/// reason, ready for the Messages panel.
+pub fn normalize_prefix_override(raw: &str) -> Result<String, &'static str> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("it is empty");
+    }
+    if !trimmed.chars().all(|c| c.is_ascii_alphabetic()) {
+        return Err("it must be ASCII letters only (no digits, spaces or '#')");
+    }
+    Ok(trimmed.to_ascii_uppercase())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prefix_override_is_upper_cased_letters_only() {
+        assert_eq!(normalize_prefix_override(" bt "), Ok("BT".to_owned()));
+        for bad in ["", "  ", "R1", "#PWR", "R?", "a b", "\u{e9}"] {
+            assert!(normalize_prefix_override(bad).is_err(), "{bad:?}");
+        }
+    }
 
     #[test]
     fn placement_prefix_keeps_a_leading_hash_and_defaults_to_u() {

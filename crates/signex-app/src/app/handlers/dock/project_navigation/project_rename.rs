@@ -9,7 +9,8 @@
 use std::path::{Path, PathBuf};
 
 use super::project_rename_fs::{
-    carry_closed_copies, folder_collides, folder_target, rename_project_on_disk, same_path_on_disk,
+    carry_closed_copies, folder_collides, folder_target, journal_closed_copies,
+    rename_project_on_disk, same_path_on_disk, unjournal_closed_copies,
 };
 use super::*;
 
@@ -90,6 +91,18 @@ impl Signex {
             return self.begin_project_folder_rename(job);
         }
 
+        // A write of the project file runs only after `update` returns, so
+        // waiting for it here would hang the app, and letting it land after
+        // the move would recreate the old file: refuse instead.
+        if self
+            .document_state
+            .document_saves
+            .is_saving(&state.target_path)
+        {
+            self.refuse_rename_while_project_saving();
+            return Task::none();
+        }
+
         // Only the file moves. Nothing else is written; the project's
         // in-memory record follows.
         if let Err(e) = std::fs::rename(&state.target_path, &new_prj) {
@@ -97,11 +110,11 @@ impl Signex {
             return Task::none();
         }
         self.rekey_renamed_project_file(idx, &state.target_path, &new_prj, new_stem);
-        self.replace_recent_project(&recent_key, &new_prj);
+        let recent_task = self.replace_recent_project(&recent_key, &new_prj);
         self.queue_project_rename_commit(&state.target_path, &new_prj, &old_stem, new_stem);
         self.ui_state.rename_dialog = None;
         self.refresh_panel_ctx();
-        Task::none()
+        recent_task
     }
 
     /// Whether the folder of the project at `idx` may follow a rename:
@@ -319,12 +332,21 @@ impl Signex {
         let run = job.clone();
         let recovery = self.document_state.autosave.dir().map(Path::to_path_buf);
         let open = self.open_document_paths();
+        let fold = self.fold_for_path(&job.old_dir);
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    rename_project_on_disk(&run)?;
+                    let journalled = recovery.as_deref().map(|recovery| {
+                        journal_closed_copies(recovery, &run.old_dir, &run.new_dir, &open, fold)
+                    });
+                    if let Err(why) = rename_project_on_disk(&run) {
+                        if let (Some(recovery), Some(journalled)) = (&recovery, &journalled) {
+                            unjournal_closed_copies(recovery, journalled);
+                        }
+                        return Err(why);
+                    }
                     if let Some(recovery) = recovery {
-                        carry_closed_copies(&recovery, &run.old_dir, &run.new_dir, &open);
+                        carry_closed_copies(&recovery, &run.old_dir, &run.new_dir, &open, fold);
                     }
                     Ok(())
                 })
@@ -375,6 +397,7 @@ impl Signex {
             // in-memory project there so it does not reference a missing file.
             let old_file = job.old_project_file();
             let renamed_in_old_dir = job.old_dir.join(format!("{}.snxprj", job.new_stem));
+            let mut recent_task = Task::none();
             if !old_file.exists()
                 && renamed_in_old_dir.exists()
                 && let Some(idx) = self
@@ -384,7 +407,7 @@ impl Signex {
                     .position(|p| p.id == job.project_id)
             {
                 self.rekey_renamed_project_file(idx, &old_file, &renamed_in_old_dir, &job.new_stem);
-                self.replace_recent_project(&job.recent_key, &renamed_in_old_dir);
+                recent_task = self.replace_recent_project(&job.recent_key, &renamed_in_old_dir);
                 self.queue_project_rename_commit(
                     &old_file,
                     &renamed_in_old_dir,
@@ -395,7 +418,7 @@ impl Signex {
             }
             self.run_deferred_git_commits(job, None);
             self.set_rename_error(&reason);
-            return Task::none();
+            return recent_task;
         }
         let old_file = job.old_project_file();
         let new_file = job.new_project_file();
@@ -421,10 +444,10 @@ impl Signex {
         } else {
             self.run_deferred_git_commits(job, None);
         }
-        self.replace_recent_project(&job.recent_key, &new_file);
+        let recent_task = self.replace_recent_project(&job.recent_key, &new_file);
         self.ui_state.rename_dialog = None;
         self.refresh_panel_ctx();
-        self.autosave_flush_moves()
+        Task::batch([recent_task, self.autosave_flush_moves()])
     }
 
     /// Update the in-memory project and any tab / engine that referenced
@@ -434,14 +457,27 @@ impl Signex {
             loaded.path = to.to_path_buf();
             loaded.data.name = new_stem.to_string();
         }
+        // A failure or queued save names the file by its old path.
+        self.document_state
+            .document_saves
+            .forget_where(|p| p == from);
+        crate::diagnostics::log_info(format!(
+            "[rename] Project file {} renamed to {}",
+            from.display(),
+            to.display()
+        ));
         for tab in self.document_state.tabs.iter_mut() {
             if tab.path == from {
                 tab.path = to.to_path_buf();
-                tab.title = new_stem.to_string();
+                tab.title = if tab.kind.as_project().is_some() {
+                    crate::app::project_tab::project_tab_title(to)
+                } else {
+                    new_stem.to_string()
+                };
             }
         }
-        if let Some(engine) = self.document_state.engines.remove(from) {
-            self.document_state.engines.insert(to.to_path_buf(), engine);
+        if let Some(engine) = self.document_state.remove_engine(from) {
+            self.document_state.insert_engine(to.to_path_buf(), engine);
         }
         if self.document_state.active_path.as_deref() == Some(from) {
             self.document_state.active_path = Some(to.to_path_buf());
@@ -450,6 +486,7 @@ impl Signex {
             self.document_state.dirty_paths.insert(to.to_path_buf());
         }
         self.rekey_page_setup(from, to);
+        self.rekey_undocked_windows(from, to);
     }
 
     /// Move every path-keyed record under the old project folder to the new
@@ -513,6 +550,7 @@ impl Signex {
                 &commit.message,
                 commit.replace_message,
                 commit.removed_path.map(&rebase).as_deref(),
+                None,
             );
         }
     }

@@ -54,6 +54,10 @@ impl SchematicCanvas<'_> {
                     // Small center dot for Altium-style feedback.
                     frame.fill(&canvas::Path::circle(p_a, 2.0), accent);
                 }
+                crate::canvas::ShapePreviewKind::Measure => {
+                    let to_point = |x: f64, y: f64| signex_types::schematic::Point::new(x, y);
+                    self.draw_measure_segment(frame, bounds, anchor, to_point(snap_x, snap_y));
+                }
             }
         }
     }

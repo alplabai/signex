@@ -55,6 +55,16 @@
     "category": "modify"
   },
   {
+    "id": "bring_drawings_forward",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "bring_drawings_to_front",
+    "group": "General",
+    "category": "edit"
+  },
+  {
     "id": "bring_to_front",
     "group": "Schematic",
     "category": "modify"
@@ -351,6 +361,11 @@
   },
   {
     "id": "footprint_mode_view_3d",
+    "group": "ThreeD",
+    "category": "library"
+  },
+  {
+    "id": "footprint_recompute_courtyard_outline",
     "group": "ThreeD",
     "category": "library"
   },
@@ -798,6 +813,16 @@
     "id": "select_node_or_connection_item",
     "group": "General",
     "category": "select"
+  },
+  {
+    "id": "send_drawings_backward",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "send_drawings_to_back",
+    "group": "General",
+    "category": "edit"
   },
   {
     "id": "send_to_back",

@@ -51,24 +51,31 @@ impl Signex {
     /// Clear every sheet's net colours (the global "Clear All Net Colors"),
     /// first pushing each sheet's own slice onto its document's undo stack,
     /// stamped with that engine's timeline, so Ctrl+Z in a sheet restores
-    /// that sheet's colours only.
-    pub(crate) fn clear_all_net_colors_undoably(&mut self) {
+    /// that sheet's colours only. Returns how many read-only sheets kept
+    /// their colours (#1402).
+    pub(crate) fn clear_all_net_colors_undoably(&mut self) -> usize {
         let overrides = &self.ui_state.wire_color_overrides;
-        let steps: Vec<_> = self
-            .document_state
-            .engines
-            .iter()
-            .filter_map(|(path, engine)| {
-                let colors = Self::sheet_net_colors(engine, overrides);
-                (!colors.is_empty()).then(|| {
-                    let step = crate::app::state::NetColorStep {
-                        colors,
-                        at: engine.undo_position(),
-                    };
-                    (path.clone(), step)
-                })
-            })
-            .collect();
+        // A read-only sheet keeps its colours: they are never touched, so
+        // there is nothing for an undo step to restore (#1402).
+        let mut kept = std::collections::HashSet::new();
+        let mut kept_sheets = 0_usize;
+        let mut steps = Vec::new();
+        for (path, engine) in &self.document_state.engines {
+            let colors = Self::sheet_net_colors(engine, overrides);
+            if colors.is_empty() {
+                continue;
+            }
+            if engine.document().is_read_only() {
+                kept.extend(colors.into_keys());
+                kept_sheets += 1;
+                continue;
+            }
+            let step = crate::app::state::NetColorStep {
+                colors,
+                at: engine.undo_position(),
+            };
+            steps.push((path.clone(), step));
+        }
         for (path, step) in steps {
             self.ui_state.net_color_redo.remove(&path);
             self.mark_net_colors_dirty(&path);
@@ -78,7 +85,15 @@ impl Signex {
                 .or_default()
                 .push(step);
         }
-        self.ui_state.wire_color_overrides.clear();
+        self.ui_state
+            .wire_color_overrides
+            .retain(|id, _| kept.contains(id));
+        if kept_sheets > 0 {
+            crate::diagnostics::log_warning(format!(
+                "Not changed: net colours on {kept_sheets} read-only sheet(s) written by a newer Signex were kept."
+            ));
+        }
+        kept_sheets
     }
 
     /// Drop a closing schematic's wire and junction colours from the map.
@@ -111,9 +126,15 @@ impl Signex {
 
     /// Record the active sheet's overrides as an undoable step, before a
     /// net-colour change. A new colour action ends the redo branch.
-    pub(crate) fn record_net_color_undo(&mut self) {
+    ///
+    /// Returns `false` when the active sheet is read-only: the refusal is in
+    /// Messages and the caller must leave the colours alone (#1402).
+    pub(crate) fn record_net_color_undo(&mut self) -> bool {
+        if self.refuse_if_active_read_only().is_some() {
+            return false;
+        }
         let Some(path) = self.document_state.active_path.clone() else {
-            return;
+            return true;
         };
         let at = self.engine_undo_position();
         let colors = self.active_sheet_net_colors();
@@ -124,6 +145,7 @@ impl Signex {
             .entry(path)
             .or_default()
             .push(crate::app::state::NetColorStep { colors, at });
+        true
     }
 
     /// Forget a document's colour steps, e.g. when its engine is replaced.
@@ -158,6 +180,11 @@ impl Signex {
     }
 
     pub(crate) fn handle_undo_requested(&mut self) {
+        // A Project tab undoes its own section edits (#1202).
+        if let Some(project_id) = self.active_project_tab() {
+            self.step_project_tab_history(project_id, true);
+            return;
+        }
         // If the active tab is a symbol editor, delegate undo to it.
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
@@ -208,6 +235,11 @@ impl Signex {
     }
 
     pub(crate) fn handle_redo_requested(&mut self) {
+        // A Project tab redoes its own section edits (#1202).
+        if let Some(project_id) = self.active_project_tab() {
+            self.step_project_tab_history(project_id, false);
+            return;
+        }
         // If the active tab is a symbol editor, delegate redo to it.
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
@@ -256,6 +288,17 @@ impl Signex {
         edit: crate::app::contracts::DrawingFieldEdit,
     ) -> iced::Task<crate::app::Message> {
         use signex_types::schematic::SchDrawing;
+        if let crate::app::contracts::DrawingFieldEdit::Placement(placement) = edit {
+            self.apply_engine_command(
+                signex_engine::Command::SetDrawingPlacement {
+                    ids: vec![target_uuid],
+                    placement,
+                },
+                true,
+                true,
+            );
+            return iced::Task::none();
+        }
         let Some(engine) = self.document_state.active_engine() else {
             return iced::Task::none();
         };
@@ -343,8 +386,10 @@ fn apply_drawing_edit(
         // Rect position / size — preserved by repositioning start/end.
         (SchDrawing::Rect { start, end, .. }, E::RectStartX(v)) => {
             let w_mm = (start.x.max(end.x)) - (start.x.min(end.x));
-            *start = Point::new(v, start.y.min(end.y));
-            *end = Point::new(v + w_mm, start.y.max(end.y));
+            let y0 = start.y.min(end.y);
+            let y1 = start.y.max(end.y);
+            *start = Point::new(v, y0);
+            *end = Point::new(v + w_mm, y1);
         }
         (SchDrawing::Rect { start, end, .. }, E::RectStartY(v)) => {
             let h_mm = (end.y - start.y).abs();
@@ -445,3 +490,5 @@ mod net_color_persist;
 mod net_color_persist_tests;
 #[cfg(test)]
 mod net_color_undo_order_tests;
+#[cfg(test)]
+mod rect_edit_tests;

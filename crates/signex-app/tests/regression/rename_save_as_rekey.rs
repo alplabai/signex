@@ -68,6 +68,7 @@ fn renaming_a_dirty_sheet_moves_its_dirty_marker_and_dirties_the_project() {
         id,
         path: prj_path.clone(),
         data: ProjectData {
+            description: None,
             name: "Proj".to_string(),
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: Some("Power.snxsch".to_string()),
@@ -87,11 +88,13 @@ fn renaming_a_dirty_sheet_moves_its_dirty_marker_and_dirties_the_project() {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
     open_sheet(&mut app, &old, true);
@@ -140,6 +143,7 @@ fn renaming_a_non_sheet_file_does_not_dirty_the_project() {
         id,
         path: prj_path.clone(),
         data: ProjectData {
+            description: None,
             name: "Proj".to_string(),
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: Some("Power.snxsch".to_string()),
@@ -159,11 +163,13 @@ fn renaming_a_non_sheet_file_does_not_dirty_the_project() {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
 

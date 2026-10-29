@@ -38,6 +38,18 @@ impl Signex {
         request: ReadRequest,
         result: Result<Box<LoadedDocument>, OpenFailure>,
     ) -> Task<Message> {
+        let path = request.path.clone();
+        let task = self.finish_document_read(request, result);
+        // A Create Sheet request from the Projects tree was waiting on it.
+        self.resume_create_sheet(&path, true);
+        task
+    }
+
+    fn finish_document_read(
+        &mut self,
+        request: ReadRequest,
+        result: Result<Box<LoadedDocument>, OpenFailure>,
+    ) -> Task<Message> {
         if !self
             .document_state
             .pending_opens
@@ -88,6 +100,7 @@ impl Signex {
     /// running, so none of them reopens a tab afterwards.
     pub(crate) fn cancel_in_flight_reads(&mut self) {
         self.document_state.pending_opens.cancel_all();
+        self.ui_state.pending_create_sheet = None;
         self.document_state.pending_restores.cancel_all_retaining();
     }
 

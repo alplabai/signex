@@ -29,7 +29,7 @@
 //! synchronous; making it async would force the whole trait surface
 //! to gain `async fn`. Async cascade is a v1.x concern.
 
-use crate::adapter::{LibraryAdapter, LibraryError};
+use crate::adapter::{LibraryAdapter, LibraryError, RowEdit, RowEditOutcome};
 use crate::component::ComponentRow;
 use crate::identity::RowId;
 use crate::manifest::WorkflowMode;
@@ -182,34 +182,41 @@ fn single_save(
 /// version is skipped, so repeating a cascade never double-bumps a row.
 /// Under [`WorkflowMode::Personal`], or for an unreleased row, the pin
 /// advances and the row's own version patch-bumps; a released row under
-/// Team keeps its pin and is reported as stale. A row that fails to update
-/// is recorded in [`CascadeReport::failed`] and the pass goes on. Each
-/// row is its own locked write and git commit
-/// ([`LibraryAdapter::bind_row_primitive_version`]).
+/// Team keeps its pin and is reported as stale. Every row to bump goes to
+/// the adapter in one [`LibraryAdapter::update_rows`] call: the local
+/// library writes its `.snxlib` once and commits once for the whole
+/// cascade; an adapter without a batch write updates the rows in order and
+/// stops at the first failure. A row that fails to update is recorded in
+/// [`CascadeReport::failed`], never returned as an error.
 pub fn cascade_after_saves(
     adapter: &dyn LibraryAdapter,
     saves: &[PrimitiveSave],
     mode: WorkflowMode,
 ) -> Result<CascadeReport, LibraryError> {
-    cascade_with(adapter, saves, mode, &mut |table, row_id, save, msg| {
-        adapter.bind_row_primitive_version(table, row_id, save, msg)
+    cascade_with(adapter, saves, mode, &mut |targets, edit, msg| {
+        adapter.update_rows(targets, edit, msg)
     })
 }
 
-type BumpRow<'a> = dyn FnMut(&str, RowId, &PrimitiveSave, &str) -> Result<bool, LibraryError> + 'a;
+/// The batch write of a cascade: the rows to bump, the edit that bumps
+/// one, the commit message; one outcome per row.
+type WriteBatch<'a> = dyn FnMut(&[(String, RowId)], &mut RowEdit<'_>, &str) -> Result<Vec<RowEditOutcome>, LibraryError>
+    + 'a;
 
 fn cascade_with(
     adapter: &dyn LibraryAdapter,
     saves: &[PrimitiveSave],
     mode: WorkflowMode,
-    bump: &mut BumpRow<'_>,
+    write: &mut WriteBatch<'_>,
 ) -> Result<CascadeReport, LibraryError> {
     let mut report = CascadeReport::default();
     if saves.is_empty() {
         return Ok(report);
     }
+    let mut targets: Vec<(String, RowId)> = Vec::new();
     for (table, row) in adapter.iter_rows()? {
         let row_id = RowId::from_uuid(row.row_id);
+        let mut bump = false;
         for save in saves {
             if !needs_bump(&row, save) {
                 continue;
@@ -218,11 +225,43 @@ fn cascade_with(
                 report.stale.push(row_id);
                 continue;
             }
-            let msg = cascade_commit_message(save.kind, save.uuid, &save.version, &row_id);
-            match bump(&table, row_id, save, &msg) {
-                Ok(_) => report.auto_bumped.push(row_id),
-                Err(e) => report.failed.push((row_id, e.to_string())),
+            bump = true;
+        }
+        if bump {
+            targets.push((table, row_id));
+        }
+    }
+    if targets.is_empty() {
+        return Ok(report);
+    }
+    // The rows are re-read at write time, so each is checked again against
+    // the saves: a row another writer already moved is left alone.
+    let mut edit = |row: &mut ComponentRow| {
+        let mut changed = false;
+        for save in saves {
+            if needs_bump(row, save) {
+                apply_cascade_bump(row, save);
+                changed = true;
             }
+        }
+        changed
+    };
+    let msg = cascade_commit_message(saves, targets.len());
+    match write(&targets, &mut edit, &msg) {
+        Ok(outcomes) => {
+            for (row_id, outcome) in outcomes {
+                match outcome {
+                    Ok(true) => report.auto_bumped.push(row_id),
+                    Ok(false) => {}
+                    Err(e) => report.failed.push((row_id, e.to_string())),
+                }
+            }
+        }
+        Err(e) => {
+            let reason = e.to_string();
+            report
+                .failed
+                .extend(targets.iter().map(|(_, id)| (*id, reason.clone())));
         }
     }
     Ok(report)
@@ -290,24 +329,22 @@ pub(crate) fn apply_cascade_bump(row: &mut ComponentRow, save: &PrimitiveSave) {
     row.updated = chrono::Utc::now();
 }
 
-/// Synthesise the git commit message for a cascade-driven row update.
-///
-/// The plan §3.5.cascade calls for a single combined commit covering
-/// the primitive save + every cascaded row update; for v0.9 simplicity
-/// we emit one commit per row with a clearly-marked subject so the
-/// audit trail still groups visually under the same primitive UUID.
-/// A future polish pass can fold these into the parent save's commit.
-fn cascade_commit_message(
-    kind: CascadeKind,
-    primitive_uuid: Uuid,
-    new_version: &str,
-    row_id: &RowId,
-) -> String {
-    format!(
-        "cascade: bump {kind_label} {short_uuid} to v{new_version} on row {row_id}",
-        kind_label = kind.label(),
-        short_uuid = short_uuid(primitive_uuid),
-    )
+/// Synthesise the one git commit message of a cascade: it names each saved
+/// primitive and how many rows the commit moved, so the audit trail
+/// groups under the primitive UUID.
+fn cascade_commit_message(saves: &[PrimitiveSave], rows: usize) -> String {
+    let what: Vec<String> = saves
+        .iter()
+        .map(|s| {
+            format!(
+                "{} {} to v{}",
+                s.kind.label(),
+                short_uuid(s.uuid),
+                s.version
+            )
+        })
+        .collect();
+    format!("cascade: bump {} on {rows} row(s)", what.join(", "))
 }
 
 fn short_uuid(uuid: Uuid) -> String {
@@ -388,6 +425,7 @@ mod tests {
                 class: ComponentClass::new("resistor"),
                 datasheet: DatasheetRef::default(),
                 datasheet_label: String::new(),
+                description: String::new(),
                 more_datasheets: Vec::new(),
                 state: LifecycleState::Draft,
                 symbol_ref: PrimitiveRef::new(library_id, symbol),
@@ -441,11 +479,17 @@ mod tests {
                 &adapter,
                 &[save(lib, symbol)],
                 WorkflowMode::Personal,
-                &mut |table, id, save, msg| {
-                    if id == bad {
-                        return Err(LibraryError::Backend("disk full".into()));
-                    }
-                    adapter.bind_row_primitive_version(table, id, save, msg)
+                &mut |targets, edit, msg| {
+                    // The adapter writes every row but `bad`, which fails.
+                    let (bad_target, rest): (Vec<_>, Vec<_>) =
+                        targets.iter().cloned().partition(|(_, id)| *id == bad);
+                    let mut outcomes = adapter.update_rows(&rest, edit, msg)?;
+                    outcomes.extend(
+                        bad_target
+                            .iter()
+                            .map(|(_, id)| (*id, Err(LibraryError::Backend("disk full".into())))),
+                    );
+                    Ok(outcomes)
                 },
             )
             .unwrap();
@@ -502,11 +546,13 @@ mod tests {
                 &adapter,
                 &[save(lib, symbol)],
                 WorkflowMode::Personal,
-                &mut |table, id, save, msg| {
-                    let mut edited = other.read_row(table, id).unwrap();
-                    edited.primary_mpn = ManufacturerPart::draft("Acme", "EDITED-MPN");
-                    other.update_row(table, edited, "edit").unwrap();
-                    adapter.bind_row_primitive_version(table, id, save, msg)
+                &mut |targets, edit, msg| {
+                    for (table, id) in targets {
+                        let mut edited = other.read_row(table, *id).unwrap();
+                        edited.primary_mpn = ManufacturerPart::draft("Acme", "EDITED-MPN");
+                        other.update_row(table, edited, "edit").unwrap();
+                    }
+                    adapter.update_rows(targets, edit, msg)
                 },
             )
             .unwrap();

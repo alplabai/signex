@@ -4,8 +4,11 @@ use super::super::super::*;
 
 mod add;
 pub(crate) mod add_io;
+pub(crate) use add::register_sheet_entry;
 #[cfg(test)]
 mod add_library_tests;
+#[cfg(test)]
+mod add_subdir_tests;
 #[cfg(test)]
 mod add_tests;
 mod close_project;
@@ -17,12 +20,25 @@ mod exclude_dirty;
 mod exclude_dirty_tests;
 #[cfg(test)]
 mod library_row_tests;
+mod missing_child;
+#[cfg(test)]
+mod nested_row_incomplete_tests;
+#[cfg(test)]
+mod nested_row_messages_tests;
+#[cfg(test)]
+mod nested_row_safety_tests;
+#[cfg(test)]
+mod nested_row_spelling_tests;
+#[cfg(test)]
+mod nested_row_tests;
 mod open_document;
 mod project_actions;
 mod project_rename;
 mod project_rename_fs;
 #[cfg(test)]
 mod project_rename_inflight_tests;
+#[cfg(test)]
+mod project_rename_recovery_tests;
 #[cfg(test)]
 mod project_rename_tests;
 mod remove;
@@ -31,10 +47,17 @@ mod rename;
 mod rename_library;
 mod save_all;
 #[cfg(test)]
+mod save_all_case_variant_tests;
+#[cfg(test)]
 mod save_all_gate_tests;
 #[cfg(test)]
 mod save_all_tests;
 mod sheet_references;
+pub(crate) mod sheet_users;
+#[cfg(test)]
+mod subdir_entry_tests;
+#[cfg(test)]
+mod tree_key_tests;
 mod version_control;
 
 impl Signex {
@@ -110,7 +133,9 @@ impl Signex {
                 );
                 if is_double {
                     self.interaction_state.last_tree_click = None;
-                    if let Some(node) = selected_node {
+                    if let Some(missing) = self.missing_child_sheet_at(path) {
+                        follow = self.offer_create_child_sheet(&missing);
+                    } else if let Some(node) = selected_node {
                         match self.open_project_tree_document(path, node.label.clone()) {
                             Ok(task) => follow = task,
                             Err(error) => crate::diagnostics::log_error(
@@ -161,8 +186,25 @@ impl Signex {
         // menu is always wrong after a pick.
         self.interaction_state.project_tree_context_menu = None;
 
+        // Resolve the row the action names against the tree as it is now,
+        // so a rebuild or reorder since the menu opened cannot retarget it.
+        // A row that no longer exists drops the action.
+        let tree_path = match action.row_key() {
+            Some(key) => match self.resolve_tree_row(key) {
+                Some(path) => path,
+                None => {
+                    crate::diagnostics::log_warning(
+                        "Project tree action dropped: its row is gone or moved under another sheet since the menu opened. Open the menu again on the row.",
+                    );
+                    return Task::none();
+                }
+            },
+            None => Vec::new(),
+        };
+
         match action {
-            ProjectTreeAction::OpenNode(path) => {
+            ProjectTreeAction::OpenNode(_) => {
+                let path = tree_path;
                 // Reuse the existing leaf-open path. Wrapping the inner
                 // call in the same PanelMsg handler keeps the icon-gate
                 // logic (only schematic / pcb / snx* leaves open) in
@@ -178,7 +220,8 @@ impl Signex {
                     }
                 }
             }
-            ProjectTreeAction::ToggleNode(path) => {
+            ProjectTreeAction::ToggleNode(_) => {
+                let path = tree_path;
                 signex_widgets::tree_view::toggle(
                     &mut self.document_state.panel_ctx.project_tree,
                     &path,
@@ -206,7 +249,7 @@ impl Signex {
                 }
                 return Task::batch(tasks);
             }
-            ProjectTreeAction::RevealInExplorer(tree_path) => {
+            ProjectTreeAction::RevealInExplorer(_) => {
                 // The tree_path's first index picks the owning project,
                 // so right-clicking project B's leaf reveals in B's dir
                 // even when project A is active. Single-element path =
@@ -230,37 +273,39 @@ impl Signex {
                     Message::PrintPreview(PrintPreviewMsg::Requested)
                 });
             }
-            ProjectTreeAction::OpenRenameDialog(tree_path) => {
+            ProjectTreeAction::OpenRenameDialog(_) => {
                 self.open_rename_dialog(tree_path);
             }
-            ProjectTreeAction::OpenRemoveDialog(tree_path) => {
+            ProjectTreeAction::OpenRemoveDialog(_) => {
                 self.open_remove_dialog(tree_path);
             }
-            ProjectTreeAction::CloseProject(tree_path) => {
+            ProjectTreeAction::CloseProject(_) => {
                 return self.close_project_at_tree_path(&tree_path);
             }
-            ProjectTreeAction::ValidateProject(tree_path) => {
+            ProjectTreeAction::ValidateProject(_) => {
                 return self.run_validate_project(tree_path);
             }
-            ProjectTreeAction::OpenProjectRenameDialog(tree_path) => {
+            ProjectTreeAction::OpenProjectRenameDialog(_) => {
                 self.open_project_rename_dialog(tree_path);
             }
-            ProjectTreeAction::OpenProjectOptions(tree_path) => {
-                self.open_project_options_dialog(tree_path);
+            ProjectTreeAction::OpenProjectOptions(_) => {
+                if let Some(&project_idx) = tree_path.first() {
+                    self.open_project_tab(project_idx);
+                }
             }
-            ProjectTreeAction::AddExistingToProject(tree_path) => {
+            ProjectTreeAction::AddExistingToProject(_) => {
                 return self.add_existing_to_project(tree_path);
             }
-            ProjectTreeAction::AddNewSchematic(tree_path) => {
+            ProjectTreeAction::AddNewSchematic(_) => {
                 return self.add_new_schematic(tree_path);
             }
-            ProjectTreeAction::AddProjectSymbolLibrary(tree_path) => {
+            ProjectTreeAction::AddProjectSymbolLibrary(_) => {
                 return self.add_project_symbol_library(tree_path);
             }
-            ProjectTreeAction::AddProjectFootprintLibrary(tree_path) => {
+            ProjectTreeAction::AddProjectFootprintLibrary(_) => {
                 return self.add_project_footprint_library(tree_path);
             }
-            ProjectTreeAction::OpenEnableVersionControl(tree_path) => {
+            ProjectTreeAction::OpenEnableVersionControl(_) => {
                 self.open_enable_version_control_dialog(tree_path);
             }
             ProjectTreeAction::OpenLibraryEnableVersionControl(row) => {

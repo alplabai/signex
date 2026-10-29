@@ -134,7 +134,7 @@ mod tests {
             .push(Entity::new(p4, plane, EntityKind::Point { x: 0.0, y: 1.0 }));
         let l1 = SketchEntityId::new();
         let mut line1 = Entity::new(l1, plane, EntityKind::Line { start: p1, end: p2 });
-        line1.courtyard = Some(CourtyardAttr);
+        line1.courtyard = Some(CourtyardAttr {});
         data.entities.push(line1);
         let l2 = SketchEntityId::new();
         let l3 = SketchEntityId::new();
@@ -179,7 +179,7 @@ mod tests {
             .iter_mut()
             .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
         {
-            e.courtyard = Some(CourtyardAttr);
+            e.courtyard = Some(CourtyardAttr {});
         }
         let solved = solve(&data);
         let mut courtyard = Polygon::default();
@@ -213,7 +213,7 @@ mod tests {
                     end: corners[(i + 1) % 4],
                 },
             );
-            line.courtyard = Some(CourtyardAttr);
+            line.courtyard = Some(CourtyardAttr {});
             data.entities.push(line);
         }
 
@@ -256,7 +256,7 @@ mod tests {
             plane,
             EntityKind::Line { start: p1, end: p2 },
         );
-        l1.courtyard = Some(CourtyardAttr);
+        l1.courtyard = Some(CourtyardAttr {});
         data.entities.push(l1);
         data.entities.push(Entity::new(
             SketchEntityId::new(),
@@ -319,7 +319,7 @@ mod tests {
                 end: pts[1],
             },
         );
-        line.courtyard = Some(CourtyardAttr);
+        line.courtyard = Some(CourtyardAttr {});
         data.entities.push(line);
         data.entities.push(Entity::new(
             SketchEntityId::new(),

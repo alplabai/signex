@@ -167,6 +167,7 @@ pub(crate) fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
         id,
         path: PathBuf::from(dir).join("ProjectA.snxprj"),
         data: ProjectData {
+            description: None,
             name: "ProjectA".to_string(),
             dir: dir.to_string(),
             schematic_root: listed.first().map(|f| (*f).to_string()),
@@ -189,11 +190,13 @@ pub(crate) fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     // The sticky pointer every one of these regressions is about.
     app.document_state.active_project = Some(id);
@@ -1005,6 +1008,7 @@ pub(crate) mod current_placement;
 
 mod lazy_preview;
 mod sheet_numbering;
+mod tree_nesting_pins;
 
 /// Append a second loaded project (`listed` sheets under `dir`) to `app`.
 pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
@@ -1013,6 +1017,7 @@ pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
         id,
         path: PathBuf::from(dir).join("Other.snxprj"),
         data: ProjectData {
+            description: None,
             name: "Other".to_string(),
             dir: dir.to_string(),
             schematic_root: listed.first().map(|f| (*f).to_string()),
@@ -1035,11 +1040,13 @@ pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
 }
 

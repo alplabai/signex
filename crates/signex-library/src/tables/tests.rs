@@ -4,91 +4,56 @@ use crate::param::ParamValue;
 use chrono::{Duration, TimeZone};
 use uuid::Uuid;
 
-/// True if `dir` contains a leftover atomic-write temp sibling
-/// (`*.tmp`). `atomic_write` picks a unique per-writer name (#416),
-/// so tests must scan for any match instead of a fixed name.
-fn has_stray_tmp(dir: &std::path::Path) -> bool {
-    std::fs::read_dir(dir)
-        .unwrap()
-        .filter_map(Result::ok)
-        .any(|entry| entry.path().extension().is_some_and(|ext| ext == "tmp"))
+use crate::validate::validate_row_for_write;
+use csv::{QuoteStyle, ReaderBuilder, WriterBuilder};
+
+/// Parse a whole TSV table the way the `.snxlib` codec parses a table body.
+fn read_table(path: &std::path::Path) -> Result<Vec<ComponentRow>, LibraryError> {
+    let bytes = std::fs::read(path).map_err(LibraryError::Io)?;
+    let mut rdr = ReaderBuilder::new()
+        .delimiter(b'\t')
+        .has_headers(true)
+        .from_reader(&bytes[..]);
+    let headers = rdr
+        .headers()
+        .map_err(|e| LibraryError::Backend(format!("read headers: {e}")))?;
+    let columns: Vec<&str> = headers.iter().collect();
+    check_columns(&columns)
+        .map_err(|e| LibraryError::Backend(format!("table schema mismatch: {e}")))?;
+    let mut rows = Vec::new();
+    for record in rdr.records() {
+        let record = record.map_err(|e| LibraryError::Backend(format!("read row: {e}")))?;
+        rows.push(record_to_row(&record)?);
+    }
+    Ok(rows)
 }
 
-/// RAII guard: while alive, `dir` rejects new-file creation, so
-/// `atomic_write`'s `File::create(&tmp)` fails deterministically
-/// regardless of the unique per-writer temp name it picks (#416).
-/// Restores permissions on drop.
-///
-/// On Windows, `icacls`'s exit code is not proof the deny is enforced
-/// yet — under full-workspace parallel test load its write to the
-/// directory's security descriptor can lose the race against the very
-/// next `File::create` in the same directory (#482), so `on` settles
-/// the deny with a real probe write before returning.
-struct DenyNewFiles {
-    dir: std::path::PathBuf,
-}
-
-impl DenyNewFiles {
-    fn on(dir: &std::path::Path) -> Self {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o555))
-                .expect("chmod dir read-only for test");
-        }
-        #[cfg(windows)]
-        {
-            let user = std::env::var("USERNAME").unwrap_or_else(|_| "Everyone".into());
-            let status = std::process::Command::new("icacls")
-                .arg(dir)
-                .arg("/deny")
-                .arg(format!("{user}:(WD)"))
-                .status()
-                .expect("run icacls /deny for test");
-            assert!(status.success(), "icacls /deny failed");
-            Self::settle_deny(dir);
-        }
-        Self {
-            dir: dir.to_path_buf(),
-        }
+/// Serialise `rows` as a TSV table, appending the alternate-symbols column
+/// only when some row has one.
+fn write_table(path: &std::path::Path, rows: &[ComponentRow]) -> Result<(), LibraryError> {
+    let mut wtr = WriterBuilder::new()
+        .delimiter(b'\t')
+        .quote_style(QuoteStyle::Necessary)
+        .from_writer(Vec::<u8>::new());
+    let with_alternates = rows.iter().any(|r| !r.alternate_symbols.is_empty());
+    let mut header: Vec<&str> = TABLE_HEADER.to_vec();
+    if with_alternates {
+        header.push(ALTERNATE_SYMBOLS_COLUMN);
     }
-
-    /// Poll with a real probe write instead of trusting `icacls`'s exit
-    /// code, so the caller never proceeds through a window where the
-    /// directory still silently accepts new files (#482).
-    #[cfg(windows)]
-    fn settle_deny(dir: &std::path::Path) {
-        let probe = dir.join(format!(".icacls-settle-probe-{}", std::process::id()));
-        for _ in 0..100 {
-            match std::fs::File::create(&probe) {
-                Ok(_) => {
-                    let _ = std::fs::remove_file(&probe);
-                    std::thread::sleep(std::time::Duration::from_millis(10));
-                }
-                Err(_) => return,
-            }
+    wtr.write_record(&header)
+        .map_err(|e| LibraryError::Backend(format!("write header: {e}")))?;
+    for row in rows {
+        let mut record = row_to_record(row)?;
+        if with_alternates {
+            record.push(alternate_symbols_cell(row)?.unwrap_or_default());
         }
-        panic!("icacls /deny on {dir:?} did not take effect within 1s (#482)");
+        wtr.write_record(record)
+            .map_err(|e| LibraryError::Backend(format!("write row: {e}")))?;
     }
-}
-
-impl Drop for DenyNewFiles {
-    fn drop(&mut self) {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&self.dir, std::fs::Permissions::from_mode(0o755));
-        }
-        #[cfg(windows)]
-        {
-            let user = std::env::var("USERNAME").unwrap_or_else(|_| "Everyone".into());
-            let _ = std::process::Command::new("icacls")
-                .arg(&self.dir)
-                .arg("/remove:d")
-                .arg(&user)
-                .status();
-        }
-    }
+    let bytes = wtr
+        .into_inner()
+        .map_err(|e| LibraryError::Backend(format!("flush table: {e}")))?;
+    std::fs::write(path, bytes).map_err(LibraryError::Io)
 }
 
 fn mk_row(internal_pn: &str, class: &str) -> ComponentRow {
@@ -104,6 +69,7 @@ fn mk_row(internal_pn: &str, class: &str) -> ComponentRow {
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Released,
         symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
@@ -155,6 +121,17 @@ fn tsv_roundtrip_preserves_every_document() {
     assert_eq!(back[0].more_datasheets.len(), 2);
 }
 
+/// The description is a plain schema column and round-trips with quotes
+/// and non-ASCII text.
+#[test]
+fn a_description_round_trips() {
+    let mut row = mk_row("R1", "resistor");
+    row.description = "100 nF, \"X7R\", 50 V µ".into();
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    write_table(tmp.path(), std::slice::from_ref(&row)).unwrap();
+    assert_eq!(read_table(tmp.path()).unwrap(), vec![row]);
+}
+
 /// A row with one unlabelled document keeps the single-object cell it
 /// has always had, so existing tables are rewritten byte for byte.
 #[test]
@@ -180,94 +157,6 @@ fn an_empty_document_list_reads_as_no_datasheet() {
     assert!(row.datasheet_label.is_empty() && row.more_datasheets.is_empty());
 }
 
-/// Empty file (no header) reads back as empty vec.
-#[test]
-fn read_missing_file_is_empty() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("does-not-exist.tsv");
-    let rows = read_table(&path).unwrap();
-    assert!(rows.is_empty());
-}
-
-/// `append_row` honours an empty file, then keeps growing it — and
-/// leaves no stranded `.tmp` sibling behind.
-#[test]
-fn append_row_grows_the_file() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("table.tsv");
-    let a = mk_row("R1", "resistor");
-    let b = mk_row("R2", "resistor");
-    append_row(&path, &a).unwrap();
-    append_row(&path, &b).unwrap();
-    let back = read_table(&path).unwrap();
-    assert_eq!(back, vec![a, b]);
-    assert!(!has_stray_tmp(dir.path()));
-}
-
-/// `write_table` must go through `atomic_write`, not `fs::write`:
-/// a failed save leaves the previous table fully intact.
-///
-/// Discriminator: denying new-file creation in the destination's
-/// parent directory makes `atomic_write`'s `File::create(&tmp)` fail
-/// before it can touch the destination, regardless of the unique
-/// per-writer temp name it picks (#416). A plain `fs::write` would
-/// ignore that and clobber the old rows — so this test fails on a
-/// revert.
-#[test]
-fn write_table_is_atomic_and_preserves_original_on_failure() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("table.tsv");
-    let original = vec![mk_row("R1", "resistor"), mk_row("R2", "resistor")];
-    write_table(&path, &original).unwrap();
-
-    let _deny = DenyNewFiles::on(dir.path());
-    let err = write_table(&path, &[mk_row("C1", "capacitor")]).unwrap_err();
-    assert!(matches!(err, LibraryError::Io(_)), "got {err:?}");
-
-    assert_eq!(read_table(&path).unwrap(), original);
-}
-
-/// #1056: a NaN parameter is refused, the error names the row and the
-/// key, and the file on disk is byte-identical afterwards.
-#[test]
-fn write_table_refuses_nan_parameter_and_keeps_file() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("table.tsv");
-    write_table(&path, &[mk_row("R1", "resistor")]).unwrap();
-    let before = std::fs::read(&path).unwrap();
-
-    let mut bad = mk_row("R_BAD", "resistor");
-    bad.parameters
-        .insert("tolerance".into(), ParamValue::Number(f64::NAN));
-    let err = write_table(&path, &[mk_row("R1", "resistor"), bad.clone()]).unwrap_err();
-    let msg = err.to_string();
-    assert!(msg.contains("R_BAD"), "row not named: {msg}");
-    assert!(msg.contains(&bad.row_id.to_string()), "row id: {msg}");
-    assert!(msg.contains("tolerance"), "key not named: {msg}");
-    assert_eq!(std::fs::read(&path).unwrap(), before);
-    assert!(read_table(&path).is_ok());
-}
-
-/// #1056: an infinite Measurement is refused too.
-#[test]
-fn write_table_refuses_infinite_measurement() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("table.tsv");
-    write_table(&path, &[mk_row("C0", "capacitor")]).unwrap();
-    let before = std::fs::read(&path).unwrap();
-    let mut bad = mk_row("C1", "capacitor");
-    bad.parameters.insert(
-        "voltage".into(),
-        ParamValue::Measurement {
-            value: f64::NEG_INFINITY,
-            unit: "V".into(),
-        },
-    );
-    let err = write_table(&path, &[bad]).unwrap_err();
-    assert!(err.to_string().contains("voltage"), "got {err}");
-    assert_eq!(std::fs::read(&path).unwrap(), before);
-}
-
 /// #1056: finite numbers and measurements still round-trip unchanged.
 #[test]
 fn write_table_round_trips_finite_parameters() {
@@ -284,48 +173,6 @@ fn write_table_round_trips_finite_parameters() {
     );
     write_table(&path, std::slice::from_ref(&row)).unwrap();
     assert_eq!(read_table(&path).unwrap(), vec![row]);
-}
-
-/// `delete_row` removes the matching id, leaves others alone.
-#[test]
-fn delete_row_removes_only_matching_id() {
-    let tmp = tempfile::NamedTempFile::new().unwrap();
-    let a = mk_row("R1", "resistor");
-    let b = mk_row("R2", "resistor");
-    write_table(tmp.path(), &[a.clone(), b.clone()]).unwrap();
-    delete_row(tmp.path(), RowId::from_uuid(a.row_id)).unwrap();
-    let back = read_table(tmp.path()).unwrap();
-    assert_eq!(back, vec![b]);
-}
-
-#[test]
-fn delete_row_missing_returns_not_found() {
-    let tmp = tempfile::NamedTempFile::new().unwrap();
-    let a = mk_row("R1", "resistor");
-    write_table(tmp.path(), &[a]).unwrap();
-    let err = delete_row(tmp.path(), RowId::new()).unwrap_err();
-    assert!(matches!(err, LibraryError::NotFound(_)));
-}
-
-/// `update_row` replaces a row in-place by id.
-#[test]
-fn update_row_replaces_in_place() {
-    let tmp = tempfile::NamedTempFile::new().unwrap();
-    let mut a = mk_row("R1", "resistor");
-    let b = mk_row("R2", "resistor");
-    write_table(tmp.path(), &[a.clone(), b.clone()]).unwrap();
-    a.internal_pn = InternalPn::new("R1_RENAMED");
-    update_row(tmp.path(), &a).unwrap();
-    let back = read_table(tmp.path()).unwrap();
-    assert_eq!(back, vec![a, b]);
-}
-
-#[test]
-fn update_row_missing_returns_not_found() {
-    let tmp = tempfile::NamedTempFile::new().unwrap();
-    let r = mk_row("R1", "resistor");
-    let err = update_row(tmp.path(), &r).unwrap_err();
-    assert!(matches!(err, LibraryError::NotFound(_)));
 }
 
 /// `none` footprint and sim refs encode as empty strings; round-trip
@@ -372,4 +219,31 @@ fn hash_from_cell_rejects_multibyte_cell() {
 #[test]
 fn schema_constant_matches_header_length() {
     assert_eq!(TABLE_HEADER.len(), TableSchema::ROW.columns.len());
+}
+
+/// #1056: a NaN parameter is refused at the write gate, naming the row and
+/// the key.
+#[test]
+fn a_nan_parameter_is_refused_before_write() {
+    let mut bad = mk_row("R_BAD", "resistor");
+    bad.parameters
+        .insert("tolerance".into(), ParamValue::Number(f64::NAN));
+    let msg = validate_row_for_write(&bad).unwrap_err().to_string();
+    assert!(msg.contains("R_BAD"), "row not named: {msg}");
+    assert!(msg.contains("tolerance"), "key not named: {msg}");
+}
+
+/// #1056: an infinite Measurement is refused too.
+#[test]
+fn an_infinite_measurement_is_refused_before_write() {
+    let mut bad = mk_row("C1", "capacitor");
+    bad.parameters.insert(
+        "voltage".into(),
+        ParamValue::Measurement {
+            value: f64::NEG_INFINITY,
+            unit: "V".into(),
+        },
+    );
+    let err = validate_row_for_write(&bad).unwrap_err();
+    assert!(err.to_string().contains("voltage"), "got {err}");
 }

@@ -6,7 +6,8 @@
 //! ```text
 //! row_id  internal_pn  class  datasheet  state  symbol_ref  footprint_ref
 //! sim_ref  primary_mpn  alternates  supply  parameters  pin_map_overrides
-//! created  updated  content_hash
+//! created  updated  content_hash  version  released  symbol_version
+//! footprint_version  sim_version  description
 //! ```
 //!
 //! Scalar columns (`row_id`, `internal_pn`, `class`, `state`, `created`,
@@ -21,33 +22,32 @@
 //! (primary first) once a document has a label or there is more than one
 //! (#1231). Readers accept both.
 //!
-//! This module is the *file format*; commit / branch handling lives
-//! in [`crate::adapters::local_git::LocalGitAdapter`]. The unit
-//! tests here only exercise the TSV serialisation contract.
-
-use std::path::Path;
+//! This module is the *cell encoding*: [`row_to_record`] and
+//! [`record_to_row`] convert a [`ComponentRow`] to and from one TSV record.
+//! Rows live inside the `.snxlib` file; commit / branch handling lives in
+//! [`crate::adapters::local_git::LocalGitAdapter`]. The unit tests here
+//! only exercise the record encoding contract.
 
 use chrono::{DateTime, Utc};
-use csv::{QuoteStyle, ReaderBuilder, WriterBuilder};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::adapter::LibraryError;
 use crate::component::{ComponentRow, DatasheetDoc, DatasheetRef, PinPadOverride, PlmReserved};
-use crate::identity::{ComponentClass, InternalPn, RowId};
+use crate::identity::{ComponentClass, InternalPn};
 use crate::lifecycle::LifecycleState;
 use crate::manufacturer::{DistributorListing, ManufacturerPart};
 use crate::param::ParamMap;
 use crate::primitive::PrimitiveRef;
-use crate::validate::validate_row_for_write;
 
 /// Header row — the canonical column ordering for every adapter.
 ///
 /// Renaming or reordering this is a wire-format break: existing TSV files
-/// would parse into the wrong fields. Add new columns at the end with a
-/// `#[serde(default)]` on the row struct.
+/// would parse into the wrong fields. New columns go at the end and are
+/// required: signex keeps no compatibility with tables written before a
+/// column existed.
 ///
-/// An optional 22nd column, [`ALTERNATE_SYMBOLS_COLUMN`], follows these 21.
+/// An optional 23rd column, [`ALTERNATE_SYMBOLS_COLUMN`], follows these 22.
 /// Readers accept both widths; writers emit it only when a row has
 /// alternate symbols, so tables without them stay byte-identical.
 pub const TABLE_HEADER: &[&str] = &[
@@ -76,6 +76,7 @@ pub const TABLE_HEADER: &[&str] = &[
     "symbol_version",
     "footprint_version",
     "sim_version",
+    "description",
 ];
 
 mod alternate_symbols;
@@ -98,145 +99,6 @@ impl TableSchema {
     pub const ROW: TableSchema = TableSchema {
         columns: TABLE_HEADER,
     };
-}
-
-// ── Public API ────────────────────────────────────────────────────────────
-
-/// Read every row from `path`. Empty file (header-only) yields an empty `Vec`.
-///
-/// Errors: `Io` on I/O failure, `Backend` on a malformed cell or schema
-/// mismatch.
-pub fn read_table(path: &Path) -> Result<Vec<ComponentRow>, LibraryError> {
-    let bytes = match std::fs::read(path) {
-        Ok(b) => b,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(LibraryError::Io(e)),
-    };
-    if bytes.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let mut rdr = ReaderBuilder::new()
-        .delimiter(b'\t')
-        .has_headers(true)
-        .from_reader(&bytes[..]);
-
-    // Verify header order. We don't accept reorderings — that would silently
-    // miscolumn data. The error mode is `Backend(...)` so the caller surfaces
-    // the schema mismatch explicitly.
-    {
-        let headers = rdr
-            .headers()
-            .map_err(|e| LibraryError::Backend(format!("read headers: {e}")))?;
-        let columns: Vec<&str> = headers.iter().collect();
-        check_columns(&columns)
-            .map_err(|e| LibraryError::Backend(format!("table schema mismatch: {e}")))?;
-    }
-
-    let mut rows = Vec::new();
-    for record in rdr.records() {
-        let record = record.map_err(|e| LibraryError::Backend(format!("read row: {e}")))?;
-        rows.push(record_to_row(&record)?);
-    }
-    Ok(rows)
-}
-
-/// Replace the contents of `path` with `rows`. Creates parent directories
-/// if they don't exist.
-///
-/// Crash-safe: the bytes land via [`signex_types::atomic_io::atomic_write`]
-/// (temp file + fsync + rename), so a crash or power loss mid-save leaves
-/// either the previous table or the new one — never a truncated file. Every
-/// mutator here ([`append_row`], [`delete_row`], [`update_row`]) rewrites the
-/// whole table through this one funnel, so they inherit the guarantee.
-///
-/// Refuses, before touching the file, any row [`validate_row_for_write`]
-/// rejects. The file is left as is.
-pub fn write_table(path: &Path, rows: &[ComponentRow]) -> Result<(), LibraryError> {
-    for row in rows {
-        validate_row_for_write(row)?;
-    }
-    write_rows(path, rows)
-}
-
-/// Serialise `rows` without validating them: the mutators below validate
-/// only the row they write, so one bad stored row cannot block unrelated
-/// appends, updates or deletes.
-fn write_rows(path: &Path, rows: &[ComponentRow]) -> Result<(), LibraryError> {
-    let mut wtr = WriterBuilder::new()
-        .delimiter(b'\t')
-        .quote_style(QuoteStyle::Necessary)
-        .from_writer(Vec::<u8>::new());
-    let with_alternates = rows.iter().any(|r| !r.alternate_symbols.is_empty());
-    let mut header: Vec<&str> = TABLE_HEADER.to_vec();
-    if with_alternates {
-        header.push(ALTERNATE_SYMBOLS_COLUMN);
-    }
-    wtr.write_record(&header)
-        .map_err(|e| LibraryError::Backend(format!("write header: {e}")))?;
-    for row in rows {
-        let mut record = row_to_record(row)?;
-        if with_alternates {
-            record.push(alternate_symbols_cell(row)?.unwrap_or_default());
-        }
-        wtr.write_record(record)
-            .map_err(|e| LibraryError::Backend(format!("write row: {e}")))?;
-    }
-    let bytes = wtr
-        .into_inner()
-        .map_err(|e| LibraryError::Backend(format!("flush table: {e}")))?;
-    signex_types::atomic_io::atomic_write(path, &bytes)?;
-    Ok(())
-}
-
-/// Append a single row to the table file.
-///
-/// **Cost:** This reads the entire table into memory and rewrites it with
-/// the appended row. For bulk loads (>10 rows), use `write_table` directly.
-pub fn append_row(path: &Path, row: &ComponentRow) -> Result<(), LibraryError> {
-    validate_row_for_write(row)?;
-    let mut rows = read_table(path)?;
-    rows.push(row.clone());
-    write_rows(path, &rows)
-}
-
-/// Remove the row whose `row_id` matches. Returns `NotFound` if no such row
-/// exists in the table.
-pub fn delete_row(path: &Path, row_id: RowId) -> Result<(), LibraryError> {
-    let mut rows = read_table(path)?;
-    let target = row_id.as_uuid();
-    let before = rows.len();
-    rows.retain(|r| r.row_id != target);
-    if rows.len() == before {
-        return Err(LibraryError::NotFound(format!(
-            "row {row_id} not in table {}",
-            path.display()
-        )));
-    }
-    write_rows(path, &rows)
-}
-
-/// Replace the row whose `row_id` matches. Returns `NotFound` if no such
-/// row exists in the table.
-pub fn update_row(path: &Path, row: &ComponentRow) -> Result<(), LibraryError> {
-    validate_row_for_write(row)?;
-    let mut rows = read_table(path)?;
-    let target = row.row_id;
-    let mut updated = false;
-    for r in rows.iter_mut() {
-        if r.row_id == target {
-            *r = row.clone();
-            updated = true;
-            break;
-        }
-    }
-    if !updated {
-        return Err(LibraryError::NotFound(format!(
-            "row {target} not in table {}",
-            path.display()
-        )));
-    }
-    write_rows(path, &rows)
 }
 
 // ── (de)serialisation helpers ─────────────────────────────────────────────
@@ -360,7 +222,7 @@ fn hash_from_cell(s: &str) -> Result<[u8; 32], LibraryError> {
     Ok(out)
 }
 
-/// The 21 legacy cells; the optional alternate-symbols cell is separate.
+/// The 22 schema cells; the optional alternate-symbols cell is separate.
 pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryError> {
     let primary_mpn = json_cell(&row.primary_mpn)?;
     let alternates = json_cell(&row.alternates)?;
@@ -425,6 +287,7 @@ pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryEr
         row.symbol_version.clone(),
         row.footprint_version.clone(),
         row.sim_version.clone(),
+        row.description.clone(),
     ])
 }
 
@@ -478,7 +341,8 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
     let symbol_version = cell(18).to_string();
     let footprint_version = cell(19).to_string();
     let sim_version = cell(20).to_string();
-    let alternate_symbols = alternate_symbols_from_cell(cell(21))?;
+    let description = cell(21).to_string();
+    let alternate_symbols = alternate_symbols_from_cell(cell(22))?;
 
     let mut row = ComponentRow {
         row_id,
@@ -486,6 +350,7 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
         class,
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
+        description,
         more_datasheets: Vec::new(),
         state,
         symbol_ref,

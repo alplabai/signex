@@ -269,3 +269,134 @@ fn erc_navigation_keeps_the_dirty_engine_of_a_tab_less_sheet() {
     assert_eq!(held, vec!["EDITED_NET".to_string()]);
     assert_eq!(tabs, 1);
 }
+
+/// Quick Fix on a finding whose sheet cannot be opened must not place the
+/// NoConnect on whichever sheet happens to be active (#1367).
+#[test]
+fn quick_fix_refuses_when_the_target_sheet_fails_to_open() {
+    let dir = std::env::temp_dir().join(format!("signex-erc-qf-missing-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).expect("tempdir");
+    let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);
+    let top = dir.join("top.snxsch");
+    open_with(
+        &mut app.document_state,
+        &top,
+        sheet_with_net("R_TOP", "TOP_NET", &[]),
+    );
+    app.document_state.active_path = Some(top.clone());
+    let missing = dir.join("missing.snxsch");
+    app.ui_state.erc_violations_by_path.insert(
+        missing,
+        vec![signex_erc::Violation::new(
+            signex_erc::RuleId::builtin(signex_erc::RuleKind::UnusedPin),
+            signex_erc::RuleKind::UnusedPin,
+            signex_erc::Severity::Warning,
+            "unused pin",
+            Point::new(5.0, 5.0),
+        )],
+    );
+
+    let _ = app.handle_erc_quick_fix(0);
+
+    let placed = app.document_state.engines[&top]
+        .document()
+        .no_connects
+        .len();
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(placed, 0, "NoConnect landed on the active sheet");
+}
+
+// ---- net-level findings (#1364) ----
+
+mod net_level {
+    use super::*;
+    use signex_erc::{LocationSpace, NetFinding, NetFindingPin, RuleId, RuleKind, Severity};
+    use signex_types::schematic::{SelectedItem, SelectedKind};
+
+    fn net_violation(pin_at: Point) -> signex_erc::Violation {
+        let mut v = signex_erc::Violation::new(
+            RuleId::user("net_rule"),
+            RuleKind::NetLabelConflict,
+            Severity::Warning,
+            "net-level",
+            pin_at,
+        );
+        v.location_space = LocationSpace::Net;
+        v.net = Some(NetFinding {
+            name: "NET".to_string(),
+            pins: vec![NetFindingPin {
+                symbol: Uuid::from_u128(7),
+                reference: "R1".to_string(),
+                number: "1".to_string(),
+                position: pin_at,
+            }],
+        });
+        v
+    }
+
+    #[test]
+    fn a_net_finding_draws_one_net_marker_at_its_pin_and_is_locatable() {
+        let top = PathBuf::from("/w/top.snxsch");
+        let (mut app, _task) = Signex::new();
+        app.ui_state
+            .erc_violations_by_path
+            .insert(top.clone(), vec![net_violation(Point::new(3.0, 4.0))]);
+        app.refresh_active_erc_from_cache(Some(&top));
+
+        let markers = &app.interaction_state.active_canvas().erc_markers;
+        assert_eq!(markers.len(), 1);
+        assert!(markers[0].net_level);
+        assert_eq!((markers[0].x, markers[0].y), (3.0, 4.0));
+        let entries = app.build_erc_diagnostic_entries();
+        assert!(entries[0].locatable);
+        assert_eq!(
+            entries[0].net.as_ref().map(|n| n.name.as_str()),
+            Some("NET")
+        );
+    }
+
+    #[test]
+    fn clicking_a_net_finding_selects_the_whole_net_and_fits_its_box() {
+        let dir = std::env::temp_dir().join(format!("signex-erc-net-focus-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("tempdir");
+        let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);
+        let top = dir.join("top.snxsch");
+        let sheet = sheet_with_net("R1", "NET", &[]);
+        let (wire, label) = (sheet.wires[0].uuid, sheet.labels[0].uuid);
+        app.open_schematic_tab(top.clone(), "top".to_string(), sheet);
+
+        let mut v = net_violation(Point::new(0.0, 0.0));
+        v.net.as_mut().expect("net").pins[0].symbol =
+            app.active_render_snapshot().expect("sheet is open").symbols[0].uuid;
+        let symbol = v.net.as_ref().expect("net").pins[0].symbol;
+        app.ui_state.erc_violations_by_path.insert(top, vec![v]);
+        let _ = app.handle_focus_erc_diagnostic_index(0);
+        std::fs::remove_dir_all(&dir).ok();
+
+        let selected = &app.interaction_state.active_canvas().selected;
+        for item in [
+            SelectedItem::new(wire, SelectedKind::Wire),
+            SelectedItem::new(label, SelectedKind::Label),
+            SelectedItem::new(symbol, SelectedKind::Symbol),
+        ] {
+            assert!(selected.contains(&item), "{item:?} not highlighted");
+        }
+        let fit = app
+            .interaction_state
+            .canvas
+            .pending_fit
+            .get()
+            .expect("viewport fit staged");
+        // The wire runs (0,0)-(10,0): the fit box must frame all of it.
+        assert!(fit.x <= 0.0 && fit.x + fit.width >= 10.0, "{fit:?}");
+    }
+
+    #[test]
+    fn fit_rect_frames_the_box_with_margin_and_a_minimum_size() {
+        let r = crate::app::handlers::canvas::fit_view::fit_rect([0.0, 0.0, 100.0, 50.0]);
+        assert_eq!((r.x, r.y, r.width, r.height), (-2.0, -2.0, 104.0, 54.0));
+        let dot = crate::app::handlers::canvas::fit_view::fit_rect([5.0, 5.0, 5.0, 5.0]);
+        assert_eq!((dot.width, dot.height), (16.0, 16.0));
+        assert_eq!((dot.x, dot.y), (-3.0, -3.0));
+    }
+}

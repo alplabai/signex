@@ -106,6 +106,10 @@ fn an_older_build_resave_keeps_the_link() {
 /// Regenerates the fixtures with a pre-#1338 `resave` example binary (see
 /// `font_family_tests::regenerate_fixtures` for how to build one):
 /// `OLDER_BUILD_RESAVE=<binary> cargo test -p signex-types regenerate_link_fixtures -- --ignored`
+///
+/// The wire table header of the checked-in fixtures was hand-migrated for
+/// #1364 (the `net` column is gone); the binary must be built from a
+/// post-#1364 base, an older one writes the old header and this panics.
 #[test]
 #[ignore = "writes fixtures; needs a build of an older signex-types"]
 fn regenerate_link_fixtures() {

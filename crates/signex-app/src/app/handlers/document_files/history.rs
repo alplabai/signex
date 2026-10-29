@@ -8,7 +8,7 @@ use iced::Task;
 use super::super::super::*;
 use crate::app::document_read::{Finished, ReadRequest};
 use crate::app::restore_job::{
-    EditStamp, RestoreFailure, RestoreJob, RestoreJobDocument, RestoreKind,
+    EditStamp, RestoreFailure, RestoreJob, RestoreJobDocument, RestoreKind, RestoredFile,
 };
 
 impl Signex {
@@ -29,7 +29,13 @@ impl Signex {
             return Task::none();
         };
         let full_path = active.path.clone();
-        let kind = restore_kind_of(&active.kind);
+        let Some(kind) = restore_kind_of(&active.kind) else {
+            // The History panel offers no restore for a Project tab
+            // (`history_target`); one that arrives anyway is refused before
+            // anything is written, since the loaded project would not follow.
+            log_project_restore_unsupported(&full_path);
+            return Task::none();
+        };
         if full_path.as_os_str().is_empty() {
             return Task::none();
         }
@@ -53,7 +59,16 @@ impl Signex {
             return Task::none();
         }
 
-        let Some(project_root) = self.owning_project_root(&full_path) else {
+        // The repo the file's commits go to: the same project the commit queue
+        // and the commit guard resolve, so a non-git project holding the file
+        // further out never gets a repository started in it. A file no
+        // git-enabled project holds falls back to the project that contains it
+        // (a repository that exists with auto-commit off).
+        let Some(project_root) = self
+            .git_project_for(&full_path)
+            .map(|project| std::path::PathBuf::from(&project.data.dir))
+            .or_else(|| self.owning_project_root(&full_path))
+        else {
             self.report_restore_failure(format!(
                 "{} does not belong to an open project, so it has no history to restore.",
                 full_path.display()
@@ -72,28 +87,24 @@ impl Signex {
             ));
             return Task::none();
         }
-        // A save's commit reads the file when its worker starts. Restoring
-        // before then would commit the restored bytes under the save's
-        // label, so refuse until every commit for this repo has finished
-        // (the status bar's "Saving…" pill shows when that is).
-        if self
-            .document_state
-            .inflight_git_commits
-            .iter()
-            .any(|(root, _)| *root == project_root)
-        {
-            self.report_restore_failure(format!(
-                "{} cannot be restored yet: a save is still being committed to version control. Try again in a moment.",
-                full_path.display()
-            ));
-            return Task::none();
-        }
         let Ok(rel_path) = full_path
             .strip_prefix(&project_root)
             .map(|p| p.to_path_buf())
         else {
             return Task::none();
         };
+        // A commit that holds the bytes it records (a document save, a
+        // restore) is unaffected by this restore, but one that reads the file
+        // when its worker starts (a primitive-editor save, say) would record
+        // the restored bytes under its own label. Refuse until this file's
+        // such commits are done; other files and bound commits do not matter.
+        if self.has_unbound_commit_of(&full_path) {
+            self.report_restore_failure(format!(
+                "{} cannot be restored yet: a save is still being committed. Try again in a moment.",
+                file_label(&full_path)
+            ));
+            return Task::none();
+        }
         // A second click while this document's restore is running does
         // nothing; the first one's completion is the only one applied.
         let Some(generation) = self
@@ -142,6 +153,28 @@ impl Signex {
         )
     }
 
+    /// Whether a queued or running commit of `path` reads the file when its
+    /// worker starts (see `DocumentState::unbound_git_commits`). Resolved the
+    /// way the commit queue resolves it: the first git-enabled project that
+    /// holds the file, compared under that project's case folding.
+    fn has_unbound_commit_of(&self, path: &std::path::Path) -> bool {
+        use crate::app::state::scope::path_key_with;
+        let Some(project) = self.git_project_for(path) else {
+            return false;
+        };
+        let root = std::path::Path::new(&project.data.dir);
+        let Ok(rel) = path.strip_prefix(root) else {
+            return false;
+        };
+        let wanted = path_key_with(rel, project.case_fold);
+        self.document_state
+            .unbound_git_commits
+            .iter()
+            .any(|(commit_root, commit_rel)| {
+                commit_root == root && path_key_with(commit_rel, project.case_fold) == wanted
+            })
+    }
+
     /// Refuse a save of a document whose History restore is still running:
     /// the write would race the restore's rewrite and re-read, and the
     /// loser's bytes would be installed or committed as the other's.
@@ -163,8 +196,12 @@ impl Signex {
         let Some(tab) = self.document_state.tabs.get(idx) else {
             return;
         };
-        let outcome = crate::app::restore_job::read_back(restore_kind_of(&tab.kind), &tab.path);
-        self.apply_reloaded(idx, outcome);
+        let Some(kind) = restore_kind_of(&tab.kind) else {
+            log_project_restore_unsupported(&tab.path);
+            return;
+        };
+        let outcome = crate::app::restore_job::read_back(kind, &tab.path);
+        self.apply_reloaded(idx, outcome, None);
     }
 
     /// The root directory of the open project that contains `path`.
@@ -187,7 +224,7 @@ impl Signex {
         request: ReadRequest,
         sha: &str,
         edit_stamp: EditStamp,
-        result: Result<Box<RestoreJobDocument>, RestoreFailure>,
+        result: Result<Box<RestoredFile>, RestoreFailure>,
     ) -> Task<Message> {
         let path = request.path;
         // Settle lazily-tracked editor edits once for every check below.
@@ -228,12 +265,13 @@ impl Signex {
             Err(RestoreFailure::NotRestored(message)) => self.report_restore_failure(message),
             Err(failure) => {
                 self.note_restored(&path, sha);
-                self.apply_reloaded(idx, Err(failure));
+                self.apply_reloaded(idx, Err(failure), None);
                 self.refresh_panel_ctx();
             }
-            Ok(document) => {
+            Ok(restored) => {
+                let RestoredFile { document, bytes } = *restored;
                 self.note_restored(&path, sha);
-                self.apply_reloaded(idx, Ok(*document));
+                self.apply_reloaded(idx, Ok(document), Some(bytes));
                 self.refresh_panel_ctx();
             }
         }
@@ -300,7 +338,7 @@ impl Signex {
         &self,
         path: &std::path::Path,
         sha: &str,
-        result: &Result<Box<RestoreJobDocument>, RestoreFailure>,
+        result: &Result<Box<RestoredFile>, RestoreFailure>,
         has_edits: bool,
     ) {
         let name = file_label(path);
@@ -342,6 +380,7 @@ impl Signex {
         &mut self,
         idx: usize,
         outcome: Result<RestoreJobDocument, RestoreFailure>,
+        restored_bytes: Option<crate::persist::SharedBytes>,
     ) {
         let Some(tab) = self.document_state.tabs.get(idx) else {
             return;
@@ -373,6 +412,19 @@ impl Signex {
                 } else {
                     self.install_schematic_at(&path, *sheet);
                 }
+                // A restored sheet from a newer Signex is read-only and can
+                // never be saved: leaving it dirty would make quit ask to
+                // save an unsaveable file (#1402). It matches disk, so
+                // commit the restored bytes as they are, as the PCB does.
+                let read_only = self
+                    .document_state
+                    .engines
+                    .get(&path)
+                    .is_some_and(|engine| engine.document().is_read_only());
+                if read_only {
+                    self.set_reloaded_dirty(&path, idx, false);
+                    self.commit_restore(&path, restored_bytes);
+                }
             }
             Ok(RestoreJobDocument::Pcb(board)) => {
                 crate::app::load_gateway::report_unusable_zone_holes(&path, &board);
@@ -385,7 +437,7 @@ impl Signex {
                 // re-encode the board and drop the restored file's comments
                 // and formatting, so commit the on-disk bytes as they are.
                 self.set_reloaded_dirty(&path, idx, false);
-                self.commit_restore(&path);
+                self.commit_restore(&path, restored_bytes);
             }
             Ok(RestoreJobDocument::Footprint(file)) => {
                 let snap_disabled = !self.ui_state.snap_enabled;
@@ -404,7 +456,7 @@ impl Signex {
                 if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
                     editor.canvas_cache.clear();
                 }
-                self.commit_restore(&path);
+                self.commit_restore(&path, restored_bytes);
             }
             Ok(RestoreJobDocument::Symbol(file)) => {
                 let state = crate::app::SymbolDocument::new(path.clone(), *file);
@@ -414,7 +466,7 @@ impl Signex {
                 // The reloaded editor is clean, so the stale dirty marker must
                 // go or quit asks about a file that matches disk.
                 self.set_reloaded_dirty(&path, idx, false);
-                self.commit_restore(&path);
+                self.commit_restore(&path, restored_bytes);
             }
             Ok(RestoreJobDocument::Library) => self.reload_library_tab(&kind),
         }
@@ -467,16 +519,28 @@ impl Signex {
         self.refresh_panel_ctx();
     }
 
-    /// Queue the project git commit for the restored bytes already on disk,
-    /// so a clean tab does not leave them uncommitted. An enqueue while a
-    /// commit of this file is in flight is re-queued (see
-    /// `commit_save_to_project_git`).
-    fn commit_restore(&mut self, path: &std::path::Path) {
+    /// Queue the project git commit for the restore, so a clean tab does not
+    /// leave the restored revision uncommitted. With the bytes the restore
+    /// wrote the commit records exactly that revision; without them (a test
+    /// re-reading the file) it commits the file as it is when the worker runs.
+    fn commit_restore(
+        &mut self,
+        path: &std::path::Path,
+        restored: Option<crate::persist::SharedBytes>,
+    ) {
         let label = path
             .file_name()
             .map(|f| f.to_string_lossy().into_owned())
             .unwrap_or_else(|| path.display().to_string());
-        self.commit_save_to_project_git(path, &format!("Restore {label}"));
+        let message = format!("Restore {label}");
+        match restored {
+            Some(bytes) => self.commit_bytes_to_project_git(
+                path,
+                &message,
+                crate::app::state::CommitBytes { bytes, sequence: 0 },
+            ),
+            None => self.commit_save_to_project_git(path, &message),
+        }
     }
 
     /// A restored footprint/symbol could not be loaded into its editor. The
@@ -510,7 +574,7 @@ impl Signex {
         if active_idx == self.document_state.active_tab {
             self.discard_state_of_replaced_engine();
         }
-        self.document_state.engines.remove(path);
+        self.document_state.remove_engine(path);
         self.set_reloaded_dirty(path, active_idx, false);
         self.report_restore_failure(restore_reload_card(path, why, unreadable));
     }
@@ -575,7 +639,7 @@ fn file_label(path: &std::path::Path) -> String {
 fn log_cancelled_restore_finished(
     path: &std::path::Path,
     sha: &str,
-    result: &Result<Box<RestoreJobDocument>, RestoreFailure>,
+    result: &Result<Box<RestoredFile>, RestoreFailure>,
 ) {
     let name = file_label(path);
     let outcome = match result {
@@ -587,14 +651,25 @@ fn log_cancelled_restore_finished(
     ));
 }
 
-fn restore_kind_of(kind: &crate::app::TabKind) -> RestoreKind {
+/// What a restore reads back for `kind`; `None` for a Project tab, whose
+/// `.snxprj` is never restored from History.
+fn restore_kind_of(kind: &crate::app::TabKind) -> Option<RestoreKind> {
     match kind {
-        crate::app::TabKind::Schematic => RestoreKind::Schematic,
-        crate::app::TabKind::Pcb => RestoreKind::Pcb,
-        crate::app::TabKind::FootprintEditor(_) => RestoreKind::Footprint,
-        crate::app::TabKind::SymbolEditor(_) => RestoreKind::Symbol,
+        crate::app::TabKind::Schematic => Some(RestoreKind::Schematic),
+        crate::app::TabKind::Pcb => Some(RestoreKind::Pcb),
+        crate::app::TabKind::FootprintEditor(_) => Some(RestoreKind::Footprint),
+        crate::app::TabKind::SymbolEditor(_) => Some(RestoreKind::Symbol),
         crate::app::TabKind::LibraryBrowser(_) | crate::app::TabKind::ComponentEditor(_) => {
-            RestoreKind::Library
+            Some(RestoreKind::Library)
         }
+        crate::app::TabKind::Project(_) => None,
     }
+}
+
+fn log_project_restore_unsupported(path: &std::path::Path) {
+    crate::diagnostics::log_warning(format!(
+        "[reload] {} was not restored: restoring a project file from History is not \
+         supported; close and reopen the project",
+        path.display()
+    ));
 }

@@ -31,6 +31,24 @@ impl SchematicCanvas<'_> {
                 return Some(action);
             }
 
+            // A part on the cursor owns every press: it is placed, never a
+            // double-click, a Ctrl-click, a hit-test, a drag-move or a box
+            // select that would edit what is already on the sheet (#1252).
+            let placing = self.prefs.placement.is_some();
+            if placing {
+                state.click_on_selected = false;
+                state.move_origin = None;
+                state.move_dragging = false;
+                state.select_drag_start = None;
+                state.select_drag_end = None;
+                return Some(canvas::Action::publish(Message::CanvasEvent(
+                    CanvasEvent::Clicked {
+                        world_x: wx,
+                        world_y: wy,
+                    },
+                )));
+            }
+
             // Double-click detection (300ms, 5px threshold)
             let now = std::time::Instant::now();
             if let (Some(last_time), Some(last_pos)) =
@@ -161,13 +179,18 @@ impl SchematicCanvas<'_> {
             if let (Some(origin), Some(current)) = (state.move_origin, state.move_current) {
                 let dx = current.0 - origin.0;
                 let dy = current.1 - origin.1;
+                let connections = state.move_connections();
                 state.move_dragging = false;
                 state.move_origin = None;
                 state.move_current = None;
                 state.click_on_selected = false;
                 if dx.abs() > 0.01 || dy.abs() > 0.01 {
                     return Some(canvas::Action::publish(Message::CanvasEvent(
-                        CanvasEvent::MoveSelected { dx, dy },
+                        CanvasEvent::MoveSelected {
+                            dx,
+                            dy,
+                            connections,
+                        },
                     )));
                 }
             }
@@ -201,6 +224,7 @@ impl SchematicCanvas<'_> {
                         y1: start.1.min(end.1),
                         x2: start.0.max(end.0),
                         y2: start.1.max(end.1),
+                        direction: BoxDirection::of_drag(start.0, end.0),
                     },
                 )));
             }

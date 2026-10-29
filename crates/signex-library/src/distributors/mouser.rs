@@ -42,7 +42,7 @@ pub struct MouserAdapter {
     base_url: String,
     cache: Option<DistributorCache>,
     throttle: Mutex<Option<Instant>>,
-    http: reqwest::blocking::Client,
+    http: super::http::LazyClient,
     auth: AuthSource,
 }
 
@@ -62,7 +62,7 @@ impl MouserAdapter {
             base_url: MOUSER_DEFAULT_BASE.into(),
             cache,
             throttle: Mutex::new(None),
-            http: super::http::build_client(),
+            http: super::http::LazyClient::standard(),
             auth: AuthSource::Keyring(KeyringStore::for_provider("mouser", "default")?),
         })
     }
@@ -77,7 +77,7 @@ impl MouserAdapter {
             base_url: base_url.into(),
             cache,
             throttle: Mutex::new(None),
-            http: super::http::build_client(),
+            http: super::http::LazyClient::standard(),
             auth: AuthSource::Inline(api_key.into()),
         }
     }
@@ -135,6 +135,7 @@ impl MouserAdapter {
         self.polite_wait();
         let resp = self
             .http
+            .get()?
             .post(url)
             .header("Accept", "application/json")
             .header("apiKey", &api_key)
@@ -482,7 +483,7 @@ mod tests {
             base_url: "http://unused.invalid".into(),
             cache: None,
             throttle: Mutex::new(None),
-            http: super::super::http::build_client(),
+            http: super::super::http::LazyClient::standard(),
             auth: AuthSource::Keyring(store),
         };
         let err = adapter.resolve_api_key().expect_err("should be Auth");
