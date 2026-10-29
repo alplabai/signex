@@ -30,9 +30,10 @@ mkdir -p "$MACOS" "$RESOURCES"
 cp "$BINARY_PATH" "$MACOS/signex"
 chmod +x "$MACOS/signex"
 
-# Info.plist with version substituted. CFBundleShortVersionString is the
-# numeric X.Y.Z (a pre-release suffix such as -rc.1 is stripped); CFBundleVersion
-# keeps the full version string.
+# Info.plist with version substituted. Apple specifies both
+# CFBundleShortVersionString and CFBundleVersion as period-separated integers,
+# so both get the numeric X.Y.Z (a pre-release suffix such as -rc.1 is
+# stripped); the full version stays in the DMG file name and `signex --version`.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SHORT_VERSION="${VERSION%%-*}"
 sed -e "s/__SHORT_VERSION__/$SHORT_VERSION/g" -e "s/__VERSION__/$VERSION/g" \
