@@ -127,12 +127,18 @@ cat > "$PKG_DIR/usr/share/mime/packages/signex.xml" <<MIME_EOF
 </mime-info>
 MIME_EOF
 
+# Debian orders "1.0.0-rc.1" ABOVE "1.0.0" (the part after the hyphen is a
+# revision), so an rc could never upgrade to the final release. A semver
+# pre-release X.Y.Z-rc.N becomes X.Y.Z~rc.N in the control file, which sorts
+# below X.Y.Z. The file name keeps the tag's version string.
+DEB_VERSION="${VERSION/-/\~}"
+
 # Control file — Installed-Size is approx (binary + assets); dpkg-deb
 # computes the actual compressed size when it builds.
 INSTALLED_SIZE=$(du -sk "$PKG_DIR/usr" | cut -f1)
 cat > "$PKG_DIR/DEBIAN/control" <<CONTROL_EOF
 Package: signex
-Version: $VERSION
+Version: $DEB_VERSION
 Section: electronics
 Priority: optional
 Architecture: $ARCH
