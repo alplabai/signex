@@ -375,6 +375,11 @@
     "category": "design"
   },
   {
+    "id": "go_to_net_partner",
+    "group": "Schematic",
+    "category": "navigation"
+  },
+  {
     "id": "highlight_net_under_cursor",
     "group": "Schematic",
     "category": "select"

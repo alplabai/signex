@@ -65,31 +65,16 @@ impl Signex {
                         self.cursor_document_now().map(std::path::Path::to_path_buf);
                 }
                 self.ui_state.zoom = zoom_pct;
-                // Hover detection: fast hit-test against the active
-                // schematic snapshot so the tooltip overlay (in
-                // `view::collect_overlays`) can show after a 250 ms
-                // dwell on a placed symbol. Snapshot lookups are cheap
-                // (Vec scan keyed by world bounds), so doing this on
-                // every cursor tick is fine. Other hit kinds (wires,
-                // labels) intentionally fall through — only Symbol
-                // hovers carry library metadata worth surfacing.
-                let hover_uuid: Option<uuid::Uuid> = self
-                    .interaction_state
-                    .active_canvas()
-                    .active_snapshot()
-                    .and_then(|snap| {
-                        crate::schematic_runtime::hit_test::hit_test_styled(
-                            snap,
-                            &self.interaction_state.active_canvas().designators,
-                            x as f64,
-                            y as f64,
-                            self.ui_state.net_class_styles.styles(),
-                        )
-                    })
-                    .and_then(|hit| {
-                        matches!(hit.kind, signex_types::schematic::SelectedKind::Symbol)
-                            .then_some(hit.uuid)
-                    });
+                // Hover detection: one hit test against the active sheet
+                // feeds both the symbol tooltip (a 700 ms dwell on a placed
+                // symbol) and the net-insight dwell (#1270), which reads the
+                // index only once the dwell is up.
+                let hit = self.item_hit_at(x as f64, y as f64);
+                self.observe_net_hover(hit, (x as f64, y as f64));
+                let hover_uuid: Option<uuid::Uuid> = hit.and_then(|hit| {
+                    matches!(hit.kind, signex_types::schematic::SelectedKind::Symbol)
+                        .then_some(hit.uuid)
+                });
                 if hover_uuid != self.interaction_state.hover_symbol_uuid {
                     self.interaction_state.hover_symbol_uuid = hover_uuid;
                     self.interaction_state.hover_started_at =

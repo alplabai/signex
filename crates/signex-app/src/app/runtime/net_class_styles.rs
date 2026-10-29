@@ -31,11 +31,11 @@ use crate::app::state::{DocumentState, ProjectId};
 use super::Signex;
 
 /// A project with open sheets, and the key its resolution is cached under.
-struct PlannedProject {
-    project: ProjectId,
-    key: ProjectKey,
-    open_paths: Vec<PathBuf>,
-    project_dir: PathBuf,
+pub(in crate::app) struct PlannedProject {
+    pub(in crate::app) project: ProjectId,
+    pub(in crate::app) key: ProjectKey,
+    pub(in crate::app) open_paths: Vec<PathBuf>,
+    pub(in crate::app) project_dir: PathBuf,
 }
 
 /// Everything a worker needs to stitch one project: owned, so it can leave
@@ -105,7 +105,7 @@ fn resolve_project(open: &OpenSheets, job: ProjectJob) -> ResolvedProject {
 /// Stamp over every open sheet's identity and connectivity revision. Moves on
 /// any edit that can change a net, and on a sheet opening, closing or being
 /// replaced; not on an edit that leaves connectivity alone.
-fn connectivity_stamp(document: &DocumentState) -> u64 {
+pub(in crate::app) fn connectivity_stamp(document: &DocumentState) -> u64 {
     document.engines.iter().fold(0u64, |acc, (path, engine)| {
         let mut hasher = DefaultHasher::new();
         (path, engine.instance_id(), engine.connectivity_revision()).hash(&mut hasher);
@@ -114,7 +114,7 @@ fn connectivity_stamp(document: &DocumentState) -> u64 {
 }
 
 /// Every project that owns an open sheet, with the key to resolve it under.
-fn plan_projects(document: &DocumentState) -> Vec<PlannedProject> {
+pub(in crate::app) fn plan_projects(document: &DocumentState) -> Vec<PlannedProject> {
     struct Open {
         stamp: u64,
         paths: Vec<PathBuf>,
@@ -264,8 +264,30 @@ impl Signex {
             }
         };
         let applied = self.ui_state.net_class_styles.apply(resolved);
+        // The net index stitches the same project: each warning is said once,
+        // whichever of the two meets it first.
         for warning in &applied.warnings {
-            crate::diagnostics::log_warning(warning);
+            let owner = resolved
+                .projects
+                .iter()
+                .find(|p| p.warnings.contains(warning))
+                .map(|p| p.project);
+            let reported = &mut self.document_state.net_nav.reported;
+            if owner.is_none_or(|project| reported.claim(project, warning)) {
+                crate::diagnostics::log_warning(warning);
+            }
+        }
+        // Only a project the job stitched says what is currently wrong with
+        // it; one without classes was not, and the index owns its warnings.
+        for entry in resolved
+            .projects
+            .iter()
+            .filter(|e| !e.key.classes.is_empty())
+        {
+            self.document_state
+                .net_nav
+                .reported
+                .settle(entry.project, &entry.warnings);
         }
         if applied.styles_changed {
             self.clear_schematic_content_caches();
