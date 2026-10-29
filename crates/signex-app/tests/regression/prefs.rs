@@ -498,3 +498,32 @@ fn ordered_pref_writes_of_different_keys_do_not_suppress_each_other() {
     assert!(!signex_app::fonts::read_grid_visible_pref_at(&path));
     assert!(!signex_app::fonts::read_snap_enabled_pref_at(&path));
 }
+
+/// #1253 / #1263 — the two paste preferences read back what was written, and
+/// a missing, zero or out-of-range value is made valid.
+#[test]
+fn increment_step_and_paste_designators_round_trip_through_prefs_json() {
+    use signex_app::paste_prefs::PasteDesignators;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("prefs.json");
+    let read = |path: &std::path::Path| {
+        let json = std::fs::read_to_string(path)
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok());
+        (
+            signex_app::fonts::read_increment_step_pref_from(json.as_ref()),
+            signex_app::fonts::read_paste_designators_pref_from(json.as_ref()),
+        )
+    };
+    assert_eq!(read(&path), (1, PasteDesignators::Keep), "defaults");
+
+    signex_app::fonts::write_increment_step_pref_at(&path, -7);
+    signex_app::fonts::write_paste_designators_pref_at(&path, PasteDesignators::NextFree);
+    assert_eq!(read(&path), (-7, PasteDesignators::NextFree));
+
+    for (stored, expected) in [(0, 1), (9999, 100), (-9999, -100)] {
+        signex_app::fonts::write_increment_step_pref_at(&path, stored);
+        assert_eq!(read(&path).0, expected, "stored {stored}");
+    }
+}
