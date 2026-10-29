@@ -61,15 +61,13 @@ deny = [{ name = "glyphon" }]
 # Fixable advisories are fixed by upgrading (quick-xml, anyhow, h2, rustls,
 # zip, git2, lopdf, ...). What remains below are "unmaintained" notices with
 # no patched release to move to; each is a transitive dep (GUI/font/image/PDF
-# stacks, tantivy search) or a direct font dep, and none is a reachable
+# stacks) or a direct font dep, and none is a reachable
 # vulnerability. Every entry has a review date; re-run `cargo deny check`
 # then and drop each entry whose upstream has moved on.
 yanked = "warn"
 ignore = [
     # core2 0.4.0 (yanked, unmaintained) <- bitstream-io <- rav1e <- image (AVIF).
     { id = "RUSTSEC-2026-0105", reason = "unmaintained, no upgrade; via image/rav1e/bitstream-io. Review 2027-01-22" },
-    # instant 0.1.13 <- measure_time <- tantivy 0.22 (signex-library search).
-    { id = "RUSTSEC-2024-0384", reason = "unmaintained, no upgrade; via tantivy/measure_time. Review 2027-01-22" },
     # paste 1.0.15 <- metal <- wgpu-hal (iced renderer).
     { id = "RUSTSEC-2024-0436", reason = "unmaintained proc-macro, build-time only; via wgpu/metal. Review 2027-01-22" },
     # rustybuzz 0.20.1 <- usvg <- resvg <- iced_tiny_skia.
