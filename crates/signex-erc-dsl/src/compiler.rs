@@ -233,6 +233,7 @@ fn evaluate_rule(
                             peer: None,
                             net: None,
                             anchor_pin: None,
+                            tag: None,
                         }
                         .for_net(NetFinding::from_net(net)),
                     );
@@ -256,6 +257,7 @@ fn evaluate_rule(
                             peer: None,
                             net: None,
                             anchor_pin: Some(pin.number.clone()),
+                            tag: None,
                         });
                     }
                 }
@@ -277,6 +279,7 @@ fn evaluate_rule(
                         peer: None,
                         net: None,
                         anchor_pin: None,
+                        tag: None,
                     });
                 }
             }
@@ -297,6 +300,7 @@ fn evaluate_rule(
                         peer: None,
                         net: None,
                         anchor_pin: None,
+                        tag: None,
                     });
                 }
             }

@@ -56,8 +56,12 @@ pub fn involved_items(v: &Violation) -> Vec<SelectedItem> {
     items
 }
 
-/// A waiver's identity objects for `v` on `sheet`: the UUIDs of the objects
-/// it names, `pin:<number>` for a pin-anchored finding, and for a net-level
+/// A waiver's identity objects for `v` on `sheet`: the UUID of its primary
+/// object and `peer:<uuid>` of its peer (the role is kept, so the two
+/// findings of a symmetric pair, A against B and B against A, stay two),
+/// `pin:<number>` for a pin-anchored finding (`<a>/<b>` for a pin
+/// pair), `tag:<x>` where the rule tells findings on the same objects apart,
+/// and for a net-level
 /// finding the net on this sheet: `net:<name>@<sheet uuid>`, or for an
 /// unnamed net its pin set `pins:<R1.1,U2.3>@<sheet uuid>`. The sheet's
 /// document id (not its path) keeps one global net's findings on two sheets
@@ -65,10 +69,16 @@ pub fn involved_items(v: &Violation) -> Vec<SelectedItem> {
 /// only in the fingerprint, so a part joining it lapses the waiver; an
 /// unnamed net has nothing else to name it by, so there a membership change
 /// orphans the waiver instead. See `docs/ERC_RULES.md`, "Waivers".
-fn identity_objects(v: &Violation, items: &[SelectedItem], sheet: &SchematicSheet) -> Vec<String> {
-    let mut objects: Vec<String> = items.iter().map(|i| i.uuid.to_string()).collect();
+fn identity_objects(v: &Violation, sheet: &SchematicSheet) -> Vec<String> {
+    let mut objects: Vec<String> = v.primary.iter().map(|p| p.uuid.to_string()).collect();
+    if let Some(peer) = v.peer.filter(|p| Some(p.uuid) != v.primary.map(|q| q.uuid)) {
+        objects.push(format!("peer:{}", peer.uuid));
+    }
     if let Some(pin) = v.anchor_pin.as_ref().filter(|p| !p.is_empty()) {
         objects.push(format!("pin:{pin}"));
+    }
+    if let Some(tag) = v.tag.as_ref().filter(|t| !t.is_empty()) {
+        objects.push(format!("tag:{tag}"));
     }
     if let Some(net) = &v.net {
         let at = sheet.uuid;
@@ -99,7 +109,7 @@ fn pin_list(net: &crate::NetFinding) -> String {
 /// that is not on `sheet`.
 pub fn waiver_key(v: &Violation, sheet: &SchematicSheet) -> Option<WaiverKey> {
     let items = involved_items(v);
-    let objects = identity_objects(v, &items, sheet);
+    let objects = identity_objects(v, sheet);
     if objects.is_empty() {
         return None;
     }
@@ -426,5 +436,7 @@ fn write_canonical(value: &serde_json::Value, out: &mut String) -> Option<()> {
     Some(())
 }
 
+#[cfg(test)]
+mod identity_guard;
 #[cfg(test)]
 mod tests;

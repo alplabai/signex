@@ -103,7 +103,8 @@ pub(crate) fn pins_touch_not_connected(ctx: &ErcContext, out: &mut Vec<Diagnosti
                     pin.world_pos,
                 )
                 .with_primary(sel(first_symbol.uuid, SelectedKind::Symbol))
-                .with_peer(sel(symbol.uuid, SelectedKind::Symbol)),
+                .with_peer(sel(symbol.uuid, SelectedKind::Symbol))
+                .at_pin_number(format!("{}/{}", first_pin.number, pin.number)),
             );
         }
     }

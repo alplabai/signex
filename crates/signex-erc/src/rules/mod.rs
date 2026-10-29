@@ -557,7 +557,8 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                     child.position,
                 )
                 .with_severity(Severity::Warning)
-                .with_primary(sel(child.uuid, SelectedKind::ChildSheet)),
+                .with_primary(sel(child.uuid, SelectedKind::ChildSheet))
+                .tagged("no-pins"),
             );
         }
 
@@ -578,7 +579,8 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                         child.position,
                     )
                     .with_severity(Severity::Warning)
-                    .with_primary(sel(child.uuid, SelectedKind::ChildSheet)),
+                    .with_primary(sel(child.uuid, SelectedKind::ChildSheet))
+                    .tagged("not-loaded"),
                 );
             }
             continue;

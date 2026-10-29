@@ -97,6 +97,7 @@ pub(crate) fn finding(first: &PlacedUnit, gap: &UnitGap) -> Diagnostic {
     };
     Diagnostic::new(RuleKind::UnitsNotPlaced, message, first.at)
         .with_primary(sel(first.uuid, SelectedKind::Symbol))
+        .tagged(reference)
 }
 
 pub(crate) fn units_not_placed(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {

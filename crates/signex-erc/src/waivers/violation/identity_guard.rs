@@ -1,0 +1,185 @@
+//! Guard: no two findings of one rule on one sheet may share a waiver
+//! identity, or one waiver would hide both (and any later one of that shape).
+//! Runs the full engine over every rule's fixture and over one sheet built to
+//! trip many rules at once.
+
+use std::collections::BTreeMap;
+
+use signex_types::schematic::{LabelType, PinDirection, Point, SchematicSheet};
+use uuid::Uuid;
+
+use super::identity_objects;
+use crate::context::{ErcChildSheet, ErcContext, ErcNet, ErcNetPin, ErcPin, ErcSymbol};
+use crate::fixtures::{context_for, empty, label, symbol, wire};
+use crate::{RuleKind, Violation, engine};
+
+/// Rules whose findings may share an identity on purpose.
+const SHARED_ON_PURPOSE: &[RuleKind] = &[
+    // The two dangling ends of one wire are one problem with one fix (draw
+    // or delete the wire): one waiver accepts both.
+    RuleKind::DanglingWire,
+];
+
+/// `(rule id, identity)` groups holding more than one finding.
+fn shared_identities(ctx: &ErcContext) -> Vec<(String, Vec<String>, usize)> {
+    let sheet = SchematicSheet::default();
+    let mut groups: BTreeMap<(String, Vec<String>), usize> = BTreeMap::new();
+    for v in engine::run_all(ctx).into_iter().map(Violation::from) {
+        if v.builtin_kind()
+            .is_some_and(|k| SHARED_ON_PURPOSE.contains(&k))
+        {
+            continue;
+        }
+        let identity = identity_objects(&v, &sheet);
+        if identity.is_empty() {
+            continue; // not waivable at all
+        }
+        *groups.entry((v.rule_id.to_string(), identity)).or_default() += 1;
+    }
+    groups
+        .into_iter()
+        .filter(|(_, n)| *n > 1)
+        .map(|((rule, id), n)| (rule, id, n))
+        .collect()
+}
+
+#[test]
+fn every_rule_fixture_gives_each_finding_its_own_identity() {
+    for kind in RuleKind::ALL {
+        let shared = shared_identities(&context_for(kind));
+        assert!(shared.is_empty(), "{kind:?}: {shared:?}");
+    }
+}
+
+fn pin(number: &str, at: Point, direction: PinDirection, connected: bool) -> ErcPin {
+    ErcPin {
+        world_pos: at,
+        number: number.into(),
+        electrical_type: direction,
+        required: true,
+        connected,
+    }
+}
+
+fn net_pin(s: &ErcSymbol, p: &ErcPin) -> ErcNetPin {
+    ErcNetPin {
+        symbol: s.uuid,
+        occurrence: signex_types::schematic::InstancePath::root(),
+        reference: s.reference.clone(),
+        number: p.number.clone(),
+        position: p.world_pos,
+        direction: p.electrical_type,
+        is_power_flag: false,
+    }
+}
+
+fn net(name: &str, pins: Vec<ErcNetPin>) -> ErcNet {
+    ErcNet {
+        name: name.into(),
+        names: vec![name.into()],
+        class: name.to_ascii_lowercase(),
+        pin_types: pins.iter().map(|p| p.direction).collect(),
+        pins,
+        has_driver: true,
+        has_pullup: false,
+    }
+}
+
+/// One sheet with several distinct findings per object pair or object.
+fn many_rules_at_once() -> ErcContext {
+    let mut c = empty();
+    let p = |x: f64, y: f64| Point::new(x, y);
+    // U1 and U2: two output/output conflicts, on D0 and on VCC.
+    let mut u1 = symbol("U1", p(0.0, 0.0));
+    u1.pins = vec![
+        pin("1", p(0.0, 0.0), PinDirection::Output, true),
+        pin("2", p(0.0, 12.7), PinDirection::PowerOutput, true),
+        pin("3", p(0.0, 25.4), PinDirection::Passive, false),
+        pin("4", p(0.0, 38.1), PinDirection::Passive, false),
+    ];
+    let mut u2 = symbol("U2", p(25.4, 0.0));
+    u2.pins = vec![
+        pin("1", p(25.4, 0.0), PinDirection::Output, true),
+        pin("2", p(25.4, 12.7), PinDirection::PowerOutput, true),
+    ];
+    c.wires.push(wire(p(0.0, 0.0), p(25.4, 0.0)));
+    c.wires.push(wire(p(0.0, 12.7), p(25.4, 12.7)));
+    c.labels.push(label("D0", p(12.7, 0.0), LabelType::Net));
+    c.labels.push(label("VCC", p(12.7, 12.7), LabelType::Net));
+    c.nets.push(net(
+        "D0",
+        vec![net_pin(&u1, &u1.pins[0]), net_pin(&u2, &u2.pins[0])],
+    ));
+    c.nets.push(net(
+        "VCC",
+        vec![net_pin(&u1, &u1.pins[1]), net_pin(&u2, &u2.pins[1])],
+    ));
+    // U3 and U4 touch at two pin pairs with no wire.
+    let mut u3 = symbol("U3", p(50.8, 0.0));
+    let mut u4 = symbol("U4", p(50.8, 0.0));
+    for (n, y) in [("1", 0.0), ("2", 12.7)] {
+        u3.pins
+            .push(pin(n, p(50.8, y), PinDirection::Passive, false));
+        u4.pins
+            .push(pin(n, p(50.8, y), PinDirection::Passive, false));
+    }
+    // R1, placed twice (a reused sheet), shown as R7 and R107, with no
+    // footprint, value or MPN.
+    let mut r1 = symbol("R?", p(76.2, 0.0));
+    r1.instance_designators = vec!["R7".into(), "R107".into()];
+    c.symbols.extend([u1, u2, u3, u4, r1]);
+    // A sheet symbol with no pins whose file did not load.
+    c.child_sheets.push(ErcChildSheet {
+        uuid: Uuid::new_v4(),
+        name: "Missing".into(),
+        filename: "missing.snxsch".into(),
+        position: p(101.6, 0.0),
+        pins: Vec::new(),
+    });
+    c
+}
+
+#[test]
+fn a_sheet_tripping_many_rules_gives_each_finding_its_own_identity() {
+    let c = many_rules_at_once();
+    let found: Vec<RuleKind> = engine::run_all(&c).iter().map(|d| d.rule_kind).collect();
+    // The fixture must actually produce the shapes it is here for.
+    let count = |k: RuleKind| found.iter().filter(|f| **f == k).count();
+    assert_eq!(count(RuleKind::PinTypeConflict), 2, "{found:?}");
+    assert_eq!(count(RuleKind::PinsTouchNotConnected), 2, "{found:?}");
+    assert!(count(RuleKind::UnusedPin) >= 2, "{found:?}");
+    let r1 = engine::run_all(&c)
+        .iter()
+        .filter(|d| d.rule_kind == RuleKind::PartWithoutFootprint)
+        .filter(|d| d.message.contains(" R7 ") || d.message.contains(" R107 "))
+        .count();
+    assert_eq!(r1, 2, "{found:?}");
+    assert!(count(RuleKind::BadHierSheetPin) >= 2, "{found:?}");
+    let shared = shared_identities(&c);
+    assert!(shared.is_empty(), "{shared:?}");
+}
+
+#[test]
+fn a_waived_conflict_between_two_parts_does_not_hide_a_later_one() {
+    let c = many_rules_at_once();
+    let conflicts: Vec<Violation> = engine::run_all(&c)
+        .into_iter()
+        .map(Violation::from)
+        .filter(|v| v.rule == RuleKind::PinTypeConflict)
+        .collect();
+    let sheet = SchematicSheet::default();
+    let on = |net: &str| {
+        let mut list: Vec<Violation> = conflicts
+            .iter()
+            .filter(|v| v.net.as_ref().is_some_and(|n| n.name == net))
+            .cloned()
+            .collect();
+        super::stamp_keys(&mut list, &sheet);
+        list
+    };
+    let d0 = on("D0");
+    let key = d0[0].waiver_key.clone().expect("waivable");
+    let waiver = super::new_waiver(&key, "D0", "bus by design", "me", "").expect("waiver");
+    let later = super::split_waived(on("VCC"), &[waiver]);
+    assert_eq!((later.kept.len(), later.waived.len()), (1, 0));
+}

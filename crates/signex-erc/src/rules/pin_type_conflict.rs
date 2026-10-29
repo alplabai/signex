@@ -142,6 +142,8 @@ fn conflict(net: &ErcNet, worst: &PinPair<'_>, all: &[PinPair<'_>]) -> Diagnosti
         .with_severity(worst.severity)
         .with_primary(sel(worst.a.symbol, SelectedKind::Symbol))
         .with_peer(sel(worst.b.symbol, SelectedKind::Symbol))
+        .at_pin_number(format!("{}/{}", worst.a.number, worst.b.number))
+        .about_net(crate::NetFinding::from_net(net))
 }
 
 fn other_pairs(worst: &PinPair<'_>, all: &[PinPair<'_>]) -> String {

@@ -314,6 +314,9 @@ pub struct Violation {
     /// Number of the pin a pin-anchored finding sits on (see
     /// [`Diagnostic::anchor_pin`]).
     pub anchor_pin: Option<String>,
+    /// Which of a rule's distinct findings on the same objects this is (see
+    /// [`Diagnostic::tag`]).
+    pub tag: Option<String>,
     /// The key a per-finding waiver matches (#1285). Filled by the caller
     /// that knows the sheet the finding is filed under
     /// ([`waivers::violation::stamp_keys`]); `None` until then, or when the
@@ -344,6 +347,7 @@ impl Violation {
             peer: None,
             net: None,
             anchor_pin: None,
+            tag: None,
             waiver_key: None,
         }
     }

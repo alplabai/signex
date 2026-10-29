@@ -106,7 +106,7 @@ provenance. Each entry holds:
 | Field | Meaning |
 |---|---|
 | `rule_id` | Stable rule id, `builtin::...` or `user::...`. |
-| `objects` | Sorted identity of the finding: the UUIDs of the objects it names (primary and peer); `pin:<number>` for a finding anchored at one pin; and for a net-level finding the net on its sheet, `net:<name>@<sheet id>`, or `pins:<R1.1,U2.3>@<sheet id>` for an unnamed net. |
+| `objects` | Sorted identity of the finding: the UUID of its primary object and `peer:<uuid>` of its peer (the role is kept, so A-against-B and B-against-A stay two findings); `pin:<number>` for a finding anchored at one pin, `pin:<a>/<b>` for a pin pair; `tag:<x>` where a rule has several findings on the same objects (a part's placement designator, `no-pins` / `not-loaded` on one sheet symbol, the child port a sheet pin disagrees with); and for a net-level finding the net on its sheet, `net:<name>@<sheet id>`, or `pins:<R1.1,U2.3>@<sheet id>` for an unnamed net. |
 | `fingerprint` | SHA-256 over the rule id and the canonical JSON (keys sorted) of each involved object. |
 | `reason`, `author` | Required; an entry missing either is kept on disk but never honoured. |
 | `date` | `YYYY-MM-DD` the waiver was made. |
@@ -153,6 +153,13 @@ row belongs to as it is then (the Waive action carries that sheet), so an edit b
 make the new waiver lapse at once. If the newest run no longer reports the
 finding, or an object it names is gone, Confirm is refused with a line in the
 Messages panel.
+
+No two findings of one rule on one sheet share an identity, except the two
+dangling ends of one wire (one problem, one waiver). A guard test runs the
+engine over every rule's fixture and over a sheet built to trip many rules at
+once (two pin-type conflicts between one pair of parts on different nets, two
+touching pin pairs, a part placed twice) and fails on any other shared
+identity (`waivers/violation/identity_guard.rs`).
 
 Limits: a finding that names neither an object nor a net with a name or
 pins, or whose objects are not on the sheet it is filed under, cannot be

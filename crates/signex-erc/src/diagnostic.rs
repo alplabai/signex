@@ -55,6 +55,10 @@ pub struct Diagnostic {
     /// Number of the pin a pin-anchored finding sits on, so two findings on
     /// two pins of one part stay two findings to a waiver.
     pub anchor_pin: Option<String>,
+    /// Which of a rule's distinct findings this is, where two can name the
+    /// same objects (a part's two placement designators, two reasons about
+    /// one sheet symbol). Part of a waiver's identity.
+    pub tag: Option<String>,
 }
 
 impl Diagnostic {
@@ -73,6 +77,7 @@ impl Diagnostic {
             peer: None,
             net: None,
             anchor_pin: None,
+            tag: None,
         }
     }
 
@@ -102,6 +107,12 @@ impl Diagnostic {
     /// Record the number of the pin this finding is anchored at.
     pub fn at_pin_number(mut self, number: impl Into<String>) -> Self {
         self.anchor_pin = Some(number.into());
+        self
+    }
+
+    /// Tell this finding apart from another of its rule on the same objects.
+    pub fn tagged(mut self, tag: impl Into<String>) -> Self {
+        self.tag = Some(tag.into());
         self
     }
 
@@ -163,6 +174,7 @@ impl From<Diagnostic> for Violation {
             peer: d.peer,
             net: d.net,
             anchor_pin: d.anchor_pin,
+            tag: d.tag,
             waiver_key: None,
         }
     }

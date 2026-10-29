@@ -16,7 +16,7 @@ fn pt(x: f64, y: f64) -> Point {
     Point { x, y }
 }
 
-fn empty() -> ErcContext {
+pub(crate) fn empty() -> ErcContext {
     ErcContext {
         paper_size: PaperSize::A4,
         symbols: Vec::new(),
@@ -34,7 +34,7 @@ fn empty() -> ErcContext {
     }
 }
 
-fn wire(a: Point, b: Point) -> ErcWire {
+pub(crate) fn wire(a: Point, b: Point) -> ErcWire {
     ErcWire {
         uuid: Uuid::new_v4(),
         start: a,
@@ -42,7 +42,7 @@ fn wire(a: Point, b: Point) -> ErcWire {
     }
 }
 
-fn label(text: &str, at: Point, label_type: LabelType) -> ErcLabel {
+pub(crate) fn label(text: &str, at: Point, label_type: LabelType) -> ErcLabel {
     ErcLabel {
         uuid: Uuid::new_v4(),
         text: text.into(),
@@ -51,7 +51,7 @@ fn label(text: &str, at: Point, label_type: LabelType) -> ErcLabel {
     }
 }
 
-fn symbol(reference: &str, at: Point) -> ErcSymbol {
+pub(crate) fn symbol(reference: &str, at: Point) -> ErcSymbol {
     ErcSymbol {
         uuid: Uuid::new_v4(),
         reference: reference.into(),

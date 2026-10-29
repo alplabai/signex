@@ -63,7 +63,8 @@ fn report_parts(
         let (first, designator) = part[0];
         out.push(
             Diagnostic::new(kind, message(display(designator)), first.position)
-                .with_primary(sel(first.uuid, SelectedKind::Symbol)),
+                .with_primary(sel(first.uuid, SelectedKind::Symbol))
+                .tagged(designator.trim()),
         );
     }
 }
