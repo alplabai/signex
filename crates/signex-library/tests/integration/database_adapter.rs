@@ -1124,6 +1124,19 @@ fn write_row_echoing(
     with_mock_server(
         move |server| {
             Box::pin(async move {
+                // Both writes check part-number uniqueness first (#1613).
+                Mock::given(method("GET"))
+                    .and(path("/tables"))
+                    .respond_with(
+                        ResponseTemplate::new(200).set_body_json(serde_json::json!(["ics"])),
+                    )
+                    .mount(server)
+                    .await;
+                Mock::given(method("GET"))
+                    .and(path("/tables/ics"))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+                    .mount(server)
+                    .await;
                 Mock::given(method(verb))
                     .and(path(url_path.as_str()))
                     .respond_with(ResponseTemplate::new(status).set_body_json(reply))
