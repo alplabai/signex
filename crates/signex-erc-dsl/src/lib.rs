@@ -71,6 +71,9 @@ mod tests {
                 lib_id: String::new(),
                 unit: 1,
                 value: "MCU".to_string(),
+                footprint: String::new(),
+                on_board: true,
+                unit_count: 1,
                 position: Point::new(10.0, 10.0),
                 is_power: false,
                 pins: vec![ErcPin {

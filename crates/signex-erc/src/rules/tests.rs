@@ -64,6 +64,9 @@ fn power_port(value: &str, pos: Point) -> ErcSymbol {
         lib_id: String::new(),
         unit: 1,
         value: value.into(),
+        footprint: String::new(),
+        on_board: true,
+        unit_count: 1,
         position: pos,
         is_power: true,
         pins: Vec::new(),
@@ -100,6 +103,9 @@ fn symbol_with_pin(reference: &str, world_pos: Point, connected: bool) -> ErcSym
         lib_id: String::new(),
         unit: 1,
         value: String::new(),
+        footprint: String::new(),
+        on_board: true,
+        unit_count: 1,
         position: world_pos,
         is_power: false,
         pins: vec![ErcPin {
@@ -980,6 +986,7 @@ fn width_rule(ctx: &ErcContext, out: &mut Vec<crate::diagnostic::Diagnostic>) {
 mod bus_hier_tests;
 mod bus_runs_tests;
 mod bus_tests;
+mod completeness_tests;
 mod index_equivalence;
 
 fn hier_label(text: &str, pos: Point) -> ErcLabel {
@@ -1040,12 +1047,13 @@ fn multiple_names_reports_two_power_ports_joined_by_a_wire() {
 fn multiple_names_leaves_label_conflicts_to_net_label_conflict() {
     // Local `SDA` + global `I2C_SDA`: `NetLabelConflict` reports it, this rule
     // stays silent, so the user sees one finding, not two.
+    // On the 1.27 mm grid so `OffGrid` stays quiet too.
     let c = ctx(
-        vec![wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0))],
+        vec![wire(Point::new(0.0, 0.0), Point::new(12.7, 0.0))],
         vec![],
         vec![
             net_label("SDA", Point::new(0.0, 0.0)),
-            global_label("I2C_SDA", Point::new(10.0, 0.0)),
+            global_label("I2C_SDA", Point::new(12.7, 0.0)),
         ],
         vec![],
     );

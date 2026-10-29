@@ -58,6 +58,9 @@ fn symbol(reference: &str, at: Point) -> ErcSymbol {
         lib_id: String::new(),
         unit: 1,
         value: String::new(),
+        footprint: String::new(),
+        on_board: true,
+        unit_count: 1,
         position: at,
         is_power: false,
         pins: Vec::new(),
@@ -68,6 +71,9 @@ fn symbol(reference: &str, at: Point) -> ErcSymbol {
 fn power_port(value: &str, at: Point) -> ErcSymbol {
     ErcSymbol {
         value: value.into(),
+        footprint: String::new(),
+        on_board: true,
+        unit_count: 1,
         is_power: true,
         ..symbol("#PWR01", at)
     }
@@ -223,8 +229,50 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
             c.children
                 .insert("child.snxsch".into(), std::sync::Arc::new(child));
         }
+        RuleKind::PartWithoutFootprint | RuleKind::PartWithoutValue | RuleKind::PartWithoutMpn => {
+            c.symbols.push(symbol("R1", pt(10.0, 10.0)));
+        }
+        RuleKind::UnannotatedDesignator => c.symbols.push(symbol("R?", pt(10.0, 10.0))),
+        RuleKind::SinglePinNet => {
+            c.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+            c.symbols
+                .push(with_pin("U1", pt(0.0, 0.0), PinDirection::Passive));
+        }
+        RuleKind::NetWithNoDriver | RuleKind::PowerInputNotDriven => {
+            let dir = if kind == RuleKind::NetWithNoDriver {
+                PinDirection::Input
+            } else {
+                PinDirection::PowerInput
+            };
+            c.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+            c.symbols.push(with_pin("U1", pt(0.0, 0.0), dir));
+            c.symbols.push(with_pin("U2", pt(10.0, 0.0), dir));
+        }
+        RuleKind::UnitsNotPlaced => {
+            let mut s = symbol("U1", pt(10.0, 10.0));
+            s.unit_count = 2;
+            c.symbols.push(s);
+        }
+        RuleKind::OffGrid => c.wires.push(wire(pt(0.0, 0.0), pt(1.0, 0.0))),
+        RuleKind::LabelsOnlyNet => {
+            c.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+            c.labels.push(label("N", pt(0.0, 0.0), LabelType::Net));
+        }
     }
     c
+}
+
+/// A part `reference` with one connected pin of `direction` at `at`.
+fn with_pin(reference: &str, at: Point, direction: PinDirection) -> ErcSymbol {
+    let mut s = symbol(reference, at);
+    s.pins.push(ErcPin {
+        world_pos: at,
+        number: "1".into(),
+        electrical_type: direction,
+        required: true,
+        connected: true,
+    });
+    s
 }
 
 /// One net holding every pin of `symbols`, as `summarize_nets` would build it

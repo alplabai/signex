@@ -39,6 +39,16 @@ impl RuleKind {
             RuleKind::BusLabelOnWire => "bus_label_on_wire",
             RuleKind::NetMultipleNames => "net_multiple_names",
             RuleKind::LocalLabelNameOnOtherSheets => "local_label_name_on_other_sheets",
+            RuleKind::PartWithoutFootprint => "part_without_footprint",
+            RuleKind::PartWithoutValue => "part_without_value",
+            RuleKind::PartWithoutMpn => "part_without_mpn",
+            RuleKind::UnannotatedDesignator => "unannotated_designator",
+            RuleKind::SinglePinNet => "single_pin_net",
+            RuleKind::NetWithNoDriver => "net_with_no_driver",
+            RuleKind::PowerInputNotDriven => "power_input_not_driven",
+            RuleKind::UnitsNotPlaced => "units_not_placed",
+            RuleKind::OffGrid => "off_grid",
+            RuleKind::LabelsOnlyNet => "labels_only_net",
         }
     }
 

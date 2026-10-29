@@ -5578,6 +5578,7 @@ name = "signex-erc"
 version = "0.15.0"
 dependencies = [
  "serde",
+ "signex-bom",
  "signex-net",
  "signex-types",
  "uuid",

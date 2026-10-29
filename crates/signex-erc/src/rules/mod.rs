@@ -18,10 +18,23 @@ mod bus_runs;
 pub(crate) use bus_hier::{bus_port_width_mismatch, global_bus_width_mismatch};
 pub(crate) use bus_runs::bus_runs_width_mismatch;
 mod clash_scope;
+mod completeness;
+pub(crate) use completeness::{
+    part_without_footprint, part_without_mpn, part_without_value, unannotated_designator,
+};
 mod local_label_other_sheets;
 pub(crate) use local_label_other_sheets::local_label_name_on_other_sheets;
 mod multiple_names;
 pub(crate) use multiple_names::net_multiple_names;
+mod net_completeness;
+mod net_members;
+pub(crate) use net_completeness::net_completeness;
+mod off_grid;
+pub(crate) use off_grid::off_grid;
+mod units_not_placed;
+pub(crate) use units_not_placed::{
+    PlacedUnit, finding as units_finding, missing_units, units_not_placed,
+};
 mod pin_type_conflict;
 pub(crate) use pin_type_conflict::pin_type_conflict;
 mod pins_touch_not_connected;

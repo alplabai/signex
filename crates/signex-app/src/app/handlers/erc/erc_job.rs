@@ -148,6 +148,7 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         fold,
         &inputs.overrides,
     );
+    add_project_units_not_placed(&mut by_path, &snapshots, &inputs.overrides);
     refile_child_sheet_violations(&mut by_path);
     dedupe_descendant_clashes(&mut by_path);
 
@@ -227,6 +228,28 @@ fn add_project_net_names(
         if let Some(list) = by_path.remove(&path) {
             by_path.insert(path, signex_erc::apply_overrides(list, overrides));
         }
+    }
+}
+
+/// The project-wide `UnitsNotPlaced` pass (#1286): units of one part are
+/// often split across sheets, so every per-sheet finding of the rule is
+/// replaced by one judged over all sheets of the run, in path order.
+fn add_project_units_not_placed(
+    by_path: &mut ViolationsByPath,
+    snapshots: &HashMap<PathBuf, SchematicRenderSnapshot>,
+    overrides: &HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+) {
+    let is_units =
+        |v: &signex_erc::Violation| v.builtin_kind() == Some(signex_erc::RuleKind::UnitsNotPlaced);
+    for list in by_path.values_mut() {
+        list.retain(|v| !is_units(v));
+    }
+    let mut sheets: Vec<(&PathBuf, &SchematicRenderSnapshot)> = snapshots.iter().collect();
+    sheets.sort_by(|a, b| a.0.cmp(b.0));
+    for (path, violation) in signex_erc::project_units_not_placed(&sheets) {
+        let mut list = by_path.remove(path).unwrap_or_default();
+        list.push(violation);
+        by_path.insert(path.clone(), signex_erc::apply_overrides(list, overrides));
     }
 }
 

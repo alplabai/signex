@@ -83,6 +83,14 @@ pub struct ErcSymbol {
     /// Unit number of this instance within its part.
     pub unit: u32,
     pub value: String,
+    /// Assigned footprint; empty when none.
+    pub footprint: String,
+    /// `false` for a part that is not placed on the board (no footprint due).
+    pub on_board: bool,
+    /// Units the library symbol defines ([`LibSymbol::unit_count`]).
+    ///
+    /// [`LibSymbol::unit_count`]: signex_types::schematic::LibSymbol::unit_count
+    pub unit_count: u32,
     pub position: Point,
     pub is_power: bool,
     /// World-space pin instances with connectivity pre-computed.
@@ -413,6 +421,9 @@ impl ErcContext {
                     lib_id: sym.lib_id.clone(),
                     unit: sym.unit,
                     value: sym.value.clone(),
+                    footprint: sym.footprint.clone(),
+                    on_board: sym.on_board,
+                    unit_count: lib_sym.unit_count(),
                     position: sym.position,
                     is_power: sym.is_power,
                     pins,
@@ -651,6 +662,9 @@ mod tests {
             lib_id: String::new(),
             unit: 1,
             value: String::new(),
+            footprint: String::new(),
+            on_board: true,
+            unit_count: 1,
             position: pt(0.0, 0.0),
             is_power: false,
             pins,
