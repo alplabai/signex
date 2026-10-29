@@ -746,6 +746,26 @@ fn a_library_still_mounting_is_refused() {
     assert_refused(&f, "still mounting");
 }
 
+/// #1728 E: the refusal while a library edit is still being written reaches
+/// the Messages panel, not only the dialog's error line.
+#[test]
+fn a_library_rename_while_its_writes_are_pending_is_refused_in_messages_too() {
+    let _ = diagnostics::init_logging();
+    let mut f = fixture();
+    let in_flight = f.app.library.writes.turn(&f.alpha);
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    assert_refused(&f, "a library edit is being written");
+    assert!(
+        diagnostics::recent_entries().iter().any(|e| e
+            .message
+            .contains("refused: A library edit is still being written")),
+        "the refusal reaches the Messages panel"
+    );
+    drop(in_flight);
+}
+
 #[test]
 fn an_open_browser_tab_and_its_state_follow_the_rename() {
     use signex_app::library::LibraryBrowserState;

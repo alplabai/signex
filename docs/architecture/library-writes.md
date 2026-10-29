@@ -21,6 +21,14 @@ Save, primitive binds, Component Preview Save including Save All and
 close-with-save), and the primitive container saves of a mounted library
 take a turn too. Nothing blocks `update` to wait for them.
 
+One exception: the Refresh All Pricing walk (`signex-library`
+`pricing_refresh.rs`) stores each row's prices through `store_pricing`
+on its own worker, without a turn. It is not a silent overwrite:
+`store_pricing` checks each update against the row as stored, under the
+library write lock and after a reload, writes only the cached prices, and
+drops (and reports) an update whose row no longer matches. Closing the
+library cancels the walk (`cancel_pricing_refresh_of`).
+
 ## Rebase on this app's own writes
 
 The gate keeps, per row, the revision this app's latest write produced
@@ -41,7 +49,31 @@ describe the same stored row.
 - Quit waits (bounded) for every library's queue, looking at the libraries
   when the wait starts.
 - Closing a library with writes pending is deferred until they finish; it
-  never unmounts under a running write.
+  never unmounts under a running write. See "Closing a library" below.
 - Rename library is refused while the library has writes pending, and the
   blocking primitive save is refused the same way, instead of waiting on a
   worker from the UI thread.
+
+## Closing a library (#1728)
+
+Close Library asks about dirty Component Preview editors first. With none,
+a library that still has writes queued records the close in
+`LibraryState.closing` and says so in Messages; the library stays usable
+meanwhile.
+
+- **When it comes due.** `close_libraries_whose_writes_are_done` runs
+  wherever a turn is released: a row write, a refresh, a container save, a
+  git re-init. It also runs on the external-edit poll tick, which catches a
+  turn released by a task the runtime dropped (no message arrives for
+  that).
+- **The check runs again.** Editors can be opened or edited while the
+  close waits. When the close comes due, a dirty editor cancels it and
+  raises the same Save All / Discard All / Cancel prompt; nothing dirty is
+  dropped silently. Clean editors close with the library. Discard All
+  drops the library's editors at once, so a close it defers does not ask
+  again.
+- **Opening again cancels it.** Opening the library (Open Library, a
+  Library Browser tab, any `commands::open_library` caller) while its close
+  waits clears the close.
+- Each step (deferred, closed, stopped by unsaved editors, cancelled by a
+  re-open) is one Messages line naming the library.
