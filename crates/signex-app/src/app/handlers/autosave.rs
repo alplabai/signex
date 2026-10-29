@@ -549,6 +549,50 @@ mod tests {
         );
     }
 
+    /// A failing move whose document was renamed back to the copy's key is
+    /// dropped, and the completion clears its journal entry: the next start
+    /// must not move the copy away from the document it belongs to.
+    #[test]
+    fn a_move_renamed_back_while_it_fails_clears_its_journal_entry() {
+        use crate::autosave::{
+            AutosaveMoved, DocStamp, FAILED_MOVES_BEFORE_FRESH_COPY, pending_move,
+        };
+        use futures::StreamExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("recovery");
+        let (a, t) = (tmp.path().join("a.snxsch"), tmp.path().join("t.snxsch"));
+        sidecar::write(&dir, &a, b"unsaved").unwrap();
+        pending_move::record(&dir, &a, &t).unwrap();
+
+        let (mut app, _boot) = Signex::new();
+        let autosave = &mut app.document_state.autosave;
+        autosave.set_dir(Some(dir.clone()));
+        autosave.begin(&a);
+        autosave.finish(&a, DocStamp::of_bytes(b"unsaved"), true);
+        autosave.rekey(&a, &t);
+        for _ in 0..FAILED_MOVES_BEFORE_FRESH_COPY {
+            let (mut start, _) = autosave.take_moves();
+            assert!(autosave.move_failed(start.remove(0)).is_none());
+        }
+        let (mut start, _) = autosave.take_moves();
+        let running = start.remove(0);
+        autosave.rekey(&t, &a);
+        let task = app.autosave_moved(AutosaveMoved {
+            sidecar: running,
+            result: Err("locked".to_string()),
+        });
+        let mut stream = iced_runtime::task::into_stream(task).expect("a journal clear");
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async { while stream.next().await.is_some() {} });
+
+        assert!(
+            pending_move::owed(&dir).is_empty(),
+            "no entry left to move the copy away at the next start"
+        );
+        assert!(sidecar::sidecar_path(&dir, &a).exists(), "the copy stays");
+    }
+
     /// A save of the new path while the rename into it runs: the task removes
     /// what it moved, so no outdated copy is offered at the next open.
     #[test]

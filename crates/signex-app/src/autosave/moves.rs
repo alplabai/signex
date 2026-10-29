@@ -185,10 +185,12 @@ impl AutosaveState {
     /// Drop each released move of this run whose old key a document took
     /// over (renamed onto it): the copy there is that document's now, and
     /// moving it would carry it to the wrong document. The released move's
-    /// own document writes fresh copies at `new` instead. Whatever sits at
-    /// the old key is left there, never removed: if that document had no
-    /// copy of its own and never writes one, the stale copy stays at its key
-    /// and may be offered when it is next opened.
+    /// own document gets a fresh copy at `new` on the next tick while it
+    /// holds unsaved edits: releasing the move marked `new` as due a write
+    /// ([`Self::move_failed`]). Whatever sits at the old key is left there,
+    /// never removed: if that document had no copy of its own and never
+    /// writes one, the stale copy stays at its key and may be offered when
+    /// it is next opened.
     fn drop_released_from_reused_keys(&mut self) {
         let reused: Vec<bool> = self
             .moves
@@ -300,21 +302,37 @@ impl AutosaveState {
             }
             return Some(failed.old);
         }
+        if failed.released {
+            self.mark_due_a_write(&failed.new);
+        }
         self.moves.push(failed);
         None
     }
 
+    /// The copy `written` records for `path` may still sit under an older
+    /// key (its move was released, not landed): forget its stamp, so the
+    /// next tick writes the current content at `path` even if the document
+    /// has not changed since. The document stays tracked.
+    fn mark_due_a_write(&mut self, path: &Path) {
+        if let Some(stamp) = self.written.get_mut(path) {
+            *stamp = None;
+        }
+    }
+
     /// The renames to start now, each with its new path held, and the old
     /// keys of obsolete copies to remove instead. A rename whose source is
-    /// itself the target of a rename still running waits for it.
+    /// itself the target of a rename still running waits for it, and so does
+    /// one whose target's copy is still being moved out.
     pub fn take_moves(&mut self) -> (Vec<SidecarMove>, Vec<PathBuf>) {
         self.drop_released_from_reused_keys();
         let (mut start, mut obsolete, mut wait) = (Vec::new(), Vec::new(), Vec::new());
         for mut owed in std::mem::take(&mut self.moves) {
-            // The copy is still being written or moved into `old`.
+            // The copy is still being written or moved into `old`, or the
+            // copy at `new` is still being moved out.
             if self.removing.contains_key(&owed.old)
                 || self.in_flight.contains_key(&owed.old)
                 || self.running_moves.iter().any(|r| r.new == owed.old)
+                || self.running_moves.iter().any(|r| r.old == owed.new)
             {
                 if !owed.released && !std::mem::replace(&mut owed.held, true) {
                     self.begin_remove(&owed.new);
@@ -404,6 +422,44 @@ mod tests {
         assert_eq!(started, [(b.into(), a.into())], "a -> t is settled");
         state.move_landed(&start[0]);
         assert!(!state.has_owed_moves());
+    }
+
+    #[test]
+    fn a_dropped_released_move_leaves_its_document_due_a_fresh_copy() {
+        let (a, b, t) = (Path::new("a"), Path::new("b"), Path::new("t"));
+        let mut state = tracked_at(&[a, b]);
+        state.rekey(a, t);
+        released(&mut state);
+        state.rekey(b, a);
+        let _ = state.take_moves(); // a -> t is dropped here
+        assert!(
+            !state.moves.iter().any(|m| m.new == t),
+            "a -> t was dropped"
+        );
+        assert!(
+            state.needs_write(t, DocStamp::of_bytes(b"x")),
+            "t's only copy was left at key(a): the next tick writes t again"
+        );
+    }
+
+    #[test]
+    fn a_move_into_a_key_whose_copy_is_moving_out_waits_for_it() {
+        let (a, b, c) = (Path::new("a"), Path::new("b"), Path::new("c"));
+        let mut state = tracked_at(&[a, b]);
+        state.rekey(b, c);
+        let (start, _) = state.take_moves();
+        let running = start[0].clone();
+        state.rekey(a, b);
+        let (start, obsolete) = state.take_moves();
+        assert!(obsolete.is_empty());
+        assert!(start.is_empty(), "a -> b waits while b -> c runs");
+        state.move_landed(&running);
+        let (start, _) = state.take_moves();
+        let started: Vec<_> = start
+            .iter()
+            .map(|m| (m.old.clone(), m.new.clone()))
+            .collect();
+        assert_eq!(started, [(a.into(), b.into())]);
     }
 
     #[test]
