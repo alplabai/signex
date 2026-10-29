@@ -770,7 +770,8 @@ fn an_unopened_annotate_write_mid_flight_refuses_the_replace() {
     std::fs::write(&child, &text).unwrap();
     let (generation, prep) = prepared_child_replace(&mut app);
 
-    let _ = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    crate::app::path_ops::settle_task(&mut app, task);
     let annotated = std::fs::read(&child).unwrap();
     assert_ne!(
         annotated,

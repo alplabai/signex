@@ -21,6 +21,9 @@ pub enum PathOpKind {
     Rename,
     RenameLibrary,
     Delete,
+    /// Annotate or Reset Duplicate Designators reading or rewriting the
+    /// project's sheets.
+    ProjectRewrite,
 }
 
 impl PathOpKind {
@@ -28,6 +31,7 @@ impl PathOpKind {
         match self {
             Self::Rename | Self::RenameLibrary => "rename",
             Self::Delete => "delete",
+            Self::ProjectRewrite => "project-wide rewrite",
         }
     }
 }

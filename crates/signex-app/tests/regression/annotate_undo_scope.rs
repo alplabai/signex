@@ -113,9 +113,12 @@ fn refs(app: &Signex, path: &PathBuf) -> Vec<String> {
 }
 
 fn annotate(app: &mut Signex) {
-    let _ = app.update(Message::Annotate(AnnotateMsg::Run(
-        signex_engine::AnnotateMode::ResetAndRenumber,
-    )));
+    crate::settle_support::settle(
+        app,
+        Message::Annotate(AnnotateMsg::Run(
+            signex_engine::AnnotateMode::ResetAndRenumber,
+        )),
+    );
 }
 
 fn undo(app: &mut Signex) {

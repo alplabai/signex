@@ -88,6 +88,20 @@ pub enum AnnotateMsg {
     ReprefixConfirmed,
     /// Cancel (or Esc) on the Re-prefix list: nothing changes.
     ReprefixCancelled,
+    /// The worker read the project's sheets for Annotate or Reset Duplicate
+    /// Designators (#859). `generation` names the run; a result a newer run
+    /// replaced is dropped.
+    PassSheetsRead {
+        generation: u64,
+        result: std::sync::Arc<Result<crate::app::handlers::erc::SheetsRead, String>>,
+    },
+    /// The worker wrote the unopened sheets the run renumbered. `hold` keeps
+    /// quit waiting until the completion has registered what it owes.
+    PassSheetsWritten {
+        generation: u64,
+        result: std::sync::Arc<Result<Vec<crate::app::handlers::erc::SheetWrite>, String>>,
+        hold: crate::autosave::SaveHold,
+    },
 }
 
 /// ERC dialog message family (ADR-0001 D3). Namespaced under

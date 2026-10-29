@@ -590,9 +590,10 @@ fn undone_reprefix_does_not_shadow_a_sheet_rewritten_on_disk() {
     rewritten.set_path(Some(child_path.clone()));
     rewritten.save().expect("rewrite the child on disk");
 
-    let _ = w.app.update(Message::Annotate(AnnotateMsg::Run(
-        signex_engine::AnnotateMode::Incremental,
-    )));
+    crate::settle_support::settle(
+        &mut w.app,
+        Message::Annotate(AnnotateMsg::Run(signex_engine::AnnotateMode::Incremental)),
+    );
 
     // An unopened sheet is annotated and written straight to disk.
     let on_disk = signex_engine::Engine::open(&child_path).expect("reopen the child");

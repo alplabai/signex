@@ -438,12 +438,24 @@ impl Signex {
                 self.sync_diagnostics_panel_ctx();
                 task
             }
-            AnnotateMsg::Run(mode) => {
-                // The action can rewrite unopened sheets on disk, which the
-                // in-memory fingerprint cannot see: force a reload.
-                let task = self.handle_annotate(mode);
-                self.invalidate_annotate_preview();
-                Task::batch([task, self.refresh_annotate_preview()])
+            // The preview reloads when the run ends: only then has the disk
+            // (the unopened sheets it rewrote) and memory settled.
+            AnnotateMsg::Run(mode) => self.handle_annotate(mode),
+            AnnotateMsg::PassSheetsRead { generation, result } => {
+                let task = self.handle_annotate_sheets_read(generation, &result);
+                self.sync_diagnostics_panel_ctx();
+                task
+            }
+            AnnotateMsg::PassSheetsWritten {
+                generation,
+                result,
+                // Held to the end of this arm, after the copy removals the
+                // handler registered; dropping it releases quit.
+                hold: _hold,
+            } => {
+                let task = self.handle_annotate_sheets_written(generation, &result);
+                self.sync_diagnostics_panel_ctx();
+                task
             }
             AnnotateMsg::OpenDialog => {
                 // A fresh session always re-reads the project from disk.

@@ -66,7 +66,7 @@ impl Signex {
     }
 
     /// The open sheets' child-sheet placements, read live (memory only).
-    fn child_sheet_signature(&self) -> ChildSheetSignature {
+    pub(crate) fn child_sheet_signature(&self) -> ChildSheetSignature {
         self.document_state
             .engines
             .iter()
