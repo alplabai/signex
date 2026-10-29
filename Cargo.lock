@@ -808,7 +808,7 @@ dependencies = [
 
 [[package]]
 name = "chrome-catalog"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "iced",
  "signex-types",
@@ -5558,7 +5558,7 @@ dependencies = [
 
 [[package]]
 name = "signex-3d-model-importer"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "base64 0.22.1",
  "log",
@@ -5573,7 +5573,7 @@ dependencies = [
 
 [[package]]
 name = "signex-app"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5624,7 +5624,7 @@ dependencies = [
 
 [[package]]
 name = "signex-bake"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -5639,7 +5639,7 @@ dependencies = [
 
 [[package]]
 name = "signex-bom"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "serde",
  "signex-types",
@@ -5647,7 +5647,7 @@ dependencies = [
 
 [[package]]
 name = "signex-engine"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "anyhow",
  "serde",
@@ -5662,7 +5662,7 @@ dependencies = [
 
 [[package]]
 name = "signex-erc"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -5674,7 +5674,7 @@ dependencies = [
 
 [[package]]
 name = "signex-erc-dsl"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "chumsky",
  "regex",
@@ -5686,7 +5686,7 @@ dependencies = [
 
 [[package]]
 name = "signex-gfx"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
@@ -5705,7 +5705,7 @@ dependencies = [
 
 [[package]]
 name = "signex-library"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5739,7 +5739,7 @@ dependencies = [
 
 [[package]]
 name = "signex-library-server"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -5764,7 +5764,7 @@ dependencies = [
 
 [[package]]
 name = "signex-net"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "signex-types",
  "uuid",
@@ -5772,7 +5772,7 @@ dependencies = [
 
 [[package]]
 name = "signex-output"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "pdf-writer",
  "rust_xlsxwriter",
@@ -5788,7 +5788,7 @@ dependencies = [
 
 [[package]]
 name = "signex-renderer"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "regex",
  "serde",
@@ -5801,7 +5801,7 @@ dependencies = [
 
 [[package]]
 name = "signex-sketch"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "approx",
  "serde",
@@ -5815,7 +5815,7 @@ dependencies = [
 
 [[package]]
 name = "signex-types"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -5829,7 +5829,7 @@ dependencies = [
 
 [[package]]
 name = "signex-widgets"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.1"
 dependencies = [
  "chrono",
  "iced",
