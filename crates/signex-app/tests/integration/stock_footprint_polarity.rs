@@ -171,3 +171,57 @@ fn stock_rows_with_an_empty_mpn_pass_write_validation() {
             .unwrap_or_else(|e| panic!("{}: empty MPN refused: {e}", row.internal_pn));
     }
 }
+
+/// The committed file must carry the pads and the mark itself: only the
+/// footprint editor bakes a sketch, so a loader that never opens the
+/// editor would otherwise see no pads and no cathode bar.
+#[test]
+fn committed_polarised_footprint_carries_baked_pads_and_the_cathode_bar() {
+    let adapter = open_stock();
+    let (_, _, fp) = paired_rows(&adapter)
+        .into_iter()
+        .find(|(_, cathode, _)| *cathode)
+        .expect("a cathode row");
+    let x_of = |n: &str| fp.pads.iter().find(|p| p.number == n).expect(n).position[0];
+    assert_eq!(fp.pads.len(), 2);
+    assert!(x_of("1") < 0.0 && x_of("2") > 0.0);
+    let [bar] = fp.silk_f.as_slice() else {
+        panic!("one baked cathode bar, got {}", fp.silk_f.len());
+    };
+    let FpGraphicKind::Line { from, to } = &bar.kind else {
+        panic!("the cathode mark is a line");
+    };
+    assert!((from[0] + 1.7).abs() < 1e-6 && (to[0] + 1.7).abs() < 1e-6);
+}
+
+/// Pin K (pin 1) reaches pad 1 through the default 1:1 map (no overrides),
+/// and pad 1 sits on the marked, negative-x side.
+#[test]
+fn cathode_pin_k_binds_to_the_marked_pad() {
+    let adapter = open_stock();
+    let mut checked = 0;
+    for (row, cathode_on_1, fp) in paired_rows(&adapter) {
+        if !cathode_on_1 {
+            continue;
+        }
+        let pn = row.internal_pn.as_str();
+        assert!(
+            row.pin_map_overrides.is_empty(),
+            "{pn}: overrides would rebind K"
+        );
+        let symbol = adapter.get_symbol(row.symbol_ref.uuid).expect("symbol");
+        let k = symbol.pins.iter().find(|p| p.name == "K").expect("pin K");
+        let pad = fp
+            .pads
+            .iter()
+            .find(|p| p.number == k.number)
+            .expect("pad for K");
+        assert!(
+            pad.position[0] < 0.0,
+            "{pn}: K lands on x = {}",
+            pad.position[0]
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 4);
+}

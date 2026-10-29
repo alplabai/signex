@@ -13,6 +13,7 @@ anchor = [
 ]
 pads_tsv = '''
 number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
+MH1	NptHole	round	6	6	0	0	0	Top Solder|Bottom Solder	3.2		0.05	
 '''
 silk_f = []
 silk_b = []

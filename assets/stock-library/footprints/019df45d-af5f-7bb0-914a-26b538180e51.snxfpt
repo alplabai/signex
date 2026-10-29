@@ -13,6 +13,14 @@ anchor = [
 ]
 pads_tsv = '''
 number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
+1	Smd	rect	1.55	0.6	-2.7	1.905	0	Top Layer|Top Solder|Top Paste			0.05	0
+2	Smd	rect	1.55	0.6	-2.7	0.635	0	Top Layer|Top Solder|Top Paste			0.05	0
+3	Smd	rect	1.55	0.6	-2.7	-0.635	0	Top Layer|Top Solder|Top Paste			0.05	0
+4	Smd	rect	1.55	0.6	-2.7	-1.905	0	Top Layer|Top Solder|Top Paste			0.05	0
+5	Smd	rect	1.55	0.6	2.7	-1.905	0	Top Layer|Top Solder|Top Paste			0.05	0
+6	Smd	rect	1.55	0.6	2.7	-0.635	0	Top Layer|Top Solder|Top Paste			0.05	0
+7	Smd	rect	1.55	0.6	2.7	0.635	0	Top Layer|Top Solder|Top Paste			0.05	0
+8	Smd	rect	1.55	0.6	2.7	1.905	0	Top Layer|Top Solder|Top Paste			0.05	0
 '''
 silk_f = []
 silk_b = []

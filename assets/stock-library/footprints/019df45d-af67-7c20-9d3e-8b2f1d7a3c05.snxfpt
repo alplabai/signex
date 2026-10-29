@@ -13,8 +13,9 @@ anchor = [
 ]
 pads_tsv = '''
 number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
+1	Smd	rect	1	1.25	-1	0	0	Top Layer|Top Solder|Top Paste			0.05	0
+2	Smd	rect	1	1.25	1	0	0	Top Layer|Top Solder|Top Paste			0.05	0
 '''
-silk_f = []
 silk_b = []
 fab_b = []
 version = "0.0.1"
@@ -41,6 +42,21 @@ points = [
     -1.9,
     0.9,
 ],
+]
+
+[[footprints.silk_f]]
+stroke_width = 0.12
+filled = false
+
+[footprints.silk_f.kind]
+kind = "line"
+from = [
+    -1.7,
+    -0.7,
+]
+to = [
+    -1.7,
+    0.7,
 ]
 
 [[footprints.fab_f]]
