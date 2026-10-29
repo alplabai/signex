@@ -278,6 +278,8 @@ impl Signex {
             moved_back,
         } = done;
         self.document_state.pending_path_ops.finish(request.id);
+        // The worker moved the library back and un-patched the project file.
+        self.document_state.note_document_written_behind_engines();
         let stale = patch_undo
             .err()
             .map(|suffix| (request.project_path.clone(), suffix));

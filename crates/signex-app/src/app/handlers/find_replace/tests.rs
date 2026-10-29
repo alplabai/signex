@@ -999,3 +999,38 @@ fn an_unchanged_hierarchy_still_applies_the_replace() {
     assert!(app.document_state.engines.contains_key(&child), "applied");
     assert!(!app.document_state.undo_groups.is_empty());
 }
+
+/// A rename of a sheet open in another project holds nothing this Replace
+/// reads, so it does not refuse it (#859 review).
+#[test]
+fn a_rename_of_another_projects_open_sheet_does_not_refuse_the_replace() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _root, _child) = placed_twice_on_disk(&dir);
+    let other = tempfile::tempdir().unwrap();
+    let elsewhere = other.path().join("other.snxsch");
+    app.document_state.insert_engine(
+        elsewhere.clone(),
+        signex_engine::Engine::new_with_path(Default::default(), Some(elsewhere.clone())).unwrap(),
+    );
+    app.document_state.pending_path_ops.begin(
+        crate::app::path_ops::PathOpKind::Rename,
+        vec![elsewhere, other.path().join("moved.snxsch")],
+        crate::app::state::scope::CaseFold::PRESERVE,
+    );
+    project_search(&mut app, "child_net");
+    set_replacement(&mut app, "X");
+
+    let _read = app.update(crate::app::Message::FindReplaceMsg(
+        FindReplaceMsg::ReplaceAll,
+    ));
+
+    assert!(
+        app.document_state.error_notice.is_none(),
+        "refused: {:?}",
+        app.document_state.error_notice
+    );
+    assert!(
+        app.ui_state.find_replace.is_busy(),
+        "the replace read started"
+    );
+}

@@ -341,6 +341,8 @@ impl Signex {
         self.document_state
             .project_folder_renames
             .insert(job.project_id);
+        // A sheet read already in flight must not land in the old folder.
+        self.document_state.note_document_written_behind_engines();
         let run = job.clone();
         let recovery = self.document_state.autosave.dir().map(Path::to_path_buf);
         let open = self.open_document_paths();

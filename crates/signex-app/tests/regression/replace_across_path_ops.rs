@@ -187,12 +187,19 @@ fn deliver(app: &mut Signex, messages: Vec<Message>) {
 /// Quit with Save All, the way a user leaving the app saves everything.
 fn save_all(app: &mut Signex) {
     let _close = app.update(Message::Window(WindowMsg::CloseMainWindow));
-    if app.ui_state.app_quit_confirm.is_some() {
-        crate::settle_support::settle(
-            app,
-            Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    if app.ui_state.app_quit_confirm.is_none() {
+        // No prompt is only right when there is nothing left to write.
+        assert!(
+            app.document_state.dirty_paths.is_empty(),
+            "quit skipped Save All with dirty documents: {:?}",
+            app.document_state.dirty_paths
         );
+        return;
     }
+    crate::settle_support::settle(
+        app,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    );
 }
 
 fn assert_nothing_held_at(app: &Signex, old: &Path) {
@@ -241,6 +248,7 @@ fn a_replace_read_before_a_delete_does_not_resurrect_the_sheet() {
 /// The Replace started while the move or delete runs is refused up front,
 /// with a card and a Messages line; nothing is read or installed.
 fn assert_replace_refused(app: &mut Signex) {
+    let since = signex_app::diagnostics::newest_entry_id();
     let task = app.update(Message::FindReplaceMsg(FindReplaceMsg::ReplaceAll));
     let notice = app
         .document_state
@@ -254,7 +262,7 @@ fn assert_replace_refused(app: &mut Signex) {
     assert!(
         signex_app::diagnostics::recent_entries()
             .iter()
-            .any(|e| e.message.contains("Replace was not run")),
+            .any(|e| Some(e.id) > since && e.message.contains("Replace was not run")),
         "the refusal reaches the Messages panel"
     );
 }

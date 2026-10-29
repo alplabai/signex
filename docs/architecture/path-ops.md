@@ -26,8 +26,9 @@ A move or delete changes what is on disk behind the engines, so it obeys the
 (project Replace's `prepare`) records the epoch and applies only if it is
 unchanged. Every operation moves the epoch twice. Starting it bumps it, so a
 read already in flight is out of date before the worker touches the file.
-Completing it bumps it again (`FileRenamed`, `LibraryRenamed`, a delete through
-`drop_deleted_documents`, a project-folder move), whether or not an engine was
+Completing it bumps it again (`FileRenamed`, `LibraryRenamed` and its rollback,
+a delete through `drop_deleted_documents`, a project-folder move), whether or
+not an engine was
 open for the path, and re-keyed or rewritten engines go through
 `insert_engine` / `remove_engine`. Otherwise a Replace whose read finished
 before the move would install a dirty tabless engine at the old path, and Save
@@ -36,10 +37,17 @@ All would write the moved or deleted sheet back.
 A project-wide rewrite that starts while an operation runs is refused up front
 with a card and a Messages line: project Replace (`refuse_replace_while_path_op`)
 and Annotate / Reset Duplicate Designators (`refuse_annotate_while_path_op`).
-Both use `refuse_project_wide_while_path_op`, which checks the parsed sheets,
-the project's declared pages and its folder. Between the worker's move and the
-completion, a moved page is in neither the parsed sheets nor the unreadable
+Both use `refuse_project_wide_while_path_op`, which checks the sheets the pass
+reads (Replace: the matched sheets and the root; Annotate: the parsed sheets),
+the project's declared pages and its folder. Open sheets of other projects are
+not read, so their operations do not refuse it. Between the worker's move and
+the completion, a moved page is in neither the parsed sheets nor the unreadable
 list, so the sheets alone would miss it.
+
+The folder check is deliberately broad: any operation under the project folder
+(a `.snxsym`, `.snxfpt` or library rename too) refuses these passes until it
+finishes. It cannot tell an unlisted sheet mid-move from any other file, and the
+refusal lasts only as long as the worker.
 
 ## Library rename (`handlers/dock/project_navigation/rename_library.rs`)
 

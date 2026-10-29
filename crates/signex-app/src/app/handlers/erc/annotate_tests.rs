@@ -561,12 +561,12 @@ fn reset_duplicates_is_refused_whole_while_a_rename_holds_a_sheet() {
 /// Between the worker's move and its completion a moved page is in neither
 /// the parsed sheets nor the unreadable list; the declared pages and the
 /// project folder still see the rename, so the pass is refused.
-fn assert_annotate_refused_while(claimed: &str) {
+fn assert_annotate_refused_while(page: &str, claimed: &str) {
     let _ = crate::diagnostics::init_logging();
     let (mut app, dir) = project(vec![unit("U7", 1, 0.0)], vec![unit("U5", 1, 0.0)]);
     let pages = &mut app.document_state.projects[0].data.sheets;
     let mut moved = pages[0].clone();
-    moved.filename = "moved_page.snxsch".to_string();
+    moved.filename = page.to_string();
     pages.push(moved);
     claim_rename(&mut app, dir.join(claimed));
     run_annotate_expecting_refusal(&mut app, &dir);
@@ -586,10 +586,16 @@ fn run_annotate_expecting_refusal(app: &mut Signex, dir: &std::path::Path) {
 
 #[test]
 fn annotate_is_refused_while_a_declared_page_is_mid_move() {
-    assert_annotate_refused_while("moved_page.snxsch");
+    assert_annotate_refused_while("moved_page.snxsch", "moved_page.snxsch");
+}
+
+/// A declared page outside the project folder pins the declared-pages check.
+#[test]
+fn annotate_is_refused_while_a_declared_page_outside_the_folder_moves() {
+    assert_annotate_refused_while("../shared_page.snxsch", "../shared_page.snxsch");
 }
 
 #[test]
 fn annotate_is_refused_while_a_file_in_the_project_folder_moves() {
-    assert_annotate_refused_while("unlisted.snxsch");
+    assert_annotate_refused_while("moved_page.snxsch", "unlisted.snxsch");
 }

@@ -441,10 +441,11 @@ pub struct DocumentState {
     /// project-wide undo steps (an annotate run under "One step for the whole
     /// project"). Never reused.
     pub next_undo_group: u64,
-    /// Bumped whenever a document is opened, saved or closed (and when a
-    /// project closes). A background job that read sheets from disk records it
-    /// first and applies its result only if it is unchanged, so it never
-    /// installs bytes a later open, save or close has already superseded.
+    /// Bumped whenever a document is opened, saved or closed, when a project
+    /// closes, and when a rename, delete or project-folder move starts and
+    /// finishes. A background job that read sheets from disk records it first
+    /// and applies its result only if it is unchanged, so it never installs
+    /// bytes a later open, save, close, move or delete has already superseded.
     pub documents_epoch: u64,
     /// Designators used on the sheets of the project a part is placed in,
     /// scanned off-thread; see `designator_scan.rs`.
