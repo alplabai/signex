@@ -435,9 +435,16 @@ pub struct DeleteDone {
 /// runtime, for unit tests of flows whose result lands on a worker (#859).
 #[cfg(test)]
 pub(crate) fn settle(app: &mut crate::app::Signex, message: crate::app::Message) {
+    let task = app.update(message);
+    settle_task(app, task);
+}
+
+/// [`settle`] for a task a handler returned directly.
+#[cfg(test)]
+pub(crate) fn settle_task(app: &mut crate::app::Signex, task: iced::Task<crate::app::Message>) {
     use futures::StreamExt as _;
     let runtime = tokio::runtime::Runtime::new().expect("runtime");
-    let mut pending = vec![app.update(message)];
+    let mut pending = vec![task];
     while let Some(task) = pending.pop() {
         let Some(mut stream) = iced_runtime::task::into_stream(task) else {
             continue;
