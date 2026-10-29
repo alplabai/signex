@@ -109,8 +109,10 @@ impl Signex {
     ) -> Task<Message> {
         if let Err(detail) = self.arm_resolved(&target_sheet, arm_epoch, &library_path, result) {
             self.report_place_failure(&detail);
+            return Task::none();
         }
-        Task::none()
+        // Closed sheets' numbers arrive off-thread; the ghost refreshes then.
+        self.start_designator_scan(&target_sheet)
     }
 
     fn arm_resolved(
