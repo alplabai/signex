@@ -2,6 +2,7 @@
 use super::*;
 
 mod instances;
+mod net_members;
 use crate::build_netlist;
 use signex_types::schematic::{
     ChildSheet, FillType, HAlign, Junction, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle,

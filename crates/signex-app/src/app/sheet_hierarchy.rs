@@ -29,7 +29,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use signex_types::schematic::{InstancePath, SchematicSheet};
+use signex_types::schematic::{InstancePath, Point, SchematicSheet};
 use uuid::Uuid;
 
 use crate::app::project_sheets::{lexically_normalize, resolve_child_reference};
@@ -448,6 +448,35 @@ pub(crate) fn parent_sheet(
             })
         })
         .map(|(path, _)| path.clone())
+}
+
+/// The sheet symbol on `parent` that references `child`: its uuid and centre,
+/// for landing the view on it after going up a level.
+pub(crate) fn symbol_referencing(
+    sheets: &HashMap<PathBuf, SchematicSheet>,
+    parent: &Path,
+    child: &Path,
+    fold: CaseFold,
+) -> Option<(Uuid, Point)> {
+    let child_key = normalised_key(child, fold);
+    let dir = parent.parent().unwrap_or_else(|| Path::new(""));
+    sheets
+        .get(parent)?
+        .child_sheets
+        .iter()
+        .find(|cs| {
+            resolve_child_reference(dir, &cs.filename)
+                .is_some_and(|resolved| normalised_key(&resolved, fold) == child_key)
+        })
+        .map(|cs| (cs.uuid, symbol_centre(cs)))
+}
+
+/// The centre of a sheet symbol's body.
+pub(crate) fn symbol_centre(symbol: &signex_types::schematic::ChildSheet) -> Point {
+    Point::new(
+        symbol.position.x + symbol.size.0 / 2.0,
+        symbol.position.y + symbol.size.1 / 2.0,
+    )
 }
 
 /// The sheet whose symbol `placed_as` is, when exactly one holds it. A copied
