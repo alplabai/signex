@@ -188,6 +188,14 @@ fn single_save(
 /// cascade; an adapter without a batch write updates the rows in order and
 /// stops at the first failure. A row that fails to update is recorded in
 /// [`CascadeReport::failed`], never returned as an error.
+///
+/// Rows are independent: each re-pin is idempotent and a row already at the
+/// saved version is skipped, so one stale or vanished row never holds back
+/// the clean ones. The clean rows commit together; the others come back in
+/// `stale` or `failed` for the caller to report, and a later pass retries
+/// them. A write that fails as a whole moves no row, leaves the file and git
+/// as they were, and reports every row as failed. The commit message names
+/// the first rows and counts the rest.
 pub fn cascade_after_saves(
     adapter: &dyn LibraryAdapter,
     saves: &[PrimitiveSave],
@@ -214,6 +222,7 @@ fn cascade_with(
         return Ok(report);
     }
     let mut targets: Vec<(String, RowId)> = Vec::new();
+    let mut names: Vec<String> = Vec::new();
     for (table, row) in adapter.iter_rows()? {
         let row_id = RowId::from_uuid(row.row_id);
         let mut bump = false;
@@ -228,6 +237,7 @@ fn cascade_with(
             bump = true;
         }
         if bump {
+            names.push(row_label(&row));
             targets.push((table, row_id));
         }
     }
@@ -246,7 +256,7 @@ fn cascade_with(
         }
         changed
     };
-    let msg = cascade_commit_message(saves, targets.len());
+    let msg = cascade_commit_message(saves, &names);
     match write(&targets, &mut edit, &msg) {
         Ok(outcomes) => {
             for (row_id, outcome) in outcomes {
@@ -329,10 +339,31 @@ pub(crate) fn apply_cascade_bump(row: &mut ComponentRow, save: &PrimitiveSave) {
     row.updated = chrono::Utc::now();
 }
 
+/// Rows named in a cascade commit message before "+N more".
+const MESSAGE_ROWS: usize = 5;
+/// Longest part number shown in a commit message, in characters.
+const MESSAGE_NAME_CHARS: usize = 32;
+
+/// What a commit message calls a row: its part number, or its short id when
+/// the part number is blank.
+fn row_label(row: &ComponentRow) -> String {
+    let pn = row.internal_pn.to_string();
+    let pn = pn.trim();
+    if pn.is_empty() {
+        return short_uuid(row.row_id);
+    }
+    let mut label: String = pn.chars().take(MESSAGE_NAME_CHARS).collect();
+    if pn.chars().count() > MESSAGE_NAME_CHARS {
+        label.push('~');
+    }
+    label.replace(['\n', '\r'], " ")
+}
+
 /// Synthesise the one git commit message of a cascade: it names each saved
-/// primitive and how many rows the commit moved, so the audit trail
-/// groups under the primitive UUID.
-fn cascade_commit_message(saves: &[PrimitiveSave], rows: usize) -> String {
+/// primitive, how many rows the commit moves and the first few of them, so
+/// the audit trail groups under the primitive UUID. The list is cut with
+/// "+N more" so the subject stays one short line.
+fn cascade_commit_message(saves: &[PrimitiveSave], rows: &[String]) -> String {
     let what: Vec<String> = saves
         .iter()
         .map(|s| {
@@ -344,7 +375,17 @@ fn cascade_commit_message(saves: &[PrimitiveSave], rows: usize) -> String {
             )
         })
         .collect();
-    format!("cascade: bump {} on {rows} row(s)", what.join(", "))
+    let mut message = format!("cascade: bump {} on {} row(s)", what.join(", "), rows.len());
+    if rows.is_empty() {
+        return message;
+    }
+    let shown = rows.len().min(MESSAGE_ROWS);
+    message.push_str(": ");
+    message.push_str(&rows[..shown].join(", "));
+    if rows.len() > shown {
+        message.push_str(&format!(", +{} more", rows.len() - shown));
+    }
+    message
 }
 
 fn short_uuid(uuid: Uuid) -> String {
@@ -372,6 +413,28 @@ mod tests {
         assert_eq!(patch_bump("draft"), "draft.1");
         assert_eq!(patch_bump("1.2"), "1.2.1");
         assert_eq!(patch_bump("1.2.3.4"), "1.2.3.4.1");
+    }
+
+    fn save() -> PrimitiveSave {
+        PrimitiveSave {
+            kind: CascadeKind::Footprint,
+            library_id: Uuid::nil(),
+            uuid: Uuid::nil(),
+            version: "1.0.1".into(),
+        }
+    }
+
+    #[test]
+    fn the_commit_message_lists_few_rows_whole_and_cuts_many() {
+        let names: Vec<String> = (0..3).map(|i| format!("R-{i}")).collect();
+        assert_eq!(
+            cascade_commit_message(&[save()], &names),
+            "cascade: bump footprint 00000000 to v1.0.1 on 3 row(s): R-0, R-1, R-2"
+        );
+        let many: Vec<String> = (0..9).map(|i| format!("R-{i}")).collect();
+        let msg = cascade_commit_message(&[save()], &many);
+        assert!(msg.ends_with("R-0, R-1, R-2, R-3, R-4, +4 more"), "{msg}");
+        assert!(msg.contains("on 9 row(s)"));
     }
 
     #[test]
@@ -447,6 +510,14 @@ mod tests {
                 content_hash: [0u8; 32],
                 server_revision: None,
             }
+        }
+
+        #[test]
+        fn a_long_or_blank_part_number_stays_short_in_the_message() {
+            let mut row = row(&"X".repeat(100), Uuid::nil(), Uuid::nil());
+            assert_eq!(row_label(&row).chars().count(), MESSAGE_NAME_CHARS + 1);
+            row.internal_pn = crate::identity::InternalPn::new("  ");
+            assert_eq!(row_label(&row), short_uuid(row.row_id));
         }
 
         fn save(lib: Uuid, symbol: Uuid) -> PrimitiveSave {

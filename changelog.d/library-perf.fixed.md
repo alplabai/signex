@@ -1,0 +1,1 @@
+- **Library cascade and reads:** a symbol or footprint save commits one `.snxlib` write with a message that names the rows it moved, `read_row` converts only the row asked for, and `snapshot_table` reuses rows it already converted; a failed cascade now says "Save again to retry" first.

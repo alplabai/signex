@@ -303,6 +303,12 @@ fn rows_that_use(n: usize) -> String {
     }
 }
 
+/// Messages cuts a line at 157 bytes; the retry advice comes first so the
+/// cut takes the tail.
+const MESSAGES_LINE_BYTES: usize = 157;
+/// Longest failure reason in the Messages line.
+const FAILED_REASON_BYTES: usize = 50;
+
 /// What to tell the user about a cascade, reason first: the Messages
 /// panel cuts long lines. Nothing for a cascade that touched no row.
 fn summarize(
@@ -322,17 +328,19 @@ fn summarize(
     };
     let mut lines = Vec::new();
     if !report.failed.is_empty() {
-        let ids: Vec<String> = report.failed.iter().map(|(id, _)| id.to_string()).collect();
-        let reason = &report.failed[0].1;
+        let failed = report.failed.len();
+        let total = failed + report.auto_bumped.len();
+        let reason =
+            crate::text_trunc::prefix_within_bytes(&report.failed[0].1, FAILED_REASON_BYTES);
+        let line = format!(
+            "Save again to retry: {failed} of {total} rows still at the old version ({reason}); {label} saved"
+        );
         lines.push((
             Level::Error,
-            format!(
-                "{label} saved; bumped {} rows, {} not bumped ({reason}): {}",
-                report.auto_bumped.len(),
-                report.failed.len(),
-                ids.join(", "),
-            ),
+            crate::text_trunc::prefix_within_bytes(&line, MESSAGES_LINE_BYTES).to_string(),
         ));
+        let ids: Vec<String> = report.failed.iter().map(|(id, _)| id.to_string()).collect();
+        lines.push((Level::Warn, format!("Rows not bumped: {}", ids.join(", "))));
     } else if !report.auto_bumped.is_empty() {
         lines.push((
             Level::Info,
@@ -405,11 +413,27 @@ mod tests {
             ..Default::default()
         };
         let lines = summarize("A", Some("0.0.2"), &Ok(report));
-        assert_eq!(lines.len(), 1);
+        assert_eq!(lines.len(), 2);
         assert_eq!(lines[0].0, Level::Error);
         assert_eq!(
             lines[0].1,
-            format!("A saved; bumped 2 rows, 1 not bumped (disk full): {bad}")
+            "Save again to retry: 1 of 3 rows still at the old version (disk full); A saved"
+        );
+        assert_eq!(lines[1].1, format!("Rows not bumped: {bad}"));
+    }
+
+    #[test]
+    fn a_failure_line_fits_the_messages_cut_with_the_advice_first() {
+        let report = CascadeReport {
+            failed: (0..40).map(|_| (id(), "x".repeat(300))).collect(),
+            ..Default::default()
+        };
+        let lines = summarize("A very long primitive name", Some("0.0.2"), &Ok(report));
+        let line = &lines[0].1;
+        assert!(line.len() <= MESSAGES_LINE_BYTES, "{line}");
+        assert!(
+            line.starts_with("Save again to retry: 40 of 40 rows"),
+            "{line}"
         );
     }
 
