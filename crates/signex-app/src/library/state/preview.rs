@@ -139,6 +139,10 @@ pub struct ComponentPreviewState {
     /// Shown next to the field; Save is blocked while one is pending.
     pub params_error: HashMap<String, String>,
 
+    /// A neutral one-line notice beside a measurement (not a refusal), by
+    /// parameter name: a unit change reinterprets the number.
+    pub params_note: HashMap<String, String>,
+
     /// Name typed into the "Add custom parameter" input, consumed by the
     /// kind pills.
     pub new_param_name: String,
@@ -203,6 +207,7 @@ impl ComponentPreviewState {
             params_prefix: HashMap::new(),
             params_slot: HashMap::new(),
             params_error: HashMap::new(),
+            params_note: HashMap::new(),
             new_param_name: String::new(),
             pin_map_state: PinMapInlineState::default(),
             alternate_error: None,

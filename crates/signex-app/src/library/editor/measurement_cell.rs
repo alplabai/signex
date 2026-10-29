@@ -122,16 +122,19 @@ pub(super) fn view<'a>(
             .into(),
         None => field.into(),
     };
-    match state.params_error.get(name) {
-        Some(why) => column![
-            line,
+    let mut lines = column![line].spacing(SP.xs).width(Length::Fill);
+    if let Some(why) = state.params_error.get(name) {
+        lines = lines.push(
             text(why.clone())
                 .size(TS.caption)
-                .color(theme_ext::error_color(tokens))
-        ]
-        .spacing(SP.xs)
-        .width(Length::Fill)
-        .into(),
-        None => line,
+                .color(theme_ext::error_color(tokens)),
+        );
+    } else if let Some(note) = state.params_note.get(name) {
+        lines = lines.push(
+            text(note.clone())
+                .size(TS.caption)
+                .color(theme_ext::text_secondary(tokens)),
+        );
     }
+    lines.into()
 }

@@ -188,6 +188,7 @@ pub(super) fn commit_param_buffer(
         .copied()
         .unwrap_or(SiPrefix::One);
     let slot = measurement_slot(template, key);
+    modal.note = None;
     match modal_param_value(value, &unit, prefix, modal.draft.parameters.get(key), slot) {
         Ok(pv) => {
             modal.draft.parameters.insert(key.to_string(), pv);
@@ -233,7 +234,7 @@ pub(super) fn pick_unit(
             .get(key)
             .and_then(|v| unit_change_note(key, before.as_ref(), v))
     {
-        modal.error = Some(note);
+        modal.note = Some(note);
     }
 }
 
@@ -782,7 +783,31 @@ mod tests {
     fn a_free_unit_change_is_noted() {
         let mut modal = modal_with(canonical_kilo_ohms());
         pick_unit(&mut modal, "value", "%".into(), None);
-        let note = modal.error.expect("a notice");
+        assert!(modal.error.is_none(), "a notice is not a refusal");
+        let note = modal.note.expect("a notice");
         assert!(note.contains("reinterpreted"), "{note}");
+    }
+
+    /// The modal stores the same for the same action: picking k on a slot
+    /// holding a plain number or an unknown unit.
+    #[test]
+    fn the_modal_stores_a_prefix_pick_on_a_slot_number_or_unknown_unit() {
+        let t = template(slot("value", "ohm"));
+        for stored in [
+            ParamValue::Number(4.7),
+            ParamValue::Measurement {
+                value: 4.7,
+                unit: "meg".into(),
+            },
+        ] {
+            let mut modal = modal_with(stored.clone());
+            modal.param_prefix.insert("value".into(), SiPrefix::Kilo);
+            commit_param_buffer(&mut modal, "value", Some(&t));
+            assert_eq!(
+                modal.draft.parameters["value"],
+                canonical_kilo_ohms(),
+                "{stored:?}"
+            );
+        }
     }
 }

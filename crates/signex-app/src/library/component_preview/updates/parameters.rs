@@ -57,6 +57,7 @@ pub(super) fn remove(state: &mut ComponentPreviewState, name: String) {
     state.params_prefix.remove(&name);
     state.params_slot.remove(&name);
     state.params_error.remove(&name);
+    state.params_note.remove(&name);
     state.dirty = true;
 }
 
@@ -706,10 +707,36 @@ mod tests {
     fn a_unit_change_says_the_value_is_reinterpreted() {
         let mut state = state_with("gain", meas(4.7, "kΩ"));
         pick_unit(&mut state, "gain".into(), "%".into());
-        let note = state.params_error.get("gain").expect("a notice");
+        assert!(state.params_error.is_empty(), "a notice is not a refusal");
+        let note = state.params_note.get("gain").expect("a notice");
         assert!(note.contains("reinterpreted"), "{note}");
         let mut same = state_with("gain", meas(4.7, "kΩ"));
         pick_unit(&mut same, "gain".into(), "ohm".into());
-        assert!(same.params_error.is_empty());
+        assert!(same.params_note.is_empty());
+    }
+
+    /// Picking a prefix with nothing typed commits the number the field
+    /// shows, also for a slot that holds a plain number or an unknown
+    /// unit, like the Edit Component Details modal does.
+    #[test]
+    fn a_prefix_pick_on_a_slot_number_or_unknown_unit_is_stored() {
+        for stored in [ParamValue::Number(4.7), meas(4.7, "meg")] {
+            let mut state = state_with("value", stored.clone());
+            pick_prefix(
+                &mut state,
+                "value".into(),
+                "ohm".into(),
+                SiPrefix::Kilo,
+                Some(slot("value", "ohm")),
+            );
+            assert_eq!(
+                state.row.parameters["value"],
+                meas(4700.0, "ohm"),
+                "{stored:?}"
+            );
+            assert!(state.dirty, "{stored:?}");
+            assert!(state.params_edit_buf.is_empty());
+            assert!(state.has_unsaved_edits());
+        }
     }
 }

@@ -311,6 +311,10 @@ pub fn view<'a>(
         )
         .padding([SP.s, SP.xl])
         .into()
+    } else if let Some(note) = edit.note.as_ref() {
+        container(text(note.clone()).size(TS.body).color(muted))
+            .padding([SP.s, SP.xl])
+            .into()
     } else {
         Space::new().height(0).into()
     };

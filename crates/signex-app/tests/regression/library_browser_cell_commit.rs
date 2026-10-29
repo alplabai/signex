@@ -55,6 +55,21 @@ fn library_with_param(
     value: f64,
     unit: &str,
 ) -> (PathBuf, RowId) {
+    let stored = ParamValue::Measurement {
+        value,
+        unit: unit.into(),
+    };
+    library_with_stored(dir, class, param, Some(stored))
+}
+
+/// The fixture for a row of `class` holding `param` as `stored` (or not
+/// holding it at all).
+fn library_with_stored(
+    dir: &std::path::Path,
+    class: &str,
+    param: &str,
+    stored: Option<ParamValue>,
+) -> (PathBuf, RowId) {
     let snxlib = dir.join("cells.snxlib");
     let manifest = SnxlibManifest {
         format: FORMAT_TOKEN.into(),
@@ -80,13 +95,9 @@ fn library_with_param(
     let lib_id = adapter.library_id();
 
     let mut parameters = ParamMap::new();
-    parameters.insert(
-        param.into(),
-        ParamValue::Measurement {
-            value,
-            unit: unit.into(),
-        },
-    );
+    if let Some(stored) = stored {
+        parameters.insert(param.into(), stored);
+    }
 
     let now = chrono::Utc::now();
     let row = ComponentRow {
@@ -673,4 +684,55 @@ fn typing_elsewhere_keeps_a_pending_refusal() {
     let (app, _) = edit_param_in_modal(&snxlib, row_id, "value", vec![pick_unit_msg("F"), other]);
     let err = modal_error(&app, &snxlib).expect("the refusal is still showing");
     assert!(err.contains("fixes its unit"), "{err}");
+}
+
+/// An inline commit to a template measurement slot whose cell holds text
+/// or nothing is refused through the real `update` path: nothing changes
+/// on disk, the buffer stays in the cell, and the Messages panel says so.
+/// This pins the `row_template(..)` lookup in the cell commit handler.
+#[test]
+fn an_inline_commit_to_a_slot_cell_without_a_measurement_is_refused() {
+    let _ = signex_app::diagnostics::init_logging();
+    for stored in [Some(ParamValue::Text("x".into())), None] {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let (snxlib, row_id) = library_with_stored(tmp.path(), "resistor", "value", stored.clone());
+        let before = row_on_disk(&snxlib, row_id);
+
+        let (mut app, _boot) = Signex::new();
+        app.library
+            .open_library(snxlib.clone())
+            .expect("mount library");
+        let mut browser = LibraryBrowserState::new(snxlib.clone());
+        browser.active_table = Some(TABLE.to_string());
+        browser
+            .cell_edit
+            .insert((row_id, "parameters.value".to_string()), "10".to_string());
+        app.library.library_browsers.insert(snxlib.clone(), browser);
+        let _ = app.update(Message::Library(LibraryMessage::BrowserCellCommit {
+            library_path: snxlib.clone(),
+            table: TABLE.to_string(),
+            row_id,
+            column: "parameters.value".to_string(),
+        }));
+
+        let after = row_on_disk(&snxlib, row_id);
+        assert_eq!(after.parameters, before.parameters, "{stored:?}");
+        assert_eq!(after.content_hash, before.content_hash, "{stored:?}");
+        let kept = app
+            .library
+            .library_browsers
+            .get(&snxlib)
+            .and_then(|b| b.cell_edit.get(&(row_id, "parameters.value".to_string())))
+            .map(String::as_str);
+        assert_eq!(kept, Some("10"), "{stored:?}");
+        let panel = &app.document_state.panel_ctx.diagnostics;
+        assert!(
+            panel
+                .iter()
+                .any(|e| e.message.contains("browser cell commit refused")
+                    && e.message.contains("parameter=value")),
+            "{stored:?}: {:?}",
+            panel.iter().map(|e| &e.message).collect::<Vec<_>>()
+        );
+    }
 }

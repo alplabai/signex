@@ -11,7 +11,7 @@
 
 use signex_library::{
     ParamKind, ParamSlot, ParamValue, commit_measurement as commit_typed, commit_slot_measurement,
-    slot_unit,
+    slot_field_seed, slot_unit,
 };
 use signex_types::quantity::{MantissaError, SiPrefix, Unit, parse_mantissa};
 
@@ -60,6 +60,7 @@ pub(super) fn set_measurement_buf(
 /// Store the outcome of a typed commit, or keep the reason it was refused.
 /// An outcome equal to the stored value changes nothing (not even `dirty`).
 fn apply(state: &mut ComponentPreviewState, name: String, result: Result<ParamValue, String>) {
+    state.params_note.remove(&name);
     match result {
         Ok(value) => {
             if state.row.parameters.get(&name) != Some(&value) {
@@ -126,14 +127,23 @@ pub(super) fn pick_prefix(
     let Some(known) = editing_unit(measurement_slot(state, &name).as_ref(), &unit) else {
         return;
     };
-    if !state.params_edit_buf.contains_key(&name)
-        && let Some(parts) = state
-            .row
-            .parameters
-            .get(&name)
-            .and_then(ParamValue::measurement_parts)
-    {
-        state.params_edit_buf.insert(name.clone(), parts.mantissa);
+    // Seed the buffer with the number the field shows, so a pick with
+    // nothing typed still commits it in the new prefix. A slot's field
+    // shows `slot_field_seed` (a plain number or an unknown unit too);
+    // a free parameter's shows the stored measurement's number.
+    if !state.params_edit_buf.contains_key(&name) {
+        let seed =
+            state
+                .row
+                .parameters
+                .get(&name)
+                .and_then(|v| match measurement_slot(state, &name) {
+                    Some(_) => Some(slot_field_seed(v, &known).0),
+                    None => v.measurement_parts().map(|p| p.mantissa),
+                });
+        if let Some(seed) = seed {
+            state.params_edit_buf.insert(name.clone(), seed);
+        }
     }
     state
         .params_prefix
@@ -174,6 +184,6 @@ pub(super) fn pick_unit(state: &mut ComponentPreviewState, name: String, unit: S
             .get(&name)
             .and_then(|v| unit_change_note(&name, before.as_ref(), v))
     {
-        state.params_error.insert(name, note);
+        state.params_note.insert(name, note);
     }
 }

@@ -303,6 +303,9 @@ pub struct EditRowModalState {
     pub tags_buf: String,
     /// Inline error text — surfaced if the save fails.
     pub error: Option<String>,
+    /// A neutral one-line notice (not a refusal), e.g. that a unit change
+    /// reinterprets the value. Cleared by the next commit.
+    pub note: Option<String>,
     /// The last save was refused because the row changed on the server.
     pub stale_base: bool,
     /// "Reload saved version" awaits the user's confirmation to discard the
@@ -368,6 +371,7 @@ impl EditRowModalState {
             param_prefix,
             tags_buf,
             error: None,
+            note: None,
             stale_base: false,
             reload_confirming: false,
             opened_primary,
