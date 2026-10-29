@@ -370,7 +370,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 49] = [
+const ALL_KINDS: [CommandKind; 50] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -389,6 +389,7 @@ const ALL_KINDS: [CommandKind; 49] = [
     CommandKind::UpdateSymbolFootprint,
     CommandKind::UpdateSymbolFields,
     CommandKind::PlaceWireSegment,
+    CommandKind::BreakWire,
     CommandKind::PlaceBus,
     CommandKind::PlaceLabel,
     CommandKind::PlaceSymbol,
@@ -445,6 +446,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::UpdateSymbolFootprint
         | CommandKind::UpdateSymbolFields
         | CommandKind::PlaceWireSegment
+        | CommandKind::BreakWire
         | CommandKind::PlaceBus
         | CommandKind::PlaceLabel
         | CommandKind::PlaceSymbol
@@ -749,6 +751,13 @@ fn samples() -> Vec<(String, Command)> {
     add(
         "PlaceWireSegment",
         Command::PlaceWireSegment { wire: wire(NEW) },
+    );
+    add(
+        "BreakWire",
+        Command::BreakWire {
+            wire: uid(WIRE, 1),
+            at: pt(2.5, 20.0),
+        },
     );
     add(
         "PlaceBus",

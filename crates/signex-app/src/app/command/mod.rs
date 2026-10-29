@@ -162,17 +162,17 @@ mod tests {
         assert_eq!(task.units(), 0);
     }
 
-    /// `break_wire` is a real catalog entry
+    /// `rubber_stamp_copy` is a real catalog entry
     /// (`keymap/catalog`) with no arm in `core_to_message`
     /// yet — it must resolve to a no-op too, not panic.
     #[test]
     fn catalog_id_with_no_bridge_arm_is_a_no_op_and_does_not_panic() {
         let (mut app, _task) = Signex::new();
 
-        let command = AppCommandId::new("break_wire").unwrap();
+        let command = AppCommandId::new("rubber_stamp_copy").unwrap();
         assert!(
             crate::keymap::metadata_for(&command).is_some(),
-            "test fixture drifted: break_wire is no longer a catalog id"
+            "test fixture drifted: rubber_stamp_copy is no longer a catalog id"
         );
 
         let task = app.dispatch_command(&command, CommandArgs::none(), None);

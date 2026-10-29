@@ -103,7 +103,8 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         | "place_local_net_label"
         | "open_components_panel"
         | "place_symbol"
-        | "measure_distance" => ctx.has_schematic,
+        | "measure_distance"
+        | "break_wire" => ctx.has_schematic,
         // These assemble the project's sheets, not only the active tab's.
         "annotate_schematic_quietly" | "force_annotate_all_schematics" | "run_erc" => {
             ctx.has_schematic || ctx.has_sheets
@@ -513,6 +514,20 @@ mod tests {
         assert!(enabled(&app, "measure_distance"));
         let _ = app.dispatch_command(&id("measure_distance"), CommandArgs::none(), None);
         assert_eq!(app.interaction_state.current_tool, Tool::Measure);
+    }
+
+    /// #1254 - Break Wire arms its tool only with a schematic open.
+    #[test]
+    fn break_wire_needs_a_schematic() {
+        let (mut app, _task) = Signex::new();
+        assert!(!enabled(&app, "break_wire"));
+        let _ = app.dispatch_command(&id("break_wire"), CommandArgs::none(), None);
+        assert_eq!(app.interaction_state.current_tool, Tool::Select);
+
+        let mut app = with_schematic();
+        assert!(enabled(&app, "break_wire"));
+        let _ = app.dispatch_command(&id("break_wire"), CommandArgs::none(), None);
+        assert_eq!(app.interaction_state.current_tool, Tool::BreakWire);
     }
 
     /// Find, the grid toggle and AutoFocus act from any tab, so they stay

@@ -32,6 +32,8 @@ mod annotation_tests;
 mod lock_tests;
 #[cfg(test)]
 mod object_lock_tests;
+#[cfg(test)]
+mod wire_merge_tests;
 
 #[cfg(test)]
 mod history_tests;
@@ -93,6 +95,7 @@ pub use sheet_placement::{
     unused_sheet_stem,
 };
 use signex_types::schematic::{SchematicSheet, SelectedItem};
+pub(crate) use transform::TouchingPairs;
 pub use transform::rubber_band::{
     BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, before_nets, follow_moved_pins,
     moved_pin_tips,
@@ -441,6 +444,7 @@ impl Engine {
             | Command::PlaceChildSheet { .. }
             | Command::PlaceSheetPin { .. }
             | Command::PlaceWireSegment { .. }
+            | Command::BreakWire { .. }
             | Command::PlaceJunction { .. }
             | Command::PlaceNoConnect { .. }
             | Command::PlaceNoErcDirective { .. }

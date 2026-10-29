@@ -63,6 +63,7 @@ pub enum CommandKind {
     UpdateSymbolFootprint,
     UpdateSymbolFields,
     PlaceWireSegment,
+    BreakWire,
     PlaceBus,
     PlaceLabel,
     PlaceSymbol,
@@ -221,6 +222,14 @@ pub enum Command {
         symbol_id: Uuid,
         key: String,
         value: String,
+    },
+    /// Split one wire in two at `at`, which must lie strictly inside it; the
+    /// first half keeps the wire's id, the second gets a new one. A point
+    /// off the wire, or at one of its ends, changes nothing. Connectivity is
+    /// unchanged and no merge pass runs, so the halves stay apart.
+    BreakWire {
+        wire: Uuid,
+        at: signex_types::schematic::Point,
     },
     PlaceWireSegment {
         wire: Wire,
@@ -493,6 +502,7 @@ impl Command {
             Command::UpdateSymbolFields { .. } => CommandKind::UpdateSymbolFields,
             Command::SetSymbolField { .. } => CommandKind::UpdateSymbolFields,
             Command::PlaceWireSegment { .. } => CommandKind::PlaceWireSegment,
+            Command::BreakWire { .. } => CommandKind::BreakWire,
             Command::PlaceBus { .. } => CommandKind::PlaceBus,
             Command::PlaceLabel { .. } => CommandKind::PlaceLabel,
             Command::PlaceSymbol { .. } => CommandKind::PlaceSymbol,

@@ -901,6 +901,8 @@ pub enum Tool {
     SheetEntry,
     /// Two clicks measure the offset between two points (#1256). Read-only.
     Measure,
+    /// One click on a wire splits it in two at that point (#1254).
+    BreakWire,
 }
 
 impl std::fmt::Display for Tool {
@@ -923,6 +925,7 @@ impl std::fmt::Display for Tool {
             Tool::Sheet => write!(f, "Place Sheet"),
             Tool::SheetEntry => write!(f, "Place Sheet Entry"),
             Tool::Measure => write!(f, "Measure Distance"),
+            Tool::BreakWire => write!(f, "Break Wire"),
         }
     }
 }

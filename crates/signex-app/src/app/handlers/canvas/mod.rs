@@ -8,6 +8,7 @@ mod child_sheet_create;
 mod child_sheet_create_tests;
 mod child_sheet_path;
 pub(crate) use child_sheet_path::relative_within;
+mod break_wire_tool;
 mod clicked;
 mod descend;
 mod double_clicked;

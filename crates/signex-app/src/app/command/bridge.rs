@@ -78,6 +78,7 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         }
         "zoom_to_selection_area" => Message::CanvasEvent(CanvasEvent::FitSelection),
         "measure_distance" => Message::Tool(ToolMessage::SelectTool(Tool::Measure)),
+        "break_wire" => Message::Tool(ToolMessage::SelectTool(Tool::BreakWire)),
         "copy" => Message::Edit(EditMsg::Copy),
         "cycle_selection_mode" => {
             Message::Selection(selection_request::SelectionRequest::CycleMode)
@@ -379,8 +380,8 @@ mod tests {
     ///
     /// The ids listed there are a mix, and the distinction decides the fix:
     /// - **unimplemented** — the catalog entry and the binding are the only
-    ///   occurrences in the tree (`break_wire`,
-    ///   `place_global_label`, `place_hierarchical_label`,
+    ///   occurrences in the tree (`place_global_label`,
+    ///   `place_hierarchical_label`,
     ///   `repeat_last_item`, `rubber_stamp_copy`). A feature, not an arm.
     ///   This is most of what is left. It also covers ids whose obvious
     ///   target turns out to be a STUB, where an arm would trade a logged
@@ -403,7 +404,7 @@ mod tests {
     /// `docs/audit/command-registry-action-surface-2026-07-25.md` §5.
     #[rustfmt::skip]
     const UNMAPPED_CATALOG_IDS: &[&str] = &[
-        "autoplace_fields", "break_wire", "center_on_cursor", "clear_net_highlighting",
+        "autoplace_fields", "center_on_cursor", "clear_net_highlighting",
         "close_active_document", "copy_attributes_or_add_vertex", "cycle_fast_grid",
         "cycle_wiring_mode",
         "edit_footprint_field",
@@ -775,6 +776,10 @@ mod tests {
             ))
         ));
         assert!(matches!(
+            resolve_id("break_wire"),
+            Some(Message::Tool(ToolMessage::SelectTool(Tool::BreakWire)))
+        ));
+        assert!(matches!(
             resolve_id("zoom_to_selection_area"),
             Some(Message::CanvasEvent(CanvasEvent::FitSelection))
         ));
@@ -786,13 +791,15 @@ mod tests {
     fn an_unmapped_command_reports_that_it_is_not_available_yet() {
         let _guard = serial();
         let _ = crate::diagnostics::init_logging();
-        let command = AppCommandId::new("break_wire").unwrap();
+        let command = AppCommandId::new("rubber_stamp_copy").unwrap();
 
         assert!(core_to_message(&command).is_none());
 
         assert!(crate::diagnostics::recent_entries().iter().any(|entry| {
-            entry.message.contains("command 'break_wire'")
-                && entry.message.contains("Break wire is not available yet")
+            entry.message.contains("command 'rubber_stamp_copy'")
+                && entry
+                    .message
+                    .contains("Rubber-stamp copy / repeated paste is not available yet")
         }));
     }
 

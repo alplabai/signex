@@ -136,6 +136,7 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
             | TextTarget::TextNote(id) => (vec![*id], "edited"),
         },
         Command::UpdateLabelProps { label_id, .. } => (vec![*label_id], "edited"),
+        Command::BreakWire { wire, .. } => (vec![*wire], "broken"),
         Command::UpdateSchDrawing { drawing } => (vec![drawing.uuid()], "edited"),
         Command::UpdateSymbolTextSize { symbol_id, .. }
         | Command::UpdateSymbolLibId { symbol_id, .. }

@@ -323,7 +323,7 @@ mod tests {
             hidden.iter().any(|r| r
                 .command
                 .as_ref()
-                .is_some_and(|c| c.as_str() == "break_wire")),
+                .is_some_and(|c| c.as_str() == "rubber_stamp_copy")),
             "an unimplemented command's binding must be hidden"
         );
         assert!(listed.iter().all(|r| {
