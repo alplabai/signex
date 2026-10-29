@@ -3,7 +3,33 @@
 `.github/workflows/release.yml` signs the Windows and macOS artifacts when the
 repository secrets below exist. With no secrets the build is unchanged:
 unsigned installers on Windows and an ad-hoc signature on macOS. Linux is not
-signed. Release mechanics (tagging, CHANGELOG) are in `CONTRIBUTING.md`.
+signed. The CHANGELOG fragment flow is in `CONTRIBUTING.md`.
+
+The release candidates and the final release are unsigned until the secrets
+below are set: Windows shows SmartScreen and macOS shows the Gatekeeper
+unidentified-developer warning on first launch (README, "First launch").
+
+## Tags and pre-releases
+
+The workflow runs on a pushed tag matching `v[0-9]+.[0-9]+.[0-9]+` or
+`v[0-9]+.[0-9]+.[0-9]+-*`, so `v1.0.0` and a release candidate such as
+`v1.0.0-rc.1` both build. Other tags (checkpoint or snapshot tags) do not.
+`scripts/check_release_version.sh` (job `verify-version`) requires the tag
+without its `v`, the root `Cargo.toml` `[workspace.package] version` and a dated
+`## [X.Y.Z...]` CHANGELOG heading to agree, so a `v1.0.0-rc.1` tag needs
+version `1.0.0-rc.1` in `Cargo.toml` and a `## [1.0.0-rc.1] — YYYY-MM-DD`
+section. The `release` job extracts that section as the Release body and sets
+`prerelease` to true whenever the tag contains a `-`. A pre-release is not what
+`releases/latest` resolves to.
+
+The Release carries these assets, and `SHA256SUMS.txt` lists all the others:
+`signex-setup-<arch>-<version>.exe`, `signex-windows-<arch>-<version>.zip`,
+`signex-macos-universal-<version>.dmg`, `signex_<version>_<arch>.deb`,
+`Signex-<version>-<arch>.AppImage`, `signex-linux-<arch>-<version>.tar.gz`,
+`signex-<version>.cdx.json` and `SHA256SUMS.txt`.
+
+A run started by hand (`workflow_dispatch`) is always a dry run: it never
+creates a Release.
 
 ## Job graph
 

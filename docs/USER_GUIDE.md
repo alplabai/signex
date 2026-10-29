@@ -37,7 +37,10 @@ For the whole flow in one pass, see the
 
 Follow the [Download section of the README](../README.md#download). It lists
 the package for each platform, the first-launch warnings on Windows and macOS,
-and how to verify a download. This guide does not repeat it.
+and how to verify a download. This guide does not repeat it. A release
+candidate such as `v1.0.0-rc.1` is a GitHub pre-release: get it from the
+[Releases page](https://github.com/alplabai/signex/releases), because the
+"latest release" link skips pre-releases.
 
 ## 2. First launch
 
@@ -128,9 +131,11 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
   Grid** does the same as the grid click. Placed objects snap to the grid
   while snapping is on.
 
-Changing the grid size from the keyboard or from **View ▸ Cycle Grid Size** has
-no effect on a schematic yet. **View ▸ Zoom In** and **Zoom Out** are also not
-wired; use the scroll wheel.
+**View ▸ Cycle Grid Size** steps the grid of the schematic. The keyboard
+shortcut for cycling the snap grid (`G` in the Altium profile) acts only in the
+footprint editor; on a schematic use the menu. **View ▸ Zoom In** (`Ctrl+=`)
+and **Zoom Out** (`Ctrl+-`) zoom about the centre of the view; the scroll wheel
+zooms about the pointer.
 
 ## 5. Place a symbol
 
@@ -140,12 +145,34 @@ from libraries.
 **Libraries.** The Components panel (**View ▸ Components**) lists mounted
 libraries in four sections: **Project**, **Installed**, **Global** and
 **Stock**. The **Stock** section is the library that ships with Signex. It is
-mounted on every launch; you do not add it. If the installer's copy cannot be
-found, the section says "Stock library not found. Reinstall Signex to restore
-the bundled parts." The **Installed** and **Global** sections have a
+mounted on every launch; you do not add it, and its parts can be placed
+(34 component rows: resistors, capacitors, inductors, diodes, LEDs,
+transistors, connectors, 74HC logic and more). If the installer's copy cannot
+be found, the section says "Stock library not found. Reinstall Signex to
+restore the bundled parts." The **Installed** and **Global** sections have a
 **+ Add Library…** button, and **File ▸ Library ▸ Open Library…** mounts a
 `.snxlib` library. Type in **Filter components…** to narrow the list. Clicking
 a part row opens its Component Preview tab.
+
+The stock library is read-only. Opening one of its **symbols** or
+**footprints** for editing does not open the original: the first time, a
+**Copy to Library** dialog asks which writable library receives a copy (or
+**New Library…** creates one), remembers the choice, and opens the copy for
+editing under the stock name. The stock original is never changed. If no
+writable library is open, the dialog says so and offers **New Library…**.
+
+**Typed values and the range filter.** A measurement such as a resistance or a
+capacitance is a number, an SI prefix and a unit, each chosen separately: you
+type the number, pick the prefix (`k`, `µ`, ...) from a list, and the unit is
+fixed by the part's template or picked from a list. You do not type the unit,
+and `4k7` or `4.7uF` in the number field is refused with a message. The
+Library Browser opens the **Edit Component Details** modal for a measurement
+cell, and the component editor's **Parameters** tab edits the same way. In the
+Library Browser and in the **Place Component** picker, **Add range filter…**
+filters a measurement column with an operator (`≥`, `≤`, `=` or `between`), a
+number and a prefix, compared in base units, so 4.7 kΩ and 4700 Ω match. Rows
+whose cell is not a measurement in that unit are left out, and the filter says
+how many ("N excluded: not a measurement in Ω."). **✕** removes the filter.
 
 To place a part, open a schematic sheet, then either:
 
@@ -490,6 +517,12 @@ pins that connect nothing or two outputs wired together.
    no-connect marker on that pin.
 4. **Clear** empties the list.
 
+Besides wiring mistakes, ERC runs completeness checks (a part with no
+footprint or value, an unannotated designator, a single-pin net, a net with no
+driver, an off-grid pin), and a finding you accept can be **waived** with a
+reason instead of switching its rule off. The rules, their default severities
+and the waiver rules are in [ERC_RULES.md](ERC_RULES.md).
+
 ERC also checks buses (section 7): a wire from a bus entry with no net label,
 a label that is not one of the signals the bus carries (for example `D33` on
 `D[0..7]`), a bus with no valid bus label, a label on a bus that looks like a bus
@@ -520,6 +553,14 @@ greyed out when no schematic is open.
 Edits are held in memory until you save. Undo is `Ctrl+Z` and redo is
 `Ctrl+Y`.
 
+**Library saves are different.** A component library (`.snxlib`) is a git
+repository, and each library save writes the file and then commits it. If the
+write succeeds but git refuses the commit, the change is still saved. The
+Messages panel says "Saved, not committed" once per cause, and the Library
+Browser shows a banner, "Uncommitted changes: N saved file(s) not in version
+control" with the cause and a **Commit now** button that retries the commit.
+The next successful commit records the pending files too.
+
 A sheet written by a newer Signex opens read-only. Its tab shows a muted
 "read-only" label (the tooltip gives the reason) and a badge sits in the corner
 of the canvas. Edits to it are refused and the tab never turns dirty, so there
@@ -547,8 +588,12 @@ Both exports are under **File ▸ Export** and need a schematic open.
 
 A schematic without placed parts produces an empty BOM.
 
-The same menu also offers **Netlist (Protel .NET)…** and **ERC Report…**
-(saved as `erc-report.txt` by default).
+The same menu also offers **Netlist (Protel .NET)…** and **ERC Report…**.
+The ERC report writes the results of the newest ERC run and does not run ERC
+itself: run it first (section 9), or the menu says so and writes nothing. The
+save dialog is titled **Export ERC Report**, proposes `erc-report.html`, and
+the extension you choose sets the format: `.html`, `.pdf`, `.json`, `.csv` or
+`.txt`. See [ERC_REPORT.md](ERC_REPORT.md).
 
 ### Title block, project parameters and special strings
 
@@ -619,9 +664,11 @@ the default Altium profile; the menu path always works.
 9. **Export a PDF.** Press `Ctrl+P` or choose **File ▸ Export ▸ PDF…**, check
    the preview, press **Export PDF** and pick where to save (section 11).
 
-*Not working yet:* **Place ▸ Power Port**, **Text**, **No Connect** and
-**Sheet Entry** are menu placeholders. To mark a pin as intentionally
-unconnected, use **Add No-Connect** in the **ERC** panel (section 9).
+*Not working yet:* the **Place ▸ Sheet Entry** menu row is a placeholder
+(greyed out). Place sheet entries with the **Sheet Entry** tool of the Active
+Bar's sheet-symbol menu. **Place ▸ Power Port**, **Text** and **No Connect**
+select their tools. A pin can also be marked as intentionally unconnected with
+**Add No-Connect** in the **ERC** panel (section 9).
 
 This walkthrough has not yet been followed end to end by a person with a fresh
 install; tell us in [Discussions](https://github.com/alplabai/signex/discussions)
@@ -651,6 +698,7 @@ Shortcuts used in this guide, in the default Altium profile:
 
 | Action | Shortcut |
 |---|---|
+| New project | `Ctrl+N` |
 | Open | `Ctrl+O` |
 | Save | `Ctrl+S` |
 | Print / export PDF | `Ctrl+P` |
@@ -674,7 +722,7 @@ The Classic profile uses single keys, for example `W` for wire and `L` for
 label. The complete lists are in the
 [command reference](COMMANDS.md), generated from the shipped profiles.
 
-There is no default shortcut for **File ▸ New Project** in the Altium profile.
+**File ▸ New Project** is `Ctrl+N` in both profiles.
 
 ## 14. Where to get help
 

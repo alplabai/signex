@@ -70,12 +70,22 @@ the project's design rules) help identify rendering discrepancies.
 The pinned toolchain is bumped to the current stable roughly **once a quarter
 (every ~3 months)** so the pin never drifts far behind and we don't accumulate
 toolchain debt. A bump edits three places in lockstep — `rust-toolchain.toml`
-(`channel`), the `rust-version` in the root `Cargo.toml`, and the four
-`dtolnay/rust-toolchain@<version>` refs in `.github/workflows/ci.yml` (the CI
-action does **not** read `rust-toolchain.toml`) — then `cargo fmt --all` in case
-the new rustfmt reformats anything.
+(`channel`), the `rust-version` in the root `Cargo.toml`, and every
+`dtolnay/rust-toolchain@<version>` ref under `.github/workflows/` (the CI
+action does **not** read `rust-toolchain.toml`; `grep -rn 'rust-toolchain@'
+.github/` finds them all: `ci.yml`, `fuzz.yml` and `release.yml`) — then
+`cargo fmt --all` in case the new rustfmt reformats anything.
 
 ### Build and Run
+
+On Linux, install the development packages first (Debian and Ubuntu names):
+
+```bash
+sudo apt-get install -y \
+  libxkbcommon-dev libwayland-dev libvulkan-dev \
+  libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+  mesa-vulkan-drivers
+```
 
 ```bash
 git clone https://github.com/alplabai/signex.git
@@ -83,6 +93,10 @@ cd signex
 cargo build --workspace
 cargo run -p signex-app
 ```
+
+The release packages for Linux are built on Ubuntu 22.04 so they need glibc
+2.35 or newer (`scripts/check_glibc_ceiling.sh`, #1688); a build from source
+links against your own glibc.
 
 ### Verify Your Changes
 
@@ -94,7 +108,17 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings   # exactly
 ```
 
 `cargo test`, `cargo check`, `cargo fmt --all -- --check` and `clippy` are all
-CI hard gates — see "Merge rules for `trunk`" below. Clippy runs inside the
+CI hard gates — see "Merge rules for `trunk`" below. The repo-level gates CI
+runs in its `lint · repo gates` job are plain scripts you can run locally:
+
+```bash
+bash scripts/check_arch_guard.sh        # crate dependency edges vs scripts/arch-edges.txt
+bash scripts/check_file_size.sh         # god-file ratchet
+bash scripts/check_discarded_tasks.sh   # no `let _ =` on an iced::Task
+bash scripts/check_lint_lockstep.sh     # workspace lints present in every member
+bash scripts/changelog_assemble.sh --check   # changelog.d fragments
+```
+ Clippy runs inside the
 required `check` job, so its **deny-by-default lints (the `correctness` group)
 fail the job and block the merge**; warn-level lints are surfaced as
 annotations and don't. Run it with the same `--all-targets --all-features` CI
@@ -240,10 +264,11 @@ PR or issue number; `<section>` = `added`, `changed`, `deprecated`, `removed`,
 `CHANGELOG.md` style. Use `<number>.<section>.2.md` for a second fragment of the
 same section. Naming rule and examples: [`changelog.d/README.md`](changelog.d/README.md).
 
-Check yours with `bash scripts/changelog_assemble.sh --check`. The CI job
-`changelog · fragments` warns when a PR into `trunk` edits `CHANGELOG.md`
-directly (it becomes an error after a transition window; same-repo release PRs
-— head branch `chore/release-*` or `release/*` — are exempt) and warns when a
+Check yours with `bash scripts/changelog_assemble.sh --check`. The
+`lint · repo gates` CI job runs that check on every PR (a malformed fragment
+fails it), warns when a PR into `trunk` edits `CHANGELOG.md` directly (it
+becomes an error after a transition window; same-repo release PRs — head
+branch `chore/release-*` or `release/*` — are exempt) and warns when a
 `feat`/`fix` PR has no fragment. At release time the maintainer runs
 `scripts/changelog_assemble.sh --version X.Y.Z --date YYYY-MM-DD`, which folds
 the fragments in and opens the dated section `release.yml` extracts. The
@@ -291,12 +316,13 @@ widget, that goes in `signex-widgets` or `signex-app`.
 ## Labels
 
 Labels are managed as code in [`.github/labels.yml`](.github/labels.yml) and
-synced automatically on merge to `trunk`. Four families plus a few signal labels:
+synced automatically on merge to `trunk`. Five families plus a few signal labels:
 
 | Family | Meaning | Who sets it |
 |---|---|---|
 | `type:` | Kind of change — `feature`, `bug`, `refactor`, `docs`, `ci`, `chore`, `test`, `performance` | Author / triager |
 | `area:` | Subsystem touched — `sketch`, `footprint-editor`, `library`, … | **Auto** (path labeler) |
+| `tier:` | The scope gate from [docs/ROADMAP.md](docs/ROADMAP.md) §4 — `p0` (required for v1.0), `p1` (v1.1–v2.0), `p2` (v2.1–v3.0), `p3` (v3.x and later) | Triager |
 | `priority:` | `critical` / `high` / `medium` / `low` | Triager |
 | `status:` | `needs-triage`, `in-progress`, `blocked`, `needs-review`, `on-hold` | Whoever moves it |
 
@@ -305,34 +331,36 @@ Signal labels: `data-loss`, `regression`, `security`, `breaking-change`,
 
 New issues open as `status: needs-triage` (+ `type:` from the template). On a PR,
 the `area:` labels are applied for you; add a `type:` and, if warranted, a
-`priority:` / `data-loss` / `regression` / `breaking-change` label.
+`tier:` / `priority:` / `data-loss` / `regression` / `breaking-change` label.
+Set the PR's milestone to the release it belongs to (a PR that closes an issue
+takes that issue's milestone); milestones are managed as code in
+[`.github/milestones.yml`](.github/milestones.yml).
 
 ## Merge rules for `trunk`
 
 `trunk` is protected. The full policy — PR preconditions, required checks,
 merge methods, and the server-side branch-protection settings — lives in
-[`docs/branching-and-merge-policy.md`](docs/branching-and-merge-policy.md);
-the importable ruleset is in [`.github/rulesets/`](.github/rulesets/). In short:
+[`docs/branching-and-merge-policy.md`](docs/branching-and-merge-policy.md).
+In short:
 
 - Changes land via **pull request** — no direct pushes, no force-push, no
-  branch deletion (admins included).
+  branch deletion.
 - **1 Code-Owner approving review** is required; you can't approve your own PR.
   Conversations must be resolved and the branch up to date with `trunk`.
-- CI hard gates must be green before merge: `check · ubuntu-latest`,
-  `check · macos-latest`, `check · windows-latest`, `test · workspace`,
-  `deny · licenses + deps`, `PR-description self-declaration`,
-  `No GPL-tool-shaped names anywhere in crates/`, `fmt · rustfmt`,
-  `no god-files`, `no discarded tasks`, and `lint lockstep`. The `deny` job
-  includes `cargo deny check bans`. `arch guard` (`scripts/check_arch_guard.sh`)
-  checks crate dependency edges against `scripts/arch-edges.txt` and keeps
-  domain crates off the UI/GPU stack; when it fires on an intended new edge,
-  add that line to the table (or run the script with `--generate`) in the same
-  PR. `clippy` runs inside the `check`
-  job — a deny-by-default lint fails that job and therefore blocks; its
-  warn-level output only annotates. The `cargo-deny` sources/advisories steps
+- Branch protection requires three status contexts: **`ci · required`**,
+  **`license guard · clean-room`** and **`PR-description self-declaration`**.
+  `ci · required` aggregates `check · <os>` (check + clippy `-D warnings` on
+  Linux, macOS and Windows), `test · workspace` and `lint · repo gates`
+  (rustfmt, `cargo deny` licenses and bans, `arch guard`
+  (`scripts/check_arch_guard.sh`: crate dependency edges against
+  `scripts/arch-edges.txt`; when it fires on an intended new edge, add that
+  line or run the script with `--generate` in the same PR), the god-file and
+  discarded-Task ratchets, lint lockstep and the changelog fragment check). A
+  PR that touches only prose skips the Rust jobs and still gets a green
+  `ci · required` from the lint job. The `cargo-deny` sources/advisories steps
   stay informational and don't block.
-- Merge with a **merge commit** (to preserve a contributor's per-commit history)
-  or **squash** (one logical change → one commit).
+- PRs merge through the **merge queue**, which squashes: one logical change,
+  one commit.
 
 ## Good First Issues
 
