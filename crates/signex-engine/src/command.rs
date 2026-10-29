@@ -1,3 +1,4 @@
+use crate::exec::change_component::ComponentReplacement;
 use signex_types::schematic::{
     AnnotateOrder, Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LibSymbol, NoConnect,
     SchematicSheet, SelectedItem, SheetPin, StrokeColor, Symbol, TextNote, Wire,
@@ -66,6 +67,7 @@ pub enum CommandKind {
     PlaceSymbol,
     RegisterLibSymbol,
     ReplaceLibSymbol,
+    ChangeComponent,
     PlaceChildSheet,
     PlaceSheetPin,
     PlaceJunction,
@@ -243,6 +245,16 @@ pub enum Command {
         /// same undo step: the version is informational, the content is the
         /// truth (#950).
         library_versions: Vec<(uuid::Uuid, String)>,
+    },
+    /// Swap the placed symbol `symbol_id` for another library part
+    /// ("Change Component...", #1260): register the part's drawing, re-key
+    /// the symbol to it and stamp the part's library identity and value.
+    /// The designator, position, orientation and parameters stay. One undo
+    /// step. It does not refuse over connected pins: the caller shows
+    /// [`change_component_preview`] first and the user confirms.
+    ChangeComponent {
+        symbol_id: Uuid,
+        replacement: ComponentReplacement,
     },
     /// Add a hierarchical sheet symbol. Rejected with
     /// [`EngineError::EmptyChildSheetFilename`] when `filename` is blank.
@@ -477,6 +489,7 @@ impl Command {
             Command::PlaceSymbol { .. } => CommandKind::PlaceSymbol,
             Command::RegisterLibSymbol { .. } => CommandKind::RegisterLibSymbol,
             Command::ReplaceLibSymbol { .. } => CommandKind::ReplaceLibSymbol,
+            Command::ChangeComponent { .. } => CommandKind::ChangeComponent,
             Command::PlaceChildSheet { .. } => CommandKind::PlaceChildSheet,
             Command::PlaceSheetPin { .. } => CommandKind::PlaceSheetPin,
             Command::PlaceJunction { .. } => CommandKind::PlaceJunction,

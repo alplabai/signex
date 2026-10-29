@@ -804,6 +804,8 @@ pub use field_style::{field_effective_style, readable_text_style};
 pub use instance_path::InstancePath;
 mod parts;
 pub use parts::*;
+mod pin_map;
+pub use pin_map::{PinMapping, PinMatchedBy, PinPair, map_pins, pin_key};
 mod sheet;
 pub use sheet::*;
 mod sheet_frame;

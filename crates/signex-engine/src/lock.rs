@@ -28,6 +28,14 @@ impl Engine {
     /// The refusal for `cmd`, or `None` when it touches no locked symbol.
     pub(crate) fn locked_symbol_refusal(&self, cmd: &Command) -> Option<EngineError> {
         let (ids, action) = locked_targets(cmd)?;
+        // A component change rewrites every placed unit of the part, so a
+        // locked sibling unit refuses it too.
+        let ids = match cmd {
+            Command::ChangeComponent { symbol_id, .. } => {
+                crate::exec::change_component::placed_unit_ids(&self.document, *symbol_id)
+            }
+            _ => ids,
+        };
         let touched: HashSet<Uuid> = ids.into_iter().collect();
         let mut references: Vec<String> = self
             .document
@@ -90,6 +98,7 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         Command::UpdateSymbolTextSize { symbol_id, .. }
         | Command::UpdateSymbolLibId { symbol_id, .. }
         | Command::UpdateSymbolFootprint { symbol_id, .. }
+        | Command::ChangeComponent { symbol_id, .. }
         | Command::UpdateSymbolFields { symbol_id, .. }
         | Command::SetSymbolBodyStyle { symbol_id, .. }
         | Command::SetSymbolField { symbol_id, .. } => (vec![*symbol_id], "edited"),

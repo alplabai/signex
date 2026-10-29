@@ -47,7 +47,13 @@ pub(crate) fn is_dispatchable(command: &AppCommandId) -> bool {
 /// entry points above are built from one table and cannot drift.
 pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
     use crate::library::editor::footprint::state::EditorMode;
+    use crate::library::{LibraryMessage, PlacedPartAction, PlacedPartMsg};
 
+    let placed_part = |action| {
+        Message::Library(LibraryMessage::PlacedPart(PlacedPartMsg::ActionRequested(
+            action,
+        )))
+    };
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
         "annotate_schematic_quietly" => {
@@ -102,6 +108,11 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "draw_graphic_line" => Message::Tool(ToolMessage::SelectTool(Tool::Line)),
         "draw_hierarchical_sheet" => Message::Tool(ToolMessage::SelectTool(Tool::Sheet)),
         "duplicate" => Message::Edit(EditMsg::Duplicate),
+        // The selected placed part's library actions (#1301, #1262).
+        "open_datasheet" => placed_part(PlacedPartAction::OpenDatasheet),
+        "edit_library_symbol" | "edit_selected_symbol_in_symbol_editor" => {
+            placed_part(PlacedPartAction::EditSymbol)
+        }
         "bring_drawings_to_front" => Message::Edit(EditMsg::ArrangeDrawings(
             signex_engine::DrawingArrange::ToFront,
         )),
@@ -396,12 +407,11 @@ mod tests {
         "close_active_document", "copy_attributes_or_add_vertex", "cycle_fast_grid",
         "cycle_wiring_mode",
         "edit_footprint_field",
-        "edit_library_symbol", "edit_reference_designator",
-        "edit_selected_symbol_in_symbol_editor",
+        "edit_reference_designator",
         "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2",
         "highlight_net_under_cursor",
         "highlight_related_net_objects", "import_graphics",
-        "next_highlighted_net_item", "open_datasheet",
+        "next_highlighted_net_item",
         "place_design_block",
         "place_global_label", "place_hierarchical_label", "place_junction",
         "place_power_symbol",
@@ -505,6 +515,27 @@ mod tests {
             resolve("center_view_at_cursor"),
             Message::CanvasEvent(CanvasEvent::CenterAtCursor)
         ));
+    }
+
+    /// #1301 / #1262: the placed-part command ids reach the library's
+    /// placed-part action, not a stub.
+    #[test]
+    fn the_placed_part_ids_reach_their_actions() {
+        use crate::library::{LibraryMessage, PlacedPartAction, PlacedPartMsg};
+        fn resolve(id: &str) -> Message {
+            let command = AppCommandId::new(id).expect("a catalog id is a valid AppCommandId");
+            core_to_message(&command).unwrap_or_else(|| panic!("'{id}' no longer resolves"))
+        }
+        let action = |id: &str| match resolve(id) {
+            Message::Library(LibraryMessage::PlacedPart(PlacedPartMsg::ActionRequested(a))) => a,
+            other => panic!("'{id}' resolved to {other:?}"),
+        };
+        assert_eq!(action("open_datasheet"), PlacedPartAction::OpenDatasheet);
+        assert_eq!(action("edit_library_symbol"), PlacedPartAction::EditSymbol);
+        assert_eq!(
+            action("edit_selected_symbol_in_symbol_editor"),
+            PlacedPartAction::EditSymbol
+        );
     }
 
     /// #103 - the cheap shortcuts that used to be dead keys now reach

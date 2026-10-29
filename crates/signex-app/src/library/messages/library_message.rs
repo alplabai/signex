@@ -222,6 +222,9 @@ pub enum LibraryMessage {
         label: String,
         result: Result<Box<ResolvedSymbolChoice>, String>,
     },
+    /// An action on the selected placed part: Open Datasheet, Edit Symbol,
+    /// Change Component (#1301, #1262, #1260), and their follow-ups.
+    PlacedPart(super::PlacedPartMsg),
     /// Internal trace-only signal: a Component Preview tab was
     /// opened for the given address. Fired alongside
     /// `OpenComponentRow` so downstream observers can attach to a
@@ -528,6 +531,13 @@ pub struct ResolvedPlacement {
     /// The row's raw `designator_prefix` parameter, not yet validated: it
     /// beats the standard's table entry for `class` (#1315).
     pub prefix_override: Option<String>,
+    /// The part's primary datasheet link and identity fields (Manufacturer,
+    /// MPN and the row's parameters). A placement does not stamp them;
+    /// Change Component replaces the old part's with them. The footprint is
+    /// not among them: the row owns it through `row_id`, and a placed
+    /// symbol's footprint text stays empty as on a fresh placement.
+    pub datasheet: String,
+    pub fields: Vec<(String, String)>,
 }
 
 /// The drawing a placed symbol is switched to, read off-thread: the

@@ -85,3 +85,61 @@ pub(super) fn push_library_rows<'a>(
     }
     c
 }
+
+/// The placed-part actions of the Properties panel, label first.
+fn part_action_buttons() -> Vec<(&'static str, PanelMsg)> {
+    use crate::library::PlacedPartAction as A;
+    [
+        ("Open Datasheet", A::OpenDatasheet),
+        ("Edit Symbol", A::EditSymbol),
+        ("Change Component\u{2026}", A::ChangeComponent),
+    ]
+    .into_iter()
+    .map(|(label, action)| (label, PanelMsg::PlacedPartAction(action)))
+    .collect()
+}
+
+/// A row of buttons for the actions that lead from the selected placed
+/// part into its library (#1301, #1262, #1260).
+pub(super) fn push_part_actions<'a>(c: Column<'a, PanelMsg>) -> Column<'a, PanelMsg> {
+    let mut buttons = iced::widget::row![].spacing(SP.m);
+    for (label, message) in part_action_buttons() {
+        buttons = buttons.push(
+            iced::widget::button(iced::widget::text(label).size(TS.body))
+                .padding([SP.xs, SP.m])
+                .on_press(message),
+        );
+    }
+    c.push(
+        iced::widget::container(buttons)
+            .padding([SP.xs, SP.m])
+            .width(Length::Fill),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::library::PlacedPartAction as A;
+
+    #[test]
+    fn the_part_actions_carry_the_issue_labels_and_their_actions() {
+        let buttons = part_action_buttons();
+        let labels: Vec<&str> = buttons.iter().map(|(label, _)| *label).collect();
+        assert_eq!(
+            labels,
+            ["Open Datasheet", "Edit Symbol", "Change Component\u{2026}"]
+        );
+        let actions: Vec<A> = buttons
+            .into_iter()
+            .map(|(_, message)| match message {
+                PanelMsg::PlacedPartAction(a) => a,
+                other => panic!("unexpected {other:?}"),
+            })
+            .collect();
+        assert_eq!(
+            actions,
+            [A::OpenDatasheet, A::EditSymbol, A::ChangeComponent]
+        );
+    }
+}

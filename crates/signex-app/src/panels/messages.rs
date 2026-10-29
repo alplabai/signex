@@ -652,6 +652,9 @@ pub enum PanelMsg {
     /// Replace the sheet's embedded library symbol with the library's
     /// current one (Properties ▸ "Update from library", #912).
     UpdateSymbolFromLibrary(uuid::Uuid),
+    /// Open Datasheet / Edit Symbol / Change Component on the selected
+    /// placed part (#1301, #1262, #1260).
+    PlacedPartAction(crate::library::PlacedPartAction),
     /// Switch a placed symbol to another drawing of its library row: the
     /// symbol's uuid and the `lib_id` of the drawing (#1230).
     SwitchSymbolChoice(uuid::Uuid, String),
