@@ -36,6 +36,16 @@ pub enum TextTarget {
     SymbolValue(Uuid),
 }
 
+/// A boolean symbol flag with a dedicated edit (`dnp` and `locked` have their
+/// own commands).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymbolFlag {
+    /// Listed in the BOM.
+    InBom,
+    /// Carried to the board by a PCB update.
+    OnBoard,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolTextField {
     Reference,
@@ -56,6 +66,8 @@ pub enum CommandKind {
     SetSymbolRotation,
     SetSymbolLocked,
     SetSymbolDnp,
+    SetSymbolFlag,
+    SetWireWidth,
     SetSymbolBodyStyle,
     UpdateSymbolTextSize,
     UpdateSymbolLibId,
@@ -173,6 +185,18 @@ pub enum Command {
     SetSymbolDnp {
         symbol_id: Uuid,
         dnp: bool,
+    },
+    /// Set a symbol's BOM / board flag (Properties of a multi-selection).
+    SetSymbolFlag {
+        symbol_id: Uuid,
+        flag: SymbolFlag,
+        value: bool,
+    },
+    /// Set a wire's own stroke width in mm (0.0 = the schematic default). A
+    /// net class width still wins when the wire's net has one.
+    SetWireWidth {
+        wire_id: Uuid,
+        width_mm: f64,
     },
     /// Show the normal or the alternate (De Morgan) body of a symbol's library
     /// symbol. Refused with `EngineError::SymbolBodyPinsConnected` when a wired
@@ -477,6 +501,8 @@ impl Command {
             Command::SetSymbolRotation { .. } => CommandKind::SetSymbolRotation,
             Command::SetSymbolLocked { .. } => CommandKind::SetSymbolLocked,
             Command::SetSymbolDnp { .. } => CommandKind::SetSymbolDnp,
+            Command::SetSymbolFlag { .. } => CommandKind::SetSymbolFlag,
+            Command::SetWireWidth { .. } => CommandKind::SetWireWidth,
             Command::SetSymbolBodyStyle { .. } => CommandKind::SetSymbolBodyStyle,
             Command::UpdateSymbolTextSize { .. } => CommandKind::UpdateSymbolTextSize,
             Command::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,

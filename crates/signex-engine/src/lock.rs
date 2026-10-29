@@ -10,7 +10,7 @@
 //! symbol's pin from a move or turn, since the symbol stays and the wire
 //! would drag off its pin.
 //!
-//! Left open on purpose: `SetSymbolLocked` (the way out), `SetSymbolDnp`,
+//! Left open on purpose: `SetSymbolLocked` (the way out), `SetSymbolDnp`, `SetSymbolFlag`,
 //! font family, library-symbol replacement and annotation (which has its
 //! own designator lock, `scope.locked`).
 
@@ -110,6 +110,8 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         // existing symbol.
         Command::SetSymbolLocked { .. }
         | Command::SetSymbolDnp { .. }
+        | Command::SetSymbolFlag { .. }
+        | Command::SetWireWidth { .. }
         | Command::SetTextFontFamily { .. }
         | Command::ReplaceLibSymbol { .. }
         | Command::AnnotateAll { .. }

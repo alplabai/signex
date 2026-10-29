@@ -105,6 +105,7 @@ pub(crate) const ACTIVE_BAR_COMMANDS: &[(&str, ActiveBarAction)] = &[
         ActiveBarAction::PlaceHarnessConnector,
     ),
     ("place_harness_entry", ActiveBarAction::PlaceHarnessEntry),
+    ("place_junction", ActiveBarAction::PlaceJunction),
     ("place_no_erc", ActiveBarAction::PlaceNoERC),
     ("place_note", ActiveBarAction::PlaceNote),
     (
@@ -439,8 +440,8 @@ mod tests {
         let accounted = ACTIVE_BAR_COMMANDS.len() + PARAMETERISED.len() + MAPPED_ELSEWHERE.len();
         assert_eq!(
             accounted,
-            85,
-            "ActiveBarAction accounted for {accounted} actions but held 85 \
+            86,
+            "ActiveBarAction accounted for {accounted} actions but held 86 \
              when this table was written ({} with ids, {} parameterised, {} \
              mapped elsewhere) — a new variant needs an id here, a slot in \
              PARAMETERISED, or a slot in MAPPED_ELSEWHERE",

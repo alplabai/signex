@@ -70,27 +70,6 @@ impl ColumnKind {
         }
     }
 
-    /// Extract the row's cell value for this column. Empty string when
-    /// the row has no value for the underlying field. For
-    /// [`ColumnKind::Rev`], the value is the bare semver string (the
-    /// 🔒/🔓 badge is added at render time, not in the sort key, so
-    /// released and unreleased rows still sort by version order).
-    /// Text an editable cell starts from. For a measurement this is the
-    /// stored form (`4700 ohm`, `4.7 kΩ`), not the engineering display:
-    /// the commit reads the typed number in the stored unit, so the cell
-    /// must show that unit and not a rescaled prefix.
-    pub(super) fn edit_seed(&self, r: &ComponentRow) -> String {
-        match self {
-            ColumnKind::Parameter(key) => match r.parameters.get(key) {
-                Some(signex_library::ParamValue::Measurement { value, unit }) => {
-                    format!("{value} {unit}")
-                }
-                _ => self.cell_value(r),
-            },
-            _ => self.cell_value(r),
-        }
-    }
-
     /// The row's sort key for this column. A parameter orders by its
     /// `ParamValue` (a measurement by base-unit quantity); every other
     /// column orders by its cell text.
@@ -104,6 +83,35 @@ impl ColumnKind {
         }
     }
 
+    /// What pressing this column's cell does for `r`: a measurement opens
+    /// the Edit Component Details modal (it needs the SI-prefix picker and
+    /// the unit, which a grid cell has no room for), so the cell is a
+    /// button and never a raw text input. `None` for every other cell.
+    pub(super) fn measurement_press(
+        &self,
+        r: &ComponentRow,
+        library_path: &std::path::Path,
+        table: &str,
+    ) -> Option<LibraryMessage> {
+        let ColumnKind::Parameter(key) = self else {
+            return None;
+        };
+        matches!(
+            r.parameters.get(key),
+            Some(signex_library::ParamValue::Measurement { .. })
+        )
+        .then(|| LibraryMessage::BrowserOpenEditModal {
+            library_path: library_path.to_path_buf(),
+            table: table.to_string(),
+            row_id: RowId::from_uuid(r.row_id),
+        })
+    }
+
+    /// Extract the row's cell value for this column. Empty string when
+    /// the row has no value for the underlying field. For
+    /// [`ColumnKind::Rev`], the value is the bare semver string (the
+    /// 🔒/🔓 badge is added at render time, not in the sort key, so
+    /// released and unreleased rows still sort by version order).
     pub(super) fn cell_value(&self, r: &ComponentRow) -> String {
         match self {
             ColumnKind::InternalPn => r.internal_pn.as_str().to_string(),
@@ -356,7 +364,7 @@ mod short_uuid_tests {
 }
 
 #[cfg(test)]
-mod edit_seed_tests {
+mod sort_tests {
     use super::*;
     use signex_library::{
         ComponentClass, DatasheetRef, InternalPn, LifecycleState, ManufacturerPart, ParamMap,
@@ -402,18 +410,6 @@ mod edit_seed_tests {
             content_hash: [0u8; 32],
             server_revision: None,
         }
-    }
-
-    /// The editable cell shows the stored number and unit, so the number
-    /// a user types is in that unit; the read-only cell may show the
-    /// engineering form.
-    #[test]
-    fn an_editable_measurement_cell_starts_from_the_stored_form() {
-        let key = ColumnKind::Parameter("value".into());
-        let canonical = row_with(4700.0, "ohm");
-        assert_eq!(key.edit_seed(&canonical), "4700 ohm");
-        assert_eq!(key.cell_value(&canonical), "4.7 kΩ");
-        assert_eq!(key.edit_seed(&row_with(4.7, "kΩ")), "4.7 kΩ");
     }
 
     fn param_row(value: ParamValue) -> ComponentRow {
@@ -487,5 +483,33 @@ mod edit_seed_tests {
             measured(900.0, "ohm"),
         ]);
         assert_eq!(out, ["900 Ω", "10 kΩ", "100 nF", "1 µF"]);
+    }
+
+    /// A measurement cell is a button that opens the Edit Component
+    /// Details modal for its row; it is never a raw text input.
+    #[test]
+    fn a_measurement_cell_opens_the_edit_modal() {
+        let key = ColumnKind::Parameter("value".into());
+        let r = row_with(4700.0, "ohm");
+        let msg = key.measurement_press(&r, std::path::Path::new("lib.snxlib"), "Resistors");
+        match msg {
+            Some(LibraryMessage::BrowserOpenEditModal { table, row_id, .. }) => {
+                assert_eq!(table, "Resistors");
+                assert_eq!(row_id, RowId::from_uuid(r.row_id));
+            }
+            other => panic!("expected the edit modal to open, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn text_and_fixed_cells_stay_inline() {
+        let r = param_row(ParamValue::Text("X7R".into()));
+        let path = std::path::Path::new("lib.snxlib");
+        assert!(
+            ColumnKind::Parameter("value".into())
+                .measurement_press(&r, path, "T")
+                .is_none()
+        );
+        assert!(ColumnKind::Mpn.measurement_press(&r, path, "T").is_none());
     }
 }

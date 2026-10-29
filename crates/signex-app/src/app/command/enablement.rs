@@ -104,6 +104,7 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         | "place_bus"
         | "place_net_label"
         | "place_local_net_label"
+        | "place_junction"
         | "place_power_symbol"
         | "place_global_label"
         | "place_hierarchical_label"
@@ -542,6 +543,28 @@ mod tests {
     /// #907 review: ids that resolve to the same message are the same
     /// command, so they must get the same answer. An alias left to the
     /// default arm would let a second key bypass the gate.
+    /// The placement shortcuts act on a schematic sheet, so each is off
+    /// without one and on with one (the Place menu rows share the gate).
+    #[test]
+    fn schematic_placement_shortcuts_need_a_schematic() {
+        let off = CommandContext::default();
+        let on = CommandContext {
+            has_schematic: true,
+            ..CommandContext::default()
+        };
+        for name in [
+            "place_power_symbol",
+            "place_global_label",
+            "place_hierarchical_label",
+            "place_junction",
+            "place_port",
+            "place_off_sheet_connector",
+        ] {
+            assert!(!is_enabled(&id(name), &off), "{name} without a schematic");
+            assert!(is_enabled(&id(name), &on), "{name} with a schematic");
+        }
+    }
+
     #[test]
     fn ids_that_resolve_to_the_same_message_share_their_enablement() {
         let facts: [fn(&mut CommandContext); 11] = [

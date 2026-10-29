@@ -147,6 +147,23 @@ pub enum TextEditMsg {
     Changed(String),
     /// Commit the in-place edit back to the engine (Enter / blur).
     Submit,
+    /// A command (F2, V, U, F) asked to edit a field in place; the target
+    /// is the object under the cursor, else the single selection.
+    Requested(TextEditTarget),
+}
+
+/// Which text a field-edit command asks for (#1670).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextEditTarget {
+    /// A part's value (`edit_value`).
+    Value,
+    /// A part's designator (`edit_reference_designator`).
+    Designator,
+    /// A part's footprint (`edit_footprint_field`).
+    FootprintField,
+    /// Whatever text the object has: a label, a text note, or a part's
+    /// designator (`edit_text_in_place`).
+    Text,
 }
 
 /// Overlay / modal-chrome message family (ADR-0001 D3). Namespaced
