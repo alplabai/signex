@@ -142,7 +142,7 @@ fn many_rules_at_once() -> ErcContext {
     c.symbols.extend([u1, u2, u3, u4, r1, p33, p5, u5]);
     // A sheet symbol with no pins whose file did not load.
     c.child_sheets.push(ErcChildSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         name: "Missing".into(),
         filename: "missing.snxsch".into(),
         position: p(101.6, 0.0),
@@ -241,7 +241,7 @@ fn identities_do_not_depend_on_symbol_order() {
 #[test]
 fn re_annotating_a_single_placement_part_lapses_its_waiver() {
     use signex_types::schematic::Symbol;
-    let id = Uuid::new_v4();
+    let id = Uuid::now_v7();
     let run = |reference: &str| {
         let mut c = empty();
         let mut s = symbol(reference, Point::new(25.4, 25.4));

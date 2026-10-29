@@ -342,7 +342,7 @@ fn sheet_with_unit(unit: u32) -> signex_types::schematic::SchematicSheet {
     let mut sheet = signex_types::schematic::SchematicSheet {
         paper_size: "A4".into(),
         symbols: vec![Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             lib_id: "Amplifier:LM358".into(),
             reference: "U1".into(),
             unit,

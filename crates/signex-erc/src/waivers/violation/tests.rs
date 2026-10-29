@@ -44,7 +44,7 @@ fn split(v: Violation, sheet: &SchematicSheet, waivers: &[ErcWaiver]) -> WaiverS
 
 #[test]
 fn a_waiver_hides_its_finding_and_says_which_waiver_did() {
-    let id = Uuid::new_v4();
+    let id = Uuid::now_v7();
     let sheet = sheet_with(part(id));
     let v = finding_on(id, RuleKind::UnusedPin);
     let waivers = vec![waive(&v, &sheet)];
@@ -57,7 +57,7 @@ fn a_waiver_hides_its_finding_and_says_which_waiver_did() {
 
 #[test]
 fn editing_an_involved_object_lapses_the_waiver() {
-    let id = Uuid::new_v4();
+    let id = Uuid::now_v7();
     let sheet = sheet_with(part(id));
     let v = finding_on(id, RuleKind::UnusedPin);
     let waivers = vec![waive(&v, &sheet)];
@@ -73,7 +73,7 @@ fn editing_an_involved_object_lapses_the_waiver() {
 
 #[test]
 fn a_deleted_object_or_another_rule_never_matches() {
-    let id = Uuid::new_v4();
+    let id = Uuid::now_v7();
     let sheet = sheet_with(part(id));
     let v = finding_on(id, RuleKind::UnusedPin);
     let waivers = vec![waive(&v, &sheet)];
@@ -86,7 +86,7 @@ fn a_deleted_object_or_another_rule_never_matches() {
 
 #[test]
 fn the_fingerprint_does_not_depend_on_field_map_order() {
-    let id = Uuid::new_v4();
+    let id = Uuid::now_v7();
     let (mut a, mut b) = (part(id), part(id));
     for i in 0..32 {
         a.fields.insert(format!("k{i}"), format!("v{i}"));
@@ -103,7 +103,7 @@ fn the_fingerprint_does_not_depend_on_field_map_order() {
 
 #[test]
 fn reason_and_author_are_required_and_incomplete_waivers_hide_nothing() {
-    let id = Uuid::new_v4();
+    let id = Uuid::now_v7();
     let sheet = sheet_with(part(id));
     let v = finding_on(id, RuleKind::UnusedPin);
     let key = waiver_key(&v, &sheet).expect("key");
@@ -134,7 +134,7 @@ fn a_finding_without_objects_is_not_waivable() {
 
 #[test]
 fn adding_a_waiver_replaces_one_for_the_same_finding() {
-    let id = Uuid::new_v4();
+    let id = Uuid::now_v7();
     let sheet = sheet_with(part(id));
     let v = finding_on(id, RuleKind::UnusedPin);
     let first = waive(&v, &sheet);
@@ -153,7 +153,7 @@ fn key_of(v: &Violation, sheet: &SchematicSheet) -> WaiverKey {
 #[test]
 fn a_waiver_survives_a_save_and_reload_of_the_sheet() {
     // 3.81 mm reads back from its stored 3_810_000 nm as 3.8099999999999996.
-    let id = Uuid::new_v4();
+    let id = Uuid::now_v7();
     let mut symbol = part(id);
     symbol.position = Point::new(3.81, 1.27 * 7.0);
     symbol.rotation = 90.0;
@@ -177,7 +177,7 @@ fn a_waiver_survives_a_save_and_reload_of_the_sheet() {
 
 #[test]
 fn a_field_rule_waiver_ignores_placement_but_not_the_field() {
-    let id = Uuid::new_v4();
+    let id = Uuid::now_v7();
     let sheet = sheet_with(part(id));
     let v = finding_on(id, RuleKind::PartWithoutFootprint);
     let waivers = vec![waive(&v, &sheet)];
@@ -220,7 +220,7 @@ fn net_finding(pins: &[(Uuid, &str)]) -> Violation {
 
 #[test]
 fn a_net_waiver_ignores_part_values_but_not_the_pin_set() {
-    let (r1, c1) = (Uuid::new_v4(), Uuid::new_v4());
+    let (r1, c1) = (Uuid::now_v7(), Uuid::now_v7());
     let sheet = |cap_value: &str| SchematicSheet {
         symbols: vec![part(r1), {
             let mut c = part(c1);
@@ -238,7 +238,7 @@ fn a_net_waiver_ignores_part_values_but_not_the_pin_set() {
 
 #[test]
 fn a_part_joining_a_waived_net_lapses_the_waiver_rather_than_orphaning_it() {
-    let (r1, c1, c2) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+    let (r1, c1, c2) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
     let sheet = SchematicSheet {
         symbols: vec![part(r1), part(c1), part(c2)],
         ..Default::default()
@@ -265,7 +265,7 @@ fn wire_sheet(wire: signex_types::schematic::Wire) -> SchematicSheet {
 #[test]
 fn a_geometry_waiver_ignores_cosmetics_but_not_the_geometry() {
     use signex_types::schematic::Wire;
-    let id = Uuid::new_v4();
+    let id = Uuid::now_v7();
     let wire = Wire {
         uuid: id,
         start: Point::new(0.0, 0.0),
@@ -319,8 +319,8 @@ fn sheet_id(n: u128) -> SchematicSheet {
 #[test]
 fn one_global_net_on_two_sheets_gets_two_identities() {
     let (a, b) = (sheet_id(1), sheet_id(2));
-    let on_a = dsl_net_finding("VBUS", &[(Uuid::new_v4(), "R1")]);
-    let on_b = dsl_net_finding("VBUS", &[(Uuid::new_v4(), "R9")]);
+    let on_a = dsl_net_finding("VBUS", &[(Uuid::now_v7(), "R1")]);
+    let on_b = dsl_net_finding("VBUS", &[(Uuid::now_v7(), "R9")]);
     let waiver_a = waive(&on_a, &a);
     assert_ne!(key_of(&on_a, &a).objects, key_of(&on_b, &b).objects);
     // B's run against A's waiver: B's finding stays, neither waived nor lapsed.
@@ -339,14 +339,14 @@ fn one_global_net_on_two_sheets_gets_two_identities() {
 #[test]
 fn an_unnamed_net_without_an_object_is_waived_by_its_pin_set() {
     let sheet = sheet_id(1);
-    let (r1, c1) = (Uuid::new_v4(), Uuid::new_v4());
+    let (r1, c1) = (Uuid::now_v7(), Uuid::now_v7());
     let v = dsl_net_finding("", &[(r1, "R1"), (c1, "C1")]);
     let key = key_of(&v, &sheet);
     assert_eq!(key.objects, vec![format!("pins:C1.1,R1.1@{}", sheet.uuid)]);
     let waivers = vec![waive(&v, &sheet)];
     assert_eq!(split(v, &sheet, &waivers).waived.len(), 1);
     // A membership change on an unnamed net orphans the waiver.
-    let grown = dsl_net_finding("", &[(r1, "R1"), (c1, "C1"), (Uuid::new_v4(), "C2")]);
+    let grown = dsl_net_finding("", &[(r1, "R1"), (c1, "C1"), (Uuid::now_v7(), "C2")]);
     let out = split(grown, &sheet, &waivers);
     assert_eq!((out.kept.len(), out.lapsed.len()), (1, 0));
 }

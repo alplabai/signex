@@ -31,7 +31,7 @@ fn pin(number: &str, y: f64) -> LibPin {
 fn label(text: &str, at: Point) -> Label {
     Label {
         unknown_columns: Default::default(),
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         text: text.into(),
         position: at,
         rotation: 0.0,
@@ -87,7 +87,7 @@ fn sheet() -> SchematicSheet {
     for (i, name) in ["N1", "N2"].into_iter().enumerate() {
         let y = 101.6 + 12.7 * i as f64;
         sheet.wires.push(Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(25.4, y),
             end: Point::new(50.8, y),
             ..Default::default()
