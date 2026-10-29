@@ -143,14 +143,11 @@ impl Signex {
         let Some((payload, target, origin)) = self.prepared_paste() else {
             return;
         };
-        let mut numbering = self.paste_numbering(&target);
-        let payload = numbering.apply(&payload);
+        let payload = self.paste_numbering(&target).apply(&payload);
         let at = signex_types::schematic::Point::new(origin.x + offset_x, origin.y + offset_y);
         match payload.place_commands(at) {
             Ok(commands) if !commands.is_empty() => {
-                if self.apply_engine_commands(commands, true, true) {
-                    self.remember_numbering(&target, numbering);
-                }
+                self.apply_engine_commands(commands, true, true);
             }
             Ok(_) => {}
             Err(error) => crate::diagnostics::log_warning(format!(

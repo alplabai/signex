@@ -306,8 +306,9 @@ impl ProjectSheetPlan {
     }
 }
 
-/// The plan for `source`'s project: the open pages, root and `source` itself
-/// are snapshotted live, every other sheet is read from disk when assembled.
+/// The plan for `source`'s project. Every open engine is snapshotted, so a
+/// sheet the hierarchy walk reaches that is open (declared or not) counts
+/// with its unsaved edits; only sheets that are not open are read from disk.
 pub(crate) fn plan_project_sheets_for(
     document_state: &DocumentState,
     source: &Path,
@@ -316,11 +317,8 @@ pub(crate) fn plan_project_sheets_for(
     let fold = crate::app::state::project_case::fold_of(project);
     let pages = project_pages(project);
     let root = resolve_netlist_root_for(document_state, source);
-    let mut snapshot_paths = pages.clone();
-    snapshot_paths.push(root.clone());
-    snapshot_paths.push(source.to_path_buf());
     ProjectSheetPlan {
-        open: open_sheets_snapshot_of(document_state, &snapshot_paths),
+        open: open_sheets_snapshot(document_state),
         pages,
         root,
         fold,

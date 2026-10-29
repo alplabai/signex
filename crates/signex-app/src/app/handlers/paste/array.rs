@@ -4,7 +4,6 @@ use iced::Task;
 use signex_engine::Command;
 use signex_types::schematic::Point;
 
-use super::designators::PasteNumbering;
 use crate::app::{Message, Signex};
 use crate::paste_array::{PasteArrayInput, PasteArrayMsg, PasteArrayState};
 
@@ -93,8 +92,8 @@ impl Signex {
         let Some((payload, target, origin)) = self.prepared_paste() else {
             return;
         };
-        let (commands, numbering) = match self.array_commands(&payload, &target, origin, input) {
-            Ok(built) => built,
+        let commands = match self.array_commands(&payload, &target, origin, input) {
+            Ok(commands) => commands,
             Err(error) => {
                 crate::diagnostics::log_warning(format!(
                     "Paste Array failed: the copies could not be placed ({error})."
@@ -103,7 +102,6 @@ impl Signex {
             }
         };
         if self.apply_engine_commands(commands, true, true) {
-            self.remember_numbering(&target, numbering);
             self.ui_state.paste_array = None;
             crate::diagnostics::log_info(format!(
                 "Paste Array: placed {} copies as one undo step.",
@@ -122,7 +120,7 @@ impl Signex {
         target: &std::path::Path,
         origin: Point,
         input: PasteArrayInput,
-    ) -> Result<(Vec<Command>, PasteNumbering), signex_engine::EngineError> {
+    ) -> Result<Vec<Command>, signex_engine::EngineError> {
         let mut numbering = self.paste_numbering_with(target, input.designators);
         // The bodies are registered once; the per-copy clones carry none.
         let mut commands = payload.register_commands();
@@ -136,6 +134,6 @@ impl Signex {
             );
             commands.extend(copy.place_commands(at)?);
         }
-        Ok((commands, numbering))
+        Ok(commands)
     }
 }

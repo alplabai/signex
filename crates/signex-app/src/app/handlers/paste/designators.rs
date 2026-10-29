@@ -7,7 +7,6 @@ use signex_engine::PlacementPayload;
 use signex_types::designator::{alphabetic_prefix, merge_counters, seed_counters, take_next};
 
 use crate::app::Signex;
-use crate::app::state::PasteCounters;
 use crate::paste_prefs::PasteDesignators;
 
 /// The numbering of one paste, or of several copies pasted in a row: the
@@ -42,13 +41,6 @@ impl PasteNumbering {
     }
 }
 
-impl PasteNumbering {
-    /// The counters as advanced by this paste.
-    pub(crate) fn into_counters(self) -> HashMap<String, u32> {
-        self.counters
-    }
-}
-
 impl Signex {
     /// The numbering for a paste onto `target`, in the saved preference's mode.
     pub(crate) fn paste_numbering(&self, target: &Path) -> PasteNumbering {
@@ -56,12 +48,10 @@ impl Signex {
     }
 
     /// The numbering for a paste onto `target` in `mode`. Next free starts
-    /// from the project's numbers read when the paste began (kept in the
-    /// interaction state and advanced per commit) and folds in what the
-    /// target's live document holds now, so an edit made since, or an open
-    /// sheet the project walk does not reach, is counted too. Without a read
-    /// (none was needed or it was for another sheet) the live sheet alone is
-    /// counted.
+    /// from the project's numbers read when the paste began and folds in what
+    /// the target's live document holds now, so an edit made since (a stamp's
+    /// earlier click included) is counted too. Without a read (none was
+    /// needed or it was for another sheet) the live sheet alone is counted.
     pub(crate) fn paste_numbering_with(
         &self,
         target: &Path,
@@ -88,17 +78,6 @@ impl Signex {
             merge_counters(&mut counters, &live);
         }
         PasteNumbering::new(mode, counters)
-    }
-
-    /// Keep the advanced counters for the next commit of the same paste.
-    pub(crate) fn remember_numbering(&mut self, target: &Path, numbering: PasteNumbering) {
-        if numbering.mode != PasteDesignators::NextFree {
-            return;
-        }
-        self.interaction_state.paste_counters = Some(PasteCounters {
-            target: target.to_path_buf(),
-            counters: numbering.into_counters(),
-        });
     }
 }
 

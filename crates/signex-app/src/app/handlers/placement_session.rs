@@ -192,17 +192,11 @@ impl Signex {
             ));
         }
         let target = session.target_sheet.clone();
-        let mut numbering = None;
         let payload = match &reference {
             Some(reference) => session
                 .payload
                 .map_symbols(|s| s.reference = reference.clone()),
-            None => {
-                let mut n = self.paste_numbering(&target);
-                let payload = n.apply(&session.payload);
-                numbering = Some(n);
-                payload
-            }
+            None => self.paste_numbering(&target).apply(&session.payload),
         };
         let placed = payload.place_commands(Point::new(x, y));
         let commands = match placed {
@@ -217,9 +211,6 @@ impl Signex {
         if !self.apply_engine_commands(commands, false, false) {
             self.report_place_failure("Nothing was placed; see the log for details.");
             return Task::none();
-        }
-        if let Some(numbering) = numbering {
-            self.remember_numbering(&target, numbering);
         }
         self.after_placement_commit(reference.as_deref());
         Task::none()

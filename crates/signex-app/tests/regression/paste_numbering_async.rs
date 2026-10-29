@@ -258,3 +258,54 @@ fn a_fifty_copy_array_places_every_copy_and_label() {
     assert_eq!(doc.labels.len(), 51);
     assert!(doc.labels.iter().all(|l| !l.text.is_empty()));
 }
+
+/// The child sheet is open with an unsaved `R15` while the copy on disk
+/// still holds `R9`: the open one is the truth.
+#[test]
+fn an_open_project_sheet_counts_with_its_unsaved_edits() {
+    let (mut app, dir) = app_with_child_on_disk("child.snxsch", child_with_r9);
+    let mut unsaved = SchematicSheet {
+        uuid: Uuid::new_v4(),
+        paper_size: "A4".to_owned(),
+        ..Default::default()
+    };
+    unsaved
+        .symbols
+        .push(part("R15", "lib:r", 1, (10.16, 10.16)));
+    app.document_state.engines.insert(
+        dir.path().join("child.snxsch"),
+        signex_engine::Engine::new(unsaved).expect("engine"),
+    );
+    app.ui_state.paste_designators = PasteDesignators::NextFree;
+    assert_eq!(paste_one_resistor(&mut app), "R16");
+}
+
+/// A fragment from another process onto a sheet that lacks its body: the
+/// array registers the body, once, and places every copy.
+#[test]
+fn a_paste_array_of_a_foreign_fragment_brings_its_library_body() {
+    let mut source = app_with_sheet(populated_sheet());
+    select(&mut source, &[("R2", 1)], false);
+    let text = written_text(source.update(Message::Edit(EditMsg::Copy))).unwrap();
+
+    let mut empty = crate::paste_support::sheet::empty_sheet();
+    empty.lib_symbols.clear();
+    let mut app = app_with_sheet(empty);
+    app.document_state.engines.values_mut().for_each(|e| {
+        let mut sheet = e.document().clone();
+        sheet.lib_symbols.clear();
+        e.set_document(sheet);
+    });
+    send_and_settle(&mut app, EditMsg::PasteArrayRequested, PasteIntent::Array);
+    answer(&mut app, PasteIntent::Array, Some(&text));
+    for msg in [
+        PasteArrayMsg::CountChanged("3".to_owned()),
+        PasteArrayMsg::ApplyPressed,
+    ] {
+        let _ = app.update(Message::Edit(EditMsg::PasteArray(msg)));
+    }
+    let doc = app.document_state.active_engine().unwrap().document();
+    assert_eq!(doc.symbols.len(), 3);
+    assert_eq!(doc.lib_symbols.len(), 1);
+    assert!(doc.lib_symbols.contains_key("lib:r"));
+}
