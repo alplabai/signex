@@ -335,6 +335,21 @@ impl LocalGitAdapter {
     where
         F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
     {
+        self.mutate_library_file_deferred(f, asset_rel_paths, &|| message.to_string(), fallback)
+    }
+
+    /// [`Self::mutate_library_file_with_assets`] whose commit message is
+    /// built after the edit ran, so it can say what the edit did.
+    pub(super) fn mutate_library_file_deferred<F>(
+        &self,
+        f: F,
+        asset_rel_paths: &[String],
+        message: &dyn Fn() -> String,
+        fallback: &str,
+    ) -> Result<(), LibraryError>
+    where
+        F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
+    {
         self.save_edit(
             |lf, _| {
                 if !f(lf)? {
@@ -368,7 +383,7 @@ impl LocalGitAdapter {
         &self,
         edit: F,
         asset_rel_paths: &[String],
-        message: &str,
+        message: &dyn Fn() -> String,
         fallback: &str,
     ) -> Result<(), LibraryError>
     where
@@ -424,7 +439,7 @@ impl LocalGitAdapter {
             );
         }
         if let Err(commit_err) =
-            self.commit_change_with(None, &rel, asset_rel_paths, message, fallback)
+            self.commit_change_with(None, &rel, asset_rel_paths, &message(), fallback)
         {
             let Some((previous, previous_file)) = previous else {
                 self.record_commit_warning(&commit_err);
@@ -470,8 +485,8 @@ impl LocalGitAdapter {
             .library_file
             .read()
             .map_err(|_| LibraryError::Backend("library_file read lock poisoned".into()))?;
+        self.row_reads.retain_tables(guard.tables.keys());
         let Some(table) = guard.tables.get(name) else {
-            self.row_reads.forget_table(name);
             return Ok(Vec::new());
         };
         // Verify the on-disk header matches the legacy schema. Once

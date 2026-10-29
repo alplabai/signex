@@ -426,3 +426,68 @@ fn a_released_row_in_team_mode_is_left_behind_and_reported() {
         "the Messages panel must name the rows the cascade left behind"
     );
 }
+
+/// Make the library folder read-only so the `.snxlib` write of a cascade
+/// fails while the primitive's own file (in `symbols/`) still saves.
+/// `None` when the process can write anyway (running as root).
+#[cfg(unix)]
+fn lock_library_folder(f: &Fixture) -> Option<(PathBuf, std::fs::Permissions)> {
+    use std::os::unix::fs::PermissionsExt;
+    let folder = f.library_file.parent().unwrap().to_path_buf();
+    let writable = std::fs::metadata(&folder).unwrap().permissions();
+    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let probe = folder.join("probe");
+    if std::fs::File::create(&probe).is_ok() {
+        std::fs::remove_file(&probe).unwrap();
+        std::fs::set_permissions(&folder, writable).unwrap();
+        return None;
+    }
+    Some((folder, writable))
+}
+
+/// A cascade that failed on a retryable error is run again by the next
+/// Save, even though the symbol has no new edit and its file is unchanged.
+#[cfg(unix)]
+#[test]
+fn a_failed_cascade_is_retried_by_the_next_save_without_edits() {
+    let mut f = fixture_with(Setup {
+        name: "MSG-RETRY-SYM",
+        ..PERSONAL
+    });
+    edit_a(&mut f);
+    let Some((folder, writable)) = lock_library_folder(&f) else {
+        eprintln!("skipped: the library folder is still writable (running as root?)");
+        return;
+    };
+    save(&mut f.app);
+    std::fs::set_permissions(&folder, writable).unwrap();
+
+    assert_eq!(
+        symbol_on_disk(&f).symbols[0].version,
+        "0.0.2",
+        "the save landed"
+    );
+    assert_eq!(
+        row_on_disk(&f.library_file, f.users).symbol_version,
+        "0.0.1",
+        "the cascade did not"
+    );
+    assert!(logged(
+        "Save again to retry: 1 of 1 rows still at the old version"
+    ));
+
+    // Save again, nothing edited.
+    save(&mut f.app);
+    let row = row_on_disk(&f.library_file, f.users);
+    assert_eq!(row.symbol_version, "0.0.2");
+    assert_eq!(row.version, "0.0.2", "bumped once");
+    assert_eq!(
+        symbol_on_disk(&f).symbols[0].version,
+        "0.0.2",
+        "not bumped again"
+    );
+
+    // And it is not owed any more: one more Save changes nothing.
+    save(&mut f.app);
+    assert_eq!(row_on_disk(&f.library_file, f.users).version, "0.0.2");
+}

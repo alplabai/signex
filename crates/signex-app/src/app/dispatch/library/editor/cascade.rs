@@ -225,18 +225,28 @@ pub(super) fn saved_footprints(file: &FootprintFile, changed: &[Uuid]) -> Vec<Sa
         .collect()
 }
 
+/// What a cascade left to the caller.
+#[derive(Debug, Default)]
+pub(super) struct CascadeOutcome {
+    /// Rows it moved, so their open Component Previews can be refreshed.
+    pub bumped: Vec<RowId>,
+    /// Saved primitives whose rows a retry can still move: the next Save
+    /// runs the cascade for them again even when they have no new edits.
+    pub owed: Vec<Uuid>,
+}
+
 /// Move the component rows that use each saved primitive onto its saved
 /// version, and tell the user what happened. `saved` is empty when the
-/// save wrote nothing. Returns the rows it moved, so the caller can bring
-/// their open Component Previews up to date.
+/// save wrote nothing.
 pub(super) fn cascade_after_container_save(
     library: &SaveLibrary,
     write: ContainerWrite,
     kind: SavedKind,
     saved: &[SavedPrimitive],
-) -> Vec<RowId> {
+) -> CascadeOutcome {
+    let mut outcome = CascadeOutcome::default();
     if write != ContainerWrite::Merge || saved.is_empty() {
-        return Vec::new();
+        return outcome;
     }
     let label = match saved {
         [one] => one.name.clone(),
@@ -246,19 +256,24 @@ pub(super) fn cascade_after_container_save(
         [one] => Some(one.version.as_str()),
         _ => None,
     };
-    let mut bumped = Vec::new();
+    let owes_all = |outcome: &mut CascadeOutcome| {
+        outcome.owed = saved.iter().map(|p| p.uuid).collect();
+    };
     let lines = match library {
-        SaveLibrary::None => return Vec::new(),
-        SaveLibrary::Unavailable { library, reason } => vec![(
-            Level::Warn,
-            format!(
-                "{label} saved, but {} could not be opened ({reason}); component rows not updated",
-                library.display()
-            ),
-        )],
+        SaveLibrary::None => return outcome,
+        SaveLibrary::Unavailable { library, reason } => {
+            owes_all(&mut outcome);
+            vec![(
+                Level::Warn,
+                cut(format!(
+                    "Save again once the library opens ({reason}); {label} saved, rows not updated: {}",
+                    library.display()
+                )),
+            )]
+        }
         SaveLibrary::Mounted(_) | SaveLibrary::Opened(_) => {
             let Some(adapter) = library.adapter() else {
-                return Vec::new();
+                return outcome;
             };
             let mode = adapter.manifest().workflow.mode;
             let library_id = adapter.manifest().library.library_id;
@@ -273,7 +288,10 @@ pub(super) fn cascade_after_container_save(
                 .collect();
             let result = signex_library::cascade_after_saves(adapter, &saves, mode);
             if let Ok(report) = &result {
-                bumped = report.auto_bumped.clone();
+                outcome.bumped = report.auto_bumped.clone();
+            }
+            if retry_can_help(&result) {
+                owes_all(&mut outcome);
             }
             summarize(&label, version, &result)
         }
@@ -285,7 +303,18 @@ pub(super) fn cascade_after_container_save(
             Level::Error => tracing::error!(target: "signex::library", "{line}"),
         }
     }
-    bumped
+    outcome
+}
+
+/// Whether running the cascade again could move a row it left behind.
+fn retry_can_help(result: &Result<CascadeReport, LibraryError>) -> bool {
+    match result {
+        Ok(report) => report
+            .failed
+            .iter()
+            .any(|(id, _)| !report.permanent.contains(id)),
+        Err(e) => !signex_library::retry_cannot_fix(e),
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -293,6 +322,18 @@ enum Level {
     Info,
     Warn,
     Error,
+}
+
+/// Messages cuts a line at 157 bytes; the advice comes first so the cut
+/// takes the tail.
+const MESSAGES_LINE_BYTES: usize = 157;
+/// Longest failure reason in the Messages line.
+const FAILED_REASON_BYTES: usize = 50;
+/// Part numbers named in a failure line before "+N more".
+const NAMED_ROWS: usize = 3;
+
+fn cut(line: String) -> String {
+    crate::text_trunc::prefix_within_bytes(&line, MESSAGES_LINE_BYTES).to_string()
 }
 
 /// "1 component row that uses" / "N component rows that use".
@@ -303,14 +344,18 @@ fn rows_that_use(n: usize) -> String {
     }
 }
 
-/// Messages cuts a line at 157 bytes; the retry advice comes first so the
-/// cut takes the tail.
-const MESSAGES_LINE_BYTES: usize = 157;
-/// Longest failure reason in the Messages line.
-const FAILED_REASON_BYTES: usize = 50;
+/// The reason of the first failed row that satisfies `want`, cut short.
+fn first_reason(report: &CascadeReport, want: impl Fn(&RowId) -> bool) -> &str {
+    let reason = report
+        .failed
+        .iter()
+        .find(|(id, _)| want(id))
+        .map_or("", |(_, reason)| reason.as_str());
+    crate::text_trunc::prefix_within_bytes(reason, FAILED_REASON_BYTES)
+}
 
-/// What to tell the user about a cascade, reason first: the Messages
-/// panel cuts long lines. Nothing for a cascade that touched no row.
+/// What to tell the user about a cascade, advice first: the Messages panel
+/// cuts long lines. Nothing for a cascade that touched no row.
 fn summarize(
     label: &str,
     version: Option<&str>,
@@ -319,29 +364,54 @@ fn summarize(
     let to = version.map(|v| format!(" to v{v}")).unwrap_or_default();
     let report = match result {
         Ok(report) => report,
+        Err(e) if signex_library::retry_cannot_fix(e) => {
+            return vec![(
+                Level::Error,
+                cut(format!(
+                    "Check the library, then re-bind its rows by hand ({e}); {label} saved"
+                )),
+            )];
+        }
         Err(e) => {
             return vec![(
                 Level::Error,
-                format!("{label} saved, but its component rows could not be read: {e}"),
+                cut(format!(
+                    "Save again to retry ({e}); {label} saved, its component rows were not read"
+                )),
             )];
         }
     };
     let mut lines = Vec::new();
-    if !report.failed.is_empty() {
-        let failed = report.failed.len();
-        let total = failed + report.auto_bumped.len();
-        let reason =
-            crate::text_trunc::prefix_within_bytes(&report.failed[0].1, FAILED_REASON_BYTES);
-        let line = format!(
-            "Save again to retry: {failed} of {total} rows still at the old version ({reason}); {label} saved"
-        );
+    let total = report.failed.len() + report.auto_bumped.len();
+    let permanent = |id: &RowId| report.permanent.contains(id);
+    let retryable = report
+        .failed
+        .iter()
+        .filter(|(id, _)| !permanent(id))
+        .count();
+    if retryable > 0 {
+        let reason = first_reason(report, |id| !permanent(id));
         lines.push((
             Level::Error,
-            crate::text_trunc::prefix_within_bytes(&line, MESSAGES_LINE_BYTES).to_string(),
+            cut(format!(
+                "Save again to retry: {retryable} of {total} rows still at the old version ({reason}); {label} saved"
+            )),
         ));
-        let ids: Vec<String> = report.failed.iter().map(|(id, _)| id.to_string()).collect();
-        lines.push((Level::Warn, format!("Rows not bumped: {}", ids.join(", "))));
-    } else if !report.auto_bumped.is_empty() {
+    }
+    if !report.permanent.is_empty() {
+        let n = report.permanent.len();
+        let reason = first_reason(report, permanent);
+        lines.push((
+            Level::Error,
+            cut(format!(
+                "Open {n} rows in the Library Browser and fix or re-bind them, a retry cannot ({reason}); {label} saved"
+            )),
+        ));
+    }
+    if !report.failed.is_empty() {
+        lines.push((Level::Warn, cut(failed_rows_line(report))));
+    }
+    if report.failed.is_empty() && !report.auto_bumped.is_empty() {
         lines.push((
             Level::Info,
             format!(
@@ -366,6 +436,22 @@ fn summarize(
         ));
     }
     lines
+}
+
+/// "Rows not bumped: R-1, R-2, R-3, +4 more", by part number.
+fn failed_rows_line(report: &CascadeReport) -> String {
+    let names: Vec<&str> = report
+        .failed_labels
+        .iter()
+        .map(String::as_str)
+        .take(NAMED_ROWS)
+        .collect();
+    let mut line = format!("Rows not bumped: {}", names.join(", "));
+    let more = report.failed.len().saturating_sub(names.len());
+    if more > 0 {
+        line.push_str(&format!(", +{more} more"));
+    }
+    line
 }
 
 #[cfg(test)]
@@ -404,36 +490,71 @@ mod tests {
         );
     }
 
+    fn failed(label: &str, reason: &str) -> ((RowId, String), String) {
+        ((id(), reason.into()), label.into())
+    }
+
     #[test]
-    fn a_partial_failure_says_the_save_worked_and_names_the_rows() {
-        let bad = id();
+    fn a_retryable_failure_tells_the_user_to_save_again_and_names_the_rows() {
+        let (a, la) = failed("R-1", "io: disk full");
+        let (b, lb) = failed("R-2", "io: disk full");
         let report = CascadeReport {
-            auto_bumped: vec![id(), id()],
-            failed: vec![(bad, "disk full".into())],
+            auto_bumped: vec![id()],
+            failed: vec![a, b],
+            failed_labels: vec![la, lb],
             ..Default::default()
         };
+        assert!(retry_can_help(&Ok(report.clone())));
         let lines = summarize("A", Some("0.0.2"), &Ok(report));
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0].0, Level::Error);
         assert_eq!(
             lines[0].1,
-            "Save again to retry: 1 of 3 rows still at the old version (disk full); A saved"
+            "Save again to retry: 2 of 3 rows still at the old version (io: disk full); A saved"
         );
-        assert_eq!(lines[1].1, format!("Rows not bumped: {bad}"));
+        assert_eq!(lines[1].1, "Rows not bumped: R-1, R-2");
+    }
+
+    #[test]
+    fn a_permanent_failure_says_what_to_do_and_is_not_owed_to_a_retry() {
+        let (a, la) = failed("R-9", "not found: row x in table R");
+        let report = CascadeReport {
+            permanent: vec![a.0],
+            failed: vec![a],
+            failed_labels: vec![la],
+            ..Default::default()
+        };
+        assert!(!retry_can_help(&Ok(report.clone())));
+        let lines = summarize("A", Some("0.0.2"), &Ok(report));
+        assert!(
+            lines[0].1.starts_with("Open 1 rows in the Library Browser"),
+            "{lines:?}"
+        );
+        assert!(!lines.iter().any(|(_, l)| l.contains("Save again")));
     }
 
     #[test]
     fn a_failure_line_fits_the_messages_cut_with_the_advice_first() {
+        let many: Vec<_> = (0..40)
+            .map(|i| failed(&format!("PART-NUMBER-{i}"), &"x".repeat(300)))
+            .collect();
         let report = CascadeReport {
-            failed: (0..40).map(|_| (id(), "x".repeat(300))).collect(),
+            failed_labels: many.iter().map(|(_, l)| l.clone()).collect(),
+            failed: many.into_iter().map(|(f, _)| f).collect(),
             ..Default::default()
         };
         let lines = summarize("A very long primitive name", Some("0.0.2"), &Ok(report));
-        let line = &lines[0].1;
-        assert!(line.len() <= MESSAGES_LINE_BYTES, "{line}");
+        for (_, line) in &lines {
+            assert!(line.len() <= MESSAGES_LINE_BYTES, "{line}");
+        }
         assert!(
-            line.starts_with("Save again to retry: 40 of 40 rows"),
-            "{line}"
+            lines[0].1.starts_with("Save again to retry: 40 of 40 rows"),
+            "{}",
+            lines[0].1
+        );
+        assert_eq!(
+            lines[1].1,
+            "Rows not bumped: PART-NUMBER-0, PART-NUMBER-1, PART-NUMBER-2, +37 more"
         );
     }
 

@@ -171,3 +171,69 @@ fn a_table_that_disappears_reads_empty() {
     std::fs::write(&path, lf.write().unwrap()).unwrap();
     assert!(adapter.read_table("t").unwrap().is_empty());
 }
+
+/// `read_row` is the first read after another writer changed the file: it
+/// must look at the disk itself, not rely on an earlier `read_table`.
+#[test]
+fn read_row_first_after_an_external_edit_sees_the_edit() {
+    let (_dir, adapter, _, _, ids) = library();
+    let other = LocalGitAdapter::open(adapter.file_path_buf()).unwrap();
+    let mut edited = other.read_row("t", ids[4]).unwrap();
+    edited.description = "d-first".into();
+    other.update_row("t", edited, "external").unwrap();
+
+    assert_eq!(
+        adapter.read_row("t", ids[4]).unwrap().description,
+        "d-first"
+    );
+}
+
+#[test]
+fn read_row_finds_an_id_written_in_another_uuid_spelling() {
+    let (_dir, adapter, ..) = library();
+    let path = adapter.file_path_buf().to_path_buf();
+    let mut lf = LibraryFile::parse(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let table = lf.tables.get_mut("t").unwrap();
+    let id = table.rows[3].cells["row_id"].clone();
+    let spelled = id.replace('-', "").to_uppercase();
+    std::sync::Arc::make_mut(&mut table.rows[3])
+        .cells
+        .insert("row_id".into(), spelled);
+    std::fs::write(&path, lf.write().unwrap()).unwrap();
+
+    let shown = adapter.read_table("t").unwrap();
+    let wanted = uuid::Uuid::parse_str(&id).unwrap();
+    assert!(shown.iter().any(|r| r.row_id == wanted));
+    assert_eq!(
+        adapter
+            .read_row("t", RowId::from_uuid(wanted))
+            .unwrap()
+            .row_id,
+        wanted
+    );
+}
+
+#[test]
+fn a_renamed_table_frees_its_old_entry() {
+    let (_dir, adapter, ..) = library();
+    adapter.read_table("t").unwrap();
+    assert_eq!(adapter.row_reads.kept_tables(), vec!["t".to_string()]);
+    adapter.rename_table("t", "u", "rename").unwrap();
+    adapter.read_table("u").unwrap();
+    assert_eq!(adapter.row_reads.kept_tables(), vec!["u".to_string()]);
+}
+
+#[test]
+fn a_reload_from_disk_frees_the_rows_it_replaced() {
+    let (_dir, adapter, ..) = library();
+    adapter.read_table("t").unwrap();
+    assert_eq!(adapter.row_reads.kept_tables(), vec!["t".to_string()]);
+    let other = LocalGitAdapter::open(adapter.file_path_buf()).unwrap();
+    let mut row = other.read_table("t").unwrap().remove(0);
+    row.description = "d-reload".into();
+    other.update_row("t", row, "external").unwrap();
+
+    // Reload without a table read: nothing may stay behind.
+    adapter.refresh_for_read();
+    assert!(adapter.row_reads.kept_tables().is_empty());
+}

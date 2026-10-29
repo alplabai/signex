@@ -492,7 +492,7 @@ pub trait LibraryAdapter: Send + Sync {
         &self,
         targets: &[(String, RowId)],
         edit: &mut RowEdit<'_>,
-        message: &str,
+        message: &RowsMessage<'_>,
     ) -> Result<Vec<RowEditOutcome>, LibraryError> {
         let mut outcomes: Vec<RowEditOutcome> = Vec::with_capacity(targets.len());
         let mut failed: Option<String> = None;
@@ -510,7 +510,7 @@ pub trait LibraryAdapter: Send + Sync {
                 if !edit(&mut row) {
                     return Ok(false);
                 }
-                self.update_row(table, row, message)?;
+                self.update_row(table, row, &message(&[*row_id]))?;
                 Ok(true)
             });
             if let Err(e) = &outcome {
@@ -828,6 +828,12 @@ pub trait LibraryAdapter: Send + Sync {
 /// The edit of [`LibraryAdapter::update_rows`]: changes the row it is given
 /// and returns whether it did.
 pub type RowEdit<'a> = dyn FnMut(&mut ComponentRow) -> bool + 'a;
+
+/// The commit message of [`LibraryAdapter::update_rows`], built once the
+/// batch knows which rows the edit actually changed: it is given exactly
+/// those rows, so the message never names a row that was gone or already
+/// moved.
+pub type RowsMessage<'a> = dyn Fn(&[RowId]) -> String + 'a;
 
 /// One target's outcome from [`LibraryAdapter::update_rows`].
 pub type RowEditOutcome = (RowId, Result<bool, LibraryError>);

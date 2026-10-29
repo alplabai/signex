@@ -278,6 +278,10 @@ pub struct SymbolDocument {
     /// The stamp of the last container save started from this editor
     /// (`DocumentSaves::mint_generation`); `0` until one starts.
     pub save_generation: u64,
+    /// Primitives of this container whose component rows a failed cascade
+    /// left behind and a retry can still move; the next Save cascades them
+    /// even with no new edit.
+    pub cascade_owed: Vec<uuid::Uuid>,
     /// Pan/zoom camera state — mirrors the schematic canvas so the
     /// user's viewport survives across tool / selection changes
     /// within the same `.snxsym` tab. New tabs and active-symbol
@@ -388,6 +392,7 @@ impl SymbolDocument {
             canvas_cache: iced::widget::canvas::Cache::default(),
             dirty: false,
             save_generation: 0,
+            cascade_owed: Vec::new(),
             camera: crate::canvas::Camera::default(),
             zoom_step: default_zoom_step(),
             cursor_mm: None,
@@ -487,6 +492,10 @@ pub struct FootprintDocument {
     /// The stamp of the last container save started from this editor
     /// (`DocumentSaves::mint_generation`); `0` until one starts.
     pub save_generation: u64,
+    /// Primitives of this container whose component rows a failed cascade
+    /// left behind and a retry can still move; the next Save cascades them
+    /// even with no new edit.
+    pub cascade_owed: Vec<uuid::Uuid>,
     /// A rejected drag gave `dirty` back as clean; the workspace's dirty set
     /// and the tab still say dirty until the next mirror sync (#1047). Lives
     /// here, not in the canvas state, which a footprint switch rebuilds.
@@ -586,6 +595,7 @@ impl FootprintDocument {
             // document opens dirty and a save persists the repair.
             dirty: repaired,
             save_generation: 0,
+            cascade_owed: Vec::new(),
             clean_mirror_owed: false,
             history: Vec::new(),
             redo: Vec::new(),

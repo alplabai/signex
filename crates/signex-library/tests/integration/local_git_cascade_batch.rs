@@ -316,7 +316,7 @@ fn a_row_gone_at_write_time_fails_alone() {
                 r.symbol_version = "0.0.2".into();
                 true
             },
-            "cascade",
+            &|changed| format!("changed {}", changed.len()),
         )
         .unwrap();
 
@@ -328,7 +328,13 @@ fn a_row_gone_at_write_time_fails_alone() {
             assert!(matches!(outcome, Ok(true)));
         }
     }
-    assert_eq!(snxlib_commits(&root).len() - before, 1);
+    let commits = snxlib_commits(&root);
+    assert_eq!(commits.len() - before, 1);
+    assert_eq!(
+        commits[0].trim(),
+        "changed 3",
+        "the message counts changed rows only"
+    );
 }
 
 /// The atomic write cannot create its temp file: no row moves, the file and

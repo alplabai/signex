@@ -206,6 +206,7 @@ impl Signex {
                 file: editor.file.clone(),
                 baseline: editor.baseline.clone(),
                 name: editor.primitive().name.clone(),
+                owed: editor.cascade_owed.clone(),
             });
         }
         if let Some(editor) = self.document_state.footprint_editors.get_mut(path) {
@@ -236,6 +237,7 @@ impl Signex {
                 file: editor.file.clone(),
                 baseline: editor.baseline.clone(),
                 name: editor.primitive().name.clone(),
+                owed: editor.cascade_owed.clone(),
             });
         }
         // Reporting success here would log a write that never happened.
@@ -358,7 +360,7 @@ impl Signex {
                 path.display()
             ));
         } else {
-            self.settle_saved_editor(path, written.file, &written.versions);
+            self.settle_saved_editor(path, written.file, &written.versions, &written.cascade_owed);
             crate::diagnostics::log_info(format!("[{label}] Wrote {}", path.display()));
         }
         // The bytes landed either way: commit them into the owning
@@ -382,6 +384,7 @@ impl Signex {
         path: &std::path::Path,
         file: WrittenContainer,
         versions: &std::collections::HashMap<uuid::Uuid, String>,
+        owed: &[uuid::Uuid],
     ) {
         let edited_since = match file {
             WrittenContainer::Symbol(saved) => self
@@ -391,6 +394,7 @@ impl Signex {
                 .map(|editor| {
                     cascade::apply_symbol_versions(&mut editor.file, versions);
                     editor.baseline = saved;
+                    editor.cascade_owed = owed.to_vec();
                     editor.dirty
                 }),
             WrittenContainer::Footprint(saved) => self
@@ -400,6 +404,7 @@ impl Signex {
                 .map(|editor| {
                     cascade::apply_footprint_versions(&mut editor.file, versions);
                     editor.baseline = saved;
+                    editor.cascade_owed = owed.to_vec();
                     editor.dirty
                 }),
         };

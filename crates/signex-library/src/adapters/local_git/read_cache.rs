@@ -20,7 +20,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use super::*;
 
 struct Cached {
-    source: Arc<LibraryRow>,
+    /// Held only so the key's address cannot be reused while the entry
+    /// lives; the key is what is compared.
+    _source: Arc<LibraryRow>,
     component: ComponentRow,
 }
 
@@ -68,9 +70,9 @@ impl RowReads {
         for row in rows {
             let key = Arc::as_ptr(row) as usize;
             let cached = match previous.remove(&key) {
-                Some(hit) if Arc::ptr_eq(&hit.source, row) => hit,
-                _ => Cached {
-                    source: Arc::clone(row),
+                Some(hit) => hit,
+                None => Cached {
+                    _source: Arc::clone(row),
                     component: self.convert(row)?,
                 },
             };
@@ -81,12 +83,36 @@ impl RowReads {
         Ok(out)
     }
 
-    /// Forget a table that no longer exists.
-    pub(super) fn forget_table(&self, name: &str) {
+    /// Forget every table not in `keep`: a renamed or removed table.
+    pub(super) fn retain_tables<'a>(&self, keep: impl Iterator<Item = &'a String>) {
+        let keep: std::collections::HashSet<&String> = keep.collect();
         self.tables
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .remove(name);
+            .retain(|name, _| keep.contains(name));
+    }
+
+    /// Drop everything kept: the rows it was converted from were replaced
+    /// by a reload, so nothing in it can hit again.
+    pub(super) fn clear(&self) {
+        self.tables
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+    }
+
+    /// Names of the tables with kept rows, sorted.
+    #[cfg(test)]
+    pub(super) fn kept_tables(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .tables
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .keys()
+            .cloned()
+            .collect();
+        names.sort();
+        names
     }
 }
 
@@ -102,15 +128,29 @@ impl LocalGitAdapter {
             .library_file
             .read()
             .map_err(|_| LibraryError::Backend("library_file read lock poisoned".into()))?;
-        let target = row_id.as_uuid().to_string();
+        let wanted = row_id.as_uuid();
+        let target = wanted.to_string();
         let missing = || LibraryError::NotFound(format!("row {row_id} in table {table}"));
         let entry = guard.tables.get(table).ok_or_else(missing)?;
         validate_legacy_header(table, &entry.columns)?;
         let row = entry
             .rows
             .iter()
-            .find(|r| r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(target.as_str()))
+            .find(|r| row_has_id(r, wanted, &target))
             .ok_or_else(missing)?;
         self.row_reads.convert(row)
     }
+}
+
+/// Whether the stored row is `wanted`. The id is compared as a UUID, so a
+/// hand-edited uppercase or unhyphenated cell that `read_table` shows is
+/// found too; the plain string match is the fast path.
+fn row_has_id(row: &LibraryRow, wanted: uuid::Uuid, wanted_text: &str) -> bool {
+    let Some(cell) = row.cells.get(LEGACY_ROW_ID_COL) else {
+        return false;
+    };
+    if cell == wanted_text {
+        return true;
+    }
+    uuid::Uuid::parse_str(cell).is_ok_and(|id| id == wanted)
 }

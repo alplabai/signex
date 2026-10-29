@@ -22,7 +22,7 @@ The cascade of a primitive save is already one write and one commit for all its 
 
 ## Measurements
 
-Release build, local SSD, macOS (Apple silicon), one process, `cargo test -p signex-library --test integration --release -- table_write_cost git_objects --ignored --nocapture`. Library: one `resistors` table, every tenth row carrying a cached price. Best of 5 runs per figure. Two full runs of the bench agreed to within 5 percent.
+Release build, local SSD, macOS (Apple silicon), one process, `cargo test -p signex-library --test integration --release -- table_write_cost git_objects --ignored --nocapture`. Library: one `resistors` table, every tenth row carrying a cached price. Latency figures are the best of 5 runs; the growth figures are one run of 10 edits. Two full runs of the bench agreed to within 5 percent.
 
 **One-row edit latency** (`update_row`; insert and delete cost the same within 5 percent):
 
@@ -46,7 +46,7 @@ Each edit stores a new compressed copy of the whole file. At 50k rows that is 0.
 
 **What a repack leaves** (the same repository after the command-line `git gc`, which delta-compresses near-identical blobs):
 
-| Rows | objects before `gc` | objects after `gc` |
+| Rows | `.git/objects` bytes before `gc` | `.git/objects` bytes after `gc` |
 |---:|---:|---:|
 | 1,000 | 196,118 | 22,941 |
 | 10,000 | 1,831,246 | 149,754 |
@@ -55,6 +55,8 @@ Each edit stores a new compressed copy of the whole file. At 50k rows that is 0.
 **Caveat on the data.** The bench rows are copies of one row with a new id and part number, so they compress far better than a real library (zlib and delta both). The growth numbers are therefore a **floor**, not a typical figure. Before acting on the growth criterion, repeat the growth measurement on a real library of the target size.
 
 For the read side (#1437, same bench, `adapter_read_cost_by_library_size`): `read_row` went from 4.6 / 47.0 / 233.7 ms to 7.8 µs / 32 µs / 42 µs at 1k / 10k / 50k rows, and a warm `read_table` from 4.6 / 46.7 / 232.8 ms to 0.35 / 5.5 / 25.6 ms. A cold `read_table` (the first call, which fills the cache) is about 1.3 times slower than before (5.1 / 76.7 / 321 ms against 4.7 / 48.1 / 239.7 ms).
+
+The app's primitive-save cascade opens a new `LocalGitAdapter` for each save, so it always reads cold (about 0.3 s at 50k rows, the cold `read_table` figure above). The warm figures above apply to a mounted adapter that stays open, not to that path.
 
 ## Problem
 
@@ -138,7 +140,7 @@ Not measured; this is arithmetic on the measurements above and must be re-measur
 ## Alternatives
 
 1. **Do nothing.** 190 ms at 50k rows is usable, and libraries of that size are not a stated target. Growth is the only open cost.
-2. **Repack automatically** (`git gc` or an in-process repack, for example every N edits or on library close). The measurement above shows a repack cuts loose-object growth by about 12 times on this data with no format change, no migration and no new failure mode. It does nothing for latency. This is the cheapest answer to the growth criterion and should be tried first. Risks to check: a repack under a concurrent `LocalGitAdapter` commit, repository size on Windows, and the time a repack takes at 50k rows (not measured).
+2. **Repack automatically** (`git gc` or an in-process repack, for example every N edits or on library close). The measurement above shows a repack shrinks the repository by about 12x at 10k and 50k rows and 8.4x at 1k rows on this data with no format change, no migration and no new failure mode. It does nothing for latency. This is the cheapest answer to the growth criterion and should be tried first. Risks to check: a repack under a concurrent `LocalGitAdapter` commit, repository size on Windows, and the time a repack takes at 50k rows (not measured).
 3. **Split by table instead of by row hash** (one file per `[tables.<t>]`). Simple, and a table is already the user's unit. It does not help the case that matters (one very large table), and a single `resistors` table of 50k rows stays at 190 ms.
 4. **A database file instead of text** (SQLite or similar). O(row) writes and no growth problem, but it gives up text diffs and merges, which are the reason the library lives in git at all, and git stores a binary blob whole.
 5. **Shard by bucket count that grows** (a directory trie by hash prefix). No fixed count to outgrow, at the price of a re-split protocol that is more complicated than the migration above. Not needed until a library outgrows 256 buckets, which is more than 60k rows per table at 250 rows per bucket.
@@ -155,7 +157,7 @@ Write the code (move this ADR to Accepted) when **either** holds:
 **The triggers are not met today. Do not build the sharded layout now.**
 
 - **Latency:** 47 ms at 10k rows is under the bar, and 10k rows is already a large component library. 190 ms at 50k rows is noticeable but usable, and nothing in the issue tracker or the roadmap names 50k-row libraries as a target. Re-evaluate if that changes.
-- **Growth:** 0.83 MB per edit at 50k rows (0.17 MB at 10k) is real but is the loose-object figure. The same repository after `git gc` is about 12 times smaller on this data, so the first step is alternative 2: repack automatically. That needs no format change. Measure it on a real library before deciding the growth criterion is met; the bench data is more compressible than a real library, so the growth numbers here are a floor and the post-`gc` figure may be too optimistic.
+- **Growth:** 0.83 MB per edit at 50k rows (0.17 MB at 10k) is real but is the loose-object figure. The same repository after `git gc` is about 12x smaller at 10k and 50k rows (8.4x at 1k) on this data, so the first step is alternative 2: repack automatically. That needs no format change. Measure it on a real library before deciding the growth criterion is met; the bench data is more compressible than a real library, so the growth numbers here are a floor and the post-`gc` figure may be too optimistic.
 - **Next steps, in order:** (1) a real-library growth measurement; (2) automatic repack, measured; (3) only if criterion 1 or 2 still holds, prototype shards and measure the Expected effect section before accepting this ADR.
 
 ## Open questions

@@ -64,7 +64,7 @@ pub use alternate_symbol_edit::{
 };
 pub use cascade::{
     CascadeKind, CascadeReport, PrimitiveSave, cascade_after_footprint_save, cascade_after_saves,
-    cascade_after_sim_save, cascade_after_symbol_save, patch_bump,
+    cascade_after_sim_save, cascade_after_symbol_save, patch_bump, retry_cannot_fix,
 };
 pub use component::{
     ComponentRow, DESIGNATOR_PREFIX_PARAM, DatasheetDoc, DatasheetRef, PinPadOverride, PlmReserved,
