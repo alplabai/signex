@@ -71,7 +71,11 @@ fn a_library_directory_is_deleted_although_other_projects_are_unread() {
             .is_some()
     );
 
-    let _deleted = app.handle_remove_confirm(RemoveChoice::DeleteFile);
+    // The delete runs on a worker (#859); settle drives its completion.
+    crate::app::path_ops::settle(
+        &mut app,
+        crate::app::Message::Remove(crate::app::RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+    );
 
     assert!(!lib.exists(), "the directory package is deleted");
 }

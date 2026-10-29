@@ -53,6 +53,18 @@ impl Signex {
             return Task::none();
         }
         let new_prj = dir.join(format!("{new_stem}.snxprj"));
+        // A rename or delete still running under the project's folder (or of
+        // the project file) would be moved from under its worker (#859).
+        if let Err(refusal) = self
+            .refuse_rename_overlap(&state.target_path, &new_prj)
+            .and_then(|()| {
+                self.refuse_start_while_path_op(&dir, "renamed")
+                    .map_err(|e| e.to_string())
+            })
+        {
+            self.set_rename_error(&refusal);
+            return Task::none();
+        }
         // A case-only rename on a case-insensitive volume finds the project
         // itself at the new name; that is not a collision.
         if new_prj.exists() && !same_path_on_disk(&state.target_path, &new_prj) {
@@ -329,6 +341,8 @@ impl Signex {
         self.document_state
             .project_folder_renames
             .insert(job.project_id);
+        // A sheet read already in flight must not land in the old folder.
+        self.document_state.note_document_written_behind_engines();
         let run = job.clone();
         let recovery = self.document_state.autosave.dir().map(Path::to_path_buf);
         let open = self.open_document_paths();
@@ -387,6 +401,8 @@ impl Signex {
         self.document_state
             .project_folder_renames
             .remove(&job.project_id);
+        // Sheets moved on disk with no engine behind them.
+        self.document_state.note_document_written_behind_engines();
         if let Err(reason) = result {
             crate::diagnostics::log_warning(format!(
                 "Rename of project {} cancelled: {reason}",

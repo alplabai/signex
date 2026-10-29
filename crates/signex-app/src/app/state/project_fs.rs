@@ -120,11 +120,17 @@ pub fn message_touches_disk(message: &crate::app::Message) -> bool {
                 | FileMsg::PrimitiveSaved(_)
                 | FileMsg::SavePrimitiveAs { .. }
         ),
-        Message::Rename(m) => matches!(m, RenameMsg::Submit),
+        Message::Rename(m) => matches!(
+            m,
+            RenameMsg::Submit
+                | RenameMsg::FileRenamed(_)
+                | RenameMsg::LibraryRenamed(_)
+                | RenameMsg::LibraryRenameRolledBack(_)
+        ),
         Message::EnableVersionControl(m) => {
             matches!(m, crate::app::EnableVersionControlMsg::Finished { .. })
         }
-        Message::Remove(m) => matches!(m, RemoveMsg::Confirm(_)),
+        Message::Remove(m) => matches!(m, RemoveMsg::Confirm(_) | RemoveMsg::Deleted(_)),
         Message::Project(m) => matches!(
             m,
             ProjectMsg::CloseRefsResolved { .. }

@@ -38,10 +38,10 @@ window.
 
 - **Fixed dialogs** (the confirm and warning class: app-quit, project-close,
   error notice, netlist prompt, autosave and library recovery, rename, remove,
-  annotate reset, Create Sheet, close-library, library delete; and the small
-  dialogs: About, Grid Properties, Custom Selection Filter, Enable Version
-  Control, custom net colour, library picker, primitive picker, document
-  options, library options) open with `resizable: false` and `minimizable:
+  annotate reset, Re-prefix confirm, Create Sheet, close-library, library
+  delete; and the small dialogs: About, Grid Properties, Custom Selection
+  Filter, Enable Version Control, custom net colour, library picker, primitive
+  picker, document options, library options, Copy to Library) open with `resizable: false` and `minimizable:
   false`. iced 0.14 maps `resizable` to winit's maximise / zoom button (so the
   macOS green button is disabled) and `minimizable` to the minimise button;
   iced exposes no separate fullscreen switch, so fullscreen is off only as a
@@ -76,8 +76,8 @@ dialogs with a button footer, and that the window background is the surface toke
 
 Confirm and warning dialogs lock the main window; tool windows do not.
 
-- **Locking:** Rename, Remove, Create Sheet and the annotate-reset confirm
-  (detached), plus the in-window confirms (quit, project close, error notice,
+- **Locking:** Rename, Remove, Create Sheet, the annotate-reset confirm and the
+  Re-prefix confirm (detached), plus the in-window confirms (quit, project close, error notice,
   netlist prompt, recovery prompts, library confirms). The one predicate
   is `Signex::has_locking_confirm_modal` (read by the macOS menu bar), and
   `locking_confirm_window` names a locking dialog that has its own window.
@@ -101,6 +101,7 @@ Confirm and warning dialogs lock the main window; tool windows do not.
 |---|---|---|---|
 | Rename, Remove | locking | Cancel | `detached_modals` |
 | Annotate reset confirm | locking | Cancel | `detached_modal_os_close` |
+| Re-prefix confirm | locking | Cancel (`AnnotateMsg::ReprefixCancelled`; changes nothing) | `reprefix_standard` |
 | Create Sheet | locking | Later (writes nothing) | `child_sheet_create_tests` |
 | Error notice | locking | dismiss (OK) | `detached_confirm_tests`, `detached_modals` |
 | Netlist-incomplete prompt | locking | Cancel (writes nothing) | `detached_confirm_tests` (close mapping) |
@@ -110,6 +111,7 @@ Confirm and warning dialogs lock the main window; tool windows do not.
 | Close-library confirm | locking | Cancel (drafts untouched) | `detached_modals` |
 | Library delete confirm (per browser) | locking | Cancel for THAT browser; nothing deleted | `detached_library_tests` |
 | Library recovery | locking | Cancel (never a decision that deletes or rebinds; returns if its window vanishes, twice at most, then stays in the window) | `detached_library_tests`, `detached_confirm_tests` |
+| Copy to Library (opening a stock symbol or footprint) | tool | Cancel; the stock original is never changed | `detached_modals` |
 | Library picker, primitive picker, document options, create options, updates, custom net colour | tool | Cancel, no write | `detached_modals` generic loops, `detached_library_tests` (net colour) |
 | Library edit row (per browser) | tool | Cancel for THAT browser | same code path as delete confirm; no edit-row fixture |
 | Find / Replace, Grid Properties, Custom Selection Filter, Enable Version Control, About, Shortcuts, Calculator | tool | close | `detached_modals` |

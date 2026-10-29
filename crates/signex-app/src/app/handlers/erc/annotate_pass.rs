@@ -40,7 +40,9 @@ impl Signex {
             crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
         // Refused up front, before any sheet is touched, so a re-prefix stays
         // all or nothing and an annotate never half-runs.
-        if self.refuse_annotate_while_project_moves(&project_set, label) {
+        if self.refuse_annotate_while_project_moves(&project_set, label)
+            || self.refuse_annotate_while_path_op(&project_set, label)
+        {
             return Task::none();
         }
 

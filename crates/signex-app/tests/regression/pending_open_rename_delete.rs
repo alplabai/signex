@@ -157,9 +157,11 @@ fn once_the_open_has_finished_the_delete_goes_ahead() {
     let (mut app, sheet) = project_with_sheet(tmp.path());
     app.ui_state.remove_dialog = Some(delete_dialog(&sheet));
 
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::DeleteFile,
-    )));
+    // The delete runs on a worker (#859); settle drives its completion.
+    crate::settle_support::settle(
+        &mut app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+    );
 
     assert!(!sheet.exists(), "no pending open: the delete runs");
 }

@@ -987,3 +987,50 @@ fn an_old_store_completion_does_not_act_on_a_newer_save() {
     assert!(!editor(&app, &address).dirty);
     assert!(head_has(&file, &second));
 }
+
+/// #859 -- a library rename or delete owns the library's directory: a staged
+/// PDF written beside it would recreate the old directory (and strand the
+/// rollback) or race the delete. The save refuses first.
+fn app_with_library_op(
+    kind: crate::app::path_ops::PathOpKind,
+) -> (Signex, EditorAddress, PathBuf, String, tempfile::TempDir) {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    let hash = pick(&mut app, &address, PDF);
+    app.document_state.pending_path_ops.begin(
+        kind,
+        vec![file.clone(), tmp.path().join("renamed.snxlib")],
+        crate::app::state::scope::CaseFold::PRESERVE,
+    );
+    (app, address, file, hash, tmp)
+}
+
+#[test]
+fn a_staged_pdf_is_not_written_while_the_library_is_renamed_or_deleted() {
+    use crate::app::path_ops::PathOpKind;
+    for kind in [PathOpKind::RenameLibrary, PathOpKind::Delete] {
+        let (mut app, address, file, hash, _tmp) = app_with_library_op(kind);
+
+        let begin = app.begin_save_row(&address).map(|_| ());
+        let err = format!("{:#}", begin.unwrap_err());
+        assert!(err.contains("is still running"), "{err}");
+        assert!(
+            !datasheet_asset_path(&file, &hash).is_some_and(|p| p.exists()),
+            "nothing was written beside the library"
+        );
+        assert!(editor(&app, &address).saving_row.is_none());
+    }
+}
+
+#[test]
+fn save_all_reports_the_library_hold_as_a_refusal() {
+    let (mut app, address, file, hash, _tmp) =
+        app_with_library_op(crate::app::path_ops::PathOpKind::RenameLibrary);
+
+    let result = app.begin_save_row_in_batch(&address, 1).map(|_| ());
+
+    assert!(format!("{:#}", result.unwrap_err()).contains("is still running"));
+    assert!(editor(&app, &address).saving_row.is_none());
+    assert!(!datasheet_asset_path(&file, &hash).is_some_and(|p| p.exists()));
+    assert!(editor(&app, &address).dirty, "the row stays owed");
+}

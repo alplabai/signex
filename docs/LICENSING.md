@@ -13,7 +13,7 @@ and what it means for users and contributors.
 
 | Repository | License | Contains |
 |---|---|---|
-| `alplabai/signex` (this repo) | **Apache-2.0** | Native Signex EDA tooling. Schematic + PCB editor, 3D viewer, simulation, plugin system. Reads/writes `.snxsch`/`.snxpcb`/`.snxsym`/`.snxfpt`/`.snxlib`/`.snxprj` natively. |
+| `alplabai/signex` (this repo) | **Apache-2.0** | Native Signex EDA tooling. The schematic editor and the symbol, footprint and library editors ship today; the PCB editor, 3D viewer, simulation and plugin system are on the [roadmap](ROADMAP.md). Reads/writes `.snxsch`/`.snxpcb`/`.snxsym`/`.snxfpt`/`.snxlib`/`.snxprj` natively. |
 | `alplabai/signex-kicad-import` (separate) | **GPL-3.0-or-later** | One-way converter from KiCad files (`.kicad_sch`/`.kicad_pcb`/`.kicad_sym`/`.kicad_pro`) to Signex's native formats. Optional install. |
 
 For users:
@@ -69,8 +69,10 @@ existing KiCad users — see the README for the migration walkthrough.
 
 The audit + remediation lived in:
 
-- `.claude/PRPs/issue-62-licensing-remediation.md` — strategy doc.
-- `.claude/PRPs/issue-62-execution-plan.md` — engineering plan + decision log.
+- `.claude/PRPs/issue-62-licensing-remediation.md` — strategy doc (a working
+  file that was never committed; not in this repository).
+- `.claude/PRPs/issue-62-execution-plan.md` — engineering plan + decision log
+  (same: not in this repository).
 - `docs/audit/kicad-derivation.md` — file-by-file audit of every
   KiCad-derived element with remediation choice.
 - `docs/audit/contributors-2026-04-29.md` — contributor consent record.

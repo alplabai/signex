@@ -367,10 +367,21 @@ impl Signex {
         address: &EditorAddress,
         written_assets: &[String],
     ) -> anyhow::Result<Option<RowWrite>> {
+        let Some(library_path) = self
+            .library
+            .editors
+            .get(address)
+            .map(|state| state.library_path.clone())
+        else {
+            return Ok(None);
+        };
+        // The mounted adapter still points at the old path while the library
+        // is being renamed (#859).
+        let refusal = self.refuse_while_path_op(&library_path, "saved");
         let Some(state) = self.library.editors.get_mut(address) else {
             return Ok(None);
         };
-        let prepared = Self::row_write_of(state, written_assets);
+        let prepared = refusal.and_then(|()| Self::row_write_of(state, written_assets));
         if prepared.is_err() {
             state.saving_row = None;
         }

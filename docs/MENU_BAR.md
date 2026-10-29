@@ -66,8 +66,10 @@ the panel's shortcut toggles it.
 
 **No accelerators on model rows.** An AppKit key equivalent fires before iced
 sees the key, which bypasses the widget-capture rule in `app/dispatch/input.rs`
-(a focused text input owns Ctrl/Command + C, V, X, A, Z), and the Ctrl-to-
-Command mapping (#1441) is not in yet. Native rows show no shortcut and
+(a focused text input owns Ctrl/Command + C, V, X, A, Z), and the keymap
+treats `Ctrl` as the physical Control key on every OS (#1441), so a native
+Command key equivalent would disagree with the profile. Native rows show no
+shortcut and
 register no key equivalent; keys keep going through the keymap.
 `Shortcut::command_id` stays in the model for a later change. The four
 app-menu key equivalents are the only ones, and none collides with editing.

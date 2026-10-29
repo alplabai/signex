@@ -265,6 +265,7 @@ impl Signex {
     }
 
     fn open_project_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        self.refuse_start_while_path_op(&path, "opened")?;
         let (_, mount_task) = self.load_or_activate_project(&path)?;
         // Success path only: `?` above returns before a project that
         // failed to load can be recorded.
@@ -292,6 +293,9 @@ impl Signex {
         &mut self,
         project_path: &std::path::Path,
     ) -> Result<(crate::app::state::ProjectId, iced::Task<Message>)> {
+        // Reopening a project whose `.snxprj` is being moved or patched would
+        // mount the new library path under a rename that may still roll back.
+        self.refuse_start_while_path_op(project_path, "opened")?;
         if let Some(existing) = self
             .document_state
             .projects
@@ -437,6 +441,21 @@ impl Signex {
         self.document_state.pending_opens.contains(path)
     }
 
+    /// Is the companion `.snxprj` being moved or rewritten? Then this sheet
+    /// opens without its project, and the Messages panel says why instead of
+    /// blaming a parse failure.
+    fn companion_project_is_busy(&self, companion: &std::path::Path) -> bool {
+        match self.refuse_start_while_path_op(companion, "opened") {
+            Ok(()) => false,
+            Err(refusal) => {
+                crate::diagnostics::log_warning(format!(
+                    "{refusal} The sheet opens without its project."
+                ));
+                true
+            }
+        }
+    }
+
     /// Activate the tab that owns `path`, if any. Returns whether one exists.
     pub(crate) fn activate_tab_for_path(&mut self, path: &std::path::Path) -> bool {
         let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) else {
@@ -460,6 +479,7 @@ impl Signex {
     }
 
     fn open_schematic_resolved(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        self.refuse_start_while_path_op(&path, "opened")?;
         if self.activate_or_skip_duplicate_open(&path) {
             return Ok(iced::Task::none());
         }
@@ -475,7 +495,7 @@ impl Signex {
                 .and_then(|segment| segment.to_str())
                 .unwrap_or("");
             let companion = dir.join(format!("{stem}.snxprj"));
-            if companion.exists() {
+            if companion.exists() && !self.companion_project_is_busy(&companion) {
                 match self.load_or_activate_project(&companion) {
                     // The companion project's cold `.snxlib` mounts
                     // prepare off-thread (#99 part 2c); its task is
@@ -544,6 +564,7 @@ impl Signex {
     }
 
     fn open_pcb_resolved(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        self.refuse_start_while_path_op(&path, "opened")?;
         if self.activate_or_skip_duplicate_open(&path) {
             return Ok(iced::Task::none());
         }
@@ -558,7 +579,7 @@ impl Signex {
                 .and_then(|segment| segment.to_str())
                 .unwrap_or("");
             let companion = dir.join(format!("{stem}.snxprj"));
-            if companion.exists() {
+            if companion.exists() && !self.companion_project_is_busy(&companion) {
                 match self.load_or_activate_project(&companion) {
                     // The companion project's cold `.snxlib` mounts
                     // prepare off-thread (#99 part 2c); its task is

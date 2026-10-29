@@ -25,69 +25,75 @@ main   ← tested, releasable baseline. Tags are cut here. Protected.
 
 ## PR requirements (gated by branch protection)
 
-For both `trunk` and `main`:
+| Gate                               | `trunk` | `main` |
+|------------------------------------|---------|--------|
+| Pull request required (no direct push) | Yes | Yes |
+| At least 1 approving review        | Yes. A different account than the PR author; no self-approval. | Yes. Same. |
+| CODEOWNERS approval                | Yes (auto-requested from [`.github/CODEOWNERS`](../.github/CODEOWNERS) for the touched paths). | Yes. |
+| Stale approvals dismissed on a new push | Yes | Yes |
+| Approval of the most recent push   | No | Yes |
+| Conversations resolved             | Yes | Yes |
+| Required status checks, branch up to date | Yes (below) | Yes (below) |
+| Merge queue                        | Yes, squash | No |
+| Allowed merge methods              | merge, squash (the queue squashes) | merge only |
+| Force-push / deletion              | **Forbidden** | **Forbidden** |
+| Bypass                             | Organization admins (always) | One named user (always) |
 
-| Gate                               | Required |
-|------------------------------------|----------|
-| At least 1 approving review        | Yes — must be a different account than the PR author (no self-approval). |
-| CODEOWNERS approval                | Yes (auto-requested from [`.github/CODEOWNERS`](../.github/CODEOWNERS) for the touched paths). |
-| All required CI checks pass        | Yes (see list below). |
-| Branch up to date with target      | Yes. |
-| Conversations resolved             | Yes. |
-| Force-push to the protected branch | **Forbidden** (admins included). |
-| Direct push (non-PR)               | **Forbidden** (admins included). |
+The bypass lists are part of the live rulesets: the earlier text of this file
+said no one, admins included, could bypass. That was never true of the live
+settings.
 
 ## Required CI checks
 
-Every PR to `trunk` must pass all of these (job names as they appear as
-status-check contexts). `main` requires five of them: `check ·
-ubuntu-latest`, `test · workspace`, `deny · licenses + deps`, `PR-description
-self-declaration` and `No GPL-tool-shaped names anywhere in crates/`; the rest
-still run on every PR to `main` but do not block it.
+Branch protection requires exactly three status contexts on both branches:
+
+- `ci · required` (`.github/workflows/ci.yml`) — one aggregator job. It needs
+  the `check`, `test` and `lint` jobs and passes when each of them succeeded,
+  or when the `changes` job skipped the Rust jobs on purpose (a draft PR, or a
+  PR that only touches prose; see `scripts/ci_build_needed.sh`). The lint job
+  and the aggregator always run. Adding or renaming a job under it needs no
+  ruleset edit.
+- `license guard · clean-room` (`.github/workflows/license-guard.yml`) — the
+  case-insensitive grep for GPL-tool-shaped names under `crates/` and the other
+  clean-room checks. It also runs on the merge queue.
+- `PR-description self-declaration` (`.github/workflows/pr-license-declaration.yml`)
+  — the license-compliance block is present and does not admit a license-gated
+  source.
+
+What the aggregated jobs run:
 
 - `check · ubuntu-latest`, `check · macos-latest`, `check · windows-latest` —
-  `cargo check --workspace` on all three release targets; all three are
-  required. Each also runs `cargo clippy --workspace --all-targets
-  --all-features` as a step, so a clippy *error* fails the job (see below).
+  `cargo check --workspace` on all three targets, and `cargo clippy
+  --workspace --all-targets --all-features -- -D warnings`.
 - `test · workspace` — `cargo test --workspace` (headless GPU tests run on
   lavapipe).
-- `deny · licenses + deps` — `cargo deny check licenses` (no GPL transitive
-  deps) and `cargo deny check bans` (the `[bans]` table in `deny.toml`, e.g.
-  the glyphon ban; duplicate versions only warn). `sources` and `advisories`
-  run in the same job but are advisory.
-- `PR-description self-declaration` — the license-compliance block is present
-  and does not admit KiCad-derived source.
-- `No GPL-tool-shaped names anywhere in crates/` — the representative licence
-  guard (the full License-Guard suite runs alongside it and shows on every PR).
-- `fmt · rustfmt` — the tree is `cargo fmt --all -- --check` clean.
-- `no god-files` — no new or growing production file over the size cap.
-- `no discarded tasks` — no `let _ = …`-shaped discard of an `iced::Task`.
-- `lint lockstep` — every `[workspace.lints.*]` entry is present, at the same
-  level, in each member that does not inherit with `[lints] workspace = true`.
-  Only `signex-app` opts out today, and cargo forbids it from inheriting while
-  it keeps its own per-lint override (#570).
+- `lint · repo gates` — as steps of one job: the path-filter controls,
+  `cargo fmt --all -- --check`, `cargo deny` (`licenses` and `bans` block;
+  `sources` and `advisories` are informational), the architecture guard
+  (`scripts/check_arch_guard.sh`), the god-file ratchet
+  (`scripts/check_file_size.sh`), the discarded-Task ratchet
+  (`scripts/check_discarded_tasks.sh`), the lint-lockstep gate
+  (`scripts/check_lint_lockstep.sh`: every `[workspace.lints.*]` entry is
+  present, at the same level, in each member that does not inherit with
+  `[lints] workspace = true`; only `signex-app` opts out, #570) and the
+  changelog fragment check (`scripts/changelog_assemble.sh --check`).
+
+`test · library-server postgres` and `test · <os>` run on PRs but are not part
+of `ci · required`. Warn-level clippy output, the `cargo deny` `sources` and
+`advisories` steps, the `CHANGELOG.md should not be edited directly` warning and
+the missing-fragment warning annotate a PR and do not block it.
 
 **Clippy is half a gate, by design.** It has no status-check context of its
-own; it is a step inside the three required `check` jobs. Clippy's
-deny-by-default lints — the whole `correctness` group — emit `error:` and
-abort compilation, so they fail the job and hold the merge button. Warn-level
-lints (`style`, `complexity`, `perf`, most of `suspicious`) only annotate and
-do not block. The job previously passed `-W clippy::all`, which demoted the
-`correctness` group to warnings and neutralised even that much; it was removed
-in #567.
-
-**Advisory, not blocking** (surfaced as annotations): warn-level clippy output
-and the `cargo-deny` `sources` / `advisories` steps. Keep them clean, but they
-don't hold the merge button.
+own; it is a step inside the three `check` jobs. Clippy's deny-by-default
+lints (the whole `correctness` group), and every warn-level lint through
+`-D warnings`, fail the step and so `ci · required`.
 
 ## Merge method
 
-- **Feature / fix branch → `trunk`**: **squash** for a single logical change
-  (one PR = one trunk commit), or a **merge commit (`--no-ff`)** when the
-  branch's individual commits carry authorship or bisect value worth keeping
-  on `trunk` — e.g. integrating an external contributor's series (the v0.14
-  footprint-editor integration, PR #132, was merged this way to preserve
-  @alpCaner's per-commit history).
+- **Feature / fix branch → `trunk`**: through the **merge queue**, which
+  squashes (one PR = one trunk commit). The queue builds the merge group with
+  all checks (`ALLGREEN`), with at most 2 entries building and 5 merging at a
+  time and a 60-minute check timeout.
 - **`trunk` → `main`** (release gate): **merge commit (`--no-ff`)**, crossed
   only after `trunk` is green and tested. Tags are then cut on `main`.
 - **Never** a plain fast-forward that erases the branch boundary on a
@@ -113,8 +119,9 @@ PR's license-compliance block, not in commit trailers.
 
 ## Push policies
 
-- Nobody — admins included — pushes directly to `trunk` or `main`. Branch
-  protection enforces this server-side.
+- Nobody pushes directly to `trunk` or `main` in the normal flow; the rulesets
+  require a pull request. The bypass actors listed above can override that, so
+  it is not a guarantee against an admin.
 - Feature-branch pushes are unrestricted; CI runs on push for any branch.
 - Force-push to a feature branch is fine while the PR is in draft; once
   review starts, prefer additional commits.
@@ -123,58 +130,46 @@ PR's license-compliance block, not in commit trailers.
 ## Branch-protection settings (GitHub-side)
 
 Repo settings can't live in git; this section is the audit-trail copy. The
-live settings under **Settings → Rules → Rulesets** are authoritative, and
+live settings under **Settings → Rules → Rulesets** are authoritative. Three
+rulesets exist: `Protect trunk` (the default branch), `main-protection`, and
+`dev-protection` (blocks force-push on the legacy `dev` branch only).
+
 [`.github/rulesets/trunk-protection.json`](../.github/rulesets/trunk-protection.json)
 and [`.github/rulesets/main-protection.json`](../.github/rulesets/main-protection.json)
-are the importable sources for them.
+are the importable declarations, but they have **drifted from the live
+rulesets**: they still list the eleven per-job status checks, no merge queue and
+no bypass actors. Re-export the live rulesets before re-applying either file;
+the tables above describe the live state as read from the GitHub API on
+2026-10-29.
 
-> **Reconciled 2026-07-15.** Until that date this section described protection
-> that did not exist. `trunk` — the default branch, where every PR lands — had
-> **no ruleset applied at all**; `trunk-protection.json` sat in the repo
-> unapplied. `main` had a ruleset, but it required a pull request and **zero
-> approvals**, with no required status checks and rebase merges allowed — on
-> the branch where release tags are cut. Both now match what is written here.
-> If you change this section, change the JSON and re-apply it; see
-> [`.github/rulesets/README.md`](../.github/rulesets/README.md).
+### `Protect trunk`
 
-### `trunk` (and `main`, same set except the required checks)
+- Targets `~DEFAULT_BRANCH`. Blocks deletion and non-fast-forward updates.
+- Pull request: 1 approval, Code Owner review, stale approvals dismissed on
+  push, conversation resolution; the most recent push does **not** need a
+  separate approval. Merge methods `merge` and `squash`.
+- Status checks (strict, so the branch must be up to date): `ci · required`,
+  `license guard · clean-room`, `PR-description self-declaration`.
+- Merge queue: method `SQUASH`, grouping `ALLGREEN`, min 1 / max 5 entries to
+  merge, max 2 to build, 60-minute check timeout.
+- Bypass: the Organization admin role, always.
 
-**Pull-request requirements**
-- ✅ Require a pull request before merging
-  - ✅ Require approvals: **1** (different account than the author; no self-approval)
-  - ✅ Dismiss stale approvals when new commits are pushed
-  - ✅ Require review from Code Owners
-  - ✅ Require approval of the most recent push
-  - ❌ Allow specified actors to bypass required PRs (no bypass list; admins included)
+### `main-protection`
 
-**Status-check requirements**
-- ✅ Require status checks to pass before merging
-  - ✅ Require branches to be up to date before merging
-  - Required checks on `trunk` (all green): `check · ubuntu-latest`,
-    `check · macos-latest`, `check · windows-latest`, `test · workspace`,
-    `deny · licenses + deps`, `PR-description self-declaration`,
-    `No GPL-tool-shaped names anywhere in crates/`, `fmt · rustfmt`,
-    `no god-files`, `no discarded tasks`, `lint lockstep`
-  - Required checks on `main` (see [Required CI checks](#required-ci-checks)):
-    `check · ubuntu-latest`, `test · workspace`, `deny · licenses + deps`,
-    `PR-description self-declaration`,
-    `No GPL-tool-shaped names anywhere in crates/`)
-
-**Merge gates**
-- ✅ Require conversation resolution before merging
-- ❌ Require linear history (merge commits are allowed for integrations)
-
-**Push restrictions**
-- ✅ **Do not allow bypassing the above** (admins included) — the load-bearing
-  setting; it removes the "merge anyway" button for every role.
-- ❌ Allow force pushes (off)
-- ❌ Allow deletions (off)
+- Targets `refs/heads/main`. Blocks deletion and non-fast-forward updates.
+- Pull request: 1 approval, Code Owner review, stale approvals dismissed,
+  approval of the most recent push required, conversation resolution. Merge
+  method `merge` only.
+- Same three status checks, strict. No merge queue.
+- Bypass: one named user account, always.
 
 ### Tuning knobs
 
 - `main` may warrant **2** approvals once the team grows; `trunk` stays at 1
   for velocity.
 - Set `strict` (up-to-date) off if rebase-before-merge friction outweighs the
-  safety on a small team.
-- To require the entire License-Guard suite (not just the representative
-  check), add each guard job name to the required list.
+  safety on a small team; the merge queue already tests each entry on top of
+  the queue ahead of it.
+- To require the entire License-Guard suite as separate contexts, add each
+  guard job name to the required list; today `license guard · clean-room` is
+  the only context from that workflow.

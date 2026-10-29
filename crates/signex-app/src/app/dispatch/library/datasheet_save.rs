@@ -194,6 +194,9 @@ impl Signex {
         let library_path = state.library_path.clone();
         self.refuse_unstorable(&library_path)?;
         self.refuse_while_project_moves(&library_path, "save")?;
+        // A rename or delete of the library would be raced by the PDF write
+        // (#859).
+        self.refuse_while_path_op(&library_path, "saved")?;
         // A typed number still in its edit buffer is part of this save;
         // the copy saved is the row as it is now.
         let Some(state) = self.library.editors.get_mut(address) else {
