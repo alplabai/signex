@@ -20,6 +20,7 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
+use super::keys::{KeyForm, all_keys, key_for};
 use super::sidecar::sidecar_path;
 
 /// Most entries one startup pass finishes. The pass is synchronous on the
@@ -237,11 +238,12 @@ fn document_moved(old: &Path, new: &Path) -> bool {
     )
 }
 
+/// Finish one owed move. Only pure key arithmetic and `stat`s on files in the
+/// recovery folder and the two documents: the pass runs synchronously at boot,
+/// so it never probes a document's folder for its case rule. Instead every key
+/// form of `old` is looked at, and a copy found under a form moves to the same
+/// form of `new`; the next open adopts it under the then-current rule.
 fn run_one(recovery_dir: &Path, file: &Path, entry: &Entry, report: &mut Finished) {
-    let (src, dst) = (
-        sidecar_path(recovery_dir, &entry.old),
-        sidecar_path(recovery_dir, &entry.new),
-    );
     let drop_entry = || {
         if let Err(e) = std::fs::remove_file(file)
             && e.kind() != std::io::ErrorKind::NotFound
@@ -249,8 +251,16 @@ fn run_one(recovery_dir: &Path, file: &Path, entry: &Entry, report: &mut Finishe
             crate::diagnostics::log_warning(format!("{e}: could not clear {}", file.display()));
         }
     };
-    if src == dst || !src.is_file() {
-        // Nothing left at the old key: already moved, or never existed.
+    let found: Vec<(KeyForm, PathBuf)> = all_keys(recovery_dir, &entry.old, false)
+        .into_iter()
+        .filter(|(form, key)| {
+            // A form whose key text is the new document's own is not "old".
+            key_for(recovery_dir, &entry.new, *form) != *key && key.is_file()
+        })
+        .collect();
+    if found.is_empty() {
+        // No copy left under any key of the old document: already moved, or
+        // never existed.
         drop_entry();
         return;
     }
@@ -259,38 +269,44 @@ fn run_one(recovery_dir: &Path, file: &Path, entry: &Entry, report: &mut Finishe
     // move; otherwise the copy stays at the old key, where it is offered.
     if !document_moved(&entry.old, &entry.new) {
         crate::diagnostics::log_warning(format!(
-            "The pending move of recovery copy {} was dropped: {} is not where the document \
-             moved to. The copy stays under its old name.",
-            src.display(),
+            "The pending move of the recovery copy of {} was dropped: {} is not where the \
+             document moved to. The copy stays under its old name.",
+            entry.old.display(),
             entry.new.display()
         ));
         drop_entry();
         return;
     }
-    if dst.is_file() {
-        crate::diagnostics::log_warning(format!(
-            "The recovery copy {} was not moved to {}: a copy already sits under the new name. \
-             It is still on disk as {} and is not offered; copy it out by hand if it matters.",
-            src.display(),
-            dst.display(),
-            src.display()
-        ));
-        drop_entry();
-        return;
-    }
-    match std::fs::rename(&src, &dst) {
-        Ok(()) => {
-            report.moved += 1;
-            drop_entry();
-        }
-        Err(e) => {
-            report.failed.push((entry.old.clone(), entry.new.clone()));
+    let mut owed_still = false;
+    for (form, src) in found {
+        let dst = key_for(recovery_dir, &entry.new, form);
+        if dst.is_file() {
             crate::diagnostics::log_warning(format!(
-                "{e}: the recovery copy {} is still owed a move to {}; retried.",
+                "The recovery copy {} was not moved to {}: a copy already sits under the new \
+                 name. It is still on disk as {} and is not offered; copy it out by hand if it \
+                 matters.",
                 src.display(),
-                dst.display()
+                dst.display(),
+                src.display()
             ));
+            continue;
         }
+        match super::sidecar::move_no_replace(&src, &dst) {
+            Ok(()) => report.moved += 1,
+            Err(e) => {
+                owed_still = true;
+                crate::diagnostics::log_warning(format!(
+                    "{e}: the recovery copy {} is still owed a move to {}; retried.",
+                    src.display(),
+                    dst.display()
+                ));
+            }
+        }
+    }
+    if owed_still {
+        report.failed.push((entry.old.clone(), entry.new.clone()));
+    } else {
+        drop_entry();
     }
 }
 

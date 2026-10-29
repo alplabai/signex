@@ -17,8 +17,8 @@
 
 use std::path::{Path, PathBuf};
 
+use super::keys::{self, KeyForm};
 use super::pending_move;
-use crate::app::{CaseFold, directory_ignores_case, path_key_with};
 
 /// Extension that marks a file as a recovery sidecar.
 pub const SIDECAR_EXTENSION: &str = "recovery";
@@ -27,73 +27,101 @@ pub const SIDECAR_EXTENSION: &str = "recovery";
 /// displaced; it is kept on disk but never offered.
 const SUPERSEDED_EXTENSION: &str = "older";
 
-/// The case rule of the volume `document` sits on, probed (disk IO, so only
-/// from the off-thread recovery tasks, never `update`). When the volume
-/// cannot be asked the probe answers "ignores case", the safe side: two
-/// spellings then share one copy rather than losing one.
-fn volume_fold(document: &Path) -> CaseFold {
-    let dir = document
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
-    CaseFold::from_probe(directory_ignores_case(dir))
-}
-
-/// The key of #1530 and the builds between: the hash of the dot-segment
-/// normalised path text exactly as spelled (no case fold).
-fn as_given_path_hash(path: &Path) -> u64 {
-    let path = crate::app::project_sheets::normalize_clamped(path);
-    bytes_hash(path.to_string_lossy().as_bytes())
-}
-
-/// The key a build before #1510 gave `path`: the hash of its text exactly as
-/// spelled, with no normalising.
-fn legacy_path_hash(path: &Path) -> u64 {
-    bytes_hash(path.to_string_lossy().as_bytes())
-}
-
-/// Every key form an older build could have filed a copy of `document` under,
-/// other than the current one: the raw (pre-#1510) and the as-given
-/// (#1510 to #1540) spellings, and on a case-insensitive volume the
-/// volume-folded spelling under both. Distinct from `current` and each other.
-fn older_keys(recovery_dir: &Path, document: &Path, fold: CaseFold) -> Vec<PathBuf> {
-    let mut spellings = vec![document.to_path_buf()];
-    if fold.fold_case {
-        spellings.push(PathBuf::from(path_key_with(document, fold)));
-    }
-    let current = sidecar_path_with(recovery_dir, document, fold);
-    let mut keys: Vec<PathBuf> = Vec::new();
-    for spelling in &spellings {
-        for hash in [as_given_path_hash(spelling), legacy_path_hash(spelling)] {
-            let key = key_path(recovery_dir, spelling, hash);
-            if key != current && !keys.contains(&key) {
-                keys.push(key);
-            }
-        }
-    }
-    keys
-}
-
-/// Bring a copy written under an older key of `document` (see [`older_keys`])
-/// to its current key, so the upgrade (or another spelling) does not strand it.
-/// Nothing happens when no older-key copy exists. Where a copy already sits at
-/// the current key, only the newest of the two is offered: if the older-key
-/// copy is newer, the current one is set aside and the older-key one adopted;
-/// otherwise it stays where it is. No copy is ever deleted or overwritten: the
-/// move is one atomic `rename` inside the recovery directory, which a crash
-/// leaves either done or not done.
+/// Bring a copy written under any other key form of `document` (see
+/// [`keys::all_keys`]) to its current key, so a changed case rule, an upgrade,
+/// or another spelling does not strand it. Nothing happens when no such copy
+/// exists. Where a copy already sits at the current key, only the newest of
+/// the two is offered: if the other copy is newer, the current one is set
+/// aside and the other adopted; otherwise it stays where it is. No copy is
+/// ever deleted or overwritten.
+///
+/// A copy under a key that merges spellings differing in case is not moved
+/// while another existing path spells the document differently up to case: it
+/// could belong to that file. It is left where it is and logged.
 pub fn adopt_legacy(recovery_dir: &Path, document: &Path) -> Result<(), String> {
-    adopt_legacy_with(recovery_dir, document, volume_fold(document))
+    adopt_legacy_with(recovery_dir, document, keys::stable_ignores_case(document))
 }
 
-fn adopt_legacy_with(recovery_dir: &Path, document: &Path, fold: CaseFold) -> Result<(), String> {
-    let current = sidecar_path_with(recovery_dir, document, fold);
-    for legacy in older_keys(recovery_dir, document, fold) {
-        if legacy.is_file() {
-            adopt_one(&current, &legacy, document)?;
+fn adopt_legacy_with(
+    recovery_dir: &Path,
+    document: &Path,
+    ignores_case: bool,
+) -> Result<(), String> {
+    let current = sidecar_path_with(recovery_dir, document, ignores_case);
+    let current_form = KeyForm::Keyed(ignores_case);
+    for (form, legacy) in keys::all_keys(recovery_dir, document, ignores_case) {
+        if legacy == current || !legacy.is_file() {
+            continue;
         }
+        if form.merges_spellings()
+            && !current_form.merges_spellings()
+            && keys::has_case_variant(document)
+        {
+            crate::diagnostics::log_warning(format!(
+                "The recovery copy {} may belong to {} or to an existing file that spells it \
+                 differently up to case; it was left where it is.",
+                legacy.display(),
+                document.display()
+            ));
+            continue;
+        }
+        adopt_one(&current, &legacy, document)?;
     }
     Ok(())
+}
+
+/// Log each recovery file named for `document` up to case that no key form of
+/// it matches, so a copy stranded by an unknown spelling can be found by hand.
+pub(super) fn log_unmatched_spellings(recovery_dir: &Path, document: &Path) {
+    let Some(name) = document
+        .file_name()
+        .map(|n| n.to_string_lossy().to_lowercase())
+    else {
+        return;
+    };
+    let Ok(entries) = std::fs::read_dir(recovery_dir) else {
+        return;
+    };
+    let known = keys::all_keys(recovery_dir, document, keys::stable_ignores_case(document));
+    let suffix = format!(".{SIDECAR_EXTENSION}");
+    for path in entries.flatten().map(|e| e.path()) {
+        let file = path.file_name().map(|n| n.to_string_lossy().to_lowercase());
+        let stem = file
+            .as_deref()
+            .and_then(|f| f.strip_suffix(suffix.as_str()))
+            .and_then(|f| f.rsplit_once('-'))
+            .map(|(stem, _)| stem);
+        if stem == Some(name.as_str()) && known.iter().all(|(_, k)| *k != path) {
+            crate::diagnostics::log_warning(format!(
+                "The recovery copy {} is named like {} but is not filed under any key of it; \
+                 it was not offered.",
+                path.display(),
+                document.display()
+            ));
+        }
+    }
+}
+
+/// Move `from` to `to` without ever replacing a file at `to`: a hard link is
+/// created first (it fails when `to` exists), then the old name is dropped.
+/// Where links are unsupported, an existing `to` is refused and the rename
+/// is used.
+pub(super) fn move_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
+    match std::fs::hard_link(from, to) {
+        Ok(()) => {
+            if let Err(e) = std::fs::remove_file(from) {
+                crate::diagnostics::log_warning(format!(
+                    "{e}: the recovery copy {} now also exists as {}",
+                    from.display(),
+                    to.display()
+                ));
+            }
+            Ok(())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(e),
+        Err(_) if to.exists() => Err(std::io::ErrorKind::AlreadyExists.into()),
+        Err(_) => std::fs::rename(from, to),
+    }
 }
 
 fn adopt_one(current: &Path, legacy: &Path, document: &Path) -> Result<(), String> {
@@ -146,7 +174,7 @@ fn adopt_one(current: &Path, legacy: &Path, document: &Path) -> Result<(), Strin
             return Ok(());
         }
     }
-    std::fs::rename(&legacy, &current).map_err(|e| {
+    move_no_replace(&legacy, &current).map_err(|e| {
         format!(
             "{e}: could not move recovery copy {} to {}",
             legacy.display(),
@@ -199,37 +227,14 @@ pub fn bytes_hash(bytes: &[u8]) -> u64 {
 }
 
 /// The sidecar path for the document at `document` inside `recovery_dir`.
+/// Probes the volume (disk IO): call it from a task, never from `update`.
 pub fn sidecar_path(recovery_dir: &Path, document: &Path) -> PathBuf {
-    sidecar_path_with(recovery_dir, document, volume_fold(document))
+    sidecar_path_with(recovery_dir, document, keys::stable_ignores_case(document))
 }
 
-/// [`sidecar_path`] under an explicit case rule: the key is the app-wide path
-/// comparison key ([`path_key_with`]), so two spellings of one file on a
-/// case-insensitive volume share a copy and on a case-sensitive one stay
-/// distinct. Dot segments resolve lexically, never by a disk lookup:
-/// `w/link/../x` and `w/x` share a key even when `link` is a symlink (the key
-/// must be computable without IO, as `KeyMap::lexical_key` is). The file name is the folded
-/// key's last segment, so two spellings of one file share the name as well as
-/// the hash.
-fn sidecar_path_with(recovery_dir: &Path, document: &Path, fold: CaseFold) -> PathBuf {
-    let key = path_key_with(document, fold);
-    let name = key
-        .rsplit('/')
-        .next()
-        .filter(|n| !n.is_empty())
-        .unwrap_or("document");
-    recovery_dir.join(format!(
-        "{name}-{:016x}.{SIDECAR_EXTENSION}",
-        bytes_hash(key.as_bytes())
-    ))
-}
-
-fn key_path(recovery_dir: &Path, document: &Path, hash: u64) -> PathBuf {
-    let name = document
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "document".to_string());
-    recovery_dir.join(format!("{name}-{hash:016x}.{SIDECAR_EXTENSION}"))
+/// [`sidecar_path`] under an explicit case rule.
+fn sidecar_path_with(recovery_dir: &Path, document: &Path, ignores_case: bool) -> PathBuf {
+    keys::key_for(recovery_dir, document, KeyForm::Keyed(ignores_case))
 }
 
 /// Atomically write `bytes` as the sidecar of `document`.
@@ -266,20 +271,24 @@ pub fn remove(recovery_dir: &Path, document: &Path) -> Result<(), String> {
 /// once the copy sits under the new key, so a move that fails until the app
 /// quits is finished by the next run instead of stranding the copy.
 pub fn rename(recovery_dir: &Path, from: &Path, to: &Path) -> Result<(), String> {
-    // A copy of `from` still under an older key is brought to the current one
-    // first, so the move below (and a replayed journal entry) finds it.
+    // A copy of `from` still under another key form is brought to the current
+    // key first. If that fails the move stays owed: journalled, and reported.
     if let Err(why) = adopt_legacy(recovery_dir, from) {
-        crate::diagnostics::log_warning(why);
+        if let Err(reason) = pending_move::record(recovery_dir, from, to) {
+            crate::diagnostics::log_warning(reason);
+        }
+        return Err(why);
     }
-    let (src, dst) = (
-        sidecar_path(recovery_dir, from),
-        sidecar_path(recovery_dir, to),
-    );
-    if src == dst || !src.is_file() {
+    let src = keys::all_keys(recovery_dir, from, keys::stable_ignores_case(from))
+        .into_iter()
+        .map(|(_, key)| key)
+        .find(|key| key.is_file());
+    let dst = sidecar_path(recovery_dir, to);
+    let Some(src) = src.filter(|src| *src != dst) else {
         // Nothing to move: an entry for `from` would only mislead.
         pending_move::clear(recovery_dir, from);
         return Ok(());
-    }
+    };
     // A journal that cannot be written must not block the move itself.
     if let Err(reason) = pending_move::record(recovery_dir, from, to) {
         crate::diagnostics::log_warning(reason);
@@ -333,7 +342,7 @@ mod tests {
         let rec = tmp.path().join("rec");
         let doc = tmp.path().join("w/../main.snxsch");
         let current = sidecar_path(&rec, &doc);
-        let legacy = key_path(&rec, &doc, legacy_path_hash(&doc));
+        let legacy = keys::key_for(&rec, &doc, KeyForm::Raw);
         assert_ne!(current, legacy);
         std::fs::create_dir_all(&rec).unwrap();
         std::fs::write(&current, b"old").unwrap();
@@ -352,7 +361,7 @@ mod tests {
         let rec = tmp.path().join("rec");
         let doc = tmp.path().join("w/../main.snxsch");
         let current = sidecar_path(&rec, &doc);
-        let legacy = key_path(&rec, &doc, legacy_path_hash(&doc));
+        let legacy = keys::key_for(&rec, &doc, KeyForm::Raw);
         std::fs::create_dir_all(&rec).unwrap();
         let older = format!("{}.{SUPERSEDED_EXTENSION}", current.display());
         std::fs::write(&older, b"earliest").unwrap();
@@ -372,7 +381,7 @@ mod tests {
         let rec = tmp.path().join("rec");
         let doc = tmp.path().join("w/../main.snxsch");
         let current = sidecar_path(&rec, &doc);
-        let legacy = key_path(&rec, &doc, legacy_path_hash(&doc));
+        let legacy = keys::key_for(&rec, &doc, KeyForm::Raw);
         std::fs::create_dir_all(&rec).unwrap();
         let mut files = vec![(current.clone(), b"old".to_vec())];
         let base = format!("{}.{SUPERSEDED_EXTENSION}", current.display());
@@ -403,7 +412,7 @@ mod tests {
         let rec = tmp.path().join("rec");
         let doc = tmp.path().join("w/../main.snxsch");
         let current = sidecar_path(&rec, &doc);
-        let legacy = key_path(&rec, &doc, legacy_path_hash(&doc));
+        let legacy = keys::key_for(&rec, &doc, KeyForm::Raw);
         // Make the rename (and only the rename) fail. Unix refuses a directory
         // renamed over a file; Windows replaces it, so there the copy is held
         // open without delete sharing, which blocks renaming it.
@@ -438,7 +447,7 @@ mod tests {
         let rec = tmp.path().join("rec");
         let doc = tmp.path().join("w/../main.snxsch");
         let current = sidecar_path(&rec, &doc);
-        let legacy = key_path(&rec, &doc, legacy_path_hash(&doc));
+        let legacy = keys::key_for(&rec, &doc, KeyForm::Raw);
         std::fs::create_dir_all(&rec).unwrap();
         std::fs::write(&legacy, b"old").unwrap();
         std::thread::sleep(std::time::Duration::from_millis(50));
@@ -450,13 +459,17 @@ mod tests {
         assert!(!Path::new(&aside).exists());
     }
 
-    // Folding rules injected, so both volume kinds run on every host.
-    const INSENSITIVE: CaseFold = CaseFold::case_only();
-    const SENSITIVE: CaseFold = CaseFold::PRESERVE;
+    // The case rule is injected, so both volume kinds run on every host.
+    const INSENSITIVE: bool = true;
+    const SENSITIVE: bool = false;
 
     fn put(path: &Path, bytes: &[u8]) {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, bytes).unwrap();
+    }
+
+    fn key(rec: &Path, doc: &Path, form: KeyForm) -> PathBuf {
+        keys::key_for(rec, doc, form)
     }
 
     #[test]
@@ -501,11 +514,70 @@ mod tests {
     }
 
     #[test]
+    fn an_undecided_probe_keeps_case_and_a_missing_folder_gives_the_same_answer() {
+        let tmp = tempfile::tempdir().unwrap();
+        let doc = tmp.path().join("Gone/Sheet.snxsch");
+        // The folder does not exist: the nearest existing one is asked, not
+        // "undecided means fold".
+        let before = keys::stable_ignores_case(&doc);
+        std::fs::create_dir_all(doc.parent().unwrap()).unwrap();
+        std::fs::write(&doc, b"x").unwrap();
+        assert_eq!(keys::stable_ignores_case(&doc), before);
+        std::fs::remove_dir_all(doc.parent().unwrap()).unwrap();
+        assert_eq!(keys::stable_ignores_case(&doc), before);
+    }
+
+    #[test]
+    fn a_copy_filed_under_the_other_case_rule_is_found_either_way_round() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let doc = tmp.path().join("Sheet.snxsch");
+        // Filed while the rule read "keep case"; the rule now says "fold".
+        put(&key(&rec, &doc, KeyForm::Keyed(SENSITIVE)), b"edits");
+        adopt_legacy_with(&rec, &doc, INSENSITIVE).unwrap();
+        assert_eq!(
+            std::fs::read(sidecar_path_with(&rec, &doc, INSENSITIVE)).unwrap(),
+            b"edits"
+        );
+        // Filed while it read "fold" (folded key); the rule now says "keep case".
+        let other = tmp.path().join("Other.snxsch");
+        put(&key(&rec, &other, KeyForm::Keyed(INSENSITIVE)), b"folded");
+        adopt_legacy_with(&rec, &other, SENSITIVE).unwrap();
+        assert_eq!(
+            std::fs::read(sidecar_path_with(&rec, &other, SENSITIVE)).unwrap(),
+            b"folded"
+        );
+    }
+
+    #[test]
+    fn a_folded_key_copy_is_not_adopted_while_a_case_variant_file_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let (upper, lower) = (
+            tmp.path().join("Sheet.snxsch"),
+            tmp.path().join("sheet.snxsch"),
+        );
+        std::fs::write(&upper, b"a").unwrap();
+        if !lower.exists() {
+            // A case-insensitive folder cannot hold both: nothing to test.
+            std::fs::write(&lower, b"b").unwrap();
+        }
+        if std::fs::read(&upper).unwrap() != b"a" {
+            return;
+        }
+        let folded = key(&rec, &upper, KeyForm::Keyed(INSENSITIVE));
+        put(&folded, b"whose?");
+        adopt_legacy_with(&rec, &lower, SENSITIVE).unwrap();
+        assert!(folded.is_file(), "left on disk, not moved");
+        assert!(!sidecar_path_with(&rec, &lower, SENSITIVE).exists());
+    }
+
+    #[test]
     fn a_copy_under_the_previous_as_given_key_is_moved_to_the_folded_key() {
         let tmp = tempfile::tempdir().unwrap();
         let rec = tmp.path().join("rec");
         let doc = tmp.path().join("Sheet.snxsch");
-        let old = key_path(&rec, &doc, as_given_path_hash(&doc));
+        let old = key(&rec, &doc, KeyForm::AsGiven);
         put(&old, b"crash edits");
         adopt_legacy_with(&rec, &doc, INSENSITIVE).unwrap();
         let current = sidecar_path_with(&rec, &doc, INSENSITIVE);
@@ -518,8 +590,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let rec = tmp.path().join("rec");
         let doc = tmp.path().join("Sheet.snxsch");
-        let folded = PathBuf::from(path_key_with(&doc, INSENSITIVE));
-        let old = key_path(&rec, &folded, as_given_path_hash(&folded));
+        let old = key(&rec, &doc, KeyForm::FoldedAsGiven);
         put(&old, b"crash edits");
         adopt_legacy_with(&rec, &doc, INSENSITIVE).unwrap();
         assert_eq!(
@@ -533,7 +604,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let rec = tmp.path().join("rec");
         let doc = tmp.path().join("Sheet.snxsch");
-        let old = key_path(&rec, &doc, as_given_path_hash(&doc));
+        let old = key(&rec, &doc, KeyForm::AsGiven);
         let current = sidecar_path_with(&rec, &doc, INSENSITIVE);
         put(&old, b"old");
         std::thread::sleep(std::time::Duration::from_millis(50));
@@ -552,6 +623,57 @@ mod tests {
             b"new",
             "set aside, not deleted"
         );
+    }
+
+    #[test]
+    fn a_move_never_replaces_a_file_at_the_target() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (from, to) = (tmp.path().join("from"), tmp.path().join("to"));
+        std::fs::write(&from, b"a").unwrap();
+        std::fs::write(&to, b"b").unwrap();
+        assert!(move_no_replace(&from, &to).is_err());
+        assert_eq!(std::fs::read(&to).unwrap(), b"b");
+        assert_eq!(std::fs::read(&from).unwrap(), b"a");
+        std::fs::remove_file(&to).unwrap();
+        move_no_replace(&from, &to).unwrap();
+        assert_eq!(std::fs::read(&to).unwrap(), b"a");
+        assert!(!from.exists());
+    }
+
+    #[test]
+    fn a_failed_adopt_keeps_the_move_owed_and_reports_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let (old, new) = (
+            tmp.path().join("a/main.snxsch"),
+            tmp.path().join("b/main.snxsch"),
+        );
+        // Two raw/as-given copies and every aside name taken: adopt fails.
+        let current = sidecar_path(&rec, &old);
+        let legacy = key(&rec, &old, KeyForm::Raw);
+        let alt = if legacy == current {
+            key(&rec, &old, KeyForm::FoldedRaw)
+        } else {
+            legacy
+        };
+        if alt == current {
+            return;
+        }
+        put(&current, b"old");
+        let base = format!("{}.{SUPERSEDED_EXTENSION}", current.display());
+        std::fs::write(&base, b"x").unwrap();
+        for n in 1..100u32 {
+            std::fs::write(format!("{base}.{n}"), b"x").unwrap();
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::fs::write(&alt, b"new").unwrap();
+        assert!(rename(&rec, &old, &new).is_err());
+        assert!(
+            pending_move::owed(&rec)
+                .iter()
+                .any(|(o, n)| *o == old && *n == new)
+        );
+        assert_eq!(std::fs::read(&alt).unwrap(), b"new");
     }
 
     #[test]
