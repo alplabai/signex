@@ -44,6 +44,7 @@ struct OpenOverlays {
     remove_open: bool,
     enable_vc_open: bool,
     library_create_options_open: bool,
+    library_stock_copy_open: bool,
     passive_calculator_open: bool,
     // #514 — the rest of the Esc ladder. Each closes exactly one gap that
     // used to fall through to the `Tool::Select` reset behind the modal.
@@ -397,6 +398,11 @@ impl OpenOverlays {
             // `ui_state` and never reach this table (#557). The hover
             // tooltip is not dismissible at all.
             OverlayId::CommandPalette | OverlayId::HoverTooltip => None,
+            OverlayId::StockCopy => self.library_stock_copy_open.then(|| {
+                Message::Library(crate::library::messages::LibraryMessage::StockCopy(
+                    crate::library::stock_copy::StockCopyMsg::Cancelled,
+                ))
+            }),
             OverlayId::LibraryUpdates => self.library_updates_open.then(|| {
                 Message::Library(crate::library::messages::LibraryMessage::LibraryUpdatesCancel)
             }),
@@ -449,6 +455,7 @@ pub(crate) fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<Over
         ModalId::LibraryPrimitivePicker => Some(OverlayId::PrimitivePicker),
         ModalId::LibraryDocumentOptions => Some(OverlayId::DocumentOptions),
         ModalId::LibraryCreateOptions => Some(OverlayId::CreateOptions),
+        ModalId::LibraryStockCopy => Some(OverlayId::StockCopy),
         ModalId::LibraryUpdates => Some(OverlayId::LibraryUpdates),
         ModalId::LibraryCloseConfirm => Some(OverlayId::CloseLibraryConfirm),
         ModalId::LibraryDeleteConfirm => Some(OverlayId::DeleteConfirm),
@@ -580,6 +587,8 @@ impl Signex {
                 && !modal_detached(crate::app::state::ModalId::LibraryPicker),
             library_document_options_open: self.library.document_options.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryDocumentOptions),
+            library_stock_copy_open: self.library.stock_copy.is_some()
+                && !modal_detached(crate::app::state::ModalId::LibraryStockCopy),
             library_updates_open: self.library.library_updates.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryUpdates),
             library_primitive_picker_open: self.library.primitive_picker.is_some()
@@ -1142,6 +1151,14 @@ mod tests {
             ))
         ));
         assert!(matches!(
+            only(|o| o.library_stock_copy_open = true),
+            Some(Message::Library(
+                crate::library::messages::LibraryMessage::StockCopy(
+                    crate::library::stock_copy::StockCopyMsg::Cancelled
+                )
+            ))
+        ));
+        assert!(matches!(
             only(|o| o.library_updates_open = true),
             Some(Message::Library(
                 crate::library::messages::LibraryMessage::LibraryUpdatesCancel
@@ -1617,6 +1634,7 @@ mod tests {
             remove_open,
             enable_vc_open,
             library_create_options_open,
+            library_stock_copy_open,
             passive_calculator_open,
             annotate_reset_confirm_open,
             reprefix_confirm_open,
@@ -1693,6 +1711,9 @@ mod tests {
             }),
             ("library_primitive_picker_open", |o| {
                 o.library_primitive_picker_open = true
+            }),
+            ("library_stock_copy_open", |o| {
+                o.library_stock_copy_open = true
             }),
             ("library_updates_open", |o| o.library_updates_open = true),
             ("close_library_confirm_open", |o| {

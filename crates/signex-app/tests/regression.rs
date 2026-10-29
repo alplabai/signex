@@ -172,6 +172,8 @@ mod history_reload_repair;
 
 #[path = "regression/library_browser_cell_commit.rs"]
 mod library_browser_cell_commit;
+#[path = "regression/library_range_filter.rs"]
+mod library_range_filter;
 #[path = "regression/library_row_base_local.rs"]
 mod library_row_base_local;
 
@@ -271,6 +273,8 @@ mod library_place_designator_standard;
 mod library_place_symbol;
 #[path = "regression/library_place_ui.rs"]
 mod library_place_ui;
+#[path = "regression/library_stock_copy.rs"]
+mod library_stock_copy;
 #[path = "regression/library_stock_place.rs"]
 mod library_stock_place;
 #[path = "regression/library_symbol_drift.rs"]

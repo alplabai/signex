@@ -162,11 +162,10 @@ impl NetIndexCache {
         self.failed.retain(|id, _| keep.contains(id));
     }
 
-    /// Forget requests in flight and failures, for a caller that lost its tasks.
-    pub fn forget_pending(&mut self) {
-        self.wanted.clear();
-        self.in_flight.clear();
-        self.failed.clear();
+    /// Let `project` try again after a failure. The key does not cover what
+    /// is on disk, so a user who fixed a file asks for a rebuild this way.
+    pub fn clear_failed(&mut self, project: ProjectId) {
+        self.failed.remove(&project);
     }
 }
 

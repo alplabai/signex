@@ -77,6 +77,8 @@ A sheet placed more than once is read per placement: hover, partners and
 related selection use the placement the tab was entered through (the first one
 when the tab was opened directly).
 
+The highlight is kept per sheet placement: a tab shows the net only for the placement it was entered through, and a sheet instance the net does not reach is dimmed. Stepping to a member in another placement switches the tab to it.
+
 A highlighted net is found again after an edit by its anchor element, then by
 its name, never by an auto-assigned `N$k` name; if neither finds it, the
 highlight is cleared and Messages says so. At most one index build runs per

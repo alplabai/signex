@@ -435,6 +435,7 @@ impl Signex {
                 // must go, or quit would not offer to save the repair (or
                 // would ask about a file that matches disk).
                 let dirty = state.is_dirty();
+                self.warn_if_cascade_owed(&path);
                 self.document_state
                     .footprint_editors
                     .insert(path.clone(), state);
@@ -446,6 +447,7 @@ impl Signex {
             }
             Ok(RestoreJobDocument::Symbol(file)) => {
                 let state = crate::app::SymbolDocument::new(path.clone(), *file);
+                self.warn_if_cascade_owed(&path);
                 self.document_state
                     .symbol_editors
                     .insert(path.clone(), state);
@@ -535,6 +537,7 @@ impl Signex {
     /// the dirty marker set for the restore, and raise the error card.
     /// `unreadable` is true for an IO error, where reopening can help.
     fn fail_primitive_reload(&mut self, path: &std::path::Path, why: &str, unreadable: bool) {
+        self.warn_if_cascade_owed(path);
         self.document_state.footprint_editors.remove(path);
         self.document_state.symbol_editors.remove(path);
         self.set_reloaded_dirty(path, false);

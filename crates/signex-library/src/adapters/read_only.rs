@@ -256,7 +256,7 @@ impl LibraryAdapter for ReadOnlyAdapter {
         &self,
         _targets: &[(String, RowId)],
         _edit: &mut crate::adapter::RowEdit<'_>,
-        _message: &str,
+        _message: &crate::adapter::RowsMessage<'_>,
     ) -> Result<Vec<crate::adapter::RowEditOutcome>, LibraryError> {
         self.refuse()
     }

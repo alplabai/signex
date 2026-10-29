@@ -254,6 +254,10 @@ impl Signex {
                 picker.filter = s;
                 self.library.sync_view_caches();
             }
+            PickerMsg::RangeFilter(msg) => {
+                picker.range_filters.apply(msg);
+                self.library.sync_view_caches();
+            }
             PickerMsg::SelectComponent(row_id) => {
                 // `ComponentSummary` carries `row_id` directly in the
                 // DBLib model; match against that.

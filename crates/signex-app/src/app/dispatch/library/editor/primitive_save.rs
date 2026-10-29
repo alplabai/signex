@@ -199,13 +199,17 @@ impl Signex {
                     symbol.updated = now;
                 }
             }
-            editor.file.updated = now;
+            // A retry with no edit writes nothing, so it is not a change.
+            if !changed.is_empty() {
+                editor.file.updated = now;
+            }
             editor.set_dirty(false);
             editor.save_generation = generation;
             let snapshot = Snapshot::Symbol {
                 file: editor.file.clone(),
                 baseline: editor.baseline.clone(),
                 name: editor.primitive().name.clone(),
+                owed: editor.cascade_owed.clone(),
             };
             self.document_state.keep_document_dirty_until_saved(path);
             return Ok(snapshot);
@@ -231,13 +235,16 @@ impl Signex {
                     footprint.updated = now;
                 }
             }
-            editor.file.updated = now;
+            if !changed.is_empty() {
+                editor.file.updated = now;
+            }
             editor.set_dirty(false);
             editor.save_generation = generation;
             let snapshot = Snapshot::Footprint {
                 file: editor.file.clone(),
                 baseline: editor.baseline.clone(),
                 name: editor.primitive().name.clone(),
+                owed: editor.cascade_owed.clone(),
             };
             self.document_state.keep_document_dirty_until_saved(path);
             return Ok(snapshot);
@@ -362,7 +369,7 @@ impl Signex {
                 path.display()
             ));
         } else {
-            self.settle_saved_editor(path, written.file, &written.versions);
+            self.settle_saved_editor(path, written.file, &written.versions, &written.cascade_owed);
             crate::diagnostics::log_info(format!("[{label}] Wrote {}", path.display()));
         }
         // The bytes landed either way: commit them into the owning
@@ -386,6 +393,7 @@ impl Signex {
         path: &std::path::Path,
         file: WrittenContainer,
         versions: &std::collections::HashMap<uuid::Uuid, String>,
+        owed: &[uuid::Uuid],
     ) {
         let edited_since = match file {
             WrittenContainer::Symbol(saved) => self
@@ -395,6 +403,7 @@ impl Signex {
                 .map(|editor| {
                     cascade::apply_symbol_versions(&mut editor.file, versions);
                     editor.baseline = saved;
+                    editor.cascade_owed = owed.to_vec();
                     editor.is_dirty()
                 }),
             WrittenContainer::Footprint(saved) => self
@@ -404,14 +413,54 @@ impl Signex {
                 .map(|editor| {
                     cascade::apply_footprint_versions(&mut editor.file, versions);
                     editor.baseline = saved;
+                    editor.cascade_owed = owed.to_vec();
                     editor.is_dirty()
                 }),
         };
+        // Rows a failed cascade left behind are an unsaved obligation: the
+        // tab dot, the close prompt and the quit guard cover it, and the
+        // prompt's Save is the retry.
         match edited_since {
+            Some(_) if !owed.is_empty() => self.mark_primitive_owes_cascade(path),
             Some(false) => self.mark_primitive_clean(path),
             Some(true) => self.document_state.release_save_hold(path),
             None => {}
         }
+    }
+
+    /// Say so when an editor that still owes row updates is dropped or
+    /// replaced: they are lost, and the user has to re-bind by hand.
+    pub(crate) fn warn_if_cascade_owed(&self, path: &std::path::Path) {
+        let document = &self.document_state;
+        let owes = document
+            .symbol_editors
+            .get(path)
+            .map(|e| !e.cascade_owed.is_empty())
+            .or_else(|| {
+                document
+                    .footprint_editors
+                    .get(path)
+                    .map(|e| !e.cascade_owed.is_empty())
+            })
+            .unwrap_or(false);
+        if !owes {
+            return;
+        }
+        let name = path.file_stem().map_or_else(
+            || path.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        let line =
+            format!("Re-bind the rows of {name} by hand; its pending row updates were discarded");
+        crate::diagnostics::log_warning(crate::text_trunc::prefix_within_bytes(&line, 157));
+    }
+
+    /// The file at `path` is saved but its rows are not all moved: keep the
+    /// draft marked unsaved.
+    fn mark_primitive_owes_cascade(&mut self, path: &std::path::Path) {
+        self.document_state.mark_document_dirty(path);
+        // The editor flag carries the dirt now; the snapshot's hold is done.
+        self.document_state.release_save_hold(path);
     }
 
     /// The draft at `path` matches disk: drop its dirty markers, and the

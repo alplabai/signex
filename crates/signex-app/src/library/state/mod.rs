@@ -169,6 +169,10 @@ pub struct LibraryBrowserState {
     /// clicking a class row in the left sidebar — clicking the
     /// same row twice clears the filter.
     pub class_filter: Option<String>,
+    /// Range filters on this tab's measurement columns, by parameter key
+    /// (#1572). Cleared when the active table changes: the columns are
+    /// the table's.
+    pub range_filters: crate::library::range_filter::RangeFilters,
     /// Edit Component Details modal — opened by double-clicking a row
     /// in the grid. `None` while closed.
     pub edit_modal: Option<EditRowModalState>,
@@ -243,6 +247,7 @@ impl LibraryBrowserState {
             search: String::new(),
             lifecycle_filter: LifecycleFilter::default(),
             class_filter: None,
+            range_filters: Default::default(),
             edit_modal: None,
             cell_edit: HashMap::new(),
             delete_confirm: None,
@@ -605,6 +610,16 @@ pub struct LibraryState {
     /// Preference-backed defaults for a library opened or created from now
     /// on; `Save Preferences` updates it, so no reader goes back to disk.
     pub new_library_defaults: NewLibraryDefaults,
+    /// The open Copy to Library dialog (#813): a stock symbol or footprint
+    /// was asked for and no usable target library is remembered.
+    pub stock_copy: Option<super::stock_copy::StockCopyState>,
+    /// The library the user chose to receive stock copies, remembered in
+    /// `prefs.json`. May name a library that is no longer mounted; it is
+    /// checked with [`LibraryState::usable_stock_copy_target`] on use.
+    pub stock_copy_target: Option<PathBuf>,
+    /// Stock files whose copy is being written, so a second open of the
+    /// same file does not start a second copy.
+    pub stock_copies_in_flight: std::collections::HashSet<PathBuf>,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the
@@ -736,6 +751,7 @@ mod refresh;
 #[cfg(test)]
 mod refresh_tests;
 mod relocate;
+mod stock_copy;
 mod symbol_choice;
 mod table_scan;
 #[cfg(test)]

@@ -274,6 +274,9 @@ impl Signex {
             ModalId::LibraryCreateOptions => {
                 Some(Message::Library(LibraryMessage::LibraryCreateOptionsCancel))
             }
+            ModalId::LibraryStockCopy => Some(Message::Library(LibraryMessage::StockCopy(
+                crate::library::stock_copy::StockCopyMsg::Cancelled,
+            ))),
             ModalId::LibraryUpdates => Some(Message::Library(LibraryMessage::LibraryUpdatesCancel)),
             ModalId::LibraryCloseConfirm => {
                 Some(Message::Library(LibraryMessage::CloseLibraryConfirm(
@@ -475,6 +478,7 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::LibraryPrimitivePicker => iced::Size::new(760.0, 600.0),
         ModalId::LibraryDocumentOptions => iced::Size::new(580.0, 360.0),
         ModalId::LibraryCreateOptions => iced::Size::new(520.0, 310.0),
+        ModalId::LibraryStockCopy => iced::Size::new(520.0, 380.0),
         ModalId::LibraryUpdates => iced::Size::new(680.0, 460.0),
         ModalId::LibraryCloseConfirm => iced::Size::new(560.0, 410.0),
         ModalId::LibraryDeleteConfirm => iced::Size::new(520.0, 240.0),
@@ -511,7 +515,8 @@ pub(crate) fn modal_is_fixed(modal: ModalId) -> bool {
         | ModalId::LibraryPicker
         | ModalId::LibraryPrimitivePicker
         | ModalId::LibraryDocumentOptions
-        | ModalId::LibraryCreateOptions => true,
+        | ModalId::LibraryCreateOptions
+        | ModalId::LibraryStockCopy => true,
         ModalId::AnnotateDialog
         | ModalId::ErcDialog
         | ModalId::MoveSelection

@@ -65,6 +65,7 @@ impl SymbolDocument {
                 format: self.file.format.clone(),
                 file_uuid: self.file.file_uuid,
                 display_name: self.file.display_name.clone(),
+                copied_from: self.file.copied_from,
                 symbols: Vec::new(),
                 created: self.file.created,
                 updated: self.file.updated,

@@ -9,9 +9,13 @@ use crate::persist::run_task::outputs;
 /// An app with a dirty symbol editor (and its tab) keyed at `dir/Lib.snxsym`
 /// whose project has git on.
 fn app_with_dirty_symbol(dir: &Path) -> (Signex, PathBuf) {
+    app_with_symbol_named(dir, "Lib")
+}
+
+fn app_with_symbol_named(dir: &Path, stem: &str) -> (Signex, PathBuf) {
     let mut app = app_workspace(&dir.to_string_lossy(), &[]);
     app.document_state.projects[0].data.enable_git = true;
-    let path = dir.join("Lib.snxsym");
+    let path = dir.join(format!("{stem}.snxsym"));
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Sym1"));
     let mut editor = SymbolDocument::new(path.clone(), file);
     editor.mark_dirty();
@@ -661,4 +665,72 @@ fn a_rejection_after_a_mid_edit_completion_leaves_the_draft_clean() {
         .unwrap()
         .set_dirty(dirty_before);
     assert_clean_in_every_reader(&app);
+}
+
+/// An editor that still owes rows after a failed cascade.
+fn owing(dir: &Path, stem: &str) -> (Signex, PathBuf) {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, path) = app_with_symbol_named(dir, stem);
+    app.document_state
+        .symbol_editors
+        .get_mut(&path)
+        .unwrap()
+        .cascade_owed = vec![uuid::Uuid::now_v7()];
+    (app, path)
+}
+
+fn warned(stem: &str) -> Option<String> {
+    crate::diagnostics::recent_entries()
+        .into_iter()
+        .map(|e| e.message)
+        .find(|m| m.contains(&format!("Re-bind the rows of {stem} by hand")))
+}
+
+#[test]
+fn dont_save_on_an_editor_that_owes_rows_says_the_rows_are_not_updated() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = owing(dir.path(), "OwedDontSave");
+    let _ = app.close_tab_now(0);
+    assert!(!app.document_state.symbol_editors.contains_key(&path));
+    let line = warned("OwedDontSave").expect("the discard is reported");
+    assert!(line.len() <= 157, "{line}");
+    assert!(line.contains("pending row updates were discarded"));
+}
+
+#[test]
+fn a_history_restore_over_an_editor_that_owes_rows_says_so() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _path) = owing(dir.path(), "OwedRestore");
+    let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Back"));
+    app.apply_reloaded(
+        0,
+        Ok(crate::app::restore_job::RestoreJobDocument::Symbol(
+            Box::new(file),
+        )),
+        None,
+    );
+    assert!(warned("OwedRestore").is_some());
+}
+
+#[test]
+fn a_failed_reload_after_a_restore_says_so_too() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _path) = owing(dir.path(), "OwedReloadFail");
+    app.apply_reloaded(
+        0,
+        Err(crate::app::restore_job::RestoreFailure::NotReloaded {
+            why: "unreadable".into(),
+            unreadable: true,
+        }),
+        None,
+    );
+    assert!(warned("OwedReloadFail").is_some());
+}
+
+#[test]
+fn an_editor_that_owes_nothing_is_dropped_without_a_warning() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _path) = app_with_symbol_named(dir.path(), "OwedNothing");
+    let _ = app.close_tab_now(0);
+    assert!(warned("OwedNothing").is_none());
 }

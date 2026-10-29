@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use signex_net::NetAnchor;
+use signex_types::schematic::InstancePath;
 use uuid::Uuid;
 
 use crate::app::state::ProjectId;
@@ -19,8 +20,9 @@ pub struct NetHighlight {
     pub anchor: NetAnchor,
     /// The member last stepped to, as a position in the net's steps.
     pub cursor: Option<usize>,
-    /// The elements of the net on each sheet file; what stays bright.
-    pub elements: HashMap<PathBuf, Arc<HashSet<Uuid>>>,
+    /// The elements of the net in each sheet placement: what stays bright
+    /// there and nowhere else, since two placements of one file share uuids.
+    pub elements: HashMap<(PathBuf, InstancePath), Arc<HashSet<Uuid>>>,
 }
 
 impl NetHighlight {
@@ -41,10 +43,17 @@ impl NetHighlight {
         Some(next)
     }
 
-    /// What stays bright on the sheet at `path`: its elements of the net,
-    /// nothing at all when the net does not reach that sheet.
-    pub fn bright_on(&self, path: &Path) -> Arc<HashSet<Uuid>> {
-        self.elements.get(path).cloned().unwrap_or_default()
+    /// What stays bright on the sheet at `path` shown through `placement`: its
+    /// elements of the net in that placement, nothing at all when the net does
+    /// not reach it (or the sheet is shown through none).
+    pub fn bright_on(&self, path: &Path, placement: Option<&InstancePath>) -> Arc<HashSet<Uuid>> {
+        let Some(placement) = placement else {
+            return Arc::default();
+        };
+        self.elements
+            .get(&(path.to_path_buf(), placement.clone()))
+            .cloned()
+            .unwrap_or_default()
     }
 }
 
@@ -56,7 +65,11 @@ mod tests {
         NetHighlight {
             project: ProjectId::test_id(1),
             name: "VCC".into(),
-            anchor: (signex_net::SheetKey::new("a.snxsch"), Uuid::nil()),
+            anchor: NetAnchor::new(
+                signex_net::SheetKey::new("a.snxsch"),
+                Uuid::nil(),
+                InstancePath::root(),
+            ),
             cursor: None,
             elements: HashMap::new(),
         }
@@ -89,9 +102,21 @@ mod tests {
     fn a_sheet_the_net_does_not_reach_has_nothing_bright() {
         let mut h = highlight();
         let id = Uuid::from_u128(7);
-        h.elements
-            .insert(PathBuf::from("a.snxsch"), Arc::new(HashSet::from([id])));
-        assert!(h.bright_on(Path::new("a.snxsch")).contains(&id));
-        assert!(h.bright_on(Path::new("b.snxsch")).is_empty());
+        h.elements.insert(
+            (PathBuf::from("a.snxsch"), InstancePath::root()),
+            Arc::new(HashSet::from([id])),
+        );
+        let root = InstancePath::root();
+        assert!(
+            h.bright_on(Path::new("a.snxsch"), Some(&root))
+                .contains(&id)
+        );
+        assert!(h.bright_on(Path::new("b.snxsch"), Some(&root)).is_empty());
+        assert!(h.bright_on(Path::new("a.snxsch"), None).is_empty());
+        let other = InstancePath::from_chain(vec![Uuid::from_u128(9)]);
+        assert!(
+            h.bright_on(Path::new("a.snxsch"), Some(&other)).is_empty(),
+            "another placement of the same file shows nothing bright"
+        );
     }
 }

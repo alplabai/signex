@@ -1107,3 +1107,62 @@ fn an_unannotated_part_skips_the_cross_sheet_check() {
         "a U? part is a part of its own"
     );
 }
+
+// ---- #813 Edit Symbol on a part from the stock library ----
+
+#[test]
+fn edit_symbol_on_a_stock_part_edits_a_copy_in_the_picked_library() {
+    use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
+    use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
+    use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
+
+    let f = fixture();
+    let stock_file = symbol_file(&f);
+    let stock_before = std::fs::read(&stock_file).unwrap();
+    let mut app = placed_part(&f, "ZE813");
+    // The fixture library plays the stock library.
+    app.library.stock_library_root = Some(f.snxlib.clone());
+    let mine_dir = tempfile::tempdir().unwrap();
+    let mine = mine_dir.path().join("Mine.snxlib");
+    LocalGitAdapter::init(
+        &mine,
+        SnxlibManifest {
+            format: FORMAT_TOKEN.into(),
+            library_id: Uuid::now_v7(),
+            library: LibrarySection {
+                name: "Mine".into(),
+                description: None,
+            },
+            mode: LibraryMode::default(),
+            workflow: WorkflowConfig::default(),
+            users: UsersConfig::default(),
+            classes: Vec::new(),
+        },
+        LibraryInitOptions {
+            enable_git: false,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+    app.library.open_library(mine.clone()).unwrap();
+
+    request(&mut app, PlacedPartAction::EditSymbol);
+
+    assert!(
+        symbol_editor_paths(&app).is_empty(),
+        "the stock file is not opened"
+    );
+    assert!(app.library.stock_copy.is_some(), "the dialog asks where");
+
+    settle(
+        &mut app,
+        Message::Library(LibraryMessage::StockCopy(
+            signex_app::library::stock_copy::StockCopyMsg::TargetPicked(mine.clone()),
+        )),
+    );
+
+    let editors = symbol_editor_paths(&app);
+    assert_eq!(editors.len(), 1);
+    assert!(editors[0].starts_with(mine_dir.path()), "{editors:?}");
+    assert_eq!(std::fs::read(&stock_file).unwrap(), stock_before);
+}

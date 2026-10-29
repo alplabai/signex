@@ -279,6 +279,10 @@ pub struct SymbolDocument {
     /// The stamp of the last container save started from this editor
     /// (`DocumentSaves::mint_generation`); `0` until one starts.
     pub save_generation: u64,
+    /// Primitives of this container whose component rows a failed cascade
+    /// left behind and a retry can still move; the next Save cascades them
+    /// even with no new edit.
+    pub cascade_owed: Vec<uuid::Uuid>,
     /// Pan/zoom camera state — mirrors the schematic canvas so the
     /// user's viewport survives across tool / selection changes
     /// within the same `.snxsym` tab. New tabs and active-symbol
@@ -405,6 +409,7 @@ impl SymbolDocument {
             canvas_cache: iced::widget::canvas::Cache::default(),
             dirty: false,
             save_generation: 0,
+            cascade_owed: Vec::new(),
             camera: crate::canvas::Camera::default(),
             zoom_step: default_zoom_step(),
             cursor_mm: None,
@@ -506,6 +511,10 @@ pub struct FootprintDocument {
     /// The stamp of the last container save started from this editor
     /// (`DocumentSaves::mint_generation`); `0` until one starts.
     pub save_generation: u64,
+    /// Primitives of this container whose component rows a failed cascade
+    /// left behind and a retry can still move; the next Save cascades them
+    /// even with no new edit.
+    pub cascade_owed: Vec<uuid::Uuid>,
     /// v0.24 Phase 1 (Track B) — Undo history. Pre-mutation snapshots
     /// pushed by `push_history` ahead of each dispatcher mutation;
     /// `undo()` pops the most recent and swaps it in. Capped at
@@ -617,6 +626,7 @@ impl FootprintDocument {
             // document opens dirty and a save persists the repair.
             dirty: repaired,
             save_generation: 0,
+            cascade_owed: Vec::new(),
             history: Vec::new(),
             redo: Vec::new(),
             last_edit_key: None,

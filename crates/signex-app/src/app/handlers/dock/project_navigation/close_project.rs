@@ -628,6 +628,7 @@ impl Signex {
     /// have `project_id: None` (a library nested under the project), so
     /// the project-close sweep by `project_id` would never reach it.
     fn discard_primitive_editor(&mut self, path: &std::path::Path) -> Task<Message> {
+        self.warn_if_cascade_owed(path);
         self.document_state.symbol_editors.remove(path);
         self.document_state.footprint_editors.remove(path);
         let tab_idx = self.document_state.tabs.iter().position(|t| {

@@ -14,8 +14,25 @@ impl Signex {
         table: String,
     ) -> Task<Message> {
         if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+            if state.active_table.as_deref() != Some(table.as_str()) {
+                // The filters name the old table's columns.
+                state.range_filters = Default::default();
+            }
             state.active_table = Some(table);
             state.selected_row = None;
+        }
+        Task::none()
+    }
+
+    /// A range filter on a parameter column of a Library Browser tab. The
+    /// caches resync in `finish_update`.
+    pub(in crate::app::dispatch::library) fn handle_browser_range_filter(
+        &mut self,
+        library_path: std::path::PathBuf,
+        msg: crate::library::messages::RangeFilterMsg,
+    ) -> Task<Message> {
+        if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+            state.range_filters.apply(msg);
         }
         Task::none()
     }

@@ -83,6 +83,17 @@ impl Signex {
         from_tree: bool,
     ) -> anyhow::Result<Task<Message>> {
         let path = self.resolve_held_spelling_now(path);
+        // A stock primitive is read-only: edit a copy in the user's library
+        // instead of opening the stock file (#813).
+        if let Some(kind) = self.library.stock_primitive_kind(&path) {
+            // The footprint editor release gate applies to the copy too.
+            if kind == crate::library::stock_copy::StockPrimitiveKind::Footprint
+                && !crate::feature_flags::FOOTPRINT_EDITOR_ENABLED
+            {
+                return Ok(Task::none());
+            }
+            return Ok(self.request_stock_copy(path, kind));
+        }
         // Already open? Just activate the existing tab.
         if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
             if idx != self.document_state.active_tab {

@@ -7,7 +7,7 @@ use crate::app::Message;
 use crate::app::state::{ModalId, Signex, WindowKind};
 
 /// Dialogs whose window follows their open state, whatever code flips it.
-const FOLLOWED: [ModalId; 23] = [
+const FOLLOWED: [ModalId; 24] = [
     ModalId::FindReplace,
     ModalId::RenameDialog,
     ModalId::RemoveDialog,
@@ -27,6 +27,7 @@ const FOLLOWED: [ModalId; 23] = [
     ModalId::LibraryPrimitivePicker,
     ModalId::LibraryDocumentOptions,
     ModalId::LibraryCreateOptions,
+    ModalId::LibraryStockCopy,
     ModalId::LibraryUpdates,
     ModalId::LibraryCloseConfirm,
     ModalId::LibraryRecovery,
@@ -86,6 +87,7 @@ impl Signex {
             ModalId::LibraryPrimitivePicker => self.library.primitive_picker.is_some(),
             ModalId::LibraryDocumentOptions => self.library.document_options.is_some(),
             ModalId::LibraryCreateOptions => self.library.create_options.is_some(),
+            ModalId::LibraryStockCopy => self.library.stock_copy.is_some(),
             ModalId::LibraryUpdates => self.library.library_updates.is_some(),
             ModalId::LibraryCloseConfirm => self.library.close_library_confirm.is_some(),
             ModalId::LibraryRecovery => self.library.recovery.is_some(),
