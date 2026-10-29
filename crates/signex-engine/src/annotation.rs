@@ -251,7 +251,7 @@ mod tests {
 
     fn symbol(reference: &str, x: f64) -> Symbol {
         Symbol {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             lib_id: "Device:R".to_string(),
             reference: reference.to_string(),
             position: Point::new(x, 0.0),
@@ -261,7 +261,7 @@ mod tests {
 
     fn unit(reference: &str, lib_id: &str, unit: u32, y: f64) -> Symbol {
         Symbol {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             lib_id: lib_id.to_string(),
             reference: reference.to_string(),
             unit,

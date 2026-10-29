@@ -44,7 +44,7 @@ fn an_unlisted_nested_sheet_cannot_be_excluded_and_keeps_its_unsaved_edits() {
         &child,
         sheet_with_net("R_CHILD", "M", &[]),
     );
-    app.document_state.dirty_paths.insert(child.clone());
+    app.document_state.mark_document_dirty(&child);
     settle(&mut app, false);
     let key = key(&app, &["top.snxsch", "child.snxsch"]);
 
@@ -60,7 +60,7 @@ fn an_unlisted_nested_sheet_cannot_be_excluded_and_keeps_its_unsaved_edits() {
         "the refusal shows"
     );
     assert!(app.document_state.engines.contains_key(&child));
-    assert!(app.document_state.dirty_paths.contains(&child));
+    assert!(app.document_state.is_document_dirty(&child));
 
     // The unsaved-edits stage must not be a way around it.
     app.ui_state.remove_dialog = Some(RemoveDialogState {
@@ -70,7 +70,7 @@ fn an_unlisted_nested_sheet_cannot_be_excluded_and_keeps_its_unsaved_edits() {
     let discarded = app.handle_exclude_dirty_choice(ExcludeDirtyChoice::Discard);
     assert_eq!(discarded.units(), 0);
     assert!(app.document_state.engines.contains_key(&child));
-    assert!(app.document_state.dirty_paths.contains(&child));
+    assert!(app.document_state.is_document_dirty(&child));
 }
 
 /// `top -> {mid, leaf}`, `mid -> leaf`, all on disk and listed: `leaf` shows

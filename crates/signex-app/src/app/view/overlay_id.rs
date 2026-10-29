@@ -97,6 +97,7 @@ pub(crate) enum OverlayId {
     PrimitivePicker,
     DocumentOptions,
     CreateOptions,
+    StockCopy,
     CloseLibraryConfirm,
     LibraryRecovery,
 
@@ -121,7 +122,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 54] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 55] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -171,6 +172,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 54] = [
     OverlayId::PrimitivePicker,
     OverlayId::DocumentOptions,
     OverlayId::CreateOptions,
+    OverlayId::StockCopy,
     OverlayId::CloseLibraryConfirm,
     OverlayId::LibraryRecovery,
     OverlayId::CommandPalette,
@@ -274,6 +276,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::PrimitivePicker
         | OverlayId::DocumentOptions
         | OverlayId::CreateOptions
+        | OverlayId::StockCopy
         | OverlayId::CloseLibraryConfirm
         | OverlayId::LibraryRecovery
         | OverlayId::CommandPalette
@@ -363,6 +366,7 @@ impl Signex {
             OverlayId::PrimitivePicker => layers.extend(self.primitive_picker_overlay()),
             OverlayId::DocumentOptions => layers.extend(self.document_options_overlay()),
             OverlayId::CreateOptions => layers.extend(self.create_options_overlay()),
+            OverlayId::StockCopy => layers.extend(self.stock_copy_overlay()),
             OverlayId::CloseLibraryConfirm => layers.extend(self.close_library_confirm_overlay()),
             OverlayId::LibraryRecovery => layers.extend(self.library_recovery_overlay()),
             OverlayId::CommandPalette => layers.extend(self.command_palette_overlay()),

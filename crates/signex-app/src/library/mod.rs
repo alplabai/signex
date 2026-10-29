@@ -45,6 +45,7 @@ pub(crate) mod prefix_picker;
 pub mod preview_refresh;
 pub mod pricing;
 pub mod primitive_picker;
+pub mod range_filter;
 pub mod recovery;
 pub mod refresh;
 pub mod reprefix_lookup;
@@ -52,6 +53,7 @@ pub mod resolve;
 pub mod row_documents;
 pub mod settings;
 pub mod state;
+pub mod stock_copy;
 #[cfg(test)]
 pub(crate) mod test_adapters;
 pub(crate) mod unit_picker;

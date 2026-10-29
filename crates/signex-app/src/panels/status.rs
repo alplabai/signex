@@ -35,6 +35,9 @@ pub struct ErcDiagnosticEntry {
     pub net: Option<signex_erc::NetFinding>,
     /// Stable rule id (`builtin::..` / `user::..`), the waiver key's rule half.
     pub rule_id: String,
+    /// What a per-finding waiver would match (#1285); `None` when the
+    /// finding names no object and cannot be waived.
+    pub waiver_key: Option<signex_erc::waivers::violation::WaiverKey>,
 }
 
 /// One stored net waiver, shown under the ERC results with a Restore button.
@@ -100,7 +103,10 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .size(9)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         );
-        return col.push(waived_section(ctx)).into();
+        return col
+            .push(waived_section(ctx))
+            .push(super::erc_waivers::violation_waivers_section(ctx))
+            .into();
     }
 
     let errors = ctx
@@ -236,13 +242,19 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .on_press(PanelMsg::ErcQuickFix(v.global_index))
                 .style(crate::styles::menu_item(&ctx.tokens)),
                 waive_chip(v, &ctx.tokens),
+                super::erc_waivers::waive_chip(v, &ctx.tokens),
             ]
             .align_y(iced::Alignment::Center)
             .width(Length::Fill),
         );
+        if let Some(editor) = super::erc_waivers::waive_editor(v, ctx) {
+            col = col.push(editor);
+        }
     }
 
-    col.push(waived_section(ctx)).into()
+    col.push(waived_section(ctx))
+        .push(super::erc_waivers::violation_waivers_section(ctx))
+        .into()
 }
 
 /// "Waive net" chip for a net-level finding on a named net; nothing for any

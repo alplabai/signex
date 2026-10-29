@@ -30,7 +30,7 @@ fn sheet(wires: Vec<Wire>, labels: Vec<Label>) -> SchematicSheet {
 
 fn wire(a: Point, b: Point) -> Wire {
     Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: a,
         end: b,
         ..Default::default()
@@ -40,7 +40,7 @@ fn wire(a: Point, b: Point) -> Wire {
 fn net_label(text: &str, pos: Point) -> Label {
     Label {
         unknown_columns: Default::default(),
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         text: text.to_string(),
         position: pos,
         rotation: 0.0,
@@ -50,6 +50,7 @@ fn net_label(text: &str, pos: Point) -> Label {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         font_family: None,
+        locked: false,
     }
 }
 

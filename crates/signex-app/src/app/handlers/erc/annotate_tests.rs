@@ -12,7 +12,7 @@ use crate::app::handlers::menu::export::tests::{app_workspace, open_with, sheet_
 
 fn unit(reference: &str, unit: u32, y: f64) -> Symbol {
     Symbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         lib_id: "Amplifier:LM358".to_string(),
         reference: reference.to_string(),
         unit,
@@ -30,7 +30,7 @@ fn sheet_of(children: &[&str], symbols: Vec<Symbol>) -> SchematicSheet {
 /// `a_root.snxsch` is open and active; `z_child.snxsch` is an unopened
 /// hierarchical child on disk. Returns the app and the project directory.
 fn project(root: Vec<Symbol>, child: Vec<Symbol>) -> (Signex, PathBuf) {
-    let dir = std::env::temp_dir().join(format!("signex-annotate-units-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-annotate-units-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     let child_text = SnxSchematic::new(sheet_of(&[], child))
         .write_string()
@@ -195,7 +195,7 @@ fn bulk_passes_do_not_dirty_an_open_newer_minor_sheet() {
             .iter()
             .map(|s| s.reference.clone())
             .collect();
-        let dirty = app.document_state.dirty_paths.contains(&child_path);
+        let dirty = app.document_state.is_document_dirty(&child_path);
         let notice = notice_detail(&app);
         std::fs::remove_dir_all(&dir).ok();
         assert_eq!(child_refs, ["R1"], "reset={reset}");
@@ -252,14 +252,13 @@ fn undocked_slot_stale_after_annotate_heals_on_the_next_narrow_edit() {
         title: "z_child".into(),
         path: child_path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
     app.document_state.active_tab = app.document_state.tabs.len() - 1;
     app.document_state.active_path = Some(child_path);
     let wire = signex_types::schematic::Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: Point::new(0.0, 0.0),
         end: Point::new(5.0, 0.0),
         ..Default::default()
@@ -306,7 +305,6 @@ fn open_and_check_recovery(app: &mut Signex, path: &std::path::Path) {
         title: "z_child".into(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -419,7 +417,7 @@ fn a_read_landing_on_a_dirty_parked_engine_keeps_its_edits() {
     edited.symbols[0].reference = "U9".into();
     let engine = signex_engine::Engine::new_with_path(edited, Some(child.clone())).unwrap();
     app.document_state.engines.insert(child.clone(), engine);
-    app.document_state.dirty_paths.insert(child.clone());
+    app.document_state.mark_document_dirty(&child);
 
     let _ = app.handle_document_read_finished(
         ReadRequest {

@@ -256,7 +256,7 @@ impl LibraryAdapter for ReadOnlyAdapter {
         &self,
         _targets: &[(String, RowId)],
         _edit: &mut crate::adapter::RowEdit<'_>,
-        _message: &str,
+        _message: &crate::adapter::RowsMessage<'_>,
     ) -> Result<Vec<crate::adapter::RowEditOutcome>, LibraryError> {
         self.refuse()
     }
@@ -269,7 +269,18 @@ impl LibraryAdapter for ReadOnlyAdapter {
         self.inner.symbol_listing_is_partial()
     }
 
-    fn commit_external_change(&self, _abs_path: &Path, _message: &str) -> Result<(), LibraryError> {
+    fn commit_pending(
+        &self,
+        _message: &str,
+    ) -> Result<crate::adapter::CommitOutcome, LibraryError> {
+        self.refuse()
+    }
+
+    fn commit_external_change(
+        &self,
+        _abs_path: &Path,
+        _message: &str,
+    ) -> Result<crate::adapter::CommitOutcome, LibraryError> {
         self.refuse()
     }
 

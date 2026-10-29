@@ -16,15 +16,15 @@ fn app_with_two_dirty_documents(dir: &Path) -> (Signex, PathBuf, PathBuf) {
     let symbol_path = dir.join("Lib.snxsym");
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Sym1"));
     let mut editor = SymbolDocument::new(symbol_path.clone(), file);
-    editor.dirty = true;
+    editor.mark_dirty();
     app.document_state
         .symbol_editors
         .insert(symbol_path.clone(), editor);
-    app.document_state.dirty_paths.insert(symbol_path.clone());
+    app.document_state.mark_document_dirty(&symbol_path);
 
     let sheet_path = dir.join("Sheet.snxsch");
     let mut engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     })
@@ -33,12 +33,11 @@ fn app_with_two_dirty_documents(dir: &Path) -> (Signex, PathBuf, PathBuf) {
     app.document_state
         .engines
         .insert(sheet_path.clone(), engine);
-    app.document_state.dirty_paths.insert(sheet_path.clone());
+    app.document_state.mark_document_dirty(&sheet_path);
     app.document_state.tabs.push(TabInfo {
         title: "Sheet".into(),
         path: sheet_path.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -102,7 +101,7 @@ fn save_all_writes_when_the_task_runs_and_settles_after_every_write() {
         "the settle message follows the completions"
     );
     feed(&mut app, messages);
-    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(!app.document_state.has_dirty_documents());
     assert!(app.document_state.error_notice.is_none());
 }
 
@@ -131,14 +130,14 @@ fn a_failed_write_keeps_signex_open_and_names_the_file_and_the_reason() {
     let blocked = blocker.join("Sheet.snxsch");
     let engine = app.document_state.engines.remove(&sheet).expect("engine");
     app.document_state.engines.insert(blocked.clone(), engine);
-    app.document_state.dirty_paths.remove(&sheet);
-    app.document_state.dirty_paths.insert(blocked.clone());
+    app.document_state.mark_document_clean(&sheet);
+    app.document_state.mark_document_dirty(&blocked);
 
     let task = save_all(&mut app, &[symbol.clone(), blocked.clone()]);
     feed(&mut app, outputs(task));
 
     assert!(symbol.exists(), "the other file still saved");
-    assert!(app.document_state.dirty_paths.contains(&blocked));
+    assert!(app.document_state.is_document_dirty(&blocked));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
     assert!(format!("{notice:?}").contains("stayed open"), "{notice:?}");
     assert!(format!("{notice:?}").contains("Sheet.snxsch"), "{notice:?}");
@@ -162,11 +161,11 @@ fn a_draft_edited_during_save_all_is_reported_unsaved() {
         .symbol_editors
         .get_mut(&symbol)
         .expect("editor")
-        .dirty = true;
+        .set_dirty(true);
 
     feed(&mut app, outputs(task));
 
-    assert!(app.document_state.dirty_paths.contains(&symbol));
+    assert!(app.document_state.is_document_dirty(&symbol));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
     assert!(format!("{notice:?}").contains("Lib.snxsym"), "{notice:?}");
 }
@@ -213,15 +212,7 @@ pub(super) fn feed_then_settle(app: &mut Signex, messages: Vec<Message>) -> iced
 
 /// Mark the schematic at `path` edited, the way an edit site does.
 fn edit_sheet(app: &mut Signex, path: &Path) {
-    app.document_state.dirty_paths.insert(path.to_path_buf());
-    for tab in app
-        .document_state
-        .tabs
-        .iter_mut()
-        .filter(|t| t.path == path)
-    {
-        tab.dirty = true;
-    }
+    app.document_state.mark_document_dirty(path);
 }
 
 #[test]
@@ -229,8 +220,11 @@ fn a_clean_sheet_edited_while_quit_save_all_runs_is_prompted_not_dropped() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, symbol, sheet) = app_with_two_dirty_documents(dir.path());
     // The sheet starts clean: the quit prompt only listed the symbol.
-    app.document_state.dirty_paths.remove(&sheet);
-    app.document_state.tabs[0].dirty = false;
+    app.document_state.mark_document_clean(&sheet);
+    {
+        let path = app.document_state.tabs[0].path.clone();
+        app.document_state.mark_document_clean(&path);
+    }
 
     let task = save_all(&mut app, std::slice::from_ref(&symbol));
     edit_sheet(&mut app, &sheet);
@@ -247,7 +241,7 @@ fn a_clean_sheet_edited_while_quit_save_all_runs_is_prompted_not_dropped() {
         .as_ref()
         .expect("the quit gate asks again");
     assert_eq!(modal.dirty_paths, vec![sheet.clone()]);
-    assert!(app.document_state.dirty_paths.contains(&sheet));
+    assert!(app.document_state.is_document_dirty(&sheet));
 }
 
 #[test]
@@ -288,12 +282,12 @@ fn a_save_all_write_superseded_by_a_later_ctrl_s_does_not_quit_before_that_save_
         0,
         "no quit while the sheet's save is unreported"
     );
-    assert!(app.document_state.dirty_paths.contains(&sheet));
+    assert!(app.document_state.is_document_dirty(&sheet));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
     assert!(format!("{notice:?}").contains("Sheet.snxsch"), "{notice:?}");
 
     feed(&mut app, ctrl_s_done);
-    assert!(!app.document_state.dirty_paths.contains(&sheet));
+    assert!(!app.document_state.is_document_dirty(&sheet));
 }
 
 #[test]
@@ -305,13 +299,13 @@ fn save_all_over_a_running_primitive_ctrl_s_keeps_signex_open_until_it_lands() {
 
     let after = feed_then_settle(&mut app, outputs(save_all_task));
     assert_eq!(after.units(), 0, "the symbol has not reported back yet");
-    assert!(app.document_state.dirty_paths.contains(&symbol));
+    assert!(app.document_state.is_document_dirty(&symbol));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
     assert!(format!("{notice:?}").contains("Lib.snxsym"), "{notice:?}");
 
     feed(&mut app, outputs(ctrl_s));
     assert!(symbol.exists());
-    assert!(!app.document_state.dirty_paths.contains(&symbol));
+    assert!(!app.document_state.is_document_dirty(&symbol));
     assert!(!app.document_state.document_saves.is_saving(&symbol));
 }
 
@@ -353,7 +347,7 @@ pub(super) fn app_with_two_engine_variants(
         let mut engine = signex_engine::Engine::new(sheet).expect("engine");
         engine.set_path(Some(path.clone()));
         app.document_state.engines.insert(path.clone(), engine);
-        app.document_state.dirty_paths.insert(path.clone());
+        app.document_state.mark_document_dirty(path);
     }
     (app, upper, lower)
 }
@@ -371,7 +365,7 @@ fn save_all_finds_a_document_held_under_a_case_variant_spelling() {
     feed(&mut app, outputs(task));
 
     assert!(held.exists(), "the held spelling must be the one written");
-    assert!(!app.document_state.dirty_paths.contains(&held));
+    assert!(!app.document_state.is_document_dirty(&held));
 }
 
 #[test]
@@ -392,8 +386,8 @@ fn save_all_refuses_differing_case_variants_and_writes_nothing() {
         "{text}"
     );
     assert_eq!(std::fs::read(&upper).expect("read"), b"on-disk");
-    assert!(app.document_state.dirty_paths.contains(&upper));
-    assert!(app.document_state.dirty_paths.contains(&lower));
+    assert!(app.document_state.is_document_dirty(&upper));
+    assert!(app.document_state.is_document_dirty(&lower));
 }
 
 #[test]
@@ -405,9 +399,9 @@ fn save_all_writes_identical_case_variants_once_and_clears_every_marker() {
     feed(&mut app, outputs(task));
 
     assert!(
-        app.document_state.dirty_paths.is_empty(),
+        !app.document_state.has_dirty_documents(),
         "{:?}",
-        app.document_state.dirty_paths
+        app.document_state.dirty_document_paths()
     );
     assert!(app.document_state.error_notice.is_none());
 }
@@ -452,7 +446,7 @@ fn loose_identical_variants(dir: &Path) -> (Signex, PathBuf, PathBuf) {
         let mut engine = signex_engine::Engine::new(Default::default()).expect("engine");
         engine.set_path(Some(path.clone()));
         app.document_state.engines.insert(path.clone(), engine);
-        app.document_state.dirty_paths.insert(path.clone());
+        app.document_state.mark_document_dirty(path);
     }
     (app, upper, lower)
 }
@@ -510,9 +504,9 @@ fn loose_identical_variants_collapse_when_the_directory_probe_says_so() {
     assert_eq!(*sink.0.lock().unwrap(), vec![upper.clone()]);
 
     assert!(
-        app.document_state.dirty_paths.is_empty(),
+        !app.document_state.has_dirty_documents(),
         "{:?}",
-        app.document_state.dirty_paths
+        app.document_state.dirty_document_paths()
     );
     assert!(app.document_state.error_notice.is_none());
 }
@@ -570,7 +564,7 @@ fn begin_save_all_probes_the_loose_directory_then_saves_both_spellings() {
     }
     feed(&mut app, writes);
 
-    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(!app.document_state.has_dirty_documents());
     assert!(app.document_state.error_notice.is_none());
     let written = sink.0.lock().unwrap().clone();
     if folds {
@@ -606,8 +600,8 @@ fn an_undecided_directory_writes_once_and_keeps_the_other_spelling_dirty() {
         "open and Ctrl+S fold"
     );
     assert_eq!(*sink.0.lock().unwrap(), vec![upper.clone()], "one write");
-    assert!(!app.document_state.dirty_paths.contains(&upper));
-    assert!(app.document_state.dirty_paths.contains(&lower));
+    assert!(!app.document_state.is_document_dirty(&upper));
+    assert!(app.document_state.is_document_dirty(&lower));
     assert_eq!(
         after.units(),
         0,
@@ -632,7 +626,7 @@ fn an_undecided_project_keeps_the_other_spelling_dirty_too() {
         let mut engine = signex_engine::Engine::new(Default::default()).expect("engine");
         engine.set_path(Some(path.clone()));
         app.document_state.engines.insert(path.clone(), engine);
-        app.document_state.dirty_paths.insert(path.clone());
+        app.document_state.mark_document_dirty(path);
     }
     let sink = record_writes(&mut app);
 
@@ -647,7 +641,7 @@ fn an_undecided_project_keeps_the_other_spelling_dirty_too() {
     let after = feed_then_settle(&mut app, outputs(task));
 
     assert_eq!(*sink.0.lock().unwrap(), vec![upper.clone()]);
-    assert!(app.document_state.dirty_paths.contains(&lower));
+    assert!(app.document_state.is_document_dirty(&lower));
     assert_eq!(
         after.units(),
         0,

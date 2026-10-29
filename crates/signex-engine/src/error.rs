@@ -57,8 +57,14 @@ pub enum EngineError {
     SelectionTransformUnsupported { what: String },
     #[error("the selection holds a coordinate that is not a finite number; it was not copied")]
     NonFiniteCoordinate,
+    #[error("a wire width must be a finite number of at least 0 mm, got {0}")]
+    InvalidWireWidth(f64),
+    #[error(
+        "the wire cannot be broken there: a pin, bus end or another wire's end sits on that spot, and a new wire end would join it"
+    )]
+    BreakWireBlocked,
     #[error("{}", locked_message(references, action))]
-    SymbolLocked {
+    ItemLocked {
         references: Vec<String>,
         action: &'static str,
     },

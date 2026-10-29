@@ -130,7 +130,7 @@ fn history_restore_is_refused_in_a_moving_project() {
     let root = tempfile::tempdir().expect("tempdir");
     let mut fx = fixture(root.path(), "Foo", false);
     let id = fx.app.document_state.projects[0].id;
-    fx.app.document_state.dirty_paths.clear();
+    fx.app.document_state.mark_documents_clean_where(|_| true);
     fx.app.document_state.project_folder_renames.insert(id);
     drop(fx.app.handle_history_restore_clicked("abc123"));
     let notice = fx.app.document_state.error_notice.take().expect("notice");
@@ -143,7 +143,7 @@ fn annotate_and_reset_refuse_up_front_in_a_moving_project() {
     let mut fx = fixture(root.path(), "Foo", false);
     let id = fx.app.document_state.projects[0].id;
     fx.app.document_state.project_folder_renames.insert(id);
-    let before = fx.app.document_state.dirty_paths.clone();
+    let before = fx.app.document_state.dirty_document_paths();
 
     let _ = fx
         .app
@@ -156,7 +156,11 @@ fn annotate_and_reset_refuse_up_front_in_a_moving_project() {
     let notice = fx.app.document_state.error_notice.take().expect("notice");
     assert!(notice.detail.contains("being renamed"), "{}", notice.detail);
     assert!(notice.detail.starts_with("Reset Duplicate"));
-    assert_eq!(fx.app.document_state.dirty_paths, before, "nothing ran");
+    assert_eq!(
+        fx.app.document_state.dirty_document_paths(),
+        before,
+        "nothing ran"
+    );
 }
 
 #[test]
@@ -652,7 +656,7 @@ fn a_restore_read_that_a_rename_overtook_re_offers_the_copy_at_the_new_path() {
         .autosave
         .set_dir(Some(recovery.clone()));
     crate::autosave::sidecar::write(&recovery, &fx.sheet, b"unsaved").expect("sidecar");
-    fx.app.document_state.dirty_paths.clear();
+    fx.app.document_state.mark_documents_clean_where(|_| true);
     fx.app.document_state.autosave.offer(RecoveryOffer {
         path: fx.sheet.clone(),
         age_secs: 60,

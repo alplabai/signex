@@ -1,7 +1,8 @@
 use super::super::*;
 
 impl Signex {
-    pub(crate) fn handle_selection_delete_requested(&mut self) {
+    /// Delete the selection. `true` when something was deleted.
+    pub(crate) fn handle_selection_delete_requested(&mut self) -> bool {
         if let Some(engine) = self.document_state.active_engine()
             && engine.has_selected_items(&self.interaction_state.active_canvas().selected)
             && self.apply_engine_command(
@@ -13,7 +14,9 @@ impl Signex {
             )
         {
             self.interaction_state.active_canvas_mut().selected.clear();
+            return true;
         }
+        false
     }
 
     fn engine_undo_position(&self) -> usize {
@@ -180,6 +183,7 @@ impl Signex {
     }
 
     pub(crate) fn handle_undo_requested(&mut self) {
+        self.close_text_edit("the document was undone");
         // A Project tab undoes its own section edits (#1202).
         if let Some(project_id) = self.active_project_tab() {
             self.step_project_tab_history(project_id, true);
@@ -235,6 +239,7 @@ impl Signex {
     }
 
     pub(crate) fn handle_redo_requested(&mut self) {
+        self.close_text_edit("the document was redone");
         // A Project tab redoes its own section edits (#1202).
         if let Some(project_id) = self.active_project_tab() {
             self.step_project_tab_history(project_id, false);

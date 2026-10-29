@@ -23,7 +23,7 @@ fn open_scripted(
     state: &mut LibraryState,
     root: &Path,
 ) -> std::sync::Arc<std::sync::Mutex<Vec<PrimitiveSummary>>> {
-    let library_id = Uuid::new_v4();
+    let library_id = Uuid::now_v7();
     let (adapter, symbols) = ScriptedSymbolsAdapter::new(library_id);
     state.set.mount(Box::new(adapter)).expect("mount stub");
     state.open_libraries.push(OpenLibrary {

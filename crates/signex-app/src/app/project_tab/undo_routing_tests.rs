@@ -12,7 +12,7 @@ use crate::app::{Message, ProjectMsg, ProjectTabMsg, Signex};
 use crate::keymap::AppCommandId;
 
 fn project_tab_with_stored_rules() -> Signex {
-    let dir = std::env::temp_dir().join(format!("signex-prj-undo-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-prj-undo-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
     // Store seeds from machine preferences other tests write.
     app.ui_state.erc_severity_override.clear();

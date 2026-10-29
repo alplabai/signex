@@ -236,26 +236,7 @@ impl Signex {
         // and returns to normal selection — same convention as most
         // IDEs (Escape cancels, click elsewhere confirms).
         if let Some(state) = self.interaction_state.editing_text.take() {
-            if state.text != state.original_text {
-                let cmd = match state.kind {
-                    signex_types::schematic::SelectedKind::Label => {
-                        Some(signex_engine::Command::UpdateText {
-                            target: signex_engine::TextTarget::Label(state.uuid),
-                            value: state.text,
-                        })
-                    }
-                    signex_types::schematic::SelectedKind::TextNote => {
-                        Some(signex_engine::Command::UpdateText {
-                            target: signex_engine::TextTarget::TextNote(state.uuid),
-                            value: state.text,
-                        })
-                    }
-                    _ => None,
-                };
-                if let Some(cmd) = cmd {
-                    self.apply_engine_command(cmd, false, true);
-                }
-            }
+            self.commit_text_edit(state);
             return Task::none();
         }
         let (wx, wy) = if self.interaction_state.current_tool == Tool::Wire {
@@ -286,10 +267,11 @@ impl Signex {
                     for seg in &segments {
                         let wire = signex_types::schematic::Wire {
                             unknown_columns: Default::default(),
-                            uuid: uuid::Uuid::new_v4(),
+                            uuid: uuid::Uuid::now_v7(),
                             start: seg.0,
                             end: seg.1,
                             stroke_width: 0.0,
+                            locked: false,
                         };
                         wire_commands.push(signex_engine::Command::PlaceWireSegment { wire });
                     }
@@ -316,7 +298,7 @@ impl Signex {
                     let mut bus_commands = Vec::new();
                     for seg in &segments {
                         let bus = signex_types::schematic::Bus {
-                            uuid: uuid::Uuid::new_v4(),
+                            uuid: uuid::Uuid::now_v7(),
                             start: seg.0,
                             end: seg.1,
                         };
@@ -335,7 +317,7 @@ impl Signex {
                     let sym = signex_types::schematic::Symbol {
                         unknown_columns: Default::default(),
                         unknown: Default::default(),
-                        uuid: uuid::Uuid::new_v4(),
+                        uuid: uuid::Uuid::now_v7(),
                         lib_id: lib_id.clone(),
                         reference: "#PWR?".to_string(),
                         value: net_name.clone(),
@@ -378,7 +360,7 @@ impl Signex {
             }
             Tool::NoConnect => {
                 let nc = signex_types::schematic::NoConnect {
-                    uuid: uuid::Uuid::new_v4(),
+                    uuid: uuid::Uuid::now_v7(),
                     position: signex_types::schematic::Point::new(wx, wy),
                 };
                 self.apply_engine_command(
@@ -402,7 +384,7 @@ impl Signex {
                 });
                 if !already_there {
                     let junction = signex_types::schematic::Junction {
-                        uuid: uuid::Uuid::new_v4(),
+                        uuid: uuid::Uuid::now_v7(),
                         position: signex_types::schematic::Point::new(wx, wy),
                         diameter: 0.0,
                         minted: false,
@@ -417,7 +399,7 @@ impl Signex {
             }
             Tool::NoErcDirective => {
                 let directive = signex_types::schematic::NoConnect {
-                    uuid: uuid::Uuid::new_v4(),
+                    uuid: uuid::Uuid::now_v7(),
                     position: signex_types::schematic::Point::new(wx, wy),
                 };
                 self.apply_engine_command(
@@ -442,7 +424,7 @@ impl Signex {
                     })
                     .unwrap_or(at);
                 let be = signex_types::schematic::BusEntry {
-                    uuid: uuid::Uuid::new_v4(),
+                    uuid: uuid::Uuid::now_v7(),
                     position,
                     size: self.interaction_state.bus_entry_size,
                 };
@@ -470,11 +452,12 @@ impl Signex {
                     }
                     Some(start) => {
                         let drawing = signex_types::schematic::SchDrawing::Line {
-                            uuid: uuid::Uuid::new_v4(),
+                            uuid: uuid::Uuid::now_v7(),
                             start,
                             end: p,
                             width: pp_w,
                             stroke_color: None,
+                            locked: false,
                         };
                         self.apply_engine_command(
                             signex_engine::Command::PlaceSchDrawing { drawing },
@@ -496,6 +479,7 @@ impl Signex {
             Tool::Sheet => self.place_sheet_click(wx, wy),
             Tool::SheetEntry => self.place_sheet_entry_click(wx, wy),
             Tool::Measure => self.measure_click(wx, wy),
+            Tool::BreakWire => self.break_wire_click(wx, wy),
             Tool::Rectangle => {
                 // Two-click: corner → opposite-corner →
                 // SchDrawing::Rect. Rearms blank for the
@@ -513,12 +497,13 @@ impl Signex {
                     }
                     Some(start) => {
                         let drawing = signex_types::schematic::SchDrawing::Rect {
-                            uuid: uuid::Uuid::new_v4(),
+                            uuid: uuid::Uuid::now_v7(),
                             start,
                             end: p,
                             width: pp_w,
                             fill: pp_fill,
                             stroke_color: None,
+                            locked: false,
                         };
                         self.apply_engine_command(
                             signex_engine::Command::PlaceSchDrawing { drawing },
@@ -553,12 +538,13 @@ impl Signex {
                         let radius = (dx * dx + dy * dy).sqrt();
                         if radius > 0.01 {
                             let drawing = signex_types::schematic::SchDrawing::Circle {
-                                uuid: uuid::Uuid::new_v4(),
+                                uuid: uuid::Uuid::now_v7(),
                                 center,
                                 radius,
                                 width: pp_w,
                                 fill: pp_fill,
                                 stroke_color: None,
+                                locked: false,
                             };
                             self.apply_engine_command(
                                 signex_engine::Command::PlaceSchDrawing { drawing },
@@ -582,13 +568,14 @@ impl Signex {
                 if self.interaction_state.arc_points.len() >= 3 {
                     let pts = std::mem::take(&mut self.interaction_state.arc_points);
                     let drawing = signex_types::schematic::SchDrawing::Arc {
-                        uuid: uuid::Uuid::new_v4(),
+                        uuid: uuid::Uuid::now_v7(),
                         start: pts[0],
                         mid: pts[1],
                         end: pts[2],
                         width: pp_w,
                         fill: pp_fill,
                         stroke_color: None,
+                        locked: false,
                     };
                     self.apply_engine_command(
                         signex_engine::Command::PlaceSchDrawing { drawing },
@@ -621,7 +608,7 @@ impl Signex {
                     .map(|pp| pp.label_text.clone())
                     .unwrap_or_else(|| "Text".to_string());
                 let tn = signex_types::schematic::TextNote {
-                    uuid: uuid::Uuid::new_v4(),
+                    uuid: uuid::Uuid::now_v7(),
                     text: note_text.clone(),
                     position: signex_types::schematic::Point::new(wx, wy),
                     rotation: 0.0,
@@ -629,6 +616,7 @@ impl Signex {
                     justify_h: signex_types::schematic::HAlign::Left,
                     justify_v: signex_types::schematic::VAlign::default(),
                     font_family: None,
+                    locked: false,
                 };
                 if self.apply_engine_command(
                     signex_engine::Command::PlaceTextNote { text_note: tn },
@@ -690,7 +678,7 @@ impl Signex {
                 let placed_text = text.clone();
                 let label = signex_types::schematic::Label {
                     unknown_columns: Default::default(),
-                    uuid: uuid::Uuid::new_v4(),
+                    uuid: uuid::Uuid::now_v7(),
                     text,
                     position: signex_types::schematic::Point::new(wx, wy),
                     rotation: pp_rot,
@@ -700,6 +688,7 @@ impl Signex {
                     justify: pp_justify_h,
                     justify_v: pp_justify_v,
                     font_family: None,
+                    locked: false,
                 };
                 if self.apply_engine_command(
                     signex_engine::Command::PlaceLabel { label },

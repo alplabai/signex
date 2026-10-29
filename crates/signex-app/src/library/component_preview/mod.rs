@@ -18,7 +18,7 @@ pub(crate) fn test_row() -> signex_library::ComponentRow {
     };
     use uuid::Uuid;
     ComponentRow {
-        row_id: Uuid::new_v4(),
+        row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new("U1"),
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
@@ -26,7 +26,7 @@ pub(crate) fn test_row() -> signex_library::ComponentRow {
         description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
-        symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
+        symbol_ref: PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7()),
         alternate_symbols: Vec::new(),
         footprint_ref: None,
         sim_ref: None,

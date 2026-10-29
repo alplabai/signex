@@ -142,7 +142,7 @@ fn a_placed_sheet_with_unsaved_edits_cannot_be_discarded_by_excluding_it() {
         &mid,
         sheet_with_net("R_MID", "N", &[]),
     );
-    app.document_state.dirty_paths.insert(mid.clone());
+    app.document_state.mark_document_dirty(&mid);
     settle(&mut app, false);
     let key = key(&app, &["top.snxsch", "mid.snxsch"]);
 
@@ -165,5 +165,5 @@ fn a_placed_sheet_with_unsaved_edits_cannot_be_discarded_by_excluding_it() {
     let discarded = app.handle_exclude_dirty_choice(ExcludeDirtyChoice::Discard);
     assert_eq!(discarded.units(), 0);
     assert!(app.document_state.engines.contains_key(&mid));
-    assert!(app.document_state.dirty_paths.contains(&mid));
+    assert!(app.document_state.is_document_dirty(&mid));
 }

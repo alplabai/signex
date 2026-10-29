@@ -11,7 +11,7 @@ use std::path::PathBuf;
 const STARTING_WIDTH: f64 = 0.12;
 
 fn fixture() -> (Signex, PathBuf, uuid::Uuid) {
-    let sheet_uuid = uuid::Uuid::new_v4();
+    let sheet_uuid = uuid::Uuid::now_v7();
     let sheet = SchematicSheet {
         child_sheets: vec![ChildSheet {
             uuid: sheet_uuid,
@@ -37,7 +37,6 @@ fn fixture() -> (Signex, PathBuf, uuid::Uuid) {
         title: "non-finite-inputs".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

@@ -136,7 +136,7 @@ Version: $VERSION
 Section: electronics
 Priority: optional
 Architecture: $ARCH
-Depends: libc6, libgcc-s1, libxkbcommon0, libxkbcommon-x11-0, libwayland-client0, libx11-6, libxcursor1, libxrandr2, libxi6, libxinerama1, libvulkan1
+Depends: libc6 (>= 2.35), libgcc-s1, libxkbcommon0, libxkbcommon-x11-0, libwayland-client0, libx11-6, libxcursor1, libxrandr2, libxi6, libxinerama1, libvulkan1
 Installed-Size: $INSTALLED_SIZE
 Maintainer: alpCaner <alpcaner92@gmail.com>
 Homepage: https://github.com/alplabai/signex

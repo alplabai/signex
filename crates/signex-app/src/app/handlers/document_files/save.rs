@@ -150,15 +150,15 @@ impl Signex {
         self.save_active_project_if_dirty();
         // Refresh the panel context so the project-tree red dirty dot
         // (which reads `panel_ctx.projects[*].sheets[*].is_dirty`)
-        // sees the updated `dirty_paths` set after the save. Without
-        // this the tree row stays red even though the title (which
-        // reads `dirty_paths.len()` directly each frame) clears.
+        // sees the cleared dirty mark after the save. Without this the
+        // tree row stays red even though the title (which counts the
+        // dirty documents directly each frame) clears.
         self.refresh_panel_ctx();
         Ok(iced::Task::batch(saves))
     }
 
     /// Persist the active project's `.snxprj` JSON when its dirty bit
-    /// is set in `dirty_paths`. No-op if no project is active or the
+    /// is dirty. No-op if no project is active or the
     /// project file isn't dirty.
     ///
     /// Pending libraries (registered via the New Library flow) are
@@ -187,7 +187,7 @@ impl Signex {
             Some(p) => p.path.clone(),
             None => return,
         };
-        if !self.document_state.dirty_paths.contains(&project_path) {
+        if !self.document_state.is_document_dirty(&project_path) {
             return;
         }
         if let Err(error) = self.persist_project_by_id(project_id) {
@@ -409,10 +409,7 @@ impl Signex {
                 };
             }
         }
-        // `dirty_paths` is keyed on path, so it follows the move.
-        if self.document_state.dirty_paths.remove(from) {
-            self.document_state.dirty_paths.insert(to.to_path_buf());
-        }
+        self.document_state.rekey_document_dirty(from, to);
         Ok(previous_title)
     }
 
@@ -514,7 +511,6 @@ impl Signex {
         // up and the project-close prompt asks the user to persist the
         // new binding.
         let project_path = loaded.path.clone();
-        self.document_state.dirty_paths.insert(project_path);
 
         let scope = match kind {
             signex_types::project::LibraryEntryKind::Shared => "Shared",
@@ -525,6 +521,7 @@ impl Signex {
             lib_dir.display(),
             loaded.path.display()
         ));
+        self.document_state.mark_document_dirty(&project_path);
 
         self.refresh_panel_ctx();
     }

@@ -120,24 +120,24 @@ mod tests {
     fn markers_follow_the_selection_order_and_the_drag_offset() {
         let mut sheet = SchematicSheet::default();
         let wire = Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(0.0, 0.0),
             end: Point::new(4.0, 0.0),
             ..Wire::default()
         };
         let junction = Junction {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             position: Point::new(9.0, 9.0),
             ..Junction::default()
         };
         let other_wire = Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             ..Wire::default()
         };
         let selected = [
             SelectedItem::new(junction.uuid, SelectedKind::Junction),
             SelectedItem::new(wire.uuid, SelectedKind::Wire),
-            SelectedItem::new(Uuid::new_v4(), SelectedKind::Wire),
+            SelectedItem::new(Uuid::now_v7(), SelectedKind::Wire),
         ];
         sheet.wires.extend([other_wire, wire]);
         sheet.junctions.push(junction);
@@ -149,10 +149,10 @@ mod tests {
     #[test]
     fn a_sheet_pin_is_found_through_its_child_sheet() {
         let mut sheet = SchematicSheet::default();
-        let pin_uuid = Uuid::new_v4();
+        let pin_uuid = Uuid::now_v7();
         let child: signex_types::schematic::ChildSheet =
             serde_json::from_value(serde_json::json!({
-                "uuid": Uuid::new_v4(),
+                "uuid": Uuid::now_v7(),
                 "name": "Sub",
                 "filename": "sub.snxsch",
                 "position": { "x": 0.0, "y": 0.0 },

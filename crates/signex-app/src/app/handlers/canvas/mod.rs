@@ -8,9 +8,12 @@ mod child_sheet_create;
 mod child_sheet_create_tests;
 mod child_sheet_path;
 pub(crate) use child_sheet_path::relative_within;
+mod break_wire_tool;
 mod clicked;
 mod descend;
 mod double_clicked;
+mod field_edit;
+pub(crate) use field_edit::editor_placeholder;
 pub(crate) mod fit_view;
 mod layout_drag;
 mod measure_tool;
@@ -20,6 +23,8 @@ mod status_activity;
 mod sync_sheet_pins;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod wire_merge_tests;
 
 /// Default stroke width applied when the user hasn't edited the
 /// pre_placement Width value yet. Standard's "default line width"

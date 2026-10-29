@@ -46,7 +46,6 @@ fn parent_with_symbol(dir: &Path) -> (Signex, PathBuf, Uuid) {
         title: "top".into(),
         path: top.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -121,7 +120,7 @@ fn a_sub_folder_path_creates_the_folder_and_file_registers_and_links_the_symbol(
             .iter()
             .any(|s| s.filename == "power/regulator.snxsch")
     );
-    assert!(app.document_state.dirty_paths.contains(&project.path));
+    assert!(app.document_state.is_document_dirty(&project.path));
     assert_eq!(
         file_field(&app, &top),
         "power/regulator.snxsch",
@@ -237,7 +236,7 @@ fn a_symbol_that_is_gone_is_logged_not_ignored() {
         .create_child_sheet_confirm
         .as_mut()
         .expect("dialog")
-        .symbol = Uuid::new_v4();
+        .symbol = Uuid::now_v7();
     assert!(app.plan_child_sheet_from_dialog().is_none());
     assert!(
         crate::diagnostics::recent_entries()
@@ -376,7 +375,6 @@ fn switch_to_other_sheet_with_same_symbol(app: &mut Signex, dir: &Path, id: Uuid
         title: "other".into(),
         path: other.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

@@ -27,7 +27,7 @@ pub use bom::{
 };
 pub use erc::{
     ErcReportError, ErcReportExporter, ErcReportFormat, ErcReportOptions, ErcReportOutput,
-    ErcReportRow, ErcReportRuleSet, ErcReportSeverity,
+    ErcReportRow, ErcReportRuleSet, ErcReportSeverity, report as erc_report,
 };
 pub use netlist::{NetlistExporter, NetlistFormat, NetlistOptions, NetlistOutput};
 pub use pdf::{

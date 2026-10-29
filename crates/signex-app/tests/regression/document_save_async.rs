@@ -58,7 +58,7 @@ impl Recorder {
 fn app_with_dirty_sheet(sink: Arc<dyn DocumentSink>) -> (Signex, PathBuf) {
     let path = PathBuf::from("document-save-async.snxsch");
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };
@@ -70,13 +70,12 @@ fn app_with_dirty_sheet(sink: Arc<dyn DocumentSink>) -> (Signex, PathBuf) {
         title: "document-save-async".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::Schematic,
     });
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(path.clone());
-    app.document_state.dirty_paths.insert(path.clone());
+    app.document_state.mark_document_dirty(&path);
     app.document_state.document_saves = DocumentSaves::new(sink);
     (app, path)
 }
@@ -116,7 +115,10 @@ fn complete(app: &mut Signex, task: Task<Message>) {
 }
 
 fn is_dirty(app: &Signex, path: &Path) -> bool {
-    app.document_state.dirty_paths.contains(path) && app.document_state.tabs[0].dirty
+    app.document_state.is_document_dirty(path)
+        && app
+            .document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
 }
 
 #[test]
@@ -265,7 +267,7 @@ fn a_replaced_engine_is_not_marked_clean_by_the_old_snapshots_completion() {
     let task = app.update(Message::File(FileMsg::Save));
     // A History restore / reload swaps in a brand-new engine.
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };
@@ -300,7 +302,10 @@ fn save_as_rekeys_the_tab_only_after_the_write_succeeded() {
     assert_eq!(app.document_state.tabs[0].path, target);
     assert!(app.document_state.engines.contains_key(&target));
     assert!(!app.document_state.engines.contains_key(&path));
-    assert!(!app.document_state.tabs[0].dirty);
+    assert!(
+        !app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
     assert_eq!(recorder.contents().len(), 1);
 }
 
@@ -333,7 +338,6 @@ fn save_as_does_not_rekey_when_the_tab_was_switched_mid_write() {
         title: "other".to_string(),
         path: PathBuf::from("other.snxsch"),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -405,7 +409,7 @@ fn closing_the_tab_mid_save_drops_the_parked_engine_once_the_write_lands() {
     complete(&mut app, task);
 
     assert!(!app.document_state.engines.contains_key(&path));
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.is_document_dirty(&path));
 }
 
 #[test]
@@ -449,5 +453,5 @@ fn a_dirty_and_edited_parked_engine_survives_a_mid_save_close() {
         app.document_state.engines.contains_key(&path),
         "the unsaved edit lives only in the parked engine"
     );
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.is_document_dirty(&path));
 }

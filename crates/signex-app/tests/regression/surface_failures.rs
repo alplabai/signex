@@ -45,10 +45,7 @@ fn ctrl_s_on_a_primitive_that_cannot_be_written_shows_the_save_failed_card() {
         .as_ref()
         .expect("a failed save must raise the error card");
     assert_eq!(notice.title, "Save Failed");
-    assert!(
-        app.document_state.dirty_paths.contains(&path),
-        "still dirty"
-    );
+    assert!(app.document_state.is_document_dirty(&path), "still dirty");
 }
 
 #[test]
@@ -78,7 +75,7 @@ fn closing_a_dirty_footprint_tab_parks_the_draft_and_a_clean_one_drops_it() {
     open_footprint_editor(&mut app, &clean);
     open_footprint_editor(&mut app, &dirty);
     edit_description_via_panel(&mut app);
-    assert!(app.document_state.dirty_paths.contains(&dirty));
+    assert!(app.document_state.is_document_dirty(&dirty));
 
     close_tab(&mut app, 1);
     close_tab(&mut app, 0);
@@ -88,7 +85,7 @@ fn closing_a_dirty_footprint_tab_parks_the_draft_and_a_clean_one_drops_it() {
         app.document_state.footprint_editors.contains_key(&dirty),
         "the unsaved draft must survive the tab close"
     );
-    assert!(app.document_state.dirty_paths.contains(&dirty));
+    assert!(app.document_state.is_document_dirty(&dirty));
     assert!(
         !app.document_state.footprint_editors.contains_key(&clean),
         "a clean editor is dropped as before"
@@ -103,7 +100,6 @@ fn closing_a_dirty_component_preview_tab_keeps_the_draft() {
         title: "row".into(),
         path: address.synthetic_tab_path(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::ComponentEditor(ComponentEditorTab {
             library_path: address.library_path.clone(),
@@ -208,7 +204,6 @@ fn open_symbol_tab(app: &mut Signex, path: &Path) {
         title: "sym".into(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::SymbolEditor(path.to_path_buf()),
     });
@@ -238,7 +233,7 @@ fn reopening_a_closed_dirty_symbol_tab_restores_the_draft_not_the_disk_copy() {
     open_symbol_tab(&mut app, &path);
     let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
     editor.primitive_mut().name = "draft".into();
-    editor.dirty = true;
+    editor.mark_dirty();
 
     close_tab(&mut app, 0);
     reopen(&mut app, &path);
@@ -258,7 +253,7 @@ fn a_parked_draft_is_reachable_even_when_its_file_is_gone() {
         .symbol_editors
         .get_mut(&path)
         .unwrap()
-        .dirty = true;
+        .set_dirty(true);
     close_tab(&mut app, 0);
     std::fs::remove_file(&path).unwrap();
 
@@ -277,7 +272,7 @@ fn a_saved_parked_editor_is_replaced_by_the_changed_disk_file_on_reopen() {
     open_symbol_tab(&mut app, &path);
     let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
     editor.primitive_mut().name = "draft".into();
-    editor.dirty = true;
+    editor.mark_dirty();
     close_tab(&mut app, 0);
     // Save All saved it (editor stays, now clean) and another tool then
     // rewrote the file.
@@ -285,8 +280,8 @@ fn a_saved_parked_editor_is_replaced_by_the_changed_disk_file_on_reopen() {
         .symbol_editors
         .get_mut(&path)
         .unwrap()
-        .dirty = false;
-    app.document_state.dirty_paths.remove(&path);
+        .set_dirty(false);
+    app.document_state.mark_document_clean(&path);
     write_symbol(&path, "external");
 
     reopen(&mut app, &path);
@@ -305,20 +300,19 @@ fn closing_a_symbol_tab_dirtied_by_undo_after_a_save_parks_the_draft() {
     let snapshot = editor.snapshot();
     editor.undo_snapshots.push(snapshot);
     editor.primitive_mut().name = "edited".into();
-    editor.dirty = true;
-    app.document_state.dirty_paths.insert(path.clone());
+    editor.mark_dirty();
+    app.document_state.mark_document_dirty(&path);
     crate::settle_support::settle(&mut app, Message::File(FileMsg::Save));
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.is_document_dirty(&path));
 
-    // Undo re-dirties the editor; the panel refresh mirrors it into
-    // `dirty_paths` (#760).
+    // Undo re-dirties the editor, and every reader sees it (#760).
     let _ = app.update(Message::Edit(EditMsg::Undo));
-    assert!(app.document_state.symbol_editors[&path].dirty);
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.symbol_editors[&path].is_dirty());
+    assert!(app.document_state.is_document_dirty(&path));
     close_tab(&mut app, 0);
 
     assert!(app.document_state.symbol_editors.contains_key(&path));
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.is_document_dirty(&path));
 }
 
 #[test]
@@ -395,7 +389,7 @@ fn close_all_and_close_all_others_park_dirty_drafts() {
             .footprint_editors
             .get_mut(p)
             .unwrap()
-            .dirty = true;
+            .set_dirty(true);
     }
 
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(

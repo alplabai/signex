@@ -18,10 +18,23 @@ mod bus_runs;
 pub(crate) use bus_hier::{bus_port_width_mismatch, global_bus_width_mismatch};
 pub(crate) use bus_runs::bus_runs_width_mismatch;
 mod clash_scope;
+mod completeness;
+pub(crate) use completeness::{
+    part_without_footprint, part_without_mpn, part_without_value, unannotated_designator,
+};
 mod local_label_other_sheets;
 pub(crate) use local_label_other_sheets::local_label_name_on_other_sheets;
 mod multiple_names;
 pub(crate) use multiple_names::net_multiple_names;
+mod net_completeness;
+mod net_members;
+pub(crate) use net_completeness::net_completeness;
+mod off_grid;
+pub(crate) use off_grid::off_grid;
+mod units_not_placed;
+pub(crate) use units_not_placed::{
+    PlacedUnit, finding as units_finding, missing_units, units_not_placed,
+};
 mod pin_type_conflict;
 pub(crate) use pin_type_conflict::pin_type_conflict;
 mod pins_touch_not_connected;
@@ -120,7 +133,8 @@ pub(crate) fn unused_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                     format!("Pin on {reference} is not connected"),
                     pin.world_pos,
                 )
-                .with_primary(sel(symbol.uuid, SelectedKind::Symbol)),
+                .with_primary(sel(symbol.uuid, SelectedKind::Symbol))
+                .at_pin_number(pin.anchor()),
             );
         }
     }
@@ -153,9 +167,14 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
             by_ref.entry(r).or_default().push((origin, *name, symbol));
         }
     }
-    // Sorted so the output order does not depend on hash iteration.
+    // Sorted so the output order does not depend on hash iteration, and each
+    // reference's entries by (sheet, uuid) so which part is reported against
+    // which (primary / peer) does not depend on document order.
     let mut by_ref: Vec<(&str, Vec<Entry>)> = by_ref.into_iter().collect();
     by_ref.sort_by(|a, b| a.0.cmp(b.0));
+    for (_, entries) in &mut by_ref {
+        entries.sort_by_key(|e| (e.0, e.2.uuid));
+    }
     for (reference, entries) in by_ref {
         let symbols: Vec<&crate::context::ErcSymbol> = entries.iter().map(|e| e.2).collect();
         // Units of one multi-unit part share a designator legitimately; only
@@ -362,7 +381,7 @@ pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     }
 
     for wire in &ctx.wires {
-        for endpoint in [wire.start, wire.end] {
+        for (end, endpoint) in [("start", wire.start), ("end", wire.end)] {
             let touches_other_wire = wire_ends.near(&endpoint).any(|id| id != wire.uuid);
             if touches_other_wire || non_wire.near(&endpoint).next().is_some() {
                 continue;
@@ -373,7 +392,10 @@ pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                     "Wire endpoint is not connected",
                     endpoint,
                 )
-                .with_primary(sel(wire.uuid, SelectedKind::Wire)),
+                .with_primary(sel(wire.uuid, SelectedKind::Wire))
+                // Each end is its own finding: a waived stub at one end must
+                // not hide a later dangle at the other.
+                .tagged(end),
             );
         }
     }
@@ -543,7 +565,8 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                     child.position,
                 )
                 .with_severity(Severity::Warning)
-                .with_primary(sel(child.uuid, SelectedKind::ChildSheet)),
+                .with_primary(sel(child.uuid, SelectedKind::ChildSheet))
+                .tagged("no-pins"),
             );
         }
 
@@ -564,7 +587,8 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                         child.position,
                     )
                     .with_severity(Severity::Warning)
-                    .with_primary(sel(child.uuid, SelectedKind::ChildSheet)),
+                    .with_primary(sel(child.uuid, SelectedKind::ChildSheet))
+                    .tagged("not-loaded"),
                 );
             }
             continue;
@@ -739,11 +763,15 @@ pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     // the tip that put it there. Insertion order keeps the report stable.
     type RootPorts<'a> = ((i64, i64), Vec<(&'a crate::context::ErcSymbol, Point)>);
     let mut roots: Vec<RootPorts> = Vec::new();
-    for symbol in ctx
+    // By uuid, so which port speaks for a value does not depend on document
+    // order.
+    let mut ports_by_id: Vec<&crate::context::ErcSymbol> = ctx
         .symbols
         .iter()
         .filter(|s| s.is_power && !s.value.is_empty() && !signex_net::is_power_flag(&s.lib_id))
-    {
+        .collect();
+    ports_by_id.sort_by_key(|s| s.uuid);
+    for symbol in ports_by_id {
         for tip in port_tips(symbol) {
             let root = conn.root_of(&tip);
             let slot = match roots.iter().position(|(r, _)| *r == root) {
@@ -760,9 +788,23 @@ pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         }
     }
 
-    for (_, ports) in roots {
-        let [(a, tip), (b, _), rest @ ..] = ports.as_slice() else {
+    for (_, mut ports) in roots {
+        // Rails in name order: the primary / peer pair is canonical.
+        ports.sort_by(|x, y| x.0.value.cmp(&y.0.value));
+        let [(a, tip), (b, b_tip), rest @ ..] = ports.as_slice() else {
             continue;
+        };
+        // Which rails collide, and at which port pins: a multi-pin port pair
+        // shorting two separate nets is two findings, never one waiver.
+        let mut rails: Vec<&str> = ports.iter().map(|(p, _)| p.value.as_str()).collect();
+        rails.sort_unstable();
+        rails.dedup();
+        let pin_at = |port: &crate::context::ErcSymbol, at: &Point| {
+            port.pins
+                .iter()
+                .find(|p| pt_key(&p.world_pos) == pt_key(at))
+                .map(|p| p.anchor())
+                .unwrap_or_default()
         };
         let mut names = format!("'{}' and '{}'", a.value, b.value);
         if !rest.is_empty() {
@@ -779,7 +821,9 @@ pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                 *tip,
             )
             .with_primary(sel(a.uuid, SelectedKind::Symbol))
-            .with_peer(sel(b.uuid, SelectedKind::Symbol)),
+            .with_peer(sel(b.uuid, SelectedKind::Symbol))
+            .at_pin_number(format!("{}/{}", pin_at(a, tip), pin_at(b, b_tip)))
+            .tagged(format!("nets:{}", rails.join(","))),
         );
     }
 }

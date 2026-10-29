@@ -121,6 +121,11 @@ fn the_first_failure_stops_the_batch_and_is_reported() {
             "the failure and the rows not attempted"
         );
         assert!(report.failed[1].1.contains("not attempted"));
+        assert!(
+            report.permanent.is_empty(),
+            "rows never attempted after a retryable failure are retryable: {:?}",
+            report.permanent
+        );
     });
     assert_eq!(
         *seen.lock().unwrap(),

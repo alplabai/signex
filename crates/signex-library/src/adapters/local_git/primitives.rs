@@ -75,7 +75,7 @@ impl LocalGitAdapter {
         &self,
         fp: &Footprint,
         message: &str,
-    ) -> Result<(), LibraryError> {
+    ) -> Result<CommitOutcome, LibraryError> {
         let (rel_path, abs_path) =
             self.prepare_primitive_write(PrimitiveKind::Footprint, fp.uuid)?;
         // The container is read, merged and rewritten: another Signex
@@ -113,7 +113,11 @@ impl LocalGitAdapter {
 
     /// Persist `model` into `<root>/sims/<uuid>.snxsim`, merging into the
     /// existing envelope (HI-7) so a multi-model file is not clobbered.
-    pub(super) fn write_sim(&self, model: &SimModel, message: &str) -> Result<(), LibraryError> {
+    pub(super) fn write_sim(
+        &self,
+        model: &SimModel,
+        message: &str,
+    ) -> Result<CommitOutcome, LibraryError> {
         let (rel_path, abs_path) = self.prepare_primitive_write(PrimitiveKind::Sim, model.uuid)?;
         // The container is read, merged and rewritten: another Signex
         // process doing the same would drop this edit (#893, see
@@ -170,7 +174,7 @@ impl LocalGitAdapter {
         abs_path: &Path,
         bytes: &[u8],
         message: &str,
-    ) -> Result<(), LibraryError> {
+    ) -> Result<CommitOutcome, LibraryError> {
         // HI-6: atomic write — primitive containers (`.snxsim`,
         // `.snxfpt`, `.snxsym`) are TOML+TSV envelopes; a half-written
         // file destroys all primitives in the container, so we cannot
@@ -178,7 +182,8 @@ impl LocalGitAdapter {
         // existing destinations.
         signex_types::atomic_io::atomic_write(abs_path, bytes)?;
         let fallback = format!("save {} {uuid}", primitive_kind_str(kind));
-        self.commit_path(rel_path, message, &fallback)
+        // The file is saved: a failed commit is an outcome, not an error.
+        Ok(self.commit_path(rel_path, message, &fallback))
     }
 
     /// Stage `rel_path` and create a new commit, unless the staged tree
@@ -188,12 +193,15 @@ impl LocalGitAdapter {
     /// has already been written to disk by the caller, and the user
     /// opted out of version control at create time. They can opt in
     /// later via the (forthcoming) Enable Version Control flow.
+    ///
+    /// Callers have written the file already, so a failed commit is the
+    /// returned [`CommitOutcome::NotCommitted`], not an error (#858).
     pub(super) fn commit_path(
         &self,
         rel_path: &str,
         message: &str,
         fallback_message: &str,
-    ) -> Result<(), LibraryError> {
+    ) -> CommitOutcome {
         self.commit_change(None, rel_path, message, fallback_message)
     }
 
@@ -206,55 +214,8 @@ impl LocalGitAdapter {
         rel_path: &str,
         message: &str,
         fallback_message: &str,
-    ) -> Result<(), LibraryError> {
+    ) -> CommitOutcome {
         self.commit_change_with(removed_rel_path, rel_path, &[], message, fallback_message)
-    }
-
-    /// [`commit_change`](Self::commit_change) that also commits
-    /// `extra_rel_paths` (files already written beside the library, such as
-    /// a pinned datasheet) in the same commit.
-    pub(super) fn commit_change_with(
-        &self,
-        removed_rel_path: Option<&str>,
-        rel_path: &str,
-        extra_rel_paths: &[String],
-        message: &str,
-        fallback_message: &str,
-    ) -> Result<(), LibraryError> {
-        if !self.root_dir.join(".git").exists() {
-            return Ok(());
-        }
-        // HI-11: serialise concurrent commits in this process. Two
-        // threads each opening their own `git2::Repository` and
-        // calling `index().add_path()` race on `.git/index.lock`; the
-        // loser would surface as a `git add: error` failure to the
-        // user despite no real conflict.
-        let _git_guard = self.git_lock.lock().unwrap_or_else(|e| e.into_inner());
-        let repo = git2::Repository::open(&self.root_dir)
-            .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
-        let (sig_name, sig_email) = identity_for_repo(&repo)?;
-        let sig = git2::Signature::now(&sig_name, &sig_email)
-            .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
-
-        let commit_message = if message.is_empty() {
-            fallback_message.to_string()
-        } else {
-            message.to_string()
-        };
-        let extras: Vec<&Path> = extra_rel_paths.iter().map(Path::new).collect();
-        retry_on_git_lock(repo.path(), || {
-            stage_and_commit_with(
-                &repo,
-                removed_rel_path.map(Path::new),
-                Path::new(rel_path),
-                None,
-                &extras,
-                &sig,
-                &commit_message,
-            )
-        })
-        .map_err(|e| LibraryError::Backend(format!("git commit {rel_path}: {e}")))?;
-        Ok(())
     }
 
     /// Refuse an asset path that is not a pinned-datasheet file already
@@ -335,6 +296,21 @@ impl LocalGitAdapter {
     where
         F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
     {
+        self.mutate_library_file_deferred(f, asset_rel_paths, &|| message.to_string(), fallback)
+    }
+
+    /// [`Self::mutate_library_file_with_assets`] whose commit message is
+    /// built after the edit ran, so it can say what the edit did.
+    pub(super) fn mutate_library_file_deferred<F>(
+        &self,
+        f: F,
+        asset_rel_paths: &[String],
+        message: &dyn Fn() -> String,
+        fallback: &str,
+    ) -> Result<(), LibraryError>
+    where
+        F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
+    {
         self.save_edit(
             |lf, _| {
                 if !f(lf)? {
@@ -355,6 +331,7 @@ impl LocalGitAdapter {
             message,
             fallback,
         )
+        .map(drop)
     }
 
     /// The one save protocol of the `.snxlib`: under both write locks,
@@ -363,14 +340,15 @@ impl LocalGitAdapter {
     /// HEAD (#1471). `edit` changes the clone and returns its encoded text,
     /// or `None` when nothing changed (no write, no commit). Its flag says
     /// whether memory holds this adapter's own last write (see
-    /// `holds_own_write`).
+    /// `holds_own_write`). Once the file is written the save is a success;
+    /// a failed commit is the returned outcome (#858).
     pub(super) fn save_edit<F>(
         &self,
         edit: F,
         asset_rel_paths: &[String],
-        message: &str,
+        message: &dyn Fn() -> String,
         fallback: &str,
-    ) -> Result<(), LibraryError>
+    ) -> Result<CommitOutcome, LibraryError>
     where
         F: FnOnce(&mut LibraryFile, bool) -> Result<Option<String>, LibraryError>,
     {
@@ -394,26 +372,20 @@ impl LocalGitAdapter {
         // are shared, so the clone is cheap (#416).
         let mut candidate = guard.clone();
         let Some(text) = edit(&mut candidate, self.holds_own_write())? else {
-            return Ok(());
+            return Ok(CommitOutcome::NothingToCommit);
         };
         // Every row's pins are in `text`, so every pinned PDF that is on
         // disk and not yet in HEAD goes into this commit, whichever row the
         // edit was about (#1471). Read under the write lock.
         let asset_rel_paths = &self.pinned_assets_to_commit(&candidate, asset_rel_paths);
-        // A commit that carries assets must not fail silently (a later
-        // commit would stage the `.snxlib` but not the files), so the write
-        // is undone then: keep the bytes it replaces.
-        let previous = if asset_rel_paths.is_empty() {
-            None
-        } else {
-            Some((std::fs::read(&self.file_path)?, guard.clone()))
-        };
+        // Built before the write: nothing after it may fail or panic.
+        let message = message();
         // HI-6: atomic write — never half-write the manifest.
         signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
         self.warn_plain_token_once(&candidate.manifest.mode);
         // Disk now holds the edit, so memory takes it too. Memory and disk
-        // stay equal whatever happens next: a failed commit without assets
-        // leaves both on the edit, one with assets restores both.
+        // stay equal whatever happens next: a failed commit leaves both on
+        // the edit (#858).
         *guard = candidate;
         // A failed stamp only costs one extra reload on the next access.
         if let Err(stamp_err) = self.note_own_write(&text) {
@@ -423,42 +395,7 @@ impl LocalGitAdapter {
                 "saved, but the disk stamp could not be recorded: {stamp_err}"
             );
         }
-        if let Err(commit_err) =
-            self.commit_change_with(None, &rel, asset_rel_paths, message, fallback)
-        {
-            let Some((previous, previous_file)) = previous else {
-                self.record_commit_warning(&commit_err);
-                return Ok(());
-            };
-            // The row would otherwise be saved with a pinned PDF that no
-            // commit holds. Put the previous file back, so the caller keeps
-            // its edit and can save again.
-            return Err(self.undo_asset_commit(
-                &mut guard,
-                previous,
-                previous_file,
-                commit_err,
-                signex_types::atomic_io::atomic_write,
-            ));
-        }
-        Ok(())
-    }
-
-    /// The edit is saved but its commit failed (a commit without assets;
-    /// one with assets is undone and returns an error instead). Nothing
-    /// is rolled back on disk or in memory. `stage_and_commit` builds the
-    /// commit from HEAD's tree and touches the on-disk index only after the commit succeeded,
-    /// so the index still equals HEAD. The next commit of the `.snxlib`
-    /// re-reads it from disk and picks the edit up; a commit of any other
-    /// library file does not. Surfaced to the Messages panel via the log
-    /// bridge.
-    fn record_commit_warning(&self, commit_err: &LibraryError) {
-        tracing::warn!(
-            target: "signex::library",
-            path = %self.file_path.display(),
-            "saved, but the git commit failed: {commit_err}; \
-             the next commit of this library file will include it"
-        );
+        Ok(self.commit_change_with(None, &rel, asset_rel_paths, &message, fallback))
     }
 
     /// Read the table named `table` as a snapshot of [`ComponentRow`]s,
@@ -470,6 +407,7 @@ impl LocalGitAdapter {
             .library_file
             .read()
             .map_err(|_| LibraryError::Backend("library_file read lock poisoned".into()))?;
+        self.row_reads.retain_tables(guard.tables.keys());
         let Some(table) = guard.tables.get(name) else {
             return Ok(Vec::new());
         };
@@ -478,13 +416,7 @@ impl LocalGitAdapter {
         // away, but for v0.9 we want a loud error if a hand-edited
         // .snxlib drifts the schema.
         validate_legacy_header(name, &table.columns)?;
-        let mut out = Vec::with_capacity(table.rows.len());
-        for row in &table.rows {
-            let mut component = library_row_to_component(row)?;
-            component.server_revision = Some(row_base(row));
-            out.push(component);
-        }
-        Ok(out)
+        self.row_reads.table(name, &table.rows)
     }
 
     // ── Symbol container helpers (v0.9 phase 2 multi-symbol files) ────────
@@ -609,7 +541,7 @@ impl LocalGitAdapter {
         &self,
         sym: Symbol,
         message: &str,
-    ) -> Result<(), LibraryError> {
+    ) -> Result<CommitOutcome, LibraryError> {
         self.ensure_commit_identity()?;
         // The container is read, merged and rewritten: another Signex
         // process doing the same would drop this edit (#893, see
@@ -618,22 +550,16 @@ impl LocalGitAdapter {
         let dir = self.primitive_dir(PrimitiveKind::Symbol);
         fs::create_dir_all(&dir)?;
 
-        let target_path = match self.locate_symbol_file(sym.uuid)? {
+        // The path is made library-relative before the write: nothing after
+        // the atomic write may return an error (#858).
+        let (path, file, rel_path) = match self.locate_symbol_file(sym.uuid)? {
             Some((path, mut file)) => {
                 if !file.upsert(sym.clone()) {
                     file.symbols.push(sym.clone());
                     file.updated = chrono::Utc::now();
                 }
-                // v0.18.4 — emit TOML envelope.
-                let text = file
-                    .to_toml_string()
-                    .map_err(|e| LibraryError::Backend(format!("write symbol container: {e}")))?;
-                // HI-6: atomic write — the symbol container is a TOML+TSV
-                // envelope holding every symbol; an in-place truncate by
-                // `fs::write` would destroy them all on a crash mid-save.
-                signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
-                self.symbol_index.record(&file, &path);
-                path
+                let rel_path = self.library_rel_path(&path)?;
+                (path, file, rel_path)
             }
             None => {
                 // A skipped container whose text mentions this uuid may
@@ -642,31 +568,36 @@ impl LocalGitAdapter {
                 self.refuse_if_skipped_file_mentions(sym.uuid)?;
                 let file = SymbolFile::from_symbol(sym.clone());
                 let path = self.fresh_symbol_file_path(&dir, &file)?;
-                // v0.18.4 — emit TOML envelope.
-                let text = file
-                    .to_toml_string()
-                    .map_err(|e| LibraryError::Backend(format!("write symbol container: {e}")))?;
-                // HI-6: atomic write — the symbol container is a TOML+TSV
-                // envelope holding every symbol; an in-place truncate by
-                // `fs::write` would destroy them all on a crash mid-save.
-                signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
-                self.symbol_index.record(&file, &path);
-                path
+                let rel_path = self.library_rel_path(&path)?;
+                (path, file, rel_path)
             }
         };
+        // v0.18.4 — emit TOML envelope.
+        let text = file
+            .to_toml_string()
+            .map_err(|e| LibraryError::Backend(format!("write symbol container: {e}")))?;
+        // HI-6: atomic write — the symbol container is a TOML+TSV
+        // envelope holding every symbol; an in-place truncate by
+        // `fs::write` would destroy them all on a crash mid-save.
+        signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
+        self.symbol_index.record(&file, &path);
 
-        let rel_path = target_path
+        let fallback = format!("save symbol {} into {rel_path}", sym.uuid);
+        Ok(self.commit_path(&rel_path, message, &fallback))
+    }
+
+    /// `path` as a library-relative, forward-slash path.
+    fn library_rel_path(&self, path: &Path) -> Result<String, LibraryError> {
+        Ok(path
             .strip_prefix(&self.root_dir)
             .map_err(|_| {
                 LibraryError::Backend(format!(
                     "could not relativise {} against root",
-                    target_path.display()
+                    path.display()
                 ))
             })?
             .to_string_lossy()
-            .replace('\\', "/");
-        let fallback = format!("save symbol {} into {rel_path}", sym.uuid);
-        self.commit_path(&rel_path, message, &fallback)
+            .replace('\\', "/"))
     }
 
     pub(super) fn locate_symbol_file(

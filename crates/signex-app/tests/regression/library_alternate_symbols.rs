@@ -248,7 +248,7 @@ fn switching_to_a_symbol_the_row_does_not_offer_is_refused() {
     switch_to(
         &mut app,
         id,
-        &format!("{}:{}", f.library_id, Uuid::new_v4()),
+        &format!("{}:{}", f.library_id, Uuid::now_v7()),
     );
     assert_eq!(doc(&app).symbols[0].lib_id, before);
     let logged = signex_app::diagnostics::recent_entries()

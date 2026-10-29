@@ -52,6 +52,8 @@ mod pdf_page_setup;
 
 #[path = "regression/paste_clipboard.rs"]
 mod paste_clipboard;
+#[path = "regression/paste_followups.rs"]
+mod paste_followups;
 #[path = "regression/paste_numbering_async.rs"]
 mod paste_numbering_async;
 #[path = "regression/paste_stamp_array.rs"]
@@ -121,9 +123,16 @@ mod primitive_dirty_quit;
 #[path = "regression/dirty_paths_gateway.rs"]
 mod dirty_paths_gateway;
 
+#[path = "regression/single_dirty_source.rs"]
+mod single_dirty_source;
+
 // #1250 — a locked symbol refuses delete and move, with a Messages note.
 #[path = "regression/symbol_locked_enforced.rs"]
 mod symbol_locked_enforced;
+
+// #1573 — locked wires, labels, notes and drawings refuse delete, with a note.
+#[path = "regression/object_locked_enforced.rs"]
+mod object_locked_enforced;
 
 // #768 — an over-cap foreign-column save names the objects to delete.
 #[path = "regression/foreign_column_save_blocked.rs"]
@@ -169,8 +178,13 @@ mod history_reload_repair;
 
 #[path = "regression/library_browser_cell_commit.rs"]
 mod library_browser_cell_commit;
+#[path = "regression/library_range_filter.rs"]
+mod library_range_filter;
 #[path = "regression/library_row_base_local.rs"]
 mod library_row_base_local;
+
+#[path = "regression/library_uncommitted.rs"]
+mod library_uncommitted;
 
 #[path = "regression/library_read_only_mount.rs"]
 mod library_read_only_mount;
@@ -258,6 +272,8 @@ mod sheet_symbol_edit;
 #[path = "regression/symbol_undo_steps.rs"]
 mod symbol_undo_steps;
 
+#[path = "regression/field_edit_support.rs"]
+mod field_edit_support;
 #[path = "regression/library_alternate_symbols.rs"]
 mod library_alternate_symbols;
 #[path = "regression/library_place_designator_standard.rs"]
@@ -266,12 +282,20 @@ mod library_place_designator_standard;
 mod library_place_symbol;
 #[path = "regression/library_place_ui.rs"]
 mod library_place_ui;
+#[path = "regression/library_stock_copy.rs"]
+mod library_stock_copy;
 #[path = "regression/library_stock_place.rs"]
 mod library_stock_place;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
 #[path = "regression/repeat_placement.rs"]
 mod repeat_placement;
+// #1258 — Properties edits the shared fields of a multi-selection.
+#[path = "regression/multi_selection_edit.rs"]
+mod multi_selection_edit;
+// #1255, #1670 — in-place editing of a part's designator, value and footprint.
+#[path = "regression/inplace_field_edit.rs"]
+mod inplace_field_edit;
 // #1301, #1262, #1260 — Open Datasheet, Edit Symbol and Change Component
 // on a placed part.
 #[path = "regression/placed_part_actions.rs"]

@@ -255,7 +255,7 @@ impl Signex {
             }
             match snxprj_path {
                 Some(p) => {
-                    self.document_state.dirty_paths.insert(p);
+                    self.document_state.mark_document_dirty(&p);
                 }
                 None => {
                     // The project was closed while the run was in flight: the

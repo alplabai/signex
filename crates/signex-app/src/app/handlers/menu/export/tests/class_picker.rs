@@ -126,7 +126,7 @@ fn an_assignment_edits_the_labels_project_not_the_active_one() {
     let other_id = other.id;
     let other_path = other.path.clone();
     app.document_state.projects.push(other);
-    app.document_state.dirty_paths.clear();
+    app.document_state.mark_documents_clean_where(|_| true);
 
     assign(&mut app, other_id, "SIG", "Mine");
 
@@ -143,11 +143,10 @@ fn an_assignment_edits_the_labels_project_not_the_active_one() {
         table(active)[0].nets.is_empty(),
         "the active project is untouched"
     );
-    assert!(app.document_state.dirty_paths.contains(&other_path));
+    assert!(app.document_state.is_document_dirty(&other_path));
     assert!(
         !app.document_state
-            .dirty_paths
-            .contains(&app.document_state.projects[0].path),
+            .is_document_dirty(&app.document_state.projects[0].path),
         "and not dirtied"
     );
     assert_eq!(
@@ -159,7 +158,7 @@ fn an_assignment_edits_the_labels_project_not_the_active_one() {
 
 #[test]
 fn a_child_that_will_not_parse_is_reported_not_dropped_silently() {
-    let dir = std::env::temp_dir().join(format!("signex-class-unreadable-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-class-unreadable-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     std::fs::write(dir.join("child.snxsch"), "this is not a schematic").expect("write child");
     let parent = sheet_with_net("R_TOP", "VCC", &["child.snxsch"]);
@@ -311,7 +310,7 @@ fn the_reorder_click_hits_a_wire_at_the_width_a_net_class_draws_it() {
     use signex_types::schematic::{Point, Wire};
 
     let dir = "/w/pick-reorder";
-    let other = Uuid::new_v4();
+    let other = Uuid::now_v7();
     let (mut app, _, styled) = child_label_selected_with(dir, |child| {
         child.wires.push(Wire {
             uuid: other,

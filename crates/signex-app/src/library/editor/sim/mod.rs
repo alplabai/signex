@@ -337,10 +337,10 @@ mod tests {
     use uuid::Uuid;
 
     fn fixture_editor() -> ComponentPreviewState {
-        let lib_id = Uuid::new_v4();
+        let lib_id = Uuid::now_v7();
         let row = ComponentRow {
             alternate_symbols: Vec::new(),
-            row_id: Uuid::new_v4(),
+            row_id: Uuid::now_v7(),
             internal_pn: InternalPn::new("TEST_PN"),
             class: ComponentClass::generic(),
             datasheet: DatasheetRef::default(),
@@ -348,7 +348,7 @@ mod tests {
             description: String::new(),
             more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
-            symbol_ref: PrimitiveRef::new(lib_id, Uuid::new_v4()),
+            symbol_ref: PrimitiveRef::new(lib_id, Uuid::now_v7()),
             footprint_ref: None,
             sim_ref: None,
             pin_map_overrides: Vec::new(),

@@ -392,6 +392,41 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
     }
 }
 
+/// Header of the optional `locked` column on wire and label rows (#1573).
+/// Like [`LABEL_FONT_FAMILY_COLUMN`] it is not a known column: it rides the
+/// foreign-column path, so a block with no locked row has no such header and
+/// re-saves byte-identical, and a build that predates the lock keeps it.
+/// Format: `docs/architecture/snxsch-object-lock.md`.
+pub(in crate::format) const LOCKED_COLUMN: &str = "locked";
+
+/// The cell a locked row writes; every other row of the block writes empty.
+const LOCKED_CELL: &str = "true";
+
+/// Add the lock cell to a row's foreign columns when the row is locked.
+fn with_locked_cell(mut columns: UnknownColumns, locked: bool) -> UnknownColumns {
+    if locked {
+        columns.set(LOCKED_COLUMN, LOCKED_CELL.to_string());
+    }
+    columns
+}
+
+/// Take the lock cell out of a row's foreign columns. `true` locks and an
+/// empty cell is a row of the block that is not locked; any other value is
+/// not ours to read, so it stays a foreign cell and round-trips untouched.
+fn take_locked_cell(columns: &mut UnknownColumns) -> bool {
+    match columns.get(LOCKED_COLUMN) {
+        Some(LOCKED_CELL) => {
+            columns.take(LOCKED_COLUMN);
+            true
+        }
+        Some("") => {
+            columns.take(LOCKED_COLUMN);
+            false
+        }
+        _ => false,
+    }
+}
+
 pub(in crate::format) fn wire_to_row(w: &Wire) -> Result<SchWireRow, NonFiniteField> {
     Ok(SchWireRow {
         uuid: w.uuid,
@@ -400,11 +435,12 @@ pub(in crate::format) fn wire_to_row(w: &Wire) -> Result<SchWireRow, NonFiniteFi
         end_x: mm_to_nm(w.end.x, "end_x")?,
         end_y: mm_to_nm(w.end.y, "end_y")?,
         stroke_width: w.stroke_width,
-        unknown_columns: w.unknown_columns.clone(),
+        unknown_columns: with_locked_cell(w.unknown_columns.clone(), w.locked),
     })
 }
 
-pub(in crate::format) fn row_to_wire(row: SchWireRow) -> Wire {
+pub(in crate::format) fn row_to_wire(mut row: SchWireRow) -> Wire {
+    let locked = take_locked_cell(&mut row.unknown_columns);
     Wire {
         uuid: row.uuid,
         start: Point {
@@ -416,6 +452,7 @@ pub(in crate::format) fn row_to_wire(row: SchWireRow) -> Wire {
             y: nm_to_mm(row.end_y),
         },
         stroke_width: row.stroke_width,
+        locked,
         unknown_columns: row.unknown_columns,
     }
 }
@@ -455,6 +492,7 @@ pub(in crate::format) fn label_to_row(l: &Label) -> Result<SchLabelRow, NonFinit
     if let Some(family) = &l.font_family {
         unknown_columns.set(LABEL_FONT_FAMILY_COLUMN, family.clone());
     }
+    let unknown_columns = with_locked_cell(unknown_columns, l.locked);
     Ok(SchLabelRow {
         uuid: l.uuid,
         text: l.text.clone(),
@@ -477,6 +515,7 @@ pub(in crate::format) fn row_to_label(mut row: SchLabelRow) -> Label {
         .unknown_columns
         .take(LABEL_FONT_FAMILY_COLUMN)
         .filter(|family| !family.is_empty());
+    let locked = take_locked_cell(&mut row.unknown_columns);
     Label {
         uuid: row.uuid,
         text: row.text,
@@ -491,6 +530,7 @@ pub(in crate::format) fn row_to_label(mut row: SchLabelRow) -> Label {
         font_family,
         justify: parse_halign(&row.justify),
         justify_v: parse_valign(&row.justify_v),
+        locked,
         unknown_columns: row.unknown_columns,
     }
 }

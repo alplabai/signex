@@ -193,13 +193,13 @@ mod tests {
     fn sheet_with_pin_on_wire_interior() -> SchematicSheet {
         let mut sheet = SchematicSheet::default();
         sheet.wires.push(Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(0.0, 0.0),
             end: Point::new(20.0, 0.0),
             ..Default::default()
         });
         sheet.child_sheets.push(ChildSheet {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             name: "Child".into(),
             filename: "child.snxsch".into(),
             position: Point::new(10.0, 0.0),
@@ -210,7 +210,7 @@ mod tests {
             fill_color: None,
             fields_autoplaced: false,
             pins: vec![SheetPin {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 name: "IN".into(),
                 direction: "input".into(),
                 position: Point::new(10.0, 0.0),

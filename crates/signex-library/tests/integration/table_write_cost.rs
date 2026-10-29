@@ -57,8 +57,8 @@ fn row(n: usize, lib: Uuid) -> ComponentRow {
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
         state: LifecycleState::Released,
-        symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
-        footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
+        symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
+        footprint_ref: Some(PrimitiveRef::new(lib, Uuid::now_v7())),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Yageo", format!("RC0805FR-{n}")),
@@ -269,6 +269,89 @@ fn adapter_one_row_edit_cost_by_library_size() {
         println!(
             "adapter rows={size} bytes={bytes} update_row={upd:?} insert_row={ins:?} delete_row={del:?} read_hash={read_hash:?}"
         );
+    }
+}
+
+/// The read side of the same library: one row by id, and the whole table,
+/// cold (first call after open) and warm (best of RUNS).
+#[test]
+#[ignore = "timing measurement for #1437"]
+fn adapter_read_cost_by_library_size() {
+    for size in [1_000usize, 10_000, 50_000] {
+        let dir = tempfile::tempdir().unwrap();
+        let (_file, adapter, seed, _) = seeded_library(dir.path(), size);
+        let id = RowId::from_uuid(seed.row_id);
+        let t = Instant::now();
+        std::hint::black_box(adapter.read_table("resistors").unwrap());
+        let table_cold = t.elapsed();
+        let (mut row, mut table) = (Duration::MAX, Duration::MAX);
+        for _ in 0..RUNS {
+            let t = Instant::now();
+            std::hint::black_box(adapter.read_row("resistors", id).unwrap());
+            row = row.min(t.elapsed());
+            let t = Instant::now();
+            std::hint::black_box(adapter.read_table("resistors").unwrap());
+            table = table.min(t.elapsed());
+        }
+        println!(
+            "adapter rows={size} read_row={row:?} read_table_cold={table_cold:?} read_table_warm={table:?}"
+        );
+    }
+}
+
+/// Total size in bytes of every file under `dir`.
+fn dir_bytes(dir: &Path) -> u64 {
+    walkdir::WalkDir::new(dir)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_file())
+        .map(|e| e.metadata().map(|m| m.len()).unwrap_or(0))
+        .sum()
+}
+
+/// `.git/objects` growth per one-row edit: each edit commits a whole new
+/// `.snxlib` blob, so growth tracks the file size, not the edit.
+#[test]
+#[ignore = "measurement for #1438"]
+fn git_objects_growth_per_edit_by_library_size() {
+    const EDITS: usize = 10;
+    for size in [1_000usize, 10_000, 50_000] {
+        let dir = tempfile::tempdir().unwrap();
+        let (file, adapter, seed, _) = seeded_library(dir.path(), size);
+        let objects = dir.path().join("lib").join(".git").join("objects");
+        let bytes = fs::metadata(&file).unwrap().len();
+        let mut base = seed.server_revision;
+        // The first edit also commits the bulk-seeded rows; leave it out.
+        let mut edited = seed.clone();
+        edited.version = "0.0.2".into();
+        edited.server_revision = base;
+        base = adapter.update_row("resistors", edited, "warm").unwrap();
+        let before = dir_bytes(&objects);
+        for n in 0..EDITS {
+            let mut edited = seed.clone();
+            edited.version = format!("0.0.{}", n + 3);
+            edited.server_revision = base;
+            base = adapter.update_row("resistors", edited, "edit").unwrap();
+        }
+        let grown = dir_bytes(&objects) - before;
+        println!(
+            "adapter rows={size} snxlib_bytes={bytes} edits={EDITS} objects_growth={grown} per_edit={}",
+            grown / EDITS as u64
+        );
+        // What a repack would leave: the command-line `git gc` deltas the
+        // near-identical blobs. Skipped when `git` is not installed.
+        let root = dir.path().join("lib");
+        let gc = std::process::Command::new("git")
+            .args(["gc", "--quiet"])
+            .current_dir(&root)
+            .status();
+        if gc.is_ok_and(|s| s.success()) {
+            let packed = dir_bytes(&objects);
+            println!(
+                "adapter rows={size} after_gc_objects_bytes={packed} (was {})",
+                before + grown
+            );
+        }
     }
 }
 

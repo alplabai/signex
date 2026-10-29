@@ -18,7 +18,7 @@ use tempfile::TempDir;
 
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     }
@@ -38,12 +38,11 @@ fn open_sheet(app: &mut Signex, path: &Path, dirty: bool) -> uuid::Uuid {
         title: path.file_stem().unwrap().to_string_lossy().into_owned(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty,
         project_id: None,
         kind: TabKind::Schematic,
     });
     if dirty {
-        app.document_state.dirty_paths.insert(path.to_path_buf());
+        app.document_state.mark_document_dirty(path);
     }
     uuid
 }
@@ -110,11 +109,17 @@ fn renaming_a_dirty_sheet_moves_its_dirty_marker_and_dirties_the_project() {
     });
     let _ = app.update(Message::Rename(RenameMsg::Submit));
 
-    let dirty = &app.document_state.dirty_paths;
-    assert!(dirty.contains(&new), "dirty marker must follow the rename");
-    assert!(!dirty.contains(&old), "stale dirty marker must be gone");
+    let dirty = &app.document_state;
     assert!(
-        dirty.contains(&prj_path),
+        dirty.is_document_dirty(&new),
+        "dirty marker must follow the rename"
+    );
+    assert!(
+        !dirty.is_document_dirty(&old),
+        "stale dirty marker must be gone"
+    );
+    assert!(
+        dirty.is_document_dirty(&prj_path),
         "the edited .snxprj must be marked dirty so the rename is saved"
     );
     let engine = app
@@ -188,7 +193,7 @@ fn renaming_a_non_sheet_file_does_not_dirty_the_project() {
         "the rename itself must have happened"
     );
     assert!(
-        !app.document_state.dirty_paths.contains(&prj_path),
+        !app.document_state.is_document_dirty(&prj_path),
         "renaming a file the project does not list must not dirty the .snxprj"
     );
 }
@@ -216,7 +221,7 @@ fn save_as_onto_another_open_sheet_is_refused() {
         b_uuid,
         "B's engine (with its unsaved edits) must not be replaced"
     );
-    assert!(app.document_state.dirty_paths.contains(&b));
+    assert!(app.document_state.is_document_dirty(&b));
     assert!(!b.exists(), "nothing may be written over B");
 }
 
@@ -254,8 +259,8 @@ fn save_as_drops_the_old_path_from_dirty_paths() {
     assert!(c.exists(), "Save As must write the new file");
     assert!(app.document_state.engines.contains_key(&c));
     assert!(
-        !app.document_state.dirty_paths.contains(&a),
+        !app.document_state.is_document_dirty(&a),
         "old path has no engine; leaving it dirty makes Save All fail on quit: {:?}",
-        app.document_state.dirty_paths
+        app.document_state.dirty_document_paths()
     );
 }

@@ -93,6 +93,6 @@ mod tests {
     #[test]
     fn a_symbol_without_a_library_row_lists_nothing() {
         assert!(document_rows(&[], None, None).is_empty());
-        assert!(document_rows(&[], Some(Uuid::new_v4()), Some(Uuid::new_v4())).is_empty());
+        assert!(document_rows(&[], Some(Uuid::now_v7()), Some(Uuid::now_v7())).is_empty());
     }
 }

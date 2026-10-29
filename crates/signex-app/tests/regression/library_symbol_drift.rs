@@ -148,7 +148,10 @@ fn update_from_library_applies_as_one_undo_step() {
     let mut app = app_with_library(&f);
     place(&mut app, &f);
     let before = pin_count(&app);
-    app.document_state.tabs[0].dirty = false;
+    {
+        let path = app.document_state.tabs[0].path.clone();
+        app.document_state.mark_document_clean(&path);
+    }
     let id = select_first(&mut app);
     edit_library_symbol(&f, add_pin);
     check_drift(&mut app);
@@ -156,7 +159,11 @@ fn update_from_library_applies_as_one_undo_step() {
     click_update(&mut app, id);
     assert_eq!(pin_count(&app), before + 1);
     assert!(!is_drifted(&app));
-    assert!(app.document_state.tabs[0].dirty, "update dirties the tab");
+    assert!(
+        app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path),
+        "update dirties the tab"
+    );
     assert!(info(&app, "Library Drift").is_none());
 
     let _ = app.update(Message::Edit(EditMsg::Undo));
@@ -195,12 +202,18 @@ fn update_is_refused_when_a_connected_pin_would_vanish() {
     edit_library_symbol(&f, |s| s.pins.retain(|p| p.number != "1"));
     check_drift(&mut app);
     assert!(is_drifted(&app));
-    app.document_state.tabs[0].dirty = false;
+    {
+        let path = app.document_state.tabs[0].path.clone();
+        app.document_state.mark_document_clean(&path);
+    }
 
     click_update(&mut app, id);
     assert_eq!(pin_count(&app), before, "sheet copy untouched");
     assert!(is_drifted(&app), "drift stays visible");
-    assert!(!app.document_state.tabs[0].dirty);
+    assert!(
+        !app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
     let logged = signex_app::diagnostics::recent_entries()
         .iter()
         .any(|e| e.message.contains("update refused") && e.message.contains("U1 pin 1"));
@@ -273,7 +286,7 @@ fn a_new_pass_prunes_rows_and_names_of_unmounted_libraries_at_once() {
     let mut app = app_with_library(&f);
     place(&mut app, &f);
     let sheet = app.document_state.active_path.clone().unwrap();
-    let ghost = format!("{}:{}", Uuid::new_v4(), Uuid::new_v4());
+    let ghost = format!("{}:{}", Uuid::now_v7(), Uuid::now_v7());
     let real = doc(&app).symbols[0].lib_id.clone();
     let drift = &mut app.library.drift;
     drift.names.insert(ghost.clone(), "Gone/Part".into());

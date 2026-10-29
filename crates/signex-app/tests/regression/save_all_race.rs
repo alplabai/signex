@@ -57,7 +57,7 @@ fn project_with_two_sheets(dir: &Path) -> Signex {
     for (name, dirty) in [("X", true), ("Y", false)] {
         let path = dir.join(format!("{name}.snxsch"));
         let mut engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             paper_size: "A4".to_string(),
             ..Default::default()
         })
@@ -68,12 +68,11 @@ fn project_with_two_sheets(dir: &Path) -> Signex {
             title: name.to_string(),
             path: path.clone(),
             cached_document: None,
-            dirty,
             project_id: Some(id),
             kind: TabKind::Schematic,
         });
         if dirty {
-            app.document_state.dirty_paths.insert(path);
+            app.document_state.mark_document_dirty(&path);
         }
     }
     app
@@ -96,7 +95,7 @@ fn a_clean_sheet_edited_while_close_project_save_all_runs_is_prompted_not_droppe
         ProjectCloseChoice::SaveAll,
     )));
     // An edit to Y while X is being written.
-    app.document_state.dirty_paths.insert(y.clone());
+    app.document_state.mark_document_dirty(&y);
     settle_task(&mut app, save_all);
 
     assert!(x.exists(), "Save All wrote X");
@@ -109,7 +108,7 @@ fn a_clean_sheet_edited_while_close_project_save_all_runs_is_prompted_not_droppe
         app.document_state.engines.contains_key(&y),
         "Y is not dropped"
     );
-    assert!(app.document_state.dirty_paths.contains(&y));
+    assert!(app.document_state.is_document_dirty(&y));
     let modal = app
         .ui_state
         .project_close_confirm

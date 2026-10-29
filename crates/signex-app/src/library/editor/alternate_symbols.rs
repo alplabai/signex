@@ -87,7 +87,7 @@ fn alternate_row<'a>(
         .size(TS.label)
         .width(Length::FillPortion(3))
         .on_input(move |label| on_label(EditorMsg::AlternateSymbolRelabeled { idx, label }));
-    let short = alt.symbol_ref.uuid.to_string();
+    let short = signex_types::object_id::short_id(&alt.symbol_ref.uuid);
     let up = (idx > 0).then(|| {
         event(EditorMsg::AlternateSymbolMoved {
             from: idx,
@@ -103,7 +103,7 @@ fn alternate_row<'a>(
     row![
         label,
         Space::new().width(8),
-        text(format!("symbol {}", &short[..8]))
+        text(format!("symbol {}", short))
             .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),

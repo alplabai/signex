@@ -250,9 +250,6 @@ impl Signex {
         self.drop_pending_profile_update_for_other_project();
         let fs_request = self.project_fs_request();
         self.document_state.project_fs.want(fs_request);
-        // The dirty dots below read `dirty_paths`; make sure footprint
-        // edits are in it first (#666).
-        self.sync_editor_dirty_paths();
         let previous_navigator = std::mem::take(&mut self.document_state.panel_ctx.navigator);
         let navigator = self.next_navigator_model(previous_navigator);
         // Build per-project panel info from every loaded project in the
@@ -262,17 +259,16 @@ impl Signex {
         // `panel_ctx.projects` directly yet.
         let active_id = self.document_state.active_project;
         // Open-state lookup is "is there a tab pointing at this path?"
-        // Dirty-state lookup is the project-scoped `dirty_paths` set,
-        // which persists across tab close (Altium parity: closing a
-        // tab keeps the file dirty until the project is saved or the
-        // edits are explicitly discarded).
+        // Dirty-state lookup is per document, not per tab, so it persists
+        // across tab close (Altium parity: closing a tab keeps the file
+        // dirty until the project is saved or the edits are discarded).
         let open_paths: std::collections::HashSet<std::path::PathBuf> = self
             .document_state
             .tabs
             .iter()
             .map(|tab| tab.path.clone())
             .collect();
-        let dirty_paths = self.document_state.dirty_paths.clone();
+        let dirty_paths = self.document_state.dirty_document_paths();
         // Active-tab path drives the per-row highlight in the tree —
         // matches Altium's "you are here" cue. None when no tabs open.
         let active_path = self
@@ -470,6 +466,8 @@ impl Signex {
         let selected_uuid = self.document_state.panel_ctx.selected_uuid;
         let selected_kind = self.document_state.panel_ctx.selected_kind;
         let selection_info = self.document_state.panel_ctx.selection_info.clone();
+        let multi_groups = self.document_state.panel_ctx.multi_groups.clone();
+        let multi_draft = self.document_state.panel_ctx.multi_draft.clone();
         let symbol_choices = self.document_state.panel_ctx.symbol_choices.clone();
         let drawing_edit_buf = self.document_state.panel_ctx.drawing_edit_buf.clone();
         let drawing_edit_buf_for = self.document_state.panel_ctx.drawing_edit_buf_for;
@@ -541,6 +539,7 @@ impl Signex {
         let sheet_color = self.document_state.panel_ctx.sheet_color;
         let erc_diagnostics = self.build_erc_diagnostic_entries();
         let erc_waivers = self.erc_waiver_entries();
+        let erc_violation_waivers = self.erc_violation_waiver_entries();
 
         let net_classes = self.net_class_panel_state();
 
@@ -613,6 +612,8 @@ impl Signex {
             selected_uuid,
             selected_kind,
             selection_info,
+            multi_groups,
+            multi_draft,
             symbol_choices,
             drawing_edit_buf,
             drawing_edit_buf_for,
@@ -636,6 +637,8 @@ impl Signex {
             pre_placement,
             erc_diagnostics,
             erc_waivers,
+            erc_violation_waivers,
+            erc_waive_draft: self.ui_state.erc_waive_draft.clone(),
             erc_focus_index: self.ui_state.erc_focus_global_index,
             erc_running: self.ui_state.erc_running,
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),

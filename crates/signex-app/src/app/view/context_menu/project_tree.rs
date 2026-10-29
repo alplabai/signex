@@ -156,7 +156,7 @@ impl Signex {
                     .map(|p| p.path.clone());
                 let project_is_dirty = project_path
                     .as_ref()
-                    .map(|p| self.document_state.dirty_paths.contains(p))
+                    .map(|p| self.document_state.is_document_dirty(p))
                     .unwrap_or(false);
                 let can_save = has_schematic || project_is_dirty;
 

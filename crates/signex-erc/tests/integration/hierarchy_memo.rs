@@ -41,7 +41,7 @@ fn sheet(reference: &str) -> SchematicSheet {
     let mut sheet = SchematicSheet {
         paper_size: "A4".to_string(),
         symbols: vec![Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             lib_id: "Device:R".to_string(),
             reference: reference.to_string(),
             unit: 1,

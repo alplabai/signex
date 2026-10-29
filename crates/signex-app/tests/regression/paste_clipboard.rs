@@ -58,8 +58,9 @@ fn a_paste_request_asks_the_system_clipboard() {
 }
 
 #[test]
-fn paste_array_reads_the_numbers_first_and_then_asks_the_clipboard() {
+fn paste_array_reads_the_numbers_first_when_the_preference_is_next_free() {
     let (mut app, _text) = app_with_copied_parts();
+    app.ui_state.paste_designators = PasteDesignators::NextFree;
     let seeding = app.update(Message::Edit(EditMsg::PasteArrayRequested));
     let seeded = crate::library_place_symbol::run(seeding)
         .into_iter()

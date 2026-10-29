@@ -225,7 +225,7 @@ mod tests {
     fn slot_with_wire() -> CanvasSlot {
         let sheet = signex_types::schematic::SchematicSheet {
             unknown: Default::default(),
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             version: 0,
             generator: String::new(),
             generator_version: String::new(),
@@ -233,11 +233,12 @@ mod tests {
             root_sheet_page: "1".to_string(),
             symbols: Vec::new(),
             wires: vec![signex_types::schematic::Wire {
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 start: signex_types::schematic::Point::new(10.0, 10.0),
                 end: signex_types::schematic::Point::new(30.0, 10.0),
                 stroke_width: 0.0,
                 unknown_columns: Default::default(),
+                locked: false,
             }],
             junctions: Vec::new(),
             labels: Vec::new(),
@@ -557,7 +558,7 @@ mod tests {
     /// A second selectable item, standing in for what Select All adds.
     fn other_item() -> signex_types::schematic::SelectedItem {
         signex_types::schematic::SelectedItem::new(
-            uuid::Uuid::new_v4(),
+            uuid::Uuid::now_v7(),
             signex_types::schematic::SelectedKind::Wire,
         )
     }

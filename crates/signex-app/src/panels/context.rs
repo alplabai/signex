@@ -91,6 +91,11 @@ pub struct PanelContext {
     pub selected_kind: Option<signex_types::schematic::SelectedKind>,
     /// Description of the selected item (for single selection).
     pub selection_info: Vec<(String, String)>,
+    /// The fields a multi-selection shares, per kind (#1258); empty unless
+    /// more than one object is selected.
+    pub multi_groups: signex_engine::SelectionGroups,
+    /// The multi-selection text box being typed in, with its text.
+    pub multi_draft: Option<(super::MultiField, String)>,
     /// The drawings the selected placed symbol's library row offers, when
     /// it has alternates; empty otherwise (#1230).
     pub symbol_choices: Vec<SymbolChoiceItem>,
@@ -159,6 +164,10 @@ pub struct PanelContext {
     pub erc_diagnostics: Vec<ErcDiagnosticEntry>,
     /// Net waivers stored in the active project (#1581).
     pub erc_waivers: Vec<super::ErcWaiverEntry>,
+    /// Per-finding waivers stored in the active project (#1285).
+    pub erc_violation_waivers: Vec<super::ErcViolationWaiverEntry>,
+    /// The waiver being written in the panel.
+    pub erc_waive_draft: Option<super::ErcWaiveDraft>,
     /// Focused ERC diagnostic index used by prev/next navigation arrows.
     pub erc_focus_index: Option<usize>,
     /// An ERC run is in flight (the panel shows "Running…").

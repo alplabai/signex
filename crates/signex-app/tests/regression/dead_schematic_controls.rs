@@ -52,7 +52,7 @@ fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
 fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
     SchematicSheet {
         unknown: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         version: 0,
         generator: String::new(),
         generator_version: String::new(),
@@ -92,7 +92,6 @@ fn app_with(symbols: Vec<Symbol>) -> (Signex, PathBuf) {
         title: "dead-controls".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -161,7 +160,7 @@ fn cycle_grid_leaves_a_deliberately_different_visible_grid_alone() {
 
 #[test]
 fn zoom_in_and_out_change_scale_and_keep_the_view_centre_fixed() {
-    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::now_v7(), "R1", 0.0)]);
     app.interaction_state.active_canvas().set_viewport(VIEWPORT);
     let centre = ScreenPoint::new(400.0, 300.0);
     let world_at_centre = |app: &Signex| {
@@ -189,7 +188,7 @@ fn zoom_in_and_out_change_scale_and_keep_the_view_centre_fixed() {
 /// #170 — the "Zoom speed" preference sets the menu-zoom notch too.
 #[test]
 fn zoom_in_uses_the_configured_zoom_speed() {
-    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::now_v7(), "R1", 0.0)]);
     app.interaction_state.active_canvas().set_viewport(VIEWPORT);
     let (_, _, s0) = app.interaction_state.active_canvas().live_camera();
 
@@ -209,7 +208,7 @@ fn zoom_in_uses_the_configured_zoom_speed() {
 
 #[test]
 fn zoom_stops_at_the_camera_limits() {
-    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::now_v7(), "R1", 0.0)]);
     app.interaction_state.active_canvas().set_viewport(VIEWPORT);
     for _ in 0..200 {
         let _ = app.update(Message::Menu(MenuMessage::ZoomIn));
@@ -242,8 +241,8 @@ fn pcb_canvas_zooms_about_its_centre() {
 
 #[test]
 fn annotate_all_off_locks_every_listed_symbol_and_all_on_unlocks_them() {
-    let a = uuid::Uuid::new_v4();
-    let b = uuid::Uuid::new_v4();
+    let a = uuid::Uuid::now_v7();
+    let b = uuid::Uuid::now_v7();
     let (mut app, _path) = app_with(vec![symbol(a, "R?", 0.0), symbol(b, "R?", 10.0)]);
 
     // The dialog lists what its background load found, so open it first.
@@ -258,8 +257,8 @@ fn annotate_all_off_locks_every_listed_symbol_and_all_on_unlocks_them() {
 
 #[test]
 fn annotate_lock_all_sent_while_the_list_is_loading_is_ignored_then_covers_every_symbol() {
-    let a = uuid::Uuid::new_v4();
-    let b = uuid::Uuid::new_v4();
+    let a = uuid::Uuid::now_v7();
+    let b = uuid::Uuid::now_v7();
     let (mut app, _path) = app_with(vec![symbol(a, "R?", 0.0), symbol(b, "R?", 10.0)]);
 
     // The load is in flight (its task is not driven): the list is not ready.
@@ -278,7 +277,7 @@ fn annotate_lock_all_sent_while_the_list_is_loading_is_ignored_then_covers_every
 
 #[test]
 fn annotate_all_on_off_keep_the_dialog_open() {
-    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R?", 0.0)]);
+    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::now_v7(), "R?", 0.0)]);
     let _ = app.update(Message::Annotate(AnnotateMsg::OpenDialog));
     assert!(app.ui_state.annotate_dialog_open);
     let _ = app.update(Message::Annotate(AnnotateMsg::SetAllLocked(true)));
@@ -308,7 +307,6 @@ fn add_second_sheet(app: &mut Signex) -> PathBuf {
         title: "dead-controls-other".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -321,7 +319,7 @@ fn add_second_sheet(app: &mut Signex) -> PathBuf {
 /// on the next canvas tick and undo the centring.
 #[test]
 fn center_view_at_cursor_recentres_without_changing_zoom_and_cancels_a_queued_fit() {
-    let (mut app, path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    let (mut app, path) = app_with(vec![symbol(uuid::Uuid::now_v7(), "R1", 0.0)]);
     let sheet = app.document_state.engines[&path].document().clone();
     app.interaction_state
         .active_canvas_mut()
@@ -370,7 +368,7 @@ fn center_view_at_cursor_recentres_without_changing_zoom_and_cancels_a_queued_fi
 /// to centre on and the view stays put.
 #[test]
 fn center_view_at_cursor_ignores_a_point_from_another_document() {
-    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::now_v7(), "R1", 0.0)]);
     app.interaction_state.active_canvas().set_viewport(VIEWPORT);
     let before = app.interaction_state.active_canvas().live_camera();
 
@@ -476,7 +474,7 @@ fn an_undocked_pcb_window_moves_its_own_camera_not_the_main_one() {
 /// active tab, so the window's event has to retarget it.
 #[test]
 fn an_undocked_pcb_window_still_centres_while_the_main_window_shows_a_schematic() {
-    let (mut app, sheet) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    let (mut app, sheet) = app_with(vec![symbol(uuid::Uuid::now_v7(), "R1", 0.0)]);
     let path = PathBuf::from("/tmp/does-not-matter/board.snxpcb");
     let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
         path: path.clone(),
@@ -541,7 +539,7 @@ fn an_event_from_a_closed_pcb_tabs_window_leaves_the_main_view_alone() {
     let mut other = empty_pcb_board();
     other.vias.push(
         serde_json::from_value(serde_json::json!({
-            "uuid": uuid::Uuid::new_v4(),
+            "uuid": uuid::Uuid::now_v7(),
             "position": { "x": 10.0, "y": 10.0 },
             "diameter": 0.6,
         }))
@@ -610,7 +608,7 @@ fn an_undocked_pcb_canvas_follows_the_grid_toggle_and_is_dropped_on_reattach() {
 fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         unknown: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         version: 1,
         generator: "signex-test".into(),
         thickness: 1.6,
@@ -633,7 +631,7 @@ fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
 /// so keying the cursor on the active tab alone would let it through.
 #[test]
 fn a_point_hovered_in_an_undocked_window_does_not_centre_the_main_view() {
-    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::now_v7(), "R1", 0.0)]);
     app.interaction_state.active_canvas().set_viewport(VIEWPORT);
     let other = add_second_sheet(&mut app);
     let window_id = undock_active_tab(&mut app);
@@ -666,7 +664,7 @@ fn a_point_hovered_in_an_undocked_window_does_not_centre_the_main_view() {
 /// window, so the keystroke has to be routed to the window it came from.
 #[test]
 fn home_in_an_undocked_window_centres_that_window_not_the_main_one() {
-    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::now_v7(), "R1", 0.0)]);
     app.interaction_state.active_canvas().set_viewport(VIEWPORT);
     let other = add_second_sheet(&mut app);
     let window_id = undock_active_tab(&mut app);
@@ -712,8 +710,8 @@ fn home_in_an_undocked_window_centres_that_window_not_the_main_one() {
 #[test]
 fn zoom_to_all_objects_frames_object_extents_not_the_paper() {
     let (mut app, path) = app_with(vec![
-        symbol(uuid::Uuid::new_v4(), "R1", 300.0),
-        symbol(uuid::Uuid::new_v4(), "R2", 320.0),
+        symbol(uuid::Uuid::now_v7(), "R1", 300.0),
+        symbol(uuid::Uuid::now_v7(), "R2", 320.0),
     ]);
     // Stand in for the first draw, which builds the render cache the fit reads.
     let sheet = app.document_state.engines[&path].document().clone();

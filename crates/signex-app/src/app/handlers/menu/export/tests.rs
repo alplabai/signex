@@ -50,7 +50,7 @@ fn child_ref(filename: &str) -> ChildSheet {
 
 fn schematic(children: &[&str]) -> SchematicSheet {
     SchematicSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         root_sheet_page: String::new(),
         child_sheets: children.iter().map(|f| child_ref(f)).collect(),
         ..Default::default()
@@ -71,14 +71,14 @@ pub(crate) fn sheet_with_net(reference: &str, net_name: &str, children: &[&str])
     let mut sheet = schematic(children);
     let origin = Point::new(0.0, 0.0);
     sheet.wires.push(Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: origin,
         end: Point::new(10.0, 0.0),
         ..Default::default()
     });
     sheet.labels.push(Label {
         unknown_columns: Default::default(),
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         text: net_name.to_string(),
         position: origin,
         rotation: 0.0,
@@ -88,6 +88,7 @@ pub(crate) fn sheet_with_net(reference: &str, net_name: &str, children: &[&str])
         justify: HAlign::default(),
         justify_v: VAlign::default(),
         font_family: None,
+        locked: false,
     });
     sheet.lib_symbols.insert(
         "Device:R".to_string(),
@@ -127,7 +128,7 @@ pub(crate) fn sheet_with_net(reference: &str, net_name: &str, children: &[&str])
         },
     );
     sheet.symbols.push(Symbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         lib_id: "Device:R".to_string(),
         reference: reference.to_string(),
         position: origin,
@@ -359,7 +360,7 @@ fn a_child_only_on_disk_is_stitched_without_being_opened() {
     // Same completeness requirement one step further out: the child is neither
     // in `data.sheets` nor open as a tab, but it is sitting next to its parent
     // on disk. `MissingChild` must mean *missing*, not merely *unopened*.
-    let dir = std::env::temp_dir().join(format!("signex-export-disk-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-export-disk-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     let child_text =
         signex_types::format::SnxSchematic::new(sheet_with_net("R_DISK", "ON_DISK_NET", &[]))
@@ -555,7 +556,7 @@ fn export_anyway_warning_reached_the_panel(marker: &str) -> bool {
 fn app_with_missing_child(missing: &str) -> Signex {
     // The Messages-panel buffer only fills once the logger is installed.
     let _ = crate::diagnostics::init_logging();
-    let dir = std::env::temp_dir().join(format!("signex-export-missing-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-export-missing-{}", Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);
     let top = dir.join("top.snxsch");
     open_with(
@@ -577,7 +578,7 @@ fn netlist_export_refuses_to_write_an_incomplete_netlist() {
     // the refusal is still the default — NOTHING reaches disk until the user
     // acts, and the prompt (not a silent write) is what the default raises.
     let mut app = app_with_missing_child("gone-net.snxsch");
-    let out = std::env::temp_dir().join(format!("signex-refuse-{}.net", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-refuse-{}.net", Uuid::now_v7()));
 
     let task = app.handle_export_netlist_finished(
         app.document_state.active_path.clone().expect("active"),
@@ -618,7 +619,7 @@ fn export_anyway_writes_a_clean_netlist_and_warns_in_the_messages_panel() {
     // comment syntax, so no header), and the omission reaches the user through
     // the Messages panel, not only the dismissed dialog.
     let mut app = app_with_missing_child("gone-anyway.snxsch");
-    let out = std::env::temp_dir().join(format!("signex-anyway-{}.net", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-anyway-{}.net", Uuid::now_v7()));
 
     // Default path raises the prompt; nothing is written yet.
     let task = app.handle_export_netlist_finished(
@@ -671,7 +672,7 @@ fn export_anyway_writes_from_the_prompt_snapshot_not_a_fresh_re_derivation() {
     // the partial .net and its warning; a re-derivation would find no active
     // schematic and write nothing.
     let mut app = app_with_missing_child("gone-snapshot.snxsch");
-    let out = std::env::temp_dir().join(format!("signex-snapshot-{}.net", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-snapshot-{}.net", Uuid::now_v7()));
 
     let task = app.handle_export_netlist_finished(
         app.document_state.active_path.clone().expect("active"),
@@ -718,7 +719,7 @@ fn cancel_on_the_incomplete_prompt_writes_nothing() {
     // #431: "Cancel" clears the prompt and leaves the disk untouched — the
     // refuse-by-default guarantee.
     let mut app = app_with_missing_child("gone-cancel.snxsch");
-    let out = std::env::temp_dir().join(format!("signex-cancel-{}.net", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-cancel-{}.net", Uuid::now_v7()));
 
     let task = app.handle_export_netlist_finished(
         app.document_state.active_path.clone().expect("active"),
@@ -766,11 +767,11 @@ fn pdf_export_proceeds_and_warns_once_per_user_action() {
     // child genuinely absent from disk is a real workflow, so it degrades
     // rather than refuses — but the warning must reach the Messages panel, and
     // exactly once per user action.
-    let marker = format!("gone-pdf-{}.snxsch", Uuid::new_v4());
+    let marker = format!("gone-pdf-{}.snxsch", Uuid::now_v7());
     let _ = crate::diagnostics::init_logging();
     let before = diagnostic_count(&marker);
     let mut app = app_with_missing_child(&marker);
-    let out = std::env::temp_dir().join(format!("signex-partial-{}.pdf", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-partial-{}.pdf", Uuid::now_v7()));
 
     let source = app.document_state.active_path.clone().expect("active path");
     let request = Box::new(pdf_request_all_sheets(&app, &source));
@@ -798,7 +799,7 @@ fn rerasterizing_the_preview_does_not_flood_the_messages_panel() {
     // call sites including a text-input handler that fires per keystroke. The
     // panel keeps 200 entries with no dedupe, so the warnings evicted the
     // user's ERC results and then their own earliest copies.
-    let marker = format!("gone-rerender-{}.snxsch", Uuid::new_v4());
+    let marker = format!("gone-rerender-{}.snxsch", Uuid::now_v7());
     let _ = crate::diagnostics::init_logging();
     let app = app_with_missing_child(&marker);
     let before = diagnostic_count(&marker);
@@ -868,7 +869,7 @@ fn a_flat_projects_second_page_no_longer_vanishes_from_the_netlist() {
 
     // …and the machine-consumed deliverable is therefore written, not held
     // behind the incomplete-export prompt.
-    let out = std::env::temp_dir().join(format!("signex-flat-{}.net", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-flat-{}.net", Uuid::now_v7()));
     let task = app.handle_export_netlist_finished(
         app.document_state.active_path.clone().expect("active"),
         Ok(out.clone()),
@@ -897,7 +898,7 @@ fn netlist_export_writes_the_protel_format_the_dialog_promises() {
     // handler writes must be the Protel component + net blocks with CRLF line
     // endings — not the `# Signex netlist` debug listing.
     let mut app = app_flat_project();
-    let out = std::env::temp_dir().join(format!("signex-protel-{}.NET", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-protel-{}.NET", Uuid::now_v7()));
 
     let task = app.handle_export_netlist_finished(
         app.document_state.active_path.clone().expect("active"),
@@ -954,7 +955,7 @@ fn a_page_the_root_does_reach_is_not_reported_as_a_shortfall() {
 fn a_child_that_exists_but_will_not_parse_is_not_called_missing() {
     // "could not be found" sends the user hunting for a file that is sitting
     // right where it should be. The refusal is correct; the diagnosis was not.
-    let dir = std::env::temp_dir().join(format!("signex-export-corrupt-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-export-corrupt-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     std::fs::write(dir.join("child.snxsch"), "(this is not a schematic").expect("write child");
 
@@ -990,7 +991,7 @@ mod diagnosis;
 
 #[test]
 fn uncovered_pdf_characters_are_named_in_the_export_warning() {
-    let marker = Uuid::new_v4().simple().to_string()[..8].to_string();
+    let marker = signex_types::object_id::short_id(&Uuid::now_v7());
     let chars: Vec<char> = format!("\u{4E2D}\u{6587}{marker}").chars().collect();
     let warning = super::uncovered_chars_warning(&chars).expect("a warning");
     assert!(warning.contains(&marker), "{warning}");

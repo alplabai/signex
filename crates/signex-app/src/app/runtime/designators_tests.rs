@@ -438,6 +438,85 @@ fn unchanged_inputs_skip_the_recompute_and_a_placement_or_edit_change_redoes_it(
     assert_eq!(shown(&app).as_deref(), Some("R205"));
 }
 
+fn open_designator_editor(app: &mut Signex, typed: &str) {
+    let id = child_symbol(app);
+    assert!(app.begin_text_edit(SelectedItem::new(id, SelectedKind::SymbolRefField)));
+    let _ = app.update(crate::app::Message::TextEdit(
+        crate::app::TextEditMsg::Changed(typed.into()),
+    ));
+}
+
+fn designator_in(app: &Signex, placement: u128) -> String {
+    let symbol = app.active_render_snapshot().unwrap().symbols[0].clone();
+    let at = InstancePath::from_chain(vec![Uuid::from_u128(placement)]);
+    symbol.designator_in(&at).to_owned()
+}
+
+#[test]
+fn a_placement_switch_closes_the_open_designator_editor_and_writes_nothing() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _top, child) = placed_twice_on_disk(&dir);
+    descend_by_canvas(&mut app, PLACEMENT_B);
+    open_designator_editor(&mut app, "R555");
+
+    let a = InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_A)]);
+    app.open_sheet_with_placement(child, Some(a));
+    assert!(
+        app.interaction_state.editing_text.is_none(),
+        "editor closed"
+    );
+    let _ = app.update(crate::app::Message::TextEdit(
+        crate::app::TextEditMsg::Submit,
+    ));
+
+    assert_eq!(designator_in(&app, PLACEMENT_A), "R1");
+    assert_eq!(designator_in(&app, PLACEMENT_B), "R101");
+}
+
+#[test]
+fn a_jump_within_the_shown_placement_keeps_the_typed_text() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _top, child) = placed_twice_on_disk(&dir);
+    descend_by_canvas(&mut app, PLACEMENT_B);
+    open_designator_editor(&mut app, "R557");
+
+    let b = InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_B)]);
+    app.open_sheet_with_placement(child, Some(b));
+    let _ = app.update(crate::app::Message::TextEdit(
+        crate::app::TextEditMsg::Submit,
+    ));
+
+    assert_eq!(designator_in(&app, PLACEMENT_A), "R1");
+    assert_eq!(designator_in(&app, PLACEMENT_B), "R557");
+}
+
+#[test]
+fn a_commit_after_the_placement_changed_underneath_is_refused_and_logged() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _top, child) = placed_twice_on_disk(&dir);
+    descend_by_canvas(&mut app, PLACEMENT_B);
+    open_designator_editor(&mut app, "R556");
+
+    // A route that moves the placement without closing the editor.
+    let a = InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_A)]);
+    app.document_state.tab_placements.record(&child, Some(a));
+    app.refresh_canvas_designators();
+    let _ = app.update(crate::app::Message::TextEdit(
+        crate::app::TextEditMsg::Submit,
+    ));
+
+    assert_eq!(designator_in(&app, PLACEMENT_A), "R1");
+    assert_eq!(designator_in(&app, PLACEMENT_B), "R101");
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("In-place edit discarded")
+                && e.message.contains("placement"))
+    );
+}
+
 /// A child opened from the Projects panel records no placement. While a
 /// Navigator rebuild is pending, a designator edit there must still land in a
 /// placement's entry, never in the `reference` the other placement reads.

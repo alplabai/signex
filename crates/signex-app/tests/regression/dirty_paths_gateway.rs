@@ -24,7 +24,7 @@ use signex_app::menu_bar::MenuMessage;
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind, Symbol};
 use std::path::{Path, PathBuf};
 
-fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
+pub(crate) fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
     Symbol {
         uuid,
         lib_id: "Device:R".to_string(),
@@ -37,7 +37,7 @@ fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
 
 fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
     SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols,
         ..Default::default()
@@ -48,7 +48,7 @@ fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
 /// `finish_schematic_mutation` reaches `dirty_paths` through
 /// `with_active_schematic_session_mut`, which needs a tab at
 /// `active_tab` or it silently no-ops.
-fn app_with(symbols: Vec<Symbol>) -> (Signex, PathBuf) {
+pub(crate) fn app_with(symbols: Vec<Symbol>) -> (Signex, PathBuf) {
     let path = PathBuf::from("dirty-gateway.snxsch");
     let engine = signex_engine::Engine::new(sheet_with(symbols)).expect("engine");
 
@@ -58,7 +58,6 @@ fn app_with(symbols: Vec<Symbol>) -> (Signex, PathBuf) {
         title: "dirty-gateway".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -70,20 +69,16 @@ fn app_with(symbols: Vec<Symbol>) -> (Signex, PathBuf) {
 
 fn assert_dirty(app: &Signex, path: &Path, what: &str) {
     assert!(
-        app.document_state.dirty_paths.contains(path),
-        "{what} must put the sheet in `dirty_paths`; it is the only thing the quit \
-         guard (close_project.rs), the tab-close engine parking (document_tabs.rs), \
-         the title-bar unsaved count and Save-All read. dirty_paths = {:?}",
-        app.document_state.dirty_paths
-    );
-    assert!(
-        app.document_state.tabs[0].dirty,
-        "{what} must also flip the tab's own dirty flag"
+        app.document_state.is_document_dirty(path),
+        "{what} must mark the sheet dirty; the quit guard (close_project.rs), the \
+         tab-close engine parking (document_tabs.rs), the tab dot, the title-bar \
+         unsaved count and Save-All all read it. dirty = {:?}",
+        app.document_state.dirty_document_paths()
     );
 }
 
 /// Apply a non-zero Move Selection to `uuid` through the dialog.
-fn move_selection(app: &mut Signex, uuid: uuid::Uuid) {
+pub(crate) fn move_selection(app: &mut Signex, uuid: uuid::Uuid) {
     app.interaction_state.active_canvas_mut().selected =
         vec![SelectedItem::new(uuid, SelectedKind::Symbol)];
     app.ui_state.move_selection.dx = "10".to_string();
@@ -93,7 +88,7 @@ fn move_selection(app: &mut Signex, uuid: uuid::Uuid) {
 
 #[test]
 fn a_move_selection_marks_the_document_dirty() {
-    let moved = uuid::Uuid::new_v4();
+    let moved = uuid::Uuid::now_v7();
     let (mut app, path) = app_with(vec![symbol(moved, "R1", 50.0)]);
 
     move_selection(&mut app, moved);
@@ -118,7 +113,7 @@ fn a_move_selection_marks_the_document_dirty() {
 /// quitting does not warn, so it goes out with the process.
 #[test]
 fn quitting_after_a_move_selection_warns_instead_of_discarding_it() {
-    let moved = uuid::Uuid::new_v4();
+    let moved = uuid::Uuid::now_v7();
     let (mut app, path) = app_with(vec![symbol(moved, "R1", 50.0)]);
 
     move_selection(&mut app, moved);
@@ -139,7 +134,7 @@ fn quitting_after_a_move_selection_warns_instead_of_discarding_it() {
 
 #[test]
 fn a_parameter_manager_edit_marks_the_document_dirty() {
-    let target = uuid::Uuid::new_v4();
+    let target = uuid::Uuid::now_v7();
     let (mut app, path) = app_with(vec![symbol(target, "R1", 0.0)]);
 
     let _ = app.update(Message::ParameterManager(ParameterManagerMsg::Edit {
@@ -167,8 +162,8 @@ fn a_parameter_manager_edit_marks_the_document_dirty() {
 #[test]
 fn annotate_marks_the_active_sheet_dirty() {
     let (mut app, path) = app_with(vec![
-        symbol(uuid::Uuid::new_v4(), "R?", 0.0),
-        symbol(uuid::Uuid::new_v4(), "R?", 10.0),
+        symbol(uuid::Uuid::now_v7(), "R?", 0.0),
+        symbol(uuid::Uuid::now_v7(), "R?", 10.0),
     ]);
 
     let _ = app.update(Message::Annotate(AnnotateMsg::Run(
@@ -195,8 +190,8 @@ fn annotate_marks_the_active_sheet_dirty() {
 #[test]
 fn reset_duplicate_designators_marks_the_active_sheet_dirty() {
     let (mut app, path) = app_with(vec![
-        symbol(uuid::Uuid::new_v4(), "R1", 0.0),
-        symbol(uuid::Uuid::new_v4(), "R1", 10.0),
+        symbol(uuid::Uuid::now_v7(), "R1", 0.0),
+        symbol(uuid::Uuid::now_v7(), "R1", 10.0),
     ]);
 
     let _ = app.update(Message::Menu(MenuMessage::AnnotateResetDuplicates));
@@ -234,7 +229,7 @@ fn app_with_parked_sheet(
 
     // The saved copy of the parked sheet: what is on disk and must stay there.
     let mut on_disk =
-        signex_engine::Engine::new(sheet_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]))
+        signex_engine::Engine::new(sheet_with(vec![symbol(uuid::Uuid::now_v7(), "R1", 0.0)]))
             .expect("engine");
     on_disk.set_path(Some(parked_path.clone()));
     on_disk.save().expect("seed the saved copy");
@@ -243,7 +238,7 @@ fn app_with_parked_sheet(
     // The unsaved edit the user parked: an extra, not-yet-annotated symbol.
     let parked = signex_engine::Engine::new(sheet_with(parked_symbols)).expect("engine");
 
-    let mut root_sheet = sheet_with(vec![symbol(uuid::Uuid::new_v4(), "C?", 0.0)]);
+    let mut root_sheet = sheet_with(vec![symbol(uuid::Uuid::now_v7(), "C?", 0.0)]);
     root_sheet
         .child_sheets
         .push(signex_types::schematic::ChildSheet {
@@ -267,12 +262,11 @@ fn app_with_parked_sheet(
     app.document_state
         .engines
         .insert(parked_path.clone(), parked);
-    app.document_state.dirty_paths.insert(parked_path.clone());
+    app.document_state.mark_document_dirty(&parked_path);
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "root".to_string(),
         path: root_path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -289,8 +283,8 @@ fn app_with_parked_sheet(
 #[test]
 fn annotate_numbers_a_parked_sheet_in_memory_and_never_writes_it() {
     let (mut app, parked_path, saved_bytes, _dir) = app_with_parked_sheet(vec![
-        symbol(uuid::Uuid::new_v4(), "R1", 0.0),
-        symbol(uuid::Uuid::new_v4(), "R?", 10.0),
+        symbol(uuid::Uuid::now_v7(), "R1", 0.0),
+        symbol(uuid::Uuid::now_v7(), "R?", 10.0),
     ]);
 
     let _ = app.update(Message::Annotate(AnnotateMsg::Run(
@@ -311,8 +305,8 @@ fn annotate_numbers_a_parked_sheet_in_memory_and_never_writes_it() {
 #[test]
 fn reset_duplicates_resets_a_parked_sheet_in_memory_and_never_writes_it() {
     let (mut app, parked_path, saved_bytes, _dir) = app_with_parked_sheet(vec![
-        symbol(uuid::Uuid::new_v4(), "R1", 0.0),
-        symbol(uuid::Uuid::new_v4(), "R1", 10.0),
+        symbol(uuid::Uuid::now_v7(), "R1", 0.0),
+        symbol(uuid::Uuid::now_v7(), "R1", 10.0),
     ]);
 
     let _ = app.update(Message::Menu(MenuMessage::AnnotateResetDuplicates));
@@ -341,7 +335,7 @@ fn parked_references(app: &Signex, parked_path: &Path) -> Vec<String> {
 
 fn assert_parked_untouched(app: &Signex, parked_path: &Path, saved_bytes: &[u8], what: &str) {
     assert!(
-        app.document_state.dirty_paths.contains(parked_path),
+        app.document_state.is_document_dirty(parked_path),
         "the parked sheet still holds unsaved edits and must stay in `dirty_paths`"
     );
     assert_eq!(

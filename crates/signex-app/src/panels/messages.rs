@@ -627,6 +627,8 @@ pub enum PanelMsg {
         net: String,
         waive: bool,
     },
+    /// Per-finding waivers with a reason (#1285).
+    ErcWaiver(super::ErcWaiverMsg),
     ToggleGrid,
     ToggleSnap,
     PropertiesTab(usize),
@@ -664,6 +666,8 @@ pub enum PanelMsg {
     ToggleSymbolMirrorY(uuid::Uuid),
     /// Toggle a symbol's locked state.
     ToggleSymbolLocked(uuid::Uuid),
+    /// Toggle the locked state of a wire, label, text note or drawing.
+    ToggleItemLocked(signex_types::schematic::SelectedItem),
     /// Toggle a symbol's DNP state.
     ToggleSymbolDnp(uuid::Uuid),
     /// The Body row of a symbol's Properties picked a body (normal or
@@ -1013,6 +1017,8 @@ pub enum PanelMsg {
     CommitTitleBlockField(super::TitleBlockField),
     /// No-op placeholder for unimplemented UI controls.
     Noop,
+    /// The multi-selection form of the Properties panel (#1258).
+    MultiEdit(super::MultiEditMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

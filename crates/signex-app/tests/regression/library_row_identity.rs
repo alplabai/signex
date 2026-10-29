@@ -237,7 +237,7 @@ fn stale_row_is_refused_and_a_surviving_row_keeps_its_own_library() {
 fn add_pending_library(f: &mut Fixture) -> PathBuf {
     let pending_path = f._project_tmp.path().join("Pending.snxlib");
     f.app.document_state.projects[0].pending_libraries.insert(
-        uuid::Uuid::new_v4(),
+        uuid::Uuid::now_v7(),
         signex_app::library::commands::PendingLibrarySpec {
             lib_path: pending_path.clone(),
             enable_git: false,

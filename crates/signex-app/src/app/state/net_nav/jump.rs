@@ -7,7 +7,12 @@
 
 use std::sync::{Arc, Weak};
 
-use signex_net::{NetAnchor, NetMember};
+use signex_net::{NetMember, SheetKey};
+use signex_types::schematic::InstancePath;
+use uuid::Uuid;
+
+/// A port in one sheet placement.
+pub type Landing = (SheetKey, Uuid, InstancePath);
 
 use super::ProjectNetData;
 
@@ -17,7 +22,7 @@ pub struct JumpCursor {
     /// even while a lap is parked.
     index: Weak<ProjectNetData>,
     /// The port the last jump landed on: the next jump continues from it.
-    landed: NetAnchor,
+    landed: Landing,
     ring: Vec<NetMember>,
     next: usize,
 }
@@ -25,7 +30,7 @@ pub struct JumpCursor {
 impl JumpCursor {
     /// A lap from `source`: the ports to visit, then `source` again.
     pub fn start(index: Arc<ProjectNetData>, source: NetMember, partners: Vec<NetMember>) -> Self {
-        let landed = (source.sheet.clone(), source.id);
+        let landed = (source.sheet.clone(), source.id, source.occurrence.clone());
         let mut ring = partners;
         ring.push(source);
         Self {
@@ -37,7 +42,7 @@ impl JumpCursor {
     }
 
     /// Whether a jump from `source` on `index` carries on this lap.
-    pub fn continues(&self, index: &Arc<ProjectNetData>, source: &NetAnchor) -> bool {
+    pub fn continues(&self, index: &Arc<ProjectNetData>, source: &Landing) -> bool {
         self.index.ptr_eq(&Arc::downgrade(index)) && &self.landed == source
     }
 
@@ -46,7 +51,7 @@ impl JumpCursor {
         let at = self.next % self.ring.len();
         self.next = at + 1;
         let member = &self.ring[at];
-        self.landed = (member.sheet.clone(), member.id);
+        self.landed = (member.sheet.clone(), member.id, member.occurrence.clone());
         member
     }
 
@@ -59,9 +64,8 @@ impl JumpCursor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signex_net::{NetIndex, NetMemberKind, SheetKey};
+    use signex_net::{NetIndex, NetMemberKind};
     use signex_types::schematic::{InstancePath, LabelType, Point};
-    use uuid::Uuid;
 
     fn index() -> Arc<ProjectNetData> {
         Arc::new(ProjectNetData {
@@ -105,12 +109,25 @@ mod tests {
     #[test]
     fn it_continues_only_from_where_it_landed_on_the_same_index() {
         let (idx, mut c) = lap();
-        let source = (SheetKey::new("root"), Uuid::from_u128(1));
+        let source = (
+            SheetKey::new("root"),
+            Uuid::from_u128(1),
+            InstancePath::root(),
+        );
         assert!(c.continues(&idx, &source), "before the first jump");
         c.advance();
-        let landed = (SheetKey::new("c"), Uuid::from_u128(5));
+        let landed = (SheetKey::new("c"), Uuid::from_u128(5), InstancePath::root());
+        let other_placement = (
+            SheetKey::new("c"),
+            Uuid::from_u128(5),
+            InstancePath::from_chain(vec![Uuid::from_u128(9)]),
+        );
         assert!(c.continues(&idx, &landed));
         assert!(!c.continues(&idx, &source), "another port starts a new lap");
+        assert!(
+            !c.continues(&idx, &other_placement),
+            "the same port in another placement starts a new lap"
+        );
         assert!(
             !c.continues(&index(), &landed),
             "a rebuilt index starts a new lap"

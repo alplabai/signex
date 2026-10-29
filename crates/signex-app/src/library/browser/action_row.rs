@@ -176,7 +176,7 @@ mod tests {
     #[test]
     fn edit_details_targets_the_selected_row_and_is_inert_otherwise() {
         let path = std::path::Path::new("parts.snxlib");
-        let row_id = RowId::from_uuid(uuid::Uuid::new_v4());
+        let row_id = RowId::from_uuid(uuid::Uuid::now_v7());
         match edit_details_message(path, "R", Some(row_id), false) {
             Some(LibraryMessage::BrowserOpenEditModal {
                 library_path,

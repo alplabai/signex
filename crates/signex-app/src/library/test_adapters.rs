@@ -174,7 +174,7 @@ impl LibraryAdapter for ScriptedSymbolsAdapter {
 /// already cached — the thing a failed listing used to erase.
 pub(crate) fn cached_summary(name: &str) -> PrimitiveSummary {
     PrimitiveSummary {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         name: name.to_string(),
         kind: signex_library::PrimitiveKind::Symbol,
         used_by_count: 0,
@@ -308,7 +308,7 @@ impl PricedAdapter {
     pub(crate) fn new(library_id: Uuid) -> Self {
         Self {
             manifest: FailingListingAdapter::new(library_id).manifest,
-            priced_row: Uuid::new_v4(),
+            priced_row: Uuid::now_v7(),
             rows: Vec::new(),
         }
     }

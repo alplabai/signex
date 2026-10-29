@@ -183,7 +183,7 @@ fn view_footprint_top_strip<'a>(
 
     let save_path = editor.path.clone();
     let save_btn = button(
-        text(if editor.dirty { "Save *" } else { "Save" })
+        text(if editor.is_dirty() { "Save *" } else { "Save" })
             .size(TS.body)
             .color(text_c),
     )
@@ -229,9 +229,23 @@ fn view_footprint_top_strip<'a>(
             ..iced::widget::button::Style::default()
         });
 
+    // A copy of a stock footprint can be made again from the editor (#813).
+    let copy_again: Element<'a, LibraryMessage> = if editor.file.copied_from.is_some() {
+        crate::library::modal_chrome::secondary_btn(
+            "Copy Again",
+            LibraryMessage::StockCopy(
+                crate::library::stock_copy::StockCopyMsg::CopyAgainRequested(editor.path.clone()),
+            ),
+            tokens,
+        )
+    } else {
+        Space::new().into()
+    };
+
     let row_widget = row![
         mode_segments,
         Space::new().width(Length::Fill),
+        copy_again,
         auto_fit_btn,
         Space::new().width(8),
         save_btn,
@@ -377,7 +391,7 @@ fn view_footprint_sketch_toolbar<'a>(
 
     let save_path = editor.path.clone();
     let save_btn = button(
-        text(if editor.dirty { "Save *" } else { "Save" })
+        text(if editor.is_dirty() { "Save *" } else { "Save" })
             .size(TS.body)
             .color(text_c),
     )
@@ -517,7 +531,7 @@ fn view_footprint_toolbar<'a>(
 
     let save_path = editor.path.clone();
     let save_btn = button(
-        text(if editor.dirty { "Save *" } else { "Save" })
+        text(if editor.is_dirty() { "Save *" } else { "Save" })
             .size(TS.body)
             .color(text_c),
     )

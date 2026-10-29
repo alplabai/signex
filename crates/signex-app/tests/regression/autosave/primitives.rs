@@ -80,8 +80,8 @@ fn name_in_editor(app: &Signex, kind: Kind, doc: &Path) -> String {
 
 fn is_dirty(app: &Signex, kind: Kind, doc: &Path) -> bool {
     match kind {
-        Kind::Symbol => app.document_state.symbol_editors[doc].dirty,
-        Kind::Footprint => app.document_state.footprint_editors[doc].dirty,
+        Kind::Symbol => app.document_state.symbol_editors[doc].is_dirty(),
+        Kind::Footprint => app.document_state.footprint_editors[doc].is_dirty(),
     }
 }
 
@@ -91,12 +91,12 @@ fn edit(app: &mut Signex, kind: Kind, doc: &Path, name: &str) {
         Kind::Symbol => {
             let editor = app.document_state.symbol_editors.get_mut(doc).unwrap();
             editor.primitive_mut().name = name.to_string();
-            editor.dirty = true;
+            editor.mark_dirty();
         }
         Kind::Footprint => {
             let editor = app.document_state.footprint_editors.get_mut(doc).unwrap();
             editor.primitive_mut().name = name.to_string();
-            editor.dirty = true;
+            editor.mark_dirty();
         }
     }
 }
@@ -219,7 +219,7 @@ fn restore_loads_the_copy_as_unsaved_edits_and_never_writes_the_file() {
 
         assert_eq!(name_in_editor(&next, kind, &f.doc), "Edited");
         assert!(is_dirty(&next, kind, &f.doc), "restored content is unsaved");
-        assert!(next.document_state.dirty_paths.contains(&f.doc));
+        assert!(next.document_state.is_document_dirty(&f.doc));
         assert_eq!(std::fs::read(&f.doc).unwrap(), on_disk);
         assert!(sidecar_of(&f).exists(), "the copy stays until a save");
 

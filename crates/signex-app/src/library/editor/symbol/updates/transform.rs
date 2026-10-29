@@ -75,12 +75,12 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
         SymbolEditorMsg::SetPinNumber { idx, number } if idx < editor.primitive().pins.len() => {
             push_undo(editor);
             editor.primitive_mut().pins[idx].number = number;
-            editor.dirty = true;
+            editor.mark_dirty();
         }
         SymbolEditorMsg::SetPinName { idx, name } if idx < editor.primitive().pins.len() => {
             push_undo(editor);
             editor.primitive_mut().pins[idx].name = name;
-            editor.dirty = true;
+            editor.mark_dirty();
         }
         _ => {}
     }
@@ -147,7 +147,10 @@ mod tests {
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
-        assert!(!editor.dirty, "no-op align must not dirty the document");
+        assert!(
+            !editor.is_dirty(),
+            "no-op align must not dirty the document"
+        );
         assert!(
             editor.undo_snapshots.is_empty(),
             "no-op align must not stack undo history"
@@ -174,7 +177,7 @@ mod tests {
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
-        assert!(editor.dirty, "a real align dirties the document");
+        assert!(editor.is_dirty(), "a real align dirties the document");
         assert_eq!(
             editor.undo_snapshots.len(),
             1,
@@ -211,7 +214,7 @@ mod tests {
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
         assert!(
-            !editor.dirty,
+            !editor.is_dirty(),
             "no-op align on an empty symbol must not dirty the document"
         );
         assert!(
@@ -249,7 +252,7 @@ mod tests {
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
-        assert!(editor.dirty);
+        assert!(editor.is_dirty());
         assert_eq!(editor.primitive().pins[0].position, [1.27, 1.27]);
         assert_eq!(editor.primitive().pins[1].position, [2.54, 2.54]);
     }
@@ -280,7 +283,7 @@ mod tests {
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
         assert!(
-            !editor.dirty,
+            !editor.is_dirty(),
             "aligning an already-on-grid pin must not dirty the document"
         );
         assert!(

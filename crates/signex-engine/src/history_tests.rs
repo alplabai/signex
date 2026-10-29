@@ -8,17 +8,18 @@ use crate::{Command, Engine};
 
 fn wire(i: usize) -> Wire {
     Wire {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(i as f64, 0.0),
         end: Point::new(i as f64, 5.0),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
 fn junction(i: usize) -> Junction {
     Junction {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         position: Point::new(i as f64, 5.0),
         diameter: 0.0,
         ..Default::default()

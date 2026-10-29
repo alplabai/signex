@@ -12,8 +12,8 @@
 //! │ Filter: [_______________]                          │
 //! │                                                    │
 //! │ ▼ Loratis-SN-lib-2.snxlib                          │
-//! │     ESP32-WROOM-32.snxsym       (uuid abc12345…)  │
-//! │     LM7805.snxsym               (uuid bd45ee01…)  │
+//! │     ESP32-WROOM-32.snxsym       (uuid …abc12345)  │
+//! │     LM7805.snxsym               (uuid …bd45ee01)  │
 //! │ ▼ Loratis-SN-lib-3.snxlib                          │
 //! │     74HC595.snxsym                                 │
 //! │                                                    │
@@ -108,10 +108,7 @@ fn row_button<'a>(
     muted: iced::Color,
     hover: iced::Color,
 ) -> Element<'a, LibraryMessage> {
-    let short_uuid = {
-        let s = uuid.simple().to_string();
-        if s.len() >= 8 { s[..8].to_string() } else { s }
-    };
+    let short_uuid = signex_types::object_id::short_id(&uuid);
     let ext = match kind {
         PrimitiveKind::Symbol => "snxsym",
         PrimitiveKind::Footprint => "snxfpt",
@@ -125,7 +122,7 @@ fn row_button<'a>(
                 .size(TS.body)
                 .color(text_c)
                 .width(Length::FillPortion(3)),
-            text(format!("(uuid {}…)", short_uuid))
+            text(format!("(uuid …{})", short_uuid))
                 .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),

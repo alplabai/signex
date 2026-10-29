@@ -83,6 +83,17 @@ impl Signex {
         from_tree: bool,
     ) -> anyhow::Result<Task<Message>> {
         let path = self.resolve_held_spelling_now(path);
+        // A stock primitive is read-only: edit a copy in the user's library
+        // instead of opening the stock file (#813).
+        if let Some(kind) = self.library.stock_primitive_kind(&path) {
+            // The footprint editor release gate applies to the copy too.
+            if kind == crate::library::stock_copy::StockPrimitiveKind::Footprint
+                && !crate::feature_flags::FOOTPRINT_EDITOR_ENABLED
+            {
+                return Ok(Task::none());
+            }
+            return Ok(self.request_stock_copy(path, kind));
+        }
         // Already open? Just activate the existing tab.
         if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
             if idx != self.document_state.active_tab {
@@ -96,7 +107,7 @@ impl Signex {
         // A dirty draft parked by a tab close wins over the disk copy, and
         // is reachable even if the file has since vanished or broke. A
         // parked editor that is clean is stale and is replaced below.
-        if self.primitive_draft_is_dirty(&path) {
+        if self.document_state.is_document_dirty(&path) {
             let parked_kind = if self.document_state.symbol_editors.contains_key(&path) {
                 Some(crate::app::TabKind::SymbolEditor(path.clone()))
             } else if self.document_state.footprint_editors.contains_key(&path) {
@@ -115,7 +126,6 @@ impl Signex {
                     title,
                     path: path.clone(),
                     cached_document: None,
-                    dirty: true,
                     project_id,
                     kind,
                 });

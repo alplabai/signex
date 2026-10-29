@@ -56,6 +56,14 @@ pub enum ContextSubmenu {
     AddNewToProject,
 }
 
+/// Widget id of the in-place editor, so opening it can focus it.
+pub static TEXT_EDIT_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::widget::Id::new("signex.text_edit"));
+
+/// The in-place editor. `kind` says which text of `uuid` it edits: a label
+/// or text note, a part's designator (`SymbolRefField`) or value
+/// (`SymbolValField`), or, as `Symbol`, the part's footprint, which has no
+/// text on the canvas.
 #[derive(Debug, Clone)]
 pub struct TextEditState {
     pub uuid: uuid::Uuid,
@@ -66,6 +74,11 @@ pub struct TextEditState {
     /// screen coords at render time so the inline editor tracks pan/zoom.
     pub world_x: f64,
     pub world_y: f64,
+    /// The sheet the editor opened on and, for a designator, the placement
+    /// it showed. A commit that finds either changed is refused: it would
+    /// write to a different copy than the one the user typed into.
+    pub sheet: Option<std::path::PathBuf>,
+    pub placement: Option<signex_types::schematic::InstancePath>,
 }
 
 #[derive(Debug, Clone)]
@@ -136,8 +149,7 @@ pub struct ProjectTreeContextMenuState {
 
 /// State for the "Close Project — Unsaved Edits" confirmation modal.
 /// Opens only when the user closes a project that has at least one
-/// entry in `DocumentState.dirty_paths` rooted in the project's
-/// directory; the modal lists every dirty file by filename so the
+/// dirty document rooted in the project's directory; the modal lists every dirty file by filename so the
 /// user can see what they're about to lose.
 #[derive(Debug, Clone)]
 pub struct ProjectCloseConfirmState {
@@ -197,7 +209,7 @@ pub struct CreateChildSheetConfirmState {
 
 /// State for the "Exit Signex — Unsaved Edits" confirmation modal.
 /// Opens when the user requests app exit (chrome ✕, File ▸ Exit,
-/// Alt+F4) while `DocumentState.dirty_paths` is non-empty. Lists
+/// Alt+F4) while any document is dirty. Lists
 /// every dirty file across the whole workspace so the user sees what
 /// they are about to lose before choosing Save All / Discard All /
 /// Cancel. Reuses `ProjectCloseChoice` for the three outcomes.

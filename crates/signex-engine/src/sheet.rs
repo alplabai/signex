@@ -251,7 +251,7 @@ pub(crate) fn reconcile_child_sheet_pins(
         };
         taken.push(Point::new(x, y));
         next_pins.push(SheetPin {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             name: port.name.clone(),
             direction,
             position: Point::new(x, y),

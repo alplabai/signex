@@ -39,7 +39,7 @@ impl DocumentSink for GatedFileSink {
 
 fn sheet(paper: &str) -> SchematicSheet {
     SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: paper.to_string(),
         ..Default::default()
     }
@@ -97,13 +97,12 @@ fn app_with_gated_sheet(dir: &Path, path: &Path) -> (Signex, mpsc::Receiver<()>,
         title: "doc".into(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::Schematic,
     });
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(path.to_path_buf());
-    app.document_state.dirty_paths.insert(path.to_path_buf());
+    app.document_state.mark_document_dirty(path);
     (app, entered_rx, proceed_tx)
 }
 
@@ -218,7 +217,7 @@ fn a_history_restore_clicked_during_an_in_flight_save_is_refused_and_lands_after
         "the restore landed after the save"
     );
     assert!(
-        app.document_state.dirty_paths.contains(&path),
+        app.document_state.is_document_dirty(&path),
         "the restored engine is not what the saved snapshot wrote"
     );
 }

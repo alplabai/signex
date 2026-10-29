@@ -236,6 +236,7 @@ impl Signex {
         // Entries match by resolved path and keep their directory prefix
         // (`sub/Power.snxsch` becomes `sub/Power2.snxsch`, #1367). (#54)
         let owner_idx = state.tree_path.first().copied();
+        let mut dirtied_project_file = None;
         if let Some(idx) = owner_idx
             && let Some(loaded) = self.document_state.projects.get_mut(idx)
         {
@@ -266,8 +267,11 @@ impl Signex {
             // A rename that touched neither (a footprint, say) leaves the
             // project file as it was and must not dirty it.
             if changed {
-                self.document_state.dirty_paths.insert(loaded.path.clone());
+                dirtied_project_file = Some(loaded.path.clone());
             }
+        }
+        if let Some(project_file) = dirtied_project_file {
+            self.document_state.mark_document_dirty(&project_file);
         }
 
         // Update any open tabs + engine-map keys that pointed at the
@@ -345,15 +349,22 @@ impl Signex {
         if self.document_state.active_path.as_deref() == Some(old_path) {
             self.document_state.active_path = Some(new_path.to_path_buf());
         }
-        if self.document_state.dirty_paths.remove(old_path) {
-            self.document_state
-                .dirty_paths
-                .insert(new_path.to_path_buf());
-        }
-        // A failure or queued save names the file by its old path.
+        self.document_state.rekey_document_dirty(old_path, new_path);
+        // A queued save names the file by its old path; a recorded failure
+        // follows the document so its Save Failed card is not lost.
+        let failure = self
+            .document_state
+            .document_saves
+            .failure(old_path)
+            .map(str::to_owned);
         self.document_state
             .document_saves
             .forget_where(|p| p == old_path);
+        if let Some(reason) = failure {
+            self.document_state
+                .document_saves
+                .record_failure(new_path.to_path_buf(), reason);
+        }
         // A PCB's save revision is keyed by path (#1040); without the move
         // every later save would compare against a missing key.
         if let Some(revision) = self.document_state.pcb_revisions.remove(old_path) {
@@ -427,6 +438,18 @@ impl Signex {
         if let Some(d) = self.ui_state.rename_dialog.as_mut() {
             d.error = Some(msg.to_string());
         }
+    }
+
+    /// Refuse a library rename that would strand an off-thread draft write:
+    /// shown in the dialog and logged, naming the draft's file.
+    pub(super) fn refuse_rename_while_library_saving(&mut self, draft: &std::path::Path) {
+        let label = draft.file_name().map_or_else(
+            || draft.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        );
+        let reason = format!("{label} is still being saved; try again in a moment.");
+        self.set_rename_error(&reason);
+        crate::diagnostics::log_warning(format!("[rename] refused: {reason}"));
     }
 
     /// Refuse a rename that would race an off-thread `.snxprj` write: shown

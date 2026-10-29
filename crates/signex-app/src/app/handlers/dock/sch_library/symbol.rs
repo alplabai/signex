@@ -76,7 +76,7 @@ impl Signex {
             if *editor.primitive() == before {
                 return false;
             }
-            editor.dirty = true;
+            editor.mark_dirty();
             editor.canvas_cache.clear();
             true
         });
@@ -420,10 +420,7 @@ impl Signex {
         else {
             return;
         };
-        self.document_state.dirty_paths.insert(path.clone());
-        if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
-            tab.dirty = true;
-        }
+        self.document_state.mark_document_dirty(&path);
     }
 
     pub(super) fn sch_library_select_symbol(&mut self, idx: usize) -> bool {
@@ -487,12 +484,8 @@ impl Signex {
         editor.file.updated = chrono::Utc::now();
         editor.active_idx = editor.file.symbols.len() - 1;
         editor.reset_view_for_symbol_switch();
-        editor.dirty = true;
         let path = editor.path.clone();
-        self.document_state.dirty_paths.insert(path.clone());
-        if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
-            tab.dirty = true;
-        }
+        self.document_state.mark_document_dirty(&path);
         self.refresh_panel_ctx();
         true
     }
@@ -538,12 +531,8 @@ impl Signex {
         if active_moved {
             editor.reset_view_for_symbol_switch();
         }
-        editor.dirty = true;
         let path = editor.path.clone();
-        self.document_state.dirty_paths.insert(path.clone());
-        if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
-            tab.dirty = true;
-        }
+        self.document_state.mark_document_dirty(&path);
         self.refresh_panel_ctx();
         true
     }

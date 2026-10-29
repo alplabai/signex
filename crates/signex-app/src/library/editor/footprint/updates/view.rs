@@ -90,7 +90,7 @@ fn set_mode(
         apply_sketch_edit_with_warnings(state, primitive, SketchEdit::SetMode(mode));
     });
     editor.canvas_cache.clear();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 fn toggle_placement_pause(editor: &mut crate::app::FootprintDocument) {
@@ -160,7 +160,7 @@ fn set_pads_tool(
                     stroke_width: 0.15,
                     filled: false,
                 });
-            editor.dirty = true;
+            editor.mark_dirty();
         }
     }
     // v0.14 — close any open active-bar dropdown after a tool
@@ -263,7 +263,7 @@ fn align_pads_action(
             FootprintEditorState::sync_pads_to_primitive(state, primitive);
         });
         editor.canvas_cache.clear();
-        editor.dirty = true;
+        editor.mark_dirty();
     }
     editor.state.active_bar_menu = None;
 }
@@ -274,7 +274,7 @@ fn set_name(editor: &mut crate::app::FootprintDocument, new_name: String) {
     // mutates. Empty names are accepted but treated as
     // "unnamed" for breadcrumb / file display purposes.
     editor.primitive_mut().name = new_name;
-    editor.dirty = true;
+    editor.mark_dirty();
     editor.canvas_cache.clear();
 }
 

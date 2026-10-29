@@ -11,7 +11,7 @@ use crate::find_similar::{FindSimilarMsg, SimilarScope};
 
 fn part(reference: &str, value: &str, x: f64) -> Symbol {
     Symbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         lib_id: "Device:R".to_owned(),
         reference: reference.to_owned(),
         value: value.to_owned(),
@@ -22,17 +22,18 @@ fn part(reference: &str, value: &str, x: f64) -> Symbol {
 
 fn wire(x: f64) -> Wire {
     Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: Point::new(x, 20.0),
         end: Point::new(x + 10.0, 20.0),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
 fn sheet_of(parts: Vec<Symbol>, wires: Vec<Wire>) -> SchematicSheet {
     SchematicSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         paper_size: "A4".to_owned(),
         symbols: parts,
         wires,
@@ -53,7 +54,6 @@ fn app_showing(sheet: SchematicSheet) -> Signex {
         title: "find-similar".to_owned(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

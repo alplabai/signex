@@ -66,7 +66,7 @@ const PIN: (f64, f64) = (2.0, 0.0);
 
 fn symbol(reference: &str, at: (f64, f64), mirror_x: bool, mirror_y: bool) -> Symbol {
     Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: "Device:R".to_string(),
         reference: reference.to_string(),
         value: "10k".to_string(),
@@ -84,7 +84,7 @@ fn pin_world(symbol: &Symbol) -> (f64, f64) {
 
 fn label(text: &str, label_type: LabelType, at: (f64, f64)) -> Label {
     Label {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         text: text.to_string(),
         position: Point::new(at.0, at.1),
         rotation: 0.0,
@@ -95,6 +95,7 @@ fn label(text: &str, label_type: LabelType, at: (f64, f64)) -> Label {
         justify_v: VAlign::Bottom,
         font_family: None,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
@@ -105,16 +106,17 @@ fn mixed_sheet(r1_mirror: (bool, bool)) -> (SchematicSheet, Ids) {
     let r1 = symbol("R1", (10.0, 10.0), r1_mirror.0, r1_mirror.1);
     let pin = pin_world(&r1);
     let wire = Wire {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(pin.0, pin.1),
         end: Point::new(20.0, 10.0),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     };
     let net = label("NET", LabelType::Net, (20.0, 16.0));
     let flag = label("FLAG", LabelType::Global, (10.0, 16.0));
     let note = TextNote {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         text: "note".to_string(),
         position: Point::new(14.0, 16.0),
         rotation: 0.0,
@@ -122,6 +124,7 @@ fn mixed_sheet(r1_mirror: (bool, bool)) -> (SchematicSheet, Ids) {
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
         font_family: None,
+        locked: false,
     };
     let ids = Ids {
         symbol: SelectedItem::new(r1.uuid, SelectedKind::Symbol),
@@ -131,7 +134,7 @@ fn mixed_sheet(r1_mirror: (bool, bool)) -> (SchematicSheet, Ids) {
         note: SelectedItem::new(note.uuid, SelectedKind::TextNote),
     };
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols: vec![r1],
         wires: vec![wire],
@@ -158,7 +161,6 @@ fn app_with(sheet: SchematicSheet, selected: Vec<SelectedItem>) -> Signex {
         title: "rotate-mirror-selection".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -339,7 +341,7 @@ fn two_symbols_turn_about_their_centre() {
         SelectedItem::new(b.uuid, SelectedKind::Symbol),
     ];
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols: vec![a, b],
         ..Default::default()
@@ -486,7 +488,7 @@ fn a_lone_symbol_still_turns_in_place() {
     let r1 = symbol("R1", (10.0, 10.0), false, false);
     let item = SelectedItem::new(r1.uuid, SelectedKind::Symbol);
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols: vec![r1],
         ..Default::default()
@@ -511,7 +513,7 @@ fn a_selection_holding_a_sheet_symbol_is_refused_whole() {
     let (sheet, ids) = mixed_sheet((false, false));
     let mut sheet = sheet;
     let child = ChildSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         name: "Child".to_string(),
         filename: "child.snxsch".to_string(),
         position: Point::new(30.0, 30.0),
@@ -573,7 +575,7 @@ fn off_grid_symbol_with_fields() -> (SchematicSheet, uuid::Uuid) {
     r1.val_text = Some(field(2.0));
     let uuid = r1.uuid;
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols: vec![r1],
         ..Default::default()
@@ -726,11 +728,12 @@ fn a_self_contained_selection_keeps_its_netlist() {
     let r2 = symbol("R2", (30.0, 10.0), false, false);
     let (a, b) = (pin_world(&r1), (28.0, 10.0));
     let wire = Wire {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     };
     let net = label("N1", LabelType::Net, (20.0, 10.0));
     let selected = vec![
@@ -740,7 +743,7 @@ fn a_self_contained_selection_keeps_its_netlist() {
         SelectedItem::new(net.uuid, SelectedKind::Label),
     ];
     let mut sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols: vec![r1, r2],
         wires: vec![wire],
@@ -767,15 +770,16 @@ fn two_mirrors_cancel_without_drift() {
     // Anchors at x = 10 and 11: the centre 10.5 is off the grid but on the
     // half grid, the drift case that re-snapping the centre each press had.
     let wire = Wire {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(10.0, 10.0),
         end: Point::new(11.0, 12.0),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     };
     let item = SelectedItem::new(wire.uuid, SelectedKind::Wire);
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         wires: vec![wire],
         ..Default::default()
@@ -798,7 +802,7 @@ fn a_lone_off_grid_label_turns_in_place() {
     let net = label("N1", LabelType::Net, (10.5, 10.0));
     let item = SelectedItem::new(net.uuid, SelectedKind::Label);
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         labels: vec![net],
         ..Default::default()
@@ -817,15 +821,16 @@ fn a_lone_off_grid_label_turns_in_place() {
 
 fn wire_from(a: (f64, f64), b: (f64, f64)) -> (SchematicSheet, SelectedItem) {
     let wire = Wire {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     };
     let item = SelectedItem::new(wire.uuid, SelectedKind::Wire);
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         wires: vec![wire],
         ..Default::default()

@@ -23,7 +23,7 @@ fn sheet(wires: Vec<Wire>, directives: Vec<NoConnect>) -> SchematicSheet {
 
 fn wire(a: Point, b: Point) -> Wire {
     Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: a,
         end: b,
         ..Default::default()
@@ -32,14 +32,14 @@ fn wire(a: Point, b: Point) -> Wire {
 
 fn directive(p: Point) -> NoConnect {
     NoConnect {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         position: p,
     }
 }
 
-/// One wire (0,0)-(10,0): two dangling endpoints.
+/// One wire (0,0)-(12.7,0), on the connection grid: two dangling endpoints.
 fn one_wire(directives: Vec<NoConnect>) -> SchematicSheet {
-    sheet(vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))], directives)
+    sheet(vec![wire(pt(0.0, 0.0), pt(12.7, 0.0))], directives)
 }
 
 fn dangling_at(diags: &[Diagnostic], p: Point) -> usize {
@@ -61,21 +61,21 @@ fn run(sheet: &SchematicSheet) -> Vec<Diagnostic> {
 fn directive_at_dangling_endpoint_removes_only_that_diagnostic() {
     let diags = run(&one_wire(vec![directive(pt(0.0, 0.0))]));
     assert_eq!(dangling_at(&diags, pt(0.0, 0.0)), 0);
-    assert_eq!(dangling_at(&diags, pt(10.0, 0.0)), 1);
+    assert_eq!(dangling_at(&diags, pt(12.7, 0.0)), 1);
 }
 
 #[test]
 fn directive_one_millimetre_away_leaves_the_diagnostic() {
     let diags = run(&one_wire(vec![directive(pt(1.0, 0.0))]));
     assert_eq!(dangling_at(&diags, pt(0.0, 0.0)), 1);
-    assert_eq!(dangling_at(&diags, pt(10.0, 0.0)), 1);
+    assert_eq!(dangling_at(&diags, pt(12.7, 0.0)), 1);
 }
 
 #[test]
 fn sheet_without_directives_is_unaffected() {
     let diags = run(&one_wire(Vec::new()));
     assert_eq!(dangling_at(&diags, pt(0.0, 0.0)), 1);
-    assert_eq!(dangling_at(&diags, pt(10.0, 0.0)), 1);
+    assert_eq!(dangling_at(&diags, pt(12.7, 0.0)), 1);
     assert_eq!(diags.len(), 2);
 }
 
@@ -124,7 +124,7 @@ fn snxsch_with_directive_roundtrips_a_no_edit_save() {
     let original = one_wire(vec![directive(pt(0.0, 0.0))]);
     let text = SnxSchematic::new(original).write_string().expect("write");
 
-    let dir = std::env::temp_dir().join(format!("signex-349-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-349-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("temp dir");
     let path = dir.join("fixture.snxsch");
     std::fs::write(&path, &text).expect("write fixture");
@@ -141,5 +141,5 @@ fn snxsch_with_directive_roundtrips_a_no_edit_save() {
     assert_eq!(resaved, text, "no-edit save must be byte-identical");
     let diags = run(&loaded.sheet);
     assert_eq!(dangling_at(&diags, pt(0.0, 0.0)), 0);
-    assert_eq!(dangling_at(&diags, pt(10.0, 0.0)), 1);
+    assert_eq!(dangling_at(&diags, pt(12.7, 0.0)), 1);
 }

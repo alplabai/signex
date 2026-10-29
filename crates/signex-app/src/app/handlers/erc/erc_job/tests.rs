@@ -22,7 +22,7 @@ fn pt(x: f64, y: f64) -> Point {
 fn label(text: &str, at: Point, label_type: LabelType) -> Label {
     Label {
         unknown_columns: Default::default(),
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         text: text.to_string(),
         position: at,
         rotation: 0.0,
@@ -32,6 +32,7 @@ fn label(text: &str, at: Point, label_type: LabelType) -> Label {
         font_family: None,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        locked: false,
     }
 }
 
@@ -243,7 +244,7 @@ fn a_per_sheet_finding_no_emitted_project_finding_covers_is_kept() {
         .unwrap()
         .no_erc_directives
         .push(signex_types::schematic::NoConnect {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             position: pt(0.0, 0.0),
         });
     f.run(&["root.snxsch"], &HashMap::new());
@@ -294,6 +295,7 @@ fn colliding_job() -> (ErcRunInputs, PathBuf, PathBuf, PathBuf) {
         },
         config: signex_erc::ErcConfig::default(),
         net_waivers: Default::default(),
+        violation_waivers: Vec::new(),
         fold: CaseFold::FOLD,
     };
     (inputs, root_path, child_path, loose_path)
@@ -321,4 +323,70 @@ fn the_job_files_the_project_finding_under_the_path_the_graph_read() {
         "{}",
         kept[0].message
     );
+}
+
+/// A sheet holding unit `unit` of `U1`, a two-unit `LM358`.
+fn sheet_with_unit(unit: u32) -> signex_types::schematic::SchematicSheet {
+    use signex_types::schematic::{FillType, Graphic, LibGraphic, LibSymbol, Symbol};
+    let lib: LibSymbol =
+        serde_json::from_value(serde_json::json!({"id": "Amplifier:LM358"})).expect("lib symbol");
+    let graphic = |unit| LibGraphic {
+        unit,
+        body_style: 1,
+        graphic: Graphic::Polyline {
+            points: Vec::new(),
+            width: 0.0,
+            fill: FillType::default(),
+        },
+    };
+    let mut sheet = signex_types::schematic::SchematicSheet {
+        paper_size: "A4".into(),
+        symbols: vec![Symbol {
+            uuid: Uuid::new_v4(),
+            lib_id: "Amplifier:LM358".into(),
+            reference: "U1".into(),
+            unit,
+            position: pt(25.4, 25.4),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    sheet.lib_symbols.insert(
+        "Amplifier:LM358".into(),
+        LibSymbol {
+            graphics: vec![graphic(1), graphic(2)],
+            ..lib
+        },
+    );
+    sheet
+}
+
+#[test]
+fn the_units_pass_spans_the_project_only_not_loose_tabs() {
+    let root_path = Path::new("/proj/root.snxsch").to_path_buf();
+    let loose_path = Path::new("/elsewhere/other.snxsch").to_path_buf();
+    let open: crate::app::project_sheets::OpenSheets = [
+        (root_path.clone(), sheet_with_unit(1)),
+        (loose_path.clone(), sheet_with_unit(2)),
+    ]
+    .into_iter()
+    .collect();
+    let (mut inputs, ..) = colliding_job();
+    inputs.tab_paths = open.keys().cloned().collect();
+    inputs.open = open;
+    inputs.root = Some(root_path.clone());
+    let outcome = run_erc_job(inputs);
+    let units = |p: &PathBuf| -> Vec<String> {
+        outcome.by_path[p]
+            .iter()
+            .filter(|v| v.builtin_kind() == Some(RuleKind::UnitsNotPlaced))
+            .map(|v| v.message.clone())
+            .collect()
+    };
+    // The loose tab's unit 2 belongs to another design: it neither completes
+    // the project's U1 nor loses its own per-sheet finding.
+    assert_eq!(units(&root_path).len(), 1, "{:?}", units(&root_path));
+    assert!(units(&root_path)[0].ends_with("unit 2"));
+    assert_eq!(units(&loose_path).len(), 1);
+    assert!(units(&loose_path)[0].ends_with("unit 1"));
 }

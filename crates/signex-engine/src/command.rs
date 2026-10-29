@@ -36,6 +36,16 @@ pub enum TextTarget {
     SymbolValue(Uuid),
 }
 
+/// A boolean symbol flag with a dedicated edit (`dnp` and `locked` have their
+/// own commands).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymbolFlag {
+    /// Listed in the BOM.
+    InBom,
+    /// Carried to the board by a PCB update.
+    OnBoard,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolTextField {
     Reference,
@@ -55,13 +65,18 @@ pub enum CommandKind {
     UpdateLabelProps,
     SetSymbolRotation,
     SetSymbolLocked,
+    SetItemLocked,
     SetSymbolDnp,
+    SetSymbolFlag,
+    SetWireWidth,
     SetSymbolBodyStyle,
     UpdateSymbolTextSize,
     UpdateSymbolLibId,
     UpdateSymbolFootprint,
     UpdateSymbolFields,
     PlaceWireSegment,
+    BreakWire,
+    PlaceWireSegmentAsIs,
     PlaceBus,
     PlaceLabel,
     PlaceSymbol,
@@ -168,11 +183,30 @@ pub enum Command {
         symbol_id: Uuid,
         locked: bool,
     },
+    /// Set the `locked` flag of a wire, label, text note or drawing (#1573);
+    /// the Properties panel "Locked" checkbox. A symbol uses
+    /// `SetSymbolLocked`; any other kind is a no-op.
+    SetItemLocked {
+        item: SelectedItem,
+        locked: bool,
+    },
     /// Set a symbol's `dnp` (Do Not Populate) flag (Properties panel "DNP"
     /// checkbox). The BOM exporters read this flag.
     SetSymbolDnp {
         symbol_id: Uuid,
         dnp: bool,
+    },
+    /// Set a symbol's BOM / board flag (Properties of a multi-selection).
+    SetSymbolFlag {
+        symbol_id: Uuid,
+        flag: SymbolFlag,
+        value: bool,
+    },
+    /// Set a wire's own stroke width in mm (0.0 = the schematic default). A
+    /// net class width still wins when the wire's net has one.
+    SetWireWidth {
+        wire_id: Uuid,
+        width_mm: f64,
     },
     /// Show the normal or the alternate (De Morgan) body of a symbol's library
     /// symbol. Refused with `EngineError::SymbolBodyPinsConnected` when a wired
@@ -213,6 +247,23 @@ pub enum Command {
         symbol_id: Uuid,
         key: String,
         value: String,
+    },
+    /// [`Command::PlaceWireSegment`] that never folds the wire into a
+    /// neighbour. Paste places a copied wire with it: the copy keeps the
+    /// splits it was cut with (a Break Wire cut, a label or no-connect on the
+    /// joint), and the anchors may not be placed yet.
+    PlaceWireSegmentAsIs {
+        wire: Wire,
+    },
+    /// Split one wire in two at `at`, which must lie strictly inside it; the
+    /// first half keeps the wire's id, the second gets a new one. A point
+    /// off the wire, or at one of its ends, changes nothing; a spot holding a
+    /// pin, bus end, bus entry or another wire's end is refused
+    /// (`EngineError::BreakWireBlocked`), since the new end would join it. Connectivity is
+    /// unchanged and no merge pass runs, so the halves stay apart.
+    BreakWire {
+        wire: Uuid,
+        at: signex_types::schematic::Point,
     },
     PlaceWireSegment {
         wire: Wire,
@@ -476,7 +527,10 @@ impl Command {
             Command::UpdateLabelProps { .. } => CommandKind::UpdateLabelProps,
             Command::SetSymbolRotation { .. } => CommandKind::SetSymbolRotation,
             Command::SetSymbolLocked { .. } => CommandKind::SetSymbolLocked,
+            Command::SetItemLocked { .. } => CommandKind::SetItemLocked,
             Command::SetSymbolDnp { .. } => CommandKind::SetSymbolDnp,
+            Command::SetSymbolFlag { .. } => CommandKind::SetSymbolFlag,
+            Command::SetWireWidth { .. } => CommandKind::SetWireWidth,
             Command::SetSymbolBodyStyle { .. } => CommandKind::SetSymbolBodyStyle,
             Command::UpdateSymbolTextSize { .. } => CommandKind::UpdateSymbolTextSize,
             Command::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,
@@ -484,6 +538,8 @@ impl Command {
             Command::UpdateSymbolFields { .. } => CommandKind::UpdateSymbolFields,
             Command::SetSymbolField { .. } => CommandKind::UpdateSymbolFields,
             Command::PlaceWireSegment { .. } => CommandKind::PlaceWireSegment,
+            Command::BreakWire { .. } => CommandKind::BreakWire,
+            Command::PlaceWireSegmentAsIs { .. } => CommandKind::PlaceWireSegmentAsIs,
             Command::PlaceBus { .. } => CommandKind::PlaceBus,
             Command::PlaceLabel { .. } => CommandKind::PlaceLabel,
             Command::PlaceSymbol { .. } => CommandKind::PlaceSymbol,

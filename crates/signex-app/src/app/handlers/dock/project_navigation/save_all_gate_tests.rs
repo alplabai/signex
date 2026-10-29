@@ -25,7 +25,7 @@ fn hold_dirty(app: &mut Signex, path: &Path, paper: &str) {
     app.document_state
         .engines
         .insert(path.to_path_buf(), engine_at(path, paper));
-    app.document_state.dirty_paths.insert(path.to_path_buf());
+    app.document_state.mark_document_dirty(path);
 }
 
 /// A project over `dir` listing `X.snxsch`.
@@ -72,7 +72,7 @@ fn assert_refused(app: &Signex, still_dirty: &[&Path]) {
     );
     for path in still_dirty {
         assert!(
-            app.document_state.dirty_paths.contains(*path),
+            app.document_state.is_document_dirty(path),
             "{} must stay dirty so a retry or Discard All can act on it",
             path.display()
         );
@@ -92,9 +92,9 @@ fn add_unmaterialisable_library(app: &mut Signex, dir: &Path) {
     };
     app.document_state.projects[0]
         .pending_libraries
-        .insert(uuid::Uuid::new_v4(), spec);
+        .insert(uuid::Uuid::now_v7(), spec);
     let prj = app.document_state.projects[0].path.clone();
-    app.document_state.dirty_paths.insert(prj);
+    app.document_state.mark_document_dirty(&prj);
 }
 
 #[test]
@@ -197,7 +197,7 @@ fn quit_proceeds_when_every_document_saved() {
 
     assert!(quit_save_all(&mut app), "a clean Save All must still quit");
 
-    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(!app.document_state.has_dirty_documents());
 }
 
 /// #1209 — closing a project drops its stored-rules undo history, as it
@@ -205,7 +205,7 @@ fn quit_proceeds_when_every_document_saved() {
 /// otherwise sit in memory for the rest of the session.
 #[test]
 fn closing_a_project_drops_its_rules_history() {
-    let dir = std::env::temp_dir().join(format!("signex-close-rules-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-close-rules-{}", uuid::Uuid::now_v7()));
     let mut app = project_app(&dir);
     let id = app.document_state.projects[0].id;
     app.document_state.rules_history.entry(id).or_default();

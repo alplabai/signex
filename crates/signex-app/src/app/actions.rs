@@ -350,7 +350,7 @@ mod designator_tests {
         let mut sheet = signex_types::schematic::SchematicSheet::default();
         for reference in references {
             sheet.symbols.push(signex_types::schematic::Symbol {
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 reference: (*reference).to_string(),
                 ..Default::default()
             });

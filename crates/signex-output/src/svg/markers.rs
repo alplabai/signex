@@ -80,7 +80,7 @@ mod tests {
 
     fn snapshot(with_markers: bool) -> SheetSnapshot {
         let marker = || NoConnect {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             position: Point::new(30.0, 40.0),
         };
         let mut schematic = SchematicSheet {

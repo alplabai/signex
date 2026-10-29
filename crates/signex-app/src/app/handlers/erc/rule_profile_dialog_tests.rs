@@ -9,7 +9,7 @@ use crate::app::state::rule_profile_ui::{QueuedWrite, WriteOutcome};
 use crate::rule_profiles::{self, SaveOutcome};
 
 fn workspace(tag: &str) -> crate::app::Signex {
-    let dir = std::env::temp_dir().join(format!("signex-dlg-{tag}-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-dlg-{tag}-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
     app.ui_state.erc_severity_override.clear();
     app.ui_state.pin_matrix_overrides.clear();
@@ -30,15 +30,14 @@ fn project_rules(app: &crate::app::Signex) -> Option<signex_types::project::Proj
 
 fn is_dirty(app: &crate::app::Signex) -> bool {
     app.document_state
-        .dirty_paths
-        .contains(&app.document_state.projects[0].path)
+        .is_document_dirty(&app.document_state.projects[0].path)
 }
 
 /// A project that stores rules, with the Save-as dialog open.
 fn with_dialog(tag: &str) -> crate::app::Signex {
     let mut app = workspace(tag);
     let _ = app.handle_store_erc_rules_in_project();
-    app.document_state.dirty_paths.clear();
+    app.document_state.mark_documents_clean_where(|_| true);
     let _ = app.handle_profile_save_dialog_opened();
     app
 }

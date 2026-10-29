@@ -12,7 +12,7 @@ const RULE: &str = "user::net_check";
 /// Two sheets, nets `NET_T` and `NET_C`, and a project DSL rule that fires on
 /// every net whose name starts with `NET_`.
 fn app_with_two_failing_nets() -> (Signex, std::path::PathBuf) {
-    let dir = std::env::temp_dir().join(format!("signex-erc-waiver-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-erc-waiver-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     let text = SnxSchematic::new(sheet_with_net("R_C", "NET_C", &[]))
         .write_string()
@@ -79,7 +79,7 @@ fn a_waiver_persists_through_save_and_load() {
     let (mut app, dir) = app_with_two_failing_nets();
     waive(&mut app, "NET_T", true);
     let project = &app.document_state.projects[0];
-    assert!(app.document_state.dirty_paths.contains(&project.path));
+    assert!(app.document_state.is_document_dirty(&project.path));
 
     signex_types::project::write_project(&project.path, &project.data).expect("save");
     let loaded = signex_types::project::parse_project(&project.path).expect("load");

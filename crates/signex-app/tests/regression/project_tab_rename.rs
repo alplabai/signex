@@ -44,7 +44,7 @@ fn rename_in_the_general_section_opens_the_project_rename_dialog() {
     assert!(dialog.is_project_rename);
     assert_eq!(dialog.target_path, f.prj);
     assert!(
-        f.app.document_state.dirty_paths.is_empty(),
+        !f.app.document_state.has_dirty_documents(),
         "asking to rename is not a document edit"
     );
 }
