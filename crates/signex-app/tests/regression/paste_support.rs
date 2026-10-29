@@ -36,7 +36,7 @@ fn reads_numbers(app: &Signex) -> bool {
 
 /// Send `message` and settle the numbering read it starts, for Duplicate and
 /// rubber stamp, which have no clipboard read.
-pub(crate) fn send_and_settle(app: &mut Signex, message: EditMsg, intent: PasteIntent) {
+pub(crate) fn send_and_settle(app: &mut Signex, message: EditMsg, _intent: PasteIntent) {
     let task = app.update(Message::Edit(message));
     let reads = reads_numbers(app);
     settle(app, task, reads);
