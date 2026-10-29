@@ -51,7 +51,10 @@ fn saving_applies_and_persists_the_scale_and_a_restart_reads_it_back() {
     let _ = app.update(Message::Preferences(PreferencesMsg::Open));
     let _ = app.update(inner(PrefMsg::DraftUiScalePercent(150)));
 
-    let _ = app.update(inner(PrefMsg::Save));
+    {
+        let task = app.update(inner(PrefMsg::Save));
+        crate::drive::drive(&mut app, task);
+    }
 
     assert_eq!(app.scale_factor(iced::window::Id::unique()), 1.5);
     assert!(!app.ui_state.preferences_draft_differs());
@@ -75,7 +78,10 @@ fn saving_an_unrelated_pref_keeps_a_hand_edited_off_step_scale() {
         !app.ui_state.autosave_enabled,
     )));
 
-    let _ = app.update(inner(PrefMsg::Save));
+    {
+        let task = app.update(inner(PrefMsg::Save));
+        crate::drive::drive(&mut app, task);
+    }
 
     assert_eq!(app.ui_state.ui_scale, 1.25);
 }

@@ -264,6 +264,9 @@ impl Signex {
                         .map(|summary| (lib.root.clone(), summary.clone()))
                 });
             }
+            // The Place button exists in the Place stage only.
+            PickerMsg::PlaceSelected
+                if !matches!(picker.mode, crate::library::state::PickerMode::Place) => {}
             PickerMsg::PlaceSelected => {
                 let Some((path, summary)) = picker.selected.clone() else {
                     return Task::none();

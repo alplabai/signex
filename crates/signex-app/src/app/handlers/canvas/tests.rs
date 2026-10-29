@@ -222,6 +222,7 @@ fn dragging_a_bus_on_the_canvas_carries_entry_and_wire() {
     let _ = app.handle_canvas_interaction_event(crate::canvas::CanvasEvent::MoveSelected {
         dx: 5.0,
         dy: 0.0,
+        connections: Default::default(),
     });
 
     let engine = app.document_state.active_engine().expect("engine");

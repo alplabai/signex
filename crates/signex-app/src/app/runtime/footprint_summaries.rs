@@ -66,7 +66,6 @@ fn constraint_summaries(
     out: &signex_sketch::solver::FullSolveOutput,
 ) -> Vec<crate::panels::OverConstraintSummary> {
     use crate::panels::OverConstraintSummary;
-    use signex_sketch::constraint::ConstraintKind;
 
     let sketch = match fp.sketch.as_ref() {
         Some(s) => s,
@@ -75,69 +74,43 @@ fn constraint_summaries(
     if ids.is_empty() {
         return Vec::new();
     }
-    let over_set: std::collections::HashSet<_> = ids.iter().copied().collect();
-
-    let kind_label = |k: &ConstraintKind| -> &'static str {
-        use ConstraintKind::*;
-        match k {
-            Coincident { .. } => "Coincident",
-            PointOnLine { .. } => "PointOnLine",
-            PointOnArc { .. } => "PointOnArc",
-            Horizontal { .. } => "Horizontal",
-            Vertical { .. } => "Vertical",
-            Parallel { .. } => "Parallel",
-            Perpendicular { .. } => "Perpendicular",
-            DistancePtPt { .. } => "DistancePtPt",
-            DistancePtLine { .. } => "DistancePtLine",
-            DistancePtCircle { .. } => "DistancePtCircle",
-            Angle { .. } => "Angle",
-            EqualLength { .. } => "EqualLength",
-            EqualRadius { .. } => "EqualRadius",
-            TangentLineArc { .. } => "TangentLineArc",
-            TangentArcArc { .. } => "TangentArcArc",
-            SymmetricAboutLine { .. } => "SymmetricAboutLine",
-            SymmetricAboutPoint { .. } => "SymmetricAboutPoint",
-            Midpoint { .. } => "Midpoint",
-            Fixed { .. } => "Fixed",
-        }
-    };
-    let first_focus = |k: &ConstraintKind| -> Option<signex_sketch::id::SketchEntityId> {
-        use ConstraintKind::*;
-        match k {
-            Coincident { p1, .. } => Some(*p1),
-            PointOnLine { point, .. } => Some(*point),
-            PointOnArc { point, .. } => Some(*point),
-            Horizontal { line } => Some(*line),
-            Vertical { line } => Some(*line),
-            Parallel { l1, .. } => Some(*l1),
-            Perpendicular { l1, .. } => Some(*l1),
-            DistancePtPt { p1, .. } => Some(*p1),
-            DistancePtLine { point, .. } => Some(*point),
-            DistancePtCircle { point, .. } => Some(*point),
-            Angle { l1, .. } => Some(*l1),
-            EqualLength { l1, .. } => Some(*l1),
-            EqualRadius { e1, .. } => Some(*e1),
-            TangentLineArc { line, .. } => Some(*line),
-            TangentArcArc { a1, .. } => Some(*a1),
-            SymmetricAboutLine { p1, .. } => Some(*p1),
-            SymmetricAboutPoint { p1, .. } => Some(*p1),
-            Midpoint { point, .. } => Some(*point),
-            Fixed { point } => Some(*point),
-        }
-    };
+    let id_set: std::collections::HashSet<_> = ids.iter().copied().collect();
 
     sketch
         .constraints
         .iter()
-        .filter(|c| over_set.contains(&c.id))
+        .filter(|c| id_set.contains(&c.id))
         .map(|c| {
-            let label = kind_label(&c.kind);
+            let label = c.kind.label();
             OverConstraintSummary {
                 constraint_id: c.id,
                 kind_label: label,
                 residual_magnitude: residual_magnitude_of(c, out, sketch, label),
-                focus_entity_id: first_focus(&c.kind),
+                focus_entity_id: c.kind.focus_entity(),
             }
+        })
+        .collect()
+}
+
+/// The rows for the last rejected edit's conflict. A row's focus entity is
+/// dropped when the revert removed it (the rejected edit made it), so a click
+/// never selects something that is gone.
+pub(super) fn build_rejected_conflict_summaries(
+    fp: &signex_library::primitive::footprint::Footprint,
+    conflict: &crate::library::editor::footprint::state::conflict::ConflictHighlight,
+) -> Vec<crate::panels::RejectedConflictSummary> {
+    let exists = |id| {
+        fp.sketch
+            .as_ref()
+            .is_some_and(|s| s.entities.iter().any(|e| e.id == id))
+    };
+    conflict
+        .rows()
+        .iter()
+        .map(|row| crate::panels::RejectedConflictSummary {
+            constraint_id: row.constraint,
+            kind_label: row.kind_label,
+            focus_entity_id: row.focus.filter(|id| exists(*id)),
         })
         .collect()
 }
@@ -289,7 +262,6 @@ mod tests {
             },
             colours: std::collections::HashMap::new(),
             over_constraints,
-            redundant_constraints: Vec::new(),
             jacobian: Vec::new(),
             params,
         };
@@ -297,24 +269,6 @@ mod tests {
         let mut fp = Footprint::empty("test");
         fp.sketch = Some(data);
         (fp, out)
-    }
-
-    /// #1649 — the redundant list becomes panel rows, in constraint order,
-    /// and a sketch with none yields no rows.
-    #[test]
-    fn redundant_constraints_become_panel_rows() {
-        let scaffold = two_point_scaffold();
-        let c = distance(&scaffold, DimTarget::Literal(5.0));
-        let cid = c.id;
-        let (fp, mut out) = output_for(scaffold, vec![c], ResolvedParams::new());
-        out.over_constraints.clear();
-        assert!(build_redundant_constraint_summaries(&fp, &out).is_empty());
-
-        out.redundant_constraints = vec![cid];
-        let rows = build_redundant_constraint_summaries(&fp, &out);
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].constraint_id, cid);
-        assert_eq!(rows[0].kind_label, "DistancePtPt");
     }
 
     /// GH #599 — the panel used to re-resolve `sketch.parameters` and
@@ -459,5 +413,73 @@ mod tests {
             assert!(new > 0);
         }
         assert_eq!(Fixed { point: a }.entities().count(), 1);
+    }
+
+    /// #685 — an edit the solver rejects as a conflict leaves rows for the
+    /// constraints panel (kind plus a click target on a surviving point), and
+    /// the next edit that solves empties them again.
+    #[test]
+    fn a_rejected_edit_lists_its_conflict_in_the_panel_rows() {
+        use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+        use crate::library::editor::footprint::sketch_mode::SketchEdit;
+        use crate::library::editor::footprint::state::FootprintEditorState;
+
+        let plane = PlaneId::new();
+        let (p1, p2) = (SketchEntityId::new(), SketchEntityId::new());
+        let distance = |mm: f64| Constraint {
+            id: ConstraintId::new(),
+            kind: ConstraintKind::DistancePtPt {
+                p1,
+                p2,
+                target: DimTarget::Literal(mm),
+            },
+        };
+        let mut fp = Footprint::empty("rows");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![
+                Entity::new(p1, plane, EntityKind::Point { x: 0.0, y: 0.0 }),
+                Entity::new(p2, plane, EntityKind::Point { x: 1.0, y: 0.0 }),
+            ],
+            constraints: vec![
+                Constraint {
+                    id: ConstraintId::new(),
+                    kind: ConstraintKind::Fixed { point: p1 },
+                },
+                distance(5.0),
+            ],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::ForceRebuild).expect("solvable");
+        assert!(build_rejected_conflict_summaries(&fp, &state.conflict).is_empty());
+
+        let rejected = distance(9.0);
+        let rejected_id = rejected.id;
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddConstraint(rejected))
+            .expect_err("9 mm contradicts 5 mm");
+
+        let rows = build_rejected_conflict_summaries(&fp, &state.conflict);
+        assert!(
+            rows.iter().any(|r| r.constraint_id == rejected_id
+                && r.kind_label == "DistancePtPt"
+                && r.focus_entity_id == Some(p1)),
+            "{rows:?}"
+        );
+        assert!(
+            !fp.sketch
+                .as_ref()
+                .expect("sketch")
+                .constraints
+                .iter()
+                .any(|c| c.id == rejected_id),
+            "geometry stays at the last good solve"
+        );
+
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::ForceRebuild).expect("solves");
+        assert!(build_rejected_conflict_summaries(&fp, &state.conflict).is_empty());
     }
 }

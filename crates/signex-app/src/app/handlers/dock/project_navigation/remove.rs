@@ -6,6 +6,9 @@ use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 
 impl Signex {
     pub(super) fn open_remove_dialog(&mut self, tree_path: Vec<usize>) {
+        if self.refuse_on_missing_child(&tree_path, "Remove", true) {
+            return;
+        }
         let Some(target_path) = self.tree_path_to_file_path(&tree_path) else {
             crate::diagnostics::log_warning(
                 "Remove cancelled: the selected project-tree row no longer resolves to a file.",
@@ -50,6 +53,58 @@ impl Signex {
             is_outside_project,
             unsaved_prompt: false,
         });
+    }
+
+    /// Refuse a Remove the sheet hierarchy makes unsafe (#1618): excluding a
+    /// sheet that is not a `.snxprj` page does nothing yet would discard its
+    /// unsaved edits, and deleting a file other sheets place leaves their
+    /// symbols dangling. Said in the Messages panel and a notice.
+    pub(super) fn refuse_remove(
+        &mut self,
+        state: &crate::app::RemoveDialogState,
+        choice: crate::app::RemoveChoice,
+    ) -> bool {
+        use crate::app::RemoveChoice;
+        use crate::app::state::ErrorNotice;
+        let blockers = self.remove_blockers(state);
+        let (notice, why): (fn(String) -> ErrorNotice, String) = match choice {
+            RemoveChoice::ExcludeFromProject if blockers.unlisted => (
+                ErrorNotice::exclude_refused,
+                format!(
+                    "\"{}\" is placed by a sheet symbol and is not a page of this project, \
+                     so there is nothing to exclude. Remove or change the sheet symbol instead.",
+                    state.display_name
+                ),
+            ),
+            RemoveChoice::DeleteFile if !blockers.other_parents.is_empty() => (
+                ErrorNotice::delete,
+                format!(
+                    "\"{}\" was not deleted: it is also placed by {}. Remove those sheet \
+                     symbols first.",
+                    state.display_name,
+                    blockers.parent_names()
+                ),
+            ),
+            RemoveChoice::DeleteFile
+                if blockers.unknown.is_some() && !state.target_path.is_dir() =>
+            {
+                (
+                    ErrorNotice::delete,
+                    format!(
+                        "\"{}\" was not deleted: whether another sheet places it cannot be ruled \
+                     out ({}). Try again once the project has been read, or exclude it instead.",
+                        state.display_name,
+                        blockers.unknown.as_deref().unwrap_or_default()
+                    ),
+                )
+            }
+            _ => return false,
+        };
+        crate::diagnostics::log_warning(&why);
+        self.document_state.error_notice = Some(notice(why));
+        // Into the Messages panel snapshot now, whichever path asked.
+        self.refresh_panel_ctx();
+        true
     }
 
     /// Folder holding the `.snxprj` that owns the tree row at `tree_path`.
@@ -181,7 +236,7 @@ impl Signex {
     /// Forget the in-memory documents of a file (or `.snxlib` directory)
     /// the user just deleted. A parked dirty engine or draft would
     /// otherwise survive in `dirty_paths` and be written back by Save All.
-    fn drop_deleted_documents(&mut self, deleted: &std::path::Path, fold: CaseFold) {
+    pub(crate) fn drop_deleted_documents(&mut self, deleted: &std::path::Path, fold: CaseFold) {
         // The file is gone: a replace that read it earlier must not bring it back.
         self.document_state.note_document_written_behind_engines();
         let gone = |p: &std::path::PathBuf| path_is_under(p, deleted, fold);
@@ -216,6 +271,15 @@ impl Signex {
         choice: crate::app::RemoveChoice,
     ) -> iced::Task<Message> {
         use crate::app::RemoveChoice;
+
+        // Refused before the unsaved-edits prompt, so Discard is never offered
+        // for a removal that would not happen.
+        if let Some(dialog) = self.ui_state.remove_dialog.clone()
+            && self.refuse_remove(&dialog, choice)
+        {
+            self.ui_state.remove_dialog = None;
+            return iced::Task::none();
+        }
 
         // Excluding a document (or a library / folder holding documents) with
         // unsaved edits asks first (#738): the modal stays open and moves to
@@ -309,6 +373,9 @@ impl Signex {
         let Some(state) = self.repointed_dialog(state) else {
             return iced::Task::none();
         };
+        if self.refuse_remove(&state, choice) {
+            return iced::Task::none();
+        }
 
         // Close any tab backed by this file before we touch disk or
         // drop it from the project's in-memory list — otherwise the

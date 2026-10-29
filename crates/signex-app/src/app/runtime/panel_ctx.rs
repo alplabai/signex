@@ -129,6 +129,10 @@ impl Signex {
                 request.exists.push(resolved);
             }
         }
+        request.hierarchy = self.hierarchy_request();
+        request.exists.extend(self.hierarchy_exists_paths());
+        request.exists.sort();
+        request.exists.dedup();
         request
     }
 
@@ -407,26 +411,15 @@ impl Signex {
                     pcb_file_dirty,
                     pcb_file_active,
                     pcb_file_missing,
-                    sheets: p
-                        .data
-                        .sheets
-                        .iter()
-                        .map(|sheet| {
-                            let (is_open, is_dirty, is_active) = lookup(&sheet.filename);
-                            let missing = !exists(&sheet.filename);
-                            crate::panels::SheetInfo {
-                                name: sheet.name.clone(),
-                                filename: sheet.filename.clone(),
-                                sym_count: sheet.symbols_count,
-                                wire_count: sheet.wires_count,
-                                label_count: sheet.labels_count,
-                                is_open,
-                                is_dirty,
-                                is_active,
-                                missing,
-                            }
-                        })
-                        .collect(),
+                    sheets: super::sheet_tree::project_sheet_rows(
+                        p,
+                        fs_facts,
+                        &super::sheet_tree::RowMarks {
+                            open: &open_paths,
+                            dirty: &dirty_paths,
+                            active: active_path_ref,
+                        },
+                    ),
                     libraries,
                     is_active: Some(p.id) == active_id,
                     is_dirty: dirty_paths.contains(&p.path),

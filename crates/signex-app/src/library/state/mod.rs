@@ -404,6 +404,9 @@ impl PrimitivePickerTarget {
 /// [`crate::app::Signex`] as a single field so the dispatcher can
 /// borrow it independently of the rest of `DocumentState`.
 pub struct LibraryState {
+    /// Shows a datasheet in the platform's viewer. A field so a test can
+    /// record what would open instead of launching a browser (#1301).
+    pub datasheet_opener: crate::library::placed_part::OpenDatasheet,
     /// Embedded-vs-library symbol drift per open sheet (#912).
     pub drift: super::drift::DriftState,
     /// Latest switch request per placed symbol (#1230).
@@ -570,6 +573,9 @@ pub struct LibraryState {
     /// libraries changes. Caches derived from them (the picker list, the
     /// browser grid) rebuild when it moves — see `touch_data`.
     pub data_version: u64,
+    /// Preference-backed defaults for a library opened or created from now
+    /// on; `Save Preferences` updates it, so no reader goes back to disk.
+    pub new_library_defaults: NewLibraryDefaults,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the
@@ -688,12 +694,14 @@ pub struct LibraryCreateOptionsState {
 }
 
 mod methods;
+mod new_library_defaults;
 mod panel_rows;
 #[cfg(test)]
 mod panel_rows_tests;
 mod picker_cache;
 #[cfg(test)]
 mod picker_cache_tests;
+mod placed_part;
 mod preview;
 mod refresh;
 #[cfg(test)]
@@ -706,8 +714,10 @@ mod tests;
 mod under_folder;
 
 pub use methods::*;
+pub use new_library_defaults::NewLibraryDefaults;
 pub use panel_rows::PanelRows;
 pub use picker_cache::{PickerEntry, PickerRows};
+pub use placed_part::{ChangePreview, DatasheetChoice, PickerMode};
 pub use preview::*;
 pub use refresh::{LibrarySnapshot, RefreshFinish, RefreshStart};
 pub use relocate::rebase_path;

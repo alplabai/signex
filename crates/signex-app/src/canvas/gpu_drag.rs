@@ -195,7 +195,7 @@ impl SchematicCanvas<'_> {
         drag_offset: Option<(f64, f64)>,
         revision: u64,
     ) -> Option<drag_layers::DragFrame> {
-        if !self.prefs.move_keeps_wires {
+        if !self.keeps_wires(state) {
             return None;
         }
         let (dx, dy) = drag_offset?;

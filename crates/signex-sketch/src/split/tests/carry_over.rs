@@ -119,7 +119,7 @@ fn closed_profile_seed_attrs_stay_on_line_a_only() {
             side: VScoreSide::Both,
         });
         // Closed-profile seed (must stay on line_a ONLY).
-        e.courtyard = Some(CourtyardAttr);
+        e.courtyard = Some(CourtyardAttr {});
         e.mask_opening = Some(MaskOpeningAttr {
             layer: SignexLayer::TopSolderMask,
         });

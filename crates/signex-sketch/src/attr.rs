@@ -432,7 +432,7 @@ pub struct SilkAttr {
 /// Closed sketch profile bakes as the courtyard polygon.
 /// v0.13 round-trips; v0.14 bakes.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct CourtyardAttr;
+pub struct CourtyardAttr {}
 
 /// Closed sketch profile bakes as a mask opening (cutout).
 /// v0.13 round-trips; v0.14 bakes.

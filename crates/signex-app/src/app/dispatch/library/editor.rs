@@ -11,6 +11,8 @@ use super::*;
 mod cache_refresh_tests;
 mod cascade;
 mod container_save;
+#[cfg(test)]
+mod footprint_preset_tests;
 mod primitive_save;
 #[cfg(test)]
 mod primitive_save_fold_tests;
@@ -310,6 +312,21 @@ impl Signex {
                 self.refresh_panel_ctx();
                 return Task::none();
             }
+            FootprintEditorMsg::ApplyFilterPreset(idx) => {
+                let idx = *idx;
+                if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
+                    crate::library::editor::footprint::updates::apply_filter_preset(
+                        editor,
+                        &self.interaction_state.footprint_filter_presets,
+                        idx,
+                    );
+                }
+                self.refresh_panel_ctx();
+                return Task::none();
+            }
+            FootprintEditorMsg::CaptureFilterPreset => {
+                return self.capture_footprint_filter_preset(&path);
+            }
             _ => {}
         }
 
@@ -330,22 +347,10 @@ impl Signex {
 
         // Footprint-only mutations.
         if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
-            // Task 6 — capturing a preset writes straight to disk from
-            // inside `apply_footprint_primitive_edit` (which only
-            // borrows `editor`, not `self`). Re-read it into
-            // `interaction_state` here so the very next
-            // `refresh_panel_ctx()` call — a few lines down — shows
-            // the new chip immediately instead of waiting for a
-            // restart.
-            let is_capture_preset = matches!(&msg, FootprintEditorMsg::CaptureFilterPreset);
             apply_footprint_primitive_edit(editor, msg);
             // A drag tick owes a solve, and a finished one may owe the
             // follow-up for the ticks that arrived while it ran (#1047).
             let solve = dispatch_pending(editor, &path).map(Message::Library);
-            if is_capture_preset {
-                self.interaction_state.footprint_filter_presets =
-                    crate::fonts::read_footprint_filter_presets();
-            }
             self.refresh_panel_ctx();
             return solve;
         }
@@ -367,6 +372,31 @@ impl Signex {
             "primitive editor event: no matching tab state",
         );
         Task::none()
+    }
+
+    /// Task 6 / #1639 — capture the editor's current selection filter as a
+    /// new preset. The list is seeded from `interaction_state` (never the
+    /// disk), the new chip shows on the next `refresh_panel_ctx`, and the
+    /// `prefs.json` write runs on the ordered background writer.
+    fn capture_footprint_filter_preset(&mut self, path: &std::path::Path) -> Task<Message> {
+        let Some(editor) = self.document_state.footprint_editors.get_mut(path) else {
+            return Task::none();
+        };
+        let captured = crate::library::editor::footprint::updates::capture_filter_preset(
+            editor,
+            &self.interaction_state.footprint_filter_presets,
+        );
+        let save = match captured {
+            Some(presets) => {
+                self.interaction_state.footprint_filter_presets = presets.clone();
+                crate::fonts::background_pref_write("footprint_filter_presets", move || {
+                    crate::fonts::write_footprint_filter_presets(&presets)
+                })
+            }
+            None => Task::none(),
+        };
+        self.refresh_panel_ctx();
+        save
     }
 
     /// Clear the canvas cache for the primitive editor tab keyed by

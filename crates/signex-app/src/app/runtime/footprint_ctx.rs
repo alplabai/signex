@@ -1,6 +1,7 @@
 use super::footprint_summaries::{
     build_over_constraint_summaries, build_redundant_constraint_summaries,
-    build_sketch_entity_summary, footprint_pad_kind_label, footprint_pad_shape_label,
+    build_rejected_conflict_summaries, build_sketch_entity_summary, footprint_pad_kind_label,
+    footprint_pad_shape_label,
 };
 
 /// v0.14.2 — project the active `.snxfpt` editor's data into a
@@ -589,6 +590,10 @@ pub(super) fn build_footprint_editor_panel_ctx(
         sketch_entity_count,
         sketch_constraint_count,
         last_solve,
+        rejected_conflicts: build_rejected_conflict_summaries(
+            editor.primitive(),
+            &editor.state.conflict,
+        ),
         selected_pad,
         selected_pad_count: editor
             .state

@@ -13,6 +13,9 @@ mod net_class_styles;
 mod panel_ctx;
 mod primitive_dirty;
 mod sheet_frame;
+mod sheet_tree;
+#[cfg(test)]
+pub(crate) mod sheet_tree_tests;
 mod symbol_ctx;
 
 impl Signex {
@@ -404,6 +407,7 @@ impl Signex {
             snap_enabled: self.ui_state.snap_enabled,
             snap_grid_mm: crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
             snap_hotspots: self.ui_state.snap_hotspots,
+            unit: self.ui_state.unit,
             wire_tool_active: self.interaction_state.current_tool == crate::app::Tool::Wire,
             visible_grid_mm: self.ui_state.visible_grid_mm as f64,
             grid_style: self.ui_state.preferences_draft_grid_style,

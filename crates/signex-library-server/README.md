@@ -38,6 +38,44 @@ insecure bind only on an interface the proxy alone can reach. Set
 `SIGNEX_TRUSTED_PROXIES` / `SIGNEX_TRUSTED_PROXY_HEADER` to the proxy, or
 every client shares one rate-limit bucket.
 
+## Part numbers are unique per library
+
+A part number (`internal_pn`, compared with surrounding white space removed and
+case-sensitively) is held by at most one row in a library, across all of its
+tables; a blank one is exempt. The database enforces it with a unique index on
+`component_rows.pn_key`, so two writers racing the same new number end with one
+row and one `409`.
+
+On start-up the server recomputes `pn_key` from the part number in every
+stored row's payload and builds the index (migration 0010). If a library
+already holds the same number twice it refuses to start, names each clash
+(`table/row_id`) and changes nothing. Fix it by giving all but one row of each
+clash a new number **in the payload**, which is what readers return, and in the
+`internal_pn` column, bumping `revision` and `updated_at` so copies open in a
+client reload instead of failing on save, then start again. On every start the
+server also compares each row's `pn_key` with its payload and repairs a stale
+one (refusing, with the same report, if the repair would clash).
+
+**Upgrading: stop every library server first.** A replica still running the
+previous version keeps writing rows without a checked key while the new one
+migrates; those rows are only caught at the next start.
+
+
+```sql
+-- SQLite
+UPDATE component_rows
+   SET payload = json_set(payload, '$.internal_pn', 'NEW-PN'), internal_pn = 'NEW-PN',
+       revision = revision + 1, updated_at = strftime('%Y-%m-%dT%H:%M:%f+00:00', 'now')
+ WHERE library_id = '...' AND table_name = '...' AND row_id = '...';
+
+-- Postgres
+UPDATE component_rows
+   SET payload = jsonb_set(payload::jsonb, '{internal_pn}', to_jsonb('NEW-PN'::text))::text,
+       internal_pn = 'NEW-PN', revision = revision + 1,
+       updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.US"+00:00"')
+ WHERE library_id = '...' AND table_name = '...' AND row_id = '...';
+```
+
 ## Known limitations (Community Preview)
 
 - **One shared token.** Every client uses the same `SIGNEX_API_TOKEN`; there

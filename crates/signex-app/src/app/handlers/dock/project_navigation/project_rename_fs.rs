@@ -62,17 +62,13 @@ pub(crate) fn carry_closed_copies(
     use crate::autosave::sidecar::{rename, sidecar_path};
     let owed = crate::autosave::pending_move::owed(recovery);
     for (old, new, alt) in closed_documents(new_dir, old_dir, new_dir, open) {
-        let dst = sidecar_path(recovery, &new);
         let Some(spelled) = find_copy(recovery, &old, &alt, fold, &owed) else {
             continue;
         };
         let src = sidecar_path(recovery, &spelled);
-        let failure = if dst.exists() {
-            Some("a copy already sits under the new name".to_string())
-        } else {
-            rename(recovery, &spelled, &new).err()
-        };
-        if let Some(why) = failure {
+        // A copy already under the new name is resolved by the move itself:
+        // the newest is offered, the other set aside.
+        if let Some(why) = rename(recovery, &spelled, &new).err() {
             crate::diagnostics::log_warning(format!(
                 "The recovery copy of {} was not carried to {}: {why}. It was kept as {}.",
                 old.display(),

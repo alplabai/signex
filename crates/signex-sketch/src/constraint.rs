@@ -142,6 +142,39 @@ impl ConstraintKind {
         }
     }
 
+    /// The kind's name as the constraints list shows it ("Coincident",
+    /// "DistancePtPt", ...).
+    pub fn label(&self) -> &'static str {
+        use ConstraintKind::*;
+        match self {
+            Coincident { .. } => "Coincident",
+            PointOnLine { .. } => "PointOnLine",
+            PointOnArc { .. } => "PointOnArc",
+            Horizontal { .. } => "Horizontal",
+            Vertical { .. } => "Vertical",
+            Parallel { .. } => "Parallel",
+            Perpendicular { .. } => "Perpendicular",
+            DistancePtPt { .. } => "DistancePtPt",
+            DistancePtLine { .. } => "DistancePtLine",
+            DistancePtCircle { .. } => "DistancePtCircle",
+            Angle { .. } => "Angle",
+            EqualLength { .. } => "EqualLength",
+            EqualRadius { .. } => "EqualRadius",
+            TangentLineArc { .. } => "TangentLineArc",
+            TangentArcArc { .. } => "TangentArcArc",
+            SymmetricAboutLine { .. } => "SymmetricAboutLine",
+            SymmetricAboutPoint { .. } => "SymmetricAboutPoint",
+            Midpoint { .. } => "Midpoint",
+            Fixed { .. } => "Fixed",
+        }
+    }
+
+    /// The first entity this constraint names: the one a click on its row
+    /// selects.
+    pub fn focus_entity(&self) -> Option<SketchEntityId> {
+        self.entities().next()
+    }
+
     /// Every entity this constraint names, in field order. Allocation-free.
     pub fn entities(&self) -> impl Iterator<Item = SketchEntityId> {
         use ConstraintKind::*;

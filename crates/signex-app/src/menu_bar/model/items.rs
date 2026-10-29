@@ -44,7 +44,14 @@ pub(super) fn item_if(label: &str, action: MenuMessage, is_enabled: bool) -> Men
     plain(label, live(action, is_enabled))
 }
 
-/// A placeholder with no handler yet.
+/// A greyed informational row that is not a missing feature (no tooltip).
+pub(super) fn unavailable(label: &str) -> MenuEntry {
+    plain(label, ItemState::Unavailable)
+}
+
+/// A planned feature with no handler yet: greyed with the "planned" tooltip.
+/// Every call site is pinned by the ratchet in `planned_tests`; add a real
+/// action instead of a new stub.
 pub(super) fn stub(label: &str) -> MenuEntry {
     plain(label, ItemState::Placeholder)
 }
@@ -79,11 +86,6 @@ pub(super) fn cmd_item_if(
     is_enabled: bool,
 ) -> MenuEntry {
     command_row(ctx, cmd, live(action, is_enabled))
-}
-
-/// A keymap-backed placeholder with no handler yet.
-pub(super) fn cmd_stub(ctx: &MenuContext, cmd: Cmd) -> MenuEntry {
-    command_row(ctx, cmd, ItemState::Placeholder)
 }
 
 pub(super) fn submenu(title: &str, entries: Vec<MenuEntry>) -> MenuEntry {

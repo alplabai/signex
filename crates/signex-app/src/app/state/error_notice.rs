@@ -73,6 +73,15 @@ impl ErrorNotice {
         }
     }
 
+    /// Excluding a document from the project was refused because it would
+    /// not do what the user asked, or would lose edits.
+    pub fn exclude_refused(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Exclude Refused".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A recovery copy could not be restored; the copy is kept.
     pub fn recovery(detail: impl Into<String>) -> Self {
         Self {

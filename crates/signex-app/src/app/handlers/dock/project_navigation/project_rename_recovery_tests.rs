@@ -168,13 +168,76 @@ fn a_copy_keyed_by_another_case_spelling_is_carried_on_a_case_insensitive_volume
 #[test]
 fn another_case_spelling_is_not_taken_for_this_file_on_a_case_sensitive_volume() {
     let root = tempfile::tempdir().expect("tempdir");
+    // The recovery key follows the volume the document sits on, so on a
+    // case-insensitive host volume the lower-case spelling IS this file; the
+    // injected-rule cases of this live in `sidecar.rs`.
+    if crate::app::state::volume_case::directory_ignores_case(root.path()) {
+        return;
+    }
     let m = moved(root.path());
     let lower = PathBuf::from(m.old_doc.to_string_lossy().to_lowercase());
+    // The other file really exists, so the lower-case copy may be its own.
+    std::fs::create_dir_all(lower.parent().expect("dir")).expect("dir");
+    std::fs::write(&lower, b"another file").expect("other file");
     sidecar::write(&m.recovery, &lower, b"another file's edits").expect("copy");
 
     carry(&m, CaseFold::PRESERVE);
     assert!(!offered_after_restart(&m.recovery, &m.new_doc));
     assert!(sidecar::sidecar_path(&m.recovery, &lower).is_file());
+}
+
+/// The folder exists when the copy is written, is then renamed, and the app
+/// dies before the carry: the startup pass still moves the copy. The case rule
+/// behind the key must not change because the old folder is gone.
+#[test]
+fn a_copy_written_in_an_existing_folder_survives_the_folder_being_renamed_before_the_carry() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let (old_dir, new_dir) = (root.path().join("Foo"), root.path().join("Bar"));
+    std::fs::create_dir_all(&old_dir).expect("folder");
+    let (old_doc, new_doc) = (old_dir.join("Sheet.snxsch"), new_dir.join("Sheet.snxsch"));
+    std::fs::write(&old_doc, b"saved sheet").expect("sheet");
+    let recovery = root.path().join("recovery");
+    sidecar::write(&recovery, &old_doc, b"crash edits").expect("copy");
+    crate::autosave::pending_move::record(&recovery, &old_doc, &new_doc).expect("journal");
+    std::fs::rename(&old_dir, &new_dir).expect("folder renamed");
+
+    assert!(offered_after_restart(&recovery, &new_doc));
+    assert!(crate::autosave::pending_move::owed(&recovery).is_empty());
+}
+
+/// Two files whose names differ only in case, one copy: the folder is renamed
+/// and the carry runs. The other file is never offered that copy. Needs a
+/// case-sensitive volume to hold both files.
+#[test]
+fn a_copy_of_one_of_two_case_variant_files_is_never_offered_to_the_other() {
+    let root = tempfile::tempdir().expect("tempdir");
+    if crate::app::state::volume_case::directory_ignores_case(root.path()) {
+        return;
+    }
+    let (old_dir, new_dir) = (root.path().join("Foo"), root.path().join("Bar"));
+    std::fs::create_dir_all(&old_dir).expect("folder");
+    for name in ["Sheet.snxsch", "sheet.snxsch"] {
+        std::fs::write(old_dir.join(name), b"saved sheet").expect("sheet");
+    }
+    let recovery = root.path().join("recovery");
+    sidecar::write(&recovery, &old_dir.join("Sheet.snxsch"), b"crash edits").expect("copy");
+    std::fs::rename(&old_dir, &new_dir).expect("folder renamed");
+
+    carry_closed_copies(
+        &recovery,
+        &old_dir,
+        &new_dir,
+        &Default::default(),
+        CaseFold::from_probe(false),
+    );
+    assert!(!offered_after_restart(
+        &recovery,
+        &new_dir.join("sheet.snxsch")
+    ));
+    assert!(offered_after_restart(
+        &recovery,
+        &new_dir.join("Sheet.snxsch")
+    ));
 }
 
 /// Fixture with the sheet's copy written and the key of `Bar`'s sheet blocked

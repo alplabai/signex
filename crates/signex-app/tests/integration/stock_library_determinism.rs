@@ -55,7 +55,7 @@ fn snapshot(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
 fn generating_twice_is_byte_identical() {
     let first = stock_gen::render_all().expect("first render");
     let second = stock_gen::render_all().expect("second render");
-    assert_eq!(first.len(), 5, "five stock footprints");
+    assert_eq!(first.len(), 6, "six stock footprints");
     for (a, b) in first.iter().zip(&second) {
         assert_eq!(a.file_name, b.file_name);
         assert_eq!(
@@ -112,6 +112,7 @@ fn library_id_is_the_pinned_constant() {
     );
     assert_eq!(
         stock_gen::manifest::stock_library_file()
+            .expect("stock library file")
             .manifest
             .library_id,
         committed.manifest.library_id
@@ -119,19 +120,19 @@ fn library_id_is_the_pinned_constant() {
 }
 
 #[test]
-fn manifest_declares_local_git_personal_empty_schema_and_classes() {
-    let lf = stock_gen::manifest::stock_library_file();
+fn manifest_declares_local_git_personal_schema_classes_and_rows() {
+    let lf = stock_gen::manifest::stock_library_file().expect("stock library file");
     assert_eq!(lf.manifest.mode, LibraryMode::LocalGit);
     assert_eq!(lf.manifest.workflow.mode, WorkflowMode::Personal);
     assert!(!lf.manifest.classes.is_empty(), "class registry is seeded");
     assert_eq!(lf.tables.len(), 1);
     let table = lf.tables.values().next().expect("one table");
     assert!(!table.columns.is_empty(), "schema is declared");
-    assert!(table.rows.is_empty(), "no component rows yet");
+    assert_eq!(table.rows.len(), 34, "one row per non-power stock symbol");
 }
 
 #[test]
-fn committed_stock_library_opens_and_lists_all_five_footprints() {
+fn committed_stock_library_opens_and_lists_all_six_footprints() {
     let adapter = LocalGitAdapter::open(stock_root().join(stock_gen::manifest::SNXLIB_FILE_NAME))
         .expect("Stock.snxlib opens without a .git/");
     let mut names: Vec<String> = adapter
@@ -144,10 +145,11 @@ fn committed_stock_library_opens_and_lists_all_five_footprints() {
     assert_eq!(
         names,
         [
+            "Chip-0805",
+            "Chip-0805-Polarised",
             "Fiducial-1mm",
             "MountingHole-3.2mm",
             "QFN-16",
-            "R0805",
             "SOIC-8"
         ]
         .map(String::from)

@@ -82,6 +82,11 @@ fn build_with(name: &str, symbol_ref: Option<(Uuid, Uuid)>, symbol: Symbol) -> F
     build_with_class(name, symbol_ref, symbol, "IC", ParamMap::new())
 }
 
+/// A library named `name` whose single row binds `symbol`.
+pub(crate) fn fixture_with_symbol(name: &str, symbol: Symbol) -> Fixture {
+    build_with(name, None, symbol)
+}
+
 /// A library whose symbol carries designator letters `designator` (`R?`).
 pub(crate) fn fixture_with_designator(designator: &str) -> Fixture {
     let mut symbol = two_unit_symbol();
@@ -194,7 +199,11 @@ fn build_in_mode(
             Some((lib, sym)) => PrimitiveRef::new(lib, sym),
             None => PrimitiveRef::new(library_id, sym_uuid),
         },
-        footprint_ref: None,
+        // A `-fp` library's row binds a footprint, to test what a swap does
+        // with the footprint text.
+        footprint_ref: name
+            .ends_with("-fp")
+            .then(|| PrimitiveRef::new(library_id, Uuid::new_v4())),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Acme", "TWO-1"),
@@ -230,6 +239,17 @@ pub(crate) fn app_with_library(f: &Fixture) -> Signex {
 }
 
 pub(crate) fn app_with_libraries(libs: &[&Fixture]) -> Signex {
+    let mut app = app_with_empty_sheet();
+    for f in libs {
+        app.library
+            .open_library(f.snxlib.clone())
+            .expect("mount library");
+    }
+    app
+}
+
+/// An app whose active tab is an empty A4 sheet and with no library mounted.
+pub(crate) fn app_with_empty_sheet() -> Signex {
     let path = PathBuf::from("place-364.snxsch");
     let sheet = SchematicSheet {
         uuid: Uuid::new_v4(),
@@ -251,11 +271,6 @@ pub(crate) fn app_with_libraries(libs: &[&Fixture]) -> Signex {
     });
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(path);
-    for f in libs {
-        app.library
-            .open_library(f.snxlib.clone())
-            .expect("mount library");
-    }
     app
 }
 

@@ -367,7 +367,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 47] = [
+const ALL_KINDS: [CommandKind; 48] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -390,6 +390,7 @@ const ALL_KINDS: [CommandKind; 47] = [
     CommandKind::PlaceSymbol,
     CommandKind::RegisterLibSymbol,
     CommandKind::ReplaceLibSymbol,
+    CommandKind::ChangeComponent,
     CommandKind::PlaceChildSheet,
     CommandKind::PlaceSheetPin,
     CommandKind::PlaceJunction,
@@ -444,6 +445,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::PlaceSymbol
         | CommandKind::RegisterLibSymbol
         | CommandKind::ReplaceLibSymbol
+        | CommandKind::ChangeComponent
         | CommandKind::PlaceChildSheet
         | CommandKind::PlaceSheetPin
         | CommandKind::PlaceJunction
@@ -758,6 +760,22 @@ fn samples() -> Vec<(String, Command)> {
         Command::ReplaceLibSymbol {
             lib_symbol: lib_symbol("L:S", "new"),
             library_versions: vec![(sym, "2".into())],
+        },
+    );
+    add(
+        "ChangeComponent",
+        Command::ChangeComponent {
+            symbol_id: sym,
+            replacement: crate::ComponentReplacement {
+                lib_symbol: lib_symbol("L:NEW", "new"),
+                library_id: Some(uid(SYMBOL, 7)),
+                row_id: Some(uid(SYMBOL, 8)),
+                library_version: "2".into(),
+                value: "NEW-MPN".into(),
+                footprint: String::new(),
+                datasheet: String::new(),
+                fields: Vec::new(),
+            },
         },
     );
     add(

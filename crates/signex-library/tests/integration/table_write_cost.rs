@@ -81,29 +81,6 @@ fn row(n: usize, lib: Uuid) -> ComponentRow {
     }
 }
 
-#[test]
-#[ignore = "timing measurement for #416"]
-fn one_row_edit_cost_by_table_size() {
-    let lib = Uuid::new_v4();
-    for size in [1_000usize, 10_000, 50_000] {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("t.tsv");
-        let rows: Vec<_> = (0..size).map(|n| row(n, lib)).collect();
-        write_table(&path, &rows).unwrap();
-        let bytes = std::fs::metadata(&path).unwrap().len();
-
-        let mut edited = rows[size / 2].clone();
-        edited.version = "0.0.2".into();
-        let t = Instant::now();
-        update_row(&path, &edited).unwrap();
-        let upd = t.elapsed();
-        let t = Instant::now();
-        append_row(&path, &row(size, lib)).unwrap();
-        let app = t.elapsed();
-        println!("rows={size} bytes={bytes} update_row={upd:?} append_row={app:?}");
-    }
-}
-
 /// A git-backed library at `<dir>/lib/lib.snxlib` whose `resistors` table
 /// holds `size` rows, the first of which is returned as read back (with its
 /// base). The bulk rows are written straight to the file and left
