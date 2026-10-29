@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::library::refresh::RefreshFollowUp;
+use crate::library::writes::{RowEdit, RowPatch, WriteFailure, WriteKind, row_edit_task};
 
 impl Signex {
     /// Commit a per-cell inline edit to the row. Re-hashes + persists.
@@ -16,14 +17,15 @@ impl Signex {
         if self.refuse_read_only_write(&library_path) {
             return Task::none();
         }
-        // Drop the buffer eagerly — if the save fails we re-insert below.
-        let buf = match self
-            .library
-            .library_browsers
-            .get_mut(&library_path)
-            .and_then(|s| s.cell_edit.remove(&(row_id, column.clone())))
-        {
-            Some(v) => v,
+        // The buffer stays until the write has landed: a failed or refused
+        // commit keeps what the user typed, and typing on during the write
+        // is not mistaken for the saved text (#893).
+        let key = (row_id, column.clone());
+        let buf = match self.library.library_browsers.get(&library_path) {
+            Some(state) => match state.cell_edit.get(&key) {
+                Some(buf) => buf.clone(),
+                None => return Task::none(),
+            },
             None => return Task::none(),
         };
         // Read the current row from the cache, mutate, re-hash, save.
@@ -88,9 +90,6 @@ impl Signex {
                             path = %library_path.display(),
                             "browser cell commit refused; the stored value is kept"
                         );
-                        if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
-                            state.cell_edit.insert((row_id, column), buf);
-                        }
                         // This handler does not run `finish_update`, so
                         // republish here or the refusal sits in the ring
                         // buffer until some unrelated later message
@@ -115,48 +114,108 @@ impl Signex {
                 tracing::warn!(
                     target: "signex::library",
                     error = %e,
-                    "browser cell commit: hash failed; reverting buffer"
+                    "browser cell commit: hash failed; the buffer is kept"
                 );
-                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
-                    state.cell_edit.insert((row_id, column), buf);
-                }
                 self.sync_diagnostics_panel_ctx();
                 return Task::none();
             }
         }
-        let library_id = self
-            .library
-            .library_at(&library_path)
-            .map(|lib| lib.library_id);
-        let result = match library_id.and_then(|id| self.library.set.get(id)) {
-            Some(adapter) => adapter.update_row(&table, row.clone(), "edit cell"),
-            None => Err(signex_library::LibraryError::NotFound(
-                library_path.display().to_string(),
-            )),
+        let edited_column = column.clone();
+        let kind = WriteKind::CellSaved {
+            table: table.clone(),
+            row_id,
+            column,
+            typed: buf,
+            saved: Box::new(row.clone()),
         };
-        let revision = match result {
+        let edited = row.clone();
+        let patch: RowPatch = Box::new(move |stored| apply_column(&edited_column, &edited, stored));
+        let edit = RowEdit {
+            table,
+            row_id,
+            row,
+            patch: Some(patch),
+            message: "edit cell",
+        };
+        row_edit_task(&mut self.library, &library_path, kind, edit)
+    }
+
+    /// The cell's row write finished.
+    pub(in crate::app::dispatch::library) fn cell_saved(
+        &mut self,
+        library_path: std::path::PathBuf,
+        cell: SavedCell,
+        outcome: Result<Option<u64>, WriteFailure>,
+    ) -> Task<Message> {
+        let SavedCell {
+            table,
+            row_id,
+            column,
+            typed,
+            saved,
+        } = cell;
+        let key = (row_id, column.clone());
+        let revision = match outcome {
             Ok(revision) => revision,
-            Err(e) => {
+            Err(failure) => {
                 crate::diagnostics::log_warning(format!(
-                    "Cell {column} of row {row_id} was not saved: {e} (table {table}, {})",
+                    "Cell {column} of row {row_id} was not saved: {} (table {table}, {})",
+                    failure.reason,
                     library_path.display()
                 ));
-                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
-                    state.cell_edit.insert((row_id, column), buf);
-                }
                 // A refused write leaves the cache on the stale revision, so
-                // every retry would be refused again: re-read the rows.
+                // every retry would be refused again: re-read the rows. The
+                // buffer is still there for the retry.
                 let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
                 // No `finish_update` here: republish so the refusal shows now.
                 self.sync_diagnostics_panel_ctx();
                 return refresh;
             }
         };
+        // Done with the typed text, unless the user went on typing in the
+        // cell while the write ran.
+        if let Some(state) = self.library.library_browsers.get_mut(&library_path)
+            && state.cell_edit.get(&key) == Some(&typed)
+        {
+            state.cell_edit.remove(&key);
+        }
         // The re-read lands later; show the saved row (new revision
         // included) right away so the cell does not flash its old value and
         // a second commit starts from the saved revision.
+        let edited = *saved;
         self.library
-            .patch_cached_row(&library_path, &table, row, revision);
+            .patch_cached_row_with(&library_path, &table, row_id, revision, |cached| {
+                apply_column(&column, &edited, cached)
+            });
         self.refresh_library_task(&library_path, RefreshFollowUp::CleanEditors(vec![row_id]))
+    }
+}
+
+/// What a saved cell carries from its [`WriteKind::CellSaved`].
+pub(in crate::app::dispatch::library) struct SavedCell {
+    pub table: String,
+    pub row_id: RowId,
+    pub column: String,
+    pub typed: String,
+    pub saved: Box<signex_library::ComponentRow>,
+}
+
+/// Copy the field `column` names from the edited row `from` into `to`.
+fn apply_column(
+    column: &str,
+    from: &signex_library::ComponentRow,
+    to: &mut signex_library::ComponentRow,
+) {
+    match column {
+        "internal_pn" => to.internal_pn = from.internal_pn.clone(),
+        "manufacturer" => to.primary_mpn.manufacturer = from.primary_mpn.manufacturer.clone(),
+        "mpn" => to.primary_mpn.mpn = from.primary_mpn.mpn.clone(),
+        other => {
+            if let Some(key) = other.strip_prefix("parameters.")
+                && let Some(value) = from.parameters.get(key)
+            {
+                to.parameters.insert(key.to_string(), value.clone());
+            }
+        }
     }
 }

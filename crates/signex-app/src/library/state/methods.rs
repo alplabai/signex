@@ -86,6 +86,7 @@ impl Default for LibraryState {
             external_poll_stall_reported: false,
             external_poll_failure_reported: false,
             pricing_refresh: None,
+            writes: Default::default(),
             clock: chrono::Utc::now(),
             refresh_generations: HashMap::new(),
             refresh_generation_counter: 0,
@@ -319,6 +320,19 @@ impl LibraryState {
     pub fn close_library(&mut self, root: &Path) {
         // A pricing walk of this library must not write after it is closed.
         self.cancel_pricing_refresh_of(&[root.to_path_buf()]);
+        // A write a worker still has in hand finishes before the library
+        // goes (ADR-0003 D2: a boundary waits for owed write-type work, it
+        // cannot cancel it). A write is short; the wait is bounded.
+        if !self
+            .writes
+            .wait_idle(root, super::super::writes::CLOSE_WAIT)
+        {
+            crate::diagnostics::log_warning(format!(
+                "Closing {}: a library write was still running after {} s; closed anyway.",
+                root.display(),
+                super::super::writes::CLOSE_WAIT.as_secs()
+            ));
+        }
         // Cancel any mount still being prepared off-thread for this path
         // (#99 part 2c). `pending_mounts` doubles as the cancellation
         // tombstone: `take_mount_intent` returns `None` for a path that

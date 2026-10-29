@@ -24,7 +24,7 @@ impl Signex {
         path: std::path::PathBuf,
         generation: u64,
         snapshot: RefreshSnapshotCell,
-    ) {
+    ) -> Task<Message> {
         let snapshot = snapshot.take().unwrap_or_else(|| {
             Err(LibraryError::Backend(
                 "refresh result was already taken".into(),
@@ -62,17 +62,24 @@ impl Signex {
                 ));
             }
         }
+        let mut tasks = Vec::new();
         for follow_up in finish.follow_ups {
             match &failure {
-                None => self.after_refresh_applied(&path, follow_up),
+                None => tasks.push(self.after_refresh_applied(&path, follow_up)),
                 Some(error) => self.after_refresh_failed(&path, follow_up, error),
             }
         }
+        Task::batch(tasks)
     }
 
-    fn after_refresh_applied(&mut self, path: &std::path::Path, follow_up: RefreshFollowUp) {
+    fn after_refresh_applied(
+        &mut self,
+        path: &std::path::Path,
+        follow_up: RefreshFollowUp,
+    ) -> Task<Message> {
         match follow_up {
             RefreshFollowUp::Nothing | RefreshFollowUp::PricingSaved => {}
+            RefreshFollowUp::RevealSelected => return self.reveal_selected_browser_row(path),
             RefreshFollowUp::CleanEditors(rows) => self.refresh_clean_editors(path, &rows),
             RefreshFollowUp::ExternalEdit { own_edit, .. } => {
                 if !own_edit {
@@ -84,6 +91,7 @@ impl Signex {
                 self.refresh_panel_ctx();
             }
         }
+        Task::none()
     }
 
     fn after_refresh_failed(
@@ -111,7 +119,9 @@ impl Signex {
                 ));
             }
             // Reported once by `handle_refresh_finished`.
-            RefreshFollowUp::Nothing | RefreshFollowUp::CleanEditors(_) => {}
+            RefreshFollowUp::Nothing
+            | RefreshFollowUp::RevealSelected
+            | RefreshFollowUp::CleanEditors(_) => {}
         }
     }
 
@@ -128,15 +138,19 @@ impl Signex {
     /// the runtime would once its blocking read finished: same read, same
     /// completion handler, no thread. For tests, which cannot run a `Task`.
     #[doc(hidden)]
-    pub fn land_pending_refresh(&mut self, path: &std::path::Path) {
+    pub fn land_pending_refresh(&mut self, path: &std::path::Path) -> Task<Message> {
         let generation = self.library.refresh_generations[path];
-        self.land_refresh_with_generation(path, generation);
+        self.land_refresh_with_generation(path, generation)
     }
 
     /// [`Self::land_pending_refresh`] for a read stamped `generation`,
     /// which the library may have moved past.
     #[doc(hidden)]
-    pub fn land_refresh_with_generation(&mut self, path: &std::path::Path, generation: u64) {
+    pub fn land_refresh_with_generation(
+        &mut self,
+        path: &std::path::Path,
+        generation: u64,
+    ) -> Task<Message> {
         let library_id = self
             .library
             .library_at(path)
@@ -145,6 +159,6 @@ impl Signex {
         let adapter = self.library.set.get(library_id).expect("adapter mounted");
         let snapshot = crate::library::state::LibrarySnapshot::read(adapter, path);
         let cell = RefreshSnapshotCell::new(snapshot);
-        self.handle_refresh_finished(path.to_path_buf(), generation, cell);
+        self.handle_refresh_finished(path.to_path_buf(), generation, cell)
     }
 }

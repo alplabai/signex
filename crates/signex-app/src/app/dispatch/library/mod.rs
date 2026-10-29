@@ -49,6 +49,7 @@ mod external_edits;
 mod grid_window_tests;
 mod lifecycle;
 mod new_component;
+mod new_row;
 mod pricing;
 #[cfg(test)]
 mod pricing_tests;
@@ -67,6 +68,9 @@ mod stale_row_tests;
 mod stock_copy;
 mod updates;
 mod use_site;
+mod write_done;
+#[cfg(test)]
+mod write_off_thread_tests;
 
 use recovery::{
     handle_recovery_broken_binding, handle_recovery_git_missing, handle_recovery_library_missing,
@@ -280,10 +284,8 @@ impl Signex {
                 path,
                 generation,
                 snapshot,
-            } => {
-                self.handle_refresh_finished(path, generation, snapshot);
-                Task::none()
-            }
+            } => self.handle_refresh_finished(path, generation, snapshot),
+            LibraryMessage::WriteFinished(done) => self.handle_write_finished(*done),
             LibraryMessage::BrowserSelectTable {
                 library_path,
                 table,
@@ -391,6 +393,9 @@ impl Signex {
                 handle_recovery_library_missing_locate_result(self, picked)
             }
             LibraryMessage::RecoveryGitMissing(choice) => handle_recovery_git_missing(self, choice),
+            LibraryMessage::GitReinitFinished { path, result } => {
+                recovery::handle_git_reinit_finished(self, path, result)
+            }
             LibraryMessage::RecoveryBrokenBinding(choice) => {
                 handle_recovery_broken_binding(self, choice)
             }

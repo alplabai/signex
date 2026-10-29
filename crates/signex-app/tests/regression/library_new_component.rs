@@ -94,7 +94,8 @@ fn new_component_with_no_library_open_says_why() {
     app.library.open_libraries.clear();
     let before = diagnostics::newest_entry_id();
 
-    let _ = app.update(Message::Library(LibraryMessage::NewComponent));
+    let task = app.update(Message::Library(LibraryMessage::NewComponent));
+    crate::drive::drive(&mut app, task);
 
     let records = records_since(
         before,
@@ -127,7 +128,8 @@ fn new_component_on_a_library_without_a_table_says_why() {
     });
     let before = diagnostics::newest_entry_id();
 
-    let _ = app.update(Message::Library(LibraryMessage::NewComponent));
+    let task = app.update(Message::Library(LibraryMessage::NewComponent));
+    crate::drive::drive(&mut app, task);
 
     let records = records_since(before, "library \"Unmounted\" is not loaded");
     assert_eq!(records.len(), 1, "silent no-op: {records:?}");
@@ -148,7 +150,8 @@ fn a_new_row_is_unbound_reported_once_and_binding_clears_it() {
         .expect("mount library");
     let before = diagnostics::newest_entry_id();
 
-    let _ = app.update(Message::Library(LibraryMessage::NewComponent));
+    let task = app.update(Message::Library(LibraryMessage::NewComponent));
+    crate::drive::drive(&mut app, task);
 
     let (table, row) = only_row(&app, &snxlib);
     assert!(row.is_symbol_unbound(), "no symbol was picked");
@@ -165,17 +168,19 @@ fn a_new_row_is_unbound_reported_once_and_binding_clears_it() {
     // Bind a symbol through the real picker flow.
     let row_id = RowId::from_uuid(row.row_id);
     let address = EditorAddress::new(snxlib.clone(), table.clone(), row_id);
-    let _ = app.update(Message::Library(LibraryMessage::OpenPrimitivePicker {
+    let task = app.update(Message::Library(LibraryMessage::OpenPrimitivePicker {
         kind: PrimitiveKind::Symbol,
         target: PrimitivePickerTarget::BrowserRow(address),
     }));
+    crate::drive::drive(&mut app, task);
     let library_id = app.library.library_at(&snxlib).expect("open").library_id;
     let picked = PrimitiveRef::new(library_id, Uuid::now_v7());
-    let _ = app.update(Message::Library(LibraryMessage::PrimitivePicker(
+    let task = app.update(Message::Library(LibraryMessage::PrimitivePicker(
         PrimitivePickerMsg::Pick(picked),
     )));
+    crate::drive::drive(&mut app, task);
     // The re-read the bind started, landing as the runtime would.
-    app.land_pending_refresh(&snxlib);
+    drop(app.land_pending_refresh(&snxlib));
 
     let (_, bound) = only_row(&app, &snxlib);
     assert!(!bound.is_symbol_unbound(), "binding must clear the marker");
@@ -198,8 +203,10 @@ fn two_blank_new_components_in_a_row_both_succeed() {
         .open_library(snxlib.clone())
         .expect("mount library");
 
-    let _ = app.update(Message::Library(LibraryMessage::NewComponent));
-    let _ = app.update(Message::Library(LibraryMessage::NewComponent));
+    let task = app.update(Message::Library(LibraryMessage::NewComponent));
+    crate::drive::drive(&mut app, task);
+    let task = app.update(Message::Library(LibraryMessage::NewComponent));
+    crate::drive::drive(&mut app, task);
 
     let lib = app.library.library_at(&snxlib).expect("library is open");
     let rows: usize = lib.tables.values().map(Vec::len).sum();

@@ -235,6 +235,32 @@ impl LibraryState {
         }
     }
 
+    /// Show an edit this app just saved, ahead of the re-read: `apply`
+    /// changes the cached row (only the fields that were edited, so a row
+    /// that other writes moved on meanwhile keeps their changes) and it
+    /// takes the new base `revision`.
+    pub fn patch_cached_row_with(
+        &mut self,
+        root: &Path,
+        table: &str,
+        row_id: RowId,
+        revision: Option<u64>,
+        apply: impl FnOnce(&mut ComponentRow),
+    ) {
+        self.touch_data();
+        let cached = self
+            .library_at_mut(root)
+            .and_then(|lib| lib.tables.get_mut(table))
+            .and_then(|rows| {
+                rows.iter_mut()
+                    .find(|r| RowId::from_uuid(r.row_id) == row_id)
+            });
+        if let Some(row) = cached {
+            apply(row);
+            row.server_revision = revision;
+        }
+    }
+
     fn adapter_at(&self, root: &Path) -> Result<&dyn LibraryAdapter, LibraryError> {
         let not_found = || LibraryError::NotFound(root.display().to_string());
         let library_id = self.library_at(root).ok_or_else(not_found)?.library_id;

@@ -15,6 +15,8 @@ use crate::library::component_preview::{apply_inline_edit, test_row};
 use crate::library::editor::datasheet_picker::DatasheetMode;
 use crate::library::state::{ComponentPreviewState, LibraryDisplaySettings, OpenLibrary};
 use crate::library::test_adapters::RevisionedRowAdapter;
+use crate::library::writes::test_support::run_task;
+use crate::library::writes::test_support::run_write;
 
 const TABLE: &str = "R";
 const PDF: &[u8] = b"%PDF-1.7 the datasheet";
@@ -215,11 +217,12 @@ fn the_save_button_stores_on_a_worker_then_saves_the_row() {
     // What the worker does, then its completion message.
     let staged = editor(&app, &address).staged_assets_in_use();
     let written = store_assets(&file, &staged).unwrap();
-    app.finish_staged_asset_store(
+    let task = app.finish_staged_asset_store(
         &address,
         editor(&app, &address).saving_generation,
         Ok(written),
     );
+    run_task(&mut app, task);
 
     assert!(!app.document_state.document_saves.is_saving(&file));
     assert!(app.document_state.error_notice.is_none());
@@ -244,11 +247,12 @@ fn a_failed_store_leaves_the_row_unsaved_and_reports_it() {
     let before = std::fs::read(&file).unwrap();
 
     let _task = app.handle_save_row(&address);
-    app.finish_staged_asset_store(
+    let task = app.finish_staged_asset_store(
         &address,
         editor(&app, &address).saving_generation,
         Err("disk full".into()),
     );
+    run_task(&mut app, task);
 
     assert!(!app.document_state.document_saves.is_saving(&file));
     assert!(app.document_state.error_notice.is_some());
@@ -267,11 +271,12 @@ fn a_pdf_picked_while_the_store_runs_is_not_saved_and_the_editor_stays_dirty() {
 
     // A second pick lands before the completion message.
     let late = pick(&mut app, &address, b"%PDF-1.7 a later pick");
-    app.finish_staged_asset_store(
+    let task = app.finish_staged_asset_store(
         &address,
         editor(&app, &address).saving_generation,
         Ok(written),
     );
+    run_task(&mut app, task);
 
     assert!(app.document_state.error_notice.is_none());
     assert!(editor(&app, &address).dirty, "the later pick is unsaved");
@@ -322,11 +327,13 @@ fn a_primitive_bind_while_a_save_runs_is_refused_with_a_message() {
     assert!(editor(&app, &address).saving_row.is_some());
     let library_id = app.library.library_at(&file).unwrap().library_id;
 
-    let _ = app.apply_primitive_pick_to_preview(
+    let task = app.apply_primitive_pick_to_preview(
         address.clone(),
         signex_library::PrimitiveKind::Footprint,
         signex_library::PrimitiveRef::new(library_id, Uuid::now_v7()),
     );
+
+    run_write(&mut app, task);
 
     let state = editor(&app, &address);
     assert!(state.row.footprint_ref.is_none(), "the bind was refused");
@@ -434,7 +441,8 @@ fn a_save_after_a_double_failure_commits_the_untracked_pinned_pdf() {
     let state = app.library.editors.get_mut(&address).unwrap();
     state.row.datasheet_label = "edited after reload".into();
     state.dirty = true;
-    let _ = app.update(event(&address, EditorMsg::SaveDraft));
+    let task = app.update(event(&address, EditorMsg::SaveDraft));
+    run_task(&mut app, task);
 
     assert!(app.document_state.error_notice.is_none());
     assert!(!editor(&app, &address).dirty);
@@ -453,7 +461,8 @@ fn a_second_save_and_a_reload_wait_for_the_running_save() {
         app.document_state.document_saves.is_saving(&file),
         "one write in flight"
     );
-    let _ = app.handle_editor_event(address.clone(), EditorMsg::ReloadConfirmed);
+    let task = app.handle_editor_event(address.clone(), EditorMsg::ReloadConfirmed);
+    run_write(&mut app, task);
     assert!(
         editor(&app, &address).dirty,
         "reload did not replace the copy being saved"
@@ -472,11 +481,12 @@ fn a_written_pdf_the_saved_row_does_not_pin_is_not_committed() {
     let mut written = store_assets(&file, &staged).unwrap();
     let orphan = signex_library::store_datasheet(&file, b"%PDF-1.7 orphan").unwrap();
     written.push(signex_library::datasheet_asset_rel_path(&orphan).unwrap());
-    app.finish_staged_asset_store(
+    let task = app.finish_staged_asset_store(
         &address,
         editor(&app, &address).saving_generation,
         Ok(written),
     );
+    run_task(&mut app, task);
 
     let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
     let tree = repo
@@ -536,11 +546,13 @@ fn binding_a_primitive_never_saves_a_staged_hash_without_its_file() {
     let hash = pick(&mut app, &address, PDF);
     let library_id = app.library.library_at(&file).unwrap().library_id;
 
-    let _ = app.apply_primitive_pick_to_preview(
+    let task = app.apply_primitive_pick_to_preview(
         address.clone(),
         signex_library::PrimitiveKind::Footprint,
         signex_library::PrimitiveRef::new(library_id, Uuid::now_v7()),
     );
+
+    run_write(&mut app, task);
 
     let stored = app
         .library
@@ -616,13 +628,14 @@ fn the_messages_route_through_update() {
     let staged = editor(&app, &address).staged_assets_in_use();
     let written = store_assets(&file, &staged).unwrap();
     let generation = editor(&app, &address).saving_generation;
-    let _ = app.update(event(
+    let task = app.update(event(
         &address,
         EditorMsg::Datasheet(DatasheetMsg::AssetsStored {
             generation,
             result: Ok(written),
         }),
     ));
+    run_task(&mut app, task);
 
     assert!(!editor(&app, &address).dirty);
     assert!(!app.document_state.document_saves.is_saving(&file));
@@ -880,7 +893,8 @@ fn a_stale_completion_during_a_batch_is_not_a_failure_of_the_reopened_editor() {
         address.clone(),
         ComponentPreviewState::from_row(file.clone(), TABLE.into(), before),
     );
-    app.finish_staged_asset_store(&address, old_generation, Err("late".into()));
+    let task = app.finish_staged_asset_store(&address, old_generation, Err("late".into()));
+    run_task(&mut app, task);
 
     assert!(app.library.batch_row_failures.is_empty());
     assert!(editor(&app, &address).saving_batch.is_none());
@@ -957,7 +971,8 @@ fn an_old_store_completion_does_not_act_on_a_newer_save() {
     assert_ne!(old_generation, new_generation);
 
     // The old completion arrives first and is ignored.
-    app.finish_staged_asset_store(&address, old_generation, Ok(old_written));
+    let task = app.finish_staged_asset_store(&address, old_generation, Ok(old_written));
+    run_task(&mut app, task);
     assert!(app.document_state.error_notice.is_none(), "no false error");
     assert!(
         editor(&app, &address).saving_row.is_some(),
@@ -966,7 +981,8 @@ fn an_old_store_completion_does_not_act_on_a_newer_save() {
 
     // The newer completion commits normally.
     let written = store_assets(&file, &editor(&app, &address).staged_assets_in_use()).unwrap();
-    app.finish_staged_asset_store(&address, new_generation, Ok(written));
+    let task = app.finish_staged_asset_store(&address, new_generation, Ok(written));
+    run_task(&mut app, task);
     assert!(app.document_state.error_notice.is_none());
     assert!(!editor(&app, &address).dirty);
     assert!(head_has(&file, &second));

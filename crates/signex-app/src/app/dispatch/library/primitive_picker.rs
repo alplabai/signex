@@ -8,6 +8,9 @@
 use super::*;
 use crate::library::refresh::RefreshFollowUp;
 use crate::library::resolve::{ResolvedKind, report_read_failure};
+use crate::library::writes::{
+    RowEdit, RowPatch, WriteFailure, WriteKind, row_edit_task, write_task,
+};
 
 impl Signex {
     /// Open the Symbol/Footprint primitive picker modal. `target`
@@ -197,27 +200,38 @@ impl Signex {
                 return Task::none();
             }
         }
-        // 4. Persist via adapter.
-        let library_id = self
-            .library
-            .library_at(&address.library_path)
-            .map(|lib| lib.library_id);
-        let commit_msg = match kind {
-            PrimitiveKind::Symbol => "bind symbol",
-            PrimitiveKind::Footprint => "bind footprint",
-            PrimitiveKind::Sim => "bind sim",
-            _ => "bind primitive",
+        // 4. Persist via the adapter, on a worker.
+        let commit_msg = bind_message(kind);
+        let table = address.table.clone();
+        let library_path = address.library_path.clone();
+        let row_id = address.row_id;
+        let bound = row.clone();
+        let patch: RowPatch = Box::new(move |stored| match kind {
+            PrimitiveKind::Symbol => stored.bind_default_symbol(primitive_ref),
+            PrimitiveKind::Footprint => stored.footprint_ref = bound.footprint_ref,
+            _ => stored.sim_ref = bound.sim_ref,
+        });
+        let kind_done = WriteKind::BrowserRowBound { address, kind };
+        let edit = RowEdit {
+            table,
+            row_id,
+            row,
+            patch: Some(patch),
+            message: commit_msg,
         };
-        let result = match library_id.and_then(|id| self.library.set.get(id)) {
-            Some(adapter) => adapter.update_row(&address.table, row, commit_msg),
-            None => Err(signex_library::LibraryError::NotFound(
-                address.library_path.display().to_string(),
-            )),
-        };
-        if let Err(e) = result {
+        row_edit_task(&mut self.library, &library_path, kind_done, edit)
+    }
+
+    /// The browser row's primitive bind finished.
+    pub(super) fn browser_row_bound(
+        &mut self,
+        address: EditorAddress,
+        outcome: Result<Option<u64>, WriteFailure>,
+    ) -> Task<Message> {
+        if let Err(failure) = &outcome {
             crate::diagnostics::log_warning(format!(
-                "Primitive binding for row {} was not saved: {e}",
-                address.row_id
+                "Primitive binding for row {} was not saved: {}",
+                address.row_id, failure.reason
             ));
             // A refused write leaves the cache on the stale base, so every
             // retry would be refused again: re-read the rows.
@@ -244,6 +258,13 @@ impl Signex {
         let Some(state) = self.library.editors.get_mut(&address) else {
             return Task::none();
         };
+        if state.binding_primitive {
+            crate::diagnostics::log_warning(
+                "The primitive was not bound: another bind of this row is still being saved. Bind it again once that has finished.",
+            );
+            self.sync_diagnostics_panel_ctx();
+            return Task::none();
+        }
         if state.saving_row.is_some() {
             // The bind would move the row's revision under the running
             // save and fail it as stale: ask for it again afterwards.
@@ -289,20 +310,14 @@ impl Signex {
         // stored row keeps the editor's base revision, so a row that moved
         // on is still refused as stale.
         let base_revision = state.row.server_revision;
+        state.binding_primitive = true;
         let table = address.table.clone();
         let row_id = address.row_id;
-        let library_id = self
-            .library
-            .library_at(&address.library_path)
-            .map(|lib| lib.library_id);
-        let msg = match kind {
-            PrimitiveKind::Symbol => "bind symbol",
-            PrimitiveKind::Footprint => "bind footprint",
-            PrimitiveKind::Sim => "bind sim",
-            _ => "bind primitive",
-        };
-        let result = match library_id.and_then(|id| self.library.set.get(id)) {
-            Some(adapter) => adapter.read_row(&table, row_id).and_then(|mut stored| {
+        let msg = bind_message(kind);
+        let library_path = address.library_path.clone();
+        let done = WriteKind::PreviewRowBound { address, kind };
+        write_task(&mut self.library, &library_path, done, move |adapter| {
+            adapter.read_row(&table, row_id).and_then(|mut stored| {
                 match kind {
                     PrimitiveKind::Symbol => stored.bind_default_symbol(primitive_ref),
                     PrimitiveKind::Footprint => stored.footprint_ref = Some(primitive_ref),
@@ -313,12 +328,20 @@ impl Signex {
                     signex_library::LibraryError::Backend(format!("hash row content: {e}"))
                 })?;
                 adapter.update_row(&table, stored, msg)
-            }),
-            None => Err(signex_library::LibraryError::NotFound(
-                address.library_path.display().to_string(),
-            )),
-        };
-        match result {
+            })
+        })
+    }
+
+    /// The Component Preview's primitive bind finished.
+    pub(super) fn preview_row_bound(
+        &mut self,
+        address: EditorAddress,
+        outcome: Result<Option<u64>, WriteFailure>,
+    ) -> Task<Message> {
+        if let Some(state) = self.library.editors.get_mut(&address) {
+            state.binding_primitive = false;
+        }
+        match outcome {
             // Keep the editor's base revision current, or its next save
             // would be refused as stale.
             Ok(revision) => {
@@ -326,16 +349,16 @@ impl Signex {
                     state.row.server_revision = revision;
                 }
             }
-            Err(e) => {
+            Err(failure) => {
                 // Offer "Reload saved version" when the row moved on.
-                if matches!(e, signex_library::LibraryError::RowChanged { .. })
+                if failure.row_changed
                     && let Some(state) = self.library.editors.get_mut(&address)
                 {
                     state.stale_base = true;
                 }
                 crate::diagnostics::log_warning(format!(
-                    "Primitive binding for row {} was not saved: {e}",
-                    address.row_id
+                    "Primitive binding for row {} was not saved: {}",
+                    address.row_id, failure.reason
                 ));
                 self.sync_diagnostics_panel_ctx();
                 return Task::none();
@@ -409,5 +432,15 @@ impl Signex {
         Task::done(Message::Library(LibraryMessage::PrimitivePicker(
             PrimitivePickerMsg::Pick(primitive_ref),
         )))
+    }
+}
+
+/// The commit message of binding a primitive of `kind` to a row.
+fn bind_message(kind: PrimitiveKind) -> &'static str {
+    match kind {
+        PrimitiveKind::Symbol => "bind symbol",
+        PrimitiveKind::Footprint => "bind footprint",
+        PrimitiveKind::Sim => "bind sim",
+        _ => "bind primitive",
     }
 }

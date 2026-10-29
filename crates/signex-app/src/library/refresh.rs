@@ -36,6 +36,9 @@ pub enum RefreshFollowUp {
     },
     /// A Refresh All Pricing walk finished writing prices.
     PricingSaved,
+    /// Scroll the browser to its selected row, which the refresh just
+    /// brought into the cache (a freshly added row).
+    RevealSelected,
 }
 
 /// One-shot carrier for a read snapshot across the `Task::perform`
@@ -83,9 +86,13 @@ pub fn refresh_task(
     let path: PathBuf = root.to_path_buf();
     let read_path = path.clone();
     let generation = start.generation;
+    // Behind every write of this library started so far, so the read sees
+    // them all and never a file half-way through a rewrite (#893).
+    let turn = state.writes.turn(root);
     iced::Task::perform(
         async move {
             let result = tokio::task::spawn_blocking(move || {
+                turn.wait();
                 LibrarySnapshot::read(start.adapter.as_ref(), &read_path)
             })
             .await

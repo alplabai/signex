@@ -18,6 +18,7 @@ use crate::library::state::{
     ComponentPreviewState, EditorAddress, LibraryDisplaySettings, OpenLibrary,
 };
 use crate::library::test_adapters::RevisionedRowAdapter;
+use crate::library::writes::test_support::run_write;
 
 const TABLE: &str = "R";
 
@@ -102,7 +103,9 @@ fn editor<'a>(app: &'a Signex, address: &EditorAddress) -> &'a ComponentPreviewS
 fn saving_twice_in_a_row_moves_the_base_revision_on() {
     let (mut app, address) = app_with_row(1, 1);
 
-    let _ = app.handle_save_row(&address);
+    let task = app.handle_save_row(&address);
+
+    run_write(&mut app, task);
     assert!(app.document_state.error_notice.is_none());
     assert_eq!(editor(&app, &address).row.server_revision, Some(2));
 
@@ -111,7 +114,8 @@ fn saving_twice_in_a_row_moves_the_base_revision_on() {
         .get_mut(&address)
         .expect("editor open")
         .dirty = true;
-    let _ = app.handle_save_row(&address);
+    let task = app.handle_save_row(&address);
+    run_write(&mut app, task);
     assert!(
         app.document_state.error_notice.is_none(),
         "our own earlier save must not make the next one stale"
@@ -123,7 +127,9 @@ fn saving_twice_in_a_row_moves_the_base_revision_on() {
 fn a_stale_preview_save_is_refused_visibly_and_keeps_the_edit() {
     let (mut app, address) = app_with_row(2, 1);
 
-    let _ = app.handle_save_row(&address);
+    let task = app.handle_save_row(&address);
+
+    run_write(&mut app, task);
 
     let notice = app
         .document_state
@@ -144,7 +150,9 @@ fn a_stale_browser_delete_reaches_the_messages_panel() {
     let (mut app, address) = app_with_row(2, 1);
     let library_path: PathBuf = address.library_path.clone();
 
-    let _ = app.handle_browser_delete_row_confirm(library_path, TABLE.into(), address.row_id);
+    let task = app.handle_browser_delete_row_confirm(library_path, TABLE.into(), address.row_id);
+
+    run_write(&mut app, task);
 
     let marker = address.row_id.to_string();
     assert!(
@@ -167,12 +175,13 @@ fn commit_cell(app: &mut Signex, address: &EditorAddress, value: &str) {
     app.library
         .library_browsers
         .insert(library_path.clone(), browser);
-    let _ = app.handle_browser_cell_commit(
+    let task = app.handle_browser_cell_commit(
         library_path,
         TABLE.into(),
         address.row_id,
         "internal_pn".into(),
     );
+    run_write(app, task);
 }
 
 fn stored_pn(app: &Signex, address: &EditorAddress) -> String {
@@ -197,7 +206,7 @@ fn a_clean_preview_follows_a_browser_cell_commit_in_content_and_revision() {
     app.library.editors.get_mut(&address).unwrap().dirty = false;
 
     commit_cell(&mut app, &address, "R-115b");
-    app.land_pending_refresh(&address.library_path);
+    drop(app.land_pending_refresh(&address.library_path));
 
     let preview = editor(&app, &address);
     assert_eq!(preview.row.internal_pn.as_str(), "R-115b");
@@ -212,7 +221,9 @@ fn a_dirty_preview_cannot_overwrite_a_browser_cell_commit() {
     commit_cell(&mut app, &address, "R-115b");
     assert_eq!(editor(&app, &address).row.server_revision, Some(1));
 
-    let _ = app.handle_save_row(&address);
+    let task = app.handle_save_row(&address);
+
+    run_write(&mut app, task);
 
     assert!(app.document_state.error_notice.is_some(), "save refused");
     assert_eq!(stored_pn(&app, &address), "R-115b", "browser edit survives");
@@ -224,24 +235,29 @@ fn a_dirty_preview_cannot_overwrite_a_browser_cell_commit() {
 fn reload_from_server_confirms_before_it_drops_a_dirty_draft() {
     let (mut app, address) = app_with_row(1, 1);
     commit_cell(&mut app, &address, "R-115b");
-    let _ = app.handle_save_row(&address);
+    let task = app.handle_save_row(&address);
+    run_write(&mut app, task);
     let msg = |m| (address.clone(), m);
 
     let (a, m) = msg(EditorMsg::ReloadRequested);
-    let _ = app.handle_editor_event(a, m);
+    let task = app.handle_editor_event(a, m);
+    run_write(&mut app, task);
     let preview = editor(&app, &address);
     assert!(preview.reload_confirming && preview.dirty, "asks first");
     assert_eq!(preview.row.internal_pn.as_str(), "R-115");
 
     let (a, m) = msg(EditorMsg::ReloadCancelled);
-    let _ = app.handle_editor_event(a, m);
+    let task = app.handle_editor_event(a, m);
+    run_write(&mut app, task);
     assert!(!editor(&app, &address).reload_confirming);
     assert!(editor(&app, &address).dirty);
 
     let (a, m) = msg(EditorMsg::ReloadRequested);
-    let _ = app.handle_editor_event(a, m);
+    let task = app.handle_editor_event(a, m);
+    run_write(&mut app, task);
     let (a, m) = msg(EditorMsg::ReloadConfirmed);
-    let _ = app.handle_editor_event(a, m);
+    let task = app.handle_editor_event(a, m);
+    run_write(&mut app, task);
     let preview = editor(&app, &address);
     assert_eq!(preview.row.internal_pn.as_str(), "R-115b");
     assert_eq!(preview.row.server_revision, Some(2));
@@ -249,7 +265,8 @@ fn reload_from_server_confirms_before_it_drops_a_dirty_draft() {
 
     app.library.editors.get_mut(&address).unwrap().dirty = true;
     app.document_state.error_notice = None;
-    let _ = app.handle_save_row(&address);
+    let task = app.handle_save_row(&address);
+    run_write(&mut app, task);
     assert!(
         app.document_state.error_notice.is_none(),
         "saves after reload"
@@ -278,7 +295,8 @@ fn a_cascade_refreshes_a_clean_preview_and_spares_a_dirty_one() {
     // Dirty: untouched, and its own save is refused as stale.
     app.refresh_editors_after_cascade(&inside, &[address.row_id]);
     assert_eq!(editor(&app, &address).row.server_revision, Some(1));
-    let _ = app.handle_save_row(&address);
+    let task = app.handle_save_row(&address);
+    run_write(&mut app, task);
     assert!(app.document_state.error_notice.is_some());
 
     // Clean: follows the cascade.
@@ -311,15 +329,21 @@ fn the_edit_modal_reloads_the_stored_row_after_a_stale_refusal() {
             .expect("modal open")
     };
 
-    let _ = app.handle_browser_edit_msg(library_path.clone(), BrowserEditMsg::Save);
+    let task = app.handle_browser_edit_msg(library_path.clone(), BrowserEditMsg::Save);
+
+    run_write(&mut app, task);
     assert!(modal(&app).stale_base, "a stale save offers the reload");
     assert_eq!(modal(&app).draft.internal_pn.as_str(), "mine");
 
-    let _ = app.handle_browser_edit_msg(library_path.clone(), BrowserEditMsg::ReloadRequested);
+    let task = app.handle_browser_edit_msg(library_path.clone(), BrowserEditMsg::ReloadRequested);
+
+    run_write(&mut app, task);
     assert!(modal(&app).reload_confirming);
     assert_eq!(modal(&app).draft.internal_pn.as_str(), "mine", "asks first");
 
-    let _ = app.handle_browser_edit_msg(library_path.clone(), BrowserEditMsg::ReloadConfirmed);
+    let task = app.handle_browser_edit_msg(library_path.clone(), BrowserEditMsg::ReloadConfirmed);
+
+    run_write(&mut app, task);
     let reloaded = modal(&app);
     assert_eq!(reloaded.draft.internal_pn.as_str(), "R-115");
     assert_eq!(reloaded.draft.server_revision, Some(2));
@@ -354,11 +378,13 @@ fn a_preview_with_a_half_typed_value_is_not_reloaded_over() {
 fn a_stale_primitive_bind_from_the_preview_offers_the_reload() {
     let (mut app, address) = app_with_row(2, 1);
 
-    let _ = app.apply_primitive_pick_to_preview(
+    let task = app.apply_primitive_pick_to_preview(
         address.clone(),
         signex_library::PrimitiveKind::Symbol,
         PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
     );
+
+    run_write(&mut app, task);
 
     assert!(editor(&app, &address).stale_base);
     assert_eq!(editor(&app, &address).row.server_revision, Some(1));
@@ -410,7 +436,8 @@ fn an_off_thread_save_refreshes_the_previews_of_the_rows_it_cascaded() {
         vec![address.row_id],
     ));
     assert_eq!(editor(&app, &address).row.server_revision, Some(1));
-    let _ = app.handle_save_row(&address);
+    let task = app.handle_save_row(&address);
+    run_write(&mut app, task);
     assert!(app.document_state.error_notice.is_some(), "stale refused");
 
     // A clean one follows the cascade the worker ran.
@@ -433,13 +460,15 @@ fn a_refused_browser_row_bind_refreshes_the_cache_so_a_retry_is_not_refused_agai
     };
     assert_eq!(cached_base(&app), Some(1), "the cache starts stale");
 
-    let _ = app.apply_primitive_pick_to_browser_row(
+    let task = app.apply_primitive_pick_to_browser_row(
         address.clone(),
         signex_library::PrimitiveKind::Symbol,
         PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
     );
 
-    app.land_pending_refresh(&address.library_path);
+    run_write(&mut app, task);
+
+    drop(app.land_pending_refresh(&address.library_path));
 
     assert_eq!(cached_base(&app), Some(2), "the refusal re-reads the rows");
 }
@@ -478,10 +507,10 @@ fn a_superseded_refreshs_follow_up_runs_when_the_latest_lands() {
     let _ = app.refresh_library_task(&path, RefreshFollowUp::CleanEditors(vec![other_row]));
 
     // The older read reports first: nothing applies, nothing follows yet.
-    app.land_refresh_with_generation(&path, superseded);
+    drop(app.land_refresh_with_generation(&path, superseded));
     assert_eq!(editor(&app, &address).row.server_revision, Some(1));
 
-    app.land_pending_refresh(&path);
+    drop(app.land_pending_refresh(&path));
     assert_eq!(
         editor(&app, &address).row.server_revision,
         Some(2),
@@ -504,7 +533,7 @@ fn two_quick_commits_still_refresh_the_first_rows_clean_preview() {
         RefreshFollowUp::CleanEditors(vec![other_row]),
     );
 
-    app.land_pending_refresh(&address.library_path);
+    drop(app.land_pending_refresh(&address.library_path));
 
     let preview = editor(&app, &address);
     assert_eq!(preview.row.internal_pn.as_str(), "R-115b");
@@ -529,11 +558,11 @@ fn a_failed_refresh_without_a_follow_up_warns_once_naming_the_library() {
     let generation = app.library.refresh_generations[&path];
     let failed = Err(signex_library::LibraryError::Backend("marker-1374".into()));
 
-    app.handle_refresh_finished(
+    drop(app.handle_refresh_finished(
         path,
         generation,
         crate::library::refresh::RefreshSnapshotCell::new(failed),
-    );
+    ));
 
     let hits: Vec<_> = crate::diagnostics::recent_entries()
         .into_iter()
