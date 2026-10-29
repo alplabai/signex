@@ -209,6 +209,27 @@ pub fn write_move_keeps_wires_pref_at(path: &Path, enabled: bool) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Net insight on hover
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read "Show net info on hover" (#1270). Defaults to on when the key is
+/// missing or not a boolean.
+pub fn read_net_hover_pref_from(json: Option<&serde_json::Value>) -> bool {
+    json.and_then(|json| json["net_hover_enabled"].as_bool())
+        .unwrap_or(true)
+}
+
+pub fn write_net_hover_pref(enabled: bool) {
+    write_net_hover_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_net_hover_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, "net_hover_enabled", |prefs| {
+        prefs.insert("net_hover_enabled".to_string(), serde_json::json!(enabled));
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Select by drag direction
 // ──────────────────────────────────────────────────────────────────────────
 

@@ -38,31 +38,7 @@ pub(super) fn build_over_constraint_summaries(
     fp: &signex_library::primitive::footprint::Footprint,
     out: &signex_sketch::solver::FullSolveOutput,
 ) -> Vec<crate::panels::OverConstraintSummary> {
-    use crate::panels::OverConstraintSummary;
-
-    let sketch = match fp.sketch.as_ref() {
-        Some(s) => s,
-        None => return Vec::new(),
-    };
-    if out.over_constraints.is_empty() {
-        return Vec::new();
-    }
-    let over_set: std::collections::HashSet<_> = out.over_constraints.iter().copied().collect();
-
-    let mut summaries: Vec<OverConstraintSummary> = sketch
-        .constraints
-        .iter()
-        .filter(|c| over_set.contains(&c.id))
-        .map(|c| {
-            let label = c.kind.label();
-            OverConstraintSummary {
-                constraint_id: c.id,
-                kind_label: label,
-                residual_magnitude: residual_magnitude_of(c, out, sketch, label),
-                focus_entity_id: c.kind.focus_entity(),
-            }
-        })
-        .collect();
+    let mut summaries = constraint_summaries(fp, &out.over_constraints, out);
     // Unevaluable rows sort FIRST: the user cannot judge them from a
     // number, so they must not be buried under rows that at least
     // carry one. The rest stay descending by magnitude.
@@ -73,6 +49,47 @@ pub(super) fn build_over_constraint_summaries(
         (Some(x), Some(y)) => y.partial_cmp(&x).unwrap_or(std::cmp::Ordering::Equal),
     });
     summaries
+}
+
+/// #1649 — the constraints the solver found redundant but consistent, in
+/// constraint order, as panel rows (the residual is ~0 by construction).
+pub(super) fn build_redundant_constraint_summaries(
+    fp: &signex_library::primitive::footprint::Footprint,
+    out: &signex_sketch::solver::FullSolveOutput,
+) -> Vec<crate::panels::OverConstraintSummary> {
+    constraint_summaries(fp, &out.redundant_constraints, out)
+}
+
+fn constraint_summaries(
+    fp: &signex_library::primitive::footprint::Footprint,
+    ids: &[signex_sketch::id::ConstraintId],
+    out: &signex_sketch::solver::FullSolveOutput,
+) -> Vec<crate::panels::OverConstraintSummary> {
+    use crate::panels::OverConstraintSummary;
+
+    let sketch = match fp.sketch.as_ref() {
+        Some(s) => s,
+        None => return Vec::new(),
+    };
+    if ids.is_empty() {
+        return Vec::new();
+    }
+    let id_set: std::collections::HashSet<_> = ids.iter().copied().collect();
+
+    sketch
+        .constraints
+        .iter()
+        .filter(|c| id_set.contains(&c.id))
+        .map(|c| {
+            let label = c.kind.label();
+            OverConstraintSummary {
+                constraint_id: c.id,
+                kind_label: label,
+                residual_magnitude: residual_magnitude_of(c, out, sketch, label),
+                focus_entity_id: c.kind.focus_entity(),
+            }
+        })
+        .collect()
 }
 
 /// The rows for the last rejected edit's conflict. A row's focus entity is
@@ -245,6 +262,8 @@ mod tests {
             },
             colours: std::collections::HashMap::new(),
             over_constraints,
+            redundant_constraints: Vec::new(),
+            warnings: Vec::new(),
             jacobian: Vec::new(),
             params,
         };

@@ -163,6 +163,7 @@ shrink.
 | `flip_selected_x` | Flip selected x | modify | — | — |
 | `flip_selected_y` | Flip selected y | modify | — | — |
 | `force_annotate_all_schematics` | Force annotate all schematics | design | `Shift+Alt+A` | `Shift+Alt+A` |
+| `go_to_net_partner` | Go to net partner on another sheet | navigation | — | — |
 | `highlight_net_under_cursor` | Highlight net under cursor | select | — | ``` |
 | `highlight_related_net_objects` | Highlight/select related net objects across sheets | select | `Alt+Click` | — |
 | `lasso_select` | Lasso select | select | — | — |
@@ -232,3 +233,4 @@ _No commands in this group yet._
 | `footprint_mode_pads` | Switch footprint editor to Pads mode | library | `2` | `2` |
 | `footprint_mode_sketch` | Switch footprint editor to Sketch mode | library | `1` | `1` |
 | `footprint_mode_view_3d` | Switch footprint editor to 3D View mode | library | `3` | `3` |
+| `footprint_recompute_courtyard_outline` | Recompute footprint courtyard outline from pads | library | — | — |

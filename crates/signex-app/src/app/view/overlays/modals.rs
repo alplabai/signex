@@ -33,6 +33,7 @@ impl Signex {
             draft_pcb_gpu_render: ui.preferences_draft_pcb_gpu_render,
             draft_annotate_undo: ui.preferences_draft_annotate_undo,
             draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
+            draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,
             draft_drag_direction_select: ui.preferences_draft_drag_direction_select,
             draft_increment_step: ui.preferences_draft_increment_step,
             draft_paste_designators: ui.preferences_draft_paste_designators,

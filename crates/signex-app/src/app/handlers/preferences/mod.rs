@@ -105,6 +105,7 @@ impl Signex {
         self.ui_state.preferences_draft_pcb_gpu_render = self.ui_state.pcb_gpu_render;
         self.ui_state.preferences_draft_annotate_undo = self.ui_state.annotate_undo;
         self.ui_state.preferences_draft_move_keeps_wires = self.ui_state.move_keeps_wires;
+        self.ui_state.preferences_draft_net_hover_enabled = self.ui_state.net_hover_enabled;
         self.ui_state.preferences_draft_drag_direction_select = self.ui_state.drag_direction_select;
         self.ui_state.preferences_draft_increment_step = self.ui_state.increment_step;
         self.ui_state.preferences_draft_paste_designators = self.ui_state.paste_designators;
@@ -310,6 +311,7 @@ impl Signex {
                 self.ui_state.pcb_gpu_render = self.ui_state.preferences_draft_pcb_gpu_render;
                 self.ui_state.annotate_undo = self.ui_state.preferences_draft_annotate_undo;
                 self.ui_state.move_keeps_wires = self.ui_state.preferences_draft_move_keeps_wires;
+                self.ui_state.net_hover_enabled = self.ui_state.preferences_draft_net_hover_enabled;
                 self.ui_state.drag_direction_select =
                     self.ui_state.preferences_draft_drag_direction_select;
                 self.ui_state.increment_step = self.ui_state.preferences_draft_increment_step;
@@ -521,6 +523,10 @@ impl Signex {
             }
             PrefMsg::DraftDragDirectionSelect(enabled) => {
                 self.ui_state.preferences_draft_drag_direction_select = enabled;
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftNetHoverEnabled(enabled) => {
+                self.ui_state.preferences_draft_net_hover_enabled = enabled;
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftIncrementStep(step) => {

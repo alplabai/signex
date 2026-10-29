@@ -144,6 +144,8 @@ pub enum PrefMsg {
     DraftMoveKeepsWires(bool),
     /// Toggle "Select by drag direction". Persisted on Save.
     DraftDragDirectionSelect(bool),
+    /// Toggle "Show net info on hover". Persisted on Save.
+    DraftNetHoverEnabled(bool),
     /// Move the "Increment step" (-100..=100, never 0). Persisted on Save.
     DraftIncrementStep(i32),
     /// Choose what a pasted part is called. Persisted on Save.
@@ -301,6 +303,7 @@ pub struct PrefsView<'a> {
     pub draft_pcb_gpu_render: bool,
     pub draft_annotate_undo: crate::annotate_undo::AnnotateUndo,
     pub draft_move_keeps_wires: bool,
+    pub draft_net_hover_enabled: bool,
     pub draft_drag_direction_select: bool,
     pub draft_increment_step: i32,
     pub draft_paste_designators: crate::paste_prefs::PasteDesignators,
@@ -614,6 +617,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         nav,
         draft_annotate_undo,
         draft_move_keeps_wires,
+        draft_net_hover_enabled,
         draft_drag_direction_select,
         draft_increment_step,
         draft_paste_designators,
@@ -637,6 +641,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         PrefNav::Annotation => content_annotation(draft_annotate_undo),
         PrefNav::Editing => content_editing(
             draft_move_keeps_wires,
+            draft_net_hover_enabled,
             draft_drag_direction_select,
             draft_increment_step,
             draft_paste_designators,

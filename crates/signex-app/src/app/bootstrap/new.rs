@@ -139,6 +139,7 @@ impl Signex {
             crate::fonts::read_ui_scale_pref_from(prefs, &crate::fonts::prefs_file_path());
         let annotate_undo = crate::fonts::read_annotate_undo_pref_from(prefs);
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
+        let net_hover_enabled = crate::fonts::read_net_hover_pref_from(prefs);
         let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
         let increment_step = crate::fonts::read_increment_step_pref_from(prefs);
         let paste_designators = crate::fonts::read_paste_designators_pref_from(prefs);
@@ -288,6 +289,8 @@ impl Signex {
                 preferences_draft_annotate_undo: annotate_undo,
                 move_keeps_wires,
                 preferences_draft_move_keeps_wires: move_keeps_wires,
+                net_hover_enabled,
+                preferences_draft_net_hover_enabled: net_hover_enabled,
                 drag_direction_select,
                 preferences_draft_drag_direction_select: drag_direction_select,
                 increment_step,
@@ -434,6 +437,7 @@ impl Signex {
                 next_project_id: 0,
                 next_undo_group: 0,
                 documents_epoch: 0,
+                designator_cache: Default::default(),
                 next_pcb_revision: 0,
                 pcb_revisions: std::collections::HashMap::new(),
                 undo_groups: std::collections::HashMap::new(),
@@ -529,6 +533,7 @@ impl Signex {
                 preview: None,
                 page_setup_memory: Default::default(),
                 tab_placements: Default::default(),
+                net_nav: Default::default(),
                 raster_queue: Default::default(),
                 error_notice: None,
                 netlist_incomplete_prompt: None,
