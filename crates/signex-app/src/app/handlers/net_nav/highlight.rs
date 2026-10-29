@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use iced::Task;
 use signex_net::NetMemberKind;
-use signex_types::schematic::SelectedItem;
+use signex_types::schematic::{InstancePath, SelectedItem};
 
 use crate::app::state::net_nav::{NetHighlight, PendingNetAction, ProjectNetData};
 use crate::app::state::{ProjectId, WindowKind};
@@ -19,16 +19,31 @@ use super::messages;
 use super::navigate::{describe_member, selected_kind_of};
 use super::target::{NetTarget, net_of_target};
 
-/// The elements of net `net` on each sheet file, for what stays bright.
-fn bright_elements(
-    data: &ProjectNetData,
-    net: usize,
-) -> HashMap<PathBuf, Arc<HashSet<uuid::Uuid>>> {
-    data.index
+/// What stays bright for net `net`, per sheet placement, and the placement each
+/// sheet file is read through when its tab records none.
+fn bright_elements(data: &ProjectNetData, net: usize) -> Bright {
+    let elements = data
+        .index
         .highlight_elements(net)
         .into_iter()
-        .filter_map(|(key, ids)| Some((data.path_of(&key)?.to_path_buf(), Arc::new(ids))))
-        .collect()
+        .filter_map(|((key, placement), ids)| {
+            Some((
+                (data.path_of(&key)?.to_path_buf(), placement),
+                Arc::new(ids),
+            ))
+        })
+        .collect();
+    let defaults = data
+        .paths
+        .iter()
+        .filter_map(|(key, path)| Some((path.clone(), data.index.default_occurrence(key)?.clone())))
+        .collect();
+    Bright { elements, defaults }
+}
+
+struct Bright {
+    elements: HashMap<(PathBuf, InstancePath), Arc<HashSet<uuid::Uuid>>>,
+    defaults: HashMap<PathBuf, InstancePath>,
 }
 
 impl Signex {
@@ -63,6 +78,7 @@ impl Signex {
             crate::diagnostics::log_info(messages::no_project("net highlight"));
             return Task::none();
         };
+        self.document_state.net_nav.index.clear_failed(project);
         match self.net_index_lookup(project) {
             IndexLookup::Ready(data) => {
                 self.highlight_with(project, &data, &target, select_here);
@@ -97,14 +113,23 @@ impl Signex {
             .net(net)
             .map(|n| n.name.clone())
             .unwrap_or_default();
-        let elements = bright_elements(data, net);
-        let sheets = elements.len();
+        let bright = bright_elements(data, net);
+        let sheets = bright.elements.len();
+        let anchor = data
+            .index
+            .anchor_in(net, &key, target.item.uuid)
+            .or_else(|| data.index.anchor_of(net));
+        let Some(anchor) = anchor else {
+            crate::diagnostics::log_info(messages::on_no_net());
+            return;
+        };
         self.document_state.net_nav.highlight = Some(NetHighlight {
             project,
             name: name.clone(),
-            anchor: (key.clone(), target.item.uuid),
+            anchor,
             cursor: None,
-            elements,
+            elements: bright.elements,
+            defaults: bright.defaults,
         });
         if select_here {
             self.select_net_members_here(data, &key, net, target.occurrence.as_ref());
@@ -153,6 +178,7 @@ impl Signex {
             crate::diagnostics::log_info(messages::nothing_highlighted());
             return Task::none();
         };
+        self.document_state.net_nav.index.clear_failed(project);
         match self.net_index_lookup(project) {
             IndexLookup::Ready(data) => self.step_with(&data, forward),
             IndexLookup::Building(build) => {
@@ -227,7 +253,9 @@ impl Signex {
         }
         match data.index.resolve(&highlight.name, &highlight.anchor) {
             Some(net) => {
-                highlight.elements = bright_elements(data, net);
+                let bright = bright_elements(data, net);
+                highlight.elements = bright.elements;
+                highlight.defaults = bright.defaults;
                 if let Some(n) = data.index.net(net) {
                     highlight.name.clone_from(&n.name);
                 }
@@ -262,8 +290,10 @@ impl Signex {
         let bright = |path: Option<&std::path::Path>| {
             let highlight = highlight?;
             let path = path?;
-            (self.project_of_sheet(path) == Some(highlight.project))
-                .then(|| highlight.bright_on(path))
+            (self.project_of_sheet(path) == Some(highlight.project)).then(|| {
+                let placement = self.document_state.tab_placements.get(path);
+                highlight.bright_on(path, placement)
+            })
         };
         let main = bright(main_path.as_deref());
         let windows: Vec<_> = per_window

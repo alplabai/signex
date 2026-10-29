@@ -51,6 +51,8 @@ impl Signex {
             crate::diagnostics::log_info(messages::no_project("Go to net partner"));
             return Task::none();
         };
+        // The user asked: a build that failed before may work now.
+        self.document_state.net_nav.index.clear_failed(project);
         match self.net_index_lookup(project) {
             IndexLookup::Ready(data) => self.jump_with(&data, &target),
             IndexLookup::Building(build) => {
@@ -145,7 +147,10 @@ impl Signex {
         member: &NetMember,
     ) -> Option<Task<Message>> {
         let held = self.resolve_held_spelling(path.to_path_buf());
-        if self.document_state.active_path.as_deref() != Some(held.as_path()) {
+        // Another placement of the same file is another sheet instance: switch
+        // to the member's own, not just to the file.
+        let shows_it = self.document_state.tab_placements.get(&held) == Some(&member.occurrence);
+        if self.document_state.active_path.as_deref() != Some(held.as_path()) || !shows_it {
             self.open_sheet_with_placement(path.to_path_buf(), Some(member.occurrence.clone()));
         }
         let opened = self.resolve_held_spelling(path.to_path_buf());
@@ -162,21 +167,27 @@ impl Signex {
     pub(crate) fn step_sheet_history(&mut self, forward: bool) -> Task<Message> {
         loop {
             let history = &mut self.document_state.net_nav.history;
-            let step = if forward {
-                history.forward()
-            } else {
-                history.back()
-            };
-            let Some(path) = step else {
+            let Some(path) = history.peek(forward).map(std::path::Path::to_path_buf) else {
                 crate::diagnostics::log_info(messages::no_history(forward));
                 return Task::none();
             };
             // A sheet that is neither open nor on disk is skipped here, so the
             // open path does not report it as a missing child sheet.
             let open = self.document_state.tabs.iter().any(|t| t.path == path);
-            if (open || path.exists()) && self.open_or_focus_sheet_path(path.clone()) {
-                return Task::none();
+            if open || path.exists() {
+                // The history moves only once the sheet is really shown, and
+                // the focus change this causes is not a visit of its own.
+                self.document_state.net_nav.history.hold(true);
+                let shown = self.open_or_focus_sheet_path(path.clone());
+                self.document_state.net_nav.history.hold(false);
+                if shown {
+                    let landed = self.active_tab_path().unwrap_or(path);
+                    self.document_state.net_nav.history.arrive(forward, &landed);
+                    return Task::none();
+                }
             }
+            // It cannot be opened: forget it rather than skip it every pass.
+            self.document_state.net_nav.history.drop_entry(forward);
             crate::diagnostics::log_warning(messages::history_skipped(&path));
         }
     }

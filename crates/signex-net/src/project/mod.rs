@@ -326,7 +326,10 @@ fn stitch_project(graph: &ProjectGraph, want: Want) -> Stitched {
     detect_shared_references(&occs, &mut issues);
 
     // ---- Level 1: per-occurrence analysis (all unions before any sampling) --
-    let analyses: Vec<Analysis> = occs.iter().map(|o| analyze(o.sheet, &o.path)).collect();
+    let analyses: Vec<Analysis> = occs
+        .iter()
+        .map(|o| analyze(o.sheet, &o.path, want_members))
+        .collect();
 
     // ---- Level 2: union net roots across occurrences ------------------------
     let mut l2: HashMap<L2, L2> = HashMap::new();
@@ -627,7 +630,7 @@ fn assemble_net(
 
 /// Level-1 analysis for one sheet: the per-sheet derivation plus sheet-pin
 /// anchoring, sampled into the tables the stitcher reads.
-fn analyze<'a>(sheet: &'a SchematicSheet, path: &InstancePath) -> Analysis<'a> {
+fn analyze<'a>(sheet: &'a SchematicSheet, path: &InstancePath, want_members: bool) -> Analysis<'a> {
     let mut parent = merged_sheet_parent(sheet);
 
     // Anchor every child-sheet pin to the wire it sits on (endpoint or
@@ -671,8 +674,9 @@ fn analyze<'a>(sheet: &'a SchematicSheet, path: &InstancePath) -> Analysis<'a> {
         })
         .collect();
 
+    // Only a net index needs the entries' uuids; the plain netlist skips this.
     let mut sheet_pins: HashMap<Key, Vec<members::SheetPinAt>> = HashMap::new();
-    for cs in &sheet.child_sheets {
+    for cs in sheet.child_sheets.iter().filter(|_| want_members) {
         for sp in &cs.pins {
             let Some(name) = normalize_port_name(&sp.name) else {
                 continue;

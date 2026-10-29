@@ -347,3 +347,35 @@ pub(super) fn ring_project() -> Project {
         _dir: dir,
     }
 }
+
+/// A project whose root page does not parse, with one valid sheet open.
+/// Returns the project, the root's path and the open sheet's global label.
+pub(super) fn failing_root_project() -> (Project, PathBuf, u128) {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let label = 950;
+    let mut x = sheet_with_net("RX", "VCC", &[]);
+    x.labels[0].uuid = id(label);
+    let x_path = write(dir.path(), "x.snxsch", x);
+    let root_path = dir.path().join("root.snxsch");
+    std::fs::write(&root_path, "not a schematic").expect("write root");
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["root.snxsch", "x.snxsch"]);
+    assert!(app.open_or_focus_sheet_path(x_path.clone()));
+    let project = Project {
+        app,
+        root: root_path.clone(),
+        mid: x_path.clone(),
+        third: x_path,
+        _dir: dir,
+    };
+    (project, root_path, label)
+}
+
+impl Project {
+    /// Rewrite `root.snxsch` as a valid sheet placing `x.snxsch`.
+    pub fn fix_root(&self, root: &std::path::Path) {
+        let valid = sheet_with_net("RR", "VCC", &["x.snxsch"]);
+        let text = SnxSchematic::new(valid).write_string().expect("encode");
+        std::fs::write(root, text).expect("fix root");
+    }
+}

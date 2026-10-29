@@ -7,7 +7,8 @@
 
 use std::sync::{Arc, Weak};
 
-use signex_net::{NetAnchor, NetMember};
+use signex_net::{NetMember, SheetKey};
+use uuid::Uuid;
 
 use super::ProjectNetData;
 
@@ -17,7 +18,7 @@ pub struct JumpCursor {
     /// even while a lap is parked.
     index: Weak<ProjectNetData>,
     /// The port the last jump landed on: the next jump continues from it.
-    landed: NetAnchor,
+    landed: (SheetKey, Uuid),
     ring: Vec<NetMember>,
     next: usize,
 }
@@ -37,7 +38,7 @@ impl JumpCursor {
     }
 
     /// Whether a jump from `source` on `index` carries on this lap.
-    pub fn continues(&self, index: &Arc<ProjectNetData>, source: &NetAnchor) -> bool {
+    pub fn continues(&self, index: &Arc<ProjectNetData>, source: &(SheetKey, Uuid)) -> bool {
         self.index.ptr_eq(&Arc::downgrade(index)) && &self.landed == source
     }
 
@@ -59,9 +60,8 @@ impl JumpCursor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signex_net::{NetIndex, NetMemberKind, SheetKey};
+    use signex_net::{NetIndex, NetMemberKind};
     use signex_types::schematic::{InstancePath, LabelType, Point};
-    use uuid::Uuid;
 
     fn index() -> Arc<ProjectNetData> {
         Arc::new(ProjectNetData {

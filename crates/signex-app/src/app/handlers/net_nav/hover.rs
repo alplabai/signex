@@ -84,7 +84,16 @@ impl Signex {
                 Task::none()
             }
             IndexLookup::Building(build) => {
-                self.wait_for_net_index(project, PendingNetAction::HoverDwell, build)
+                let task = self.wait_for_net_index(project, PendingNetAction::HoverDwell, build);
+                // Parked for the index: the timer has nothing more to ask.
+                let nav = &mut self.document_state.net_nav;
+                let parked = nav.pending.as_ref().is_some_and(|p| {
+                    p.project == project && p.action == PendingNetAction::HoverDwell
+                });
+                if let (true, Some(candidate)) = (parked, nav.hover.candidate.as_mut()) {
+                    candidate.waiting = true;
+                }
+                task
             }
             IndexLookup::Unavailable => {
                 self.settle_hover(None);
