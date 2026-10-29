@@ -243,31 +243,114 @@ fn repeated_failing_solves_reach_the_messages_panel_once() {
     );
 }
 
+/// Reject a fresh 9 mm distance (a new constraint id, as the UI mints one per
+/// click) and report it. Returns how many Messages entries naming the
+/// pre-existing constraint appeared.
+fn reject_and_report(
+    state: &mut FootprintEditorState,
+    fp: &mut Footprint,
+    p1: SketchEntityId,
+    p2: SketchEntityId,
+    mm: f64,
+    needle: &str,
+) -> usize {
+    let before = crate::diagnostics::logged_count(needle);
+    let result = apply_sketch_edit(state, fp, SketchEdit::AddConstraint(distance(p1, p2, mm)));
+    let error = result.expect_err("the conflicting edit is rejected");
+    super::sketch_dispatch::report_solve_failure(state, &error);
+    crate::diagnostics::logged_count(needle) - before
+}
+
 /// The revert re-solves the last good sketch, and that clean solve must not
-/// forget what was logged: the same rejected edit made again is the same
-/// conflict, and the Messages panel hears about it once.
+/// forget what was logged: the same rejected click made again (a new
+/// constraint id each time) is the same conflict, and the Messages panel
+/// hears about it once.
 #[test]
 fn a_rejected_edit_repeated_logs_its_conflict_once() {
-    use super::sketch_dispatch::report_solve_failure;
+    let _ = crate::diagnostics::init_logging();
+    let (mut fp, mut state, p1, p2) = solved_footprint();
+    // The pre-existing 5 mm distance is named in every attempt's message.
+    let kept = fp.sketch.as_ref().expect("sketch").constraints[1].id;
+    let needle = kept.to_string();
+
+    assert_eq!(
+        reject_and_report(&mut state, &mut fp, p1, p2, 9.0, &needle),
+        1
+    );
+    for _ in 0..2 {
+        assert_eq!(
+            reject_and_report(&mut state, &mut fp, p1, p2, 9.0, &needle),
+            0
+        );
+    }
+}
+
+/// A different conflict is news: another kind of constraint on the same
+/// points logs again.
+#[test]
+fn a_different_rejected_conflict_is_logged() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut fp, mut state, p1, p2) = solved_footprint();
+    let kept = fp.sketch.as_ref().expect("sketch").constraints[1].id;
+    let needle = kept.to_string();
+    assert_eq!(
+        reject_and_report(&mut state, &mut fp, p1, p2, 9.0, &needle),
+        1
+    );
+
+    let coincident = Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Coincident { p1, p2 },
+    };
+    let before = crate::diagnostics::logged_count(&needle);
+    let error = apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddConstraint(coincident))
+        .expect_err("joining the points 5 mm apart is rejected");
+    super::sketch_dispatch::report_solve_failure(&mut state, &error);
+    assert_eq!(crate::diagnostics::logged_count(&needle) - before, 1);
+}
+
+/// A bake warning that holds across rejections (here a cutout on a circle)
+/// was logged with the sketch; rejecting an edit must not log it again.
+#[test]
+fn a_standing_bake_warning_is_not_relogged_by_a_rejected_edit() {
+    use signex_sketch::attr::BoardCutoutAttr;
 
     let _ = crate::diagnostics::init_logging();
     let (mut fp, mut state, p1, p2) = solved_footprint();
-    let conflicting = distance(p1, p2, 9.0);
-    let needle = conflicting.id.to_string();
-    let before = crate::diagnostics::logged_count(&needle);
+    let circle = SketchEntityId::new();
+    let plane = fp.sketch.as_ref().expect("sketch").planes[0].id;
+    let mut entity = Entity::new(
+        circle,
+        plane,
+        EntityKind::Circle {
+            center: p1,
+            radius: 1.0,
+        },
+    );
+    entity.board_cutout = Some(BoardCutoutAttr {
+        edge_radius_expr: None,
+        through: true,
+    });
+    fp.sketch.as_mut().expect("sketch").entities.push(entity);
 
-    for attempt in 0..3 {
-        let result = apply_sketch_edit(
-            &mut state,
-            &mut fp,
-            SketchEdit::AddConstraint(conflicting.clone()),
-        );
-        let error = result.expect_err("the conflicting edit is rejected");
-        report_solve_failure(&mut state, &error);
-        assert_eq!(
-            crate::diagnostics::logged_count(&needle) - before,
-            1,
-            "attempt {attempt}: the conflict is logged once"
-        );
+    let needle = format!("entity {circle}: BoardCutoutAttr requires");
+    let before = crate::diagnostics::logged_count(&needle);
+    apply_sketch_edit(&mut state, &mut fp, SketchEdit::ForceRebuild).expect("solves");
+    assert_eq!(
+        crate::diagnostics::logged_count(&needle) - before,
+        1,
+        "logged with the sketch"
+    );
+
+    let kept = fp.sketch.as_ref().expect("sketch").constraints[1]
+        .id
+        .to_string();
+    for _ in 0..2 {
+        reject_and_report(&mut state, &mut fp, p1, p2, 9.0, &kept);
     }
+    assert_eq!(
+        crate::diagnostics::logged_count(&needle) - before,
+        1,
+        "rejections leave the standing warning alone"
+    );
 }

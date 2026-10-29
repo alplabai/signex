@@ -83,6 +83,25 @@ pub(super) fn solve_failure_key(error: &SketchError) -> String {
     }
 }
 
+/// The key of a rejected edit's named conflict, built from what the
+/// conflicting constraints are (their kind and the entity they act on), not
+/// their ids: the UI mints a fresh id for the constraint on every attempt, so
+/// the same click again is the same conflict. A conflict between other
+/// constraints has other rows and so another key.
+fn rejected_conflict_key(state: &FootprintEditorState) -> Option<String> {
+    let mut rows: Vec<String> = state
+        .conflict
+        .rows()
+        .iter()
+        .map(|r| format!("{}@{:?}", r.kind_label, r.focus))
+        .collect();
+    if rows.is_empty() {
+        return None;
+    }
+    rows.sort();
+    Some(format!("rejected:{}", rows.join(",")))
+}
+
 /// Record `error` in `state.solve_warnings` and return the warnings that
 /// have not been logged since the set last changed. The bake warnings key on
 /// their text, the failure on [`solve_failure_key`].
@@ -92,13 +111,17 @@ pub(super) fn unlogged_failure_warnings(
 ) -> Vec<String> {
     state.solve_warnings.push(format!("{error}"));
     let last = state.solve_warnings.len() - 1;
+    let failure_key = was_reverted(error)
+        .then(|| rejected_conflict_key(state))
+        .flatten()
+        .unwrap_or_else(|| solve_failure_key(error));
     let keyed: Vec<(String, String)> = state
         .solve_warnings
         .iter()
         .enumerate()
         .map(|(i, w)| {
             let key = if i == last {
-                solve_failure_key(error)
+                failure_key.clone()
             } else {
                 w.clone()
             };
