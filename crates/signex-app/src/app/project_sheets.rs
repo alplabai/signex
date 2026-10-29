@@ -306,25 +306,56 @@ impl ProjectSheetPlan {
     }
 }
 
-/// The open sheets that belong to `source`'s project (declared pages and
-/// hierarchy children); for a loose document, the open sheets no project
-/// owns. Tabs of other projects are none of the job's business and are not
+/// The open sheets the walk for `source`'s project can read: every open
+/// sheet except those another project owns and this one neither lists nor
+/// reaches through an open parent. Sheets no project owns stay in (a child
+/// behind a closed parent has no owner), and so do pages this project lists
+/// even when another project owns them. Tabs of unrelated projects are not
 /// cloned.
-fn open_paths_of_project_of(document_state: &DocumentState, source: &Path) -> Vec<PathBuf> {
-    let Some(project) = document_state.document_project(source) else {
-        return document_state.unowned_engine_paths();
-    };
-    let id = project.id;
-    document_state
+fn open_paths_of_project_of(
+    document_state: &DocumentState,
+    source: &Path,
+    pages: &[PathBuf],
+    fold: CaseFold,
+) -> Vec<PathBuf> {
+    let id = document_state.document_project(source).map(|p| p.id);
+    let listed: HashSet<String> = pages.iter().map(|p| path_key_with(p, fold)).collect();
+    let mut included: HashSet<&PathBuf> = document_state
         .engines
         .keys()
         .filter(|path| {
-            document_state
-                .document_project(path)
-                .is_some_and(|owner| owner.id == id)
+            listed.contains(&path_key_with(path, fold))
+                || match document_state.document_project(path) {
+                    None => true,
+                    Some(owner) => Some(owner.id) == id,
+                }
         })
-        .cloned()
-        .collect()
+        .collect();
+    // A sheet an included open parent references belongs to the walk even
+    // when another project owns it.
+    let by_key: HashMap<String, &PathBuf> = document_state
+        .engines
+        .keys()
+        .map(|path| (path_key_with(path, fold), path))
+        .collect();
+    let mut queue: Vec<&PathBuf> = included.iter().copied().collect();
+    while let Some(parent) = queue.pop() {
+        let (Some(dir), Some(engine)) = (parent.parent(), document_state.engines.get(parent))
+        else {
+            continue;
+        };
+        for child in &engine.document().child_sheets {
+            let Ok(resolved) = resolve_child_reference_quiet(dir, &child.filename) else {
+                continue;
+            };
+            if let Some(path) = by_key.get(&path_key_with(&resolved, fold))
+                && included.insert(path)
+            {
+                queue.push(path);
+            }
+        }
+    }
+    included.into_iter().cloned().collect()
 }
 
 /// The plan for `source`'s project. The open sheets of that project are
@@ -341,7 +372,7 @@ pub(crate) fn plan_project_sheets_for(
     ProjectSheetPlan {
         open: open_sheets_snapshot_of(
             document_state,
-            &open_paths_of_project_of(document_state, source),
+            &open_paths_of_project_of(document_state, source, &pages, fold),
         ),
         pages,
         root,
@@ -1447,7 +1478,7 @@ mod tests {
     }
 
     #[test]
-    fn a_project_plan_snapshots_only_its_own_open_sheets() {
+    fn a_project_plan_leaves_out_other_projects_open_sheets() {
         let (mut app, _task) = crate::app::Signex::new();
         let (p1, p2) = (
             app.document_state.mint_project_id(),
@@ -1473,7 +1504,12 @@ mod tests {
         open.sort();
         assert_eq!(
             open,
-            [PathBuf::from("/p1/a.snxsch"), PathBuf::from("/p1/b.snxsch")]
+            [
+                PathBuf::from("/loose/d.snxsch"),
+                PathBuf::from("/p1/a.snxsch"),
+                PathBuf::from("/p1/b.snxsch"),
+            ],
+            "its own sheets and the unowned ones, not /p2's"
         );
 
         open_engine(&mut app, "/loose/e.snxsch");
@@ -1488,5 +1524,101 @@ mod tests {
             ],
             "a loose document clones the loose tabs, not a project's"
         );
+    }
+    /// A sheet holding one part `reference` and one child reference per name
+    /// in `children`.
+    fn sheet_with(reference: &str, children: &[&str]) -> SchematicSheet {
+        let mut sheet = SchematicSheet {
+            uuid: Uuid::new_v4(),
+            paper_size: "A4".to_owned(),
+            ..Default::default()
+        };
+        sheet.symbols.push(signex_types::schematic::Symbol {
+            uuid: Uuid::new_v4(),
+            lib_id: "lib:r".to_owned(),
+            reference: reference.to_owned(),
+            unit: 1,
+            ..Default::default()
+        });
+        sheet.child_sheets = children.iter().map(|name| child_ref(name)).collect();
+        sheet
+    }
+
+    fn write_to_disk(dir: &Path, name: &str, sheet: &SchematicSheet) {
+        let text = signex_types::format::SnxSchematic::new(sheet.clone())
+            .write_string()
+            .expect("write");
+        std::fs::write(dir.join(name), text).expect("write sheet");
+    }
+
+    fn references_seen(plan: &ProjectSheetPlan) -> Vec<String> {
+        let set = plan.assemble();
+        let mut all: Vec<String> = set
+            .sheets
+            .values()
+            .flat_map(|sheet| sheet.symbols.iter().map(|s| s.reference.clone()))
+            .collect();
+        all.sort();
+        all
+    }
+
+    fn open_with(app: &mut crate::app::Signex, path: PathBuf, sheet: SchematicSheet) {
+        app.document_state
+            .engines
+            .insert(path, signex_engine::Engine::new(sheet).expect("engine"));
+    }
+
+    /// a (open) -> mid (closed) -> leaf (open, unsaved R50; disk says R2):
+    /// the leaf has no owner, and the walk still reaches it.
+    #[test]
+    fn an_open_grandchild_behind_a_closed_parent_counts_with_its_unsaved_edits() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        write_to_disk(dir, "a.snxsch", &sheet_with("R1", &["mid.snxsch"]));
+        write_to_disk(dir, "mid.snxsch", &sheet_with("R3", &["leaf.snxsch"]));
+        write_to_disk(dir, "leaf.snxsch", &sheet_with("R2", &[]));
+        let (mut app, _task) = crate::app::Signex::new();
+        let id = app.document_state.mint_project_id();
+        app.document_state
+            .projects
+            .push(project_of(id, &dir.to_string_lossy(), &["a.snxsch"]));
+        open_with(
+            &mut app,
+            dir.join("a.snxsch"),
+            sheet_with("R1", &["mid.snxsch"]),
+        );
+        open_with(&mut app, dir.join("leaf.snxsch"), sheet_with("R50", &[]));
+
+        let plan = plan_project_sheets_for(&app.document_state, &dir.join("a.snxsch"));
+        assert!(references_seen(&plan).contains(&"R50".to_owned()));
+        assert!(!references_seen(&plan).contains(&"R2".to_owned()));
+    }
+
+    /// p1 and p2 both list `s`; ownership goes to p1, the paste is on p2's
+    /// `b`, and `s` has an unsaved R50.
+    #[test]
+    fn a_sheet_listed_by_two_projects_counts_for_the_one_pasted_into() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        write_to_disk(dir, "b.snxsch", &sheet_with("R1", &[]));
+        write_to_disk(dir, "s.snxsch", &sheet_with("R2", &[]));
+        let (mut app, _task) = crate::app::Signex::new();
+        let (p1, p2) = (
+            app.document_state.mint_project_id(),
+            app.document_state.mint_project_id(),
+        );
+        let dir_text = dir.to_string_lossy();
+        app.document_state
+            .projects
+            .push(project_of(p1, &dir_text, &["s.snxsch"]));
+        app.document_state
+            .projects
+            .push(project_of(p2, &dir_text, &["b.snxsch", "s.snxsch"]));
+        open_with(&mut app, dir.join("b.snxsch"), sheet_with("R1", &[]));
+        open_with(&mut app, dir.join("s.snxsch"), sheet_with("R50", &[]));
+
+        let plan = plan_project_sheets_for(&app.document_state, &dir.join("b.snxsch"));
+        let seen = references_seen(&plan);
+        assert!(seen.contains(&"R50".to_owned()), "{seen:?}");
     }
 }
