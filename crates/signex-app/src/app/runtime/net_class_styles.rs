@@ -31,11 +31,11 @@ use crate::app::state::{DocumentState, ProjectId};
 use super::Signex;
 
 /// A project with open sheets, and the key its resolution is cached under.
-struct PlannedProject {
-    project: ProjectId,
-    key: ProjectKey,
-    open_paths: Vec<PathBuf>,
-    project_dir: PathBuf,
+pub(in crate::app) struct PlannedProject {
+    pub(in crate::app) project: ProjectId,
+    pub(in crate::app) key: ProjectKey,
+    pub(in crate::app) open_paths: Vec<PathBuf>,
+    pub(in crate::app) project_dir: PathBuf,
 }
 
 /// Everything a worker needs to stitch one project: owned, so it can leave
@@ -114,7 +114,7 @@ fn connectivity_stamp(document: &DocumentState) -> u64 {
 }
 
 /// Every project that owns an open sheet, with the key to resolve it under.
-fn plan_projects(document: &DocumentState) -> Vec<PlannedProject> {
+pub(in crate::app) fn plan_projects(document: &DocumentState) -> Vec<PlannedProject> {
     struct Open {
         stamp: u64,
         paths: Vec<PathBuf>,

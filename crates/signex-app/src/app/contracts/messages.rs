@@ -320,6 +320,9 @@ pub enum UiMsg {
             >,
         >,
     ),
+    /// Cross-sheet net navigation family (#1270-#1272): partner jumps, sheet
+    /// history, net highlight and the hover insight.
+    NetNav(super::net_nav::NetNavMsg),
 }
 
 /// Move Selection dialog message family (ADR-0001 D3). Namespaced under

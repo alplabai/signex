@@ -82,6 +82,15 @@ impl NetIndex {
             .map_or(&[], Vec::as_slice)
     }
 
+    /// The first member recorded for element `id` on `sheet`.
+    pub fn member(&self, sheet: &SheetKey, id: Uuid) -> Option<&NetMember> {
+        let net = self.nets_of(sheet, id).first()?;
+        self.nets[*net]
+            .members
+            .iter()
+            .find(|m| m.id == id && &m.sheet == sheet)
+    }
+
     /// The net an earlier highlight named, after the index was rebuilt: the
     /// anchor's own net when it still exists, else the net of that name.
     pub fn resolve(&self, name: &str, anchor: &NetAnchor) -> Option<usize> {

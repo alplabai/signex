@@ -445,6 +445,7 @@ impl Signex {
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
 
         self.apply_loaded_schematic(Some(sheet), true, true, true);
+        self.note_sheet_focused();
         // Every schematic open funnels through here; `finish_update` starts
         // the (once per project) per-placement designator note off-thread.
         self.document_state.instance_note_due = true;
@@ -507,6 +508,7 @@ impl Signex {
         // existing engine.
         self.document_state.active_path = Some(path);
         self.apply_loaded_schematic(None, true, true, true);
+        self.note_sheet_focused();
     }
 
     pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {

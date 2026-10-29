@@ -261,3 +261,14 @@ fn resolve_follows_a_net_by_name_or_anchor_after_a_rebuild() {
     assert_eq!(idx.resolve("VCC", &gone), Some(found), "by name");
     assert_eq!(idx.resolve("NOPE", &gone), None);
 }
+
+#[test]
+fn a_member_says_whether_it_is_a_port() {
+    let idx = two_sheet_vcc();
+    let label = idx.member(&key("root.sch"), id(1)).expect("global label");
+    assert!(label.is_port());
+    assert_eq!(label.text, "VCC");
+    let pin = idx.member(&key("root.sch"), id(100)).expect("R1");
+    assert!(!pin.is_port());
+    assert!(idx.member(&key("root.sch"), id(404)).is_none());
+}
