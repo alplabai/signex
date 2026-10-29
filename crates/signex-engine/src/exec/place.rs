@@ -190,6 +190,35 @@ impl Engine {
         Ok(CommandResult::changed(patch_pair))
     }
 
+    /// Place one wire, reconcile its junctions, and (with `merges`) fold it
+    /// into a neighbour it now continues straight.
+    fn place_wire(
+        &mut self,
+        before: SchematicSheet,
+        wire: signex_types::schematic::Wire,
+        merges: bool,
+    ) -> Result<CommandResult, EngineError> {
+        let wire_item = SelectedItem::new(wire.uuid, SelectedKind::Wire);
+        let adjacent = self.touching_wire_pairs();
+        self.document.wires.push(wire);
+
+        // Reconcile through the same shared path move / rotate / mirror /
+        // delete use: mints the new wire's T both ways and drops any stale
+        // minted dot its placement would otherwise re-justify into merging
+        // two nets (issues #402, #422).
+        let mut patch = self.reconciled_patch(&[wire_item]);
+        // Then a wire drawn straight on from another folds into it.
+        if merges {
+            patch |= self.merge_after_edit(&adjacent);
+        }
+        let patch_pair = PatchPair {
+            semantic: SemanticPatch::ObjectPlaced,
+            document: patch,
+        };
+        self.record_history(before, patch_pair);
+        Ok(CommandResult::changed(patch_pair))
+    }
+
     pub(crate) fn exec_place(
         &mut self,
         before: SchematicSheet,
@@ -386,29 +415,8 @@ impl Engine {
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
-            Command::PlaceWireSegment { wire } => {
-                let wire_item = SelectedItem::new(wire.uuid, SelectedKind::Wire);
-                let adjacent = self.touching_wire_pairs();
-                self.document.wires.push(wire);
-
-                // Reconcile through the same shared path move / rotate /
-                // mirror / delete use: mints the new wire's T both ways (its
-                // own endpoints landing on something, and something else's
-                // endpoint landing on its interior) and drops any stale
-                // minted dot the new wire's own placement would otherwise
-                // silently re-justify into merging two nets (issue #422).
-                let mut patch = self.reconciled_patch(&[wire_item]);
-                // Then a wire drawn straight on from another folds into it.
-                patch |= self.merge_after_edit(&adjacent);
-                let patch_pair = PatchPair {
-                    semantic: SemanticPatch::ObjectPlaced,
-                    document: patch,
-                };
-
-                self.record_history(before, patch_pair);
-
-                Ok(CommandResult::changed(patch_pair))
-            }
+            Command::PlaceWireSegment { wire } => self.place_wire(before, wire, true),
+            Command::PlaceWireSegmentAsIs { wire } => self.place_wire(before, wire, false),
             Command::PlaceJunction { junction } => {
                 self.document.junctions.push(junction);
 

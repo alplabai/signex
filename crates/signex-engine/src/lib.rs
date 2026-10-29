@@ -460,6 +460,7 @@ impl Engine {
             | Command::PlaceSheetPin { .. }
             | Command::PlaceWireSegment { .. }
             | Command::BreakWire { .. }
+            | Command::PlaceWireSegmentAsIs { .. }
             | Command::PlaceJunction { .. }
             | Command::PlaceNoConnect { .. }
             | Command::PlaceNoErcDirective { .. }

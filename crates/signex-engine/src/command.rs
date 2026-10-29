@@ -64,6 +64,7 @@ pub enum CommandKind {
     UpdateSymbolFields,
     PlaceWireSegment,
     BreakWire,
+    PlaceWireSegmentAsIs,
     PlaceBus,
     PlaceLabel,
     PlaceSymbol,
@@ -222,6 +223,13 @@ pub enum Command {
         symbol_id: Uuid,
         key: String,
         value: String,
+    },
+    /// [`Command::PlaceWireSegment`] that never folds the wire into a
+    /// neighbour. Paste places a copied wire with it: the copy keeps the
+    /// splits it was cut with (a Break Wire cut, a label or no-connect on the
+    /// joint), and the anchors may not be placed yet.
+    PlaceWireSegmentAsIs {
+        wire: Wire,
     },
     /// Split one wire in two at `at`, which must lie strictly inside it; the
     /// first half keeps the wire's id, the second gets a new one. A point
@@ -503,6 +511,7 @@ impl Command {
             Command::SetSymbolField { .. } => CommandKind::UpdateSymbolFields,
             Command::PlaceWireSegment { .. } => CommandKind::PlaceWireSegment,
             Command::BreakWire { .. } => CommandKind::BreakWire,
+            Command::PlaceWireSegmentAsIs { .. } => CommandKind::PlaceWireSegmentAsIs,
             Command::PlaceBus { .. } => CommandKind::PlaceBus,
             Command::PlaceLabel { .. } => CommandKind::PlaceLabel,
             Command::PlaceSymbol { .. } => CommandKind::PlaceSymbol,

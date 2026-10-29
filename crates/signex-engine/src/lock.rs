@@ -159,6 +159,7 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         | Command::AnnotateAll { .. }
         | Command::ReplaceDocument { .. }
         | Command::PlaceWireSegment { .. }
+        | Command::PlaceWireSegmentAsIs { .. }
         | Command::PlaceBus { .. }
         | Command::PlaceLabel { .. }
         | Command::PlaceSymbol { .. }
