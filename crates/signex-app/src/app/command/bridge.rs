@@ -410,8 +410,7 @@ mod tests {
     ///
     /// The ids listed there are a mix, and the distinction decides the fix:
     /// - **unimplemented** — the catalog entry and the binding are the only
-    ///   occurrences in the tree (`break_wire`,
-    ///   `place_junction`). A feature, not an arm.
+    ///   occurrences in the tree (`break_wire`). A feature, not an arm.
     ///   This is most of what is left. It also covers ids whose obvious
     ///   target turns out to be a STUB, where an arm would trade a logged
     ///   warning for a silent no-op. Read the handler body, not just its
@@ -441,9 +440,6 @@ mod tests {
         "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2",
         "import_graphics",
         "place_design_block",
-        // No junction tool exists: junctions are derived from wire topology
-        // and the engine's PlaceJunction command has no UI tool (#1666).
-        "place_junction",
         "refresh_view",
         "reset_local_coordinates", "select_expand_connection",
         "select_node_or_connection_item",
@@ -541,6 +537,13 @@ mod tests {
             resolve("place_hierarchical_label"),
             Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
                 crate::active_bar::ActiveBarAction::PlaceOffSheetConnector
+            ))
+        ));
+        // The key reaches the Active Bar button, which arms Tool::Junction.
+        assert!(matches!(
+            resolve("place_junction"),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::PlaceJunction
             ))
         ));
         assert!(matches!(

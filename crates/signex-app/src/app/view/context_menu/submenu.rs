@@ -38,6 +38,7 @@ pub(super) fn place_entries(tid: ThemeId) -> Vec<DropdownEntry<Message>> {
         ab(ic::icon_dd_bus(tid), "Bus", A::DrawBus),
         ab(ic::icon_dd_bus_entry(tid), "Bus Entry", A::PlaceBusEntry),
         ab(ic::icon_dd_net_label(tid), "Net Label", A::PlaceNetLabel),
+        ab(ic::icon_dd_junction(tid), "Junction", A::PlaceJunction),
         DropdownEntry::Separator,
         // Ports
         ab(ic::icon_dd_port(tid), "Port", A::PlacePort),
