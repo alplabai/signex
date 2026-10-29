@@ -55,6 +55,7 @@ fn fixture_row(internal_pn: &str) -> ComponentRow {
         state: LifecycleState::Released,
         symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
         footprint_ref: Some(PrimitiveRef::new(lib, Uuid::now_v7())),
+        alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: Vec::<PinPadOverride>::new(),
         primary_mpn: ManufacturerPart::draft("Acme", format!("MPN-{internal_pn}")),

@@ -60,7 +60,7 @@ impl KnownPrimitives {
         self.unknown
             || match slot {
                 RefSlot::Symbol => self.symbols.contains(&uuid),
-                RefSlot::Footprint => self.footprints.contains(&uuid),
+                RefSlot::Footprint | RefSlot::AlternateFootprint => self.footprints.contains(&uuid),
                 RefSlot::Sim => self.sims.contains(&uuid),
             }
     }

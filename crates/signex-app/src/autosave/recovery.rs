@@ -58,9 +58,29 @@ pub fn reconcile(
     document: &Path,
     now: SystemTime,
 ) -> Result<Option<Recoverable>, String> {
+    reconcile_with(recovery_dir, document, now, true)
+}
+
+/// [`reconcile`], with `finish_owed` saying whether journalled moves into
+/// `document` may be finished here. The live autosave state owns the moves it
+/// has queued or running; the caller passes `false` while it owns one into
+/// `document`, so this never races it.
+pub fn reconcile_with(
+    recovery_dir: &Path,
+    document: &Path,
+    now: SystemTime,
+    finish_owed: bool,
+) -> Result<Option<Recoverable>, String> {
     // A copy a build before #1510 keyed by the raw spelling moves to the
-    // current key. Journalled moves are not replayed here: the live autosave
-    // state owns them once the app runs.
+    // current key. Moves journalled into `document` are finished first.
+    // A move that still fails must not pause autosave for the document: the
+    // copy stays at the old key (nothing writes there), autosave may write the
+    // current content at this one, and the later move keeps the newest.
+    if finish_owed && let Err(why) = super::pending_move::finish_for(recovery_dir, document) {
+        crate::diagnostics::log_warning(format!(
+            "{why}; it stays under the old name and is moved later, keeping the newest copy."
+        ));
+    }
     sidecar::adopt_legacy(recovery_dir, document)?;
     sidecar::log_unmatched_spellings(recovery_dir, document);
     let sidecar_file = sidecar::sidecar_path(recovery_dir, document);

@@ -22,6 +22,8 @@ pub struct PickerState {
 pub struct NewTableDraft {
     pub name: String,
     pub error: Option<String>,
+    /// The table is being created (#893); a second confirm waits.
+    pub saving: bool,
 }
 
 /// "Close Library — Unsaved Drafts" confirmation modal state.
@@ -191,6 +193,10 @@ pub struct ComponentPreviewState {
     /// is recorded for that flow's settle step
     /// (`LibraryState::batch_row_failures`) instead of raising its own card.
     pub saving_batch: Option<u64>,
+    /// A primitive bind (#893) is being written on a worker. It moves the
+    /// row's revision, so a Save or a reload started meanwhile is refused
+    /// until the result is in.
+    pub binding_primitive: bool,
 }
 
 impl ComponentPreviewState {
@@ -221,6 +227,7 @@ impl ComponentPreviewState {
             saving_row: None,
             saving_generation: 0,
             saving_batch: None,
+            binding_primitive: false,
         }
     }
 

@@ -33,8 +33,8 @@ impl Signex {
     }
 
     /// Git or copy work running off the update loop that writes into the
-    /// library at `root`: a "Commit now", or a stock copy (its target is not
-    /// tracked, so any copy counts). Moving or deleting the library under it
+    /// library at `root`: a queued library edit (#893), a "Commit now", or a
+    /// stock copy (its target is not tracked, so any copy counts). Moving or deleting the library under it
     /// would strand that work in a folder the app no longer mounts.
     pub(crate) fn library_background_write_running(
         &self,
@@ -45,7 +45,8 @@ impl Signex {
             .extension()
             .is_some_and(|e| e.eq_ignore_ascii_case("snxlib"));
         is_library
-            && (any_root_under(self.library.committing_roots(), root, fold)
+            && (self.library.writes.pending(root) > 0
+                || any_root_under(self.library.committing_roots(), root, fold)
                 || !self.library.stock_copies_in_flight.is_empty())
     }
 }
@@ -243,6 +244,20 @@ mod tests {
             .insert("/stock/r.snxsym".into());
         assert!(running(&app, "/w/a.snxlib"));
         assert!(!running(&app, "/w/a.snxsch"));
+    }
+
+    /// A library edit queued on its worker (#893) holds a rename or delete
+    /// of that library, and only that one.
+    #[test]
+    fn a_queued_library_edit_holds_its_library() {
+        let (mut app, _task) = Signex::new();
+        let library = std::path::Path::new("/w/a.snxlib");
+        let in_flight = app.library.writes.turn(library);
+        assert!(app.library_background_write_running(library, CaseFold::PRESERVE));
+        let other = std::path::Path::new("/w/b.snxlib");
+        assert!(!app.library_background_write_running(other, CaseFold::PRESERVE));
+        drop(in_flight);
+        assert!(!app.library_background_write_running(library, CaseFold::PRESERVE));
     }
 
     #[test]

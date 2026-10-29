@@ -2,6 +2,7 @@
 //! library's table and opens it; tells the user why when it cannot.
 
 use super::*;
+use crate::library::writes::AfterRowCreated;
 
 /// Messages-panel text for "New Component" with no library open.
 pub(super) const NO_LIBRARY_OPEN: &str =
@@ -40,7 +41,6 @@ impl Signex {
             return Task::none();
         };
         let library = &self.library.open_libraries[library_idx];
-        let library_path = library.root.clone();
         let library_id = library.library_id;
         let display_name = library.display_name.clone();
         let class = signex_library::ComponentClass::default();
@@ -53,28 +53,6 @@ impl Signex {
             tracing::warn!(target: "signex::library", "{}", library_not_loaded(&display_name));
             return Task::none();
         };
-        match commands::create_component_row(
-            &mut self.library,
-            library_idx,
-            &table,
-            "",
-            class,
-            None,
-            None,
-        ) {
-            Ok(row_id) => Task::done(Message::Library(LibraryMessage::OpenComponentRow {
-                library_path,
-                table,
-                row_id,
-            })),
-            Err(e) => {
-                tracing::error!(
-                    target: "signex::library",
-                    error = %e,
-                    "New Component: could not append a row to the library table"
-                );
-                Task::none()
-            }
-        }
+        self.create_row_task(library_idx, &table, class, AfterRowCreated::OpenPreview)
     }
 }

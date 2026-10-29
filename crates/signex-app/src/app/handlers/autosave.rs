@@ -245,7 +245,17 @@ impl Signex {
         if ok && nothing_to_recover {
             return self.start_remove(&dir, path);
         }
-        Task::none()
+        if !ok {
+            return Task::none();
+        }
+        // The fresh copy at `path` is current, so the older copy a failing
+        // move still owes it is obsolete (#1433). A move settled without a
+        // removal (its old key is in use again) leaves a journal entry that
+        // must not let the next start carry another copy over.
+        match self.document_state.autosave.take_obsolete_released(&path) {
+            Some(old) => self.start_remove(&dir, old),
+            None => self.autosave_flush_journal_clears(&dir),
+        }
     }
 
     /// A normal save of `path` landed: drop its recovery copy. Runs
@@ -256,10 +266,12 @@ impl Signex {
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             return Task::none();
         };
-        if on_disk {
-            return self.start_remove(&dir, path.to_path_buf());
-        }
-        Task::none()
+        let remove = on_disk.then(|| self.start_remove(&dir, path.to_path_buf()));
+        // A copy of this run still owed a move into `path` is obsolete now
+        // that the file holds the content; settle it here, not on a timer
+        // that may never tick (autosave off, or the app quitting).
+        let moves = self.autosave_flush_moves();
+        Task::batch(remove.into_iter().chain([moves]))
     }
 
     /// The file at `path` was rewritten without going through a document
@@ -298,11 +310,17 @@ impl Signex {
             let guard = self.document_state.autosave.track_job();
             tasks.push(move_task(dir.clone(), owed, guard));
         }
-        for (old, targets) in self.document_state.autosave.take_journal_clears() {
-            let guard = self.document_state.autosave.track_job();
-            tasks.push(clear_journal_task(dir.clone(), old, targets, guard));
-        }
+        tasks.push(self.autosave_flush_journal_clears(&dir));
         Task::batch(tasks)
+    }
+
+    /// Clear the journal entries of moves dropped since the last flush.
+    fn autosave_flush_journal_clears(&mut self, dir: &Path) -> Task<Message> {
+        let clears = self.document_state.autosave.take_journal_clears();
+        Task::batch(clears.into_iter().map(|(old, targets)| {
+            let guard = self.document_state.autosave.track_job();
+            clear_journal_task(dir.to_path_buf(), old, targets, guard)
+        }))
     }
 
     fn autosave_moved(&mut self, moved: AutosaveMoved) -> Task<Message> {
@@ -318,12 +336,13 @@ impl Signex {
         ));
         // A failed move is retried on the timer, which runs while a move is
         // owed (not here, or a lasting failure would spin).
-        match (obsolete, self.document_state.autosave.dir()) {
-            (Some(old), Some(dir)) => {
-                let dir = dir.to_path_buf();
-                self.start_remove(&dir, old)
-            }
-            _ => Task::none(),
+        let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
+            return Task::none();
+        };
+        match obsolete {
+            Some(old) => self.start_remove(&dir, old),
+            // A move renamed back to its copy was dropped: clear its entry.
+            None => self.autosave_flush_journal_clears(&dir),
         }
     }
 
@@ -395,16 +414,20 @@ fn move_task(dir: PathBuf, owed: SidecarMove, guard: InFlight) -> Task<Message> 
         async move {
             tokio::task::spawn_blocking(move || {
                 let _guard = guard;
-                let moved = sidecar::rename(&dir, &owed.old, &owed.new);
-                // A discarding quit arrived while this ran: the copy goes,
-                // wherever it sits, and its journal entry with it.
+                let moved = sidecar::rename_landing(&dir, &owed.old, &owed.new);
+                // A save or a discarding quit arrived while this ran: the copy
+                // goes, wherever it sits, and its journal entry with it. The
+                // new key is removed only when this move brought the copy in:
+                // one already there (a fresh copy written after the save)
+                // won the collision and is not this move's to delete.
                 if owed.is_discarded() {
                     return match moved {
-                        Ok(()) => sidecar::remove(&dir, &owed.new),
+                        Ok(true) => sidecar::remove(&dir, &owed.new),
+                        Ok(false) => Ok(()),
                         Err(_) => sidecar::remove(&dir, &owed.old),
                     };
                 }
-                moved
+                moved.map(|_| ())
             })
             .await
             .map_err(|e| format!("the autosave move task failed: {e}"))
@@ -523,6 +546,118 @@ mod tests {
             crate::autosave::pending_move::finish_all(&dir),
             Default::default(),
             "no entry left to resurrect it"
+        );
+    }
+
+    /// A failing move whose document was renamed back to the copy's key is
+    /// dropped, and the completion clears its journal entry: the next start
+    /// must not move the copy away from the document it belongs to.
+    #[test]
+    fn a_move_renamed_back_while_it_fails_clears_its_journal_entry() {
+        use crate::autosave::{
+            AutosaveMoved, DocStamp, FAILED_MOVES_BEFORE_FRESH_COPY, pending_move,
+        };
+        use futures::StreamExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("recovery");
+        let (a, t) = (tmp.path().join("a.snxsch"), tmp.path().join("t.snxsch"));
+        sidecar::write(&dir, &a, b"unsaved").unwrap();
+        pending_move::record(&dir, &a, &t).unwrap();
+
+        let (mut app, _boot) = Signex::new();
+        let autosave = &mut app.document_state.autosave;
+        autosave.set_dir(Some(dir.clone()));
+        autosave.begin(&a);
+        autosave.finish(&a, DocStamp::of_bytes(b"unsaved"), true);
+        autosave.rekey(&a, &t);
+        for _ in 0..FAILED_MOVES_BEFORE_FRESH_COPY {
+            let (mut start, _) = autosave.take_moves();
+            assert!(autosave.move_failed(start.remove(0)).is_none());
+        }
+        let (mut start, _) = autosave.take_moves();
+        let running = start.remove(0);
+        autosave.rekey(&t, &a);
+        let task = app.autosave_moved(AutosaveMoved {
+            sidecar: running,
+            result: Err("locked".to_string()),
+        });
+        let mut stream = iced_runtime::task::into_stream(task).expect("a journal clear");
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async { while stream.next().await.is_some() {} });
+
+        assert!(
+            pending_move::owed(&dir).is_empty(),
+            "no entry left to move the copy away at the next start"
+        );
+        assert!(sidecar::sidecar_path(&dir, &a).exists(), "the copy stays");
+    }
+
+    /// A save of the new path while the rename into it runs: the task removes
+    /// what it moved, so no outdated copy is offered at the next open.
+    #[test]
+    fn a_save_during_a_running_move_leaves_no_copy_at_the_new_key() {
+        use futures::StreamExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("recovery");
+        let (old, new) = (tmp.path().join("a.snxsch"), tmp.path().join("b.snxsch"));
+        sidecar::write(&dir, &old, b"outdated").unwrap();
+
+        let mut state = crate::autosave::AutosaveState::new(Some(dir.clone()));
+        state.begin(&old);
+        state.finish(&old, crate::autosave::DocStamp::of_bytes(b"outdated"), true);
+        state.rekey(&old, &new);
+        let (start, _) = state.take_moves();
+        let task = move_task(dir.clone(), start[0].clone(), state.track_job());
+        // The save lands while the rename is still to run; its removal of
+        // the new key finds nothing there yet.
+        state.saved(&new);
+        let mut stream = iced_runtime::task::into_stream(task).expect("stream");
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async { while stream.next().await.is_some() {} });
+
+        assert!(
+            !sidecar::sidecar_path(&dir, &new).exists(),
+            "no outdated copy"
+        );
+        assert!(!sidecar::sidecar_path(&dir, &old).exists());
+    }
+
+    /// A released move (no hold on the new key) is still running when the
+    /// document is saved and autosave writes a fresh copy after the save: the
+    /// move resolves onto that copy and must not delete it.
+    #[test]
+    fn a_save_during_a_released_move_keeps_the_copy_written_after_the_save() {
+        use futures::StreamExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("recovery");
+        let (old, new) = (tmp.path().join("a.snxsch"), tmp.path().join("b.snxsch"));
+        sidecar::write(&dir, &old, b"outdated").unwrap();
+
+        let mut state = crate::autosave::AutosaveState::new(Some(dir.clone()));
+        state.begin(&old);
+        state.finish(&old, crate::autosave::DocStamp::of_bytes(b"outdated"), true);
+        state.rekey(&old, &new);
+        for _ in 0..2 {
+            let (mut start, _) = state.take_moves();
+            assert!(state.move_failed(start.remove(0)).is_none());
+        }
+        let (start, _) = state.take_moves();
+        assert!(start[0].is_released());
+        let task = move_task(dir.clone(), start[0].clone(), state.track_job());
+        state.saved(&new);
+        // Autosave writes after the save, before the slow rename runs.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        sidecar::write(&dir, &new, b"post-save edits").unwrap();
+        let mut stream = iced_runtime::task::into_stream(task).expect("stream");
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async { while stream.next().await.is_some() {} });
+
+        assert_eq!(
+            std::fs::read(sidecar::sidecar_path(&dir, &new)).unwrap(),
+            b"post-save edits"
         );
     }
 

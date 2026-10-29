@@ -108,6 +108,20 @@ impl Signex {
         &mut self,
         path: &std::path::Path,
     ) -> anyhow::Result<()> {
+        // This write runs on the UI thread, so it cannot wait for a library
+        // write a worker still has: refuse instead of freezing the window.
+        if let Some(library) = self
+            .library
+            .open_libraries
+            .iter()
+            .find(|lib| lib.root_dir().is_some_and(|d| path.starts_with(d)))
+            && self.library.writes.pending(&library.root) > 0
+        {
+            anyhow::bail!(
+                "{}: a library write is still running; try again once it finishes",
+                path.display()
+            );
+        }
         let (write, generation, guard) =
             self.prepare_primitive_save(path, ContainerWrite::Merge)?;
         let result = {
@@ -169,12 +183,16 @@ impl Signex {
             .iter()
             .find(|lib| lib.root_dir().is_some_and(|d| path.starts_with(d)))
             .map(|lib| lib.root.clone());
+        let turn = mounted_library
+            .as_deref()
+            .map(|library| self.library.writes.turn(library));
         let write = PrimitiveWrite {
             path: path.to_path_buf(),
             mode,
             mounted_library,
             now,
             snapshot,
+            turn,
         };
         let guard = self
             .document_state

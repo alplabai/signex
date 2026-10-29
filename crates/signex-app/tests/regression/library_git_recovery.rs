@@ -35,9 +35,10 @@ fn valid_snxlib_bytes(scratch: &std::path::Path) -> Vec<u8> {
 }
 
 fn re_init(app: &mut Signex) {
-    let _ = app.update(Message::Library(LibraryMessage::RecoveryGitMissing(
+    let task = app.update(Message::Library(LibraryMessage::RecoveryGitMissing(
         GitMissingChoice::ReInit,
     )));
+    crate::drive::drive(app, task);
 }
 
 #[test]

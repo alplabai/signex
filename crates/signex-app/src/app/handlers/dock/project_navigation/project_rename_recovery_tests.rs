@@ -507,7 +507,7 @@ fn a_journal_clear_for_an_older_target_keeps_a_newer_entry() {
 }
 
 #[test]
-fn a_move_still_failing_at_startup_leaves_the_crash_copy_safe_while_the_new_document_is_edited() {
+fn a_move_still_failing_at_startup_is_finished_when_the_new_document_opens() {
     let root = tempfile::tempdir().expect("tempdir");
     let m = moved(root.path());
     sidecar::write(&m.recovery, &m.old_doc, b"crash edits").expect("copy");
@@ -522,24 +522,24 @@ fn a_move_still_failing_at_startup_leaves_the_crash_copy_safe_while_the_new_docu
     app.autosave_finish_pending_moves();
     assert!(
         !app.document_state.autosave.has_owed_moves(),
-        "the live state does not take the move: it would land under a key the session writes"
+        "the live state does not take the move: opening the document finishes it (#1433)"
     );
 
-    // The lock clears; the user opens the document at the new path (nothing
-    // to offer yet), edits it, and autosave writes its own copy.
-    std::fs::remove_dir_all(&new_key).expect("unblock");
+    // Still locked: the open does not touch the copy.
     let old_key = sidecar::sidecar_path(&m.recovery, &m.old_doc);
-    assert!(!offered_without_startup(&m.recovery, &m.new_doc));
-    let tick = app.autosave_flush_moves();
-    run_task(&mut app, tick);
-    sidecar::write(&m.recovery, &m.new_doc, b"new edits").expect("autosave write");
+    drop(recovery::reconcile(
+        &m.recovery,
+        &m.new_doc,
+        SystemTime::now(),
+    ));
     assert_eq!(std::fs::read(&old_key).expect("untouched"), b"crash edits");
 
-    // The edit is saved (its copy goes) and the app restarts: the move is
-    // finished and the crash copy is offered.
-    sidecar::remove(&m.recovery, &m.new_doc).expect("saved");
-    assert!(offered_after_restart(&m.recovery, &m.new_doc));
+    // The lock clears; the user opens the document at the new path and the
+    // crash copy is offered before any autosave write can replace it.
+    std::fs::remove_dir_all(&new_key).expect("unblock");
+    assert!(offered_without_startup(&m.recovery, &m.new_doc));
     assert_eq!(std::fs::read(&new_key).expect("moved"), b"crash edits");
+    assert!(!old_key.exists());
 }
 
 /// `reconcile` alone, as a document opens mid-session.

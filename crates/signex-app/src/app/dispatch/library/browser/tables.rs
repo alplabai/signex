@@ -7,6 +7,7 @@
 
 use super::*;
 use crate::library::refresh::RefreshFollowUp;
+use crate::library::writes::{WriteFailure, WriteKind, write_task};
 
 impl Signex {
     /// Flip the browser into add-table mode.
@@ -58,25 +59,37 @@ impl Signex {
         if self.refuse_read_only_write(&library_path) {
             return Task::none();
         }
-        let library_id = match self.library.library_at(&library_path) {
-            Some(lib) => lib.library_id,
-            None => return Task::none(),
-        };
-        let adapter = match self.library.set.get(library_id) {
-            Some(a) => a,
-            None => return Task::none(),
-        };
-        if let Err(error) =
-            adapter.delete_empty_table(&table, &format!("delete empty table {table}"))
-        {
+        let name = table.clone();
+        write_task(
+            &mut self.library,
+            &library_path,
+            WriteKind::TableDeleted {
+                name: table.clone(),
+            },
+            move |adapter| {
+                adapter
+                    .delete_empty_table(&name, &format!("delete empty table {name}"))
+                    .map(|()| None)
+            },
+        )
+    }
+
+    /// The table delete finished.
+    pub(in crate::app::dispatch::library) fn table_deleted(
+        &mut self,
+        library_path: std::path::PathBuf,
+        table: String,
+        outcome: Result<Option<u64>, WriteFailure>,
+    ) -> Task<Message> {
+        if let Err(failure) = outcome {
             tracing::error!(
                 target: "signex::library",
                 path = %library_path.display(),
-                error = %error,
+                error = %failure.reason,
                 "delete table failed; library left unchanged"
             );
             if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
-                s.delete_error = Some(error.to_string());
+                s.delete_error = Some(failure.reason);
             }
             return Task::none();
         }
@@ -166,27 +179,49 @@ impl Signex {
             }
             return Task::none();
         }
-        let library_id = match self.library.library_at(&library_path) {
-            Some(lib) => lib.library_id,
-            None => return Task::none(),
-        };
-        let adapter = match self.library.set.get(library_id) {
-            Some(a) => a,
-            None => return Task::none(),
-        };
-        if let Err(error) = adapter.rename_table(
-            &old_name,
-            &new_trimmed,
-            &format!("rename table {old_name} → {new_trimmed}"),
-        ) {
+        if state.rename_saving {
+            return Task::none();
+        }
+        if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+            s.rename_saving = true;
+            s.rename_error = None;
+        }
+        let (old, new) = (old_name.clone(), new_trimmed.clone());
+        write_task(
+            &mut self.library,
+            &library_path,
+            WriteKind::TableRenamed {
+                old: old_name,
+                new: new_trimmed,
+            },
+            move |adapter| {
+                adapter
+                    .rename_table(&old, &new, &format!("rename table {old} → {new}"))
+                    .map(|()| None)
+            },
+        )
+    }
+
+    /// The table rename finished.
+    pub(in crate::app::dispatch::library) fn table_renamed(
+        &mut self,
+        library_path: std::path::PathBuf,
+        old_name: String,
+        new_name: String,
+        outcome: Result<Option<u64>, WriteFailure>,
+    ) -> Task<Message> {
+        if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+            s.rename_saving = false;
+        }
+        if let Err(failure) = outcome {
             tracing::error!(
                 target: "signex::library",
                 path = %library_path.display(),
-                error = %error,
+                error = %failure.reason,
                 "rename table failed; library left unchanged"
             );
             if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
-                s.rename_error = Some(error.to_string());
+                s.rename_error = Some(failure.reason);
             }
             return Task::none();
         }
@@ -195,7 +230,7 @@ impl Signex {
             s.renaming_table = None;
             s.rename_error = None;
             if s.active_table.as_deref() == Some(old_name.as_str()) {
-                s.active_table = Some(new_trimmed);
+                s.active_table = Some(new_name);
             }
         }
         refresh
@@ -226,34 +261,54 @@ impl Signex {
             }
             return Task::none();
         }
-        let library_id = match self.library.library_at(&library_path) {
-            Some(lib) => lib.library_id,
-            None => return Task::none(),
-        };
-        let adapter = match self.library.set.get(library_id) {
-            Some(a) => a,
-            None => return Task::none(),
-        };
-        if let Err(error) =
-            adapter.create_empty_table(&trimmed, &format!("create empty table {trimmed}"))
+        if draft.saving {
+            return Task::none();
+        }
+        if let Some(s) = self.library.library_browsers.get_mut(&library_path)
+            && let Some(d) = s.adding_table.as_mut()
         {
+            d.saving = true;
+            d.error = None;
+        }
+        let name = trimmed.clone();
+        write_task(
+            &mut self.library,
+            &library_path,
+            WriteKind::TableCreated { name: trimmed },
+            move |adapter| {
+                adapter
+                    .create_empty_table(&name, &format!("create empty table {name}"))
+                    .map(|()| None)
+            },
+        )
+    }
+
+    /// The table create finished.
+    pub(in crate::app::dispatch::library) fn table_created(
+        &mut self,
+        library_path: std::path::PathBuf,
+        name: String,
+        outcome: Result<Option<u64>, WriteFailure>,
+    ) -> Task<Message> {
+        if let Err(failure) = outcome {
             tracing::error!(
                 target: "signex::library",
                 path = %library_path.display(),
-                error = %error,
+                error = %failure.reason,
                 "create table failed; library left unchanged"
             );
             if let Some(s) = self.library.library_browsers.get_mut(&library_path)
                 && let Some(d) = s.adding_table.as_mut()
             {
-                d.error = Some(error.to_string());
+                d.saving = false;
+                d.error = Some(failure.reason);
             }
             return Task::none();
         }
         let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
         if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
             s.adding_table = None;
-            s.active_table = Some(trimmed);
+            s.active_table = Some(name);
         }
         refresh
     }

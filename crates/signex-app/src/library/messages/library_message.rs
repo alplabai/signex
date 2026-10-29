@@ -285,6 +285,8 @@ pub enum LibraryMessage {
         path: PathBuf,
         prepared: crate::library::mount::PreparedMountCell,
     },
+    /// A library write that `update` handed to a worker (#893) is over.
+    WriteFinished(Box<crate::library::writes::WriteDone>),
     /// An off-thread library refresh (#1374) has read the library. Applied
     /// only while `generation` is still the latest for `path`; a result
     /// superseded by a newer refresh, or for a closed library, is dropped.
@@ -450,6 +452,12 @@ pub enum LibraryMessage {
     RecoveryLibraryMissing(super::super::recovery::LibraryMissingChoice),
     RecoveryLibraryMissingLocateResult(Option<PathBuf>),
     RecoveryGitMissing(super::super::recovery::GitMissingChoice),
+    /// The off-thread git re-init of a library whose `.git` is missing
+    /// finished (#893).
+    GitReinitFinished {
+        path: PathBuf,
+        result: Result<(), String>,
+    },
     RecoveryBrokenBinding(super::super::recovery::BrokenBindingChoice),
 
     // ── Library Updates Available modal (Stage 16) ─────────────────────

@@ -69,9 +69,10 @@ fn add_table(app: &mut Signex, snxlib: &Path, name: &str) {
             library_path: path.clone(),
         },
     ] {
-        let _ = app.update(Message::Library(msg));
+        let task = app.update(Message::Library(msg));
+        crate::drive::drive(app, task);
     }
-    app.land_pending_refresh(snxlib);
+    drop(app.land_pending_refresh(snxlib));
 }
 
 /// Messages entries naming the library (by its unique temp directory) that

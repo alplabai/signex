@@ -221,6 +221,9 @@ pub struct LibraryBrowserState {
     /// Most recent rename error (e.g. duplicate target name).
     /// Surfaces inline next to the rename input.
     pub rename_error: Option<String>,
+    /// The rename in `renaming_table` is being written (#893); a second
+    /// confirm waits for the result.
+    pub rename_saving: bool,
     /// Filtered, sorted rows and derived columns of the active table (#1374),
     /// kept current by `LibraryState::sync_view_caches`; `view` reads it
     /// instead of recomputing every frame.
@@ -256,6 +259,7 @@ impl LibraryBrowserState {
             delete_error: None,
             renaming_table: None,
             rename_error: None,
+            rename_saving: false,
             view_cache: None,
             grid_scroll: super::browser::GridScroll::default(),
         }
@@ -320,6 +324,18 @@ pub struct EditRowModalState {
     /// shows no label, so the label is kept only while the primary still
     /// points where it did (#1231).
     pub opened_primary: (signex_library::DatasheetRef, String),
+    /// The copy being written by a Save that has not finished (#893): the
+    /// modal stays open meanwhile, and the result closes it only if the
+    /// draft still equals this.
+    pub saving: Option<SavingSnapshot>,
+}
+
+/// What the Edit Component Details modal held when Save was pressed.
+#[derive(Debug, Clone)]
+pub struct SavingSnapshot {
+    pub draft: ComponentRow,
+    pub tags_buf: String,
+    pub param_buf: HashMap<String, (String, String)>,
 }
 
 impl EditRowModalState {
@@ -380,6 +396,7 @@ impl EditRowModalState {
             stale_base: false,
             reload_confirming: false,
             opened_primary,
+            saving: None,
         }
     }
 }
@@ -586,6 +603,11 @@ pub struct LibraryState {
     /// The Refresh All Pricing walk in progress, if any. One at a time: a
     /// second request is refused with a Messages-panel line.
     pub pricing_refresh: Option<super::pricing::PricingRefreshRun>,
+    /// The write order of each library (#893): library mutations run on
+    /// workers, one library at a time, in the order the user made them.
+    pub writes: super::writes::LibraryWrites,
+    /// Libraries whose close waits for their writes to finish.
+    pub closing: std::collections::HashSet<PathBuf>,
     /// "Now" as `view` may use it, for the age of cached prices. `view` is
     /// pure and cannot ask the clock, so `update` sets this on the poll tick
     /// and whenever a library's caches are refreshed.

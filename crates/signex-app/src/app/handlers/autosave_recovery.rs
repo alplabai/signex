@@ -38,7 +38,9 @@ impl Signex {
             return Task::none();
         };
         let guard = self.document_state.autosave.track_job();
-        check_task(dir, path.to_path_buf(), guard)
+        // A move the live state owns into this path finishes on its own.
+        let finish_owed = !self.document_state.autosave.move_owed(path);
+        check_task(dir, path.to_path_buf(), finish_owed, guard)
     }
 
     /// Start the recovery check of every schematic tab opened since the last
@@ -54,9 +56,10 @@ impl Signex {
     /// Startup, before any document opens: finish the recovery-copy moves a
     /// previous run left journalled (#1510). A move that still fails stays
     /// journalled and its copy stays untouched at the old key, for the next
-    /// start to retry. It is not handed to the live state: a document opened
-    /// at the new path finds nothing to offer, and a move landing later would
-    /// put the copy under a key the session may already write to.
+    /// start to retry. It is not handed to the live state: the recovery check
+    /// of a document opened at the new path retries it first
+    /// ([`recovery::reconcile`]), and a move landing later would put the copy
+    /// under a key the session may already write to.
     pub(crate) fn autosave_finish_pending_moves(&mut self) {
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             return;
@@ -334,13 +337,13 @@ fn file_label(path: &Path) -> String {
         .unwrap_or_else(|| path.display().to_string())
 }
 
-fn check_task(dir: PathBuf, path: PathBuf, guard: InFlight) -> Task<Message> {
+fn check_task(dir: PathBuf, path: PathBuf, finish_owed: bool, guard: InFlight) -> Task<Message> {
     let target = path.clone();
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || {
                 let _guard = guard;
-                recovery::reconcile(&dir, &target, SystemTime::now())
+                recovery::reconcile_with(&dir, &target, SystemTime::now(), finish_owed)
             })
             .await
             .map_err(|e| format!("the recovery check failed: {e}"))

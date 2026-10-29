@@ -750,6 +750,26 @@ mod tests {
         lf
     }
 
+    /// Alternate footprints survive the `.snxlib` row path (#1234), and a
+    /// malformed cell is an error, not a dropped alternate.
+    #[test]
+    fn library_row_roundtrips_alternate_footprints() {
+        use crate::footprint_binding::FootprintBinding;
+        use crate::primitive::PrimitiveRef;
+        let mut row = crate::component::tests::fixture_row();
+        row.alternate_footprints = vec![FootprintBinding::new(PrimitiveRef::new(
+            Uuid::now_v7(),
+            Uuid::now_v7(),
+        ))];
+        let lib_row = component_to_library_row(&row).unwrap();
+        assert!(lib_row.cells["footprint_ref"].starts_with('['));
+        assert_eq!(library_row_to_component(&lib_row).unwrap(), row);
+
+        let mut bad = lib_row;
+        bad.cells.insert("footprint_ref".into(), "[]".into());
+        assert!(library_row_to_component(&bad).is_err());
+    }
+
     fn poison(lock: &RwLock<LibraryFile>) {
         let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let _guard = lock.write().expect("lock is clean before the probe");

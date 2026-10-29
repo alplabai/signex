@@ -13,10 +13,14 @@ mod cell_commit;
 mod grid;
 mod modal_reload;
 mod param_commit;
+mod row_delete;
+mod row_save;
 mod tables;
 
 use super::*;
-use crate::library::refresh::RefreshFollowUp;
+use crate::library::writes::AfterRowCreated;
+
+pub(super) use cell_commit::SavedCell;
 
 impl Signex {
     /// Open `.snxlib` at `path` as a Library Browser tab.
@@ -254,41 +258,12 @@ impl Signex {
             })
             .unwrap_or(generic);
 
-        match commands::create_component_row(
-            &mut self.library,
+        self.create_row_task(
             library_idx,
             &resolved_table,
-            "", // empty PN — user fills it in via inline cell editor
             class,
-            None, // symbol_ref bound later via Properties panel
-            None, // footprint_ref bound later
-        ) {
-            Ok(row_id) => {
-                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
-                    state.active_table = Some(resolved_table.clone());
-                    state.selected_row = Some(row_id);
-                }
-                tracing::info!(
-                    target: "signex::library",
-                    library = %library_path.display(),
-                    table = %resolved_table,
-                    row_id = %row_id,
-                    "browser: minted draft row inline"
-                );
-                // The new row may sort outside the built window.
-                return self.reveal_selected_browser_row(&library_path);
-            }
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    library = %library_path.display(),
-                    table = %resolved_table,
-                    error = %e,
-                    "browser: inline row create failed"
-                );
-            }
-        }
-        Task::none()
+            AfterRowCreated::SelectInBrowser,
+        )
     }
 
     /// Phase 2 — open the delete-row confirm modal. Records
@@ -318,84 +293,6 @@ impl Signex {
             });
         }
         Task::none()
-    }
-
-    /// Confirm step — actually delete the row through
-    /// `adapter.delete_row` and refresh the cache.
-    pub(super) fn handle_browser_delete_row_confirm(
-        &mut self,
-        library_path: std::path::PathBuf,
-        table: String,
-        row_id: RowId,
-    ) -> Task<Message> {
-        if self.refuse_read_only_write(&library_path) {
-            return Task::none();
-        }
-        let library_id = match self.library.library_at(&library_path) {
-            Some(lib) => lib.library_id,
-            None => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %library_path.display(),
-                    "browser delete: library not mounted"
-                );
-                return Task::none();
-            }
-        };
-        let adapter = match self.library.set.get(library_id) {
-            Some(a) => a,
-            None => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %library_path.display(),
-                    "browser delete: adapter not present in set"
-                );
-                return Task::none();
-            }
-        };
-        // The revision the user saw: the server refuses the delete if the
-        // row has been saved by someone else since.
-        let base_revision = self
-            .library
-            .library_at(&library_path)
-            .and_then(|lib| lib.tables.get(&table))
-            .and_then(|rows| rows.iter().find(|r| RowId::from_uuid(r.row_id) == row_id))
-            .and_then(|row| row.server_revision);
-        match adapter.delete_row(&table, row_id, base_revision, "delete row") {
-            Ok(_) => {
-                tracing::info!(
-                    target: "signex::library",
-                    path = %library_path.display(),
-                    table = %table,
-                    row = %row_id,
-                    "browser delete: row removed"
-                );
-                let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
-                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
-                    if state.selected_row == Some(row_id) {
-                        state.selected_row = None;
-                    }
-                    state.delete_confirm = None;
-                    // Drop any cached cell-edit buffers for the gone row.
-                    state.cell_edit.retain(|(rid, _), _| *rid != row_id);
-                }
-                refresh
-            }
-            Err(e) => {
-                crate::diagnostics::log_warning(format!(
-                    "Row {row_id} was not deleted: {e} (table {table}, {})",
-                    library_path.display()
-                ));
-                // The cache holds the revision the refusal was based on, so
-                // a retry would be refused again: re-read the rows.
-                let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
-                self.sync_diagnostics_panel_ctx();
-                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
-                    state.delete_confirm = None;
-                }
-                refresh
-            }
-        }
     }
 
     /// Open the Edit Component Details modal for a row. Loads the row
@@ -590,6 +487,15 @@ impl Signex {
                         },
                     )));
                 }
+                // The row is being written: a second Save would be refused
+                // as stale, and a reload would drop the draft being saved.
+                BrowserEditMsg::Save | BrowserEditMsg::ReloadConfirmed
+                    if modal.saving.is_some() =>
+                {
+                    crate::diagnostics::log_info(
+                        "This row is being saved; try again once the save has finished.",
+                    );
+                }
                 BrowserEditMsg::Save => {
                     // Typed-but-not-Entered parameter edits live only in
                     // `param_buf`; commit them before the draft snapshot,
@@ -640,53 +546,8 @@ impl Signex {
             self.reload_edit_modal_from_server(&library_path, address);
         }
         let mut refresh = Task::none();
-        if let Some((address, mut draft)) = save_request {
-            // Refresh content_hash before saving.
-            match signex_library::hash_row_content(&draft) {
-                Ok(h) => {
-                    draft.content_hash = h;
-                }
-                Err(e) => {
-                    if let Some(state) = self.library.library_browsers.get_mut(&library_path)
-                        && let Some(modal) = state.edit_modal.as_mut()
-                    {
-                        modal.error = Some(format!("hash failed: {e}"));
-                    }
-                    return next.unwrap_or_else(Task::none);
-                }
-            }
-            let library_id = self
-                .library
-                .library_at(&address.library_path)
-                .map(|lib| lib.library_id);
-            let result = match library_id.and_then(|id| self.library.set.get(id)) {
-                Some(adapter) => adapter.update_row(&address.table, draft, "edit row"),
-                None => Err(signex_library::LibraryError::NotFound(
-                    address.library_path.display().to_string(),
-                )),
-            };
-            match result {
-                Ok(_) => {
-                    refresh = self.refresh_library_task(
-                        &address.library_path,
-                        RefreshFollowUp::CleanEditors(vec![address.row_id]),
-                    );
-                    if let Some(state) =
-                        self.library.library_browsers.get_mut(&address.library_path)
-                    {
-                        state.edit_modal = None;
-                    }
-                }
-                Err(e) => {
-                    if let Some(state) = self.library.library_browsers.get_mut(&library_path)
-                        && let Some(modal) = state.edit_modal.as_mut()
-                    {
-                        modal.stale_base =
-                            matches!(e, signex_library::LibraryError::RowChanged { .. });
-                        modal.error = Some(e.to_string());
-                    }
-                }
-            }
+        if let Some((address, draft)) = save_request {
+            refresh = self.start_modal_row_save(&library_path, address, draft);
         }
         Task::batch([refresh, next.unwrap_or_else(Task::none)])
     }

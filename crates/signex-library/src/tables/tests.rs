@@ -74,6 +74,7 @@ fn mk_row(internal_pn: &str, class: &str) -> ComponentRow {
         state: LifecycleState::Released,
         symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
         footprint_ref: Some(PrimitiveRef::new(lib, Uuid::now_v7())),
+        alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: vec![PinPadOverride::new("EP", "EP1")],
         primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),
@@ -155,6 +156,63 @@ fn an_empty_document_list_reads_as_no_datasheet() {
     row.set_documents(Vec::new());
     assert!(row.datasheet.is_empty());
     assert!(row.datasheet_label.is_empty() && row.more_datasheets.is_empty());
+}
+
+fn alt_binding() -> FootprintBinding {
+    let mut alt = FootprintBinding::new(PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7()));
+    alt.version = "2".into();
+    alt.pin_map_overrides = vec![PinPadOverride::new("1", "A1")];
+    alt
+}
+
+/// A row with no alternates writes the footprint cell it always wrote,
+/// and a legacy cell reads back with none (#1234).
+#[test]
+fn a_row_without_alternates_keeps_the_legacy_footprint_cell() {
+    let row = mk_row("R1", "resistor");
+    let legacy = serde_json::to_string(row.footprint_ref.as_ref().unwrap()).unwrap();
+    let cells = row_to_record(&row).unwrap();
+    assert_eq!(cells[6], legacy);
+    let (fp, alts) = footprint_from_cell(&legacy).unwrap();
+    assert_eq!(fp, row.footprint_ref);
+    assert!(alts.is_empty());
+    let json = serde_json::to_string(&row).unwrap();
+    assert!(!json.contains("alternate_footprints"));
+}
+
+#[test]
+fn tsv_roundtrip_preserves_alternate_footprints() {
+    let mut row = mk_row("U1", "opamp");
+    row.alternate_footprints = vec![alt_binding(), alt_binding()];
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    write_table(tmp.path(), std::slice::from_ref(&row)).unwrap();
+    assert!(row_to_record(&row).unwrap()[6].starts_with('['));
+    assert_eq!(read_table(tmp.path()).unwrap(), vec![row]);
+}
+
+/// A malformed footprint cell is an error naming the column, never a
+/// silent drop of the alternates.
+#[test]
+fn a_malformed_footprint_cell_is_an_error() {
+    let row = mk_row("U1", "opamp");
+    let mut cells = row_to_record(&row).unwrap();
+    cells[6] = "[]".into();
+    let record = csv::StringRecord::from(cells.clone());
+    let err = record_to_row(&record).unwrap_err().to_string();
+    assert!(err.contains("footprint_ref"), "{err}");
+    cells[6] = "nope".into();
+    assert!(record_to_row(&csv::StringRecord::from(cells)).is_err());
+
+    let mut no_default = mk_row("U2", "opamp");
+    no_default.footprint_ref = None;
+    no_default.alternate_footprints = vec![alt_binding()];
+    assert!(
+        write_table(
+            tempfile::NamedTempFile::new().unwrap().path(),
+            &[no_default]
+        )
+        .is_err()
+    );
 }
 
 /// #1056: finite numbers and measurements still round-trip unchanged.

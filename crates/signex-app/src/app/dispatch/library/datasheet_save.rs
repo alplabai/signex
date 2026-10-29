@@ -122,21 +122,27 @@ impl Signex {
         let Some(state) = self.library.editors.get(address) else {
             return Ok(Task::none());
         };
+        if state.binding_primitive {
+            crate::diagnostics::log_info(
+                "Save was ignored: a primitive bind of this row is still being saved. Save again once it has finished.",
+            );
+            self.sync_diagnostics_panel_ctx();
+            return Ok(Task::none());
+        }
         if state.saving_row.is_some() {
             return Ok(Task::none());
         }
         if state.staged_assets_in_use().is_empty() {
-            self.try_save_row(address)?;
-            return Ok(Task::none());
+            return self.start_plain_row_save(address, None);
         }
         self.start_staged_store(address, None)
     }
 
     /// The row's part of a Save All (quit, project close, close library).
-    /// `Ok(None)` means it is settled already (saved at once, or gone);
-    /// `Ok(Some(task))` writes its staged PDFs on a worker and then saves
-    /// it, recording a failure for the Save All's settle step. Refused,
-    /// as before, while another save of the row runs.
+    /// `Ok(None)` means it is settled already (gone); `Ok(Some(task))`
+    /// writes it on a worker, after its staged PDFs when it pins any, and
+    /// records a failure for the Save All's settle step. Refused while
+    /// another save or a primitive bind of the row runs.
     pub(crate) fn begin_save_row_in_batch(
         &mut self,
         address: &EditorAddress,
@@ -145,13 +151,34 @@ impl Signex {
         let Some(state) = self.library.editors.get(address) else {
             return Ok(None);
         };
-        if state.saving_row.is_some() {
+        if state.saving_row.is_some() || state.binding_primitive {
             anyhow::bail!("this row is still being saved; try again in a moment");
         }
         if state.staged_assets_in_use().is_empty() {
-            return self.try_save_row(address).map(|()| None);
+            return self.start_plain_row_save(address, Some(batch)).map(Some);
         }
         self.start_staged_store(address, Some(batch)).map(Some)
+    }
+
+    /// Save a row that pins no staged PDF: mark it saving and write it on a
+    /// worker. `preview_row_saved` settles it.
+    fn start_plain_row_save(
+        &mut self,
+        address: &EditorAddress,
+        batch: Option<u64>,
+    ) -> anyhow::Result<Task<Message>> {
+        let generation = self.document_state.document_saves.mint_generation();
+        let Some(state) = self.library.editors.get_mut(address) else {
+            return Ok(Task::none());
+        };
+        // A typed number still in its edit buffer is part of this save;
+        // the copy saved is the row as it is now.
+        crate::library::component_preview::updates::flush_edit_buffers(state)
+            .map_err(anyhow::Error::msg)?;
+        state.saving_row = Some(state.row.clone());
+        state.saving_generation = generation;
+        state.saving_batch = None;
+        self.begin_row_write(address, &[], batch)
     }
 
     /// Check the library can take the staged PDFs, mark the row as saving
@@ -217,7 +244,7 @@ impl Signex {
         address: &EditorAddress,
         generation: u64,
         result: Result<Vec<String>, String>,
-    ) {
+    ) -> Task<Message> {
         self.document_state
             .document_saves
             .finish(&address.library_path);
@@ -236,33 +263,36 @@ impl Signex {
                     "Save abandoned: the editor was closed before its datasheet PDFs were stored",
                 ),
             }
-            return;
+            return Task::none();
         }
         let batch = self
             .library
             .editors
             .get_mut(address)
             .and_then(|state| state.saving_batch.take());
-        let saved = result
+        let stored = result
             .inspect_err(|_| {
                 if let Some(state) = self.library.editors.get_mut(address) {
                     state.saving_row = None;
                 }
             })
-            .map_err(anyhow::Error::msg)
-            .and_then(|written| self.commit_row(address, &written));
-        let Err(e) = saved else { return };
-        let Some(batch) = batch else {
-            self.report_save_row_failure(&e);
-            return;
-        };
-        // A Save All is waiting on this row: its settle step reports the
-        // failure and keeps the window / library open.
-        let label = self.library.editor_label(address);
-        crate::diagnostics::log_error(&format!("Save All: could not save {label}"), &e);
-        self.library
-            .batch_row_failures
-            .insert((batch, address.clone()), (label, format!("{e:#}")));
+            .map_err(anyhow::Error::msg);
+        let started = stored.and_then(|written| self.begin_row_write(address, &written, batch));
+        started.unwrap_or_else(|e| {
+            match batch {
+                // A Save All is waiting on this row: its settle step
+                // reports the failure and keeps the window / library open.
+                Some(batch) => {
+                    let label = self.library.editor_label(address);
+                    crate::diagnostics::log_error(&format!("Save All: could not save {label}"), &e);
+                    self.library
+                        .batch_row_failures
+                        .insert((batch, address.clone()), (label, format!("{e:#}")));
+                }
+                None => self.report_save_row_failure(&e),
+            }
+            Task::none()
+        })
     }
 }
 

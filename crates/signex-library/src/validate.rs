@@ -7,13 +7,16 @@
 use crate::adapter::LibraryError;
 use crate::alternate_symbol::alternate_symbol_issues;
 use crate::component::ComponentRow;
+use crate::footprint_binding::ensure_footprint_bindings_valid;
 use crate::hash::check_param_map_finite;
 
-/// Refuse a row that must not be stored, naming the row. Two steps:
-/// [`check_parameters_finite`], then [`check_alternate_symbols`].
+/// Refuse a row that must not be stored, naming the row. Three steps:
+/// [`check_parameters_finite`], then [`check_alternate_symbols`], then the
+/// footprint bindings (alternates need a default; none bound twice, #1234).
 pub fn validate_row_for_write(row: &ComponentRow) -> Result<(), LibraryError> {
     check_parameters_finite(row)?;
-    check_alternate_symbols(row)
+    check_alternate_symbols(row)?;
+    ensure_footprint_bindings_valid(row)
 }
 
 /// Refuse a NaN / infinite parameter, naming the parameter key.

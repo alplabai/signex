@@ -20,6 +20,7 @@ pub mod diff;
 pub mod distributor;
 #[cfg(feature = "distributors-community")]
 pub mod distributors;
+pub mod footprint_binding;
 #[cfg(feature = "local-git")]
 mod git_history;
 #[cfg(feature = "local-git")]
@@ -87,6 +88,10 @@ pub use distributor::{DistributorAdapter, DistributorError, DistributorPart, Dis
 pub use distributors::{
     DigiKeyAdapter, DistributorCache, JlcpcbAdapter, KeyringStore, LcscAdapter, MouserAdapter,
     PRICING_SOURCES, source_supports_pricing,
+};
+pub use footprint_binding::{
+    FootprintBinding, FootprintCellError, decode_footprint_cell, encode_footprint_cell,
+    ensure_footprint_bindings_valid, pick_binding,
 };
 pub use hash::hash_row_content;
 pub use identity::{ComponentClass, InternalPn, Mpn, RowId};
