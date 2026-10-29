@@ -237,6 +237,8 @@ fn draw_line_bucket<F>(
         if let Some(pattern) = line.pattern_px() {
             draw_dashed_line(frame, p0, p1, width, color, pattern);
         } else {
+            // Whole-pixel hairlines, so thickness ignores orientation (#1654).
+            let (p0, p1, width) = crate::scene_line_snap::snap_hairline(p0, p1, width);
             let path = canvas::Path::line(p0, p1);
             frame.stroke(
                 &path,
