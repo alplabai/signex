@@ -219,17 +219,17 @@ impl Signex {
                 .wire_preview
                 .clear();
             self.interaction_state.active_canvas_mut().drawing_mode = false;
-        } else if let Some(snapshot) = self.active_render_snapshot() {
-            if let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
+        } else if let Some(snapshot) = self.active_render_snapshot()
+            && let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
                 snapshot,
                 &self.interaction_state.active_canvas().designators,
                 world_x,
                 world_y,
                 self.ui_state.net_class_styles.styles(),
-            ) && let Some(focus) = self.open_text_edit_on_double_click(hit)
-            {
-                return focus;
-            }
+            )
+            && let Some(focus) = self.open_text_edit_on_double_click(hit)
+        {
+            return focus;
         }
         Task::none()
     }
