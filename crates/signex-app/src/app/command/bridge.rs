@@ -159,6 +159,7 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "open_preferences" | "open_schematic_preferences" => {
             Message::Preferences(PreferencesMsg::Open)
         }
+        "repeat_last_item" => Message::Edit(EditMsg::RepeatLastItem),
         "paste" => Message::Edit(EditMsg::Paste),
         "paste_special" | "smart_paste" => Message::Edit(EditMsg::SmartPaste),
         "place_bus" => Message::Tool(ToolMessage::SelectTool(Tool::Bus)),
@@ -406,7 +407,7 @@ mod tests {
         "place_global_label", "place_hierarchical_label", "place_junction",
         "place_power_symbol",
         "previous_highlighted_net_item",
-        "refresh_view", "repeat_last_item",
+        "refresh_view",
         "reset_local_coordinates", "rubber_stamp_copy", "select_expand_connection",
         "select_node_or_connection_item", "sheet_navigation_back", "sheet_navigation_forward",
         "switch_segment_posture", "toggle_cross_select_mode", "toggle_floating_panels",

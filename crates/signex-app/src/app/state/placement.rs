@@ -74,3 +74,16 @@ impl PlacementSession {
         self.payload = payload;
     }
 }
+
+/// What "Repeat last item" arms again: the text-bearing tool that placed
+/// something last, with the text its next copy would carry (already stepped).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LastPlacement {
+    /// A net label, port or hierarchical port.
+    Label {
+        port: Option<(signex_types::schematic::LabelType, String)>,
+        text: String,
+    },
+    /// A text note.
+    Text { text: String },
+}

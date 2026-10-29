@@ -258,6 +258,8 @@ mod library_place_ui;
 mod library_stock_place;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
+#[path = "regression/repeat_placement.rs"]
+mod repeat_placement;
 // #1231 — Properties lists a placed symbol's library row documents.
 #[path = "regression/library_row_documents.rs"]
 mod library_row_documents;

@@ -588,6 +588,7 @@ impl Signex {
                 last_tool: std::collections::HashMap::new(),
                 pending_power: None,
                 placement: None,
+                last_placement: None,
                 placement_epoch: 0,
                 pending_port: None,
                 bus_entry_size: signex_types::schematic::SCHEMATIC_BUS_ENTRY_DEFAULT_SIZE,

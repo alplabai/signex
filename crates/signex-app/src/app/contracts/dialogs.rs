@@ -701,6 +701,8 @@ pub enum EditMsg {
     SmartPaste,
     /// Duplicate the current selection in place.
     Duplicate,
+    /// Arm the last label or text note again, with its text stepped (#1253).
+    RepeatLastItem,
     /// Reorder the selected drawings within the sheet's drawing list; the
     /// selection's circuit elements are ignored (#1583).
     ArrangeDrawings(signex_engine::DrawingArrange),

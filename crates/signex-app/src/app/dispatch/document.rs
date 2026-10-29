@@ -81,6 +81,7 @@ impl Signex {
                 self.handle_selection_duplicate_requested();
                 self.finish_update()
             }
+            EditMsg::RepeatLastItem => self.handle_repeat_last_item_requested(),
             EditMsg::ArrangeDrawings(arrange) => {
                 self.handle_drawings_arrange_requested(arrange);
                 self.finish_update()

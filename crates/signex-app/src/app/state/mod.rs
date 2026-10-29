@@ -45,7 +45,7 @@ pub use pdf_preview_raster::{
     PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
     forget_page_setup, rekey_page_setup,
 };
-pub use placement::{PlacementKind, PlacementSession};
+pub use placement::{LastPlacement, PlacementKind, PlacementSession};
 pub use profile_update::PendingProfileUpdate;
 pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{NetColorStep, UiState};
