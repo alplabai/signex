@@ -7,6 +7,7 @@ mod clipboard_text;
 mod history;
 mod history_snapshot;
 mod lock;
+mod multi_edit;
 mod net_class_table;
 mod paste_edit;
 mod placement;
@@ -51,7 +52,7 @@ pub use annotation::AnnotateScope;
 pub use clipboard_text::{CLIPBOARD_MARKER, MAX_CLIPBOARD_TEXT_BYTES};
 pub use command::{
     AnnotateMode, Command, CommandKind, DrawingArrange, MirrorAxis, ReorderDirection,
-    SelectionTransform, SheetPort, SymbolTextField, TextTarget,
+    SelectionTransform, SheetPort, SymbolFlag, SymbolTextField, TextTarget,
 };
 pub use error::EngineError;
 pub use exec::change_component::{
@@ -68,6 +69,10 @@ pub use find_similar::{
 };
 use history::HistoryEntry;
 pub use history::UndoGroupId;
+pub use multi_edit::{
+    LabelGroup, MultiEdit, SelectionGroups, Shared, SymbolGroup, WireGroup,
+    edit_commands as multi_edit_commands, selection_groups,
+};
 pub use net_class_table::{
     HISTORY_LIMIT as NET_CLASS_HISTORY_LIMIT, NetClassCommand, NetClassError, NetClassHistory,
     StepId as NetClassStepId, apply_net_class_command,
@@ -418,6 +423,8 @@ impl Engine {
             | Command::SetSymbolRotation { .. }
             | Command::SetSymbolLocked { .. }
             | Command::SetSymbolDnp { .. }
+            | Command::SetSymbolFlag { .. }
+            | Command::SetWireWidth { .. }
             | Command::SetSymbolBodyStyle { .. }
             | Command::UpdateSymbolTextSize { .. }
             | Command::UpdateSymbolLibId { .. }

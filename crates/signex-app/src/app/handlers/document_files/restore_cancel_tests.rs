@@ -440,6 +440,8 @@ fn a_restore_finishing_on_a_background_schematic_leaves_the_users_tab_state_alon
         original_text: "x".into(),
         world_x: 0.0,
         world_y: 0.0,
+        sheet: None,
+        placement: None,
     });
     finish_restore(&mut app, collect_messages(task));
 
@@ -484,6 +486,8 @@ fn arm_state_of_the_old_engine(app: &mut Signex) {
         original_text: "x".into(),
         world_x: 0.0,
         world_y: 0.0,
+        sheet: None,
+        placement: None,
     });
     let slot = app.interaction_state.active_canvas_mut();
     slot.move_pick = Some(crate::canvas::MovePick::Object);
@@ -595,6 +599,8 @@ fn text_edit_on(
         original_text: "x".into(),
         world_x: 0.0,
         world_y: 0.0,
+        sheet: None,
+        placement: None,
     }
 }
 

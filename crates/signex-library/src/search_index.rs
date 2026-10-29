@@ -549,24 +549,22 @@ impl TantivySearchIndex {
         facet: &Facet,
     ) -> Result<Box<dyn Query>, TantivyIndexError> {
         let n = parse_f64(facet)?;
+        let at = || Term::from_field_f64(field, n);
         match facet.op {
             FacetOp::Eq => {
                 // f64 equality via a single-value [n, n] inclusive range to
                 // avoid bit-pattern comparison surprises with `TermQuery`.
-                Ok(Box::new(RangeQuery::new_f64_bounds(
-                    self.field_name_owned(field),
-                    Bound::Included(n),
-                    Bound::Included(n),
+                Ok(Box::new(RangeQuery::new(
+                    Bound::Included(at()),
+                    Bound::Included(at()),
                 )))
             }
-            FacetOp::Lt => Ok(Box::new(RangeQuery::new_f64_bounds(
-                self.field_name_owned(field),
+            FacetOp::Lt => Ok(Box::new(RangeQuery::new(
                 Bound::Unbounded,
-                Bound::Excluded(n),
+                Bound::Excluded(at()),
             ))),
-            FacetOp::Gt => Ok(Box::new(RangeQuery::new_f64_bounds(
-                self.field_name_owned(field),
-                Bound::Excluded(n),
+            FacetOp::Gt => Ok(Box::new(RangeQuery::new(
+                Bound::Excluded(at()),
                 Bound::Unbounded,
             ))),
             FacetOp::Contains => Err(TantivyIndexError::InvalidFacetValue {
@@ -613,10 +611,6 @@ impl TantivySearchIndex {
                 value: facet.value.clone(),
                 reason: e.to_string(),
             })
-    }
-
-    fn field_name_owned(&self, field: Field) -> String {
-        self.index.schema().get_field_name(field).to_string()
     }
 
     fn doc_to_summary(&self, doc: &TantivyDocument) -> Option<ComponentSummary> {
@@ -693,7 +687,7 @@ impl SearchIndex for TantivySearchIndex {
             }
         };
 
-        let top = match searcher.search(&query, &TopDocs::with_limit(limit)) {
+        let top = match searcher.search(&query, &TopDocs::with_limit(limit).order_by_score()) {
             Ok(t) => t,
             Err(e) => {
                 tracing::warn!(
