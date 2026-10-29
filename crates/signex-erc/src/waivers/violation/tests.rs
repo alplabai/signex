@@ -235,3 +235,65 @@ fn a_net_waiver_ignores_part_values_but_not_the_pin_set() {
     let renamed = net_finding(&[(r1, "R1"), (c1, "C9")]);
     assert!(split(renamed, &sheet("100n"), &waivers).lapsed.contains(&0));
 }
+
+#[test]
+fn a_part_joining_a_waived_net_lapses_the_waiver_rather_than_orphaning_it() {
+    let (r1, c1, c2) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+    let sheet = SchematicSheet {
+        symbols: vec![part(r1), part(c1), part(c2)],
+        ..Default::default()
+    };
+    let v = net_finding(&[(r1, "R1"), (c1, "C1")]);
+    let waiver = waive(&v, &sheet);
+    assert_eq!(
+        waiver.objects,
+        vec![r1.to_string(), "net:SENSE".to_string()]
+    );
+    let grown = net_finding(&[(r1, "R1"), (c1, "C1"), (c2, "C2")]);
+    let out = split(grown, &sheet, &[waiver]);
+    assert!(out.lapsed.contains(&0), "same identity, new fingerprint");
+    assert_eq!(out.kept.len(), 1);
+}
+
+fn wire_sheet(wire: signex_types::schematic::Wire) -> SchematicSheet {
+    SchematicSheet {
+        wires: vec![wire],
+        ..Default::default()
+    }
+}
+
+#[test]
+fn a_geometry_waiver_ignores_cosmetics_but_not_the_geometry() {
+    use signex_types::schematic::Wire;
+    let id = Uuid::new_v4();
+    let wire = Wire {
+        uuid: id,
+        start: Point::new(0.0, 0.0),
+        end: Point::new(12.7, 0.0),
+        ..Default::default()
+    };
+    let mut v = Violation::new(
+        RuleId::builtin(RuleKind::DanglingWire),
+        RuleKind::DanglingWire,
+        Severity::Warning,
+        "Wire endpoint is not connected",
+        Point::new(0.0, 0.0),
+    );
+    v.primary = Some(SelectedItem::new(id, SelectedKind::Wire));
+    let waivers = vec![waive(&v, &wire_sheet(wire.clone()))];
+    let thicker = Wire {
+        stroke_width: 0.5,
+        ..wire.clone()
+    };
+    assert_eq!(
+        split(v.clone(), &wire_sheet(thicker), &waivers)
+            .waived
+            .len(),
+        1
+    );
+    let moved = Wire {
+        end: Point::new(25.4, 0.0),
+        ..wire
+    };
+    assert!(split(v, &wire_sheet(moved), &waivers).lapsed.contains(&0));
+}

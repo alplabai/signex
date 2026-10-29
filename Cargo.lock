@@ -5667,7 +5667,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "signex-bom",
  "signex-net",
  "signex-types",
  "uuid",

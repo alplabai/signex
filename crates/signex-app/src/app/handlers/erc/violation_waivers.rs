@@ -120,9 +120,22 @@ impl Signex {
         let Some(draft) = self.ui_state.erc_waive_draft.clone() else {
             return Task::none();
         };
+        // The fingerprint is taken from the sheet as it is now, not as it was
+        // when the row was drawn, so an edit in between cannot make the new
+        // waiver lapse on arrival.
+        let key = match self.current_waiver_key(&draft.key) {
+            Ok(key) => key,
+            Err(why) => {
+                crate::diagnostics::log_warning(format!("ERC: not waived: {why}"));
+                if let Some(d) = self.ui_state.erc_waive_draft.as_mut() {
+                    d.error = Some(why);
+                }
+                return Task::none();
+            }
+        };
         let date = chrono::Local::now().format("%Y-%m-%d").to_string();
         let waiver = match signex_erc::waivers::violation::new_waiver(
-            &draft.key,
+            &key,
             &draft.message,
             &draft.reason,
             &draft.author,
@@ -149,6 +162,37 @@ impl Signex {
         ));
         self.replace_project_rules(Some(rules), true);
         self.handle_run_erc()
+    }
+
+    /// `key` with its fingerprint recomputed from the open sheet the finding
+    /// is filed under. `Err` (user-facing) when the newest run no longer
+    /// reports the finding, or an object it names is gone. A sheet that is not
+    /// open cannot have changed since the run, so its key stands.
+    fn current_waiver_key(
+        &self,
+        key: &signex_erc::waivers::violation::WaiverKey,
+    ) -> Result<signex_erc::waivers::violation::WaiverKey, String> {
+        let same = |k: &signex_erc::waivers::violation::WaiverKey| {
+            k.rule_id == key.rule_id && k.objects == key.objects
+        };
+        let found = self
+            .ui_state
+            .erc_violations_by_path
+            .iter()
+            .find_map(|(path, list)| {
+                list.iter()
+                    .find(|v| v.waiver_key.as_ref().is_some_and(same))
+                    .map(|v| (path, v))
+            });
+        let Some((path, violation)) = found else {
+            return Err("the finding is no longer reported; run ERC again".to_string());
+        };
+        let Some(engine) = self.document_state.engines.get(path) else {
+            return Ok(key.clone());
+        };
+        signex_erc::waivers::violation::waiver_key(violation, engine.document())
+            .filter(same)
+            .ok_or_else(|| "an object the finding names is no longer on its sheet".to_string())
     }
 
     fn remove_erc_waiver(&mut self, rule_id: &str, objects: &[String]) -> Task<Message> {

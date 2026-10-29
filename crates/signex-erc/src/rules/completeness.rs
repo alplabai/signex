@@ -94,7 +94,7 @@ pub(crate) fn part_without_value(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 pub(crate) fn part_without_mpn(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let has_mpn = |(s, _): Placed| {
         s.attrs.iter().any(|(key, value)| {
-            signex_bom::MPN_FIELDS
+            signex_types::schematic::MPN_FIELDS
                 .iter()
                 .any(|f| key.eq_ignore_ascii_case(f))
                 && !value.trim().is_empty()

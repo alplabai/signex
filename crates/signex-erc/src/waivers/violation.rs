@@ -48,27 +48,34 @@ impl std::fmt::Display for WaiverError {
     }
 }
 
-/// The objects a finding involves: its primary and peer object and, for a
-/// net-level finding, every part on the net.
+/// The objects a finding names: its primary and peer object.
 pub fn involved_items(v: &Violation) -> Vec<SelectedItem> {
     let mut items: Vec<SelectedItem> = v.primary.into_iter().chain(v.peer).collect();
-    if let Some(net) = &v.net {
-        items.extend(
-            net.pins
-                .iter()
-                .map(|p| SelectedItem::new(p.symbol, SelectedKind::Symbol)),
-        );
-    }
     items.sort_by_key(|i| i.uuid);
     items.dedup_by_key(|i| i.uuid);
     items
 }
 
+/// A waiver's identity objects for `v`: the UUIDs of the objects it names
+/// and, for a net-level finding, `net:<name>`. The net's parts are not part
+/// of the identity, so adding or removing one lapses the waiver (through
+/// the fingerprint) instead of orphaning it.
+fn identity_objects(v: &Violation, items: &[SelectedItem]) -> Vec<String> {
+    let mut objects: Vec<String> = items.iter().map(|i| i.uuid.to_string()).collect();
+    if let Some(net) = v.net.as_ref().filter(|n| !n.name.is_empty()) {
+        objects.push(format!("net:{}", net.name));
+    }
+    objects.sort();
+    objects
+}
+
 /// The finding's key on `sheet`, the sheet it is filed under. `None` when it
-/// involves no object, or one that is not on `sheet`.
+/// names neither an object nor a named net, or names an object that is not
+/// on `sheet`.
 pub fn waiver_key(v: &Violation, sheet: &SchematicSheet) -> Option<WaiverKey> {
     let items = involved_items(v);
-    if items.is_empty() {
+    let objects = identity_objects(v, &items);
+    if objects.is_empty() {
         return None;
     }
     let rule_id = v.rule_id.to_string();
@@ -91,7 +98,7 @@ pub fn waiver_key(v: &Violation, sheet: &SchematicSheet) -> Option<WaiverKey> {
     }
     Some(WaiverKey {
         rule_id,
-        objects: items.iter().map(|i| i.uuid.to_string()).collect(),
+        objects,
         fingerprint: format!("{:x}", hasher.finalize()),
     })
 }
@@ -248,33 +255,77 @@ pub fn stamp_keys(violations: &mut [Violation], sheet: &SchematicSheet) {
 
 /// Canonical text of the object `item` names on `sheet` for `scope`: JSON
 /// with keys sorted, every number in stored nanometre units (a raw `f64`
-/// changes across a save + load, see `mm_as_stored_nm`).
+/// changes across a save + load, see `mm_as_stored_nm`). Only connection
+/// geometry and names are covered; cosmetics (stroke width, font, colour,
+/// justification) never are.
 fn object_content(sheet: &SchematicSheet, item: &SelectedItem, scope: Scope) -> Option<String> {
+    use serde_json::json;
     let id = item.uuid;
     let value = match item.kind {
         SelectedKind::Symbol | SelectedKind::SymbolRefField | SelectedKind::SymbolValField => {
-            symbol_view(sheet.symbols.iter().find(|s| s.uuid == id)?, scope)
+            symbol_view(sheet.symbols.iter().find(|s| s.uuid == id)?, scope)?
         }
-        SelectedKind::Wire => to_value(sheet.wires.iter().find(|w| w.uuid == id)?),
-        SelectedKind::Bus => to_value(sheet.buses.iter().find(|b| b.uuid == id)?),
-        SelectedKind::BusEntry => to_value(sheet.bus_entries.iter().find(|b| b.uuid == id)?),
-        SelectedKind::Junction => to_value(sheet.junctions.iter().find(|j| j.uuid == id)?),
-        SelectedKind::NoConnect => to_value(sheet.no_connects.iter().find(|n| n.uuid == id)?),
+        SelectedKind::Wire => {
+            let w = sheet.wires.iter().find(|w| w.uuid == id)?;
+            json!({"start": to_value(&w.start)?, "end": to_value(&w.end)?})
+        }
+        SelectedKind::Bus => {
+            let b = sheet.buses.iter().find(|b| b.uuid == id)?;
+            json!({"start": to_value(&b.start)?, "end": to_value(&b.end)?})
+        }
+        SelectedKind::BusEntry => {
+            let b = sheet.bus_entries.iter().find(|b| b.uuid == id)?;
+            json!({"position": to_value(&b.position)?, "size": [b.size.0, b.size.1]})
+        }
+        SelectedKind::Junction => {
+            let j = sheet.junctions.iter().find(|j| j.uuid == id)?;
+            json!({"position": to_value(&j.position)?})
+        }
+        SelectedKind::NoConnect => {
+            let n = sheet.no_connects.iter().find(|n| n.uuid == id)?;
+            json!({"position": to_value(&n.position)?})
+        }
         SelectedKind::NoErcDirective => {
-            to_value(sheet.no_erc_directives.iter().find(|n| n.uuid == id)?)
+            let n = sheet.no_erc_directives.iter().find(|n| n.uuid == id)?;
+            json!({"position": to_value(&n.position)?})
         }
-        SelectedKind::Label => to_value(sheet.labels.iter().find(|l| l.uuid == id)?),
-        SelectedKind::SheetPin => to_value(
-            sheet
+        SelectedKind::Label => {
+            let l = sheet.labels.iter().find(|l| l.uuid == id)?;
+            json!({
+                "text": l.text,
+                "type": to_value(&l.label_type)?,
+                "position": to_value(&l.position)?,
+            })
+        }
+        SelectedKind::SheetPin => {
+            let p = sheet
                 .child_sheets
                 .iter()
                 .flat_map(|c| c.pins.iter())
-                .find(|p| p.uuid == id)?,
-        ),
-        SelectedKind::ChildSheet => to_value(sheet.child_sheets.iter().find(|c| c.uuid == id)?),
-        SelectedKind::TextNote => to_value(sheet.text_notes.iter().find(|t| t.uuid == id)?),
+                .find(|p| p.uuid == id)?;
+            json!({"name": p.name, "direction": p.direction, "position": to_value(&p.position)?})
+        }
+        SelectedKind::ChildSheet => {
+            let c = sheet.child_sheets.iter().find(|c| c.uuid == id)?;
+            let pins: Vec<serde_json::Value> = c
+                .pins
+                .iter()
+                .map(|p| json!({"name": p.name, "x": p.position.x, "y": p.position.y}))
+                .collect();
+            json!({
+                "name": c.name,
+                "filename": c.filename,
+                "position": to_value(&c.position)?,
+                "size": [c.size.0, c.size.1],
+                "pins": pins,
+            })
+        }
+        SelectedKind::TextNote => {
+            let t = sheet.text_notes.iter().find(|t| t.uuid == id)?;
+            json!({"text": t.text, "position": to_value(&t.position)?})
+        }
         SelectedKind::Drawing => return None,
-    }?;
+    };
     let mut out = String::new();
     write_canonical(&value, &mut out)?;
     Some(out)

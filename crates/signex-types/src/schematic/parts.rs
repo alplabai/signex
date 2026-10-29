@@ -11,6 +11,10 @@ use uuid::Uuid;
 
 use super::Symbol;
 
+/// The symbol fields a part's manufacturer part number is read from, in
+/// order (case-insensitive). Shared by the BOM and ERC.
+pub const MPN_FIELDS: [&str; 3] = ["MPN", "Manufacturer Part Number", "Part Number"];
+
 /// The identity fields of a placed symbol that decide part membership.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PartKey<'a> {

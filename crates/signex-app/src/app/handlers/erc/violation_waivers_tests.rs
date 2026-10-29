@@ -164,23 +164,191 @@ fn a_waiver_persists_through_save_and_load_and_undoes() {
     std::fs::remove_dir_all(&dir).ok();
 }
 
+/// Waive the first finding `pick` selects, through the panel flow.
+fn waive_where(
+    app: &mut Signex,
+    pick: impl Fn(&crate::panels::ErcDiagnosticEntry) -> bool,
+) -> crate::panels::ErcDiagnosticEntry {
+    let entry = app
+        .build_erc_diagnostic_entries()
+        .into_iter()
+        .find(|e| pick(e))
+        .expect("finding to waive");
+    send(
+        app,
+        ErcWaiverMsg::Started {
+            key: entry.waiver_key.clone().expect("waivable"),
+            message: entry.message.clone(),
+        },
+    );
+    send(app, ErcWaiverMsg::ReasonChanged("accepted".into()));
+    send(app, ErcWaiverMsg::AuthorChanged("A. Designer".into()));
+    send(app, ErcWaiverMsg::Confirmed);
+    entry
+}
+
+/// The top sheet with a lone wire at y = 3.81 mm, which reads back from its
+/// stored nm as 3.8099999999999996.
+fn top_with_drifting_wire(top: &SchematicSheet) -> (SchematicSheet, Uuid) {
+    let mut sheet = top.clone();
+    let id = Uuid::new_v4();
+    sheet.wires.push(signex_types::schematic::Wire {
+        uuid: id,
+        start: signex_types::schematic::Point::new(25.4, 3.81),
+        end: signex_types::schematic::Point::new(38.1, 3.81),
+        ..Default::default()
+    });
+    (sheet, id)
+}
+
+fn dangling_on(app: &Signex, wire: Uuid) -> usize {
+    app.ui_state
+        .erc_violations_by_path
+        .values()
+        .flatten()
+        .filter(|v| v.builtin_kind() == Some(signex_erc::RuleKind::DanglingWire))
+        .filter(|v| v.primary.is_some_and(|p| p.uuid == wire))
+        .count()
+}
+
 #[test]
 fn a_waiver_still_holds_after_the_sheet_is_saved_and_reloaded() {
+    // A geometry finding, so the fingerprint hashes the drifting coordinate.
+    let (mut app, dir, top) = app_with_two_failing_nets();
+    let top_path = dir.join("top.snxsch");
+    let (sheet, wire) = top_with_drifting_wire(&top);
+    open_with(&mut app.document_state, &top_path, sheet.clone());
+    app.run_erc_blocking();
+    assert_eq!(dangling_on(&app, wire), 2);
+    waive_where(&mut app, |e| {
+        e.rule_kind == Some(signex_erc::RuleKind::DanglingWire)
+            && e.select.is_some_and(|s| s.uuid == wire)
+    });
+    app.run_erc_blocking();
+    assert_eq!(dangling_on(&app, wire), 0);
+
+    let text = SnxSchematic::new(sheet.clone())
+        .write_string()
+        .expect("save sheet");
+    let reloaded = SnxSchematic::parse(&text).expect("load sheet").sheet;
+    let y = |s: &SchematicSheet| {
+        s.wires
+            .iter()
+            .find(|w| w.uuid == wire)
+            .map(|w| w.start.y.to_bits())
+    };
+    assert_ne!(
+        y(&reloaded),
+        y(&sheet),
+        "the coordinate must drift on reload"
+    );
+    open_with(&mut app.document_state, &top_path, reloaded);
+    app.run_erc_blocking();
+    assert_eq!(dangling_on(&app, wire), 0, "no edit, so the waiver holds");
+    assert_eq!(
+        app.erc_violation_waiver_entries()[0].status,
+        ErcWaiverStatus::Waiving(2)
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn a_part_joining_a_waived_net_lapses_it_in_the_panel_and_the_report() {
     let (mut app, dir, top) = app_with_two_failing_nets();
     app.run_erc_blocking();
     waive_net_t(&mut app, "accepted");
     assert_eq!(flagged(&app), ["NET_C"]);
 
-    let text = SnxSchematic::new(top).write_string().expect("save sheet");
-    let reloaded = SnxSchematic::parse(&text).expect("load sheet").sheet;
-    open_with(&mut app.document_state, &dir.join("top.snxsch"), reloaded);
+    let mut grown = top;
+    let mut extra = grown.symbols[0].clone();
+    extra.uuid = Uuid::new_v4();
+    extra.reference = "R_U".into();
+    grown.symbols.push(extra);
+    open_with(&mut app.document_state, &dir.join("top.snxsch"), grown);
     app.run_erc_blocking();
-    assert_eq!(flagged(&app), ["NET_C"], "no edit, so the waiver holds");
+    assert_eq!(flagged(&app), ["NET_C", "NET_T"], "the finding is back");
     assert_eq!(
         app.erc_violation_waiver_entries()[0].status,
-        ErcWaiverStatus::Waiving(1)
+        ErcWaiverStatus::Lapsed
+    );
+    let opts = app.erc_report_options(signex_output::ErcReportFormat::Json);
+    assert_eq!(
+        opts.waivers[0].status,
+        signex_output::erc_report::ErcReportWaiverStatus::Lapsed
     );
     std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn confirm_fingerprints_the_sheet_as_it_is_now() {
+    let (mut app, dir, top) = app_with_two_failing_nets();
+    let top_path = dir.join("top.snxsch");
+    let (sheet, wire) = top_with_drifting_wire(&top);
+    open_with(&mut app.document_state, &top_path, sheet.clone());
+    app.run_erc_blocking();
+    let entry = app
+        .build_erc_diagnostic_entries()
+        .into_iter()
+        .find(|e| e.select.is_some_and(|s| s.uuid == wire))
+        .expect("dangling row");
+    send(
+        &mut app,
+        ErcWaiverMsg::Started {
+            key: entry.waiver_key.clone().expect("waivable"),
+            message: entry.message.clone(),
+        },
+    );
+    // The wire moves after the row was drawn, before Confirm.
+    let mut moved = sheet.clone();
+    if let Some(w) = moved.wires.iter_mut().find(|w| w.uuid == wire) {
+        w.end.x = 50.8;
+    }
+    open_with(&mut app.document_state, &top_path, moved);
+    send(&mut app, ErcWaiverMsg::ReasonChanged("ok".into()));
+    send(&mut app, ErcWaiverMsg::AuthorChanged("me".into()));
+    send(&mut app, ErcWaiverMsg::Confirmed);
+    app.run_erc_blocking();
+    assert_eq!(
+        dangling_on(&app, wire),
+        0,
+        "waived as it is now, not lapsed"
+    );
+
+    // A wire deleted before Confirm is refused, with the editor kept open.
+    let (mut app, dir2, top) = app_with_two_failing_nets();
+    let (sheet, wire) = top_with_drifting_wire(&top);
+    open_with(&mut app.document_state, &dir2.join("top.snxsch"), sheet);
+    app.run_erc_blocking();
+    let entry = app
+        .build_erc_diagnostic_entries()
+        .into_iter()
+        .find(|e| e.select.is_some_and(|s| s.uuid == wire))
+        .expect("dangling row");
+    send(
+        &mut app,
+        ErcWaiverMsg::Started {
+            key: entry.waiver_key.clone().expect("waivable"),
+            message: entry.message.clone(),
+        },
+    );
+    open_with(&mut app.document_state, &dir2.join("top.snxsch"), top);
+    send(&mut app, ErcWaiverMsg::ReasonChanged("ok".into()));
+    send(&mut app, ErcWaiverMsg::AuthorChanged("me".into()));
+    send(&mut app, ErcWaiverMsg::Confirmed);
+    let draft = app
+        .ui_state
+        .erc_waive_draft
+        .as_ref()
+        .expect("editor stays open");
+    assert!(
+        draft
+            .error
+            .as_deref()
+            .is_some_and(|e| e.contains("no longer on its sheet"))
+    );
+    assert!(app.erc_violation_waiver_entries().is_empty());
+    std::fs::remove_dir_all(&dir).ok();
+    std::fs::remove_dir_all(&dir2).ok();
 }
 
 #[test]

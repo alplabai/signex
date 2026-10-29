@@ -106,13 +106,16 @@ provenance. Each entry holds:
 | Field | Meaning |
 |---|---|
 | `rule_id` | Stable rule id, `builtin::...` or `user::...`. |
-| `objects` | Sorted UUIDs of the objects the finding involves: its primary and peer object, and every part on the net for a net-level finding. |
+| `objects` | Sorted identity of the finding: the UUIDs of the objects it names (primary and peer) and, for a net-level finding, `net:<net name>`. |
 | `fingerprint` | SHA-256 over the rule id and the canonical JSON (keys sorted) of each involved object. |
 | `reason`, `author` | Required; an entry missing either is kept on disk but never honoured. |
 | `date` | `YYYY-MM-DD` the waiver was made. |
 | `message` | The finding's text when waived, so a lapsed waiver still says what it was about. |
 
-The identity is `rule_id` + `objects`; positions are never part of it. The
+The identity is `rule_id` + `objects`; positions are never part of it, and
+neither are the parts on a net: a part joining or leaving a waived net
+changes the fingerprint, so the waiver shows as LAPSED, not as matching no
+finding (which would read as fixed). The
 fingerprint is what makes a waiver lapse, and it covers only what the rule
 depends on, so an unrelated edit never lapses a waiver:
 
@@ -120,7 +123,7 @@ depends on, so an unrelated edit never lapses a waiver:
 |---|---|
 | Part rules (footprint, value, MPN, annotation, duplicate designator, units not placed) | Each part's designators, library id, unit, value, footprint, `on_board` and fields. Not its position, rotation or text placement. |
 | Net-level findings (every finding that carries its net) | The net's name and pin set (designator, pin number, electrical type), plus any label or wire the finding names. Not the parts' other fields. |
-| Everything else (off-grid, dangling wire, pin conflicts, ...) | The involved objects with their geometry: for a part, the part fields above plus position, rotation, mirroring and body style. |
+| Everything else (off-grid, dangling wire, pin conflicts, ...) | The involved objects' connection geometry and names: for a part, the part fields above plus position, rotation, mirroring and body style; for a wire or bus its ends; for a label its text, type and position; for a sheet pin its name, direction and position. Cosmetics (stroke width, font, justification, colour, junction diameter) are left out, so restyling never lapses a waiver. |
 
 Every number is hashed as the integer nanometres the file stores
 (`mm_as_stored_nm`), never as the raw `f64`: a length such as 3.81 mm reads
@@ -139,8 +142,14 @@ waiver with its reason, author, date and status (waiving N findings, lapsed,
 matches no finding, or ignored as incomplete), each with a Restore button, and
 the ERC report lists them in its waivers section.
 
-Limits: a finding that names no object (a placeholder-located DSL finding) or
-whose objects are not on the sheet it is filed under cannot be waived. Two
+The fingerprint is taken when the waiver is confirmed, from the open sheet as
+it is then, so an edit between the panel showing the row and Confirm does not
+make the new waiver lapse at once. If the newest run no longer reports the
+finding, or an object it names is gone, Confirm is refused with a line in the
+Messages panel.
+
+Limits: a finding that names neither an object nor a named net, or whose
+objects are not on the sheet it is filed under, cannot be waived. Two
 placements of one sheet file share object UUIDs, so a waiver covers both.
 Rule-specific No-ERC markers (an optional item of #1285) are not implemented.
 Per-net waivers keep their existing shape and carry no reason; adding one

@@ -8,7 +8,6 @@ license.workspace = true
 [dependencies]
 signex-types.workspace = true
 signex-net.workspace = true
-signex-bom.workspace = true
 uuid.workspace = true
 serde.workspace = true
 serde_json.workspace = true
