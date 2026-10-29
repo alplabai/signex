@@ -72,9 +72,6 @@ fn new_library(path: &Path, name: &str) {
 
 fn world() -> World {
     let serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-    // The refusal tests read the diagnostics ring, which stays empty until
-    // logging is up; run alone, nothing else starts it.
-    let _ = signex_app::diagnostics::init_logging();
     let tmp = TempDir::new().expect("tempdir");
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/stock-library");
     copy_dir(&source, &tmp.path().join("stock"));
