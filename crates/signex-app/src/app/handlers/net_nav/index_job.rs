@@ -135,6 +135,7 @@ impl Signex {
             action,
             sheet: self.document_state.active_path.clone(),
             selected: self.interaction_state.active_canvas().selected.clone(),
+            cursor: self.cursor_world_now(),
         };
         let nav = &mut self.document_state.net_nav;
         if action != PendingNetAction::HoverDwell || nav.pending.is_none() {
@@ -188,6 +189,7 @@ impl Signex {
             action,
             sheet,
             selected,
+            cursor,
         } = pending.clone();
         let user_command = action != PendingNetAction::HoverDwell;
         if project != landed {
@@ -214,6 +216,13 @@ impl Signex {
             && selected == self.interaction_state.active_canvas().selected;
         if user_command && !same_context {
             crate::diagnostics::log_info(messages::command_dropped_moved());
+            return Task::none();
+        }
+        // A command aimed at what is under the pointer is about that spot.
+        if action == PendingNetAction::HighlightUnderCursor
+            && pointer_moved(cursor, self.cursor_world_now())
+        {
+            crate::diagnostics::log_info(messages::command_dropped_pointer());
             return Task::none();
         }
         self.run_pending_net_action(action)
@@ -327,5 +336,17 @@ impl Signex {
             let outcome = job.run();
             let _follow_up = self.apply_net_index(&outcome);
         }
+    }
+}
+
+/// How far the pointer may drift before it is aiming at something else, in mm.
+const POINTER_DRIFT_MM: f64 = 0.5;
+
+/// Whether the pointer left the spot a command was given at.
+fn pointer_moved(then: Option<(f64, f64)>, now: Option<(f64, f64)>) -> bool {
+    match (then, now) {
+        (Some(a), Some(b)) => (a.0 - b.0).hypot(a.1 - b.1) > POINTER_DRIFT_MM,
+        (None, None) => false,
+        _ => true,
     }
 }

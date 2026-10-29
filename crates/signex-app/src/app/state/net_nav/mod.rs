@@ -38,6 +38,8 @@ pub struct Pending {
     pub action: PendingNetAction,
     pub sheet: Option<std::path::PathBuf>,
     pub selected: Vec<signex_types::schematic::SelectedItem>,
+    /// Where the pointer was, for a command aimed at what is under it.
+    pub cursor: Option<(f64, f64)>,
 }
 
 /// Everything cross-sheet navigation keeps between messages.

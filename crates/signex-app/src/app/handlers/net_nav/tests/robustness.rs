@@ -512,3 +512,27 @@ fn a_command_whose_project_was_closed_under_the_same_sheet_is_dropped_with_a_lin
         "dropped with its own line"
     );
 }
+
+#[test]
+fn a_parked_highlight_under_the_cursor_is_dropped_when_the_pointer_moved_on() {
+    let mut p = project();
+    let root = p.root.clone();
+    p.app.ui_state.cursor_document = Some(root);
+    p.app.ui_state.cursor_x = 5.0;
+    p.app.ui_state.cursor_y = 0.0;
+    p.send(NetNavMsg::NetHighlightRequested);
+    assert!(
+        p.app.document_state.net_nav.pending.is_some(),
+        "the highlight was parked on the wire under the pointer"
+    );
+    let before = crate::diagnostics::logged_count(NOT_READY);
+    // The pointer moves to the other wire while the index builds.
+    p.app.ui_state.cursor_x = 2.5;
+    p.app.ui_state.cursor_y = 50.0;
+
+    p.app.settle_net_index_blocking();
+
+    assert!(p.app.document_state.net_nav.highlight.is_none());
+    assert!(p.app.document_state.net_nav.pending.is_none());
+    assert!(crate::diagnostics::logged_count(NOT_READY) > before);
+}

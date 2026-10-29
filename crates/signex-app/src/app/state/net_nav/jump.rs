@@ -5,7 +5,7 @@
 //! source and one index: selecting another port, or an edit that rebuilds the
 //! index, starts a new lap.
 
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use signex_net::{NetAnchor, NetMember};
 
@@ -13,7 +13,9 @@ use super::ProjectNetData;
 
 #[derive(Debug)]
 pub struct JumpCursor {
-    index: Arc<ProjectNetData>,
+    /// The index the ring was read from. Weak, so a replaced index is freed
+    /// even while a lap is parked.
+    index: Weak<ProjectNetData>,
     /// The port the last jump landed on: the next jump continues from it.
     landed: NetAnchor,
     ring: Vec<NetMember>,
@@ -27,7 +29,7 @@ impl JumpCursor {
         let mut ring = partners;
         ring.push(source);
         Self {
-            index,
+            index: Arc::downgrade(&index),
             landed,
             ring,
             next: 0,
@@ -36,7 +38,7 @@ impl JumpCursor {
 
     /// Whether a jump from `source` on `index` carries on this lap.
     pub fn continues(&self, index: &Arc<ProjectNetData>, source: &NetAnchor) -> bool {
-        Arc::ptr_eq(&self.index, index) && &self.landed == source
+        self.index.ptr_eq(&Arc::downgrade(index)) && &self.landed == source
     }
 
     /// The port to land on now; the lap wraps after its last.
