@@ -61,6 +61,8 @@ pub enum EngineError {
     UnrecordedEditRefused,
     #[error("this sheet was written by a newer Signex and is read-only; edit it in that version")]
     ReadOnly,
+    #[error("the clipboard fragment could not be converted: {0}")]
+    ClipboardFragment(String),
 }
 
 fn locked_message(references: &[String], action: &str) -> String {

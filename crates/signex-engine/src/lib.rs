@@ -3,10 +3,12 @@ mod error;
 mod patch;
 
 mod annotation;
+mod clipboard_text;
 mod history;
 mod history_snapshot;
 mod lock;
 mod net_class_table;
+mod paste_edit;
 mod placement;
 mod power_port;
 mod project_general;
@@ -46,6 +48,7 @@ mod sheet_identity_tests;
 use std::path::{Path, PathBuf};
 
 pub use annotation::AnnotateScope;
+pub use clipboard_text::CLIPBOARD_MARKER;
 pub use command::{
     AnnotateMode, Command, CommandKind, DrawingArrange, MirrorAxis, ReorderDirection,
     SelectionTransform, SheetPort, SymbolTextField, TextTarget,

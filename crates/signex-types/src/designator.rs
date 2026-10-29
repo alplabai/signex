@@ -8,9 +8,11 @@
 
 use std::cmp::Ordering;
 
+mod counters;
 mod prefix;
 mod standard;
 
+pub use counters::{seed_counters, take_next};
 pub use prefix::{alphabetic_prefix, normalize_prefix_override, placement_prefix, split_reference};
 pub use standard::{DesignatorStandard, class_letters_ever_issued, class_prefix, resolve_prefix};
 
