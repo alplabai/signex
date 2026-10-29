@@ -135,8 +135,12 @@ jobs:
             arch: arm64
             arch_suffix: aarch64
 
+          # Linux legs build on the oldest supported runner image: the
+          # binary needs the glibc it was linked against or newer, so a
+          # 24.04 build (glibc 2.39) does not start on Debian 12 or
+          # Deepin 25 (#1688). The smoke test below enforces the ceiling.
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-22.04
             arch: amd64
             arch_suffix: x86_64
 
@@ -147,7 +151,7 @@ jobs:
           # naming) feeds the .deb, `arch_suffix` the AppImage, the
           # appimagetool download and the tarball.
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04-arm
+            os: ubuntu-22.04-arm
             arch: arm64
             arch_suffix: aarch64
 
@@ -261,7 +265,7 @@ jobs:
           chmod +x appimagetool
           export APPIMAGETOOL="$PWD/appimagetool"
           # appimagetool is itself an AppImage; extract-and-run avoids
-          # needing libfuse2 on the runner (absent on ubuntu 24.04 images).
+          # needing libfuse2 on the runner.
           export APPIMAGE_EXTRACT_AND_RUN=1
           chmod +x installer/linux/build-appimage.sh
           ./installer/linux/build-appimage.sh \
@@ -301,6 +305,7 @@ jobs:
             || { echo "::error::the tarball carries no font licenses"; exit 1; }
           rm -f deb-contents.txt tar-contents.txt
           bash scripts/smoke_release_artifact.sh "$V" /usr/bin/signex
+          bash scripts/check_glibc_ceiling.sh "target/${{ matrix.target }}/release/signex"
           # --appimage-extract-and-run: no FUSE needed on the runner.
           bash scripts/smoke_release_artifact.sh "$V" \
             "./Signex-${V}-${{ matrix.arch_suffix }}.AppImage" --appimage-extract-and-run
