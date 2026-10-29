@@ -33,8 +33,9 @@ impl Signex {
     }
 
     /// Git or copy work running off the update loop that writes into the
-    /// library at `root`: a queued library edit (#893), a "Commit now", or a
-    /// stock copy (its target is not tracked, so any copy counts). Moving or deleting the library under it
+    /// library at `root`: a queued library edit (#893), a datasheet PDF store,
+    /// a "Commit now", or a stock copy (its target is not tracked, so any copy
+    /// counts). Mounted roots are compared under `fold`. Moving or deleting the library under it
     /// would strand that work in a folder the app no longer mounts.
     pub(crate) fn library_background_write_running(
         &self,
@@ -45,7 +46,15 @@ impl Signex {
             .extension()
             .is_some_and(|e| e.eq_ignore_ascii_case("snxlib"));
         is_library
-            && (self.library.writes.pending(root) > 0
+            && (any_root_under(
+                self.library
+                    .writes
+                    .busy_roots()
+                    .iter()
+                    .map(std::path::PathBuf::as_path),
+                root,
+                fold,
+            ) || self.document_state.document_saves.is_saving(root)
                 || any_root_under(self.library.committing_roots(), root, fold)
                 || !self.library.stock_copies_in_flight.is_empty())
     }
@@ -64,7 +73,7 @@ fn any_root_under<'a>(
 /// Why a library rename or delete waits for `library_background_write_running`.
 /// The copy's target is not tracked, so the text names no library.
 pub(crate) const LIBRARY_BACKGROUND_WRITE_REFUSAL: &str =
-    "A library commit or copy is still running; try again once it finishes.";
+    "A library edit, commit or copy is still running; try again once it finishes.";
 
 /// The library a message addresses, when it carries its path.
 fn library_named_by(msg: &LibraryMessage) -> Option<&std::path::Path> {
@@ -254,9 +263,28 @@ mod tests {
         let library = std::path::Path::new("/w/a.snxlib");
         let in_flight = app.library.writes.turn(library);
         assert!(app.library_background_write_running(library, CaseFold::PRESERVE));
+        let variant = std::path::Path::new("/w/A.snxlib");
+        assert!(app.library_background_write_running(variant, CaseFold::FOLD));
+        assert!(!app.library_background_write_running(variant, CaseFold::PRESERVE));
         let other = std::path::Path::new("/w/b.snxlib");
         assert!(!app.library_background_write_running(other, CaseFold::PRESERVE));
         drop(in_flight);
+        assert!(!app.library_background_write_running(library, CaseFold::PRESERVE));
+    }
+
+    /// A datasheet PDF store writes beside the library on a worker, so it
+    /// holds a rename or delete of that library too.
+    #[test]
+    fn a_datasheet_store_in_flight_holds_its_library() {
+        let (mut app, _task) = Signex::new();
+        let library = std::path::Path::new("/w/a.snxlib");
+        let store = app
+            .document_state
+            .document_saves
+            .begin_work(library.to_path_buf());
+        assert!(app.library_background_write_running(library, CaseFold::PRESERVE));
+        drop(store);
+        app.document_state.document_saves.finish(library);
         assert!(!app.library_background_write_running(library, CaseFold::PRESERVE));
     }
 

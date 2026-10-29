@@ -217,6 +217,15 @@ impl LibraryWrites {
         lock_gates(&self.gates).get(root).cloned()
     }
 
+    /// The library roots with a write queued or running.
+    pub fn busy_roots(&self) -> Vec<PathBuf> {
+        lock_gates(&self.gates)
+            .iter()
+            .filter(|(_, gate)| gate.pending() > 0)
+            .map(|(root, _)| root.clone())
+            .collect()
+    }
+
     /// Writes of the library at `root` that have not finished.
     pub fn pending(&self, root: &Path) -> u64 {
         self.gate(root).map_or(0, |gate| gate.pending())
