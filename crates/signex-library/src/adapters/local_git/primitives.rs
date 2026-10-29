@@ -471,6 +471,7 @@ impl LocalGitAdapter {
             .read()
             .map_err(|_| LibraryError::Backend("library_file read lock poisoned".into()))?;
         let Some(table) = guard.tables.get(name) else {
+            self.row_reads.forget_table(name);
             return Ok(Vec::new());
         };
         // Verify the on-disk header matches the legacy schema. Once
@@ -478,13 +479,7 @@ impl LocalGitAdapter {
         // away, but for v0.9 we want a loud error if a hand-edited
         // .snxlib drifts the schema.
         validate_legacy_header(name, &table.columns)?;
-        let mut out = Vec::with_capacity(table.rows.len());
-        for row in &table.rows {
-            let mut component = library_row_to_component(row)?;
-            component.server_revision = Some(row_base(row));
-            out.push(component);
-        }
-        Ok(out)
+        self.row_reads.table(name, &table.rows)
     }
 
     // ── Symbol container helpers (v0.9 phase 2 multi-symbol files) ────────

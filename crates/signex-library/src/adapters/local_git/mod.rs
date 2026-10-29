@@ -133,6 +133,9 @@ pub struct LocalGitAdapter {
     /// Encoded row lines from the last row write (#416). Lock order: after
     /// `library_file` and `disk_stamp`.
     row_lines: Mutex<crate::library_file::RowLines>,
+    /// Converted rows served to readers (#1437). Lock order: after
+    /// `library_file`.
+    row_reads: read_cache::RowReads,
 }
 
 impl LocalGitAdapter {
@@ -238,6 +241,7 @@ impl LocalGitAdapter {
             write_lock_warned: Default::default(),
             plain_token_warnings: Default::default(),
             row_lines: Mutex::default(),
+            row_reads: Default::default(),
         })
     }
 
@@ -285,6 +289,7 @@ impl LocalGitAdapter {
             write_lock_warned: Default::default(),
             plain_token_warnings: Default::default(),
             row_lines: Mutex::default(),
+            row_reads: Default::default(),
         })
     }
 
@@ -393,6 +398,7 @@ impl LocalGitAdapter {
             write_lock_warned: Default::default(),
             plain_token_warnings: Default::default(),
             row_lines: Mutex::default(),
+            row_reads: Default::default(),
         })
     }
 
@@ -445,6 +451,7 @@ pub use helpers::component_to_library_row;
 pub(crate) mod lfs;
 mod pinned_assets;
 mod primitives;
+mod read_cache;
 mod row_edit;
 mod write_lock;
 
@@ -459,6 +466,8 @@ mod insert_row_tests;
 mod plain_token;
 #[cfg(test)]
 mod plain_token_tests;
+#[cfg(test)]
+mod read_cache_tests;
 
 #[cfg(test)]
 mod tests {

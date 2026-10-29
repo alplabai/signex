@@ -263,11 +263,7 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn read_row(&self, table: &str, row_id: RowId) -> Result<ComponentRow, LibraryError> {
-        let target = row_id.as_uuid();
-        self.snapshot_table(table)?
-            .into_iter()
-            .find(|r| r.row_id == target)
-            .ok_or_else(|| LibraryError::NotFound(format!("row {row_id} in table {table}")))
+        self.read_component_row(table, row_id)
     }
 
     /// Linear scan across every table — O(total rows). Acceptable at
