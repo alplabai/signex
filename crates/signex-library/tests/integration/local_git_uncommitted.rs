@@ -198,7 +198,7 @@ fn check_path(name: &str, lib: &Lib, write: impl FnOnce(&Lib) -> Result<(), Libr
         .unwrap_or_else(|e| panic!("{name}: {e}"));
     assert_eq!(lib.adapter.uncommitted_changes(), None, "{name}");
     assert_ne!(head_oid(&lib.root), head_before, "{name}: no new commit");
-    assert_eq!(head_message(&lib.root).trim(), "next save", "{name}");
+    assert!(head_message(&lib.root).starts_with("next save"), "{name}");
     let mut paths = pending.paths;
     paths.push(lib.file.file_name().unwrap().to_string_lossy().into_owned());
     assert_head_holds_disk(&lib.root, &paths);
@@ -385,7 +385,7 @@ fn commit_pending_commits_by_itself_and_reports_a_second_failure() {
         CommitOutcome::Committed
     );
     assert_eq!(lib.adapter.uncommitted_changes(), None);
-    assert_eq!(head_message(&lib.root).trim(), "retry");
+    assert!(head_message(&lib.root).starts_with("retry"));
     assert_head_holds_disk(&lib.root, &["Rb.snxlib".to_string()]);
     assert_eq!(
         lib.adapter.commit_pending("again").unwrap(),
@@ -529,7 +529,7 @@ fn a_second_adapter_committing_meanwhile_loses_no_change() {
     other
         .add_library_class(class("from-other"), "other adds")
         .unwrap();
-    assert_eq!(head_message(&lib.root).trim(), "other adds");
+    assert!(head_message(&lib.root).starts_with("other adds"));
     assert_eq!(head_bytes(&lib.root, &symbol_rel), None, "not in HEAD yet");
 
     assert_eq!(
@@ -657,4 +657,145 @@ fn a_project_commit_waits_for_another_committer_of_the_repository() {
         "the commit did not wait: {waited:?}"
     );
     assert_eq!(head_bytes(&lib.root, "doc.txt").unwrap(), b"d");
+}
+
+/// A tracked file whose commit failed and which was deleted since: "Commit
+/// now" is a commit of the removal alone, with no file to anchor it on.
+#[test]
+fn commit_pending_commits_a_removal_when_every_pending_file_is_gone() {
+    let lib = Lib::new();
+    let note = lib.root.join("note.txt");
+    std::fs::write(&note, "v1").unwrap();
+    assert_eq!(
+        lib.adapter.commit_external_change(&note, "note").unwrap(),
+        CommitOutcome::Committed
+    );
+
+    std::fs::write(&note, "v2").unwrap();
+    let lock = fail_commits(&lib.root);
+    lib.adapter.commit_external_change(&note, "edit").unwrap();
+    std::fs::remove_file(lock).unwrap();
+    assert!(lib.adapter.uncommitted_changes().is_some());
+
+    std::fs::remove_file(&note).unwrap();
+    assert_eq!(
+        lib.adapter.commit_pending("").unwrap(),
+        CommitOutcome::Committed
+    );
+    assert_eq!(lib.adapter.uncommitted_changes(), None);
+    assert_eq!(
+        head_bytes(&lib.root, "note.txt"),
+        None,
+        "the removal landed"
+    );
+}
+
+/// A commit that carries pending files says so in its message.
+#[test]
+fn a_commit_that_sweeps_pending_files_names_them_in_its_message() {
+    let lib = Lib::new();
+    let note = lib.root.join("note.txt");
+    std::fs::write(&note, "n").unwrap();
+    let lock = fail_commits(&lib.root);
+    lib.adapter.commit_external_change(&note, "note").unwrap();
+    std::fs::remove_file(lock).unwrap();
+
+    lib.adapter.add_library_class(class("c"), "add c").unwrap();
+    let message = head_message(&lib.root);
+    assert!(message.starts_with("add c"), "{message}");
+    assert!(
+        message.contains("also commits pending: note.txt"),
+        "{message}"
+    );
+}
+
+/// The ledger is seeded from the working tree when a library is opened, so a
+/// save whose commit failed in an earlier session still shows as uncommitted
+/// and the next commit takes it.
+#[test]
+fn a_library_opened_with_uncommitted_files_lists_them() {
+    let lib = Lib::new();
+    let lock = fail_commits(&lib.root);
+    lib.adapter
+        .save_symbol(Symbol::empty("S"), "add S")
+        .unwrap();
+    lib.adapter.add_library_class(class("c"), "add c").unwrap();
+    std::fs::remove_file(lock).unwrap();
+    let before = lib.adapter.uncommitted_changes().unwrap().paths;
+
+    let reopened = LocalGitAdapter::open(&lib.file).unwrap();
+    let found = reopened.uncommitted_changes().expect("seeded from disk");
+    assert_eq!(found.paths, before);
+
+    assert_eq!(
+        reopened.commit_pending("after restart").unwrap(),
+        CommitOutcome::Committed
+    );
+    assert_head_holds_disk(&lib.root, &before);
+    assert_eq!(
+        LocalGitAdapter::open(&lib.file)
+            .unwrap()
+            .uncommitted_changes(),
+        None,
+        "a committed library opens clean"
+    );
+}
+
+fn copy_dir(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap().flatten() {
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_dir(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
+/// The ledger names files of one repository. A library moved to another
+/// directory leaves the old repository behind: the ledger is rebuilt from the
+/// new directory (its own repository, or none).
+#[test]
+fn relocating_a_library_to_another_directory_rebases_the_ledger() {
+    let mut lib = Lib::new();
+    let lock = fail_commits(&lib.root);
+    lib.adapter.add_library_class(class("c"), "add c").unwrap();
+    std::fs::remove_file(lock).unwrap();
+    let old_head = head_oid(&lib.root);
+
+    // Moved with its repository: the pending file is still pending there.
+    let with_repo = lib.root.parent().unwrap().join("MovedWithRepo");
+    copy_dir(&lib.root, &with_repo);
+    lib.adapter
+        .relocate_library_file(&with_repo.join("Rb.snxlib"))
+        .unwrap();
+    assert_eq!(
+        lib.adapter.uncommitted_changes().unwrap().paths,
+        vec!["Rb.snxlib".to_string()]
+    );
+    assert_eq!(
+        lib.adapter.commit_pending("moved").unwrap(),
+        CommitOutcome::Committed
+    );
+    assert_eq!(
+        head_oid(&lib.root),
+        old_head,
+        "the old repository is left alone"
+    );
+    assert_head_holds_disk(&with_repo, &["Rb.snxlib".to_string()]);
+
+    // Moved out of any repository with a save pending: nothing to commit
+    // there, so nothing is pending.
+    let lock = fail_commits(&with_repo);
+    lib.adapter.add_library_class(class("d"), "add d").unwrap();
+    std::fs::remove_file(lock).unwrap();
+    assert!(lib.adapter.uncommitted_changes().is_some());
+    let bare = lib.root.parent().unwrap().join("MovedPlain");
+    std::fs::create_dir_all(&bare).unwrap();
+    std::fs::copy(with_repo.join("Rb.snxlib"), bare.join("Rb.snxlib")).unwrap();
+    lib.adapter
+        .relocate_library_file(&bare.join("Rb.snxlib"))
+        .unwrap();
+    assert_eq!(lib.adapter.uncommitted_changes(), None);
 }

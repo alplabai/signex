@@ -43,7 +43,7 @@ pub(super) fn stage_and_commit(
     stage_and_commit_with(
         repo,
         removed_rel_paths,
-        rel_path,
+        Some(rel_path),
         content,
         &[],
         signature,
@@ -53,10 +53,12 @@ pub(super) fn stage_and_commit(
 
 /// [`stage_and_commit`] that also puts `extra_rel_paths` (working-tree
 /// files, e.g. the pinned datasheet a row references) into the same commit.
+/// `rel_path` is `None` for a commit of only `extra_rel_paths` and removals
+/// (the retry of files whose earlier commit failed, #858).
 pub(super) fn stage_and_commit_with(
     repo: &git2::Repository,
     removed_rel_paths: &[&Path],
-    rel_path: &Path,
+    rel_path: Option<&Path>,
     content: Option<&[u8]>,
     extra_rel_paths: &[&Path],
     signature: &git2::Signature<'_>,
@@ -72,18 +74,23 @@ pub(super) fn stage_and_commit_with(
     // `text`/`eol` attributes), as before. Built in memory only; the tree
     // is still made from HEAD's, never the index. Supplied bytes are never
     // staged from the working file, which may have moved on since.
-    let main_entry = match content {
-        Some(_) => None,
-        None => staged_entry(repo, rel_path).ok(),
-    };
-    let staged_blob = match &main_entry {
-        Some(entry) if !super::lfs::is_lfs_path(repo, rel_path)? => Some(entry.id),
+    let main_entry = match (content, rel_path) {
+        (None, Some(rel_path)) => staged_entry(repo, rel_path).ok(),
         _ => None,
     };
-    let blob = match (content, staged_blob) {
-        (Some(bytes), _) => super::lfs::blob_for_bytes(repo, rel_path, bytes)?,
-        (None, Some(id)) => id,
-        (None, None) => super::lfs::blob_for_path(repo, workdir, rel_path)?,
+    let blob = match rel_path {
+        None => None,
+        Some(rel_path) => {
+            let staged_blob = match &main_entry {
+                Some(entry) if !super::lfs::is_lfs_path(repo, rel_path)? => Some(entry.id),
+                _ => None,
+            };
+            Some(match (content, staged_blob) {
+                (Some(bytes), _) => super::lfs::blob_for_bytes(repo, rel_path, bytes)?,
+                (None, Some(id)) => id,
+                (None, None) => super::lfs::blob_for_path(repo, workdir, rel_path)?,
+            })
+        }
     };
     // An unborn HEAD (fresh repo) is the only legitimate "no parent" case.
     let parent = match repo.head() {
@@ -102,9 +109,20 @@ pub(super) fn stage_and_commit_with(
             None => None,
         };
     }
-    let components: Vec<&std::ffi::OsStr> = rel_path.iter().collect();
-    let mut tree_id = tree_with_blob(repo, base.as_ref(), &components, blob)?;
-    let mut staged: Vec<(&Path, git2::Oid)> = vec![(rel_path, blob)];
+    let mut staged: Vec<(&Path, git2::Oid)> = Vec::new();
+    let mut tree_id = match (rel_path, blob) {
+        (Some(rel_path), Some(blob)) => {
+            let components: Vec<&std::ffi::OsStr> = rel_path.iter().collect();
+            staged.push((rel_path, blob));
+            tree_with_blob(repo, base.as_ref(), &components, blob)?
+        }
+        _ => match &base {
+            Some(tree) => tree.id(),
+            // Nothing to record on a repository with no commit.
+            None if extra_rel_paths.is_empty() => return Ok(None),
+            None => repo.treebuilder(None)?.write()?,
+        },
+    };
     for extra in extra_rel_paths {
         let extra_blob = super::lfs::blob_for_path(repo, workdir, extra)?;
         let extra_components: Vec<&std::ffi::OsStr> = extra.iter().collect();
@@ -125,7 +143,7 @@ pub(super) fn stage_and_commit_with(
     // The index is re-read on every attempt, so an entry another process
     // staged while we waited for its `index.lock` is kept (#900).
     let mut main_entry = main_entry;
-    if let Some(entry) = main_entry.as_mut() {
+    if let (Some(entry), Some(blob)) = (main_entry.as_mut(), blob) {
         // An LFS path's entry records the pointer that was committed.
         entry.id = blob;
     }
@@ -138,7 +156,7 @@ pub(super) fn stage_and_commit_with(
             }
         }
         for (path, blob) in &staged {
-            if *path == rel_path
+            if Some(*path) == rel_path
                 && let Some(entry) = &main_entry
             {
                 index.add(entry)?;
@@ -155,7 +173,7 @@ pub(super) fn stage_and_commit_with(
             // re-hash the file and report it modified. The extra files are
             // always committed from the working tree, so they match.
             let working_differs = content.is_some()
-                && *path == rel_path
+                && Some(*path) == rel_path
                 && super::lfs::working_blob_id(repo, workdir, path).ok() != Some(*blob);
             if let Some(mut entry) = index.get_path(path, 0)
                 && (entry.id != *blob || working_differs)
@@ -175,7 +193,7 @@ pub(super) fn stage_and_commit_with(
     if let Err(e) = updated {
         tracing::warn!(
             target: "signex::library",
-            path = %rel_path.display(),
+            path = %rel_path.map(|p| p.display().to_string()).unwrap_or_default(),
             error = %e,
             "committed, but the git index could not be updated; `git status` may show the file as changed"
         );

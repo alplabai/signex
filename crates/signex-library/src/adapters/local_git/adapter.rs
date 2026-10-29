@@ -46,8 +46,12 @@ impl LibraryAdapter for LocalGitAdapter {
                 &format!("rename {old_rel} to {new_rel}"),
             );
         }
+        let moved_root = new_root != self.root_dir;
         self.root_dir = new_root;
         self.file_path = new_file.to_path_buf();
+        if moved_root {
+            self.reset_uncommitted_for_new_root();
+        }
         Ok(())
     }
 

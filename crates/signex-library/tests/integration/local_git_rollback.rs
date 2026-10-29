@@ -248,7 +248,7 @@ fn late_commit_failure_keeps_edit_unstaged_and_the_next_commit_of_any_path_takes
     // The next successful commit, through whatever path, records the edit
     // too (#858): it is not left waiting for another save of the `.snxlib`.
     commit_other_file(&adapter, &root, "unrelated");
-    assert_eq!(head_message(&root).trim(), "unrelated");
+    assert!(head_message(&root).starts_with("unrelated"));
     assert_eq!(head_classes(&root), vec!["res", "cap"]);
     assert_eq!(adapter.uncommitted_changes(), None);
 
@@ -315,7 +315,7 @@ fn two_failures_in_a_row_never_store_a_stale_snxlib() {
 
     adapter.add_library_class(class("x"), "add x").unwrap();
     assert_eq!(head_classes(&root), vec!["res", "cap", "ind", "x"]);
-    assert_eq!(head_message(&root).trim(), "add x");
+    assert!(head_message(&root).starts_with("add x"));
 }
 
 #[test]

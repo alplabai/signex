@@ -51,24 +51,15 @@ impl LocalGitAdapter {
         })
     }
 
-    /// [`LibraryAdapter::commit_pending`]: commit the ledger on its own.
+    /// [`LibraryAdapter::commit_pending`]: commit the ledger on its own. A
+    /// ledger whose files are all gone is a commit of removals only.
     pub(super) fn commit_pending_changes(&self, message: &str) -> CommitOutcome {
-        let Some(first) = self.ledger().paths.iter().next().cloned() else {
-            return CommitOutcome::NothingToCommit;
-        };
-        // The commit needs one anchor file; prefer one that still exists.
-        let anchor = {
-            let ledger = self.ledger();
-            ledger
-                .paths
-                .iter()
-                .find(|p| self.root_dir.join(p).symlink_metadata().is_ok())
-                .cloned()
-        }
-        .unwrap_or(first);
         let n = self.ledger().paths.len();
+        if n == 0 {
+            return CommitOutcome::NothingToCommit;
+        }
         let fallback = format!("commit {n} saved change(s)");
-        self.commit_change_with(None, &anchor, &[], message, &fallback)
+        self.commit_paths(None, None, &[], message, &fallback)
     }
 
     /// Stage `rel_path` (and `extra_rel_paths`, dropping `removed_rel_path`)
@@ -79,6 +70,25 @@ impl LocalGitAdapter {
         &self,
         removed_rel_path: Option<&str>,
         rel_path: &str,
+        extra_rel_paths: &[String],
+        message: &str,
+        fallback_message: &str,
+    ) -> CommitOutcome {
+        self.commit_paths(
+            removed_rel_path,
+            Some(rel_path),
+            extra_rel_paths,
+            message,
+            fallback_message,
+        )
+    }
+
+    /// [`Self::commit_change_with`] where the main file is optional: `None`
+    /// commits only the extras, the ledger and removals.
+    fn commit_paths(
+        &self,
+        removed_rel_path: Option<&str>,
+        rel_path: Option<&str>,
         extra_rel_paths: &[String],
         message: &str,
         fallback_message: &str,
@@ -111,6 +121,81 @@ impl LocalGitAdapter {
         }
     }
 
+    /// Seed the ledger from the working tree: library-owned files that
+    /// differ from HEAD (a save whose commit failed in an earlier session, an
+    /// outside edit) are listed as uncommitted, so the banner and the next
+    /// commit know about them after a restart. Best effort; a repository
+    /// that cannot be read lists nothing.
+    pub(super) fn seed_uncommitted_from_working_tree(&self) {
+        if !self.root_dir.join(".git").exists() {
+            return;
+        }
+        let found = match self.working_tree_changes() {
+            Ok(found) => found,
+            Err(e) => {
+                tracing::debug!(
+                    target: "signex::library",
+                    "could not look for uncommitted library files: {e}"
+                );
+                return;
+            }
+        };
+        if found.is_empty() {
+            return;
+        }
+        let mut ledger = self.ledger();
+        ledger.paths.extend(found);
+        ledger.reason.get_or_insert_with(|| {
+            "library files differ from the last commit (found when the library was opened)"
+                .to_owned()
+        });
+    }
+
+    /// Library-relative paths of library-owned files that differ between
+    /// HEAD and the working tree, including untracked and deleted ones.
+    fn working_tree_changes(&self) -> Result<BTreeSet<String>, git2::Error> {
+        let repo = git2::Repository::open(&self.root_dir)?;
+        let head_tree = match repo.head() {
+            Ok(head) => Some(head.peel_to_tree()?),
+            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
+            Err(e) => return Err(e),
+        };
+        let mut opts = git2::DiffOptions::new();
+        opts.include_untracked(true)
+            .recurse_untracked_dirs(true)
+            .include_typechange(true);
+        if let Some(name) = self.file_path.file_name().and_then(|n| n.to_str()) {
+            opts.pathspec(name);
+        }
+        for dir in [
+            SYMBOLS_DIR,
+            FOOTPRINTS_DIR,
+            SIMS_DIR,
+            crate::datasheet_asset::DATASHEET_ASSET_DIR,
+        ] {
+            opts.pathspec(dir);
+        }
+        let diff = repo.diff_tree_to_workdir_with_index(head_tree.as_ref(), Some(&mut opts))?;
+        Ok(diff
+            .deltas()
+            .filter_map(|delta| {
+                let file = if delta.status() == git2::Delta::Deleted {
+                    delta.old_file()
+                } else {
+                    delta.new_file()
+                };
+                file.path().map(|p| p.to_string_lossy().replace('\\', "/"))
+            })
+            .collect())
+    }
+
+    /// The library moved to another directory: the ledger named files of the
+    /// old repository, so it is dropped and the new directory is looked at.
+    pub(super) fn reset_uncommitted_for_new_root(&self) {
+        *self.ledger() = UncommittedLedger::default();
+        self.seed_uncommitted_from_working_tree();
+    }
+
     fn clear_ledger(&self) {
         let mut ledger = self.ledger();
         ledger.paths.clear();
@@ -121,7 +206,7 @@ impl LocalGitAdapter {
     fn try_commit(
         &self,
         removed: &[String],
-        rel_path: &str,
+        rel_path: Option<&str>,
         extra_rel_paths: &[String],
         message: &str,
     ) -> Result<Option<git2::Oid>, String> {
@@ -136,27 +221,38 @@ impl LocalGitAdapter {
         // failed is recorded whole.
         let mut removed: Vec<String> = removed.to_vec();
         let mut extras: Vec<String> = extra_rel_paths.to_vec();
+        let mut swept: Vec<String> = Vec::new();
         for pending in self.ledger().paths.iter() {
-            if pending == rel_path || extras.contains(pending) || removed.contains(pending) {
+            if Some(pending.as_str()) == rel_path
+                || extras.contains(pending)
+                || removed.contains(pending)
+            {
                 continue;
             }
+            swept.push(pending.clone());
             if self.root_dir.join(pending).symlink_metadata().is_ok() {
                 extras.push(pending.clone());
             } else {
                 removed.push(pending.clone());
             }
         }
+        // History stays truthful: the commit says what else it holds.
+        let message = if swept.is_empty() {
+            message.to_owned()
+        } else {
+            format!("{message}\n\nalso commits pending: {}", swept.join(", "))
+        };
         let removed: Vec<&Path> = removed.iter().map(Path::new).collect();
         let extras: Vec<&Path> = extras.iter().map(Path::new).collect();
         retry_on_git_lock(repo.path(), || {
             stage_and_commit_with(
                 &repo,
                 &removed,
-                Path::new(rel_path),
+                rel_path.map(Path::new),
                 None,
                 &extras,
                 &sig,
-                message,
+                &message,
             )
         })
         .map_err(|e| e.message().to_owned())
@@ -166,13 +262,13 @@ impl LocalGitAdapter {
     fn note_not_committed(
         &self,
         removed: &[String],
-        rel_path: &str,
+        rel_path: Option<&str>,
         extra_rel_paths: &[String],
         reason: String,
     ) -> CommitOutcome {
         let first_time = {
             let mut ledger = self.ledger();
-            ledger.paths.insert(rel_path.to_owned());
+            ledger.paths.extend(rel_path.map(str::to_owned));
             ledger.paths.extend(extra_rel_paths.iter().cloned());
             ledger.paths.extend(removed.iter().cloned());
             ledger.reason = Some(reason.clone());

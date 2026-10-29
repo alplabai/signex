@@ -274,7 +274,7 @@ impl LocalGitAdapter {
                 .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
         }
         let manifest_synth = synthesize_manifest(&library_file.manifest);
-        Ok(Self {
+        let adapter = Self {
             file_path,
             root_dir,
             library_file: RwLock::new(library_file),
@@ -289,7 +289,9 @@ impl LocalGitAdapter {
             plain_token_warnings: Default::default(),
             row_lines: Mutex::default(),
             uncommitted: Mutex::default(),
-        })
+        };
+        adapter.seed_uncommitted_from_working_tree();
+        Ok(adapter)
     }
 
     /// Recover a library whose `.git/` directory was deleted
