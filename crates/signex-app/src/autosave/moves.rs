@@ -122,6 +122,9 @@ impl AutosaveState {
         if self.deferred.remove(old) {
             self.deferred.insert(new.to_path_buf());
         }
+        if self.due_write.remove(old) {
+            self.due_write.insert(new.to_path_buf());
+        }
         for offer in self.offers.iter_mut().filter(|o| o.path == old) {
             offer.path = new.to_path_buf();
         }
@@ -310,12 +313,12 @@ impl AutosaveState {
     }
 
     /// The copy `written` records for `path` may still sit under an older
-    /// key (its move was released, not landed): forget its stamp, so the
-    /// next tick writes the current content at `path` even if the document
-    /// has not changed since. The document stays tracked.
+    /// key (its move was released, not landed): the next tick writes the
+    /// current content at `path` even if the document has not changed
+    /// since. Its stamp stays, so it still counts as this run's copy.
     fn mark_due_a_write(&mut self, path: &Path) {
-        if let Some(stamp) = self.written.get_mut(path) {
-            *stamp = None;
+        if self.written.contains_key(path) {
+            self.due_write.insert(path.to_path_buf());
         }
     }
 
@@ -440,6 +443,48 @@ mod tests {
             state.needs_write(t, DocStamp::of_bytes(b"x")),
             "t's only copy was left at key(a): the next tick writes t again"
         );
+    }
+
+    #[test]
+    fn a_released_move_renamed_on_is_still_dropped_when_its_old_key_is_reused() {
+        let (a, b, t, x) = (
+            Path::new("a"),
+            Path::new("b"),
+            Path::new("t"),
+            Path::new("x"),
+        );
+        let mut state = tracked_at(&[a, b]);
+        state.rekey(a, t);
+        released(&mut state);
+        state.rekey(t, x);
+        state.rekey(b, a);
+        let (start, _) = state.take_moves();
+        assert!(
+            !state.moves.iter().any(|m| m.old == a),
+            "b's copy at a is never carried to x"
+        );
+        assert!(!state.running_moves.iter().any(|m| m.old == a));
+        // t -> x holds x until it lands; then x is due a fresh copy.
+        for moved in &start {
+            state.move_landed(moved);
+        }
+        assert!(
+            state.needs_write(x, DocStamp::of_bytes(b"x")),
+            "x is due a copy"
+        );
+    }
+
+    #[test]
+    fn a_released_move_renamed_on_then_saved_is_removed_not_moved() {
+        let (a, t, x) = (Path::new("a"), Path::new("t"), Path::new("x"));
+        let mut state = tracked_at(&[a]);
+        state.rekey(a, t);
+        released(&mut state);
+        state.rekey(t, x);
+        state.saved(x);
+        let (start, obsolete) = state.take_moves();
+        assert!(obsolete.contains(&a.to_path_buf()), "a's copy is obsolete");
+        assert!(!start.iter().any(|m| m.old == a), "a -> x is not started");
     }
 
     #[test]

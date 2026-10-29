@@ -302,6 +302,9 @@ pub struct AutosaveState {
     /// Documents whose recovery copy a Restore is reading right now: the
     /// path the read was issued for, and where the document lives now.
     restoring: HashMap<PathBuf, PathBuf>,
+    /// Documents due a fresh copy even if unchanged since their last write:
+    /// a released move may still hold that copy under an older key.
+    due_write: HashSet<PathBuf>,
 }
 
 /// The recovery directory under the per-user config root, if the platform
@@ -334,7 +337,7 @@ impl AutosaveState {
             && !self.offers.iter().any(|offer| offer.path == path)
             && !self.in_flight.contains_key(path)
             && !self.removing.contains_key(path)
-            && self.written.get(path) != Some(&Some(stamp))
+            && (self.due_write.contains(path) || self.written.get(path) != Some(&Some(stamp)))
     }
 
     /// A barrier over every write and removal handed out so far (quit
@@ -499,6 +502,7 @@ impl AutosaveState {
             .remove(path)
             .is_some_and(|flag| flag.load(Ordering::SeqCst));
         if ok && !superseded {
+            self.due_write.remove(&key);
             self.written.insert(key, Some(stamp));
         }
         superseded
@@ -524,6 +528,7 @@ impl AutosaveState {
         {
             running.discard.store(true, Ordering::SeqCst);
         }
+        self.due_write.remove(path);
         self.written.remove(path).is_some()
     }
 
@@ -556,6 +561,7 @@ impl AutosaveState {
 
     /// Stop tracking `path`'s sidecar. Returns true if one was on disk.
     pub fn forget(&mut self, path: &Path) -> bool {
+        self.due_write.remove(path);
         self.written.remove(path).is_some()
     }
 
