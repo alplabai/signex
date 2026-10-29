@@ -4,6 +4,7 @@ use iced::Task;
 use signex_engine::Command;
 use signex_types::schematic::Point;
 
+use super::designators::PasteNumbering;
 use crate::app::{Message, Signex};
 use crate::paste_array::{PasteArrayInput, PasteArrayMsg, PasteArrayState};
 
@@ -38,6 +39,8 @@ impl Signex {
             dx_mm,
             0.0,
             self.ui_state.increment_step,
+            self.ui_state.paste_designators,
+            copied.payload.item_count(),
             self.document_state.active_path.clone(),
         ));
     }
@@ -50,6 +53,7 @@ impl Signex {
                 PasteArrayMsg::XSpacingChanged(text) => state.x_spacing = text,
                 PasteArrayMsg::YSpacingChanged(text) => state.y_spacing = text,
                 PasteArrayMsg::StepChanged(text) => state.step = text,
+                PasteArrayMsg::DesignatorsChosen(mode) => state.designators = mode,
                 PasteArrayMsg::ApplyPressed => self.apply_paste_array(),
                 PasteArrayMsg::Closed => self.ui_state.paste_array = None,
             }
@@ -89,8 +93,8 @@ impl Signex {
         let Some((payload, target, origin)) = self.prepared_paste() else {
             return;
         };
-        let commands = match self.array_commands(&payload, &target, origin, input) {
-            Ok(commands) => commands,
+        let (commands, numbering) = match self.array_commands(&payload, &target, origin, input) {
+            Ok(built) => built,
             Err(error) => {
                 crate::diagnostics::log_warning(format!(
                     "Paste Array failed: the copies could not be placed ({error})."
@@ -99,6 +103,7 @@ impl Signex {
             }
         };
         if self.apply_engine_commands(commands, true, true) {
+            self.remember_numbering(&target, numbering);
             self.ui_state.paste_array = None;
             crate::diagnostics::log_info(format!(
                 "Paste Array: placed {} copies as one undo step.",
@@ -117,23 +122,20 @@ impl Signex {
         target: &std::path::Path,
         origin: Point,
         input: PasteArrayInput,
-    ) -> Result<Vec<Command>, signex_engine::EngineError> {
-        let mut numbering = self.paste_numbering(target);
-        let mut commands = Vec::new();
+    ) -> Result<(Vec<Command>, PasteNumbering), signex_engine::EngineError> {
+        let mut numbering = self.paste_numbering_with(target, input.designators);
+        // The bodies are registered once; the per-copy clones carry none.
+        let mut commands = payload.register_commands();
+        let bare = payload.without_bodies();
         for k in 1..=input.count {
             let steps = i64::from(k) * i64::from(input.step);
-            let copy = numbering.apply(&payload.with_labels_stepped(steps));
+            let copy = numbering.apply(&bare.with_labels_stepped(steps));
             let at = Point::new(
                 origin.x + f64::from(k) * input.dx_mm,
                 origin.y + f64::from(k) * input.dy_mm,
             );
-            let mut placed = copy.place_commands(at)?;
-            if k > 1 {
-                // The bodies are registered by the first copy.
-                placed.retain(|c| !matches!(c, Command::RegisterLibSymbol { .. }));
-            }
-            commands.extend(placed);
+            commands.extend(copy.place_commands(at)?);
         }
-        Ok(commands)
+        Ok((commands, numbering))
     }
 }

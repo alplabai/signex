@@ -37,6 +37,25 @@ impl PlacementPayload {
         Self::new(fragment)
     }
 
+    /// The commands that register the library bodies the payload carries,
+    /// for a caller that places the same payload many times.
+    pub fn register_commands(&self) -> Vec<crate::Command> {
+        self.fragment
+            .lib_symbols
+            .values()
+            .cloned()
+            .map(|lib_symbol| crate::Command::RegisterLibSymbol { lib_symbol })
+            .collect()
+    }
+
+    /// A copy without its library bodies, cheap to clone per copy; register
+    /// them once with [`Self::register_commands`].
+    pub fn without_bodies(&self) -> Self {
+        let mut fragment = self.fragment.clone();
+        fragment.lib_symbols.clear();
+        Self::new(fragment)
+    }
+
     /// A copy whose label texts have their trailing number moved by `step`.
     pub fn with_labels_stepped(&self, step: i64) -> Self {
         let mut fragment = self.fragment.clone();
@@ -106,6 +125,28 @@ mod tests {
         let p = payload(vec![power, part("C2", "lib:c", 1), part("R9", "lib:r", 1)]);
         let renamed = p.redesignate_parts(|old| (old != "C2").then(|| "X1".to_owned()));
         assert_eq!(references(&renamed), ["#PWR01", "C2", "X1"]);
+    }
+
+    #[test]
+    fn bodies_are_registered_once_and_left_out_of_the_copies() {
+        let mut sheet = test_sheet();
+        for id in ["lib:a", "lib:b"] {
+            let body: signex_types::schematic::LibSymbol =
+                serde_json::from_str(&format!(r#"{{"id":"{id}"}}"#)).unwrap();
+            sheet.lib_symbols.insert(body.id.clone(), body);
+        }
+        sheet.symbols.push(part("R1", "lib:a", 1));
+        let p = PlacementPayload::new(sheet);
+        assert_eq!(p.register_commands().len(), 2);
+        let bare = p.without_bodies();
+        assert!(bare.fragment().lib_symbols.is_empty());
+        let placed = bare.place_commands(Point::new(1.0, 1.0)).unwrap();
+        assert!(
+            !placed
+                .iter()
+                .any(|c| matches!(c, crate::Command::RegisterLibSymbol { .. }))
+        );
+        assert_eq!(p.fragment().lib_symbols.len(), 2, "the original keeps them");
     }
 
     #[test]

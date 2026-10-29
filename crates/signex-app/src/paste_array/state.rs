@@ -1,11 +1,16 @@
 use std::path::PathBuf;
 
 use signex_types::coord::Unit;
+
+use crate::paste_prefs::PasteDesignators;
 use signex_types::measure::{length_field_text, parse_length_field_mm};
 use signex_types::text_increment::{STEP_MAX, STEP_MIN};
 
 /// Most copies one Paste Array places.
 pub const MAX_COPIES: u32 = 1000;
+
+/// Most items (copies times the items in one copy) one Paste Array places.
+pub const MAX_PLACED_ITEMS: usize = 100_000;
 
 /// No array reaches further than this from where it was copied, so a typo
 /// cannot push copies out of any real sheet.
@@ -18,6 +23,10 @@ pub struct PasteArrayState {
     pub x_spacing: String,
     pub y_spacing: String,
     pub step: String,
+    /// What the pasted parts are called; starts as the saved preference.
+    pub designators: PasteDesignators,
+    /// How many items one copy holds, for the item cap.
+    pub items_per_copy: usize,
     /// The unit the spacings are typed in (the active unit when it opened).
     pub unit: Unit,
     /// The sheet the dialog was opened on; OK places on that sheet only.
@@ -31,16 +40,28 @@ pub struct PasteArrayInput {
     pub dx_mm: f64,
     pub dy_mm: f64,
     pub step: i32,
+    pub designators: PasteDesignators,
 }
 
 impl PasteArrayState {
-    /// A fresh dialog: 2 copies, `dx_mm` / `dy_mm` apart, counting by `step`.
-    pub fn new(unit: Unit, dx_mm: f64, dy_mm: f64, step: i32, origin: Option<PathBuf>) -> Self {
+    /// A fresh dialog: 2 copies, `dx_mm` / `dy_mm` apart, counting by `step`,
+    /// of a copy holding `items_per_copy` items.
+    pub fn new(
+        unit: Unit,
+        dx_mm: f64,
+        dy_mm: f64,
+        step: i32,
+        designators: PasteDesignators,
+        items_per_copy: usize,
+        origin: Option<PathBuf>,
+    ) -> Self {
         Self {
             count: "2".to_owned(),
             x_spacing: length_field_text(dx_mm, unit),
             y_spacing: length_field_text(dy_mm, unit),
             step: step.to_string(),
+            designators,
+            items_per_copy,
             unit,
             origin,
         }
@@ -55,6 +76,12 @@ impl PasteArrayState {
             .ok()
             .filter(|n| (1..=MAX_COPIES).contains(n))
             .ok_or_else(|| format!("Copies must be a whole number from 1 to {MAX_COPIES}."))?;
+        if (count as usize).saturating_mul(self.items_per_copy) > MAX_PLACED_ITEMS {
+            return Err(format!(
+                "{count} copies of {} items is over the limit of {MAX_PLACED_ITEMS} items; use fewer copies.",
+                self.items_per_copy
+            ));
+        }
         let spacing = |text: &str, axis: &str| {
             parse_length_field_mm(text, self.unit)
                 .filter(|mm| (mm * f64::from(count)).abs() <= MAX_EXTENT_MM)
@@ -80,6 +107,7 @@ impl PasteArrayState {
             dx_mm,
             dy_mm,
             step,
+            designators: self.designators,
         })
     }
 }
@@ -90,6 +118,7 @@ pub enum PasteArrayMsg {
     XSpacingChanged(String),
     YSpacingChanged(String),
     StepChanged(String),
+    DesignatorsChosen(PasteDesignators),
     /// OK: place the array.
     ApplyPressed,
     Closed,
@@ -100,7 +129,7 @@ mod tests {
     use super::*;
 
     fn state() -> PasteArrayState {
-        PasteArrayState::new(Unit::Mm, 10.0, 0.0, 1, None)
+        PasteArrayState::new(Unit::Mm, 10.0, 0.0, 1, PasteDesignators::Keep, 3, None)
     }
 
     #[test]
@@ -112,7 +141,8 @@ mod tests {
                 count: 2,
                 dx_mm: 10.0,
                 dy_mm: 0.0,
-                step: 1
+                step: 1,
+                designators: PasteDesignators::Keep,
             }
         );
     }
@@ -132,6 +162,18 @@ mod tests {
     }
 
     #[test]
+    fn the_total_item_count_is_capped() {
+        let mut s = PasteArrayState::new(Unit::Mm, 10.0, 0.0, 1, PasteDesignators::Keep, 101, None);
+        s.count = "1000".to_owned();
+        assert!(s.input().unwrap_err().contains("100000 items"));
+        s.count = "990".to_owned();
+        assert!(s.input().is_ok(), "99 990 items is within the cap");
+        s.items_per_copy = 100;
+        s.count = "1000".to_owned();
+        assert!(s.input().is_ok(), "exactly the cap is allowed");
+    }
+
+    #[test]
     fn spacings_must_be_finite_and_keep_the_array_on_the_sheet() {
         for bad in ["", "abc", "inf", "NaN", "1e999", "1e12"] {
             let mut s = state();
@@ -145,7 +187,7 @@ mod tests {
 
     #[test]
     fn spacings_are_read_in_the_dialogs_unit() {
-        let mut s = PasteArrayState::new(Unit::Mil, 2.54, 0.0, 1, None);
+        let mut s = PasteArrayState::new(Unit::Mil, 2.54, 0.0, 1, PasteDesignators::Keep, 3, None);
         s.y_spacing = "-200".to_owned();
         let input = s.input().unwrap();
         assert!((input.dx_mm - 2.54).abs() < 1e-9);

@@ -52,6 +52,8 @@ mod pdf_page_setup;
 
 #[path = "regression/paste_clipboard.rs"]
 mod paste_clipboard;
+#[path = "regression/paste_numbering_async.rs"]
+mod paste_numbering_async;
 #[path = "regression/paste_stamp_array.rs"]
 mod paste_stamp_array;
 #[path = "regression/paste_support.rs"]

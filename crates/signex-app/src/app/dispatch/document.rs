@@ -76,7 +76,10 @@ impl Signex {
             EditMsg::Paste => self.request_paste(PasteIntent::Paste),
             EditMsg::SmartPaste => self.request_paste(PasteIntent::SmartPaste),
             EditMsg::PasteArrayRequested => self.request_paste(PasteIntent::Array),
-            EditMsg::PasteTextRead { intent, text } => self.handle_paste_text_read(intent, text),
+            EditMsg::PasteTextRead { request, text } => self.handle_paste_text_read(request, text),
+            EditMsg::PasteCountersSeeded { request, seed } => {
+                self.handle_paste_counters_seeded(request, &seed)
+            }
             EditMsg::PasteArray(msg) => self.handle_paste_array_message(msg),
             EditMsg::RubberStampCopy => self.handle_rubber_stamp_requested(),
             EditMsg::Duplicate => self.handle_selection_duplicate_requested(),

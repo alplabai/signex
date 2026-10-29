@@ -3,7 +3,7 @@ use iced::Task;
 use super::super::*;
 
 /// Fixed offset of a Duplicate, and the fallback of Smart Paste.
-const DEFAULT_PASTE_OFFSET_MM: f64 = 5.08;
+pub(crate) const DEFAULT_PASTE_OFFSET_MM: f64 = 5.08;
 
 fn smart_paste_offset(app: &Signex) -> (f64, f64) {
     let default_offset = DEFAULT_PASTE_OFFSET_MM;
@@ -89,8 +89,8 @@ impl Signex {
             return self.finish_update();
         }
         let write = self.clipboard_write_task();
-        self.paste_with_offset(DEFAULT_PASTE_OFFSET_MM, DEFAULT_PASTE_OFFSET_MM);
-        Task::batch([write, self.finish_update()])
+        // The offset paste itself happens once Next free numbering is ready.
+        Task::batch([write, self.begin_paste(crate::app::PasteIntent::Duplicate)])
     }
 
     pub(crate) fn handle_clipboard_smart_paste_requested(&mut self) {
@@ -139,15 +139,18 @@ impl Signex {
 
     /// Smart Paste and Duplicate: place the copy now, shifted by a fixed
     /// offset from where it was copied, as one undo step.
-    fn paste_with_offset(&mut self, offset_x: f64, offset_y: f64) {
+    pub(crate) fn paste_with_offset(&mut self, offset_x: f64, offset_y: f64) {
         let Some((payload, target, origin)) = self.prepared_paste() else {
             return;
         };
-        let payload = self.paste_numbering(&target).apply(&payload);
+        let mut numbering = self.paste_numbering(&target);
+        let payload = numbering.apply(&payload);
         let at = signex_types::schematic::Point::new(origin.x + offset_x, origin.y + offset_y);
         match payload.place_commands(at) {
             Ok(commands) if !commands.is_empty() => {
-                self.apply_engine_commands(commands, true, true);
+                if self.apply_engine_commands(commands, true, true) {
+                    self.remember_numbering(&target, numbering);
+                }
             }
             Ok(_) => {}
             Err(error) => crate::diagnostics::log_warning(format!(

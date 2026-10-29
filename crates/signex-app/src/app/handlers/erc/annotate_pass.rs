@@ -29,8 +29,6 @@ impl Signex {
             reprefix,
             label,
         } = pass;
-        // Share one per-prefix counter across every open sheet so designators
-        // don't collide across sheets of the same project.
         // The project, from the one assembler: the declared pages plus
         // everything reachable down the child-sheet graph. Seeding off
         // `engines.values()` instead both over-reached (a loose tab from
@@ -51,6 +49,8 @@ impl Signex {
         // phase 2, but running a separate seed pass first ensures
         // order-independence — without this, sheet B could reuse
         // numbers it considers free that sheet A actually claims.
+        // One per-prefix counter shared by every project sheet, so designators
+        // don't collide across the sheets of the project.
         let mut next_by_prefix = signex_types::designator::seed_counters(
             project_set
                 .sheets

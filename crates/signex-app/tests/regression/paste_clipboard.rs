@@ -2,7 +2,7 @@
 //! paste reads it back (another Signex process can paste it), and the
 //! "Designators on paste" preference decides what pasted parts are called.
 
-use signex_app::app::{EditMsg, Message, Signex};
+use signex_app::app::{EditMsg, Message, PasteIntent, Signex};
 use signex_app::paste_prefs::PasteDesignators;
 use signex_engine::CLIPBOARD_MARKER;
 
@@ -10,7 +10,7 @@ use crate::paste_support::sheet::{
     app_with_sheet, click, empty_sheet, populated_sheet, references, select,
 };
 use crate::paste_support::{
-    paste, paste_with_clipboard, reads_clipboard, smart_paste, written_text,
+    paste, paste_with_clipboard, reads_clipboard, send_and_settle, smart_paste, written_text,
 };
 
 /// The selection that exercises every designator mode: a resistor and the
@@ -51,14 +51,21 @@ fn cut_writes_the_fragment_too_and_removes_the_selection() {
 #[test]
 fn a_paste_request_asks_the_system_clipboard() {
     let (mut app, _text) = app_with_copied_parts();
-    for message in [
-        EditMsg::Paste,
-        EditMsg::SmartPaste,
-        EditMsg::PasteArrayRequested,
-    ] {
+    for message in [EditMsg::Paste, EditMsg::SmartPaste] {
         let task = app.update(Message::Edit(message));
         assert!(reads_clipboard(task));
     }
+}
+
+#[test]
+fn paste_array_reads_the_numbers_first_and_then_asks_the_clipboard() {
+    let (mut app, _text) = app_with_copied_parts();
+    let seeding = app.update(Message::Edit(EditMsg::PasteArrayRequested));
+    let seeded = crate::library_place_symbol::run(seeding)
+        .into_iter()
+        .find(|m| matches!(m, Message::Edit(EditMsg::PasteCountersSeeded { .. })))
+        .expect("the numbering read answers");
+    assert!(reads_clipboard(app.update(seeded)));
 }
 
 #[test]
@@ -160,7 +167,7 @@ fn smart_paste_and_duplicate_follow_the_preference() {
 
         let (mut app, _text) = app_with_copied_parts();
         app.ui_state.paste_designators = mode;
-        let _ = app.update(Message::Edit(EditMsg::Duplicate));
+        send_and_settle(&mut app, EditMsg::Duplicate, PasteIntent::Duplicate);
         assert_eq!(pasted_references(&app), expected, "duplicate, {mode:?}");
     }
 }

@@ -4,9 +4,10 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use signex_engine::PlacementPayload;
-use signex_types::designator::{alphabetic_prefix, seed_counters, take_next};
+use signex_types::designator::{alphabetic_prefix, merge_counters, seed_counters, take_next};
 
 use crate::app::Signex;
+use crate::app::state::PasteCounters;
 use crate::paste_prefs::PasteDesignators;
 
 /// The numbering of one paste, or of several copies pasted in a row: the
@@ -41,29 +42,63 @@ impl PasteNumbering {
     }
 }
 
+impl PasteNumbering {
+    /// The counters as advanced by this paste.
+    pub(crate) fn into_counters(self) -> HashMap<String, u32> {
+        self.counters
+    }
+}
+
 impl Signex {
-    /// The numbering for a paste onto `target`. Next free counts from every
-    /// designator in the target's project, the open sheet's live document
-    /// included, the way Annotate does.
+    /// The numbering for a paste onto `target`, in the saved preference's mode.
     pub(crate) fn paste_numbering(&self, target: &Path) -> PasteNumbering {
-        let mode = self.ui_state.paste_designators;
+        self.paste_numbering_with(target, self.ui_state.paste_designators)
+    }
+
+    /// The numbering for a paste onto `target` in `mode`. Next free starts
+    /// from the project's numbers read when the paste began (kept in the
+    /// interaction state and advanced per commit) and folds in what the
+    /// target's live document holds now, so an edit made since, or an open
+    /// sheet the project walk does not reach, is counted too. Without a read
+    /// (none was needed or it was for another sheet) the live sheet alone is
+    /// counted.
+    pub(crate) fn paste_numbering_with(
+        &self,
+        target: &Path,
+        mode: PasteDesignators,
+    ) -> PasteNumbering {
         if mode != PasteDesignators::NextFree {
             return PasteNumbering::new(mode, HashMap::new());
         }
-        let (_pages, project) =
-            crate::app::project_sheets::assemble_project_sheets_for(&self.document_state, target);
-        let live = self
-            .document_state
-            .engines
-            .get(target)
-            .map(|e| e.document());
-        let symbols = project
-            .sheets
-            .values()
-            .chain(live)
-            .flat_map(|sheet| sheet.symbols.iter())
-            .filter(|s| !s.is_power && !s.reference.starts_with('#'));
-        PasteNumbering::new(mode, seed_counters(symbols.map(|s| s.reference.as_str())))
+        let mut counters = self
+            .interaction_state
+            .paste_counters
+            .as_ref()
+            .filter(|c| c.target == target)
+            .map(|c| c.counters.clone())
+            .unwrap_or_default();
+        if let Some(live) = self.document_state.engines.get(target) {
+            let live = seed_counters(
+                live.document()
+                    .symbols
+                    .iter()
+                    .filter(|s| !s.is_power && !s.reference.starts_with('#'))
+                    .map(|s| s.reference.as_str()),
+            );
+            merge_counters(&mut counters, &live);
+        }
+        PasteNumbering::new(mode, counters)
+    }
+
+    /// Keep the advanced counters for the next commit of the same paste.
+    pub(crate) fn remember_numbering(&mut self, target: &Path, numbering: PasteNumbering) {
+        if numbering.mode != PasteDesignators::NextFree {
+            return;
+        }
+        self.interaction_state.paste_counters = Some(PasteCounters {
+            target: target.to_path_buf(),
+            counters: numbering.into_counters(),
+        });
     }
 }
 

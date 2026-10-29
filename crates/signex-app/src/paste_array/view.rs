@@ -1,5 +1,7 @@
 use super::{PasteArrayMsg, PasteArrayState};
-use iced::widget::{Space, button, column, container, row, text, text_input};
+use iced::widget::{Space, button, column, container, pick_list, row, text, text_input};
+
+use crate::paste_prefs::PasteDesignators;
 use iced::{Background, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 
@@ -68,6 +70,22 @@ pub fn view<'a>(state: &'a PasteArrayState, tokens: &ThemeTokens) -> Element<'a,
         ),
     ]
     .spacing(SP.m);
+
+    let designators = row![
+        text("Designators")
+            .size(TS.body)
+            .color(text_primary)
+            .width(LABEL_W),
+        pick_list(
+            PasteDesignators::ALL,
+            Some(state.designators),
+            PasteArrayMsg::DesignatorsChosen,
+        )
+        .text_size(12),
+    ]
+    .align_y(iced::Alignment::Center)
+    .spacing(SP.m);
+    let fields = fields.push(designators);
 
     let note = match &verdict {
         Ok(_) => "Copy k sits k spacings from the original; label numbers count up by k steps."

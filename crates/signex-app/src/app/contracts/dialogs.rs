@@ -676,6 +676,20 @@ pub enum PasteIntent {
     SmartPaste,
     /// Open the Paste Array dialog.
     Array,
+    /// Place the copy just made, beside the original.
+    Duplicate,
+    /// Arm the copy just made as a rubber stamp.
+    Stamp,
+}
+
+/// One paste-family request in flight: what it is for, and the tool state it
+/// was made in. An answer that arrives after the placement epoch or the
+/// active sheet moved on is dropped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PasteRequest {
+    pub intent: PasteIntent,
+    pub epoch: u64,
+    pub path: Option<PathBuf>,
 }
 
 /// Edit-command message family (ADR-0001 D3). Namespaced under
@@ -724,8 +738,14 @@ pub enum EditMsg {
     /// The system clipboard answered a paste request (#1263): its text if it
     /// holds any. A Signex fragment in it replaces the in-app copy.
     PasteTextRead {
-        intent: PasteIntent,
+        request: PasteRequest,
         text: Option<String>,
+    },
+    /// The project's designator numbers were read off the UI thread (#1263);
+    /// the paste carries on.
+    PasteCountersSeeded {
+        request: PasteRequest,
+        seed: std::sync::Arc<crate::app::handlers::paste::PasteSeed>,
     },
     /// Reorder the selected drawings within the sheet's drawing list; the
     /// selection's circuit elements are ignored (#1583).

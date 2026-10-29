@@ -85,14 +85,25 @@ impl PlacementSession {
     }
 }
 
+/// The per-prefix designator numbers a paste hands out from, read once when
+/// the paste started and advanced in memory by every commit after it.
+#[derive(Debug, Clone, Default)]
+pub struct PasteCounters {
+    /// The sheet they were read for.
+    pub target: PathBuf,
+    pub counters: std::collections::HashMap<String, u32>,
+}
+
 /// What "Repeat last item" arms again: the text-bearing tool that placed
 /// something last, with the text its next copy would carry (already stepped).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum LastPlacement {
     /// A net label, port or hierarchical port.
     Label {
         port: Option<(signex_types::schematic::LabelType, String)>,
         text: String,
+        /// The look the Tab form gave it; `None` for the tool defaults.
+        style: Option<crate::panels::PrePlacementStyle>,
     },
     /// A text note.
     Text { text: String },

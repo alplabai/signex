@@ -5,5 +5,5 @@
 mod state;
 mod view;
 
-pub use state::{MAX_COPIES, PasteArrayInput, PasteArrayMsg, PasteArrayState};
+pub use state::{MAX_COPIES, MAX_PLACED_ITEMS, PasteArrayInput, PasteArrayMsg, PasteArrayState};
 pub use view::view;

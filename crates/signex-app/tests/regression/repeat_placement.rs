@@ -139,3 +139,25 @@ fn repeat_last_item_repeats_a_text_note_with_the_next_value() {
         .collect();
     assert_eq!(notes, ["Note 1", "Note 2"]);
 }
+
+#[test]
+fn repeat_last_item_restores_the_look_the_form_gave_the_label() {
+    let mut app = app_with_empty_sheet();
+    arm_label(&mut app, "D0");
+    if let Some(pre) = app.document_state.panel_ctx.pre_placement.as_mut() {
+        pre.rotation = 90.0;
+        pre.font_size_pt = 14;
+        pre.justify_h = signex_types::schematic::HAlign::Right;
+    }
+    click_n(&mut app, 1);
+    select(&mut app, Tool::Select);
+    let _ = app.update(Message::Edit(EditMsg::RepeatLastItem));
+    click_n(&mut app, 1);
+
+    let labels = &doc(&app).labels;
+    assert_eq!(labels[1].text, "D1");
+    assert_eq!(labels[1].rotation, labels[0].rotation);
+    assert_eq!(labels[1].rotation, 90.0);
+    assert_eq!(labels[1].font_size, labels[0].font_size);
+    assert_eq!(labels[1].justify, labels[0].justify);
+}

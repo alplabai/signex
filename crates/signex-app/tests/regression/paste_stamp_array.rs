@@ -7,8 +7,8 @@ use signex_app::paste_array::PasteArrayMsg;
 use signex_app::paste_prefs::PasteDesignators;
 use signex_types::coord::Unit;
 
-use crate::paste_support::answer;
 use crate::paste_support::sheet::{app_with_sheet, click, populated_sheet, references, select};
+use crate::paste_support::{answer, send_and_settle};
 
 fn symbol_count(app: &Signex) -> usize {
     app.document_state
@@ -32,7 +32,7 @@ fn undo(app: &mut Signex) {
 fn a_rubber_stamp_places_a_copy_per_click_until_escape_with_one_undo_each() {
     let mut app = app_with_sheet(populated_sheet());
     select(&mut app, &[("R1", 1)], false);
-    let _ = app.update(Message::Edit(EditMsg::RubberStampCopy));
+    send_and_settle(&mut app, EditMsg::RubberStampCopy, PasteIntent::Stamp);
     assert!(app.interaction_state.placement.is_some(), "stamp armed");
 
     for (n, at) in [(60.96, 60.96), (76.2, 60.96), (91.44, 60.96)]
@@ -63,7 +63,7 @@ fn stamped_parts_are_numbered_per_click_by_the_preference() {
     let mut app = app_with_sheet(populated_sheet());
     app.ui_state.paste_designators = PasteDesignators::NextFree;
     select(&mut app, &[("R1", 1)], false);
-    let _ = app.update(Message::Edit(EditMsg::RubberStampCopy));
+    send_and_settle(&mut app, EditMsg::RubberStampCopy, PasteIntent::Stamp);
     for x in [60.96, 76.2, 91.44] {
         click(&mut app, (x, 60.96));
     }
@@ -75,7 +75,7 @@ fn stamped_parts_are_numbered_per_click_by_the_preference() {
 }
 
 fn open_array(app: &mut Signex) {
-    let _ = app.update(Message::Edit(EditMsg::PasteArrayRequested));
+    send_and_settle(app, EditMsg::PasteArrayRequested, PasteIntent::Array);
     answer(app, PasteIntent::Array, None);
 }
 

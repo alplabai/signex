@@ -9,6 +9,10 @@ use signex_types::format::SnxSchematic;
 
 use crate::{CopiedSelection, EngineError};
 
+/// Largest marked clipboard text that is parsed; anything bigger is refused
+/// before the parser sees it.
+pub const MAX_CLIPBOARD_TEXT_BYTES: usize = 16 * 1024 * 1024;
+
 /// First line of every clipboard fragment; the trailing `/1` is the fragment
 /// version.
 pub const CLIPBOARD_MARKER: &str = "signex-clipboard-fragment/1";
@@ -28,6 +32,12 @@ impl CopiedSelection {
     /// fragment at all; `Err` when it claims to be one but cannot be read.
     /// `grid_mm` snaps the anchor as in [`crate::Engine::copy_selection`].
     pub fn from_clipboard_text(text: &str, grid_mm: f64) -> Result<Option<Self>, EngineError> {
+        if !text.starts_with(CLIPBOARD_MARKER) {
+            return Ok(None);
+        }
+        if text.len() > MAX_CLIPBOARD_TEXT_BYTES {
+            return Err(EngineError::ClipboardFragment("too large".to_owned()));
+        }
         let (first, body) = text.split_once('\n').unwrap_or((text, ""));
         if first.trim_end() != CLIPBOARD_MARKER {
             return Ok(None);
@@ -123,6 +133,23 @@ mod tests {
                 "{text:?}"
             );
         }
+    }
+
+    #[test]
+    fn marked_text_over_the_cap_is_refused_before_parsing() {
+        let huge = format!(
+            "{CLIPBOARD_MARKER}\n{}",
+            "x".repeat(MAX_CLIPBOARD_TEXT_BYTES)
+        );
+        let error = CopiedSelection::from_clipboard_text(&huge, 1.27).unwrap_err();
+        assert!(error.to_string().contains("too large"), "{error}");
+        // Unmarked text of any size is simply not ours.
+        let other = "y".repeat(MAX_CLIPBOARD_TEXT_BYTES + 1);
+        assert!(
+            CopiedSelection::from_clipboard_text(&other, 1.27)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]

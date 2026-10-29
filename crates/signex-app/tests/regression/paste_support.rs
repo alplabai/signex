@@ -2,11 +2,49 @@
 //! `EditMsg::Paste`, and the system clipboard's answer — which only a running
 //! window can give — is delivered by hand.
 
-use signex_app::app::{EditMsg, Message, PasteIntent, Signex};
+use signex_app::app::{EditMsg, Message, PasteIntent, PasteRequest, Signex};
+use signex_app::paste_prefs::PasteDesignators;
+
+/// The request a paste made now would carry.
+pub(crate) fn request(app: &Signex, intent: PasteIntent) -> PasteRequest {
+    PasteRequest {
+        intent,
+        epoch: app.interaction_state.placement_epoch,
+        path: app.document_state.active_path.clone(),
+    }
+}
+
+/// Run the numbering read a request started (when it started one) and hand
+/// its answer back, as the runtime would. A task that waits for the system
+/// clipboard is never run: only Next free and Paste Array read first.
+pub(crate) fn settle(app: &mut Signex, task: iced::Task<Message>, reads_numbers: bool) {
+    if !reads_numbers {
+        return;
+    }
+    for message in crate::library_place_symbol::run(task) {
+        if matches!(message, Message::Edit(EditMsg::PasteCountersSeeded { .. })) {
+            let _ = app.update(message);
+        }
+    }
+}
+
+fn reads_numbers(app: &Signex, intent: PasteIntent) -> bool {
+    intent == PasteIntent::Array || app.ui_state.paste_designators == PasteDesignators::NextFree
+}
+
+/// Send `message` and settle the numbering read it starts, for Duplicate and
+/// rubber stamp, which have no clipboard read.
+pub(crate) fn send_and_settle(app: &mut Signex, message: EditMsg, intent: PasteIntent) {
+    let task = app.update(Message::Edit(message));
+    let reads = reads_numbers(app, intent);
+    settle(app, task, reads);
+}
 
 /// `text` as the system clipboard's answer to a paste request.
 pub(crate) fn paste_with_clipboard(app: &mut Signex, text: Option<&str>) {
-    let _read_request = app.update(Message::Edit(EditMsg::Paste));
+    let task = app.update(Message::Edit(EditMsg::Paste));
+    let reads = reads_numbers(app, PasteIntent::Paste);
+    settle(app, task, reads);
     answer(app, PasteIntent::Paste, text);
 }
 
@@ -18,13 +56,21 @@ pub(crate) fn paste(app: &mut Signex) {
 
 /// Smart Paste with nothing usable on the system clipboard.
 pub(crate) fn smart_paste(app: &mut Signex) {
-    let _read_request = app.update(Message::Edit(EditMsg::SmartPaste));
+    let task = app.update(Message::Edit(EditMsg::SmartPaste));
+    let reads = reads_numbers(app, PasteIntent::SmartPaste);
+    settle(app, task, reads);
     answer(app, PasteIntent::SmartPaste, None);
 }
 
+/// The clipboard's answer to a request made now.
 pub(crate) fn answer(app: &mut Signex, intent: PasteIntent, text: Option<&str>) {
+    let request = request(app, intent);
+    answer_request(app, request, text);
+}
+
+pub(crate) fn answer_request(app: &mut Signex, request: PasteRequest, text: Option<&str>) {
     let _ = app.update(Message::Edit(EditMsg::PasteTextRead {
-        intent,
+        request,
         text: text.map(str::to_owned),
     }));
 }
@@ -112,13 +158,17 @@ pub(crate) mod sheet {
         }
     }
 
-    /// An app whose active sheet is `sheet`.
-    pub(crate) fn app_with_sheet(mut sheet: SchematicSheet) -> Signex {
+    /// An app whose active sheet is `sheet`, at the fixed test path.
+    pub(crate) fn app_with_sheet(sheet: SchematicSheet) -> Signex {
+        app_with_sheet_at(PathBuf::from(SHEET), sheet)
+    }
+
+    /// An app whose active sheet is `sheet`, at `path`.
+    pub(crate) fn app_with_sheet_at(path: PathBuf, mut sheet: SchematicSheet) -> Signex {
         for lib in ["lib:r", "lib:dual"] {
             let body: LibSymbol = serde_json::from_str(&format!(r#"{{"id":"{lib}"}}"#)).unwrap();
             sheet.lib_symbols.insert(body.id.clone(), body);
         }
-        let path = PathBuf::from(SHEET);
         let (mut app, _t) = Signex::new();
         app.ui_state.first_run_tour_open = false;
         app.document_state.engines.insert(

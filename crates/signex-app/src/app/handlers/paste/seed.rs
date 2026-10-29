@@ -1,0 +1,83 @@
+//! Reading the project's designator numbers for Next free, off the UI thread.
+
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use iced::Task;
+use signex_types::designator::seed_counters;
+
+use crate::app::state::PasteCounters;
+use crate::app::{EditMsg, Message, PasteIntent, PasteRequest, Signex};
+use crate::paste_prefs::PasteDesignators;
+
+/// What the numbering read found.
+#[derive(Debug, Default)]
+pub struct PasteSeed {
+    /// The highest number in use per prefix, across every project sheet.
+    pub counters: HashMap<String, u32>,
+    /// Sheets that exist but could not be read, with why.
+    pub unreadable: Vec<(PathBuf, String)>,
+}
+
+impl Signex {
+    /// The task that reads the numbers `request` will hand out from, or
+    /// `None` when its numbering needs none (Keep and Reset) or there is no
+    /// sheet. Paste Array always reads them: its dialog can choose Next free.
+    pub(crate) fn paste_seed_task(&self, request: &PasteRequest) -> Option<Task<Message>> {
+        let needs = request.intent == PasteIntent::Array
+            || self.ui_state.paste_designators == PasteDesignators::NextFree;
+        if !needs {
+            return None;
+        }
+        let target = request.path.clone()?;
+        let plan =
+            crate::app::project_sheets::plan_project_sheets_for(&self.document_state, &target);
+        let request = request.clone();
+        Some(Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || {
+                    let set = plan.assemble();
+                    PasteSeed {
+                        counters: seed_counters(
+                            set.sheets
+                                .values()
+                                .flat_map(|sheet| sheet.symbols.iter())
+                                .filter(|s| !s.is_power && !s.reference.starts_with('#'))
+                                .map(|s| s.reference.as_str()),
+                        ),
+                        unreadable: set.unreadable,
+                    }
+                })
+                .await
+                .unwrap_or_else(|error| PasteSeed {
+                    counters: HashMap::new(),
+                    unreadable: vec![(target, format!("the numbering task failed: {error}"))],
+                })
+            },
+            move |seed| {
+                Message::Edit(EditMsg::PasteCountersSeeded {
+                    request: request.clone(),
+                    seed: Arc::new(seed),
+                })
+            },
+        ))
+    }
+
+    /// Keep the numbers for the commits that follow, and name any sheet that
+    /// could not be counted.
+    pub(crate) fn store_paste_seed(&mut self, request: &PasteRequest, seed: &PasteSeed) {
+        for (path, why) in &seed.unreadable {
+            crate::diagnostics::log_warning(format!(
+                "Designators on paste: {} could not be read ({why}), so its designators are not counted.",
+                path.display()
+            ));
+        }
+        if let Some(target) = request.path.clone() {
+            self.interaction_state.paste_counters = Some(PasteCounters {
+                target,
+                counters: seed.counters.clone(),
+            });
+        }
+    }
+}

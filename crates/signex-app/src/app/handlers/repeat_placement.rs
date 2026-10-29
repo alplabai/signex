@@ -8,7 +8,7 @@ use signex_types::text_increment::increment_trailing_number;
 
 use crate::app::state::LastPlacement;
 use crate::app::{Message, Signex, Tool};
-use crate::panels::{PrePlacementData, PrePlacementKind};
+use crate::panels::{PrePlacementData, PrePlacementKind, PrePlacementStyle};
 use crate::toolbar::ToolMessage;
 
 impl Signex {
@@ -24,6 +24,12 @@ impl Signex {
         self.interaction_state.last_placement = Some(LastPlacement::Label {
             port: self.interaction_state.pending_port.clone(),
             text: next,
+            style: self
+                .document_state
+                .panel_ctx
+                .pre_placement
+                .as_ref()
+                .map(PrePlacementData::style),
         });
     }
 
@@ -47,25 +53,33 @@ impl Signex {
             );
             return self.finish_update();
         };
-        let (tool, port, kind, text) = match last {
-            LastPlacement::Label { port, text } => {
+        let (tool, port, kind, text, style) = match last {
+            LastPlacement::Label { port, text, style } => {
                 let kind = match port.as_ref().map(|(label_type, _)| label_type) {
                     Some(LabelType::Global) => PrePlacementKind::GlobalPort,
                     Some(LabelType::Hierarchical) => PrePlacementKind::HierPort,
                     _ => PrePlacementKind::NetLabel,
                 };
-                (Tool::Label, port, kind, text)
+                (Tool::Label, port, kind, text, style)
             }
-            LastPlacement::Text { text } => (Tool::Text, None, PrePlacementKind::TextNote, text),
+            LastPlacement::Text { text } => {
+                (Tool::Text, None, PrePlacementKind::TextNote, text, None)
+            }
         };
         let armed = self.update(Message::Tool(ToolMessage::SelectTool(tool)));
         self.interaction_state.pending_port = port;
-        self.set_pending_text(kind, text);
+        self.set_pending_text(kind, text, style);
         armed
     }
 
-    /// Put `text` where the next click reads it: the pre-placement data.
-    fn set_pending_text(&mut self, kind: PrePlacementKind, text: String) {
+    /// Put `text` where the next click reads it: the pre-placement data. A
+    /// form that is already open keeps its own look; a new one takes `style`.
+    fn set_pending_text(
+        &mut self,
+        kind: PrePlacementKind,
+        text: String,
+        style: Option<PrePlacementStyle>,
+    ) {
         let tool_name = format!("{}", self.interaction_state.current_tool);
         let (cursor_x_mm, cursor_y_mm) = (self.ui_state.cursor_x, self.ui_state.cursor_y);
         let slot = &mut self.document_state.panel_ctx.pre_placement;
@@ -76,24 +90,12 @@ impl Signex {
                 pre.label_text = text;
             }
             None => {
-                *slot = Some(PrePlacementData {
-                    tool_name,
-                    kind,
-                    label_text: text,
-                    designator: String::new(),
-                    rotation: 0.0,
-                    font: "Iosevka".to_string(),
-                    font_size_pt: 10,
-                    justify_h: signex_types::schematic::HAlign::Left,
-                    justify_v: Default::default(),
-                    bold: false,
-                    italic: false,
-                    underline: false,
-                    cursor_x_mm,
-                    cursor_y_mm,
-                    shape_width_mm: 0.0,
-                    shape_fill: signex_types::schematic::FillType::None,
-                });
+                let mut pre =
+                    PrePlacementData::new(tool_name, kind, text, cursor_x_mm, cursor_y_mm);
+                if let Some(style) = style {
+                    pre.set_style(style);
+                }
+                *slot = Some(pre);
             }
         }
     }

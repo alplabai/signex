@@ -48,7 +48,7 @@ mod sheet_identity_tests;
 use std::path::{Path, PathBuf};
 
 pub use annotation::AnnotateScope;
-pub use clipboard_text::CLIPBOARD_MARKER;
+pub use clipboard_text::{CLIPBOARD_MARKER, MAX_CLIPBOARD_TEXT_BYTES};
 pub use command::{
     AnnotateMode, Command, CommandKind, DrawingArrange, MirrorAxis, ReorderDirection,
     SelectionTransform, SheetPort, SymbolTextField, TextTarget,
