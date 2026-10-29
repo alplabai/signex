@@ -38,8 +38,6 @@ impl Signex {
             epoch: self.interaction_state.placement_epoch,
             path: self.document_state.active_path.clone(),
         };
-        // A new request replaces whatever numbers an earlier one read.
-        self.interaction_state.paste_counters = None;
         match self.paste_seed_task(&request) {
             Some(seeding) => seeding,
             None => self.continue_paste(request),

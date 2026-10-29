@@ -18,6 +18,8 @@ pub struct PasteSeed {
     pub counters: HashMap<String, u32>,
     /// Sheets that exist but could not be read, with why.
     pub unreadable: Vec<(PathBuf, String)>,
+    /// The read itself did not finish; `counters` says nothing.
+    pub failed: bool,
 }
 
 impl Signex {
@@ -39,6 +41,7 @@ impl Signex {
                 tokio::task::spawn_blocking(move || {
                     let set = plan.assemble();
                     PasteSeed {
+                        failed: false,
                         counters: seed_counters(
                             set.sheets
                                 .values()
@@ -51,6 +54,7 @@ impl Signex {
                 })
                 .await
                 .unwrap_or_else(|error| PasteSeed {
+                    failed: true,
                     counters: HashMap::new(),
                     unreadable: vec![(target, format!("the numbering task failed: {error}"))],
                 })
@@ -73,11 +77,50 @@ impl Signex {
                 path.display()
             ));
         }
+        // A read that did not finish has no numbers: what an earlier read
+        // stored for this sheet stays, as it can only skip numbers.
+        if seed.failed {
+            return;
+        }
         if let Some(target) = request.path.clone() {
             self.interaction_state.paste_counters = Some(PasteCounters {
                 target,
                 counters: seed.counters.clone(),
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(path: &str) -> PasteRequest {
+        PasteRequest {
+            intent: PasteIntent::Paste,
+            epoch: 0,
+            path: Some(PathBuf::from(path)),
+        }
+    }
+
+    #[test]
+    fn a_failed_read_keeps_the_numbers_an_earlier_read_stored() {
+        let (mut app, _task) = Signex::new();
+        let good = PasteSeed {
+            counters: HashMap::from([("R".to_owned(), 4)]),
+            ..PasteSeed::default()
+        };
+        app.store_paste_seed(&request("a.snxsch"), &good);
+        let failed = PasteSeed {
+            failed: true,
+            unreadable: vec![(
+                PathBuf::from("a.snxsch"),
+                "the numbering task failed".into(),
+            )],
+            ..PasteSeed::default()
+        };
+        app.store_paste_seed(&request("a.snxsch"), &failed);
+        let kept = app.interaction_state.paste_counters.as_ref().unwrap();
+        assert_eq!(kept.counters.get("R"), Some(&4));
     }
 }

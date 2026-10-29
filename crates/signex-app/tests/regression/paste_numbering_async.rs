@@ -309,3 +309,27 @@ fn a_paste_array_of_a_foreign_fragment_brings_its_library_body() {
     assert_eq!(doc.lib_symbols.len(), 1);
     assert!(doc.lib_symbols.contains_key("lib:r"));
 }
+
+/// A new paste request must not strip the numbers a Next free stamp is
+/// still armed with: a click before the new numbers land would reuse R4.
+#[test]
+fn a_new_request_does_not_strip_an_armed_stamps_project_numbers() {
+    let (mut app, _dir) = app_with_child_on_disk("child.snxsch", || {
+        let mut child = SchematicSheet {
+            uuid: Uuid::new_v4(),
+            paper_size: "A4".to_owned(),
+            ..Default::default()
+        };
+        child.symbols.push(part("R4", "lib:r", 1, (10.16, 10.16)));
+        signex_types::format::SnxSchematic::new(child)
+            .write_string()
+            .unwrap()
+    });
+    app.ui_state.paste_designators = PasteDesignators::NextFree;
+    select(&mut app, &[("R2", 1)], false);
+    send_and_settle(&mut app, EditMsg::RubberStampCopy, PasteIntent::Stamp);
+    // A second request starts, and its numbers have not landed yet.
+    let _unsettled = app.update(Message::Edit(EditMsg::Paste));
+    click(&mut app, (60.0, 60.0));
+    assert_eq!(references(&app).pop().unwrap(), "R5");
+}
