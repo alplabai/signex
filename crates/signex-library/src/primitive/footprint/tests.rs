@@ -887,3 +887,68 @@ fn arc_sweep_is_ccw_with_wrap() {
     assert_eq!(sweep(90.0, 90.0), 0.0);
     assert_eq!(sweep(0.0, 360.0), 360.0);
 }
+
+/// A sketch entity tagged with every layer marker must survive a save and
+/// a reload. `CourtyardAttr` was a unit struct, which the TOML writer
+/// refuses, so a footprint with a courtyard-tagged sketch could not be
+/// saved at all.
+#[test]
+fn footprint_file_toml_round_trip_with_every_sketch_marker() {
+    use signex_sketch::attr::{
+        CourtyardAttr, MaskExcludeAttr, MaskOpeningAttr, PasteApertureAttr, SilkAttr,
+    };
+    use signex_sketch::entity::{Entity, EntityKind};
+    use signex_sketch::id::SketchEntityId;
+    use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+    use signex_types::layer::SignexLayer;
+
+    let plane = PlaneId::new();
+    let mut sketch = signex_sketch::SketchData {
+        planes: vec![Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        }],
+        ..Default::default()
+    };
+    let a = SketchEntityId::new();
+    let b = SketchEntityId::new();
+    for (id, x) in [(a, 0.0), (b, 2.0)] {
+        sketch
+            .entities
+            .push(Entity::new(id, plane, EntityKind::Point { x, y: 0.0 }));
+    }
+    let mut line = Entity::new(
+        SketchEntityId::new(),
+        plane,
+        EntityKind::Line { start: a, end: b },
+    );
+    line.courtyard = Some(CourtyardAttr {});
+    line.silk = Some(SilkAttr {
+        layer: SignexLayer::TopSilk,
+    });
+    line.mask_opening = Some(MaskOpeningAttr {
+        layer: SignexLayer::TopSolderMask,
+    });
+    line.mask_exclude = Some(MaskExcludeAttr {
+        layer: SignexLayer::TopSolderMask,
+    });
+    line.paste_aperture = Some(PasteApertureAttr {
+        layer: SignexLayer::TopPaste,
+    });
+    sketch.entities.push(line);
+
+    let mut fp = Footprint::empty("Courtyard-Tagged");
+    fp.sketch = Some(sketch);
+    let original = FootprintFile::from_footprint(fp);
+    let text = original.to_toml_string().expect("a courtyard tag saves");
+    let back = FootprintFile::from_toml_str(&text).expect("parse");
+    assert_eq!(back.footprints[0].sketch, original.footprints[0].sketch);
+    let tagged = back.footprints[0]
+        .sketch
+        .as_ref()
+        .unwrap()
+        .entities
+        .last()
+        .unwrap();
+    assert!(tagged.courtyard.is_some());
+}
