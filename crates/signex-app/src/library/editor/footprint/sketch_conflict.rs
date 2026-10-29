@@ -44,7 +44,12 @@ pub(super) fn mutate_solve_or_revert(
             let (rows, named_entities) = name_conflict(&ids, footprint.sketch.as_ref());
             footprint.sketch = before;
             drop_dangling_selection(state, footprint);
-            if let Err(e) = solve_and_bake(state, footprint) {
+            // The clean re-solve has no warnings, which would empty the
+            // logged set and make the next identical rejection log again.
+            let logged = std::mem::take(&mut state.logged_solve_warnings);
+            let resolved = solve_and_bake(state, footprint);
+            state.logged_solve_warnings = logged;
+            if let Err(e) = resolved {
                 tracing::warn!(
                     target: "signex::sketch",
                     error = %e,

@@ -242,3 +242,32 @@ fn repeated_failing_solves_reach_the_messages_panel_once() {
         state.solve_warnings
     );
 }
+
+/// The revert re-solves the last good sketch, and that clean solve must not
+/// forget what was logged: the same rejected edit made again is the same
+/// conflict, and the Messages panel hears about it once.
+#[test]
+fn a_rejected_edit_repeated_logs_its_conflict_once() {
+    use super::sketch_dispatch::report_solve_failure;
+
+    let _ = crate::diagnostics::init_logging();
+    let (mut fp, mut state, p1, p2) = solved_footprint();
+    let conflicting = distance(p1, p2, 9.0);
+    let needle = conflicting.id.to_string();
+    let before = crate::diagnostics::logged_count(&needle);
+
+    for attempt in 0..3 {
+        let result = apply_sketch_edit(
+            &mut state,
+            &mut fp,
+            SketchEdit::AddConstraint(conflicting.clone()),
+        );
+        let error = result.expect_err("the conflicting edit is rejected");
+        report_solve_failure(&mut state, &error);
+        assert_eq!(
+            crate::diagnostics::logged_count(&needle) - before,
+            1,
+            "attempt {attempt}: the conflict is logged once"
+        );
+    }
+}
