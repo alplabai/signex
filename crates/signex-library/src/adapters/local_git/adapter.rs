@@ -2,6 +2,7 @@
 
 use super::helpers::*;
 use super::*;
+use crate::adapter::UncommittedChanges;
 
 impl LibraryAdapter for LocalGitAdapter {
     fn manifest(&self) -> &Manifest {
@@ -35,12 +36,15 @@ impl LibraryAdapter for LocalGitAdapter {
             // adapter moves, so a failed commit leaves it on the old path.
             let old_rel = self.snxlib_rel_path()?;
             let new_rel = file_name_str(new_file)?;
+            // The file is already renamed on disk, so a failed commit must
+            // not leave the adapter on the old path: the rename stays
+            // pending and the next commit records it (#858).
             self.commit_change(
                 Some(&old_rel),
                 &new_rel,
                 "",
                 &format!("rename {old_rel} to {new_rel}"),
-            )?;
+            );
         }
         self.root_dir = new_root;
         self.file_path = new_file.to_path_buf();
@@ -643,18 +647,27 @@ impl LibraryAdapter for LocalGitAdapter {
         }
         let _write_lock = self.lock_for_write()?;
         let written = crate::adapter::rewrite_file(abs_path, rewrite)?;
-        if written && let Err(e) = self.commit_external_change(abs_path, commit_message) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %abs_path.display(),
-                error = %e,
-                "save primitive: file written, not committed",
-            );
+        // The file is written: its commit, failed or not, is reported by
+        // the adapter (see `uncommitted`) and never undoes the write.
+        if written {
+            self.commit_external_change(abs_path, commit_message)?;
         }
         Ok(written)
     }
 
-    fn commit_external_change(&self, abs_path: &Path, message: &str) -> Result<(), LibraryError> {
+    fn uncommitted_changes(&self) -> Option<UncommittedChanges> {
+        self.pending_changes()
+    }
+
+    fn commit_pending(&self, message: &str) -> Result<CommitOutcome, LibraryError> {
+        Ok(self.commit_pending_changes(message))
+    }
+
+    fn commit_external_change(
+        &self,
+        abs_path: &Path,
+        message: &str,
+    ) -> Result<CommitOutcome, LibraryError> {
         let rel_path = abs_path
             .strip_prefix(&self.root_dir)
             .map_err(|_| {
@@ -667,7 +680,7 @@ impl LibraryAdapter for LocalGitAdapter {
             .to_string_lossy()
             .replace('\\', "/");
         let fallback = format!("save {rel_path}");
-        self.commit_path(&rel_path, message, &fallback)
+        Ok(self.commit_path(&rel_path, message, &fallback))
     }
 
     fn history(&self, primitive_path: &Path) -> Result<Vec<HistoryEntry>, LibraryError> {

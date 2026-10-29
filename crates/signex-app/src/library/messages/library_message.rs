@@ -138,6 +138,16 @@ pub enum LibraryMessage {
     BrowserDismissDeleteError {
         library_path: PathBuf,
     },
+    /// "Commit now" on the uncommitted-changes banner: retry the git commit
+    /// of everything the library saved without one (#858).
+    BrowserCommitPending {
+        library_path: PathBuf,
+    },
+    /// The off-thread "Commit now" finished.
+    BrowserCommitPendingDone {
+        library_path: PathBuf,
+        result: Result<signex_library::CommitOutcome, String>,
+    },
     /// Sidebar `✎` rename button — flip the matching row into edit
     /// mode (text input replaces label).
     BrowserBeginRenameTable {

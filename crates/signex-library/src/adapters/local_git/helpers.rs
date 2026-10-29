@@ -26,7 +26,7 @@ const GIT_LOCK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
 /// The on-disk index entry is updated afterwards, best effort, so the
 /// working copy does not show the file as changed.
 ///
-/// `removed_rel_path` is dropped from the new tree (and the index) in the
+/// `removed_rel_paths` are dropped from the new tree (and the index) in the
 /// same commit, so a file moved to `rel_path` is recorded as a rename
 /// rather than left tracked at its old name.
 ///
@@ -34,7 +34,7 @@ const GIT_LOCK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
 /// working-tree file as it is when this runs.
 pub(super) fn stage_and_commit(
     repo: &git2::Repository,
-    removed_rel_path: Option<&Path>,
+    removed_rel_paths: &[&Path],
     rel_path: &Path,
     content: Option<&[u8]>,
     signature: &git2::Signature<'_>,
@@ -42,7 +42,7 @@ pub(super) fn stage_and_commit(
 ) -> Result<Option<git2::Oid>, git2::Error> {
     stage_and_commit_with(
         repo,
-        removed_rel_path,
+        removed_rel_paths,
         rel_path,
         content,
         &[],
@@ -55,7 +55,7 @@ pub(super) fn stage_and_commit(
 /// files, e.g. the pinned datasheet a row references) into the same commit.
 pub(super) fn stage_and_commit_with(
     repo: &git2::Repository,
-    removed_rel_path: Option<&Path>,
+    removed_rel_paths: &[&Path],
     rel_path: &Path,
     content: Option<&[u8]>,
     extra_rel_paths: &[&Path],
@@ -93,16 +93,15 @@ pub(super) fn stage_and_commit_with(
     };
     let base = parent.as_ref().map(|c| c.tree()).transpose()?;
     let head_tree = base.clone();
-    let base = match (removed_rel_path, base) {
-        (Some(removed), Some(tree)) => {
-            let components: Vec<&std::ffi::OsStr> = removed.iter().collect();
-            match tree_without_path(repo, &tree, &components)? {
-                Some(id) => Some(repo.find_tree(id)?),
-                None => None,
-            }
-        }
-        (_, base) => base,
-    };
+    let mut base = base;
+    for removed in removed_rel_paths {
+        let Some(tree) = base.take() else { break };
+        let components: Vec<&std::ffi::OsStr> = removed.iter().collect();
+        base = match tree_without_path(repo, &tree, &components)? {
+            Some(id) => Some(repo.find_tree(id)?),
+            None => None,
+        };
+    }
     let components: Vec<&std::ffi::OsStr> = rel_path.iter().collect();
     let mut tree_id = tree_with_blob(repo, base.as_ref(), &components, blob)?;
     let mut staged: Vec<(&Path, git2::Oid)> = vec![(rel_path, blob)];
@@ -118,6 +117,8 @@ pub(super) fn stage_and_commit_with(
     }
     let tree = repo.find_tree(tree_id)?;
     let parents: Vec<&git2::Commit> = parent.iter().collect();
+    #[cfg(test)]
+    run_before_commit_hook();
     let oid = repo.commit(Some("HEAD"), signature, signature, message, &tree, &parents)?;
     // Best effort: a failure here leaves the index stale for this one path
     // (shown as a change by `git status`), never a wrong commit.
@@ -131,10 +132,10 @@ pub(super) fn stage_and_commit_with(
     let updated = retry_on_git_lock(repo.path(), || {
         let mut index = repo.index()?;
         index.read(true)?;
-        if let Some(removed) = removed_rel_path
-            && index.get_path(removed, 0).is_some()
-        {
-            index.remove_path(removed)?;
+        for removed in removed_rel_paths {
+            if index.get_path(removed, 0).is_some() {
+                index.remove_path(removed)?;
+            }
         }
         for (path, blob) in &staged {
             if *path == rel_path
@@ -180,6 +181,28 @@ pub(super) fn stage_and_commit_with(
         );
     }
     Ok(Some(oid))
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Runs once, on this thread, between resolving the parent commit and
+    /// making the commit: where a test moves HEAD under the commit.
+    static BEFORE_COMMIT: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Arrange for `hook` to run once just before the next commit this thread
+/// makes (see [`BEFORE_COMMIT`]).
+#[cfg(test)]
+pub(super) fn set_before_commit_hook(hook: impl FnOnce() + 'static) {
+    BEFORE_COMMIT.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
+}
+
+#[cfg(test)]
+fn run_before_commit_hook() {
+    if let Some(hook) = BEFORE_COMMIT.with(|slot| slot.borrow_mut().take()) {
+        hook();
+    }
 }
 
 /// The index entry `add_path` makes for `rel_path` from the working tree

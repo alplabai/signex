@@ -157,17 +157,6 @@ impl LocalGitAdapter {
         Ok(())
     }
 
-    /// Forget what is known about the file, so the next access reloads it.
-    /// For a file put back on disk whose bytes need not be what memory was
-    /// parsed from.
-    pub(super) fn forget_disk(&self) {
-        let mut known = self
-            .disk_stamp
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *known = None;
-    }
-
     /// Whether memory holds what this adapter last wrote, with no load from
     /// disk since (see [`KnownDisk::written`]). Asked under the write guard,
     /// after [`Self::reload_if_stale`].

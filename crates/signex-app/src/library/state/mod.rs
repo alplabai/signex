@@ -558,6 +558,8 @@ pub struct LibraryState {
     /// concurrent mounts of *different* libraries are both legitimate,
     /// so a single counter would cancel the wrong one.
     pub pending_mounts: HashMap<PathBuf, super::mount::MountIntent>,
+    /// Libraries holding saved changes that no git commit has yet (#858).
+    pub uncommitted: uncommitted::UncommittedState,
     /// An external-edit `stat` pass is running off-thread (#531); a tick
     /// that lands meanwhile is dropped rather than stacked behind it.
     pub external_poll_in_flight: bool,
@@ -740,6 +742,7 @@ mod symbol_choice;
 mod table_scan;
 #[cfg(test)]
 mod tests;
+mod uncommitted;
 mod under_folder;
 
 pub use methods::*;
@@ -751,3 +754,4 @@ pub use preview::*;
 pub use refresh::{LibrarySnapshot, RefreshFinish, RefreshStart};
 pub use relocate::rebase_path;
 pub use symbol_choice::SymbolChoiceRequests;
+pub use uncommitted::{CommitNowReport, UncommittedState};

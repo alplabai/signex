@@ -23,6 +23,7 @@ mod local_git_external_edits;
 mod local_git_project_adapter;
 mod local_git_rollback;
 mod local_git_row_base;
+mod local_git_uncommitted;
 mod local_git_unknown_keys;
 mod managed_vcs_files;
 mod migration_v1_to_v2;

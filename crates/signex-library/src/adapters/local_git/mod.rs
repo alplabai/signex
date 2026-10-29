@@ -39,7 +39,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use uuid::Uuid;
 
-use crate::adapter::{HistoryEntry, LibraryAdapter, LibraryError, PrimitiveSummary};
+use crate::adapter::{CommitOutcome, HistoryEntry, LibraryAdapter, LibraryError, PrimitiveSummary};
 use crate::component::ComponentRow;
 use crate::git_identity::identity_for_repo;
 use crate::identity::{InternalPn, RowId};
@@ -133,6 +133,8 @@ pub struct LocalGitAdapter {
     /// Encoded row lines from the last row write (#416). Lock order: after
     /// `library_file` and `disk_stamp`.
     row_lines: Mutex<crate::library_file::RowLines>,
+    /// Files saved whose commit failed (#858); see `uncommitted`.
+    uncommitted: Mutex<uncommitted::UncommittedLedger>,
 }
 
 impl LocalGitAdapter {
@@ -238,6 +240,7 @@ impl LocalGitAdapter {
             write_lock_warned: Default::default(),
             plain_token_warnings: Default::default(),
             row_lines: Mutex::default(),
+            uncommitted: Mutex::default(),
         })
     }
 
@@ -285,6 +288,7 @@ impl LocalGitAdapter {
             write_lock_warned: Default::default(),
             plain_token_warnings: Default::default(),
             row_lines: Mutex::default(),
+            uncommitted: Mutex::default(),
         })
     }
 
@@ -393,6 +397,7 @@ impl LocalGitAdapter {
             write_lock_warned: Default::default(),
             plain_token_warnings: Default::default(),
             row_lines: Mutex::default(),
+            uncommitted: Mutex::default(),
         })
     }
 
@@ -429,6 +434,7 @@ impl LocalGitAdapter {
 }
 
 mod adapter;
+mod commit_lock;
 mod disk_sync;
 /// `add_all` callback: stage everything except a write-lock file (#832).
 pub(crate) fn skip_write_lock_files(path: &Path, _spec: &[u8]) -> i32 {
@@ -446,6 +452,9 @@ pub(crate) mod lfs;
 mod pinned_assets;
 mod primitives;
 mod row_edit;
+mod uncommitted;
+#[cfg(test)]
+mod uncommitted_tests;
 mod write_lock;
 
 use helpers::*;
@@ -560,13 +569,21 @@ mod tests {
         let head = || repo.head().unwrap().target().unwrap();
 
         fs::write(adapter.root().join("note.txt"), "a").unwrap();
-        adapter.commit_path("note.txt", "", "add note").unwrap();
+        assert!(
+            adapter
+                .commit_path("note.txt", "", "add note")
+                .is_recorded()
+        );
         let first = head();
-        adapter.commit_path("note.txt", "", "again").unwrap();
+        assert!(adapter.commit_path("note.txt", "", "again").is_recorded());
         assert_eq!(head(), first, "unchanged tree must not commit");
 
         fs::write(adapter.root().join("note.txt"), "b").unwrap();
-        adapter.commit_path("note.txt", "", "edit note").unwrap();
+        assert!(
+            adapter
+                .commit_path("note.txt", "", "edit note")
+                .is_recorded()
+        );
         assert_ne!(head(), first, "a real change still commits");
     }
 

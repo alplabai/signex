@@ -57,6 +57,7 @@ impl Default for LibraryState {
             symbol_choice_requests: Default::default(),
             set: LibrarySet::new(),
             open_libraries: Vec::new(),
+            uncommitted: Default::default(),
             editors: HashMap::new(),
             where_used: WhereUsedIndex::new(),
             picker: None,
