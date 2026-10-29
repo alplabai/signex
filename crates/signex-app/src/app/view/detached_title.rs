@@ -53,6 +53,7 @@ pub(crate) fn detached_modal_title(modal: ModalId) -> &'static str {
         ModalId::LibraryPrimitivePicker => "Pick Primitive",
         ModalId::LibraryDocumentOptions => "Document Options",
         ModalId::LibraryCreateOptions => "Library Options",
+        ModalId::LibraryStockCopy => "Copy to Library",
         ModalId::LibraryUpdates => "Library Updates Available",
         ModalId::LibraryCloseConfirm => "Close Library",
         ModalId::LibraryDeleteConfirm => "Delete Component",

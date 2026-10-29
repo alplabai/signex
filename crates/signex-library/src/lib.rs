@@ -119,7 +119,7 @@ pub use primitive::{
     LayerId, LoadRepair, Pad, PadKind, PadShape, PinDirection, PinOrientation, PinSymbolKind,
     Polygon, PrimitiveKind, PrimitiveRef, SimKind, SimModel, StepAttachment, Symbol, SymbolFile,
     SymbolGraphic, SymbolGraphicKind, SymbolPin, chain_into_closed_contour,
-    normalize_arc_endpoints_deg,
+    normalize_arc_endpoints_deg, unique_copy_name,
 };
 pub use range_filter::{
     EQUALS_RELATIVE_TOLERANCE, RangeFilter, RangeOp, RangeVerdict, column_unit,
