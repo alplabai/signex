@@ -7,8 +7,7 @@
 //! the same write, and then moves the rows onto that version.
 
 use signex_app::app::{
-    ContextMenuMsg, FileMsg, FootprintDocument, Message, Signex, SymbolDocument, TabContextAction,
-    TabInfo, TabKind,
+    FileMsg, FootprintDocument, Message, Signex, SymbolDocument, TabInfo, TabKind,
 };
 use signex_library::adapter::LibraryAdapter;
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
@@ -614,6 +613,7 @@ fn closing_a_tab_that_still_owes_rows_keeps_the_editor() {
     assert!(f.app.document_state.tabs.iter().any(|t| t.dirty));
 
     let tabs = f.app.document_state.tabs.len();
+    use signex_app::app::{ContextMenuMsg, TabContextAction};
     let _ = f.app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
         TabContextAction::Close(tabs - 1),
     )));
