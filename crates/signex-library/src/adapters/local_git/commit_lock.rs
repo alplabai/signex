@@ -7,6 +7,9 @@
 //! failed commit. This advisory file lock, in the repository's git directory
 //! beside the library write locks, makes every commit path in this module
 //! take its turn. The OS drops it when the holder exits.
+//!
+//! It is the innermost lock of a write, held for one commit and never while
+//! waiting for another lock; the order is documented in `write_lock`.
 
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::path::Path;
