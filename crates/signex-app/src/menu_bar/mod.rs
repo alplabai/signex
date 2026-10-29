@@ -191,6 +191,7 @@ pub enum MenuMessage {
     PlaceText,
     /// Place ▸ No Connect — the no-connect tool.
     PlaceNoConnect,
+    /// Place ▸ Junction — the junction tool.
     PlaceJunction,
     // Design
     Annotate,

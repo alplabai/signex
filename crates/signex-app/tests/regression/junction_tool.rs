@@ -83,3 +83,32 @@ fn a_click_places_a_junction_at_the_point_and_undo_removes_it() {
     let _ = app.update(Message::Edit(EditMsg::Undo));
     assert!(doc(&app).junctions.is_empty());
 }
+
+#[test]
+fn a_second_click_on_the_same_point_leaves_one_junction() {
+    let mut app = app_with_empty_sheet();
+    let _ = app.update(Message::Menu(MenuMessage::PlaceJunction));
+    click(&mut app, 10.0, 20.0);
+    click(&mut app, 10.0, 20.0);
+    assert_eq!(doc(&app).junctions.len(), 1);
+    // The tool stays armed: a different point still places.
+    click(&mut app, 30.0, 20.0);
+    assert_eq!(doc(&app).junctions.len(), 2);
+}
+
+/// A dot off every wire joins nothing: the net list and the ERC output are
+/// the same with and without it.
+#[test]
+fn a_junction_off_any_wire_changes_neither_nets_nor_erc() {
+    let mut app = app_with_empty_sheet();
+    let before_nets = format!("{:?}", signex_net::build_netlist(doc(&app)));
+    let before_erc = format!("{:?}", signex_erc::run(doc(&app)));
+    let _ = app.update(Message::Menu(MenuMessage::PlaceJunction));
+    click(&mut app, 10.0, 20.0);
+    assert_eq!(doc(&app).junctions.len(), 1);
+    assert_eq!(
+        format!("{:?}", signex_net::build_netlist(doc(&app))),
+        before_nets
+    );
+    assert_eq!(format!("{:?}", signex_erc::run(doc(&app))), before_erc);
+}
