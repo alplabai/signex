@@ -52,6 +52,8 @@ pub(crate) struct NativeItem {
     pub id: String,
     pub label: String,
     pub enabled: bool,
+    /// `Some` renders a check item showing this state.
+    pub checked: Option<bool>,
     pub accelerator: Option<Accelerator>,
 }
 
@@ -181,7 +183,11 @@ impl Builder {
             Some(MenuMessage::OpenRecentProject(path)) => path.display().to_string(),
             _ => item.label.clone(),
         };
-        self.item_keyed(path, &key, &item.label, action, enabled, None)
+        let mut node = self.item_keyed(path, &key, &item.label, action, enabled, None);
+        if let NativeNode::Item(native) = &mut node {
+            native.checked = item.checked;
+        }
+        node
     }
 
     fn item(
@@ -212,6 +218,7 @@ impl Builder {
             id,
             label: label.to_owned(),
             enabled,
+            checked: None,
             accelerator,
         })
     }

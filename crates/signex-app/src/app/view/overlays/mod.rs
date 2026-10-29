@@ -16,6 +16,7 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 mod bars;
 mod modals;
+mod net_hover;
 pub(super) mod read_only_badge;
 
 impl Signex {
@@ -30,6 +31,11 @@ impl Signex {
         use iced::widget::{column, container, text};
         use iced::{Background, Border};
 
+        // A net card (a wire, pin or label, #1270) takes the place of the
+        // symbol card while the pointer rests on a pin.
+        if let Some(card) = &self.document_state.net_nav.hover.card {
+            return Some(self.view_net_hover_card(card));
+        }
         let interaction = &self.interaction_state;
         let uuid = interaction.hover_symbol_uuid?;
         let started = interaction.hover_started_at?;

@@ -16,6 +16,7 @@ mod link_policy;
 pub(crate) mod navigator_job;
 pub(crate) mod net_class_picks;
 pub(crate) mod net_class_styles;
+pub(crate) mod net_nav;
 pub(crate) mod ownership_index;
 mod path_key;
 mod pcb_revision;
@@ -468,6 +469,9 @@ pub struct DocumentState {
     pub page_setup_memory: PageSetupMemory,
     /// The sheet symbol each child tab was descended through (#1133).
     pub tab_placements: TabPlacements,
+    /// Sheet history, net highlight, hover insight and the project net index
+    /// they read (#1270, #1271, #1272).
+    pub net_nav: net_nav::NetNavState,
     /// Generation counter and in-flight job of the preview renderer.
     pub raster_queue: RasterQueue,
     /// The app's one user-visible error card. `Some` while it is shown;

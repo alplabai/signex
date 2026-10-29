@@ -150,7 +150,7 @@ fn a_locked_bar_greys_the_model_rows_and_keeps_the_app_menu() {
     assert!(!is_app_menu_id("Signexx/File"));
     let unlocked = spec_for(&ctx);
     match plan_refresh(Some(&unlocked), &built.spec) {
-        Refresh::Enablement(changes) => assert!(changes.iter().all(|(_, on)| !on)),
+        Refresh::Enablement(changes) => assert!(changes.iter().all(|change| !change.enabled)),
         other => panic!("locking must only flip enablement, got {other:?}"),
     }
 }
@@ -276,8 +276,8 @@ fn refresh_plan_follows_what_changed() {
     let open = spec_for(&variants().remove(1));
     match plan_refresh(Some(&base), &open) {
         Refresh::Enablement(changes) => {
-            assert!(changes.contains(&("File/Save".to_owned(), true)));
-            assert!(changes.iter().all(|(id, _)| !id.is_empty()));
+            assert!(changes.iter().any(|c| c.id == "File/Save" && c.enabled));
+            assert!(changes.iter().all(|c| !c.id.is_empty()));
         }
         other => panic!("expected an enablement update, got {other:?}"),
     }
@@ -301,28 +301,73 @@ fn refresh_plan_follows_what_changed() {
 #[test]
 fn inputs_compare_by_what_the_menu_reads() {
     let recent = recent_paths();
-    let a = MenuInputs::new(CommandContext::default(), &recent, false);
+    let a = MenuInputs::new(CommandContext::default(), &recent, false, Vec::new());
     assert_eq!(
         a,
-        MenuInputs::new(CommandContext::default(), &recent, false)
+        MenuInputs::new(CommandContext::default(), &recent, false, Vec::new())
     );
-    assert_ne!(a, MenuInputs::new(CommandContext::default(), &recent, true));
     assert_ne!(
         a,
-        MenuInputs::new(CommandContext::default(), &recent[1..], false)
+        MenuInputs::new(CommandContext::default(), &recent, true, Vec::new())
+    );
+    assert_ne!(
+        a,
+        MenuInputs::new(CommandContext::default(), &recent[1..], false, Vec::new())
     );
     let dirty = CommandContext {
         project_dirty: true,
         ..CommandContext::default()
     };
-    assert_ne!(a, MenuInputs::new(dirty, &recent, false));
+    assert_ne!(a, MenuInputs::new(dirty, &recent, false, Vec::new()));
+    let panels = vec![crate::panels::PanelKind::Properties];
+    assert_ne!(
+        a,
+        MenuInputs::new(CommandContext::default(), &recent, false, panels)
+    );
 }
 
 #[test]
 fn nothing_syncs_before_the_main_window_opens() {
-    let inputs = MenuInputs::new(CommandContext::default(), &[], false);
+    let inputs = MenuInputs::new(CommandContext::default(), &[], false, Vec::new());
     let mut state = NativeMenuState::default();
     assert!(!state.needs_sync(&inputs));
     state.arm();
     assert!(state.needs_sync(&inputs));
+}
+
+/// #103 - the panel rows' check marks reach the native spec and refresh in place.
+#[test]
+fn the_native_menu_carries_and_refreshes_the_check_mark() {
+    let closed = build(&menu_bar_model(&MenuContext::default()), false);
+    let open = build(
+        &menu_bar_model(&MenuContext {
+            open_panels: vec![crate::panels::PanelKind::Properties],
+            ..MenuContext::default()
+        }),
+        false,
+    );
+    let checked_of = |spec: &NativeMenuSpec| {
+        spec.menus
+            .iter()
+            .find(|m| m.title == "View")
+            .unwrap()
+            .nodes
+            .iter()
+            .find_map(|node| match node {
+                NativeNode::Item(i) if i.label == "Properties" => Some(i.checked),
+                _ => None,
+            })
+            .unwrap()
+    };
+    assert_eq!(checked_of(&closed.spec), Some(false));
+    assert_eq!(checked_of(&open.spec), Some(true));
+
+    match plan_refresh(Some(&closed.spec), &open.spec) {
+        Refresh::Enablement(changes) => {
+            assert_eq!(changes.len(), 1);
+            assert_eq!(changes[0].id, "View/Properties");
+            assert_eq!(changes[0].checked, Some(true));
+        }
+        other => panic!("a check mark moving must refresh in place, got {other:?}"),
+    }
 }

@@ -38,6 +38,8 @@ pub struct MenuItem {
     pub label: String,
     pub shortcut: Option<Shortcut>,
     pub state: ItemState,
+    /// `Some` for a toggle row (a panel): whether its check mark shows.
+    pub checked: Option<bool>,
 }
 
 /// A placeholder is a planned feature with no handler yet (greyed, "planned"
