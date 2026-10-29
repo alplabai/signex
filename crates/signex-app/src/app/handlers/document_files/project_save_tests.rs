@@ -149,6 +149,26 @@ fn a_library_that_cannot_be_created_stays_pending_and_is_reported() {
     );
 }
 
+/// Close Project through its real gate, discarding, while a write runs.
+fn close_project_discarding(fx: &mut Fx) {
+    use crate::app::{ContextMenuMsg, ProjectTreeAction};
+    let _ = fx
+        .app
+        .update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            ProjectTreeAction::CloseProject(vec![fx.id.to_string()]),
+        )));
+    let result = fx.app.resolve_sheet_refs_blocking();
+    let _ = fx
+        .app
+        .update(Message::Project(ProjectMsg::CloseRefsResolved {
+            project_id: fx.id,
+            result,
+        }));
+    let _ = fx.app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+}
+
 #[test]
 fn a_completion_for_a_closed_project_changes_nothing() {
     let _ = crate::diagnostics::init_logging();
@@ -158,7 +178,8 @@ fn a_completion_for_a_closed_project_changes_nothing() {
     let task = fx.app.begin_project_save(fx.id).expect("planned");
     let done = run(task);
 
-    fx.app.document_state.projects.clear();
+    close_project_discarding(&mut fx);
+    assert!(fx.app.document_state.projects.is_empty(), "really closed");
     drop(deliver(&mut fx.app, done));
 
     assert!(fx.app.document_state.projects.is_empty());
@@ -176,7 +197,8 @@ fn a_completion_for_a_reopened_project_does_not_touch_the_new_one() {
     let task = fx.app.begin_project_save(fx.id).expect("planned");
     let done = run(task);
 
-    // Closed and reopened at the same path: a different loaded project.
+    // Open is refused while a write runs, so this cannot happen today; it
+    // pins that a completion never reaches a project it did not start from.
     let mut reopened = fx.app.document_state.projects.remove(0);
     reopened.id = fx.app.document_state.mint_project_id();
     reopened.pending_libraries.clear();
@@ -287,4 +309,108 @@ fn quit_save_all_with_a_write_in_flight_stays_open() {
 
     drop(deliver(&mut fx.app, run(running)));
     assert!(!is_dirty(&fx), "the running write still lands");
+}
+
+/// A pending library `New` of `fx`, created on disk the way a worker that
+/// crashed before the project file was written would have left it.
+fn leave_created_library_behind(fx: &Fx, id: uuid::Uuid) {
+    let spec = fx.app.document_state.projects[0].pending_libraries[&fx.lib_id].clone();
+    crate::library::commands::create_pending_library(id, &spec, &Default::default())
+        .expect("created");
+}
+
+#[test]
+fn a_retry_adopts_the_library_a_crashed_save_left_behind() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    leave_created_library_behind(&fx, fx.lib_id);
+    let task = fx.app.begin_project_save(fx.id).expect("planned");
+
+    drop(deliver(&mut fx.app, run(task)));
+
+    let project = &fx.app.document_state.projects[0];
+    assert!(project.pending_libraries.is_empty(), "no longer stuck");
+    assert_eq!(project.data.libraries.len(), 1);
+    assert!(!is_dirty(&fx));
+}
+
+#[test]
+fn another_library_at_the_path_is_still_refused() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    leave_created_library_behind(&fx, uuid::Uuid::now_v7());
+    let task = fx.app.begin_project_save(fx.id).expect("planned");
+
+    drop(deliver(&mut fx.app, run(task)));
+
+    let project = &fx.app.document_state.projects[0];
+    assert!(project.pending_libraries.contains_key(&fx.lib_id));
+    assert!(project.data.libraries.is_empty());
+    assert!(is_dirty(&fx));
+}
+
+#[test]
+fn an_edit_reverted_while_a_save_is_queued_ends_clean_with_no_extra_write() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    fx.app.document_state.projects[0].pending_libraries.clear();
+    fx.app.document_state.projects[0].data.description = Some("a".into());
+    let first = fx.app.begin_project_save(fx.id).expect("planned");
+    fx.app.document_state.projects[0].data.description = Some("ab".into());
+    assert!(outputs(fx.app.begin_project_save(fx.id).expect("queued")).is_empty());
+    fx.app.document_state.projects[0].data.description = Some("a".into());
+
+    let follow_up = deliver(&mut fx.app, run(first));
+
+    let writes = outputs(follow_up)
+        .iter()
+        .filter(|m| matches!(m, Message::Project(ProjectMsg::FileSaved(_))))
+        .count();
+    assert_eq!(writes, 0, "memory already equals what was written");
+    assert!(!is_dirty(&fx));
+    let on_disk = signex_types::project::parse_project(&fx.prj).unwrap();
+    assert_eq!(on_disk.description.as_deref(), Some("a"));
+}
+
+fn head_blob(dir: &Path, rel: &str) -> Vec<u8> {
+    let repo = git2::Repository::open(dir).expect("repo");
+    let tree = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .tree()
+        .unwrap();
+    let entry = tree.get_path(Path::new(rel)).expect("entry");
+    repo.find_blob(entry.id()).unwrap().content().to_vec()
+}
+
+/// #1512: the "Save" commit records the bytes the write put on disk, not
+/// whatever the file holds when the commit worker reads it.
+#[test]
+fn the_save_commit_records_the_written_bytes_not_a_later_edit_of_the_file() {
+    use super::restore_commit_tests::{commit_revision, run_task};
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    fx.app.document_state.projects[0].pending_libraries.clear();
+    commit_revision(tmp.path(), &fx.prj, "{}");
+    fx.app.document_state.projects[0].data.enable_git = true;
+    fx.app.document_state.projects[0].data.description = Some("saved".into());
+    fx.app.document_state.mark_document_dirty(&fx.prj);
+    let task = fx.app.begin_project_save(fx.id).expect("planned");
+
+    // Not `update`: it would drain the commit queue before we look at it.
+    let Message::Project(ProjectMsg::FileSaved(done)) = run(task) else {
+        panic!("a save completion");
+    };
+    let written = done.bytes.clone();
+    drop(fx.app.handle_project_file_saved(*done));
+    assert_eq!(fx.app.document_state.pending_git_commits.len(), 1);
+
+    std::fs::write(&fx.prj, b"someone else's edit").unwrap();
+    let commits = fx.app.drain_pending_git_commits();
+    run_task(&mut fx.app, commits);
+
+    let rel = fx.prj.file_name().unwrap().to_string_lossy().into_owned();
+    assert_eq!(head_blob(tmp.path(), &rel), written);
 }

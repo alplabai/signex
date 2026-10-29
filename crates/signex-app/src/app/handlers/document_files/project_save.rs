@@ -141,7 +141,7 @@ impl Signex {
         // created is on disk, so the project must list it and drop it from
         // the pending set, or the next save would fail on "already exists".
         let (mounts, failed) = self.apply_created_libraries(project_id, &path, libraries);
-        self.settle_project_write(project_id, &path, sequence, &bytes, result);
+        self.settle_project_write(project_id, &path, sequence, bytes, result);
         if !failed.is_empty() {
             let error = unmaterialised_error(&path, &failed);
             // Save All names this reason for the file it kept unsaved.
@@ -165,12 +165,12 @@ impl Signex {
     ) -> (Task<Message>, Vec<String>) {
         let mut failed = Vec::new();
         let mut to_mount = Vec::new();
-        for LibraryCreated {
-            library_id,
-            spec,
-            result,
-        } in libraries
-        {
+        for created in libraries {
+            let LibraryCreated {
+                library_id,
+                spec,
+                result,
+            } = created;
             if let Err(error) = result {
                 tracing::warn!(
                     target: "signex::library",
@@ -183,45 +183,60 @@ impl Signex {
                 failed.push(format!("{} ({error})", spec.display_name));
                 continue;
             }
-            let registered = self
-                .document_state
-                .project_by_id_mut(project_id)
-                .filter(|loaded| loaded.path == path)
-                .and_then(|loaded| {
-                    loaded.pending_libraries.remove(&library_id)?;
-                    crate::library::commands::register_library_entry(
-                        &mut loaded.data,
-                        &spec.lib_path,
-                        library_id,
-                        loaded.case_fold,
-                    );
-                    Some(())
-                });
-            if registered.is_none() {
-                crate::diagnostics::log_warning(format!(
-                    "[save] The library {} was created, but project {} no longer asks for it; \
-                     it is on disk and not in the project",
-                    spec.lib_path.display(),
-                    path.display()
-                ));
+            if !self.register_created_library(project_id, path, library_id, &spec) {
                 continue;
             }
-            tracing::info!(
-                target: "signex::library",
-                project = %path.display(),
-                library = %spec.lib_path.display(),
-                library_id = %library_id,
-                "materialised pending library"
-            );
-            if matches!(
-                self.library
-                    .request_mount(&spec.lib_path, MountIntent::Silent),
-                MountRequest::Spawn
-            ) {
+            let request = self
+                .library
+                .request_mount(&spec.lib_path, MountIntent::Silent);
+            if matches!(request, MountRequest::Spawn) {
                 to_mount.push(spec.lib_path);
             }
         }
         (spawn_pending_mounts(to_mount), failed)
+    }
+
+    /// List a created library on the project that still has it pending and
+    /// drop the pending entry. False, with a Messages warning, when that
+    /// project is gone or no longer wants it.
+    fn register_created_library(
+        &mut self,
+        project_id: ProjectId,
+        path: &Path,
+        library_id: uuid::Uuid,
+        spec: &crate::library::commands::PendingLibrarySpec,
+    ) -> bool {
+        let registered = self
+            .document_state
+            .project_by_id_mut(project_id)
+            .filter(|loaded| loaded.path == path)
+            .and_then(|loaded| {
+                loaded.pending_libraries.remove(&library_id)?;
+                crate::library::commands::register_library_entry(
+                    &mut loaded.data,
+                    &spec.lib_path,
+                    library_id,
+                    loaded.case_fold,
+                );
+                Some(())
+            });
+        if registered.is_none() {
+            crate::diagnostics::log_warning(format!(
+                "[save] The library {} was created, but project {} no longer asks for it; \
+                 it is on disk and not in the open project",
+                spec.lib_path.display(),
+                path.display()
+            ));
+            return false;
+        }
+        tracing::info!(
+            target: "signex::library",
+            project = %path.display(),
+            library = %spec.lib_path.display(),
+            library_id = %library_id,
+            "materialised pending library"
+        );
+        true
     }
 
     /// Decide what the write's result means for the project: failures reach
@@ -233,40 +248,12 @@ impl Signex {
         project_id: ProjectId,
         path: &Path,
         sequence: u64,
-        bytes: &[u8],
+        bytes: Vec<u8>,
         result: Result<SaveOutcome, String>,
     ) {
-        match result {
-            Ok(SaveOutcome::Written) => {}
-            // A newer write of this file landed first; its own completion
-            // decides.
-            Ok(SaveOutcome::Superseded) => return,
-            // An older write failing late says nothing about the file now:
-            // the newest write's completion decides, so only log it.
-            Err(reason)
-                if !self
-                    .document_state
-                    .document_saves
-                    .is_newest_begun(path, sequence) =>
-            {
-                crate::diagnostics::log_warning(format!(
-                    "[save] An earlier write of project {} failed after a newer one began: {reason}",
-                    path.display()
-                ));
-                return;
-            }
-            Err(reason) => {
-                self.document_state
-                    .document_saves
-                    .record_failure(path.to_path_buf(), reason.clone());
-                self.report_save_failure("Failed to save project file", &anyhow::anyhow!(reason));
-                return;
-            }
+        if !self.note_project_write_result(path, sequence, result) {
+            return;
         }
-        // The file on disk changed behind every engine (#1401).
-        self.document_state.note_documents_changed();
-        self.document_state.document_saves.clear_failure(path);
-        crate::diagnostics::log_info(format!("[save] Wrote project {}", path.display()));
         let newest = self
             .document_state
             .document_saves
@@ -282,13 +269,57 @@ impl Signex {
                             .is_ok_and(|now| now == bytes)
                 });
         if unchanged {
-            self.finish_clean_project_save(path);
+            let saved = crate::app::state::CommitBytes {
+                bytes: std::sync::Arc::new(bytes),
+                sequence,
+            };
+            self.finish_clean_project_save(path, saved);
         } else if self.document_state.is_document_dirty(path) {
             crate::diagnostics::log_info(format!(
                 "[save] {} changed while it was being written; it stays modified",
                 path.display()
             ));
         }
+    }
+
+    /// Record the write's outcome. True when the file was written, so the
+    /// caller may go on to decide whether the project is clean.
+    fn note_project_write_result(
+        &mut self,
+        path: &Path,
+        sequence: u64,
+        result: Result<SaveOutcome, String>,
+    ) -> bool {
+        let newest = self
+            .document_state
+            .document_saves
+            .is_newest_begun(path, sequence);
+        match result {
+            Ok(SaveOutcome::Written) => {}
+            // Defensive: one writer per file, so no newer write can have
+            // landed first. If one ever did, its completion decides.
+            Ok(SaveOutcome::Superseded) => return false,
+            // Defensive, same reason: only the newest write's failure counts.
+            Err(reason) if !newest => {
+                crate::diagnostics::log_warning(format!(
+                    "[save] An earlier write of project {} failed after a newer one began: {reason}",
+                    path.display()
+                ));
+                return false;
+            }
+            Err(reason) => {
+                self.document_state
+                    .document_saves
+                    .record_failure(path.to_path_buf(), reason.clone());
+                self.report_save_failure("Failed to save project file", &anyhow::anyhow!(reason));
+                return false;
+            }
+        }
+        // The file on disk changed behind every engine (#1401).
+        self.document_state.note_documents_changed();
+        self.document_state.document_saves.clear_failure(path);
+        crate::diagnostics::log_info(format!("[save] Wrote project {}", path.display()));
+        true
     }
 
     /// Run the save asked for while the write of `path` was running, if the
@@ -314,16 +345,15 @@ impl Signex {
         }
     }
 
-    /// The project's bytes on disk match it: clear the marker, queue the
-    /// project git commit, refresh the tree's dirty dot.
-    fn finish_clean_project_save(&mut self, path: &Path) {
+    /// The project's bytes on disk match it: clear the marker and queue the
+    /// project git commit of exactly `saved`. The caller refreshes the panels.
+    fn finish_clean_project_save(&mut self, path: &Path, saved: crate::app::state::CommitBytes) {
         self.document_state.mark_document_clean(path);
         let label = path
             .file_name()
             .map(|f| f.to_string_lossy().into_owned())
             .unwrap_or_else(|| path.display().to_string());
-        self.commit_save_to_project_git(path, &format!("Save {label}"));
-        self.refresh_panel_ctx();
+        self.commit_bytes_to_project_git(path, &format!("Save {label}"), saved);
     }
 }
 

@@ -148,6 +148,12 @@ fn a_failed_write_is_recorded_and_the_queued_save_that_follows_clears_it() {
             .is_none(),
         "a later success forgets the failure"
     );
+    // Kept on purpose: the first write really failed, so its Save Failed
+    // card stays until the user dismisses it.
+    assert!(
+        f.app.document_state.error_notice.is_some(),
+        "the card of the failed write is still shown"
+    );
 }
 
 #[test]

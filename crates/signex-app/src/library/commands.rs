@@ -179,6 +179,12 @@ pub(crate) fn create_pending_library(
     defaults: &super::state::NewLibraryDefaults,
 ) -> Result<(), LibraryError> {
     if spec.lib_path.exists() {
+        // A crash after the init but before the project file listed the
+        // library leaves this exact library behind; adopting it lets the
+        // retry finish. Anything else at the path is not ours to touch.
+        if existing_library_id(&spec.lib_path) == Some(library_id) {
+            return Ok(());
+        }
         return Err(LibraryError::Conflict(format!(
             "{} already exists (pending materialise)",
             spec.lib_path.display()
@@ -194,6 +200,13 @@ pub(crate) fn create_pending_library(
         },
     )?;
     Ok(())
+}
+
+/// The `library_id` of the library already at `path`, if it opens as one.
+fn existing_library_id(path: &Path) -> Option<Uuid> {
+    use signex_library::LibraryAdapter as _;
+    let adapter = LocalGitAdapter::open(path).ok()?;
+    Some(adapter.manifest().library.library_id)
 }
 
 /// Create a library on its own at `lib_path`, not attached to any project:

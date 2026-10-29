@@ -99,6 +99,9 @@ libraries it lists, and a single completion then holds both outcomes for one
    `request_mount`. This runs whatever the write's own result was, since the
    library is on disk and a retry would fail on "already exists". A library
    nothing asks for any more is reported and left on disk.
+   `create_pending_library` accepts a library already at the path when its
+   manifest has the same `library_id`, so a save lost between the init and the
+   file write is finished by the retry.
 2. A library that could not be created stays pending and is reported (Messages
    panel and the Save Failed card); the file is still written without it and
    the project stays modified.
