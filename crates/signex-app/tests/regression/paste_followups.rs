@@ -345,11 +345,13 @@ fn a_numbers_read_answers_only_the_dialog_that_asked() {
     );
 }
 
+/// The redraw happens in `update`, so the Save task is never run: running it
+/// would write the prefs file every test in this binary shares.
 #[test]
 fn saving_the_designator_preference_redraws_an_armed_stamp_ghost() {
-    let _serial = crate::preferences_prefs_recovery::serial();
-    let _guard = crate::preferences_prefs_recovery::PrefsPathGuard::capture();
-    let inner = crate::preferences_prefs_recovery::inner;
+    use signex_app::app::PreferencesMsg;
+    use signex_app::preferences::PrefMsg;
+    let inner = |msg| Message::Preferences(PreferencesMsg::Inner(msg));
     let mut app = app_with_sheet(populated_sheet());
     app.ui_state.paste_designators = PasteDesignators::Keep;
     select(&mut app, &[("R1", 1)], false);
@@ -360,11 +362,10 @@ fn saving_the_designator_preference_redraws_an_armed_stamp_ghost() {
     );
     assert_eq!(ghost_references(&app), ["R1"]);
 
-    let _ = app.update(Message::Preferences(signex_app::app::PreferencesMsg::Open));
-    let _ = app.update(inner(
-        signex_app::preferences::PrefMsg::DraftPasteDesignators(PasteDesignators::NextFree),
-    ));
-    let task = app.update(inner(signex_app::preferences::PrefMsg::Save));
-    crate::drive::drive(&mut app, task);
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+    let _ = app.update(inner(PrefMsg::DraftPasteDesignators(
+        PasteDesignators::NextFree,
+    )));
+    let _task = app.update(inner(PrefMsg::Save));
     assert_eq!(ghost_references(&app), ["R4"]);
 }

@@ -71,6 +71,7 @@ impl Signex {
 
         self.interaction_state.active_canvas_mut().selected = cuttable;
         let previous_copy = self.interaction_state.clipboard.clone();
+        let previous_text = self.interaction_state.clipboard_text.clone();
         // Cut deletes only what the copy now holds: if the copy failed (the
         // reason is in the Messages panel), nothing is deleted.
         if self.handle_selection_copy_requested() != CopyOutcome::Carried {
@@ -78,6 +79,7 @@ impl Signex {
                 "Cut cancelled: the selection could not be copied, so nothing was deleted.",
             );
             self.interaction_state.clipboard = previous_copy;
+            self.interaction_state.clipboard_text = previous_text;
             self.interaction_state.active_canvas_mut().selected = selected;
             return Task::none();
         }
@@ -88,6 +90,7 @@ impl Signex {
                 "Cut cancelled: the selection could not be deleted, so nothing was copied.",
             );
             self.interaction_state.clipboard = previous_copy;
+            self.interaction_state.clipboard_text = previous_text;
             self.interaction_state.active_canvas_mut().selected = selected;
             return Task::none();
         }
