@@ -9,6 +9,7 @@ use crate::alternate_symbol::AlternateSymbol;
 use crate::cascade::{CascadeKind, PrimitiveSave, apply_cascade_bump, needs_bump};
 use crate::component::{DatasheetRef, PlmReserved};
 use crate::distributor::PriceBreak;
+use crate::footprint_binding::FootprintBinding;
 use crate::identity::ComponentClass;
 use crate::library_file::{FORMAT_TOKEN, LibrarySection};
 use crate::lifecycle::LifecycleState;
@@ -67,6 +68,17 @@ pub(super) fn random_row(rng: &mut Rng, w: &World, row_id: Uuid) -> ComponentRow
             "IEC",
         ));
     }
+    let footprint = w.footprints[rng.below(w.footprints.len())];
+    let mut alternate_footprints = Vec::new();
+    if rng.one_in(5) {
+        let alt = w
+            .footprints
+            .iter()
+            .find(|f| **f != footprint)
+            .copied()
+            .unwrap();
+        alternate_footprints.push(FootprintBinding::new(PrimitiveRef::new(w.lib, alt)));
+    }
     let description = if rng.one_in(3) {
         "100 nF \"X7R\" µ".to_string()
     } else {
@@ -81,10 +93,8 @@ pub(super) fn random_row(rng: &mut Rng, w: &World, row_id: Uuid) -> ComponentRow
         datasheet: DatasheetRef::default(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(w.lib, symbol),
-        footprint_ref: Some(PrimitiveRef::new(
-            w.lib,
-            w.footprints[rng.below(w.footprints.len())],
-        )),
+        footprint_ref: Some(PrimitiveRef::new(w.lib, footprint)),
+        alternate_footprints,
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Acme", pn),

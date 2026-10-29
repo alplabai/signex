@@ -310,6 +310,14 @@ pub fn remove(recovery_dir: &Path, document: &Path) -> Result<(), String> {
 /// once the copy sits under the new key, so a move that fails until the app
 /// quits is finished by the next run instead of stranding the copy.
 pub fn rename(recovery_dir: &Path, from: &Path, to: &Path) -> Result<(), String> {
+    rename_landing(recovery_dir, from, to).map(|_| ())
+}
+
+/// [`rename`], saying whether the copy itself now sits under the new key
+/// (`false`: there was none to move, or the new key already held a copy and
+/// the newest of the two was kept there). A caller that must undo what the
+/// move brought in removes the new key only on `true`.
+pub fn rename_landing(recovery_dir: &Path, from: &Path, to: &Path) -> Result<bool, String> {
     // A copy of `from` still under another key form is brought to the current
     // key first. If that fails the move stays owed: journalled, and reported.
     if let Err(why) = adopt_legacy(recovery_dir, from) {
@@ -325,14 +333,15 @@ pub fn rename(recovery_dir: &Path, from: &Path, to: &Path) -> Result<(), String>
     let Some(src) = src.filter(|src| *src != dst) else {
         // Nothing to move: an entry for `from` would only mislead.
         pending_move::clear(recovery_dir, from);
-        return Ok(());
+        return Ok(false);
     };
     // A journal that cannot be written must not block the move itself.
     if let Err(reason) = pending_move::record(recovery_dir, from, to) {
         crate::diagnostics::log_warning(reason);
     }
+    let mut landed = false;
     match move_no_replace(&src, &dst) {
-        Ok(()) => {}
+        Ok(()) => landed = true,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         // The new path already holds a copy: the newest is offered under it
         // and the other is set aside, never deleted. On failure the journal
@@ -349,7 +358,7 @@ pub fn rename(recovery_dir: &Path, from: &Path, to: &Path) -> Result<(), String>
         }
     }
     pending_move::clear_if(recovery_dir, from, std::slice::from_ref(&to.to_path_buf()));
-    Ok(())
+    Ok(landed)
 }
 
 #[cfg(test)]

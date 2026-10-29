@@ -29,6 +29,7 @@ pub(crate) fn test_row() -> signex_library::ComponentRow {
         symbol_ref: PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7()),
         alternate_symbols: Vec::new(),
         footprint_ref: None,
+        alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),

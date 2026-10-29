@@ -340,7 +340,13 @@ pub(crate) fn row_binds_to(row: &ComponentRow, save: &PrimitiveSave) -> bool {
         CascadeKind::Symbol => {
             row.symbol_ref == target || row.alternate_symbols.iter().any(|a| a.symbol_ref == target)
         }
-        CascadeKind::Footprint => row.footprint_ref == Some(target),
+        CascadeKind::Footprint => {
+            row.footprint_ref == Some(target)
+                || row
+                    .alternate_footprints
+                    .iter()
+                    .any(|a| a.footprint == target)
+        }
         CascadeKind::Sim => row.sim_ref == Some(target),
     }
 }
@@ -359,7 +365,17 @@ fn is_pinned_at(row: &ComponentRow, save: &PrimitiveSave) -> bool {
                     .filter(|a| a.symbol_ref == target)
                     .all(|a| a.symbol_version == save.version)
         }
-        CascadeKind::Footprint => row.footprint_version == save.version,
+        CascadeKind::Footprint => {
+            let default_ok =
+                row.footprint_ref != Some(target) || row.footprint_version == save.version;
+            // An alternate with no pinned version follows latest: no pin to move.
+            default_ok
+                && row
+                    .alternate_footprints
+                    .iter()
+                    .filter(|a| a.footprint == target && !a.version.is_empty())
+                    .all(|a| a.version == save.version)
+        }
         CascadeKind::Sim => row.sim_version == save.version,
     }
 }
@@ -384,10 +400,25 @@ fn bump_symbol_pins(row: &mut ComponentRow, target: PrimitiveRef, version: &str)
     }
 }
 
+/// Re-pin the default footprint, and every alternate that binds `target`
+/// and holds a pin.
+fn bump_footprint_pins(row: &mut ComponentRow, target: PrimitiveRef, version: &str) {
+    if row.footprint_ref == Some(target) {
+        row.footprint_version = version.to_string();
+    }
+    for alt in row
+        .alternate_footprints
+        .iter_mut()
+        .filter(|a| a.footprint == target && !a.version.is_empty())
+    {
+        alt.version = version.to_string();
+    }
+}
+
 pub(crate) fn apply_cascade_bump(row: &mut ComponentRow, save: &PrimitiveSave) {
     match save.kind {
         CascadeKind::Symbol => bump_symbol_pins(row, save.target(), &save.version),
-        CascadeKind::Footprint => row.footprint_version = save.version.clone(),
+        CascadeKind::Footprint => bump_footprint_pins(row, save.target(), &save.version),
         CascadeKind::Sim => row.sim_version = save.version.clone(),
     }
     row.version = patch_bump(&row.version);
@@ -550,6 +581,7 @@ mod tests {
                 state: LifecycleState::Draft,
                 symbol_ref: PrimitiveRef::new(library_id, symbol),
                 footprint_ref: None,
+                alternate_footprints: Vec::new(),
                 sim_ref: None,
                 pin_map_overrides: Vec::new(),
                 primary_mpn: ManufacturerPart::draft("Acme", pn),
@@ -584,6 +616,54 @@ mod tests {
                 uuid: symbol,
                 version: "0.0.2".into(),
             }
+        }
+
+        fn footprint_save(lib: Uuid, footprint: Uuid) -> PrimitiveSave {
+            PrimitiveSave {
+                kind: CascadeKind::Footprint,
+                library_id: lib,
+                uuid: footprint,
+                version: "0.0.2".into(),
+            }
+        }
+
+        /// A footprint used only as an alternate is found by the cascade and
+        /// bumps that alternate's own pin; the default, other alternates and
+        /// an unpinned alternate are left alone (#1234).
+        #[test]
+        fn an_alternate_footprint_pin_is_bumped_on_its_own() {
+            use crate::footprint_binding::FootprintBinding;
+            let dir = tempfile::tempdir().unwrap();
+            let (_file, adapter, lib) = library(dir.path());
+            let (default, pinned, unpinned) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
+            let mut r = row("R-ALT", lib, Uuid::now_v7());
+            r.footprint_ref = Some(PrimitiveRef::new(lib, default));
+            r.footprint_version = "0.0.1".into();
+            let mut a = FootprintBinding::new(PrimitiveRef::new(lib, pinned));
+            a.version = "0.0.1".into();
+            r.alternate_footprints =
+                vec![a, FootprintBinding::new(PrimitiveRef::new(lib, unpinned))];
+            let id = RowId::from_uuid(r.row_id);
+            adapter.insert_row("R", r, "seed").unwrap();
+
+            let run = |uuid| {
+                cascade_after_saves(
+                    &adapter,
+                    &[footprint_save(lib, uuid)],
+                    WorkflowMode::Personal,
+                )
+                .unwrap()
+            };
+            assert_eq!(run(pinned).auto_bumped, vec![id]);
+            let after = read(&adapter, id);
+            assert_eq!(after.alternate_footprints[0].version, "0.0.2");
+            assert_eq!(after.footprint_version, "0.0.1");
+            assert!(after.alternate_footprints[1].version.is_empty());
+            assert_eq!(after.version, "0.0.2");
+
+            assert!(run(pinned).auto_bumped.is_empty(), "already current");
+            assert!(run(unpinned).auto_bumped.is_empty(), "follows latest");
+            assert_eq!(read(&adapter, id).version, "0.0.2");
         }
 
         fn read(adapter: &LocalGitAdapter, id: RowId) -> ComponentRow {

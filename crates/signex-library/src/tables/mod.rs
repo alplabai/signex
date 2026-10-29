@@ -34,6 +34,7 @@ use serde::de::DeserializeOwned;
 
 use crate::adapter::LibraryError;
 use crate::component::{ComponentRow, DatasheetDoc, DatasheetRef, PinPadOverride, PlmReserved};
+use crate::footprint_binding::{FootprintBinding, decode_footprint_cell, encode_footprint_cell};
 use crate::identity::{ComponentClass, InternalPn};
 use crate::lifecycle::LifecycleState;
 use crate::manufacturer::{DistributorListing, ManufacturerPart};
@@ -159,6 +160,20 @@ fn lifecycle_from_cell(s: &str) -> Result<LifecycleState, LibraryError> {
     })
 }
 
+/// The `footprint_ref` cell: the single [`PrimitiveRef`] object (or empty)
+/// for a row with no alternates, byte-identical to before #1234, else the
+/// array form of [`crate::footprint_binding`].
+fn footprint_to_cell(row: &ComponentRow) -> Result<String, LibraryError> {
+    encode_footprint_cell(row.footprint_ref.as_ref(), &row.alternate_footprints)
+        .map_err(|e| LibraryError::Backend(format!("footprint_ref: {e}")))
+}
+
+type FootprintCell = (Option<PrimitiveRef>, Vec<FootprintBinding>);
+
+fn footprint_from_cell(s: &str) -> Result<FootprintCell, LibraryError> {
+    decode_footprint_cell(s).map_err(|e| LibraryError::Backend(format!("footprint_ref: {e}")))
+}
+
 fn opt_primitive_to_cell(p: &Option<PrimitiveRef>) -> Result<String, LibraryError> {
     match p {
         None => Ok(String::new()),
@@ -265,7 +280,7 @@ pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryEr
         datasheet_to_cell(row)?,
         lifecycle_to_cell(row.state).to_string(),
         json_cell(&row.symbol_ref)?,
-        opt_primitive_to_cell(&row.footprint_ref)?,
+        footprint_to_cell(row)?,
         opt_primitive_to_cell(&row.sim_ref)?,
         primary_mpn,
         alternates,
@@ -310,7 +325,7 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
     let documents = datasheet_from_cell(cell(3))?;
     let state = lifecycle_from_cell(cell(4))?;
     let symbol_ref: PrimitiveRef = from_json_cell(cell(5), "symbol_ref")?;
-    let footprint_ref = opt_primitive_from_cell(cell(6))?;
+    let (footprint_ref, alternate_footprints) = footprint_from_cell(cell(6))?;
     let sim_ref = opt_primitive_from_cell(cell(7))?;
     let primary_mpn: ManufacturerPart = from_json_cell(cell(8), "primary_mpn")?;
     let alternates: Vec<ManufacturerPart> = from_json_cell(cell(9), "alternates")?;
@@ -356,6 +371,7 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
         symbol_ref,
         alternate_symbols,
         footprint_ref,
+        alternate_footprints,
         sim_ref,
         pin_map_overrides,
         primary_mpn,

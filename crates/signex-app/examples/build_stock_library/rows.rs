@@ -312,6 +312,7 @@ pub fn stock_rows() -> Result<Vec<ComponentRow>, Box<dyn Error>> {
             symbol_ref: PrimitiveRef::new(library_id, symbol_ids(spec.symbol).1),
             alternate_symbols: Vec::new(),
             footprint_ref,
+            alternate_footprints: Vec::new(),
             sim_ref: None,
             pin_map_overrides: Vec::new(),
             primary_mpn: ManufacturerPart::draft("", ""),

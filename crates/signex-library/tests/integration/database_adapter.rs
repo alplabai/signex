@@ -541,6 +541,7 @@ pub(super) fn mk_row(pn: &str, class: &str) -> ComponentRow {
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
         footprint_ref: Some(PrimitiveRef::new(lib, Uuid::now_v7())),
+        alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Vishay", "CRCW08051002F"),
@@ -1085,5 +1086,100 @@ fn row_writes_are_refused_against_an_old_server() {
                 );
             },
         );
+    }
+}
+
+fn row_with_alternate_footprint() -> ComponentRow {
+    use signex_library::footprint_binding::FootprintBinding;
+    let mut row = mk_row("U9", "opamp");
+    row.server_revision = Some(1);
+    row.footprint_ref = Some(PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7()));
+    row.alternate_footprints = vec![FootprintBinding::new(PrimitiveRef::new(
+        Uuid::now_v7(),
+        Uuid::now_v7(),
+    ))];
+    row
+}
+
+/// Run `insert_row` (or `update_row`) against a mock that echoes `row`,
+/// with or without its alternate footprints, and return the call's result.
+fn write_row_echoing(
+    insert: bool,
+    row: ComponentRow,
+    strip_alternates: bool,
+) -> Result<(), signex_library::LibraryError> {
+    let mut echoed = row.clone();
+    if strip_alternates {
+        echoed.alternate_footprints.clear();
+    }
+    echoed.server_revision = Some(2);
+    let reply = serde_json::to_value(&echoed).unwrap();
+    let (verb, url_path, status) = if insert {
+        ("POST", "/tables/ics/rows".to_string(), 201)
+    } else {
+        ("PUT", format!("/tables/ics/rows/{}", row.row_id), 200)
+    };
+    let outcome = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let slot = outcome.clone();
+    with_mock_server(
+        move |server| {
+            Box::pin(async move {
+                // Both writes check part-number uniqueness first (#1613).
+                Mock::given(method("GET"))
+                    .and(path("/tables"))
+                    .respond_with(
+                        ResponseTemplate::new(200).set_body_json(serde_json::json!(["ics"])),
+                    )
+                    .mount(server)
+                    .await;
+                Mock::given(method("GET"))
+                    .and(path("/tables/ics"))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+                    .mount(server)
+                    .await;
+                Mock::given(method(verb))
+                    .and(path(url_path.as_str()))
+                    .respond_with(ResponseTemplate::new(status).set_body_json(reply))
+                    .expect(0..=1)
+                    .mount(server)
+                    .await;
+            })
+        },
+        move |adapter| {
+            let result = if insert {
+                adapter.insert_row("ics", row, "write")
+            } else {
+                adapter.update_row("ics", row, "write").map(drop)
+            };
+            *slot.lock().unwrap() = Some(result);
+        },
+    );
+    outcome.lock().unwrap().take().expect("test closure ran")
+}
+
+#[test]
+fn a_server_that_drops_alternate_footprints_fails_insert_and_update() {
+    for insert in [true, false] {
+        let err = write_row_echoing(insert, row_with_alternate_footprint(), true)
+            .expect_err("alternates were dropped");
+        assert!(err.to_string().contains("alternate footprints"), "{err}");
+    }
+}
+
+#[test]
+fn an_identical_echo_keeps_insert_and_update_ok() {
+    for insert in [true, false] {
+        write_row_echoing(insert, row_with_alternate_footprint(), false)
+            .unwrap_or_else(|e| panic!("insert={insert}: {e}"));
+    }
+}
+
+#[test]
+fn alternates_without_a_default_never_reach_the_server() {
+    let mut row = row_with_alternate_footprint();
+    row.footprint_ref = None;
+    for insert in [true, false] {
+        let err = write_row_echoing(insert, row.clone(), false).unwrap_err();
+        assert!(err.to_string().contains("footprint_ref"), "{err}");
     }
 }

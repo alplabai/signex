@@ -25,8 +25,9 @@ use crate::primitive::PrimitiveRef;
 /// Row wire-schema level. Bump it whenever a `ComponentRow` field is added
 /// that an older build would drop on save (1 = implicit, pre-guard;
 /// 2 = `alternate_symbols`; 3 = the labelled documents `datasheet_label` /
-/// `more_datasheets`, #1231; 4 = `description`, #1474).
-pub const ROW_SCHEMA: u32 = 4;
+/// `more_datasheets`, #1231; 4 = `description`, #1474; 5 = `alternate_footprints`,
+/// #1234).
+pub const ROW_SCHEMA: u32 = 5;
 
 /// `code` in the error body of a row write refused for a schema mismatch.
 pub const ROW_SCHEMA_REFUSED_CODE: &str = "row_schema_too_old";
@@ -173,6 +174,10 @@ pub struct ComponentRow {
     pub alternate_symbols: Vec<AlternateSymbol>,
     #[serde(default)]
     pub footprint_ref: Option<PrimitiveRef>,
+    /// Further footprints the part can be built with, after the default
+    /// `footprint_ref` (#1234). Empty for a single-footprint part.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alternate_footprints: Vec<crate::footprint_binding::FootprintBinding>,
     #[serde(default)]
     pub sim_ref: Option<PrimitiveRef>,
 
@@ -256,6 +261,13 @@ impl ComponentRow {
             Some(crate::ParamValue::Text(text)) if !text.trim().is_empty() => Some(text),
             _ => None,
         }
+    }
+
+    /// True when `reply`, the row a server stored, carries different
+    /// alternate footprints than this row sent: a server built before
+    /// [`ROW_SCHEMA`] 5 drops them.
+    pub fn alternate_footprints_differ_in(&self, reply: &ComponentRow) -> bool {
+        self.alternate_footprints != reply.alternate_footprints
     }
 
     /// True when `reply`, the row a server stored, lost documents this row
@@ -359,6 +371,7 @@ pub(crate) mod tests {
             state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
             footprint_ref: Some(PrimitiveRef::new(lib, Uuid::now_v7())),
+            alternate_footprints: Vec::new(),
             sim_ref: None,
             pin_map_overrides: Vec::new(),
             primary_mpn: ManufacturerPart::draft("Vishay", "CRCW08051002F"),
@@ -394,6 +407,7 @@ pub(crate) mod tests {
             state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7()),
             footprint_ref: Some(PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7())),
+            alternate_footprints: Vec::new(),
             sim_ref: None,
             pin_map_overrides: vec![],
             primary_mpn: ManufacturerPart::draft("Vishay", "CRCW08051002F"),

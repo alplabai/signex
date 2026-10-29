@@ -13,6 +13,13 @@
 //! is also cleared when the owed move is dropped (the document came back, or
 //! its copy was removed).
 //!
+//! Opening a document also finishes the entries that name it ([`finish_for`]),
+//! unless the live autosave state owns a move into that path
+//! (`AutosaveState::move_owed`; the caller passes that to `reconcile_with`).
+//! A move that still fails there is logged, not fatal: the copy stays at its
+//! old key, which nothing writes to, and autosave keeps writing the current
+//! content at the new key.
+//!
 //! A copy is never deleted here: it is only renamed onto a free new key.
 
 use std::path::{Path, PathBuf};
@@ -210,6 +217,48 @@ fn finish_all_from(recovery_dir: &Path, seed: u64) -> Finished {
         }
     }
     report
+}
+
+/// Finish the journalled moves into `document` before its copy is judged
+/// (#1433). A move that kept failing during a run left the older copy under
+/// the old key; opening the document at its new path must still see it, and
+/// where a fresher copy was written at the new key meanwhile, the newest is
+/// the one offered (the other is set aside, never deleted). Err names the
+/// copy still stranded, so the document stays protected and the user can
+/// rescue it by hand.
+pub(super) fn finish_for(recovery_dir: &Path, document: &Path) -> Result<(), String> {
+    let wanted = sidecar_path(recovery_dir, document);
+    for file in entry_files(recovery_dir) {
+        let Ok(entry) = std::fs::read(&file)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| serde_json::from_slice::<Entry>(&bytes).map_err(|e| e.to_string()))
+        else {
+            continue;
+        };
+        if sidecar_path(recovery_dir, &entry.new) != wanted {
+            continue;
+        }
+        let mut report = Finished::default();
+        run_one(recovery_dir, &file, &entry, &mut report);
+        if !report.failed.is_empty() {
+            return Err(format!(
+                "the recovery copy of {} is still under the name of {} and could not be moved",
+                entry.new.display(),
+                entry.old.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn entry_files(recovery_dir: &Path) -> Vec<PathBuf> {
+    std::fs::read_dir(recovery_dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some(ENTRY_EXTENSION))
+        .collect()
 }
 
 /// A per-process random seed for where a capped pass starts in the sorted
