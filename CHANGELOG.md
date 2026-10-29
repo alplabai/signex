@@ -18,7 +18,9 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
-## [1.0.0-rc.1] — 2026-10-29
+## [1.0.0-rc.2] — 2026-10-29
+
+_v1.0.0-rc.1 was tagged but never published: its release run crashed in the test step before any build. rc.2 is the same release with the release workflow fixed._
 
 _The first v1.0 release candidate: a schematic-only Community Preview. PCB and footprint editing are present but are not part of the v1.0 promise, and this build is a pre-release._
 
@@ -43,10 +45,10 @@ Pick the package for your platform from the assets below. `SHA256SUMS.txt` lists
 
 | Platform | Asset |
 |---|---|
-| Windows (x86_64, ARM64) | `signex-setup-<arch>-1.0.0-rc.1.exe` installer, or `signex-windows-<arch>-1.0.0-rc.1.zip` portable |
-| macOS (Apple silicon and Intel) | `signex-macos-universal-1.0.0-rc.1.dmg` |
-| Linux (x86_64, ARM64) | `signex_1.0.0-rc.1_<arch>.deb`, `Signex-1.0.0-rc.1-<arch>.AppImage`, or `signex-linux-<arch>-1.0.0-rc.1.tar.gz` |
-| All | `signex-1.0.0-rc.1.cdx.json` (CycloneDX SBOM) and `SHA256SUMS.txt` |
+| Windows (x86_64, ARM64) | `signex-setup-<arch>-1.0.0-rc.2.exe` installer, or `signex-windows-<arch>-1.0.0-rc.2.zip` portable |
+| macOS (Apple silicon and Intel) | `signex-macos-universal-1.0.0-rc.2.dmg` |
+| Linux (x86_64, ARM64) | `signex_1.0.0-rc.2_<arch>.deb`, `Signex-1.0.0-rc.2-<arch>.AppImage`, or `signex-linux-<arch>-1.0.0-rc.2.tar.gz` |
+| All | `signex-1.0.0-rc.2.cdx.json` (CycloneDX SBOM) and `SHA256SUMS.txt` |
 
 - **These builds are UNSIGNED.** On macOS, right-click Signex and choose **Open** on first launch (Gatekeeper); the app carries only an ad-hoc signature and is not notarized. On Windows, SmartScreen shows "Windows protected your PC": choose **More info**, then **Run anyway**. On Linux nothing is signed, and `SHA256SUMS.txt` is an integrity checksum, not a signature.
 - **Linux needs glibc 2.35 or newer** (Ubuntu 22.04, Debian 12 and later); check with `ldd --version`.
@@ -62,13 +64,13 @@ Pick the package for your platform from the assets below. `SHA256SUMS.txt` lists
 
 ### Detailed changes
 
-Every change since v0.15.0, grouped by type, is in [CHANGELOG.md](https://github.com/alplabai/signex/blob/v1.0.0-rc.1/CHANGELOG.md#detailed-changes-in-100-rc1).
+Every change since v0.15.0, grouped by type, is in [CHANGELOG.md](https://github.com/alplabai/signex/blob/v1.0.0-rc.2/CHANGELOG.md#detailed-changes-in-100-rc2).
 
-[Full changelog](https://github.com/alplabai/signex/compare/v0.15.0...v1.0.0-rc.1)
+[Full changelog](https://github.com/alplabai/signex/compare/v0.15.0...v1.0.0-rc.2)
 
-## Detailed changes in 1.0.0-rc.1
+## Detailed changes in 1.0.0-rc.2
 
-All entries folded from the per-PR fragments for 1.0.0-rc.1. They sit under their own heading because the release workflow publishes only the `## [1.0.0-rc.1]` section above as the Release body, and the full list is far over GitHub's 125,000-character limit.
+All entries folded from the per-PR fragments for 1.0.0-rc.2 (first prepared as 1.0.0-rc.1). They sit under their own heading because the release workflow publishes only the `## [1.0.0-rc.2]` section above as the Release body, and the full list is far over GitHub's 125,000-character limit.
 
 ### Added
 
@@ -700,7 +702,11 @@ All entries folded from the per-PR fragments for 1.0.0-rc.1. They sit under thei
 - **Library server hardening (#115)** — the server compares the bearer token in constant time, the database client refuses to send a token over cleartext HTTP to a non-loopback host (redirect hops included) and rejects an unresolved `@signex-keychain:` sigil, and distributor URL host checks are dot-anchored so look-alike domains no longer match. TLS must be terminated by a reverse proxy.
 - **Library server refuses plaintext on a non-loopback bind (#115)** — `signex-library-server` now exits at startup unless `--allow-insecure-bind` (or `SIGNEX_ALLOW_INSECURE_BIND=1`/`true`/`yes`) is given, since it has no TLS and must sit behind a TLS-terminating proxy. `SIGNEX_TRUSTED_PROXIES` lets the rate limiter key by the real client behind a trusted reverse proxy rather than sharing one bucket; when it is set, `SIGNEX_TRUSTED_PROXY_HEADER` (`x-forwarded-for` or `forwarded`) is required and names the single header the proxy overwrites or appends to. The other header is ignored, so a client cannot forge hops through it. IPv4-mapped peers (`::ffff:10.0.0.1`) match IPv4 proxies and hops may carry a port. The `@signex-keychain:<name>` library `auth` sigil stays refused (OS keychain resolution is tracked in #976).
 
-[Full changelog](https://github.com/alplabai/signex/compare/v0.15.0...v1.0.0-rc.1)
+### Fixed — release
+
+- **The release workflow's test step runs like CI** — release.yml ran `cargo test --workspace`, which runs a test binary's tests as threads of one process; the wgpu canvas tests crashed (SIGSEGV) that way and stopped the v1.0.0-rc.1 release before any build. It now runs `cargo nextest run --workspace --profile ci` plus doctests, exactly as ci.yml's `test · workspace` does.
+
+[Full changelog](https://github.com/alplabai/signex/compare/v0.15.0...v1.0.0-rc.2)
 
 ## [0.15.0] — 2026-07-23
 
