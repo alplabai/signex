@@ -245,12 +245,17 @@ impl Signex {
         if ok && nothing_to_recover {
             return self.start_remove(&dir, path);
         }
-        // The fresh copy at `path` is current, so the older copy a failing
-        // move still owes it is obsolete (#1433).
-        if ok && let Some(old) = self.document_state.autosave.take_obsolete_released(&path) {
-            return self.start_remove(&dir, old);
+        if !ok {
+            return Task::none();
         }
-        Task::none()
+        // The fresh copy at `path` is current, so the older copy a failing
+        // move still owes it is obsolete (#1433). A move settled without a
+        // removal (its old key is in use again) leaves a journal entry that
+        // must not let the next start carry another copy over.
+        match self.document_state.autosave.take_obsolete_released(&path) {
+            Some(old) => self.start_remove(&dir, old),
+            None => self.autosave_flush_journal_clears(&dir),
+        }
     }
 
     /// A normal save of `path` landed: drop its recovery copy. Runs
@@ -305,11 +310,17 @@ impl Signex {
             let guard = self.document_state.autosave.track_job();
             tasks.push(move_task(dir.clone(), owed, guard));
         }
-        for (old, targets) in self.document_state.autosave.take_journal_clears() {
-            let guard = self.document_state.autosave.track_job();
-            tasks.push(clear_journal_task(dir.clone(), old, targets, guard));
-        }
+        tasks.push(self.autosave_flush_journal_clears(&dir));
         Task::batch(tasks)
+    }
+
+    /// Clear the journal entries of moves dropped since the last flush.
+    fn autosave_flush_journal_clears(&mut self, dir: &Path) -> Task<Message> {
+        let clears = self.document_state.autosave.take_journal_clears();
+        Task::batch(clears.into_iter().map(|(old, targets)| {
+            let guard = self.document_state.autosave.track_job();
+            clear_journal_task(dir.to_path_buf(), old, targets, guard)
+        }))
     }
 
     fn autosave_moved(&mut self, moved: AutosaveMoved) -> Task<Message> {
@@ -325,12 +336,13 @@ impl Signex {
         ));
         // A failed move is retried on the timer, which runs while a move is
         // owed (not here, or a lasting failure would spin).
-        match (obsolete, self.document_state.autosave.dir()) {
-            (Some(old), Some(dir)) => {
-                let dir = dir.to_path_buf();
-                self.start_remove(&dir, old)
-            }
-            _ => Task::none(),
+        let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
+            return Task::none();
+        };
+        match obsolete {
+            Some(old) => self.start_remove(&dir, old),
+            // A move renamed back to its copy was dropped: clear its entry.
+            None => self.autosave_flush_journal_clears(&dir),
         }
     }
 

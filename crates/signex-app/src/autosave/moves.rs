@@ -38,8 +38,8 @@ pub struct SidecarMove {
     /// clears only an entry that still names one of them.
     #[serde(skip)]
     pub(super) targets: Vec<PathBuf>,
-    /// Set by a discarding quit while the rename runs: the task removes the
-    /// copy it just moved.
+    /// Set by a discarding quit, or a save of the new path, while the rename
+    /// runs: the task removes the copy it just moved.
     #[serde(skip)]
     pub(super) discard: Arc<AtomicBool>,
 }
@@ -51,7 +51,8 @@ impl SidecarMove {
         self.released
     }
 
-    /// A discarding quit arrived while the rename ran.
+    /// A discarding quit, or a save of the new path, arrived while the
+    /// rename ran.
     pub fn is_discarded(&self) -> bool {
         self.discard.load(Ordering::SeqCst)
     }
@@ -158,8 +159,11 @@ impl AutosaveState {
 
     /// A fresh copy of `path` landed while a released move of this run's
     /// older copy into `path` is still owed (and not running): the older
-    /// copy holds nothing the fresh one lacks. Returns its old key to
-    /// remove, once the fresh copy is safely on disk.
+    /// copy holds nothing the fresh one lacks, so the move is settled.
+    /// Returns its old key to remove, once the fresh copy is safely on disk.
+    /// `None` when that key is in use again (a document was renamed onto
+    /// it): what sits there now is not this move's copy to delete, and the
+    /// move is dropped so it never carries that copy over to `path` either.
     pub fn take_obsolete_released(&mut self, path: &Path) -> Option<PathBuf> {
         let i = self.moves.iter().position(|m| {
             m.released
@@ -170,7 +174,25 @@ impl AutosaveState {
                     .iter()
                     .any(|r| r.old == m.old && r.new == m.new)
         })?;
-        Some(self.moves.remove(i).old)
+        let settled = self.moves.remove(i);
+        if settled.old != settled.new && !self.key_in_use(&settled.old) {
+            return Some(settled.old);
+        }
+        self.journal_clears.push((settled.old, settled.targets));
+        None
+    }
+
+    /// Whether `path`'s key belongs to a document again: a copy tracked,
+    /// offered, kept, checked or restored there, or a write, removal or
+    /// rename into it owed or running.
+    fn key_in_use(&self, path: &Path) -> bool {
+        self.tracks(path)
+            || self.in_flight.contains_key(path)
+            || self.removing.contains_key(path)
+            || self.checking.contains_key(path)
+            || self.restoring.values().any(|p| p == path)
+            || self.moves.iter().any(|m| m.new == path)
+            || self.running_moves.iter().any(|m| m.new == path)
     }
 
     /// The sources whose journal entries must be cleared now.
@@ -205,8 +227,9 @@ impl AutosaveState {
 
     /// The rename of `failed.old`'s sidecar to `failed.new` failed (a file
     /// lock, say): the copy is still under the old key. It is retried on
-    /// the next tick, with `new` held so no write lands there first.
-    /// Returns the old key to remove instead when the copy is obsolete.
+    /// the next tick, with `new` held so no write lands there first until
+    /// [`FAILED_MOVES_BEFORE_FRESH_COPY`] failures release it. Returns the
+    /// old key to remove instead when the copy is obsolete.
     pub fn move_failed(&mut self, mut failed: SidecarMove) -> Option<PathBuf> {
         self.end_running(&failed);
         failed.attempts += 1;
@@ -237,6 +260,15 @@ impl AutosaveState {
                 failed.this_run &= onward.this_run;
                 failed.held = onward.held;
             }
+        }
+        // Renamed back to where the copy sits while it ran: nothing left to
+        // move, and a kept `old -> old` move would later remove that copy.
+        if failed.old == failed.new {
+            if failed.held {
+                Self::release(&mut self.removing, &failed.new);
+            }
+            self.journal_clears.push((failed.old, failed.targets));
+            return None;
         }
         if self.is_obsolete(&failed) {
             if failed.held {
@@ -289,5 +321,121 @@ impl AutosaveState {
         self.removing.contains_key(path)
             || self.moves.iter().any(|m| m.new == path)
             || self.running_moves.iter().any(|m| m.new == path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::autosave::DocStamp;
+
+    fn tracked_at(paths: &[&Path]) -> AutosaveState {
+        let mut state = AutosaveState::default();
+        for path in paths {
+            state.begin(path);
+            state.finish(path, DocStamp::of_bytes(b"x"), true);
+        }
+        state
+    }
+
+    /// Fail the one owed move until its hold on the new key is given up.
+    fn released(state: &mut AutosaveState) {
+        for _ in 0..FAILED_MOVES_BEFORE_FRESH_COPY {
+            let (mut start, obsolete) = state.take_moves();
+            assert!(obsolete.is_empty());
+            assert!(state.move_failed(start.remove(0)).is_none(), "kept owed");
+        }
+        assert!(state.moves.iter().all(SidecarMove::is_released));
+    }
+
+    fn fresh_copy_lands(state: &mut AutosaveState, path: &Path) {
+        state.begin(path);
+        state.finish(path, DocStamp::of_bytes(b"fresh"), true);
+    }
+
+    #[test]
+    fn a_released_move_never_removes_a_copy_renamed_onto_its_old_key() {
+        let (a, b, t) = (Path::new("a"), Path::new("b"), Path::new("t"));
+        let mut state = tracked_at(&[a, b]);
+        state.rekey(a, t);
+        released(&mut state);
+        // Document b is renamed to a: its copy lands at key(a).
+        state.rekey(b, a);
+        let (start, obsolete) = state.take_moves();
+        assert!(obsolete.is_empty());
+        let started: Vec<_> = start
+            .iter()
+            .map(|m| (m.old.clone(), m.new.clone()))
+            .collect();
+        assert_eq!(started, [(b.into(), a.into())], "a -> t waits for b -> a");
+        state.move_landed(&start[0]);
+        fresh_copy_lands(&mut state, t);
+        assert_eq!(
+            state.take_obsolete_released(t),
+            None,
+            "key(a) is b's only copy now"
+        );
+        assert!(state.written.contains_key(a), "b's copy stays tracked");
+        assert!(
+            !state.has_owed_moves(),
+            "the settled move never brings b's copy over to t"
+        );
+        assert_eq!(state.take_journal_clears(), [(a.into(), vec![t.into()])]);
+    }
+
+    #[test]
+    fn a_released_move_renamed_back_while_it_runs_is_dropped() {
+        let (a, t) = (Path::new("a"), Path::new("t"));
+        let mut state = tracked_at(&[a]);
+        state.rekey(a, t);
+        released(&mut state);
+        let (mut start, _) = state.take_moves();
+        let running = start.remove(0);
+        state.rekey(t, a);
+        // The re-pointed retry would be a -> a: nothing left to move.
+        assert!(state.move_failed(running).is_none());
+        assert!(
+            state.moves.iter().all(|m| m.old != m.new),
+            "no a -> a move is kept"
+        );
+        assert!(
+            state
+                .take_journal_clears()
+                .contains(&(a.into(), vec![t.into(), a.into()]))
+        );
+        let (start, obsolete) = state.take_moves();
+        assert!(obsolete.is_empty());
+        assert_eq!(start.len(), 1, "only t -> a runs");
+        state.move_landed(&start[0]);
+        fresh_copy_lands(&mut state, a);
+        assert_eq!(
+            state.take_obsolete_released(a),
+            None,
+            "the fresh copy at a is never removed"
+        );
+        assert!(state.written.contains_key(a));
+        assert!(!state.has_owed_moves());
+    }
+
+    #[test]
+    fn renaming_back_after_the_move_was_released_keeps_the_fresh_copy() {
+        let (a, b) = (Path::new("a"), Path::new("b"));
+        let mut state = tracked_at(&[a]);
+        state.rekey(a, b);
+        released(&mut state);
+        state.rekey(b, a);
+        let (start, obsolete) = state.take_moves();
+        assert!(obsolete.is_empty());
+        let started: Vec<_> = start
+            .iter()
+            .map(|m| (m.old.clone(), m.new.clone()))
+            .collect();
+        assert_eq!(started, [(b.into(), a.into())], "only b's copy moves home");
+        state.move_landed(&start[0]);
+        fresh_copy_lands(&mut state, a);
+        assert_eq!(state.take_obsolete_released(a), None);
+        assert!(state.written.contains_key(a));
+        assert!(!state.has_owed_moves());
+        assert!(state.removing.is_empty(), "no hold left behind");
     }
 }
