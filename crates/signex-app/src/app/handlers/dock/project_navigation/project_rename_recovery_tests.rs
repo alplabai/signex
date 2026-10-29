@@ -168,6 +168,11 @@ fn a_copy_keyed_by_another_case_spelling_is_carried_on_a_case_insensitive_volume
 #[test]
 fn another_case_spelling_is_not_taken_for_this_file_on_a_case_sensitive_volume() {
     let root = tempfile::tempdir().expect("tempdir");
+    // The recovery key follows the volume the document sits on, so on a
+    // case-insensitive host volume the lower-case spelling IS this file.
+    if crate::app::directory_ignores_case(root.path()) {
+        return;
+    }
     let m = moved(root.path());
     let lower = PathBuf::from(m.old_doc.to_string_lossy().to_lowercase());
     sidecar::write(&m.recovery, &lower, b"another file's edits").expect("copy");

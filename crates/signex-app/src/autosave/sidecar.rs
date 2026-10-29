@@ -18,6 +18,7 @@
 use std::path::{Path, PathBuf};
 
 use super::pending_move;
+use crate::app::{CaseFold, directory_ignores_case, path_key_with};
 
 /// Extension that marks a file as a recovery sidecar.
 pub const SIDECAR_EXTENSION: &str = "recovery";
@@ -26,18 +27,21 @@ pub const SIDECAR_EXTENSION: &str = "recovery";
 /// displaced; it is kept on disk but never offered.
 const SUPERSEDED_EXTENSION: &str = "older";
 
-/// FNV-1a over the path text. Stable across Rust versions and platforms
-/// (unlike `DefaultHasher`), which is what a name that must be found again
-/// on the next launch needs.
-///
-/// Dot segments are resolved first, with the normaliser the rest of the app
-/// compares paths by, so `W/x/../Foo/a` and `W/Foo/a` name one sidecar.
-///
-/// The resolution is lexical, never a disk lookup: `w/link/../x` and `w/x`
-/// share a key even when `link` is a symlink and they are different files.
-/// Sheet paths are compared the same way elsewhere (`KeyMap::lexical_key`),
-/// and the key must be computable without IO on the UI thread.
-fn path_hash(path: &Path) -> u64 {
+/// The case rule of the volume `document` sits on, probed (disk IO, so only
+/// from the off-thread recovery tasks, never `update`). When the volume
+/// cannot be asked the probe answers "ignores case", the safe side: two
+/// spellings then share one copy rather than losing one.
+fn volume_fold(document: &Path) -> CaseFold {
+    let dir = document
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    CaseFold::from_probe(directory_ignores_case(dir))
+}
+
+/// The key of #1530 and the builds between: the hash of the dot-segment
+/// normalised path text exactly as spelled (no case fold).
+fn as_given_path_hash(path: &Path) -> u64 {
     let path = crate::app::project_sheets::normalize_clamped(path);
     bytes_hash(path.to_string_lossy().as_bytes())
 }
@@ -48,17 +52,52 @@ fn legacy_path_hash(path: &Path) -> u64 {
     bytes_hash(path.to_string_lossy().as_bytes())
 }
 
-/// Move a copy written under the pre-#1510 key of `document` to its current
-/// key, so an upgrade (or a dot-segment spelling) does not strand it. Nothing
-/// happens when the keys agree, when no old-key copy exists, or when a copy
-/// already sits at the current key and is the newer (the old one is kept; if
-/// the old one is newer, the current copy is set aside and the old one adopted).
-pub fn adopt_legacy(recovery_dir: &Path, document: &Path) -> Result<(), String> {
-    let current = sidecar_path(recovery_dir, document);
-    let legacy = key_path(recovery_dir, document, legacy_path_hash(document));
-    if legacy == current || !legacy.is_file() {
-        return Ok(());
+/// Every key form an older build could have filed a copy of `document` under,
+/// other than the current one: the raw (pre-#1510) and the as-given
+/// (#1510 to #1540) spellings, and on a case-insensitive volume the
+/// volume-folded spelling under both. Distinct from `current` and each other.
+fn older_keys(recovery_dir: &Path, document: &Path, fold: CaseFold) -> Vec<PathBuf> {
+    let mut spellings = vec![document.to_path_buf()];
+    if fold.fold_case {
+        spellings.push(PathBuf::from(path_key_with(document, fold)));
     }
+    let current = sidecar_path_with(recovery_dir, document, fold);
+    let mut keys: Vec<PathBuf> = Vec::new();
+    for spelling in &spellings {
+        for hash in [as_given_path_hash(spelling), legacy_path_hash(spelling)] {
+            let key = key_path(recovery_dir, spelling, hash);
+            if key != current && !keys.contains(&key) {
+                keys.push(key);
+            }
+        }
+    }
+    keys
+}
+
+/// Bring a copy written under an older key of `document` (see [`older_keys`])
+/// to its current key, so the upgrade (or another spelling) does not strand it.
+/// Nothing happens when no older-key copy exists. Where a copy already sits at
+/// the current key, only the newest of the two is offered: if the older-key
+/// copy is newer, the current one is set aside and the older-key one adopted;
+/// otherwise it stays where it is. No copy is ever deleted or overwritten: the
+/// move is one atomic `rename` inside the recovery directory, which a crash
+/// leaves either done or not done.
+pub fn adopt_legacy(recovery_dir: &Path, document: &Path) -> Result<(), String> {
+    adopt_legacy_with(recovery_dir, document, volume_fold(document))
+}
+
+fn adopt_legacy_with(recovery_dir: &Path, document: &Path, fold: CaseFold) -> Result<(), String> {
+    let current = sidecar_path_with(recovery_dir, document, fold);
+    for legacy in older_keys(recovery_dir, document, fold) {
+        if legacy.is_file() {
+            adopt_one(&current, &legacy, document)?;
+        }
+    }
+    Ok(())
+}
+
+fn adopt_one(current: &Path, legacy: &Path, document: &Path) -> Result<(), String> {
+    let (current, legacy) = (current.to_path_buf(), legacy.to_path_buf());
     if current.exists() {
         let newer = |a: &Path, b: &Path| match (
             std::fs::metadata(a).and_then(|m| m.modified()),
@@ -161,7 +200,28 @@ pub fn bytes_hash(bytes: &[u8]) -> u64 {
 
 /// The sidecar path for the document at `document` inside `recovery_dir`.
 pub fn sidecar_path(recovery_dir: &Path, document: &Path) -> PathBuf {
-    key_path(recovery_dir, document, path_hash(document))
+    sidecar_path_with(recovery_dir, document, volume_fold(document))
+}
+
+/// [`sidecar_path`] under an explicit case rule: the key is the app-wide path
+/// comparison key ([`path_key_with`]), so two spellings of one file on a
+/// case-insensitive volume share a copy and on a case-sensitive one stay
+/// distinct. Dot segments resolve lexically, never by a disk lookup:
+/// `w/link/../x` and `w/x` share a key even when `link` is a symlink (the key
+/// must be computable without IO, as `KeyMap::lexical_key` is). The file name is the folded
+/// key's last segment, so two spellings of one file share the name as well as
+/// the hash.
+fn sidecar_path_with(recovery_dir: &Path, document: &Path, fold: CaseFold) -> PathBuf {
+    let key = path_key_with(document, fold);
+    let name = key
+        .rsplit('/')
+        .next()
+        .filter(|n| !n.is_empty())
+        .unwrap_or("document");
+    recovery_dir.join(format!(
+        "{name}-{:016x}.{SIDECAR_EXTENSION}",
+        bytes_hash(key.as_bytes())
+    ))
 }
 
 fn key_path(recovery_dir: &Path, document: &Path, hash: u64) -> PathBuf {
@@ -206,6 +266,11 @@ pub fn remove(recovery_dir: &Path, document: &Path) -> Result<(), String> {
 /// once the copy sits under the new key, so a move that fails until the app
 /// quits is finished by the next run instead of stranding the copy.
 pub fn rename(recovery_dir: &Path, from: &Path, to: &Path) -> Result<(), String> {
+    // A copy of `from` still under an older key is brought to the current one
+    // first, so the move below (and a replayed journal entry) finds it.
+    if let Err(why) = adopt_legacy(recovery_dir, from) {
+        crate::diagnostics::log_warning(why);
+    }
     let (src, dst) = (
         sidecar_path(recovery_dir, from),
         sidecar_path(recovery_dir, to),
@@ -383,6 +448,110 @@ mod tests {
         assert_eq!(std::fs::read(&legacy).unwrap(), b"old");
         let aside = format!("{}.{SUPERSEDED_EXTENSION}", current.display());
         assert!(!Path::new(&aside).exists());
+    }
+
+    // Folding rules injected, so both volume kinds run on every host.
+    const INSENSITIVE: CaseFold = CaseFold::case_only();
+    const SENSITIVE: CaseFold = CaseFold::PRESERVE;
+
+    fn put(path: &Path, bytes: &[u8]) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, bytes).unwrap();
+    }
+
+    #[test]
+    fn two_spellings_share_a_copy_on_a_case_insensitive_volume() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let (upper, lower) = (
+            tmp.path().join("W/Sheet.snxsch"),
+            tmp.path().join("w/sheet.snxsch"),
+        );
+        assert_eq!(
+            sidecar_path_with(&rec, &upper, INSENSITIVE),
+            sidecar_path_with(&rec, &lower, INSENSITIVE)
+        );
+        put(&sidecar_path_with(&rec, &upper, INSENSITIVE), b"draft");
+        adopt_legacy_with(&rec, &lower, INSENSITIVE).unwrap();
+        assert_eq!(
+            std::fs::read(sidecar_path_with(&rec, &lower, INSENSITIVE)).unwrap(),
+            b"draft"
+        );
+    }
+
+    #[test]
+    fn two_files_do_not_share_a_copy_on_a_case_sensitive_volume() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let (upper, lower) = (
+            tmp.path().join("Sheet.snxsch"),
+            tmp.path().join("sheet.snxsch"),
+        );
+        assert_ne!(
+            sidecar_path_with(&rec, &upper, SENSITIVE),
+            sidecar_path_with(&rec, &lower, SENSITIVE)
+        );
+        put(&sidecar_path_with(&rec, &upper, SENSITIVE), b"upper");
+        adopt_legacy_with(&rec, &lower, SENSITIVE).unwrap();
+        assert!(!sidecar_path_with(&rec, &lower, SENSITIVE).exists());
+        assert_eq!(
+            std::fs::read(sidecar_path_with(&rec, &upper, SENSITIVE)).unwrap(),
+            b"upper"
+        );
+    }
+
+    #[test]
+    fn a_copy_under_the_previous_as_given_key_is_moved_to_the_folded_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let doc = tmp.path().join("Sheet.snxsch");
+        let old = key_path(&rec, &doc, as_given_path_hash(&doc));
+        put(&old, b"crash edits");
+        adopt_legacy_with(&rec, &doc, INSENSITIVE).unwrap();
+        let current = sidecar_path_with(&rec, &doc, INSENSITIVE);
+        assert_eq!(std::fs::read(&current).unwrap(), b"crash edits");
+        assert!(!old.exists(), "moved, not copied");
+    }
+
+    #[test]
+    fn a_copy_under_the_previous_volume_folded_key_is_found() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let doc = tmp.path().join("Sheet.snxsch");
+        let folded = PathBuf::from(path_key_with(&doc, INSENSITIVE));
+        let old = key_path(&rec, &folded, as_given_path_hash(&folded));
+        put(&old, b"crash edits");
+        adopt_legacy_with(&rec, &doc, INSENSITIVE).unwrap();
+        assert_eq!(
+            std::fs::read(sidecar_path_with(&rec, &doc, INSENSITIVE)).unwrap(),
+            b"crash edits"
+        );
+    }
+
+    #[test]
+    fn with_an_old_and_a_new_copy_only_the_newest_is_offered_and_the_other_stays() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let doc = tmp.path().join("Sheet.snxsch");
+        let old = key_path(&rec, &doc, as_given_path_hash(&doc));
+        let current = sidecar_path_with(&rec, &doc, INSENSITIVE);
+        put(&old, b"old");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        put(&current, b"new");
+        adopt_legacy_with(&rec, &doc, INSENSITIVE).unwrap();
+        assert_eq!(std::fs::read(&current).unwrap(), b"new");
+        assert_eq!(std::fs::read(&old).unwrap(), b"old", "left on disk");
+        // And the other way round: the older-key copy is the newer one.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        put(&old, b"newest");
+        adopt_legacy_with(&rec, &doc, INSENSITIVE).unwrap();
+        assert_eq!(std::fs::read(&current).unwrap(), b"newest");
+        let aside = format!("{}.{SUPERSEDED_EXTENSION}", current.display());
+        assert_eq!(
+            std::fs::read(aside).unwrap(),
+            b"new",
+            "set aside, not deleted"
+        );
     }
 
     #[test]
