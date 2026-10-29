@@ -189,6 +189,15 @@ fn open(app: &mut Signex, modal: ModalId) {
                     exists: false,
                 })
         }
+        ModalId::LibraryStockCopy => {
+            app.library.stock_copy = Some(crate::library::stock_copy::StockCopyState {
+                source: "R.snxsym".into(),
+                kind: crate::library::stock_copy::StockPrimitiveKind::Symbol,
+                label: "R".into(),
+                previous_unavailable: None,
+                error: None,
+            })
+        }
         other => panic!("{other:?} is not followed"),
     }
 }
