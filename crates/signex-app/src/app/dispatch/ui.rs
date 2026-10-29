@@ -196,6 +196,7 @@ impl Signex {
                 self.apply_net_class_styles(&result);
                 Task::none()
             }
+            UiMsg::NetNav(msg) => self.dispatch_net_nav_message(msg),
         }
     }
 

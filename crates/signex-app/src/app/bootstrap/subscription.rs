@@ -807,6 +807,15 @@ impl Signex {
             Subscription::none()
         };
 
+        // Net hover dwell (#1270): ticks only while a candidate waits for its
+        // dwell to pass, so an idle or hover-off session costs nothing.
+        let net_hover_tick = if self.document_state.net_nav.hover.needs_ticks() {
+            iced::time::every(std::time::Duration::from_millis(100))
+                .map(|_| Message::Ui(UiMsg::NetNav(NetNavMsg::HoverDwellTicked)))
+        } else {
+            Subscription::none()
+        };
+
         // External `.snxlib` edits (#531): a slow timer whose handler stats
         // the mounted files off-thread; `view` only reads the caches.
         let library_poll = crate::library::external_poll::subscription(
@@ -853,6 +862,7 @@ impl Signex {
             window_resize,
             hover_tick,
             hover_tooltip_tick,
+            net_hover_tick,
             library_poll,
             autosave_tick,
         ])

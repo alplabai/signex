@@ -206,6 +206,7 @@ impl Signex {
             scale_factor: crate::ui_scale::render_scale(ui.main_window_scale, ui.ui_scale),
             active_keymap: Some(std::sync::Arc::clone(&ui.active_keymap)),
             recent_projects: ui.recent_projects.entries(),
+            open_panels: self.open_panels(),
         };
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row = || {
