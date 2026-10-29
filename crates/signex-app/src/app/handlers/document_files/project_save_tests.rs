@@ -414,3 +414,124 @@ fn the_save_commit_records_the_written_bytes_not_a_later_edit_of_the_file() {
     let rel = fx.prj.file_name().unwrap().to_string_lossy().into_owned();
     assert_eq!(head_blob(tmp.path(), &rel), written);
 }
+
+/// A pending library that asks for version control (and LFS), with the
+/// library an earlier init left behind: plain files only, same id.
+fn partly_created(fx: &mut Fx, use_lfs: bool) {
+    signex_library::git_identity::test_identity::install();
+    leave_created_library_behind(fx, fx.lib_id);
+    let spec = fx.app.document_state.projects[0]
+        .pending_libraries
+        .get_mut(&fx.lib_id)
+        .unwrap();
+    spec.enable_git = true;
+    spec.use_lfs = use_lfs;
+}
+
+fn retry(fx: &mut Fx) {
+    let task = fx.app.begin_project_save(fx.id).expect("planned");
+    drop(deliver(&mut fx.app, run(task)));
+}
+
+fn head_commit_exists(dir: &Path) -> bool {
+    git2::Repository::open(dir)
+        .ok()
+        .and_then(|repo| repo.head().ok()?.peel_to_commit().ok().map(|_| ()))
+        .is_some()
+}
+
+#[test]
+fn a_left_behind_library_gets_the_git_repo_that_was_asked_for() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    partly_created(&mut fx, false);
+    assert!(!tmp.path().join(".git").exists());
+
+    retry(&mut fx);
+
+    assert!(head_commit_exists(tmp.path()), "git init and a commit");
+    assert!(
+        fx.app.document_state.projects[0]
+            .pending_libraries
+            .is_empty()
+    );
+    assert_eq!(fx.app.document_state.projects[0].data.libraries.len(), 1);
+}
+
+#[test]
+fn a_left_behind_library_gets_the_lfs_rules_that_were_asked_for() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    partly_created(&mut fx, false);
+    // The first init got as far as the commit, without LFS.
+    let spec = fx.app.document_state.projects[0].pending_libraries[&fx.lib_id].clone();
+    let repo = git2::Repository::init(tmp.path()).unwrap();
+    signex_library::adapters::local_git::LocalGitAdapter::complete_init(
+        &spec.lib_path,
+        signex_library::adapters::local_git::LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+    drop(repo);
+    assert!(!tmp.path().join(".gitattributes").exists());
+    fx.app.document_state.projects[0]
+        .pending_libraries
+        .get_mut(&fx.lib_id)
+        .unwrap()
+        .use_lfs = true;
+
+    retry(&mut fx);
+
+    let attrs = std::fs::read_to_string(tmp.path().join(".gitattributes")).unwrap();
+    assert!(attrs.contains("*.step filter=lfs"), "{attrs}");
+    assert!(
+        fx.app.document_state.projects[0]
+            .pending_libraries
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_left_behind_library_with_an_unborn_repo_gets_its_initial_commit() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    partly_created(&mut fx, false);
+    git2::Repository::init(tmp.path()).unwrap();
+    assert!(!head_commit_exists(tmp.path()));
+
+    retry(&mut fx);
+
+    assert!(head_commit_exists(tmp.path()));
+    assert!(
+        fx.app.document_state.projects[0]
+            .pending_libraries
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_library_whose_version_control_cannot_be_completed_is_refused_loudly() {
+    let _ = crate::diagnostics::init_logging();
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    partly_created(&mut fx, false);
+    // A `.git` that is not a repository: neither opened nor initialised.
+    std::fs::write(tmp.path().join(".git"), b"not a repository").unwrap();
+    let needle = dir_needle(tmp.path());
+    let before = crate::diagnostics::logged_count(&needle);
+
+    retry(&mut fx);
+
+    let project = &fx.app.document_state.projects[0];
+    assert!(project.pending_libraries.contains_key(&fx.lib_id));
+    assert!(project.data.libraries.is_empty());
+    let notice = fx.app.document_state.error_notice.clone().expect("card");
+    assert!(
+        notice.detail.contains("partly created library"),
+        "{}",
+        notice.detail
+    );
+    assert!(crate::diagnostics::logged_count(&needle) > before);
+}

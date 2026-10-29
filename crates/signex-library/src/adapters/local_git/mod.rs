@@ -192,40 +192,7 @@ impl LocalGitAdapter {
 
             let repo = git2::Repository::init(&root_dir)
                 .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
-            let (sig_name, sig_email) = identity_for_repo(&repo)?;
-            let sig = git2::Signature::now(&sig_name, &sig_email)
-                .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
-
-            let mut index = repo
-                .index()
-                .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
-            let snxlib_rel = file_name_str(&file_path)?;
-            index
-                .add_path(Path::new(&snxlib_rel))
-                .map_err(|e| LibraryError::Backend(format!("git add snxlib: {e}")))?;
-            if opts.use_lfs {
-                index
-                    .add_path(Path::new(GITATTRIBUTES_FILE))
-                    .map_err(|e| LibraryError::Backend(format!("git add gitattributes: {e}")))?;
-            }
-            index
-                .write()
-                .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
-            let tree_oid = index
-                .write_tree()
-                .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
-            let tree = repo
-                .find_tree(tree_oid)
-                .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
-            repo.commit(
-                Some("HEAD"),
-                &sig,
-                &sig,
-                "chore: initialise library",
-                &tree,
-                &[],
-            )
-            .map_err(|e| LibraryError::Backend(format!("git initial commit: {e}")))?;
+            commit_initial(&repo, &file_path, opts.use_lfs)?;
         }
 
         let manifest_synth = synthesize_manifest(&library_file.manifest);
@@ -246,6 +213,31 @@ impl LocalGitAdapter {
             uncommitted: Mutex::default(),
             row_reads: Default::default(),
         })
+    }
+
+    /// Finish the version-control scaffolding a failed [`Self::init`] left
+    /// behind: a `.snxlib` that is already on disk, but whose `.git/` is
+    /// missing or has no commit, or whose LFS rules are missing. Only what
+    /// `opts` asks for is touched; with `enable_git` off nothing is. Never
+    /// creates the `.snxlib` itself.
+    pub fn complete_init(
+        file_path: impl AsRef<Path>,
+        opts: LibraryInitOptions,
+    ) -> Result<(), LibraryError> {
+        let file_path = file_path.as_ref().to_path_buf();
+        Self::validate_file_path(&file_path)?;
+        if !opts.enable_git {
+            return Ok(());
+        }
+        let root_dir = parent_dir(&file_path)?;
+        let wrote_attributes = opts.use_lfs && ensure_lfs_attributes(&root_dir)?;
+        let repo = git2::Repository::init(&root_dir)
+            .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
+        let has_commit = repo.head().is_ok_and(|head| head.peel_to_commit().is_ok());
+        if wrote_attributes || !has_commit {
+            commit_initial(&repo, &file_path, opts.use_lfs)?;
+        }
+        Ok(())
     }
 
     /// Open an existing library by `.snxlib` file path. The file's

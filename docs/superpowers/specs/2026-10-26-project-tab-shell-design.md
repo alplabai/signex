@@ -161,7 +161,7 @@ it follows the same rule, with its own field-scoped history.
    for Save All; the job's `InFlight` guard frees the barrier when dropped. A
    library the worker created before it was lost stays pending, and the retry
    adopts it (`create_pending_library` accepts the same `library_id` at the
-   path).
+   path, once its git repo and LFS rules match the request).
 6. **One authority:** one rename flow (`handle_project_rename_submit`) for the tree and
    the tab; the write goes through the one ledger.
 

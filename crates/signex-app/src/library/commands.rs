@@ -179,11 +179,21 @@ pub(crate) fn create_pending_library(
     defaults: &super::state::NewLibraryDefaults,
 ) -> Result<(), LibraryError> {
     if spec.lib_path.exists() {
-        // A crash after the init but before the project file listed the
-        // library leaves this exact library behind; adopting it lets the
-        // retry finish. Anything else at the path is not ours to touch.
+        // A failed or interrupted init leaves this exact library behind.
+        // Adopt it only once its version control is what was asked for:
+        // finish the missing steps, or refuse and say why. Anything else at
+        // the path is not ours to touch.
         if existing_library_id(&spec.lib_path) == Some(library_id) {
-            return Ok(());
+            let opts = LibraryInitOptions {
+                enable_git: spec.enable_git,
+                use_lfs: spec.enable_git && spec.use_lfs,
+            };
+            return LocalGitAdapter::complete_init(&spec.lib_path, opts).map_err(|e| {
+                LibraryError::Conflict(format!(
+                    "a partly created library is at {}: version control was not set up ({e})",
+                    spec.lib_path.display()
+                ))
+            });
         }
         return Err(LibraryError::Conflict(format!(
             "{} already exists (pending materialise)",
@@ -202,11 +212,12 @@ pub(crate) fn create_pending_library(
     Ok(())
 }
 
-/// The `library_id` of the library already at `path`, if it opens as one.
+/// The `library_id` of the library file already at `path`, if it parses as
+/// one. Read from the file alone: a half-made repo beside it must not hide it.
 fn existing_library_id(path: &Path) -> Option<Uuid> {
-    use signex_library::LibraryAdapter as _;
-    let adapter = LocalGitAdapter::open(path).ok()?;
-    Some(adapter.manifest().library.library_id)
+    let text = std::fs::read_to_string(path).ok()?;
+    let file = signex_library::library_file::LibraryFile::parse(&text).ok()?;
+    Some(file.manifest.library_id)
 }
 
 /// Create a library on its own at `lib_path`, not attached to any project:

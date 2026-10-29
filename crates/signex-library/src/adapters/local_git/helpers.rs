@@ -636,6 +636,78 @@ pub(super) fn write_lfs_attributes(root_dir: &Path) -> Result<(), LibraryError> 
     Ok(())
 }
 
+/// Make `.gitattributes` carry the LFS rules, adding only the missing ones
+/// to a file that exists. True when the file changed.
+pub(super) fn ensure_lfs_attributes(root_dir: &Path) -> Result<bool, LibraryError> {
+    let path = root_dir.join(GITATTRIBUTES_FILE);
+    if !path.exists() {
+        write_lfs_attributes(root_dir)?;
+        return Ok(true);
+    }
+    let mut text = fs::read_to_string(&path)?;
+    let mut changed = false;
+    for ext in LFS_EXTENSIONS {
+        let rule = format!("*.{ext} filter=lfs diff=lfs merge=lfs -text");
+        if !text.lines().any(|line| line.trim() == rule) {
+            if !text.is_empty() && !text.ends_with('\n') {
+                text.push('\n');
+            }
+            text.push_str(&rule);
+            text.push('\n');
+            changed = true;
+        }
+    }
+    if changed {
+        fs::write(&path, text)?;
+    }
+    Ok(changed)
+}
+
+/// Stage the `.snxlib` (and `.gitattributes` for LFS) and record the
+/// library's initial commit, on top of HEAD when the repo already has one.
+pub(super) fn commit_initial(
+    repo: &git2::Repository,
+    file_path: &Path,
+    use_lfs: bool,
+) -> Result<(), LibraryError> {
+    let (sig_name, sig_email) = identity_for_repo(repo)?;
+    let sig = git2::Signature::now(&sig_name, &sig_email)
+        .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
+    let mut index = repo
+        .index()
+        .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
+    let snxlib_rel = file_name_str(file_path)?;
+    index
+        .add_path(Path::new(&snxlib_rel))
+        .map_err(|e| LibraryError::Backend(format!("git add snxlib: {e}")))?;
+    if use_lfs {
+        index
+            .add_path(Path::new(GITATTRIBUTES_FILE))
+            .map_err(|e| LibraryError::Backend(format!("git add gitattributes: {e}")))?;
+    }
+    index
+        .write()
+        .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
+    let tree_oid = index
+        .write_tree()
+        .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
+    let tree = repo
+        .find_tree(tree_oid)
+        .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
+    let parent = repo.head().ok().and_then(|head| head.peel_to_commit().ok());
+    let parents: Vec<&git2::Commit> = parent.iter().collect();
+    repo.commit(
+        Some("HEAD"),
+        &sig,
+        &sig,
+        "chore: initialise library",
+        &tree,
+        &parents,
+    )
+    .map_err(|e| LibraryError::Backend(format!("git initial commit: {e}")))?;
+    Ok(())
+}
+
 /// Slugify a human-facing name into a safe filename component.
 /// Lowercased, ASCII-only, runs of non-alphanumeric chars collapsed to
 /// `-`. Empty result falls back to `"untitled"`.
