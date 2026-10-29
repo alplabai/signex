@@ -43,7 +43,7 @@ default-members = [
 ]
 
 [workspace.package]
-version = "0.15.0"
+version = "1.0.0-rc.1"
 edition = "2024"
 # MSRV tracks the pinned toolchain (`rust-toolchain.toml` channel). We build,
 # test, and support exactly one toolchain — the pinned stable — so the declared
