@@ -33,9 +33,11 @@ impl Signex {
         // Before any document opens, so no open races a half-finished move.
         // Synchronous on purpose: boot runs before the event loop, so no open
         // message can be handled until it returns, which a Task could not
-        // promise. The work is bounded (`pending_move::MAX_ENTRIES_PER_PASS`),
-        // but a recovery folder on a slow network home directory can still
-        // delay the first frame.
+        // promise. The work is bounded (`pending_move::MAX_ENTRIES_PER_PASS`)
+        // and touches only the recovery folder and the two document paths of
+        // each entry (pure key arithmetic plus a `stat`); it never probes a
+        // document's folder for its case rule. A recovery folder on a slow
+        // network home directory can still delay the first frame.
         app.autosave_finish_pending_moves();
         // The installed-font probe walks the system font directories, so it
         // runs off the update thread; until it lands, named families render

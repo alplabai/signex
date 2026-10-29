@@ -41,6 +41,8 @@ pub(crate) mod sheet_hierarchy;
 mod state;
 pub(crate) use state::library_entry;
 pub(crate) use state::rule_profile_ui;
+pub(crate) use state::scope::path_key_with;
+pub(crate) use state::volume_case::probe_directory_case;
 pub(crate) mod stitched_netlist;
 mod symbol_history;
 mod undo_groups;
