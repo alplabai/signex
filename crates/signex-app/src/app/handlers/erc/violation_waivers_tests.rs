@@ -15,7 +15,7 @@ const RULE: &str = "user::net_check";
 /// Top sheet `top` with net `NET_T` (part `R_T`), child with `NET_C`, and a
 /// DSL rule that flags both nets.
 fn app_with_two_failing_nets() -> (Signex, std::path::PathBuf, SchematicSheet) {
-    let dir = std::env::temp_dir().join(format!("signex-erc-vwaiver-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-erc-vwaiver-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     let text = SnxSchematic::new(sheet_with_net("R_C", "NET_C", &[]))
         .write_string()
@@ -193,7 +193,7 @@ fn waive_where(
 /// stored nm as 3.8099999999999996.
 fn top_with_drifting_wire(top: &SchematicSheet) -> (SchematicSheet, Uuid) {
     let mut sheet = top.clone();
-    let id = Uuid::new_v4();
+    let id = Uuid::now_v7();
     sheet.wires.push(signex_types::schematic::Wire {
         uuid: id,
         start: signex_types::schematic::Point::new(25.4, 3.81),
@@ -264,7 +264,7 @@ fn a_part_joining_a_waived_net_lapses_it_in_the_panel_and_the_report() {
 
     let mut grown = top;
     let mut extra = grown.symbols[0].clone();
-    extra.uuid = Uuid::new_v4();
+    extra.uuid = Uuid::now_v7();
     extra.reference = "R_U".into();
     grown.symbols.push(extra);
     open_with(&mut app.document_state, &dir.join("top.snxsch"), grown);
@@ -426,7 +426,7 @@ fn one_global_net_on_two_open_sheets_is_waived_per_sheet() {
     // document ids, as two real files have.
     let (top_path, child_path) = (dir.join("top.snxsch"), dir.join("child.snxsch"));
     let mut child = sheet_with_net("R_C", "NET_T", &[]);
-    child.uuid = Uuid::new_v4();
+    child.uuid = Uuid::now_v7();
     open_with(&mut app.document_state, &child_path, child);
     app.run_erc_blocking();
     assert_eq!(flagged_paths(&app), [child_path.clone(), top_path.clone()]);

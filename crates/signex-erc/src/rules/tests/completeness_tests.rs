@@ -14,13 +14,13 @@ fn found(c: &ErcContext, kind: RuleKind) -> Vec<Diagnostic> {
 fn part(reference: &str) -> ErcSymbol {
     let mut s = symbol_with_pin(reference, pt(0.0, 0.0), false);
     s.pins.clear();
-    s.uuid = Uuid::new_v4();
+    s.uuid = Uuid::now_v7();
     s
 }
 
 fn pin_at(reference: &str, at: Point, dir: PinDirection) -> ErcSymbol {
     let mut s = symbol_with_pin(reference, at, true);
-    s.uuid = Uuid::new_v4();
+    s.uuid = Uuid::now_v7();
     s.pins[0].electrical_type = dir;
     s
 }
@@ -212,7 +212,7 @@ fn net_with_no_driver_flags_inputs_only() {
 
 fn port_on(value: &str, lib_id: &str, at: Point) -> ErcSymbol {
     let mut p = power_port(value, at);
-    p.uuid = Uuid::new_v4();
+    p.uuid = Uuid::now_v7();
     p.lib_id = lib_id.into();
     p.pins.push(ErcPin {
         world_pos: at,
