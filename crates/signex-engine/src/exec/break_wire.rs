@@ -10,7 +10,7 @@ impl Engine {
     /// the sheet, the second is a new wire right after it with the same
     /// width and lock. A point that is not strictly inside the wire changes
     /// nothing and records no history; a spot holding a pin, bus end or
-    /// another wire's end is refused with `BreakWireBlocked`. No merge pass runs, so the halves stay
+    /// another wire (its end or a crossing) is refused with `BreakWireBlocked`. No merge pass runs, so the halves stay
     /// apart; connectivity is unchanged (two wires meeting end to end).
     pub(super) fn break_wire(
         &mut self,
@@ -25,16 +25,17 @@ impl Engine {
             return Ok(CommandResult::unchanged());
         };
 
-        // A new wire end at a spot that holds a pin or another wire's end
-        // would join that element's net, which the wire passing by did not.
+        // A new wire end at a spot that holds a pin, another wire's end or a
+        // dotless crossing would join that element's net, which the wire
+        // passing by did not.
         let key = pt_key(&cut);
-        let other_end = self
-            .document
-            .wires
-            .iter()
-            .enumerate()
-            .any(|(i, w)| i != index && (pt_key(&w.start) == key || pt_key(&w.end) == key));
-        if other_end || self.connection_points().contains(&key) {
+        let other_wire = self.document.wires.iter().enumerate().any(|(i, w)| {
+            i != index
+                && (pt_key(&w.start) == key
+                    || pt_key(&w.end) == key
+                    || point_on_segment(key, pt_key(&w.start), pt_key(&w.end)))
+        });
+        if other_wire || self.connection_points().contains(&key) {
             return Err(EngineError::BreakWireBlocked);
         }
 

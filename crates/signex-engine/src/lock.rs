@@ -149,6 +149,7 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         // A locked symbol's designator is part of what the lock freezes, on
         // a sheet placed once or many times alike.
         Command::SetSymbolDesignatorIn { symbol, .. } => (vec![*symbol], "edited"),
+        Command::SetWireWidth { wire_id, .. } => (vec![*wire_id], "edited"),
         // Exempt, by name (see the module docs): the way out of the lock,
         // properties the lock leaves open, and commands that name no
         // existing symbol.
@@ -156,7 +157,6 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         | Command::SetItemLocked { .. }
         | Command::SetSymbolDnp { .. }
         | Command::SetSymbolFlag { .. }
-        | Command::SetWireWidth { .. }
         | Command::SetTextFontFamily { .. }
         | Command::ReplaceLibSymbol { .. }
         | Command::AnnotateAll { .. }

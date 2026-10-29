@@ -206,6 +206,23 @@ fn a_property_edit_of_a_locked_label_note_or_drawing_is_refused() {
         },
         "drawing",
     );
+    assert_refused(
+        &mut engine,
+        Command::SetWireWidth {
+            wire_id: id(1),
+            width_mm: 0.5,
+        },
+        "wire width",
+    );
+    // The free twin's width still changes.
+    assert!(
+        engine
+            .execute(Command::SetWireWidth {
+                wire_id: id(11),
+                width_mm: 0.5,
+            })
+            .is_ok_and(|r| r.changed)
+    );
 }
 
 #[test]

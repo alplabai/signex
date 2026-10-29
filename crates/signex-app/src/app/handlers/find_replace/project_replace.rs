@@ -233,11 +233,11 @@ impl Signex {
                 continue;
             }
 
-            let (commands, hits, dropped) = live_replacement(engine, job, prep, &path, &listed);
-            left_alone += dropped;
             // A locked label or note is skipped and named, as the active
             // sheet's Replace does, instead of failing the whole run.
-            let (commands, skipped) = Self::without_locked_items(engine, commands);
+            let (commands, hits, dropped, skipped) =
+                live_replacement(engine, job, prep, &path, &listed);
+            left_alone += dropped;
             Self::report_locked_skips(&skipped);
             let outcome = engine.execute_batch_grouped(commands, Some(group));
             for warning in engine.take_warnings() {
@@ -432,7 +432,7 @@ pub(super) fn live_replacement(
     prep: &ReplacePrep,
     path: &Path,
     listed: &Path,
-) -> (Vec<Command>, usize, usize) {
+) -> (Vec<Command>, usize, usize, Vec<String>) {
     let shown: HashSet<HitKey> = job
         .matches
         .iter()
@@ -443,6 +443,7 @@ pub(super) fn live_replacement(
     let document = engine.document();
     let mut commands = Vec::new();
     let mut hits = 0;
+    let mut locked = Vec::new();
     let mut still_there: HashSet<HitKey> = HashSet::new();
     for hit in signex_engine::scan_sheet(document, &job.query, &scope) {
         let key = hit_key(&hit);
@@ -453,14 +454,21 @@ pub(super) fn live_replacement(
         // spelling) is done, not stale.
         still_there.insert(key);
         let mine = signex_engine::replace_commands(document, &hit, &job.query, &job.replacement);
+        // A hit on a locked label or note is skipped and named, and not
+        // counted as replaced.
+        let (mine, skipped) = Signex::without_locked_items(engine, mine);
+        locked.extend(skipped);
         if !mine.is_empty() {
             hits += 1;
             commands.extend(mine);
         }
     }
+    locked.sort();
+    locked.dedup();
     (
         commands,
         hits,
         shown.len().saturating_sub(still_there.len()),
+        locked,
     )
 }

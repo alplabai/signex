@@ -536,7 +536,7 @@ fn a_shown_result_whose_rewrite_is_a_no_op_is_not_reported_as_changed() {
         .expect("a job");
     let listed = job.matches[0].sheet.clone().expect("a project hit");
 
-    let (commands, hits, left_alone) = super::project_replace::live_replacement(
+    let (commands, hits, left_alone, _locked) = super::project_replace::live_replacement(
         &app.document_state.engines[&top],
         &job,
         &prep,
