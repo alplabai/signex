@@ -560,7 +560,7 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         id: "place_component",
         category: "place",
         label: "Place component",
-        menu_label: None,
+        menu_label: Some("Part"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::GUI_MUTATES,

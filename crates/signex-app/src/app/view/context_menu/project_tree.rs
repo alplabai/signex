@@ -7,7 +7,9 @@
 
 use super::*;
 
-use super::items::{dd_disabled, dd_msg, dd_planned, save_entry, submenu_launcher};
+use super::items::{
+    dd_cmd, dd_cmd_disabled, dd_disabled, dd_msg, dd_planned, save_entry, submenu_launcher,
+};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 use signex_widgets::tree_view::TreeIcon;
 
@@ -104,6 +106,22 @@ impl Signex {
         &self,
         ctx: &crate::app::ProjectTreeContextMenuState,
     ) -> Element<'_, Message> {
+        let tokens = &self.document_state.panel_ctx.tokens;
+        // No entries (an empty-area click, or a row that no longer exists)
+        // renders an empty placeholder so the overlay layer above has
+        // something to render into.
+        let Some(v) = self.project_tree_entries(ctx) else {
+            return container(iced::widget::Space::new()).into();
+        };
+        signex_widgets::active_bar_dropdown::view(v, tokens, Some(Self::CONTEXT_MENU_WIDTH))
+    }
+
+    /// The pure row data behind [`Self::view_project_tree_context_menu`]:
+    /// `None` when the click names no live tree row.
+    pub(super) fn project_tree_entries(
+        &self,
+        ctx: &crate::app::ProjectTreeContextMenuState,
+    ) -> Option<Vec<DropdownEntry<Message>>> {
         use crate::app::ProjectTreeAction as A;
         use signex_widgets::tree_view::{get_node, resolve_path};
 
@@ -111,24 +129,16 @@ impl Signex {
         let tokens = &panel_ctx.tokens;
         let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(18);
 
-        let Some(key) = ctx.key.as_ref() else {
-            // Background (empty-area) clicks currently produce no menu —
-            // Altium shows a "New Project..." flow there which we do not
-            // ship yet. Return an empty placeholder so the overlay layer
-            // above has something to render into.
-            return container(iced::widget::Space::new()).into();
-        };
+        // Background (empty-area) clicks currently produce no menu —
+        // Altium shows a "New Project..." flow there which we do not ship yet.
+        let key = ctx.key.as_ref()?;
         // Resolve the stored key against the tree as it is NOW, so the
         // actions below carry indices of the row the user right-clicked
         // even if the tree was rebuilt since. A row that no longer exists
         // yields no menu rather than a menu for whatever took its place.
-        let Some(path_vec) = resolve_path(panel_ctx.project_tree.as_slice(), key) else {
-            return container(iced::widget::Space::new()).into();
-        };
+        let path_vec = resolve_path(panel_ctx.project_tree.as_slice(), key)?;
         let path = &path_vec;
-        let Some(node) = get_node(panel_ctx.project_tree.as_slice(), path) else {
-            return container(iced::widget::Space::new()).into();
-        };
+        let node = get_node(panel_ctx.project_tree.as_slice(), path)?;
 
         let role = tree_node_role(&node.icon, path.len(), !node.children.is_empty());
         let has_schematic = panel_ctx.has_schematic;
@@ -188,7 +198,10 @@ impl Signex {
                         A::AddExistingToProject(key.clone()),
                     )),
                 ));
-                v.push(save_entry(can_save));
+                v.push(save_entry(
+                    can_save,
+                    &self.keymap_shortcut_label("save_document"),
+                ));
                 v.push(dd_msg(
                     None,
                     "Rename...",
@@ -404,14 +417,14 @@ impl Signex {
                 // whenever a schematic tab is open, regardless of which
                 // tree row was clicked.
                 v.push(if has_schematic {
-                    dd_msg(
+                    dd_cmd(
                         None,
-                        "Print...",
-                        "",
+                        "print",
+                        &self.keymap_shortcut_label("print"),
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::PrintActive)),
                     )
                 } else {
-                    dd_disabled(None, "Print...", None)
+                    dd_cmd_disabled(None, "print", &self.keymap_shortcut_label("print"))
                 });
                 v.push(dd_planned(None, "Show Differences...", Some("v4.3")));
             }
@@ -459,6 +472,6 @@ impl Signex {
             }
         }
 
-        signex_widgets::active_bar_dropdown::view(v, tokens, Some(Self::CONTEXT_MENU_WIDTH))
+        Some(v)
     }
 }

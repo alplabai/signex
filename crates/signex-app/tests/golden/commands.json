@@ -120,6 +120,11 @@
     "category": "interactive"
   },
   {
+    "id": "create_sheet_from_sheet_symbol",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "cut",
     "group": "General",
     "category": "edit"
@@ -466,6 +471,11 @@
   },
   {
     "id": "next_sheet",
+    "group": "Schematic",
+    "category": "navigation"
+  },
+  {
+    "id": "open_child_sheet",
     "group": "Schematic",
     "category": "navigation"
   },
@@ -878,6 +888,11 @@
     "id": "switch_segment_posture",
     "group": "General",
     "category": "interactive"
+  },
+  {
+    "id": "sync_sheet_pins",
+    "group": "Schematic",
+    "category": "design"
   },
   {
     "id": "toggle_auto_focus",

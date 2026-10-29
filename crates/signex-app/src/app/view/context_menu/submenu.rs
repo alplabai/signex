@@ -10,27 +10,60 @@
 
 use super::*;
 
-use super::items::{dd_disabled, dd_kb, dd_msg, dd_planned};
-use crate::app::command::active_bar::action_label;
+use super::items::{
+    command_text, dd_cmd_action, dd_cmd_disabled, dd_disabled, dd_kb, dd_msg, dd_planned,
+    tag_command,
+};
+use crate::app::command::active_bar::id_for_action;
 use crate::icons as ic;
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
+/// A flyout row for an Active Bar action. With a command id the label and
+/// shortcut `hint` come from the catalog (#271); the literal `fallback` is
+/// only for an action that has no id. A disabled row keeps its hint in the
+/// right-hand column.
+fn active_bar_row(
+    icon: iced::widget::svg::Handle,
+    fallback: &'static str,
+    action: crate::active_bar::ActiveBarAction,
+    enabled: bool,
+    planned: bool,
+    hint: &dyn Fn(&str) -> String,
+) -> DropdownEntry<Message> {
+    let Some(id) = id_for_action(&action) else {
+        return if !enabled {
+            dd_disabled(Some(icon), fallback, None)
+        } else if planned {
+            dd_planned(Some(icon), fallback, None)
+        } else {
+            dd_kb(Some(icon), fallback, "", ContextAction::ActiveBar(action))
+        };
+    };
+    let shortcut = hint(id);
+    let right = (!shortcut.is_empty()).then_some(shortcut.as_str());
+    if planned {
+        // A planned tool is shown but cannot be armed (#1249).
+        tag_command(dd_planned(Some(icon), &command_text(id), right), id)
+    } else if enabled {
+        dd_cmd_action(Some(icon), id, &shortcut, ContextAction::ActiveBar(action))
+    } else {
+        dd_cmd_disabled(Some(icon), id, &shortcut)
+    }
+}
+
 /// Place submenu — wires, buses, ports, power, directives, harness, sheet
 /// symbols, component, and text. Rows for planned tools are greyed with a
-/// tooltip; every other row is always enabled.
-pub(super) fn place_entries(tid: ThemeId) -> Vec<DropdownEntry<Message>> {
+/// tooltip; every other row is always enabled. `hint` resolves a command id
+/// to its keymap shortcut.
+pub(super) fn place_entries(
+    tid: ThemeId,
+    hint: &dyn Fn(&str) -> String,
+) -> Vec<DropdownEntry<Message>> {
     use crate::active_bar::ActiveBarAction as A;
-    // Row text comes from the command table (#271); the literal is the
-    // fallback for an action with no id.
     let ab = |icon, label: &'static str, action: A| {
-        let text = action_label(&action, label);
-        if crate::active_bar::is_planned(&action) {
-            // A planned tool is shown but cannot be armed (#1249).
-            dd_planned(Some(icon), text, None)
-        } else {
-            dd_kb(Some(icon), text, "", ContextAction::ActiveBar(action))
-        }
+        let planned = crate::active_bar::is_planned(&action);
+        active_bar_row(icon, label, action, true, planned, hint)
     };
     vec![
         // Wires + buses + entries
@@ -111,14 +144,7 @@ pub(super) fn place_entries(tid: ThemeId) -> Vec<DropdownEntry<Message>> {
         ),
         DropdownEntry::Separator,
         // Component
-        // "Part" stays literal: the catalog calls this command "Place
-        // component", and the flyout's wording is menu content.
-        dd_kb(
-            Some(ic::icon_component(tid)),
-            "Part",
-            "",
-            ContextAction::ActiveBar(A::PlaceComponent),
-        ),
+        ab(ic::icon_component(tid), "Part", A::PlaceComponent),
         DropdownEntry::Separator,
         // Text
         ab(
@@ -142,16 +168,15 @@ pub(super) fn align_gate(selected: usize) -> (bool, bool) {
 
 /// Align submenu — pairwise aligns + distribute (gated by selection
 /// count) and the always-on Align To Grid.
-pub(super) fn align_entries(tid: ThemeId, selected: usize) -> Vec<DropdownEntry<Message>> {
+pub(super) fn align_entries(
+    tid: ThemeId,
+    selected: usize,
+    hint: &dyn Fn(&str) -> String,
+) -> Vec<DropdownEntry<Message>> {
     use crate::active_bar::ActiveBarAction as A;
     let (pair, dist) = align_gate(selected);
     let row = |icon, label: &'static str, action: A, enabled: bool| {
-        let text = action_label(&action, label);
-        if enabled {
-            dd_kb(Some(icon), text, "", ContextAction::ActiveBar(action))
-        } else {
-            dd_disabled(Some(icon), text, None)
-        }
+        active_bar_row(icon, label, action, enabled, false, hint)
     };
     vec![
         row(
@@ -210,16 +235,18 @@ pub(super) fn align_entries(tid: ThemeId, selected: usize) -> Vec<DropdownEntry<
 
 /// Arrange submenu — order the selected drawings (#1583). Offered only while
 /// the selection holds a drawing, so every row is live.
-pub(super) fn arrange_entries() -> Vec<DropdownEntry<Message>> {
+pub(super) fn arrange_entries(hint: &dyn Fn(&str) -> String) -> Vec<DropdownEntry<Message>> {
     use signex_engine::DrawingArrange as D;
     [
-        ("Bring to Front", D::ToFront),
-        ("Send to Back", D::ToBack),
-        ("Bring Forward", D::Forward),
-        ("Send Backward", D::Backward),
+        ("bring_drawings_to_front", D::ToFront),
+        ("send_drawings_to_back", D::ToBack),
+        ("bring_drawings_forward", D::Forward),
+        ("send_drawings_backward", D::Backward),
     ]
     .into_iter()
-    .map(|(label, arrange)| dd_kb(None, label, "", ContextAction::ArrangeDrawings(arrange)))
+    .map(|(id, arrange)| {
+        dd_cmd_action(None, id, &hint(id), ContextAction::ArrangeDrawings(arrange))
+    })
     .collect()
 }
 
@@ -315,11 +342,13 @@ impl Signex {
         let tid = self.ui_state.theme_id;
         let tokens = &self.document_state.panel_ctx.tokens;
         let entries = match kind {
-            ContextSubmenu::Place => place_entries(tid),
+            ContextSubmenu::Place => place_entries(tid, &|id| self.keymap_shortcut_label(id)),
             ContextSubmenu::Align => {
-                align_entries(tid, self.interaction_state.canvas.selected.len())
+                align_entries(tid, self.interaction_state.canvas.selected.len(), &|id| {
+                    self.keymap_shortcut_label(id)
+                })
             }
-            ContextSubmenu::Arrange => arrange_entries(),
+            ContextSubmenu::Arrange => arrange_entries(&|id| self.keymap_shortcut_label(id)),
             ContextSubmenu::AddNewToProject => {
                 // The right-clicked project lives at `tree_path[0]` —
                 // resolve it off the captured menu state so the action

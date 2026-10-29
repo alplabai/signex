@@ -55,6 +55,7 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
             action,
         )))
     };
+    let context_action = |action| Message::ContextMenu(ContextMenuMsg::Action(action));
     let text_edit = |target| Message::TextEdit(TextEditMsg::Requested(target));
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
@@ -135,6 +136,11 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "edit_object_properties" | "edit_selected_object_properties" => {
             Message::Menu(MenuMessage::OpenPropertiesPanel)
         }
+        // The selected sheet symbol's child-sheet actions: the canvas menu
+        // rows send the same context-menu action (#271).
+        "open_child_sheet" => context_action(ContextAction::OpenChildSheet),
+        "create_sheet_from_sheet_symbol" => context_action(ContextAction::CreateChildSheet),
+        "sync_sheet_pins" => context_action(ContextAction::SyncSheetPins),
         "find" | "find_text" => Message::Overlay(OverlayMsg::OpenFind),
         "find_and_replace" => Message::Overlay(OverlayMsg::OpenReplace),
         "footprint_mode_pads" => {
