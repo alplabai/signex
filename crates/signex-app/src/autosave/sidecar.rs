@@ -65,7 +65,7 @@ fn adopt_legacy_with(
             ));
             continue;
         }
-        adopt_one(&current, &legacy, document)?;
+        adopt_one(&current, &legacy, document, false)?;
     }
     Ok(())
 }
@@ -124,7 +124,44 @@ pub(super) fn move_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
     }
 }
 
-fn adopt_one(current: &Path, legacy: &Path, document: &Path) -> Result<(), String> {
+/// A move found `dst` already holding a copy: keep the newest under `dst` and
+/// set the other aside as `.older`, so neither is deleted and the new path is
+/// offered the newest edits. For a moved document's copy, not an old key.
+pub(super) fn resolve_taken(dst: &Path, src: &Path, document: &Path) -> Result<(), String> {
+    adopt_one(dst, src, document, true)
+}
+
+/// Rename `from` to a free `.older` name next to `current` (never replacing one).
+fn set_aside(from: &Path, current: &Path) -> Result<PathBuf, String> {
+    // Never overwrite an earlier set-aside copy: claim the first free
+    // name (`.older`, `.older.1`, ...) by creating it with `create_new`,
+    // which fails if it exists, so two processes cannot pick one name.
+    // With none free the move is refused, so the document stays
+    // protected by what is on disk.
+    let aside = claim_aside_name(current)?;
+    if let Err(e) = std::fs::rename(from, &aside) {
+        // Do not leave the empty claim behind.
+        if let Err(cleanup) = std::fs::remove_file(&aside) {
+            crate::diagnostics::log_warning(format!(
+                "{cleanup}: could not remove the unused claim {}",
+                aside.display()
+            ));
+        }
+        return Err(format!(
+            "{e}: could not set aside recovery copy {} as {}",
+            from.display(),
+            aside.display()
+        ));
+    }
+    Ok(aside)
+}
+
+fn adopt_one(
+    current: &Path,
+    legacy: &Path,
+    document: &Path,
+    aside_loser: bool,
+) -> Result<(), String> {
     let (current, legacy) = (current.to_path_buf(), legacy.to_path_buf());
     // Both names of one file (a move that stopped between linking and
     // unlinking): drop the stale name, the content is kept under the other.
@@ -148,26 +185,7 @@ fn adopt_one(current: &Path, legacy: &Path, document: &Path) -> Result<(), Strin
         // Only the newest of the two is offered. The other is never deleted:
         // it stays on disk under a name no scan offers, and is logged.
         if newer(&legacy, &current) {
-            // Never overwrite an earlier set-aside copy: claim the first free
-            // name (`.older`, `.older.1`, ...) by creating it with `create_new`,
-            // which fails if it exists, so two processes cannot pick one name.
-            // With none free the move is refused, so the document stays
-            // protected by what is on disk.
-            let aside = claim_aside_name(&current)?;
-            if let Err(e) = std::fs::rename(&current, &aside) {
-                // Do not leave the empty claim behind.
-                if let Err(cleanup) = std::fs::remove_file(&aside) {
-                    crate::diagnostics::log_warning(format!(
-                        "{cleanup}: could not remove the unused claim {}",
-                        aside.display()
-                    ));
-                }
-                return Err(format!(
-                    "{e}: could not set aside recovery copy {} as {}",
-                    current.display(),
-                    aside.display()
-                ));
-            }
+            let aside = set_aside(&current, &current)?;
             crate::diagnostics::log_warning(format!(
                 "The recovery copy {} of {} was older than {}; it was kept as {}.",
                 current.display(),
@@ -175,6 +193,16 @@ fn adopt_one(current: &Path, legacy: &Path, document: &Path) -> Result<(), Strin
                 legacy.display(),
                 aside.display()
             ));
+        } else if aside_loser {
+            let aside = set_aside(&legacy, &current)?;
+            crate::diagnostics::log_warning(format!(
+                "The recovery copy {} of {} was older than {}; it was kept as {}.",
+                legacy.display(),
+                document.display(),
+                current.display(),
+                aside.display()
+            ));
+            return Ok(());
         } else {
             crate::diagnostics::log_warning(format!(
                 "The recovery copy {} (an older key of {}) was left on disk: a copy already \
@@ -306,6 +334,12 @@ pub fn rename(recovery_dir: &Path, from: &Path, to: &Path) -> Result<(), String>
     match move_no_replace(&src, &dst) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        // The new path already holds a copy: the newest is offered under it
+        // and the other is set aside, never deleted. On failure the journal
+        // entry stays and the move is retried.
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && dst.is_file() => {
+            resolve_taken(&dst, &src, to)?;
+        }
         Err(e) => {
             return Err(format!(
                 "could not move recovery copy {} to {}: {e}",
@@ -690,17 +724,16 @@ mod tests {
     fn renaming_one_of_two_case_variant_files_never_takes_the_others_copy() {
         let tmp = tempfile::tempdir().unwrap();
         let rec = tmp.path().join("rec");
-        let dir = tmp.path().join("w");
-        std::fs::create_dir_all(&dir).unwrap();
-        let (a, b, main) = (
-            dir.join("Sheet.snxsch"),
-            dir.join("sheet.snxsch"),
-            dir.join("Main.snxsch"),
-        );
+        // B is the lower-case twin of A's WHOLE path: A's folded key is B's key.
+        let a = tmp.path().join("Dir/Sheet.snxsch");
+        let b = PathBuf::from(a.to_string_lossy().to_lowercase());
+        let main = tmp.path().join("Dir/Main.snxsch");
+        std::fs::create_dir_all(a.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(b.parent().unwrap()).unwrap();
         std::fs::write(&a, b"a").unwrap();
         std::fs::write(&b, b"b").unwrap();
         if std::fs::read(&a).unwrap() != b"a" {
-            return; // a case-insensitive folder cannot hold both
+            return; // a case-insensitive volume cannot hold both
         }
         write(&rec, &b, b"b's edits").unwrap();
         let copy = sidecar_path(&rec, &b);
@@ -757,6 +790,71 @@ mod tests {
         assert!(!legacy.exists());
         assert_eq!(std::fs::read(&current).unwrap(), b"edits");
         assert!(!Path::new(&format!("{}.{SUPERSEDED_EXTENSION}", current.display())).exists());
+    }
+
+    /// A moved document's copy at `a`, a stale copy already at `x`'s key; which
+    /// is newer decides the winner. Returns (rec, a, x).
+    fn taken_target(a_is_newer: bool) -> (PathBuf, PathBuf, PathBuf, tempfile::TempDir) {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("rec");
+        let (a, x) = (tmp.path().join("A.snxsch"), tmp.path().join("X.snxsch"));
+        let pause = || std::thread::sleep(std::time::Duration::from_millis(50));
+        if a_is_newer {
+            write(&rec, &x, b"stale").unwrap();
+            pause();
+            write(&rec, &a, b"newer").unwrap();
+        } else {
+            write(&rec, &a, b"older").unwrap();
+            pause();
+            write(&rec, &x, b"stale but newer").unwrap();
+        }
+        (rec, a, x, tmp)
+    }
+
+    fn aside_of(rec: &Path, x: &Path) -> Vec<u8> {
+        std::fs::read(format!(
+            "{}.{SUPERSEDED_EXTENSION}",
+            sidecar_path(rec, x).display()
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn a_live_move_onto_a_taken_key_offers_the_newest_and_sets_the_other_aside() {
+        let (rec, a, x, _tmp) = taken_target(true);
+        rename(&rec, &a, &x).unwrap();
+        assert_eq!(std::fs::read(sidecar_path(&rec, &x)).unwrap(), b"newer");
+        assert_eq!(aside_of(&rec, &x), b"stale");
+        assert!(!sidecar_path(&rec, &a).exists());
+        assert!(pending_move::owed(&rec).is_empty());
+
+        let (rec, a, x, _tmp) = taken_target(false);
+        rename(&rec, &a, &x).unwrap();
+        assert_eq!(
+            std::fs::read(sidecar_path(&rec, &x)).unwrap(),
+            b"stale but newer"
+        );
+        assert_eq!(aside_of(&rec, &x), b"older", "set aside, not deleted");
+        assert!(!sidecar_path(&rec, &a).exists());
+    }
+
+    #[test]
+    fn a_replayed_move_onto_a_taken_key_offers_the_newest_and_sets_the_other_aside() {
+        for a_is_newer in [true, false] {
+            let (rec, a, x, _tmp) = taken_target(a_is_newer);
+            std::fs::write(&x, b"saved").unwrap();
+            pending_move::record(&rec, &a, &x).unwrap();
+            pending_move::finish_all(&rec);
+            let (won, lost): (&[u8], &[u8]) = if a_is_newer {
+                (b"newer", b"stale")
+            } else {
+                (b"stale but newer", b"older")
+            };
+            assert_eq!(std::fs::read(sidecar_path(&rec, &x)).unwrap(), won);
+            assert_eq!(aside_of(&rec, &x), lost);
+            assert!(!sidecar_path(&rec, &a).exists());
+            assert!(pending_move::owed(&rec).is_empty());
+        }
     }
 
     #[test]

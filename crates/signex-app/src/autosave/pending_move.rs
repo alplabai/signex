@@ -297,19 +297,23 @@ fn run_one(recovery_dir: &Path, file: &Path, entry: &Entry, report: &mut Finishe
     let mut owed_still = false;
     for (form, src) in found {
         let dst = key_for(recovery_dir, &entry.new, form);
-        if dst.is_file() {
-            crate::diagnostics::log_warning(format!(
-                "The recovery copy {} was not moved to {}: a copy already sits under the new \
-                 name. It is still on disk as {} and is not offered; copy it out by hand if it \
-                 matters.",
-                src.display(),
-                dst.display(),
-                src.display()
-            ));
-            continue;
-        }
         match super::sidecar::move_no_replace(&src, &dst) {
             Ok(()) => report.moved += 1,
+            // The new path already holds a copy: keep the newest under it and
+            // set the other aside. The entry stays if that fails.
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && dst.is_file() => {
+                match super::sidecar::resolve_taken(&dst, &src, &entry.new) {
+                    Ok(()) => report.moved += 1,
+                    Err(why) => {
+                        owed_still = true;
+                        crate::diagnostics::log_warning(format!(
+                            "{why}: the recovery copy {} is still owed a move to {}; retried.",
+                            src.display(),
+                            dst.display()
+                        ));
+                    }
+                }
+            }
             Err(e) => {
                 owed_still = true;
                 crate::diagnostics::log_warning(format!(
@@ -400,17 +404,16 @@ mod tests {
     fn a_replayed_move_never_takes_the_copy_of_a_case_variant_file() {
         let tmp = tempfile::tempdir().unwrap();
         let rec = tmp.path().join("rec");
-        let dir = tmp.path().join("w");
-        std::fs::create_dir_all(&dir).unwrap();
-        let (a, b, main) = (
-            dir.join("Sheet.snxsch"),
-            dir.join("sheet.snxsch"),
-            dir.join("Main.snxsch"),
-        );
+        // B is the lower-case twin of A's WHOLE path: A's folded key is B's key.
+        let a = tmp.path().join("Dir/Sheet.snxsch");
+        let b = PathBuf::from(a.to_string_lossy().to_lowercase());
+        let main = tmp.path().join("Dir/Main.snxsch");
+        std::fs::create_dir_all(a.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(b.parent().unwrap()).unwrap();
         std::fs::write(&b, b"b").unwrap();
         std::fs::write(&a, b"a").unwrap();
         if std::fs::read(&b).unwrap() != b"b" {
-            return; // a case-insensitive folder cannot hold both
+            return; // a case-insensitive volume cannot hold both
         }
         super::super::sidecar::write(&rec, &b, b"b's edits").unwrap();
         let copy = super::super::sidecar::sidecar_path(&rec, &b);
