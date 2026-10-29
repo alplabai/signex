@@ -51,6 +51,12 @@ until `mark_document_clean` runs on completion, so a quit, a tab close or a
 failed write still sees the draft. A completion for a stale snapshot checks
 the flag first: a newer edit leaves it set and the document stays dirty.
 
+## Re-keying and recorded failures
+
+`rekey_open_document` (rename, Save As, library rename) moves a recorded
+Save Failed reason to the new path with the document, so its card is not
+lost. A queued follow-up save is dropped: it names the old file.
+
 ## Readers that differ
 
 The title-bar count (`dirty_document_count`) counts documents only. A dirty

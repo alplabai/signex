@@ -350,10 +350,21 @@ impl Signex {
             self.document_state.active_path = Some(new_path.to_path_buf());
         }
         self.document_state.rekey_document_dirty(old_path, new_path);
-        // A failure or queued save names the file by its old path.
+        // A queued save names the file by its old path; a recorded failure
+        // follows the document so its Save Failed card is not lost.
+        let failure = self
+            .document_state
+            .document_saves
+            .failure(old_path)
+            .map(str::to_owned);
         self.document_state
             .document_saves
             .forget_where(|p| p == old_path);
+        if let Some(reason) = failure {
+            self.document_state
+                .document_saves
+                .record_failure(new_path.to_path_buf(), reason);
+        }
         // A PCB's save revision is keyed by path (#1040); without the move
         // every later save would compare against a missing key.
         if let Some(revision) = self.document_state.pcb_revisions.remove(old_path) {
@@ -429,15 +440,20 @@ impl Signex {
         }
     }
 
-    /// Refuse a rename that would race an off-thread `.snxprj` write: shown
-    /// in the dialog and logged to the Messages panel.
-    pub(super) fn refuse_rename_while_library_saving(&mut self) {
-        const REASON: &str =
-            "A document in the library is still being saved; try again in a moment.";
-        self.set_rename_error(REASON);
-        crate::diagnostics::log_warning(format!("[rename] refused: {REASON}"));
+    /// Refuse a library rename that would strand an off-thread draft write:
+    /// shown in the dialog and logged, naming the draft's file.
+    pub(super) fn refuse_rename_while_library_saving(&mut self, draft: &std::path::Path) {
+        let label = draft.file_name().map_or_else(
+            || draft.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        );
+        let reason = format!("{label} is still being saved; try again in a moment.");
+        self.set_rename_error(&reason);
+        crate::diagnostics::log_warning(format!("[rename] refused: {reason}"));
     }
 
+    /// Refuse a rename that would race an off-thread `.snxprj` write: shown
+    /// in the dialog and logged to the Messages panel.
     pub(super) fn refuse_rename_while_project_saving(&mut self) {
         const REASON: &str = "The project file is still being saved; try again in a moment.";
         self.set_rename_error(REASON);

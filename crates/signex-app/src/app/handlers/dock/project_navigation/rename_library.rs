@@ -88,11 +88,12 @@ impl Signex {
         }
         // The same holds for a draft inside the library: its write names the
         // old path and its completion would find no editor behind it.
-        if self
-            .library_draft_paths(&old_path)
-            .any(|draft| self.document_state.document_saves.is_saving(&draft))
-        {
-            self.refuse_rename_while_library_saving();
+        let fold = self.document_state.fold_for_project(project);
+        let saving = self
+            .library_draft_paths(&old_path, fold)
+            .find(|draft| self.document_state.document_saves.is_saving(draft));
+        if let Some(saving) = saving {
+            self.refuse_rename_while_library_saving(&saving);
             return iced::Task::none();
         }
         if new_path.exists() {
@@ -355,7 +356,8 @@ impl Signex {
             self.document_state.mark_document_dirty(&project_path);
         }
 
-        self.rekey_library_documents(old_path, new_path);
+        let fold = self.document_state.fold_for_project(project);
+        self.rekey_library_documents(old_path, new_path, fold);
         Ok(outcome)
     }
 
@@ -389,12 +391,16 @@ impl Signex {
     }
 
     /// The symbol and footprint drafts open at or under `root`.
-    fn library_draft_paths(&self, root: &Path) -> impl Iterator<Item = PathBuf> {
+    fn library_draft_paths(
+        &self,
+        root: &Path,
+        fold: crate::app::state::CaseFold,
+    ) -> impl Iterator<Item = PathBuf> {
         let d = &self.document_state;
         d.symbol_editors
             .keys()
             .chain(d.footprint_editors.keys())
-            .filter(|p| p.starts_with(root))
+            .filter(|p| crate::app::state::scope::path_is_under(p, root, fold))
             .cloned()
             .collect::<Vec<_>>()
             .into_iter()
@@ -402,13 +408,21 @@ impl Signex {
 
     /// Move every open tab, dirty marker and undocked window that lives at
     /// or under the library's old path.
-    fn rekey_library_documents(&mut self, old_path: &Path, new_path: &Path) {
+    fn rekey_library_documents(
+        &mut self,
+        old_path: &Path,
+        new_path: &Path,
+        fold: crate::app::state::CaseFold,
+    ) {
         // Drafts first: `rekey_open_document` moves the editor, its tab (path
         // and kind), its stored dirty mark and its path-keyed records
         // together, so the dirty draft stays dirty at the new path.
         let drafts: Vec<(PathBuf, PathBuf)> = self
-            .library_draft_paths(old_path)
-            .filter_map(|p| rebase_path(&p, old_path, new_path).map(|to| (p, to)))
+            .library_draft_paths(old_path, fold)
+            .map(|p| {
+                let to = crate::app::state::scope::rebase_under(&p, old_path, new_path);
+                (p, to)
+            })
             .collect();
         for (from, to) in drafts {
             self.rekey_open_document(&from, &to);

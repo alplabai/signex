@@ -370,6 +370,7 @@ fn renaming_a_library_keeps_a_dirty_draft_inside_it_dirty_at_the_new_path() {
 
 #[test]
 fn a_library_rename_waits_for_a_draft_inside_it_that_is_being_saved() {
+    let _ = diagnostics::init_logging();
     let mut f = fixture();
     let alpha = f.alpha.clone();
     let old = open_dirty_draft_in(&mut f, &alpha);
@@ -389,6 +390,72 @@ fn a_library_rename_waits_for_a_draft_inside_it_that_is_being_saved() {
         "the draft stays where its write will land"
     );
     assert!(f.app.document_state.is_document_dirty(&old));
+}
+
+/// The project's volume folds case, so `ALPHA.snxlib` is the library.
+fn fold_case(f: &mut Fixture) {
+    f.app.document_state.projects[0].case_fold = signex_app::app::CaseFold {
+        fold_case: true,
+        backslash_is_separator: false,
+        normalize_unicode: false,
+    };
+}
+
+#[test]
+fn a_draft_under_a_case_variant_of_the_library_is_rekeyed_too() {
+    let mut f = fixture();
+    fold_case(&mut f);
+    let variant = f.alpha.with_file_name("ALPHA.snxlib");
+    let old = open_dirty_draft_in(&mut f, &variant);
+    let new = f
+        .alpha
+        .with_file_name("alpha2.snxlib")
+        .join("symbols")
+        .join("d.snxsym");
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    let d = &f.app.document_state;
+    assert!(d.symbol_editors.contains_key(&new), "the editor moved");
+    assert!(!d.symbol_editors.contains_key(&old));
+    assert!(d.is_document_dirty(&new));
+    assert_eq!(d.dirty_document_count(), 1);
+}
+
+#[test]
+fn a_library_rename_waits_for_a_draft_under_a_case_variant_being_saved() {
+    let mut f = fixture();
+    fold_case(&mut f);
+    let variant = f.alpha.with_file_name("ALPHA.snxlib");
+    let old = open_dirty_draft_in(&mut f, &variant);
+    let _in_flight = f.app.document_state.document_saves.begin_work(old.clone());
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    assert!(f.alpha.exists(), "nothing moved");
+    assert!(f.app.document_state.symbol_editors.contains_key(&old));
+}
+
+#[test]
+fn a_recorded_save_failure_follows_its_draft_through_a_library_rename() {
+    let mut f = fixture();
+    let alpha = f.alpha.clone();
+    let old = open_dirty_draft_in(&mut f, &alpha);
+    f.app
+        .document_state
+        .document_saves
+        .record_failure(old.clone(), "disk full".into());
+    let new = f
+        .alpha
+        .with_file_name("alpha2.snxlib")
+        .join("symbols")
+        .join("d.snxsym");
+
+    submit_rename(&mut f.app, &alpha, "alpha2.snxlib");
+
+    let saves = &f.app.document_state.document_saves;
+    assert_eq!(saves.failure(&new), Some("disk full"));
+    assert!(saves.failure(&old).is_none());
 }
 
 #[test]
