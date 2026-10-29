@@ -390,6 +390,8 @@ pub struct UiState {
     /// Token of the newest Find Similar project search. Lives outside the
     /// dialog state so a reopened dialog never reuses an old token.
     pub find_similar_generation: u64,
+    /// The open Paste Array dialog (#1264).
+    pub paste_array: Option<crate::paste_array::PasteArrayState>,
     /// v0.18.14.1 — Custom Selection Filter modal draft. `Some`
     /// while the dialog is visible; the eight-bool draft mirror
     /// commits on Apply, discards on Cancel.

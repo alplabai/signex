@@ -18,8 +18,11 @@ pub enum PlacementKind {
     /// A library part: placed again and again, each copy with the next
     /// designator counted for `prefix`, until Esc or a right-click.
     Part { prefix: String },
-    /// Pasted content: keeps its own designators and is placed once.
+    /// Pasted content: placed once.
     Paste,
+    /// Rubber-stamp copy: pasted content that stays on the cursor after a
+    /// click, until Esc or a right-click.
+    Stamp,
 }
 
 impl PlacementKind {
@@ -28,12 +31,19 @@ impl PlacementKind {
     pub fn prefix(&self) -> Option<&str> {
         match self {
             Self::Part { prefix } => Some(prefix),
-            Self::Paste => None,
+            Self::Paste | Self::Stamp => None,
         }
     }
 
+    /// Copied content (a paste or a stamp), which has no part form.
     #[must_use]
     pub fn is_paste(&self) -> bool {
+        matches!(self, Self::Paste | Self::Stamp)
+    }
+
+    /// Whether the session ends with its first click.
+    #[must_use]
+    pub fn ends_after_click(&self) -> bool {
         matches!(self, Self::Paste)
     }
 }

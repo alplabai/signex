@@ -195,7 +195,9 @@ impl Signex {
             Some(reference) => session
                 .payload
                 .map_symbols(|s| s.reference = reference.clone()),
-            None => session.payload.clone(),
+            None => self
+                .paste_numbering(&session.target_sheet)
+                .apply(&session.payload),
         };
         let placed = payload.place_commands(Point::new(x, y));
         let commands = match placed {
@@ -222,7 +224,7 @@ impl Signex {
         let Some(session) = self.interaction_state.placement.as_mut() else {
             return;
         };
-        if session.kind.is_paste() {
+        if session.kind.ends_after_click() {
             self.cancel_placement_session();
             return;
         }

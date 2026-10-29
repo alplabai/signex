@@ -50,6 +50,9 @@ mod bom_validation;
 #[path = "regression/pdf_page_setup.rs"]
 mod pdf_page_setup;
 
+#[path = "regression/paste_support.rs"]
+mod paste_support;
+
 #[path = "regression/paste_instance_entries.rs"]
 mod paste_instance_entries;
 

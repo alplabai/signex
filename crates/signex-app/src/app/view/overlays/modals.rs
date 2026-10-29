@@ -91,6 +91,15 @@ impl Signex {
         )
     }
 
+    /// Paste Array dialog (#1264). In-window only: it has no detached form.
+    pub(in crate::app::view) fn paste_array_overlay(&self) -> Option<Element<'_, Message>> {
+        let state = self.ui_state.paste_array.as_ref()?;
+        Some(
+            crate::paste_array::view(state, &self.document_state.panel_ctx.tokens)
+                .map(|msg| Message::Edit(crate::app::EditMsg::PasteArray(msg))),
+        )
+    }
+
     /// Keyboard-shortcuts reference modal.
     pub(in crate::app::view) fn keyboard_shortcuts_overlay(&self) -> Option<Element<'_, Message>> {
         let ui = &self.ui_state;

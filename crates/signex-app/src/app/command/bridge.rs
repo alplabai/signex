@@ -160,6 +160,8 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
             Message::Preferences(PreferencesMsg::Open)
         }
         "repeat_last_item" => Message::Edit(EditMsg::RepeatLastItem),
+        "rubber_stamp_copy" => Message::Edit(EditMsg::RubberStampCopy),
+        "paste_array" => Message::Edit(EditMsg::PasteArrayRequested),
         "paste" => Message::Edit(EditMsg::Paste),
         "paste_special" | "smart_paste" => Message::Edit(EditMsg::SmartPaste),
         "place_bus" => Message::Tool(ToolMessage::SelectTool(Tool::Bus)),
@@ -370,8 +372,7 @@ mod tests {
     /// The ids listed there are a mix, and the distinction decides the fix:
     /// - **unimplemented** — the catalog entry and the binding are the only
     ///   occurrences in the tree (`break_wire`,
-    ///   `place_global_label`, `place_hierarchical_label`,
-    ///   `repeat_last_item`, `rubber_stamp_copy`). A feature, not an arm.
+    ///   `place_global_label`, `place_hierarchical_label`). A feature, not an arm.
     ///   This is most of what is left. It also covers ids whose obvious
     ///   target turns out to be a STUB, where an arm would trade a logged
     ///   warning for a silent no-op. Read the handler body, not just its
@@ -408,7 +409,7 @@ mod tests {
         "place_power_symbol",
         "previous_highlighted_net_item",
         "refresh_view",
-        "reset_local_coordinates", "rubber_stamp_copy", "select_expand_connection",
+        "reset_local_coordinates", "select_expand_connection",
         "select_node_or_connection_item", "sheet_navigation_back", "sheet_navigation_forward",
         "switch_segment_posture", "toggle_cross_select_mode", "toggle_floating_panels",
         "toggle_search_panel",
