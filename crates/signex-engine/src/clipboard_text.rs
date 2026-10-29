@@ -200,6 +200,7 @@ mod tests {
             font_family: Some("Iosevka".to_owned()),
             justify_h: Default::default(),
             justify_v: Default::default(),
+            locked: true,
         });
         sheet.labels.push(
             serde_json::from_str(&format!(
@@ -214,6 +215,7 @@ mod tests {
             end: at(25.0, 0.0),
             width: 0.5,
             stroke_color: None,
+            locked: true,
         };
         let poly = SchDrawing::Polyline {
             uuid: Uuid::new_v4(),
@@ -221,6 +223,7 @@ mod tests {
             width: 0.25,
             fill: Default::default(),
             stroke_color: None,
+            locked: false,
         };
         sheet.drawing_placements.insert(
             poly_uuid(&poly),
