@@ -307,8 +307,9 @@ impl ProjectSheetPlan {
 }
 
 /// The plan for `source`'s project. Every open engine is snapshotted, so a
-/// sheet the hierarchy walk reaches that is open (declared or not) counts
-/// with its unsaved edits; only sheets that are not open are read from disk.
+/// sheet the hierarchy walk reaches that is open (declared or not, whoever
+/// owns it) counts with its unsaved edits; only sheets that are not open are
+/// read from disk.
 pub(crate) fn plan_project_sheets_for(
     document_state: &DocumentState,
     source: &Path,
@@ -1367,5 +1368,143 @@ mod tests {
             Uuid::from_u128(0x0BAD),
             "/other sorts before /proj, so it wins when no root is named"
         );
+    }
+    fn project_of(
+        id: crate::app::state::ProjectId,
+        dir: &str,
+        sheets: &[&str],
+    ) -> crate::app::state::LoadedProject {
+        crate::app::state::LoadedProject {
+            id,
+            path: PathBuf::from(dir).join("p.snxprj"),
+            data: signex_types::project::ProjectData {
+                description: None,
+                name: dir.to_owned(),
+                dir: dir.to_owned(),
+                schematic_root: sheets.first().map(|s| (*s).to_owned()),
+                pcb_file: None,
+                sheets: sheets
+                    .iter()
+                    .map(|name| signex_types::project::SheetEntry {
+                        name: (*name).to_owned(),
+                        filename: (*name).to_owned(),
+                        symbols_count: 0,
+                        wires_count: 0,
+                        labels_count: 0,
+                        unknown: Default::default(),
+                    })
+                    .collect(),
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: Vec::new(),
+                enable_git: false,
+                net_classes: Vec::new(),
+                rules: None,
+                annotation: None,
+                parameters: Default::default(),
+                unknown: Default::default(),
+            },
+            pending_libraries: HashMap::new(),
+            case_fold: Default::default(),
+            case_probed: false,
+            case_decided: false,
+        }
+    }
+
+    /// A sheet holding one part `reference` and one child reference per name
+    /// in `children`.
+    fn sheet_with(reference: &str, children: &[&str]) -> SchematicSheet {
+        let mut sheet = SchematicSheet {
+            uuid: Uuid::new_v4(),
+            paper_size: "A4".to_owned(),
+            ..Default::default()
+        };
+        sheet.symbols.push(signex_types::schematic::Symbol {
+            uuid: Uuid::new_v4(),
+            lib_id: "lib:r".to_owned(),
+            reference: reference.to_owned(),
+            unit: 1,
+            ..Default::default()
+        });
+        sheet.child_sheets = children.iter().map(|name| child_ref(name)).collect();
+        sheet
+    }
+
+    fn write_to_disk(dir: &Path, name: &str, sheet: &SchematicSheet) {
+        let text = signex_types::format::SnxSchematic::new(sheet.clone())
+            .write_string()
+            .expect("write");
+        std::fs::write(dir.join(name), text).expect("write sheet");
+    }
+
+    fn references_seen(plan: &ProjectSheetPlan) -> Vec<String> {
+        let set = plan.assemble();
+        let mut all: Vec<String> = set
+            .sheets
+            .values()
+            .flat_map(|sheet| sheet.symbols.iter().map(|s| s.reference.clone()))
+            .collect();
+        all.sort();
+        all
+    }
+
+    fn open_with(app: &mut crate::app::Signex, path: PathBuf, sheet: SchematicSheet) {
+        app.document_state
+            .engines
+            .insert(path, signex_engine::Engine::new(sheet).expect("engine"));
+    }
+
+    /// a (open) -> mid (closed) -> leaf (open, unsaved R50; disk says R2):
+    /// the leaf has no owner, and the walk still reaches it.
+    #[test]
+    fn an_open_grandchild_behind_a_closed_parent_counts_with_its_unsaved_edits() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        write_to_disk(dir, "a.snxsch", &sheet_with("R1", &["mid.snxsch"]));
+        write_to_disk(dir, "mid.snxsch", &sheet_with("R3", &["leaf.snxsch"]));
+        write_to_disk(dir, "leaf.snxsch", &sheet_with("R2", &[]));
+        let (mut app, _task) = crate::app::Signex::new();
+        let id = app.document_state.mint_project_id();
+        app.document_state
+            .projects
+            .push(project_of(id, &dir.to_string_lossy(), &["a.snxsch"]));
+        open_with(
+            &mut app,
+            dir.join("a.snxsch"),
+            sheet_with("R1", &["mid.snxsch"]),
+        );
+        open_with(&mut app, dir.join("leaf.snxsch"), sheet_with("R50", &[]));
+
+        let plan = plan_project_sheets_for(&app.document_state, &dir.join("a.snxsch"));
+        assert!(references_seen(&plan).contains(&"R50".to_owned()));
+        assert!(!references_seen(&plan).contains(&"R2".to_owned()));
+    }
+
+    /// p1 and p2 both list `s`; ownership goes to p1, the paste is on p2's
+    /// `b`, and `s` has an unsaved R50.
+    #[test]
+    fn a_sheet_listed_by_two_projects_counts_for_the_one_pasted_into() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        write_to_disk(dir, "b.snxsch", &sheet_with("R1", &[]));
+        write_to_disk(dir, "s.snxsch", &sheet_with("R2", &[]));
+        let (mut app, _task) = crate::app::Signex::new();
+        let (p1, p2) = (
+            app.document_state.mint_project_id(),
+            app.document_state.mint_project_id(),
+        );
+        let dir_text = dir.to_string_lossy();
+        app.document_state
+            .projects
+            .push(project_of(p1, &dir_text, &["s.snxsch"]));
+        app.document_state
+            .projects
+            .push(project_of(p2, &dir_text, &["b.snxsch", "s.snxsch"]));
+        open_with(&mut app, dir.join("b.snxsch"), sheet_with("R1", &[]));
+        open_with(&mut app, dir.join("s.snxsch"), sheet_with("R50", &[]));
+
+        let plan = plan_project_sheets_for(&app.document_state, &dir.join("b.snxsch"));
+        let seen = references_seen(&plan);
+        assert!(seen.contains(&"R50".to_owned()), "{seen:?}");
     }
 }

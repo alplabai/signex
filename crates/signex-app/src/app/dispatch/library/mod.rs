@@ -36,6 +36,7 @@ use signex_library::{PrimitiveKind, PrimitiveRef, RowId};
 
 mod alternate_symbols;
 mod browser;
+mod commit_pending;
 mod component_preview;
 mod components_panel;
 mod datasheet_save;
@@ -140,6 +141,13 @@ impl Signex {
             LibraryMessage::BrowserDismissDeleteError { library_path } => {
                 self.handle_browser_dismiss_delete_error(library_path)
             }
+            LibraryMessage::BrowserCommitPending { library_path } => {
+                self.handle_browser_commit_pending(library_path)
+            }
+            LibraryMessage::BrowserCommitPendingDone {
+                library_path,
+                result,
+            } => self.handle_browser_commit_pending_done(&library_path, result),
             LibraryMessage::BrowserBeginRenameTable {
                 library_path,
                 table,

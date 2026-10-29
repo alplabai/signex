@@ -1048,7 +1048,9 @@ fn lock_branch(dir: &Path) -> PathBuf {
 }
 
 /// A commit that fails (locked branch ref) leaves HEAD and the index exactly
-/// as before, so the next ordinary row write commits only the row.
+/// as before. The rename itself stands (#858: the file is already moved, and
+/// undoing it would be a second way to lose work): the library follows it, the
+/// rename is listed as uncommitted, and the next commit carries it.
 #[test]
 fn a_failed_rename_commit_leaves_the_index_and_head_untouched() {
     let _ = diagnostics::init_logging();
@@ -1061,14 +1063,23 @@ fn a_failed_rename_commit_leaves_the_index_and_head_untouched() {
 
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
 
-    assert!(f.alpha.exists() && !renamed.exists());
-    assert!(f.app.library.library_at(&f.alpha).is_some());
+    assert!(renamed.exists() && !f.alpha.exists(), "the rename stands");
+    assert!(f.app.library.library_at(&renamed).is_some());
+    assert!(f.app.library.library_at(&f.alpha).is_none());
     assert_eq!(
         disk_library_paths(&f.prj)[0],
-        PathBuf::from("alpha/alpha.snxlib"),
-        "the project patch must be undone with the rename"
+        PathBuf::from("alpha/alpha2.snxlib"),
+        "the project follows the rename"
     );
     fs::remove_file(lock).unwrap();
+    f.app.library.sync_uncommitted();
+    let pending = f
+        .app
+        .library
+        .uncommitted_in(&renamed)
+        .expect("the rename is listed as uncommitted");
+    assert_eq!(pending.paths, vec!["alpha.snxlib", "alpha2.snxlib"]);
+    // The failed commit touched neither HEAD nor the index.
     let idx = repo.index().unwrap();
     assert!(idx.get_path(Path::new("alpha2.snxlib"), 0).is_none());
     assert!(idx.get_path(Path::new("alpha.snxlib"), 0).is_some());
@@ -1077,13 +1088,15 @@ fn a_failed_rename_commit_leaves_the_index_and_head_untouched() {
         head_before
     );
 
-    adapter_write(&f.app, &f.alpha, "after_fail");
+    adapter_write(&f.app, &renamed, "after_fail");
     let tree = repo.head().unwrap().peel_to_tree().unwrap();
-    assert!(tree.get_name("alpha.snxlib").is_some());
     assert!(
-        tree.get_name("alpha2.snxlib").is_none(),
-        "phantom alpha2.snxlib committed from a stale index"
+        tree.get_name("alpha.snxlib").is_none(),
+        "the old name is committed as removed"
     );
+    assert!(tree.get_name("alpha2.snxlib").is_some());
+    f.app.library.sync_uncommitted();
+    assert!(f.app.library.uncommitted_in(&renamed).is_none());
 }
 
 /// A library without a repository renames cleanly.

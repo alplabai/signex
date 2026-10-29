@@ -12,7 +12,9 @@ use uuid::Uuid;
 use crate::paste_support::sheet::{
     app_with_sheet, app_with_sheet_at, click, part, populated_sheet, references, select,
 };
-use crate::paste_support::{answer, answer_request, paste, request, send_and_settle, written_text};
+use crate::paste_support::{
+    answer, answer_request, paste, request, send_and_settle, settle, written_text,
+};
 use crate::placement_session::second_sheet;
 
 fn symbol_count(app: &Signex) -> usize {
@@ -196,8 +198,12 @@ fn array_with_choice(global: PasteDesignators, chosen: PasteDesignators) -> Vec<
     answer(&mut app, PasteIntent::Array, None);
     let state = app.ui_state.paste_array.as_ref().expect("dialog open");
     assert_eq!(state.designators, global, "starts as the saved preference");
-    for msg in [
+    // Choosing Next free reads the project's numbers; OK waits for them.
+    let task = app.update(Message::Edit(EditMsg::PasteArray(
         PasteArrayMsg::DesignatorsChosen(chosen),
+    )));
+    settle(&mut app, task, true);
+    for msg in [
         PasteArrayMsg::CountChanged("2".to_owned()),
         PasteArrayMsg::ApplyPressed,
     ] {

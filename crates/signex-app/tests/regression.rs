@@ -52,6 +52,8 @@ mod pdf_page_setup;
 
 #[path = "regression/paste_clipboard.rs"]
 mod paste_clipboard;
+#[path = "regression/paste_followups.rs"]
+mod paste_followups;
 #[path = "regression/paste_numbering_async.rs"]
 mod paste_numbering_async;
 #[path = "regression/paste_stamp_array.rs"]
@@ -180,6 +182,9 @@ mod library_browser_cell_commit;
 mod library_range_filter;
 #[path = "regression/library_row_base_local.rs"]
 mod library_row_base_local;
+
+#[path = "regression/library_uncommitted.rs"]
+mod library_uncommitted;
 
 #[path = "regression/library_read_only_mount.rs"]
 mod library_read_only_mount;

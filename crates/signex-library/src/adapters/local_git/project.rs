@@ -177,6 +177,12 @@ impl LocalGitProjectAdapter {
         let sig = git2::Signature::now(&sig_name, &sig_email)
             .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 
+        // One commit at a time per repository, across adapters and
+        // processes (#893): `git_lock` only covers this instance.
+        let _commit_lock = super::commit_lock::lock_repo_for_commit(repo.path()).map_err(|e| {
+            LibraryError::Backend(format!("git commit {}: {e}", rel_path.display()))
+        })?;
+
         let final_message = if message.is_empty() {
             format!("save {}", rel_path.display())
         } else {
@@ -185,7 +191,7 @@ impl LocalGitProjectAdapter {
         super::helpers::retry_on_git_lock(repo.path(), || {
             super::helpers::stage_and_commit(
                 &repo,
-                removed_rel_path,
+                removed_rel_path.as_slice(),
                 rel_path,
                 content,
                 &sig,
