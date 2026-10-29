@@ -134,3 +134,56 @@ fn a_merge_never_leaves_the_selection_naming_the_folded_wire() {
         vec![SelectedItem::new(id(1), SelectedKind::Wire)]
     );
 }
+
+/// The single-command path hands the engine the net colours too: moving a red
+/// wire into line with an uncoloured one must not fold them.
+#[test]
+fn moving_a_red_wire_into_line_with_an_uncoloured_one_does_not_fold_them() {
+    let mut app = app_with_first_leg();
+    let red_wire = Wire {
+        uuid: id(2),
+        start: Point::new(5.08, 30.48),
+        end: Point::new(10.16, 30.48),
+        ..Default::default()
+    };
+    app.apply_engine_command(
+        signex_engine::Command::PlaceWireSegment { wire: red_wire },
+        true,
+        true,
+    );
+    app.ui_state.wire_color_overrides.insert(id(2), RED);
+    app.interaction_state.active_canvas_mut().selected =
+        vec![SelectedItem::new(id(2), SelectedKind::Wire)];
+    app.ui_state.move_selection.dx = "0".to_string();
+    app.ui_state.move_selection.dy = "-5.08".to_string();
+
+    let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
+
+    let after = wires(&app);
+    assert_eq!(after.len(), 2, "different colours stay two wires");
+    assert!((after[1].start.y - 25.4).abs() < 1e-9, "the wire did move");
+}
+
+#[test]
+fn the_same_move_folds_when_neither_wire_is_coloured() {
+    let mut app = app_with_first_leg();
+    let wire = Wire {
+        uuid: id(2),
+        start: Point::new(5.08, 30.48),
+        end: Point::new(10.16, 30.48),
+        ..Default::default()
+    };
+    app.apply_engine_command(
+        signex_engine::Command::PlaceWireSegment { wire },
+        true,
+        true,
+    );
+    app.interaction_state.active_canvas_mut().selected =
+        vec![SelectedItem::new(id(2), SelectedKind::Wire)];
+    app.ui_state.move_selection.dx = "0".to_string();
+    app.ui_state.move_selection.dy = "-5.08".to_string();
+
+    let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
+
+    assert_eq!(wires(&app).len(), 1);
+}

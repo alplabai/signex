@@ -49,6 +49,11 @@ impl Signex {
             .map(|w| w.uuid)
             .filter(|id| !before.contains(id))
             .collect();
+        // A refused or no-op break adds nothing: leave the colours and the
+        // tab's dirty state alone.
+        if added.is_empty() {
+            return;
+        }
         for id in added {
             self.ui_state.wire_color_overrides.insert(id, color);
         }
@@ -64,14 +69,19 @@ mod tests {
     use signex_types::schematic::{SchematicSheet, Wire};
 
     fn app_with_wire() -> (Signex, uuid::Uuid) {
+        app_with_wire_at(4321.0)
+    }
+
+    /// `y` keeps each test's log lines distinct: the diagnostics ring is shared.
+    fn app_with_wire_at(y: f64) -> (Signex, uuid::Uuid) {
         let _ = crate::diagnostics::init_logging();
         let id = uuid::Uuid::new_v4();
         let sheet = SchematicSheet {
             uuid: uuid::Uuid::new_v4(),
             wires: vec![Wire {
                 uuid: id,
-                start: Point::new(0.0, 4321.0),
-                end: Point::new(20.0, 4321.0),
+                start: Point::new(0.0, y),
+                end: Point::new(20.0, y),
                 ..Default::default()
             }],
             ..Default::default()
@@ -133,6 +143,30 @@ mod tests {
 
         assert_eq!(wire_count(&app), 1);
         assert_eq!(logged(needle), before + 1);
+    }
+
+    #[test]
+    fn a_refused_break_of_a_coloured_wire_leaves_the_colours_and_revision_alone() {
+        let (mut app, id) = app_with_wire_at(4322.0);
+        let red = signex_types::theme::Color::new(255, 0, 0, 255);
+        app.ui_state.wire_color_overrides.insert(id, red);
+        let engine = app.document_state.active_engine_mut().expect("engine");
+        engine
+            .execute(signex_engine::Command::SetItemLocked {
+                item: signex_types::schematic::SelectedItem::new(
+                    id,
+                    signex_types::schematic::SelectedKind::Wire,
+                ),
+                locked: true,
+            })
+            .expect("lock");
+        let revisions = app.ui_state.net_color_revision.clone();
+
+        app.break_wire_click(8.0, 4322.0);
+
+        assert_eq!(wire_count(&app), 1);
+        assert_eq!(app.ui_state.wire_color_overrides.len(), 1);
+        assert_eq!(app.ui_state.net_color_revision, revisions);
     }
 
     #[test]
