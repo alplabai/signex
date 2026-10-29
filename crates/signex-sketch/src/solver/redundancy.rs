@@ -12,6 +12,11 @@
 //! constraints before it: a multi-row constraint with one new direction still
 //! removes a degree of freedom, so deleting it would not be free.
 //!
+//! The scan is charged to the solve's [`WorkMeter`] (the whole pass up front,
+//! at its worst case) and is skipped, reporting no ids, when the pool cannot
+//! afford it: it grows roughly cubically with a block, and a shared datum puts
+//! every constraint in one block.
+//!
 //! The scan is per connected block of constraints (those sharing a state
 //! column), so sketches with many independent pads cost the sum of small
 //! blocks, not one large matrix.
@@ -30,6 +35,7 @@ use crate::solver::derivatives::{SparseRow, arc_closure_rows, constraint_rows};
 use crate::solver::dof::RANK_TOL;
 use crate::solver::residual::ResolvedParams;
 use crate::solver::state::EntityIndex;
+use crate::solver::work::{WorkMeter, redundancy_block_cost};
 
 /// A row is dependent when what survives projection onto the earlier rows
 /// is under this fraction of its own length.
@@ -39,13 +45,17 @@ const DEPENDENCE_TOL: f64 = 1e-8;
 /// rows of the constraints before them (and the arc closures), in
 /// constraint order. Constraints in `violated` are neither flagged nor
 /// allowed to imply others.
+///
+/// `Ok(None)` when `meter` cannot afford the pass: nothing is reported, not
+/// a partial list, and the pool is left as it was.
 pub fn redundant_constraint_ids(
     sketch: &SketchData,
     state: &[f64],
     index: &EntityIndex,
     params: &ResolvedParams,
     violated: &[ConstraintId],
-) -> Result<Vec<ConstraintId>, SketchError> {
+    meter: &mut WorkMeter,
+) -> Result<Option<Vec<ConstraintId>>, SketchError> {
     // Arc closures are structural equations: they join the basis first, so
     // a constraint repeating one is the redundant side.
     let mut rows: Vec<(Option<ConstraintId>, SparseRow)> = arc_closure_rows(state, index, sketch)?
@@ -64,20 +74,43 @@ pub fn redundant_constraint_ids(
 
     // A constraint's rows can fall in different blocks, so the verdict is
     // taken over all of them: (has a gradient, has an independent row).
-    let mut verdicts: HashMap<ConstraintId, (bool, bool)> = HashMap::new();
-    for block in blocks(&rows, state.len()) {
-        scan_block(&rows, &block, &mut verdicts);
+    let blocks = blocks(&rows, state.len());
+    let cost = blocks.iter().fold(0u64, |total, block| {
+        total.saturating_add(redundancy_block_cost(
+            block.len(),
+            column_count(&rows, block),
+        ))
+    });
+    if !meter.try_charge(cost) {
+        return Ok(None);
     }
-    Ok(sketch
-        .constraints
+    let mut verdicts: HashMap<ConstraintId, (bool, bool)> = HashMap::new();
+    for block in &blocks {
+        scan_block(&rows, block, &mut verdicts);
+    }
+    Ok(Some(
+        sketch
+            .constraints
+            .iter()
+            .map(|c| c.id)
+            .filter(|id| {
+                verdicts
+                    .get(id)
+                    .is_some_and(|&(grad, indep)| grad && !indep)
+            })
+            .collect(),
+    ))
+}
+
+/// Distinct state columns the rows of `block` touch.
+fn column_count(rows: &[(Option<ConstraintId>, SparseRow)], block: &[usize]) -> usize {
+    let mut cols: Vec<usize> = block
         .iter()
-        .map(|c| c.id)
-        .filter(|id| {
-            verdicts
-                .get(id)
-                .is_some_and(|&(grad, indep)| grad && !indep)
-        })
-        .collect())
+        .flat_map(|&i| rows[i].1.iter().map(|&(col, _)| col))
+        .collect();
+    cols.sort_unstable();
+    cols.dedup();
+    cols.len()
 }
 
 /// Structural zeros (a Horizontal row lists both columns of each point)
@@ -147,16 +180,26 @@ fn scan_block(
         while owner.is_some() && end < block.len() && rows[block[end]].0 == owner {
             end += 1;
         }
-        let vectors: Vec<Vec<f64>> = block[start..end].iter().map(|&i| dense(i)).collect();
+        // Each row is projected onto the basis before its owner once; the
+        // verdict and the basis update both read that projection.
+        let owner_start = basis.len();
+        let projected: Vec<(f64, Vec<f64>)> = block[start..end]
+            .iter()
+            .map(|&i| {
+                let v = dense(i);
+                (norm(&v), project_out(v.clone(), &basis))
+            })
+            .collect();
         if let Some(id) = owner {
-            let (grad, indep) = classify(&vectors, &basis);
+            let (grad, indep) = classify(&projected);
             let entry = verdicts.entry(id).or_default();
             entry.0 |= grad;
             entry.1 |= indep;
         }
-        for v in vectors {
-            let before = norm(&v);
-            let v = project_out(v, &basis);
+        for (before, v) in projected {
+            // Later rows of the owner also lose what the owner's earlier
+            // rows just added; those are orthogonal to the old basis.
+            let v = project_out(v, &basis[owner_start..]);
             let after = norm(&v);
             if before > RANK_TOL && after > DEPENDENCE_TOL * before {
                 basis.push(v.iter().map(|x| x / after).collect());
@@ -167,16 +210,16 @@ fn scan_block(
 }
 
 /// Whether any row has a gradient, and whether any such row lies outside
-/// the span of `basis`. A row with no gradient says nothing.
-fn classify(rows: &[Vec<f64>], basis: &[Vec<f64>]) -> (bool, bool) {
+/// the span of the basis. Each entry is a row's length and what is left of it
+/// after projecting out that basis. A row with no gradient says nothing.
+fn classify(projected: &[(f64, Vec<f64>)]) -> (bool, bool) {
     let (mut grad, mut indep) = (false, false);
-    for v in rows {
-        let before = norm(v);
-        if before <= RANK_TOL {
+    for (before, rest) in projected {
+        if *before <= RANK_TOL {
             continue;
         }
         grad = true;
-        indep |= norm(&project_out(v.clone(), basis)) > DEPENDENCE_TOL * before;
+        indep |= norm(rest) > DEPENDENCE_TOL * before;
     }
     (grad, indep)
 }

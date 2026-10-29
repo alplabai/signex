@@ -332,3 +332,59 @@ fn an_emptied_sketch_clears_its_pads_but_a_never_baked_one_keeps_literal_pads() 
     assert!(fp.pads.is_empty(), "stale pad survived");
     assert!(state.pads.is_empty());
 }
+
+/// A field bake that fails after the pads were replaced must still leave the
+/// sketch owning them, or a later delete-all keeps them as stale pads.
+#[test]
+fn a_failed_field_bake_on_a_first_bake_still_records_the_pads() {
+    use signex_library::primitive::footprint::Pad;
+    use signex_sketch::SketchError;
+    use signex_sketch::attr::PadAttr;
+
+    let (mut fp, _, plane) = square();
+    fp.sketch.as_mut().unwrap().entities.clear();
+    fp.pads.push(Pad {
+        number: "L1".into(),
+        ..Pad::default()
+    });
+    let mut pad = Entity::new(
+        SketchEntityId::new(),
+        plane,
+        EntityKind::Point { x: 0.0, y: 0.0 },
+    );
+    pad.pad = Some(PadAttr {
+        number: "1".into(),
+        size_x_expr: "1mm".into(),
+        size_y_expr: "0.5mm".into(),
+        ..PadAttr::default()
+    });
+    fp.sketch.as_mut().unwrap().entities.push(pad);
+    let mut state = FootprintEditorState::from_footprint(&fp);
+
+    let sketch = fp.sketch.as_ref().unwrap();
+    let resolved = signex_sketch::parameter::resolve(&sketch.parameters).unwrap();
+    let out = state.sketch_solver.solve(sketch, &resolved).unwrap();
+    assert!(!sketch.was_baked(BakedKind::Pads), "a first-ever bake");
+
+    let failed = super::sketch_bake::bake_solution_with(
+        &mut state,
+        &mut fp,
+        &resolved,
+        out,
+        |_, _, _, _| {
+            Err(SketchError::ParameterNotFound(
+                "injected field-bake failure".into(),
+            ))
+        },
+    );
+    assert!(failed.is_err());
+    assert_eq!(fp.pads.len(), 1);
+    assert_eq!(fp.pads[0].number, "1");
+    assert!(
+        fp.sketch.as_ref().unwrap().was_baked(BakedKind::Pads),
+        "the sketch-baked pads have no record"
+    );
+
+    delete_all_entities(&mut state, &mut fp);
+    assert!(fp.pads.is_empty(), "stale pad survived the delete-all");
+}
