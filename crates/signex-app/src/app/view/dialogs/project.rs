@@ -447,6 +447,7 @@ impl Signex {
                 mk_input("0.127", &st.step_mm, |v| Message::GridProperties(
                     GridPropertiesMsg::SetStep(v)
                 )),
+                text("mm, both axes").size(TS.caption).color(text_muted),
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center),
