@@ -224,7 +224,7 @@ fn deleting_the_last_silk_entity_clears_the_baked_outline() {
 #[test]
 fn deleting_the_courtyard_entity_clears_and_reports_it() {
     let (mut fp, edges, _) = square();
-    entity_mut(&mut fp, edges[0]).courtyard = Some(CourtyardAttr);
+    entity_mut(&mut fp, edges[0]).courtyard = Some(CourtyardAttr {});
     let mut state = FootprintEditorState::from_footprint(&fp);
     rebuild(&mut state, &mut fp);
     assert!(!fp.courtyard.points.is_empty());
