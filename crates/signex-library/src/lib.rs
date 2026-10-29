@@ -211,6 +211,7 @@ fn with_rollback_notes(error: adapter::LibraryError, notes: Vec<String>) -> adap
     match error {
         LibraryError::Conflict(m) => LibraryError::Conflict(format!("{m}; {notes}")),
         LibraryError::Backend(m) => LibraryError::Backend(format!("{m}; {notes}")),
+        LibraryError::InvalidData(m) => LibraryError::InvalidData(format!("{m}; {notes}")),
         other => LibraryError::Backend(format!("{other}; {notes}")),
     }
 }

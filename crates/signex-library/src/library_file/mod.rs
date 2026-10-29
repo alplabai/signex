@@ -349,6 +349,7 @@ impl From<LibraryFileError> for LibraryError {
     /// matching on the inner enum.
     fn from(value: LibraryFileError) -> Self {
         match value {
+            // Encoding our own value failed: a program bug, not the user's data.
             LibraryFileError::TomlSer(_) => LibraryError::Backend(value.to_string()),
             _ => LibraryError::InvalidData(value.to_string()),
         }

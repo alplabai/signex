@@ -455,7 +455,9 @@ impl LockedFolder {
 #[cfg(unix)]
 impl Drop for LockedFolder {
     fn drop(&mut self) {
-        std::fs::set_permissions(&self.0, self.1.clone()).unwrap();
+        if let Err(e) = std::fs::set_permissions(&self.0, self.1.clone()) {
+            eprintln!("could not restore {}: {e}", self.0.display());
+        }
     }
 }
 
@@ -501,8 +503,19 @@ fn a_failed_cascade_is_retried_by_the_next_save_without_edits() {
     };
     assert_eq!(owed(&f), (true, true, true, 1));
 
-    // Save again, nothing edited.
+    // Save again, nothing edited. Nothing is written, so the container is
+    // not stamped as changed: autosave and crash recovery see no new edit.
+    let stamped = f.app.document_state.symbol_editors[&f.symbol_path]
+        .file
+        .updated;
     save(&mut f.app);
+    assert_eq!(
+        f.app.document_state.symbol_editors[&f.symbol_path]
+            .file
+            .updated,
+        stamped,
+        "a no-edit retry must not stamp the file as updated"
+    );
     let row = row_on_disk(&f.library_file, f.users);
     assert_eq!(row.symbol_version, "0.0.2");
     assert_eq!(row.version, "0.0.2", "bumped once");

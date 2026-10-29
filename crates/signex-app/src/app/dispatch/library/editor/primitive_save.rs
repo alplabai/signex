@@ -199,7 +199,10 @@ impl Signex {
                     symbol.updated = now;
                 }
             }
-            editor.file.updated = now;
+            // A retry with no edit writes nothing, so it is not a change.
+            if !changed.is_empty() {
+                editor.file.updated = now;
+            }
             editor.dirty = false;
             editor.save_generation = generation;
             return Ok(Snapshot::Symbol {
@@ -230,7 +233,9 @@ impl Signex {
                     footprint.updated = now;
                 }
             }
-            editor.file.updated = now;
+            if !changed.is_empty() {
+                editor.file.updated = now;
+            }
             editor.dirty = false;
             editor.save_generation = generation;
             return Ok(Snapshot::Footprint {
@@ -416,6 +421,33 @@ impl Signex {
         } else if edited_since == Some(false) {
             self.mark_primitive_clean(path);
         }
+    }
+
+    /// Say so when an editor that still owes row updates is dropped or
+    /// replaced: they are lost, and the user has to re-bind by hand.
+    pub(crate) fn warn_if_cascade_owed(&self, path: &std::path::Path) {
+        let document = &self.document_state;
+        let owes = document
+            .symbol_editors
+            .get(path)
+            .map(|e| !e.cascade_owed.is_empty())
+            .or_else(|| {
+                document
+                    .footprint_editors
+                    .get(path)
+                    .map(|e| !e.cascade_owed.is_empty())
+            })
+            .unwrap_or(false);
+        if !owes {
+            return;
+        }
+        let name = path.file_stem().map_or_else(
+            || path.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        let line =
+            format!("Re-bind the rows of {name} by hand; its pending row updates were discarded");
+        crate::diagnostics::log_warning(crate::text_trunc::prefix_within_bytes(&line, 157));
     }
 
     /// The file at `path` is saved but its rows are not all moved: keep the
