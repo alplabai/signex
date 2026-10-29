@@ -3,8 +3,10 @@
 
 mod commands;
 mod fixture;
+mod followups;
 mod highlight;
 mod history;
 mod hover;
 mod partners;
+mod placements;
 mod robustness;

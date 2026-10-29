@@ -131,19 +131,24 @@ pub(super) fn collect_members(
                 (wires, NetMemberKind::Wire),
                 (junctions, NetMemberKind::Junction),
             ] {
-                out.extend(ids.iter().map(|id| {
-                    let p = at.get(id).copied().unwrap_or_default();
-                    member(kind.clone(), *id, p, String::new())
-                }));
+                for id in ids {
+                    // Every wire and junction of a net is on its sheet; one
+                    // with no position is skipped rather than put at the origin.
+                    let Some(p) = at.get(id).copied() else {
+                        debug_assert!(false, "net element {id} is not on its sheet");
+                        continue;
+                    };
+                    out.push(member(kind.clone(), *id, p, String::new()));
+                }
             }
         }
         if let Some(terminals) = a.terminals.get(&root) {
             let positions = a.terminal_at.get(&root);
             for (i, t) in terminals.iter().enumerate() {
-                let at = positions
-                    .and_then(|p| p.get(i))
-                    .copied()
-                    .unwrap_or_default();
+                let Some(at) = positions.and_then(|p| p.get(i)).copied() else {
+                    debug_assert!(false, "pin {} has no tip position", t.pin);
+                    continue;
+                };
                 let kind = NetMemberKind::Pin {
                     reference: t.reference.clone(),
                     pin: t.pin.clone(),
