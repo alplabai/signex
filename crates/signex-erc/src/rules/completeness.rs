@@ -63,7 +63,11 @@ fn report_parts(
         if !part.iter().any(|p| applies(*p)) || part.iter().any(|p| has(*p)) {
             continue;
         }
-        let (first, designator) = part[0];
+        // The marker sits on the lowest-numbered unit (UUID breaks ties), the
+        // one a reader looks for first, independent of document order.
+        let Some(&(first, designator)) = part.iter().min_by_key(|(s, _)| (s.unit, s.uuid)) else {
+            continue;
+        };
         let d = Diagnostic::new(kind, message(display(designator)), first.position)
             .with_primary(sel(first.uuid, SelectedKind::Symbol));
         // Only a symbol placed several times needs the designator to tell its

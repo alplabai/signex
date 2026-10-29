@@ -271,3 +271,54 @@ fn re_annotating_a_single_placement_part_lapses_its_waiver() {
     assert!(after.lapsed.contains(&0), "LAPSED, not unmatched");
     assert_eq!(after.kept.len(), 1);
 }
+
+/// A sheet holding `parts` (designator, unit) of one four-unit library part.
+fn unit_sheet(id: u128, parts: &[(&str, u32)]) -> SchematicSheet {
+    use signex_types::schematic::{LibSymbol, Symbol};
+    let graphics: Vec<serde_json::Value> = (1..=4)
+        .map(|u| serde_json::json!({"unit": u, "graphic": {"type": "polyline", "points": []}}))
+        .collect();
+    let lib: Option<LibSymbol> =
+        serde_json::from_value(serde_json::json!({"id": "Amp:Quad", "graphics": graphics})).ok();
+    let mut sheet = SchematicSheet {
+        uuid: Uuid::from_u128(id),
+        symbols: parts
+            .iter()
+            .enumerate()
+            .map(|(i, (reference, unit))| Symbol {
+                uuid: Uuid::from_u128(id * 100 + i as u128),
+                lib_id: "Amp:Quad".into(),
+                reference: (*reference).into(),
+                unit: *unit,
+                position: Point::new(25.4 * (i as f64 + 1.0), 25.4),
+                ..Default::default()
+            })
+            .collect(),
+        ..Default::default()
+    };
+    if let Some(lib) = lib {
+        sheet.lib_symbols.insert("Amp:Quad".into(), lib);
+    }
+    sheet
+}
+
+#[test]
+fn the_project_units_pass_gives_each_finding_its_own_identity() {
+    // U1 split across both sheets, U2 and U3 on one sheet each; every part
+    // misses units, so several findings land on each sheet.
+    let a = unit_sheet(1, &[("U1", 1), ("U2", 1), ("U2", 2), ("U3", 4)]);
+    let b = unit_sheet(2, &[("U1", 3), ("U4", 2), ("U5", 1)]);
+    let found = crate::project_units_not_placed(&[("a", &a), ("b", &b)]);
+    assert!(found.len() >= 4, "{found:?}");
+    for (key, sheet) in [("a", &a), ("b", &b)] {
+        let mut ids: Vec<Vec<String>> = found
+            .iter()
+            .filter(|(k, _)| *k == key)
+            .map(|(_, v)| identity_objects(v, sheet))
+            .collect();
+        let n = ids.len();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), n, "sheet {key}: {found:?}");
+    }
+}

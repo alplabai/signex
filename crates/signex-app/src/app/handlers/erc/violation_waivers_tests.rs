@@ -461,3 +461,54 @@ fn one_global_net_on_two_open_sheets_is_waived_per_sheet() {
     );
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn reopening_the_same_finding_keeps_the_typed_reason() {
+    let (mut app, dir, top) = app_with_two_failing_nets();
+    let top_path = dir.join("top.snxsch");
+    let (sheet, wire) = top_with_drifting_wire(&top);
+    open_with(&mut app.document_state, &top_path, sheet.clone());
+    app.run_erc_blocking();
+    let start = |app: &mut Signex, pick: &dyn Fn(&crate::panels::ErcDiagnosticEntry) -> bool| {
+        let entry = app
+            .build_erc_diagnostic_entries()
+            .into_iter()
+            .find(|e| pick(e))
+            .expect("row");
+        send(
+            app,
+            ErcWaiverMsg::Started {
+                key: entry.waiver_key.clone().expect("waivable"),
+                message: entry.message.clone(),
+                sheet: entry.sheet_path.clone(),
+            },
+        );
+    };
+    let on_wire = |e: &crate::panels::ErcDiagnosticEntry| e.select.is_some_and(|s| s.uuid == wire);
+    start(&mut app, &on_wire);
+    send(&mut app, ErcWaiverMsg::ReasonChanged("test stub".into()));
+    send(&mut app, ErcWaiverMsg::AuthorChanged("A. Designer".into()));
+    // The sheet changes, Confirm is refused, the user re-runs and waives again.
+    let mut nudged = sheet;
+    if let Some(w) = nudged.wires.iter_mut().find(|w| w.uuid == wire) {
+        w.end.x = 50.8;
+    }
+    open_with(&mut app.document_state, &top_path, nudged);
+    send(&mut app, ErcWaiverMsg::Confirmed);
+    assert!(
+        app.ui_state
+            .erc_waive_draft
+            .as_ref()
+            .is_some_and(|d| d.error.is_some())
+    );
+    app.run_erc_blocking();
+    start(&mut app, &on_wire);
+    let draft = app.ui_state.erc_waive_draft.as_ref().expect("editor");
+    assert_eq!(draft.reason, "test stub");
+    assert_eq!(draft.author, "A. Designer");
+    // A different finding starts with an empty reason.
+    start(&mut app, &|e| e.rule_id == RULE);
+    let draft = app.ui_state.erc_waive_draft.as_ref().expect("editor");
+    assert!(draft.reason.is_empty());
+    std::fs::remove_dir_all(&dir).ok();
+}

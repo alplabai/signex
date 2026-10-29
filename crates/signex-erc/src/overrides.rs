@@ -46,9 +46,55 @@ pub fn apply_overrides(
             Some(kind) => format!("{kind:?}"),
             None => v.rule_id.to_string(),
         };
-        (bucket, name)
+        // Within a rule, the order a reader expects, not emission order
+        // (rules pick their reported unit or pin by UUID): the message in
+        // natural order, so designators read C3, R1, R2, R12, then location.
+        (
+            bucket,
+            name,
+            natural_key(&v.message),
+            signex_net::pt_key(&v.location),
+        )
     });
     violations
+}
+
+/// One run of a [`natural_key`]: text, or a number compared by value.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+enum Chunk {
+    /// Digits without leading zeros, compared by length then text, so any
+    /// length of digits orders by value without overflow.
+    Number(usize, String),
+    Text(String),
+}
+
+/// `s` split into text and digit runs, so "R12" sorts after "R2".
+fn natural_key(s: &str) -> Vec<Chunk> {
+    let mut out = Vec::new();
+    let mut run = String::new();
+    let mut digits = false;
+    let flush = |run: &mut String, digits: bool, out: &mut Vec<Chunk>| {
+        if run.is_empty() {
+            return;
+        }
+        let taken = std::mem::take(run);
+        out.push(if digits {
+            let value = taken.trim_start_matches('0').to_string();
+            Chunk::Number(value.len(), value)
+        } else {
+            Chunk::Text(taken)
+        });
+    };
+    for c in s.chars() {
+        let is_digit = c.is_ascii_digit();
+        if is_digit != digits {
+            flush(&mut run, digits, &mut out);
+            digits = is_digit;
+        }
+        run.push(c);
+    }
+    flush(&mut run, digits, &mut out);
+    out
 }
 
 #[cfg(test)]
@@ -158,6 +204,32 @@ mod tests {
         let v = dsl_violation(RuleKind::NetLabelConflict, Severity::Info);
         assert_eq!(v.builtin_kind(), None);
         assert_eq!(v.display_name(), "user::my_rule");
+    }
+
+    #[test]
+    fn findings_of_one_rule_read_in_natural_designator_order() {
+        let finding = |reference: &str| {
+            Violation::new(
+                crate::RuleId::builtin(RuleKind::PartWithoutFootprint),
+                RuleKind::PartWithoutFootprint,
+                Severity::Info,
+                format!("Part {reference} has no footprint"),
+                signex_types::schematic::Point::new(0.0, 0.0),
+            )
+        };
+        for order in [["R12", "C3", "R1", "R2"], ["R1", "R2", "R12", "C3"]] {
+            let out = apply_overrides(order.iter().map(|r| finding(r)).collect(), &HashMap::new());
+            let shown: Vec<&str> = out.iter().map(|v| v.message.as_str()).collect();
+            assert_eq!(
+                shown,
+                [
+                    "Part C3 has no footprint",
+                    "Part R1 has no footprint",
+                    "Part R2 has no footprint",
+                    "Part R12 has no footprint",
+                ]
+            );
+        }
     }
 
     #[test]

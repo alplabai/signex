@@ -98,7 +98,8 @@ impl Signex {
     }
 
     /// Open the editor for the finding keyed `key`. The author defaults to
-    /// the last one used, then to the OS login name.
+    /// the last one used, then to the OS login name; the reason carries over
+    /// only when it is the same finding.
     fn start_erc_waiver(
         &mut self,
         key: signex_erc::waivers::violation::WaiverKey,
@@ -112,11 +113,20 @@ impl Signex {
             .map(|d| d.author.clone())
             .filter(|a| !a.trim().is_empty())
             .unwrap_or_else(default_author);
+        // Re-opening the same finding (after a refused or stale Confirm and a
+        // re-run) keeps the reason already typed.
+        let reason = self
+            .ui_state
+            .erc_waive_draft
+            .as_ref()
+            .filter(|d| d.key.rule_id == key.rule_id && d.key.objects == key.objects)
+            .map(|d| d.reason.clone())
+            .unwrap_or_default();
         self.ui_state.erc_waive_draft = Some(ErcWaiveDraft {
             key,
             sheet,
             message,
-            reason: String::new(),
+            reason,
             author,
             error: None,
         });

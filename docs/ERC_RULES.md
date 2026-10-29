@@ -168,6 +168,11 @@ touching pin pairs, a part placed twice, two multi-pin power ports shorted
 on two separate nets, two unnumbered pins sharing a name) and also re-runs
 every case with the symbols reversed and fails on any shared identity (`waivers/violation/identity_guard.rs`).
 
+A pin-anchored waiver names the pin by its number and its position in the
+symbol, so switching the part's body style or a library update that moves or
+renumbers the pin orphans the waiver: it shows as matching no finding, and
+the finding itself is reported again.
+
 Limits: a finding that names neither an object nor a net with a name or
 pins, or whose objects are not on the sheet it is filed under, cannot be
 waived. Two

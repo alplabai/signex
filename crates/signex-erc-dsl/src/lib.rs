@@ -52,6 +52,9 @@ pub fn parse_validate_compile_to_eval_fns(
 }
 
 #[cfg(test)]
+mod identity_guard_tests;
+
+#[cfg(test)]
 mod tests {
     use std::collections::HashMap;
 

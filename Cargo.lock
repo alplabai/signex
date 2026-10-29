@@ -5681,6 +5681,7 @@ dependencies = [
  "signex-erc",
  "signex-types",
  "thiserror 2.0.18",
+ "uuid",
 ]
 
 [[package]]

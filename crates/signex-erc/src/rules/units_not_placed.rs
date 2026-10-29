@@ -63,12 +63,21 @@ pub(crate) fn missing_units(units: &[PlacedUnit]) -> Vec<(usize, UnitGap)> {
         .filter_map(|members| {
             let count = members.iter().map(|&m| units[m].unit_count).max()?;
             if count > MAX_UNITS_PER_PART {
-                return Some((members[0], UnitGap::TooManyUnits(count)));
+                let first = members
+                    .iter()
+                    .copied()
+                    .min_by_key(|&m| (units[m].unit, units[m].uuid))?;
+                return Some((first, UnitGap::TooManyUnits(count)));
             }
             let missing: Vec<u32> = (1..=count)
                 .filter(|n| !members.iter().any(|&m| units[m].unit == *n))
                 .collect();
-            (!missing.is_empty()).then(|| (members[0], UnitGap::Missing(missing)))
+            // Report at the lowest-numbered placed unit (UUID breaks ties).
+            let first = members
+                .iter()
+                .copied()
+                .min_by_key(|&m| (units[m].unit, units[m].uuid))?;
+            (!missing.is_empty()).then_some((first, UnitGap::Missing(missing)))
         })
         .collect()
 }
