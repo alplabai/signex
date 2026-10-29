@@ -87,8 +87,10 @@ impl Signex {
         }
         // A "Commit now" or a stock copy writes into the library on a worker
         // through its old path; moving the folder would strand that work.
-        if self.library_background_write_running(&old_path) {
-            self.refuse_rename_while_library_saving(&old_path);
+        if self.library_background_write_running(&old_path, fold) {
+            let reason = crate::app::dispatch::library::LIBRARY_BACKGROUND_WRITE_REFUSAL;
+            self.set_rename_error(reason);
+            crate::diagnostics::log_warning(format!("[rename] refused: {reason}"));
             return iced::Task::none();
         }
         let id = self.document_state.pending_path_ops.begin_with_dependents(

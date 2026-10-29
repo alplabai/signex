@@ -60,6 +60,7 @@ mod recovery_read_only_tests;
 mod refresh;
 mod registration;
 mod rename_guard;
+pub(crate) use rename_guard::LIBRARY_BACKGROUND_WRITE_REFUSAL;
 mod settings;
 #[cfg(test)]
 mod settings_tests;

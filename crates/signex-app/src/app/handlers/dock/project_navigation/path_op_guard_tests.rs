@@ -173,3 +173,42 @@ fn close_project_is_held_while_a_delete_under_it_is_pending() {
     let notice = fx.app.document_state.error_notice.clone().expect("notice");
     assert!(notice.detail.contains("delete"), "{}", notice.detail);
 }
+
+/// A stock copy or "Commit now" writes into a library on a worker; deleting
+/// the library meanwhile would strand it, so the delete waits and says why.
+#[test]
+fn a_library_delete_waits_for_a_library_copy_in_flight() {
+    let _ = crate::diagnostics::init_logging();
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let library = fx.folder.join("parts.snxlib");
+    std::fs::create_dir_all(library.join("symbols")).expect("library dir");
+    fx.app
+        .library
+        .stock_copies_in_flight
+        .insert(root.path().join("stock/r.snxsym"));
+    fx.app.ui_state.remove_dialog = Some(RemoveDialogState {
+        target_path: library.clone(),
+        display_name: "parts.snxlib".to_string(),
+        ..remove_dialog_for(&fx)
+    });
+    let since = crate::diagnostics::newest_entry_id();
+
+    drop(fx.app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::DeleteFile,
+    ))));
+
+    let notice = fx.app.document_state.error_notice.clone().expect("notice");
+    assert!(
+        notice.detail.contains("commit or copy is still running"),
+        "got: {}",
+        notice.detail
+    );
+    assert!(fx.app.document_state.pending_path_ops.is_empty());
+    assert!(library.exists(), "nothing was deleted");
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| Some(e.id) > since && e.message.contains("[delete] refused"))
+    );
+}

@@ -433,17 +433,13 @@ impl Signex {
 
         // A "Commit now" or a stock copy writing into this library on a worker
         // would recreate it, or fail, once the folder is gone.
-        if is_delete && self.library_background_write_running(&state.target_path) {
-            let refusal = format!(
-                "{} is still being saved; try again in a moment.",
-                state
-                    .target_path
-                    .file_name()
-                    .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
-            );
+        if is_delete
+            && self.library_background_write_running(&state.target_path, self.dialog_fold(&state))
+        {
+            let refusal = crate::app::dispatch::library::LIBRARY_BACKGROUND_WRITE_REFUSAL;
             crate::diagnostics::log_warning(format!("[delete] refused: {refusal}"));
             self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::delete(refusal));
+                Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
             return iced::Task::none();
         }
 

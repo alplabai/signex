@@ -429,6 +429,31 @@ fn a_library_rename_waits_for_a_draft_inside_it_that_is_being_saved() {
     assert!(f.app.document_state.is_document_dirty(&old));
 }
 
+/// A stock copy or "Commit now" writes into the library on a worker through
+/// its old path, so the rename waits and nothing moves (#859).
+#[test]
+fn a_library_rename_waits_for_a_library_copy_in_flight() {
+    let _ = diagnostics::init_logging();
+    let mut f = fixture();
+    let copy = f.alpha.join("symbols/r.snxsym");
+    f.app.library.stock_copies_in_flight.insert(copy);
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    assert_refused(&f, "a library copy is running");
+    let error = f
+        .app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .and_then(|d| d.error.clone())
+        .unwrap_or_default();
+    assert!(
+        error.contains("commit or copy is still running"),
+        "got: {error}"
+    );
+}
+
 /// The project's volume folds case, so `ALPHA.snxlib` is the library.
 fn fold_case(f: &mut Fixture) {
     f.app.document_state.projects[0].case_fold = signex_app::app::CaseFold {

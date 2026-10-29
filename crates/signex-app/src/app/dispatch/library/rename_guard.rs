@@ -36,14 +36,34 @@ impl Signex {
     /// library at `root`: a "Commit now", or a stock copy (its target is not
     /// tracked, so any copy counts). Moving or deleting the library under it
     /// would strand that work in a folder the app no longer mounts.
-    pub(crate) fn library_background_write_running(&self, root: &std::path::Path) -> bool {
+    pub(crate) fn library_background_write_running(
+        &self,
+        root: &std::path::Path,
+        fold: crate::app::state::CaseFold,
+    ) -> bool {
         let is_library = root
             .extension()
             .is_some_and(|e| e.eq_ignore_ascii_case("snxlib"));
         is_library
-            && (self.library.is_committing(root) || !self.library.stock_copies_in_flight.is_empty())
+            && (any_root_under(self.library.committing_roots(), root, fold)
+                || !self.library.stock_copies_in_flight.is_empty())
     }
 }
+
+/// One of `roots` is `path` or lies under it, compared under `fold` so a case
+/// variant of the mounted root still matches.
+fn any_root_under<'a>(
+    mut roots: impl Iterator<Item = &'a std::path::Path>,
+    path: &std::path::Path,
+    fold: crate::app::state::CaseFold,
+) -> bool {
+    roots.any(|root| crate::app::state::scope::path_is_under(root, path, fold))
+}
+
+/// Why a library rename or delete waits for `library_background_write_running`.
+/// The copy's target is not tracked, so the text names no library.
+pub(crate) const LIBRARY_BACKGROUND_WRITE_REFUSAL: &str =
+    "A library commit or copy is still running; try again once it finishes.";
 
 /// The library a message addresses, when it carries its path.
 fn library_named_by(msg: &LibraryMessage) -> Option<&std::path::Path> {
@@ -214,12 +234,29 @@ mod tests {
     #[test]
     fn a_stock_copy_in_flight_holds_any_library_but_not_a_plain_file() {
         let (mut app, _task) = Signex::new();
-        assert!(!app.library_background_write_running(std::path::Path::new("/w/a.snxlib")));
+        let running = |app: &Signex, path: &str| {
+            app.library_background_write_running(std::path::Path::new(path), CaseFold::PRESERVE)
+        };
+        assert!(!running(&app, "/w/a.snxlib"));
         app.library
             .stock_copies_in_flight
             .insert("/stock/r.snxsym".into());
-        assert!(app.library_background_write_running(std::path::Path::new("/w/a.snxlib")));
-        assert!(!app.library_background_write_running(std::path::Path::new("/w/a.snxsch")));
+        assert!(running(&app, "/w/a.snxlib"));
+        assert!(!running(&app, "/w/a.snxsch"));
+    }
+
+    #[test]
+    fn a_commit_at_a_case_variant_of_the_root_counts_only_when_folding() {
+        let roots = [std::path::Path::new("/w/alpha.snxlib")];
+        let variant = std::path::Path::new("/w/ALPHA.snxlib");
+        assert!(any_root_under(roots.into_iter(), variant, CaseFold::FOLD));
+        assert!(!any_root_under(
+            roots.into_iter(),
+            variant,
+            CaseFold::PRESERVE
+        ));
+        let other = std::path::Path::new("/w/beta.snxlib");
+        assert!(!any_root_under(roots.into_iter(), other, CaseFold::FOLD));
     }
 
     #[test]
