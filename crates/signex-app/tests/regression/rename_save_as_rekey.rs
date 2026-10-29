@@ -18,7 +18,7 @@ use tempfile::TempDir;
 
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     }

@@ -753,7 +753,7 @@ mod canvas_font_tests {
         use signex_types::schematic::{Label, LabelType, Point as SchPoint, SchematicSheet};
 
         let label = |text: &str, family: Option<&str>| Label {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             text: text.to_string(),
             position: SchPoint { x: 10.0, y: 10.0 },
             rotation: 0.0,

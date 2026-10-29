@@ -211,7 +211,7 @@ fn resolve_completing_after_esc_does_not_arm() {
 pub(crate) fn second_sheet(app: &mut Signex) -> PathBuf {
     let path = PathBuf::from("other-1252.snxsch");
     let sheet = signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };
@@ -519,7 +519,7 @@ fn sheet_in(f: &Fixture, dir: &std::path::Path, name: &str) -> (Signex, PathBuf)
     let path = dir.join(name);
     let (mut app, _t) = Signex::new();
     let sheet = signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };

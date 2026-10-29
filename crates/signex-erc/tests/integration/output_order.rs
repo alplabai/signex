@@ -11,7 +11,7 @@ fn duplicated_refs_sheet() -> SchematicSheet {
     for i in (1..=12).rev() {
         for n in 0..2 {
             symbols.push(Symbol {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 lib_id: if n == 0 { "Device:R" } else { "Device:C" }.to_string(),
                 reference: format!("R{i}"),
                 unit: 1,
@@ -55,7 +55,7 @@ fn duplicated_refs_sheet() -> SchematicSheet {
 fn conflicting_nets_sheet() -> SchematicSheet {
     let label = |text: &str, pos: Point| Label {
         unknown_columns: Default::default(),
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         text: text.to_string(),
         position: pos,
         rotation: 0.0,
@@ -71,7 +71,7 @@ fn conflicting_nets_sheet() -> SchematicSheet {
     for i in 0..12 {
         let y = 10.0 + f64::from(i) * 5.0;
         wires.push(Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(0.0, y),
             end: Point::new(10.0, y),
             ..Default::default()

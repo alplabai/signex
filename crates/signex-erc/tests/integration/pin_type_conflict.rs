@@ -60,7 +60,7 @@ fn two_pins_on_one_wire(left: PinDirection, right: PinDirection) -> (SchematicSh
         ..Default::default()
     };
     sheet.wires.push(Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: Point::new(0.0, 0.0),
         end: Point::new(10.0, 0.0),
         ..Default::default()
@@ -71,7 +71,7 @@ fn two_pins_on_one_wire(left: PinDirection, right: PinDirection) -> (SchematicSh
         sheet
             .lib_symbols
             .insert(lib_id.clone(), lib_with_one_pin(&lib_id, dir));
-        let uuid = Uuid::new_v4();
+        let uuid = Uuid::now_v7();
         ids.push(uuid);
         sheet.symbols.push(Symbol {
             uuid,
@@ -222,13 +222,13 @@ fn two_pins_of_one_symbol_on_one_net_do_not_conflict() {
     lib.pins.push(second);
     sheet.lib_symbols.insert("lib_U1".to_string(), lib);
     sheet.wires.push(Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: Point::new(0.0, 0.0),
         end: Point::new(10.0, 0.0),
         ..Default::default()
     });
     sheet.symbols.push(Symbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         lib_id: "lib_U1".to_string(),
         reference: "U1".to_string(),
         position: Point::new(0.0, 0.0),
@@ -297,7 +297,7 @@ fn sheet_of(parts: &[Part]) -> SchematicSheet {
             .lib_symbols
             .insert(lib_id.clone(), lib_with_one_pin(&lib_id, part.direction));
         sheet.symbols.push(Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             lib_id,
             reference: part.reference.to_string(),
             value: part.value.to_string(),
@@ -311,7 +311,7 @@ fn sheet_of(parts: &[Part]) -> SchematicSheet {
 
 fn wire(sheet: &mut SchematicSheet, from: f64, to: f64) {
     sheet.wires.push(Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: Point::new(from, 0.0),
         end: Point::new(to, 0.0),
         ..Default::default()
@@ -445,7 +445,7 @@ fn no_erc_on_one_pin_silences_only_its_pairs() {
     wire(&mut sheet, 0.0, 10.0);
     wire(&mut sheet, 10.0, 20.0);
     sheet.no_erc_directives.push(NoConnect {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         position: Point::new(0.0, 0.0),
     });
 

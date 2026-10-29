@@ -154,7 +154,7 @@ mod tests {
 
     fn label(x: f64) -> signex_types::schematic::Label {
         serde_json::from_value(serde_json::json!({
-            "uuid": uuid::Uuid::new_v4(),
+            "uuid": uuid::Uuid::now_v7(),
             "text": "N",
             "position": { "x": x, "y": 1.0 },
             "label_type": "net",
@@ -169,24 +169,24 @@ mod tests {
         for n in 0..2 {
             let o = f64::from(n) * 100.0;
             let symbol = Symbol {
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 position: Point::new(o, 10.0),
                 ..Symbol::default()
             };
             let wire = Wire {
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 start: Point::new(o, 0.0),
                 end: Point::new(o + 5.0, 0.0),
                 ..Wire::default()
             };
             let junction = Junction {
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 position: Point::new(o + 2.0, 0.0),
                 ..Junction::default()
             };
             let lbl = label(o);
             let drawing = SchDrawing::Line {
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 start: Point::new(o, 20.0),
                 end: Point::new(o + 3.0, 21.0),
                 width: 0.0,

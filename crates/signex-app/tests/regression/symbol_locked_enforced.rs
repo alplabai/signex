@@ -9,9 +9,9 @@ use std::path::PathBuf;
 
 fn locked_symbol_app(reference: &str) -> (Signex, uuid::Uuid) {
     let _ = diagnostics::init_logging();
-    let uuid = uuid::Uuid::new_v4();
+    let uuid = uuid::Uuid::now_v7();
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols: vec![Symbol {
             uuid,
@@ -99,8 +99,8 @@ fn the_move_dialog_is_refused_and_reported() {
 /// resistor valued `GND` too.
 fn find_replace_app(reference: &str) -> (Signex, uuid::Uuid, uuid::Uuid, uuid::Uuid) {
     let (mut app, locked) = locked_symbol_app(reference);
-    let label = uuid::Uuid::new_v4();
-    let free = uuid::Uuid::new_v4();
+    let label = uuid::Uuid::now_v7();
+    let free = uuid::Uuid::now_v7();
     let engine = app.document_state.active_engine_mut().expect("engine");
     let mut sheet = engine.document().clone();
     sheet.symbols[0].value = "GND".to_string();

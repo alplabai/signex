@@ -279,7 +279,7 @@ mod tests {
 
     fn placed(reference: &str, lib_id: &str, unit: u32) -> Symbol {
         Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             reference: reference.to_string(),
             lib_id: lib_id.to_string(),
             unit,

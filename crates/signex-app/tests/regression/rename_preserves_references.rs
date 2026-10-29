@@ -14,12 +14,12 @@ use tempfile::TempDir;
 
 fn sheet(children: &[&str]) -> SchematicSheet {
     SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         child_sheets: children
             .iter()
             .map(|f| ChildSheet {
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 name: (*f).to_string(),
                 filename: (*f).to_string(),
                 position: Point::new(0.0, 0.0),

@@ -285,7 +285,7 @@ mod tests {
     fn svg_document_is_emitted() {
         let mut sheet = empty_sheet_snapshot();
         sheet.schematic.wires.push(Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             end: Point::new(25.0, 20.0),
             stroke_width: 0.15,
             ..Default::default()

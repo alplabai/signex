@@ -37,7 +37,7 @@ fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
 
 fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
     SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols,
         ..Default::default()
@@ -93,7 +93,7 @@ fn move_selection(app: &mut Signex, uuid: uuid::Uuid) {
 
 #[test]
 fn a_move_selection_marks_the_document_dirty() {
-    let moved = uuid::Uuid::new_v4();
+    let moved = uuid::Uuid::now_v7();
     let (mut app, path) = app_with(vec![symbol(moved, "R1", 50.0)]);
 
     move_selection(&mut app, moved);
@@ -118,7 +118,7 @@ fn a_move_selection_marks_the_document_dirty() {
 /// quitting does not warn, so it goes out with the process.
 #[test]
 fn quitting_after_a_move_selection_warns_instead_of_discarding_it() {
-    let moved = uuid::Uuid::new_v4();
+    let moved = uuid::Uuid::now_v7();
     let (mut app, path) = app_with(vec![symbol(moved, "R1", 50.0)]);
 
     move_selection(&mut app, moved);
@@ -139,7 +139,7 @@ fn quitting_after_a_move_selection_warns_instead_of_discarding_it() {
 
 #[test]
 fn a_parameter_manager_edit_marks_the_document_dirty() {
-    let target = uuid::Uuid::new_v4();
+    let target = uuid::Uuid::now_v7();
     let (mut app, path) = app_with(vec![symbol(target, "R1", 0.0)]);
 
     let _ = app.update(Message::ParameterManager(ParameterManagerMsg::Edit {
@@ -167,8 +167,8 @@ fn a_parameter_manager_edit_marks_the_document_dirty() {
 #[test]
 fn annotate_marks_the_active_sheet_dirty() {
     let (mut app, path) = app_with(vec![
-        symbol(uuid::Uuid::new_v4(), "R?", 0.0),
-        symbol(uuid::Uuid::new_v4(), "R?", 10.0),
+        symbol(uuid::Uuid::now_v7(), "R?", 0.0),
+        symbol(uuid::Uuid::now_v7(), "R?", 10.0),
     ]);
 
     let _ = app.update(Message::Annotate(AnnotateMsg::Run(
@@ -195,8 +195,8 @@ fn annotate_marks_the_active_sheet_dirty() {
 #[test]
 fn reset_duplicate_designators_marks_the_active_sheet_dirty() {
     let (mut app, path) = app_with(vec![
-        symbol(uuid::Uuid::new_v4(), "R1", 0.0),
-        symbol(uuid::Uuid::new_v4(), "R1", 10.0),
+        symbol(uuid::Uuid::now_v7(), "R1", 0.0),
+        symbol(uuid::Uuid::now_v7(), "R1", 10.0),
     ]);
 
     let _ = app.update(Message::Menu(MenuMessage::AnnotateResetDuplicates));
@@ -234,7 +234,7 @@ fn app_with_parked_sheet(
 
     // The saved copy of the parked sheet: what is on disk and must stay there.
     let mut on_disk =
-        signex_engine::Engine::new(sheet_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]))
+        signex_engine::Engine::new(sheet_with(vec![symbol(uuid::Uuid::now_v7(), "R1", 0.0)]))
             .expect("engine");
     on_disk.set_path(Some(parked_path.clone()));
     on_disk.save().expect("seed the saved copy");
@@ -243,7 +243,7 @@ fn app_with_parked_sheet(
     // The unsaved edit the user parked: an extra, not-yet-annotated symbol.
     let parked = signex_engine::Engine::new(sheet_with(parked_symbols)).expect("engine");
 
-    let mut root_sheet = sheet_with(vec![symbol(uuid::Uuid::new_v4(), "C?", 0.0)]);
+    let mut root_sheet = sheet_with(vec![symbol(uuid::Uuid::now_v7(), "C?", 0.0)]);
     root_sheet
         .child_sheets
         .push(signex_types::schematic::ChildSheet {
@@ -289,8 +289,8 @@ fn app_with_parked_sheet(
 #[test]
 fn annotate_numbers_a_parked_sheet_in_memory_and_never_writes_it() {
     let (mut app, parked_path, saved_bytes, _dir) = app_with_parked_sheet(vec![
-        symbol(uuid::Uuid::new_v4(), "R1", 0.0),
-        symbol(uuid::Uuid::new_v4(), "R?", 10.0),
+        symbol(uuid::Uuid::now_v7(), "R1", 0.0),
+        symbol(uuid::Uuid::now_v7(), "R?", 10.0),
     ]);
 
     let _ = app.update(Message::Annotate(AnnotateMsg::Run(
@@ -311,8 +311,8 @@ fn annotate_numbers_a_parked_sheet_in_memory_and_never_writes_it() {
 #[test]
 fn reset_duplicates_resets_a_parked_sheet_in_memory_and_never_writes_it() {
     let (mut app, parked_path, saved_bytes, _dir) = app_with_parked_sheet(vec![
-        symbol(uuid::Uuid::new_v4(), "R1", 0.0),
-        symbol(uuid::Uuid::new_v4(), "R1", 10.0),
+        symbol(uuid::Uuid::now_v7(), "R1", 0.0),
+        symbol(uuid::Uuid::now_v7(), "R1", 10.0),
     ]);
 
     let _ = app.update(Message::Menu(MenuMessage::AnnotateResetDuplicates));

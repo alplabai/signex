@@ -70,7 +70,7 @@ mod tests {
 
     fn pin(reference: &str, number: &str, x: f64) -> ErcNetPin {
         ErcNetPin {
-            symbol: Uuid::new_v4(),
+            symbol: Uuid::now_v7(),
             occurrence: InstancePath::root(),
             reference: reference.into(),
             number: number.into(),

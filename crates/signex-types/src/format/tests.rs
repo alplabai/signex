@@ -263,7 +263,7 @@ pub(super) fn sample_symbol() -> Symbol {
 
 fn sample_wire(sx: f64, sy: f64, ex: f64, ey: f64) -> Wire {
     Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: SchPoint { x: sx, y: sy },
         end: SchPoint { x: ex, y: ey },
         ..Default::default()

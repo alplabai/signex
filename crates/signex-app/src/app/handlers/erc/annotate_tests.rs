@@ -12,7 +12,7 @@ use crate::app::handlers::menu::export::tests::{app_workspace, open_with, sheet_
 
 fn unit(reference: &str, unit: u32, y: f64) -> Symbol {
     Symbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         lib_id: "Amplifier:LM358".to_string(),
         reference: reference.to_string(),
         unit,
@@ -30,7 +30,7 @@ fn sheet_of(children: &[&str], symbols: Vec<Symbol>) -> SchematicSheet {
 /// `a_root.snxsch` is open and active; `z_child.snxsch` is an unopened
 /// hierarchical child on disk. Returns the app and the project directory.
 fn project(root: Vec<Symbol>, child: Vec<Symbol>) -> (Signex, PathBuf) {
-    let dir = std::env::temp_dir().join(format!("signex-annotate-units-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-annotate-units-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     let child_text = SnxSchematic::new(sheet_of(&[], child))
         .write_string()
@@ -259,7 +259,7 @@ fn undocked_slot_stale_after_annotate_heals_on_the_next_narrow_edit() {
     app.document_state.active_tab = app.document_state.tabs.len() - 1;
     app.document_state.active_path = Some(child_path);
     let wire = signex_types::schematic::Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: Point::new(0.0, 0.0),
         end: Point::new(5.0, 0.0),
         ..Default::default()

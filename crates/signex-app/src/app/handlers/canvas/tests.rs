@@ -135,7 +135,7 @@ fn child_sheet_double_click_keeps_the_dirty_engine_of_a_tab_less_sheet() {
     use crate::app::handlers::menu::export::tests::{open_with, sheet_with_net};
     use signex_types::format::SnxSchematic;
 
-    let dir = std::env::temp_dir().join(format!("signex-dbl-dirty-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-dbl-dirty-{}", uuid::Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     let path = dir.join("child.snxsch");
     let text = SnxSchematic::new(sheet_with_net("R_DISK", "DISK_NET", &[]))
@@ -174,9 +174,9 @@ fn dragging_a_bus_on_the_canvas_carries_entry_and_wire() {
     };
     let (mut app, _task) = Signex::new();
     let (bus_id, entry_id, wire_id) = (
-        uuid::Uuid::new_v4(),
-        uuid::Uuid::new_v4(),
-        uuid::Uuid::new_v4(),
+        uuid::Uuid::now_v7(),
+        uuid::Uuid::now_v7(),
+        uuid::Uuid::now_v7(),
     );
     let sheet = SchematicSheet {
         paper_size: "A4".to_string(),

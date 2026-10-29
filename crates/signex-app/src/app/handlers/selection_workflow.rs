@@ -287,7 +287,7 @@ impl Signex {
                 .unwrap_or(signex_types::schematic::FillType::None);
             let pts = std::mem::take(&mut self.interaction_state.polyline_points);
             let drawing = signex_types::schematic::SchDrawing::Polyline {
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 points: pts,
                 width: pp_w,
                 fill: pp_fill,

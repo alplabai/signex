@@ -193,7 +193,7 @@ fn a_numbering_issue_is_not_an_export_issue() {
 #[test]
 fn the_pdf_export_logs_the_numbering_lines() {
     let _ = crate::diagnostics::init_logging();
-    let marker = format!("Num{}", Uuid::new_v4().simple());
+    let marker = format!("Num{}", Uuid::now_v7().simple());
     let dir = std::env::temp_dir().join(format!("signex-numbering-{marker}"));
     let dir_str = dir.to_string_lossy().to_string();
     let mut app = placed_app(&dir_str, &["top.snxsch"], &["A", &marker], Vec::new());

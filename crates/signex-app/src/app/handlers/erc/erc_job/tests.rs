@@ -22,7 +22,7 @@ fn pt(x: f64, y: f64) -> Point {
 fn label(text: &str, at: Point, label_type: LabelType) -> Label {
     Label {
         unknown_columns: Default::default(),
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         text: text.to_string(),
         position: at,
         rotation: 0.0,
@@ -243,7 +243,7 @@ fn a_per_sheet_finding_no_emitted_project_finding_covers_is_kept() {
         .unwrap()
         .no_erc_directives
         .push(signex_types::schematic::NoConnect {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             position: pt(0.0, 0.0),
         });
     f.run(&["root.snxsch"], &HashMap::new());

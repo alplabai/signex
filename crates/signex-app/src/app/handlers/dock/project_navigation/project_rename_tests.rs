@@ -82,7 +82,7 @@ pub(super) fn fixture(root: &Path, stem: &str, git: bool) -> Fixture {
     project.data.name = stem.to_string();
     project.data.enable_git = git;
     let engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     })
@@ -550,7 +550,7 @@ fn a_library_under_the_folder_refuses_the_folder_move_whatever_holds_it() {
                 .push(crate::library::state::OpenLibrary {
                     root: p,
                     display_name: "p".into(),
-                    library_id: uuid::Uuid::new_v4(),
+                    library_id: uuid::Uuid::now_v7(),
                     tables: Default::default(),
                     cached_components: Vec::new(),
                     cached_symbols: Vec::new(),

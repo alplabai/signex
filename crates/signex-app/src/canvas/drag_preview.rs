@@ -348,7 +348,7 @@ mod tests {
                 pin_name_offset: 0.0,
             },
         );
-        let uuid = uuid::Uuid::new_v4();
+        let uuid = uuid::Uuid::now_v7();
         sheet.symbols.push(Symbol {
             uuid,
             lib_id: "R".to_string(),
@@ -356,7 +356,7 @@ mod tests {
             ..Default::default()
         });
         sheet.wires.push(Wire {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             start: Point::new(30.0, 50.0),
             end: Point::new(45.0, 50.0),
             ..Default::default()

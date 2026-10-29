@@ -337,7 +337,7 @@ impl Signex {
         match target.rule_kind {
             Some(signex_erc::RuleKind::UnusedPin) => {
                 let nc = signex_types::schematic::NoConnect {
-                    uuid: uuid::Uuid::new_v4(),
+                    uuid: uuid::Uuid::now_v7(),
                     position: signex_types::schematic::Point::new(target.world_x, target.world_y),
                 };
                 self.apply_engine_command(

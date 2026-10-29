@@ -45,7 +45,7 @@ impl Env {
             }
             for (lo, hi) in pieces {
                 let mut wire = template.clone();
-                wire.uuid = Uuid::new_v4();
+                wire.uuid = Uuid::now_v7();
                 (wire.start, wire.end) = if oriented { (lo, hi) } else { (hi, lo) };
                 out.touched
                     .push(SelectedItem::new(wire.uuid, SelectedKind::Wire));

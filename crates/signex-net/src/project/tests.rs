@@ -1061,7 +1061,7 @@ mod scope;
 fn a_duplicate_sheet_uuid_is_reported_anywhere_in_the_project_graph() {
     // `empty_sheet` has the nil uuid, which the check skips; give it a real one.
     let mut root = empty_sheet();
-    root.uuid = uuid::Uuid::new_v4();
+    root.uuid = uuid::Uuid::now_v7();
     let mut page = empty_sheet();
     page.uuid = root.uuid;
     let children: HashMap<String, SchematicSheet> = [("page.snxsch".to_string(), page)].into();
@@ -1076,7 +1076,7 @@ fn a_duplicate_sheet_uuid_is_reported_anywhere_in_the_project_graph() {
 
     // Distinct uuids: nothing to report.
     let mut other = empty_sheet();
-    other.uuid = uuid::Uuid::new_v4();
+    other.uuid = uuid::Uuid::now_v7();
     let children: HashMap<String, SchematicSheet> = [("page.snxsch".to_string(), other)].into();
     let p = stitch_pages(&root, "root.snxsch", &children, &["page.snxsch"]);
     assert!(

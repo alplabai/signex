@@ -9,13 +9,13 @@ use crate::app::{Signex, TabInfo, TabKind};
 use crate::panels::NetClassMsg;
 
 fn app_with_sheet() -> (Signex, uuid::Uuid) {
-    let dir = std::env::temp_dir().join(format!("signex-pick-undo-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-pick-undo-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
     app.document_state.projects[0].data.net_classes = vec![NetClass::named("Power")];
     let path = dir.join("a_root.snxsch");
-    let symbol = uuid::Uuid::new_v4();
+    let symbol = uuid::Uuid::now_v7();
     let sheet = signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols: vec![Symbol {
             uuid: symbol,
@@ -161,7 +161,7 @@ fn open_second_sheet(app: &mut Signex) -> std::path::PathBuf {
         &mut app.document_state,
         &path,
         signex_types::schematic::SchematicSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             paper_size: "A4".to_string(),
             ..Default::default()
         },

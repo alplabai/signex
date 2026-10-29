@@ -57,7 +57,7 @@ fn one_pin_part() -> LibSymbol {
 /// A labelled `VCC` wire that ends on a pin, so the netlist forms the net.
 fn vcc_sheet() -> SchematicSheet {
     let mut sheet = SchematicSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         paper_size: "A4".to_string(),
         root_sheet_page: "1".to_string(),
         ..Default::default()

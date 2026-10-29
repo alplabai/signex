@@ -237,7 +237,7 @@ fn a_symbol_that_is_gone_is_logged_not_ignored() {
         .create_child_sheet_confirm
         .as_mut()
         .expect("dialog")
-        .symbol = Uuid::new_v4();
+        .symbol = Uuid::now_v7();
     assert!(app.plan_child_sheet_from_dialog().is_none());
     assert!(
         crate::diagnostics::recent_entries()

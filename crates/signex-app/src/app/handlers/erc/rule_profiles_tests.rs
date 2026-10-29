@@ -11,7 +11,7 @@ use signex_types::project::{RuleProfile, RuleProfileRef};
 use crate::app::handlers::menu::export::tests::app_workspace;
 
 fn workspace(tag: &str) -> crate::app::Signex {
-    let dir = std::env::temp_dir().join(format!("signex-prof-{tag}-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-prof-{tag}-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
     app.ui_state.erc_severity_override.clear();
     app.ui_state.pin_matrix_overrides.clear();
@@ -137,7 +137,7 @@ fn drift_is_noted_once_and_never_overwrites() {
     let _ = app.handle_store_erc_rules_in_project();
     let id = app.document_state.projects[0].id;
     let mut local = company_profile();
-    local.name = format!("Drift-{}", uuid::Uuid::new_v4());
+    local.name = format!("Drift-{}", uuid::Uuid::now_v7());
     let stale = RuleProfileRef {
         name: local.name.clone(),
         source: "user".into(),
@@ -174,7 +174,7 @@ fn no_drift_note_when_the_hash_still_matches() {
     let _ = app.handle_store_erc_rules_in_project();
     let id = app.document_state.projects[0].id;
     let mut local = company_profile();
-    local.name = format!("Same-{}", uuid::Uuid::new_v4());
+    local.name = format!("Same-{}", uuid::Uuid::now_v7());
     app.document_state.projects[0]
         .data
         .rules
@@ -330,7 +330,7 @@ fn confirming_for_another_project_logs_instead_of_dropping_silently() {
     let mut app = edited_project("stale-confirm");
     let id = app.document_state.projects[0].id;
     let mut profile = company_profile();
-    profile.name = format!("Stale-{}", uuid::Uuid::new_v4());
+    profile.name = format!("Stale-{}", uuid::Uuid::now_v7());
     let _ = app.handle_profile_loaded_for_update(id, &found(profile.clone()));
     app.ui_state
         .pending_profile_update
@@ -439,7 +439,7 @@ fn a_drift_check_that_failed_is_logged() {
     let mut app = workspace("drift-err");
     let _ = app.handle_store_erc_rules_in_project();
     let id = app.document_state.projects[0].id;
-    let why = format!("newer-schema-{}", uuid::Uuid::new_v4());
+    let why = format!("newer-schema-{}", uuid::Uuid::now_v7());
     let logged = crate::diagnostics::logged_count(&why);
     let _ = app.handle_profile_drift_checked(id, &Arc::new(Err(why.clone())));
     assert_eq!(crate::diagnostics::logged_count(&why), logged + 1);

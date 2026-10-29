@@ -779,7 +779,7 @@ fn a_net_colour_change_on_a_dirty_schematic_during_a_restore_is_kept() {
     assert!(click_restore(&mut app, &sha).is_empty(), "arms the confirm");
     let messages = click_restore(&mut app, &sha);
     assert_eq!(messages.len(), 1);
-    let wire = uuid::Uuid::new_v4();
+    let wire = uuid::Uuid::now_v7();
     app.record_net_color_undo();
     app.ui_state
         .wire_color_overrides

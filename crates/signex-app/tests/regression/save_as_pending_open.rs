@@ -26,7 +26,7 @@ fn symbol(uuid: uuid::Uuid) -> Symbol {
 
 fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
     SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols,
         ..Default::default()
@@ -85,11 +85,11 @@ fn race(dir: &Path) -> (Signex, uuid::Uuid, std::path::PathBuf, std::path::PathB
     let _ = signex_app::diagnostics::init_logging();
     let a = dir.join("A.snxsch");
     let p = dir.join("P.snxsch");
-    let on_disk = sheet_with(vec![symbol(uuid::Uuid::new_v4())]);
+    let on_disk = sheet_with(vec![symbol(uuid::Uuid::now_v7())]);
     write_sheet(&p, on_disk.clone());
 
     let (mut app, _boot) = Signex::new();
-    let doomed = uuid::Uuid::new_v4();
+    let doomed = uuid::Uuid::now_v7();
     let a_uuid = open_active(&mut app, &a, doomed);
 
     let _ = app.update(Message::File(FileMsg::Opened(Some(p.clone()))));
@@ -174,7 +174,7 @@ fn save_as_onto_a_pending_open_is_refused_and_reported() {
     write_sheet(&p, sheet_with(Vec::new()));
 
     let (mut app, _boot) = Signex::new();
-    let a_uuid = open_active(&mut app, &a, uuid::Uuid::new_v4());
+    let a_uuid = open_active(&mut app, &a, uuid::Uuid::now_v7());
     let _ = app.update(Message::File(FileMsg::Opened(Some(p.clone()))));
     let before = std::fs::read(&p).expect("read P");
 
@@ -214,7 +214,7 @@ fn a_late_open_result_for_an_owned_path_is_dropped_with_a_warning() {
     let tmp = TempDir::new().expect("tempdir");
     let owned = tmp.path().join("OwnedLate1089.snxsch");
     let (mut app, _boot) = Signex::new();
-    let owner_uuid = open_active(&mut app, &owned, uuid::Uuid::new_v4());
+    let owner_uuid = open_active(&mut app, &owned, uuid::Uuid::now_v7());
     app.document_state.pending_opens.insert(owned.clone());
 
     let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
@@ -244,7 +244,7 @@ fn a_late_open_result_for_an_owned_path_is_dropped_with_a_warning() {
 fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         unknown: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         version: 1,
         generator: "signex-test".into(),
         thickness: 1.6,
@@ -301,7 +301,7 @@ fn an_open_started_during_the_save_as_write_refuses_the_rekey_and_reports_it() {
     write_sheet(&p, on_disk.clone());
 
     let (mut app, _boot) = Signex::new();
-    let doomed = uuid::Uuid::new_v4();
+    let doomed = uuid::Uuid::now_v7();
     let a_uuid = open_active(&mut app, &a, doomed);
     app.interaction_state.active_canvas_mut().selected =
         vec![SelectedItem::new(doomed, SelectedKind::Symbol)];
@@ -355,7 +355,7 @@ fn a_clean_tabless_engine_does_not_block_a_later_open() {
     let stale = signex_engine::Engine::new(sheet_with(Vec::new())).expect("engine");
     app.document_state.engines.insert(q.clone(), stale);
     app.document_state.pending_opens.insert(q.clone());
-    let fresh = sheet_with(vec![symbol(uuid::Uuid::new_v4())]);
+    let fresh = sheet_with(vec![symbol(uuid::Uuid::now_v7())]);
     let fresh_uuid = fresh.uuid;
 
     let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
@@ -385,7 +385,7 @@ fn a_superseded_open_attaches_a_tab_to_a_dirty_parked_engine() {
     let parent = tmp.path().join("Parent.snxsch");
     let (mut app, _boot) = Signex::new();
     let parked =
-        signex_engine::Engine::new(sheet_with(vec![symbol(uuid::Uuid::new_v4())])).expect("engine");
+        signex_engine::Engine::new(sheet_with(vec![symbol(uuid::Uuid::now_v7())])).expect("engine");
     let parked_uuid = parked.document().uuid;
     app.document_state.engines.insert(parent.clone(), parked);
     app.document_state.dirty_paths.insert(parent.clone());
@@ -449,7 +449,7 @@ fn the_save_as_refusal_leads_with_its_reason_not_the_path() {
     let p = dir.join("ReasonP1137.snxsch");
     write_sheet(&p, sheet_with(Vec::new()));
     let (mut app, _boot) = Signex::new();
-    let _ = open_active(&mut app, &a, uuid::Uuid::new_v4());
+    let _ = open_active(&mut app, &a, uuid::Uuid::now_v7());
     let _ = app.update(Message::File(FileMsg::Opened(Some(p.clone()))));
 
     crate::settle_support::settle(
@@ -474,7 +474,7 @@ fn a_dropped_late_open_result_leads_with_its_reason_not_the_path() {
     let dir = long_dir(tmp.path());
     let owned = dir.join("ReasonOwned1137.snxsch");
     let (mut app, _boot) = Signex::new();
-    let _ = open_active(&mut app, &owned, uuid::Uuid::new_v4());
+    let _ = open_active(&mut app, &owned, uuid::Uuid::now_v7());
     app.document_state.pending_opens.insert(owned.clone());
 
     let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
@@ -500,7 +500,7 @@ fn a_tab_switch_during_save_as_does_not_warn_about_a_stale_tab() {
     let b = tmp.path().join("SwitchB.snxsch");
     let p = tmp.path().join("SwitchP1137.snxsch");
     let (mut app, _boot) = Signex::new();
-    let _ = open_active(&mut app, &a, uuid::Uuid::new_v4());
+    let _ = open_active(&mut app, &a, uuid::Uuid::now_v7());
     second_tab(&mut app, &b);
 
     let write = app.update(Message::File(FileMsg::SaveAs {
@@ -531,7 +531,7 @@ fn an_open_during_the_save_as_write_of_that_path_is_refused() {
     let p = tmp.path().join("WriteP1137.snxsch");
     write_sheet(&p, sheet_with(Vec::new()));
     let (mut app, _boot) = Signex::new();
-    let a_uuid = open_active(&mut app, &a, uuid::Uuid::new_v4());
+    let a_uuid = open_active(&mut app, &a, uuid::Uuid::now_v7());
 
     let write = app.update(Message::File(FileMsg::SaveAs {
         from_path: a.clone(),
@@ -569,7 +569,7 @@ fn a_dropped_duplicate_open_activates_the_owning_tab() {
     let owned = tmp.path().join("FocusOwned1137.snxsch");
     let other = tmp.path().join("FocusOther1137.snxsch");
     let (mut app, _boot) = Signex::new();
-    let _ = open_active(&mut app, &owned, uuid::Uuid::new_v4());
+    let _ = open_active(&mut app, &owned, uuid::Uuid::now_v7());
     second_tab(&mut app, &other);
     app.document_state.active_tab = 1;
     app.document_state.active_path = Some(other.clone());

@@ -18,7 +18,7 @@ use tempfile::TempDir;
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
         unknown: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         version: 0,
         generator: String::new(),
         generator_version: String::new(),
@@ -47,7 +47,7 @@ fn empty_sheet() -> SchematicSheet {
 fn label(text: &str, label_type: LabelType, shape: &str) -> Label {
     Label {
         unknown_columns: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         text: text.to_string(),
         position: Point::new(10.0, 10.0),
         rotation: 0.0,
@@ -62,7 +62,7 @@ fn label(text: &str, label_type: LabelType, shape: &str) -> Label {
 
 fn pin(name: &str, direction: &str, auto: bool, moved: bool, at: (f64, f64)) -> SheetPin {
     SheetPin {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         name: name.to_string(),
         direction: direction.to_string(),
         position: Point::new(at.0, at.1),
@@ -74,7 +74,7 @@ fn pin(name: &str, direction: &str, auto: bool, moved: bool, at: (f64, f64)) -> 
 
 fn symbol_for(filename: &str, pins: Vec<SheetPin>) -> ChildSheet {
     ChildSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         name: "Child".to_string(),
         filename: filename.to_string(),
         position: Point::new(100.0, 100.0),

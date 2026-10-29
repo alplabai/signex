@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 fn part(reference: &str, value: &str, footprint: &str, lib: &str) -> Symbol {
     Symbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         lib_id: lib.to_owned(),
         reference: reference.to_owned(),
         value: value.to_owned(),
@@ -17,7 +17,7 @@ fn part(reference: &str, value: &str, footprint: &str, lib: &str) -> Symbol {
 
 fn label(text: &str, label_type: LabelType) -> Label {
     Label {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         text: text.to_owned(),
         position: Point::new(0.0, 0.0),
         rotation: 0.0,
@@ -47,7 +47,7 @@ fn sheet() -> (SchematicSheet, [Symbol; 4]) {
     let mut s = test_sheet();
     s.symbols = parts.to_vec();
     s.wires.push(Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: Point::new(0.0, 0.0),
         end: Point::new(1.0, 0.0),
         stroke_width: 0.0,
@@ -164,7 +164,7 @@ fn an_object_not_on_the_sheet_has_no_properties() {
         SelectedKind::Wire,
         SelectedKind::Label,
     ] {
-        assert!(properties_of(&s, &SelectedItem::new(Uuid::new_v4(), kind)).is_empty());
+        assert!(properties_of(&s, &SelectedItem::new(Uuid::now_v7(), kind)).is_empty());
     }
 }
 

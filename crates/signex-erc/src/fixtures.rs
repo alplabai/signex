@@ -36,7 +36,7 @@ fn empty() -> ErcContext {
 
 fn wire(a: Point, b: Point) -> ErcWire {
     ErcWire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: a,
         end: b,
     }
@@ -44,7 +44,7 @@ fn wire(a: Point, b: Point) -> ErcWire {
 
 fn label(text: &str, at: Point, label_type: LabelType) -> ErcLabel {
     ErcLabel {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         text: text.into(),
         position: at,
         label_type,
@@ -53,7 +53,7 @@ fn label(text: &str, at: Point, label_type: LabelType) -> ErcLabel {
 
 fn symbol(reference: &str, at: Point) -> ErcSymbol {
     ErcSymbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         reference: reference.into(),
         lib_id: String::new(),
         unit: 1,
@@ -75,7 +75,7 @@ fn power_port(value: &str, at: Point) -> ErcSymbol {
 
 fn sheet_pin(name: &str) -> ErcSheetPin {
     ErcSheetPin {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         name: name.into(),
         position: pt(1.0, 1.0),
     }
@@ -113,7 +113,7 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
         RuleKind::OrphanLabel => c.labels.push(label("N", pt(5.0, 5.0), LabelType::Net)),
         RuleKind::BusBitWidthMismatch => {
             c.buses.push(ErcBus {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 start: pt(0.0, 0.0),
                 end: pt(10.0, 0.0),
             });
@@ -125,14 +125,14 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
         RuleKind::BadHierSheetPin => {
             // Duplicate pin names (Error) plus a pin-less child (Warning).
             c.child_sheets.push(ErcChildSheet {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 name: "Dup".into(),
                 filename: "dup.snxsch".into(),
                 position: pt(0.0, 0.0),
                 pins: vec![sheet_pin("P"), sheet_pin("P")],
             });
             c.child_sheets.push(ErcChildSheet {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 name: "Bare".into(),
                 filename: "bare.snxsch".into(),
                 position: pt(50.0, 0.0),
@@ -267,7 +267,7 @@ pub(crate) fn violations_for(kind: RuleKind) -> Vec<Violation> {
 /// A vertical bus (0,0)-(0,20).
 fn fixture_bus() -> ErcBus {
     ErcBus {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: pt(0.0, 0.0),
         end: pt(0.0, 20.0),
     }
@@ -276,7 +276,7 @@ fn fixture_bus() -> ErcBus {
 /// An entry stub from the bus at (0,5) out to (2.54, 7.54).
 fn fixture_entry() -> ErcBusEntry {
     ErcBusEntry {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         position: pt(0.0, 5.0),
         size: (2.54, 2.54),
     }

@@ -891,7 +891,7 @@ fn a_file_over_the_size_cap_is_refused_before_it_is_hashed() {
 fn a_library_that_keeps_no_files_refuses_a_pinned_pdf() {
     let (mut app, _task) = Signex::new();
     app.library.open_libraries.clear();
-    let library_id = Uuid::new_v4();
+    let library_id = Uuid::now_v7();
     let adapter = RevisionedRowAdapter::new(library_id, 1);
     let mut row = test_row();
     row.server_revision = Some(1);

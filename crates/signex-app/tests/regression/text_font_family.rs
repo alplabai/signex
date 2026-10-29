@@ -98,7 +98,7 @@ fn label_family(app: &Signex, path: &Path, id: uuid::Uuid) -> Option<String> {
 
 #[test]
 fn a_family_edit_is_stored_as_typed_and_undone_with_one_undo() {
-    let id = uuid::Uuid::new_v4();
+    let id = uuid::Uuid::now_v7();
     let path = PathBuf::from("font-edit.snxsch");
     let sheet = SchematicSheet {
         labels: vec![label(id)],
@@ -124,11 +124,11 @@ fn a_family_edit_is_stored_as_typed_and_undone_with_one_undo() {
 
 #[test]
 fn a_missing_family_is_reported_once_per_document() {
-    let (first, second) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+    let (first, second) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
     let path = PathBuf::from("font-notice.snxsch");
     let sheet = SchematicSheet {
         labels: vec![label(first), label(second)],
-        text_notes: vec![note(uuid::Uuid::new_v4())],
+        text_notes: vec![note(uuid::Uuid::now_v7())],
         ..Default::default()
     };
     let mut app = app_with(sheet, &path);

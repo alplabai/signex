@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 fn resistor_at(x: f64, y: f64) -> Symbol {
     Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: "Device:R".to_string(),
         reference: "R?".to_string(),
         value: "10k".to_string(),
@@ -22,7 +22,7 @@ fn resistor_at(x: f64, y: f64) -> Symbol {
 fn annotate_grid_with(order: AnnotateOrder) -> Vec<String> {
     let path = PathBuf::from("annotate-order.snxsch");
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols: vec![
             resistor_at(0.0, 0.0),

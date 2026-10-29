@@ -41,7 +41,7 @@ use crate::app::handlers::menu::export::tests::{app_workspace, open_with, sheet_
 ///
 /// Returns the app and the temp dir (caller cleans up).
 fn fixture() -> (Signex, PathBuf) {
-    let dir = std::env::temp_dir().join(format!("signex-annotate-preview-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-annotate-preview-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
 
     let child = SnxSchematic::new(sheet_with_net("R?", "CHILD_NET", &[]))
@@ -168,7 +168,7 @@ fn the_preview_promises_what_the_action_assigns_down_then_across() {
         .into_iter()
         .map(|(x, y)| {
             let mut s = template.clone();
-            s.uuid = Uuid::new_v4();
+            s.uuid = Uuid::now_v7();
             s.position = signex_types::schematic::Point::new(x, y);
             s
         })
@@ -246,7 +246,7 @@ fn the_preview_omits_tabs_the_action_refuses_to_touch() {
 fn the_preview_honours_locks_like_the_action() {
     use signex_types::schematic::Symbol;
     let unit = |unit: u32, y: f64| Symbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         lib_id: "Amplifier:LM358".to_string(),
         reference: "U?".to_string(),
         unit,
@@ -255,7 +255,7 @@ fn the_preview_honours_locks_like_the_action() {
     };
     let (locked, sibling) = (unit(1, 0.0), unit(2, 10.0));
     let locked_uuid = locked.uuid;
-    let dir = std::env::temp_dir().join(format!("signex-preview-lock-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-preview-lock-{}", Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
     let root = dir.join("a_root.snxsch");
     let mut sheet = sheet_with_net("R?", "ROOT_NET", &[]);
@@ -433,7 +433,7 @@ fn resetting_duplicates_drops_the_cached_rows() {
         sym.reference = "R1".to_string();
     }
     let mut twin = document.symbols[0].clone();
-    twin.uuid = Uuid::new_v4();
+    twin.uuid = Uuid::now_v7();
     document.symbols.push(twin);
     engine
         .execute(signex_engine::Command::ReplaceDocument { document })

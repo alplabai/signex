@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
         unknown: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         version: 0,
         generator: String::new(),
         generator_version: String::new(),
@@ -104,12 +104,12 @@ fn selection_does_not_carry_to_another_schematic_tab() {
     activate(&mut app, 0);
 
     app.interaction_state.active_canvas_mut().selected = vec![SelectedItem::new(
-        uuid::Uuid::new_v4(),
+        uuid::Uuid::now_v7(),
         SelectedKind::Symbol,
     )];
     // The panel mirror of that selection (what a Properties edit reads).
     app.document_state.panel_ctx.selection_count = 1;
-    app.document_state.panel_ctx.selected_uuid = Some(uuid::Uuid::new_v4());
+    app.document_state.panel_ctx.selected_uuid = Some(uuid::Uuid::now_v7());
     app.document_state.panel_ctx.selected_kind = Some(SelectedKind::Symbol);
 
     let _ = app.update(Message::Tab {

@@ -58,7 +58,7 @@ fn engine_with_wired_pin_2() -> Engine {
         lib_symbol("old", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]),
     );
     sheet.symbols.push(Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: ID.into(),
         reference: "U1".into(),
         position: Point::new(10.0, 10.0),
@@ -160,7 +160,7 @@ fn a_label_on_a_pin_tip_counts_as_a_connection() {
     // Pin "1" tip (7.46, 10) carries only a label, no wire.
     sheet.labels.push(signex_types::schematic::Label {
         unknown_columns: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         text: "N".to_string(),
         position: Point::new(7.46, 10.0),
         rotation: 0.0,
@@ -245,7 +245,7 @@ fn a_junction_alone_on_a_pin_tip_counts_as_a_connection() {
 
     let mut sheet = engine_with_bare_symbol().document().clone();
     sheet.junctions.push(Junction {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         position: Point::new(12.54, 10.0),
         ..Default::default()
     });
@@ -260,7 +260,7 @@ fn a_junction_alone_on_a_pin_tip_counts_as_a_connection() {
 fn a_no_connect_on_a_pin_tip_counts_as_a_connection() {
     let mut sheet = engine_with_bare_symbol().document().clone();
     sheet.no_connects.push(NoConnect {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         position: Point::new(12.54, 10.0),
     });
     let mut engine = Engine::new(sheet).unwrap();
@@ -352,7 +352,7 @@ fn only_instances_of_the_replaced_lib_id_are_stamped() {
     let mut engine = engine_with_wired_pin_2();
     let mut doc = engine.document().clone();
     let mut other = doc.symbols[0].clone();
-    other.uuid = uuid::Uuid::new_v4();
+    other.uuid = uuid::Uuid::now_v7();
     other.lib_id = "L:other".into();
     other.reference = "U2".into();
     other.position = Point::new(50.0, 50.0);
@@ -401,7 +401,7 @@ fn engine_with_shared_pin() -> Engine {
         .lib_symbols
         .insert(ID.into(), lib_symbol("old", vec![unit_pin(0)]));
     sheet.symbols.push(Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: ID.into(),
         reference: "U1".into(),
         position: Point::new(10.0, 10.0),
@@ -437,7 +437,7 @@ fn the_same_relabel_is_refused_when_unit_2s_instance_has_that_tip_wired() {
     // U2 is unit 2 of the same part, its tip (world 32.54, 10) wired too.
     let mut doc = engine.document().clone();
     doc.symbols.push(Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: ID.into(),
         reference: "U2".into(),
         position: Point::new(30.0, 10.0),
@@ -474,7 +474,7 @@ fn undo_snapshots_share_lib_symbols_and_a_replace_does_not_bleed_into_them() {
     engine
         .execute(Command::PlaceNoConnect {
             no_connect: signex_types::schematic::NoConnect {
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 position: Point::new(0.0, 0.0),
             },
         })

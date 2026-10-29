@@ -503,7 +503,7 @@ mod tests {
 
     fn sheet() -> signex_types::schematic::SchematicSheet {
         signex_types::schematic::SchematicSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             paper_size: "A4".to_string(),
             ..Default::default()
         }
@@ -538,7 +538,7 @@ mod tests {
             uuid: id,
             ..Default::default()
         };
-        let (gone_wire, kept_wire) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+        let (gone_wire, kept_wire) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
         for (path, id) in [(&gone, gone_wire), (&kept, kept_wire)] {
             let mut s = sheet();
             s.wires.push(wire_of(id));

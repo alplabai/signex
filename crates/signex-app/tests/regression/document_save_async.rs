@@ -58,7 +58,7 @@ impl Recorder {
 fn app_with_dirty_sheet(sink: Arc<dyn DocumentSink>) -> (Signex, PathBuf) {
     let path = PathBuf::from("document-save-async.snxsch");
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };
@@ -265,7 +265,7 @@ fn a_replaced_engine_is_not_marked_clean_by_the_old_snapshots_completion() {
     let task = app.update(Message::File(FileMsg::Save));
     // A History restore / reload swaps in a brand-new engine.
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };

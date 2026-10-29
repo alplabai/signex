@@ -5,7 +5,7 @@ use signex_types::schematic::{Label, LabelType, Point, Wire};
 
 fn symbol(reference: &str, value: &str) -> Symbol {
     Symbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         reference: reference.into(),
         value: value.into(),
         in_bom: true,
@@ -16,7 +16,7 @@ fn symbol(reference: &str, value: &str) -> Symbol {
 
 fn label(text: &str, font_size: f64) -> Label {
     Label {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         text: text.into(),
         position: Point::new(0.0, 0.0),
         rotation: 0.0,
@@ -32,7 +32,7 @@ fn label(text: &str, font_size: f64) -> Label {
 
 fn wire(width: f64) -> Wire {
     Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: Point::new(0.0, 0.0),
         end: Point::new(5.0, 0.0),
         stroke_width: width,

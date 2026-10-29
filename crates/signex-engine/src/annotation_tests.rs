@@ -13,7 +13,7 @@ use crate::test_support::test_sheet;
 
 fn unit(reference: &str, unit: u32, x: f64) -> Symbol {
     Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: "Amp:Dual".to_string(),
         reference: reference.to_string(),
         unit,
@@ -193,7 +193,7 @@ fn refs_of(engine: &Engine) -> Vec<String> {
 
 fn at(x: f64, y: f64) -> Symbol {
     Symbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         lib_id: "Device:R".to_string(),
         reference: "R?".to_string(),
         position: Point::new(x, y),

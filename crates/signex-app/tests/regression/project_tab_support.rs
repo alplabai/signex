@@ -105,7 +105,7 @@ pub fn is_dirty(f: &Fixture) -> bool {
 pub fn open_dirty_root_sheet(f: &mut Fixture) -> PathBuf {
     let path = f.tmp.path().join("Oscar.snxsch");
     let mut engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     })

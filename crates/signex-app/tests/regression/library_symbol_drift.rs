@@ -273,7 +273,7 @@ fn a_new_pass_prunes_rows_and_names_of_unmounted_libraries_at_once() {
     let mut app = app_with_library(&f);
     place(&mut app, &f);
     let sheet = app.document_state.active_path.clone().unwrap();
-    let ghost = format!("{}:{}", Uuid::new_v4(), Uuid::new_v4());
+    let ghost = format!("{}:{}", Uuid::now_v7(), Uuid::now_v7());
     let real = doc(&app).symbols[0].lib_id.clone();
     let drift = &mut app.library.drift;
     drift.names.insert(ghost.clone(), "Gone/Part".into());

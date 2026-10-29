@@ -365,6 +365,24 @@ Examples of good first contributions:
   of thumb, a comment block longer than about ten lines belongs in a document.
   The history of a change belongs in its commit message and PR, not in the code.
 
+### Object ids
+
+Every new id is a UUID v7: call `Uuid::now_v7()`. The workspace builds `uuid`
+without the `v4` feature, so `Uuid::new_v4()` does not compile.
+
+- **A v7 id carries its creation time.** Its first 48 bits are a millisecond
+  Unix timestamp. `signex_types::object_id::created_at` reads it back, and
+  returns `None` for any other version.
+- **Ids sort by creation.** That keeps index order and the row diffs of
+  `.snxsch` / `.snxlib` files steadier than random ids did.
+- **Existing ids are never rewritten.** v4 ids in older files stay valid;
+  nothing reads the version nibble except `created_at`.
+- **Shorten an id from its tail.** Ids made in the same minute share their
+  leading hex digits, so a display label uses
+  `signex_types::object_id::short_id` (the last 8 digits), never the prefix.
+- **An id is not a secret.** Tokens, nonces and OAuth state come from a CSPRNG
+  (the `oauth2` crate's own generators), not from a UUID.
+
 ## Contributor License Agreement
 
 By submitting a pull request, you agree that your contribution is licensed under

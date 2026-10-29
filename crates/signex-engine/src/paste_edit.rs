@@ -75,7 +75,7 @@ mod tests {
 
     fn part(reference: &str, lib: &str, unit: u32) -> Symbol {
         Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             lib_id: lib.to_owned(),
             reference: reference.to_owned(),
             unit,
@@ -154,7 +154,7 @@ mod tests {
         let mut sheet = test_sheet();
         for text in ["D0", "CLK", "A07"] {
             sheet.labels.push(Label {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 text: text.to_owned(),
                 position: Point::new(0.0, 0.0),
                 rotation: 0.0,

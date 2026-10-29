@@ -92,7 +92,7 @@ fn add_unmaterialisable_library(app: &mut Signex, dir: &Path) {
     };
     app.document_state.projects[0]
         .pending_libraries
-        .insert(uuid::Uuid::new_v4(), spec);
+        .insert(uuid::Uuid::now_v7(), spec);
     let prj = app.document_state.projects[0].path.clone();
     app.document_state.dirty_paths.insert(prj);
 }
@@ -205,7 +205,7 @@ fn quit_proceeds_when_every_document_saved() {
 /// otherwise sit in memory for the rest of the session.
 #[test]
 fn closing_a_project_drops_its_rules_history() {
-    let dir = std::env::temp_dir().join(format!("signex-close-rules-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-close-rules-{}", uuid::Uuid::now_v7()));
     let mut app = project_app(&dir);
     let id = app.document_state.projects[0].id;
     app.document_state.rules_history.entry(id).or_default();

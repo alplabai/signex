@@ -39,7 +39,7 @@ impl DocumentSink for GatedFileSink {
 
 fn sheet(paper: &str) -> SchematicSheet {
     SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: paper.to_string(),
         ..Default::default()
     }

@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 fn symbol(reference: &str, mirror_x: bool, mirror_y: bool) -> Symbol {
     Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: "Device:R".to_string(),
         reference: reference.to_string(),
         value: "10k".to_string(),
@@ -29,7 +29,7 @@ fn symbol(reference: &str, mirror_x: bool, mirror_y: bool) -> Symbol {
 
 fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
     SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols,
         ..Default::default()

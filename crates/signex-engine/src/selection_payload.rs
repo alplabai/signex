@@ -34,7 +34,7 @@ impl Engine {
     ) -> Result<Option<CopiedSelection>, EngineError> {
         let clip = self.collect_selection_clipboard(items);
         let mut fragment = SchematicSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             symbols: clip.symbols,
             wires: clip.wires,
             buses: clip.buses,
@@ -172,7 +172,7 @@ mod tests {
             serde_json::from_str(r#"{"id":"lib:r"}"#).unwrap();
         sheet.lib_symbols.insert(lib.id.clone(), lib);
         let part = Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             lib_id: "lib:r".to_owned(),
             reference: "R7".to_owned(),
             position: Point::new(25.4, 25.4),
@@ -180,7 +180,7 @@ mod tests {
             ..Default::default()
         };
         let wire = Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(25.4, 25.4),
             end: Point::new(38.1, 25.4),
             stroke_width: 0.0,
@@ -261,14 +261,14 @@ mod tests {
         // A stem ending on a trunk that is NOT copied: the engine would call
         // a minted dot there unjustified and retire it.
         let stem = Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(10.16, 0.0),
             end: Point::new(10.16, 10.16),
             stroke_width: 0.0,
             unknown_columns: Default::default(),
         };
         let dot = Junction {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             position: Point::new(10.16, 0.0),
             minted: true,
             ..Default::default()
@@ -321,7 +321,7 @@ mod tests {
         // The ref text sits far above the part, so the copy's centre (the
         // origin) is not the part's position.
         let part = Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             lib_id: "lib:r".to_owned(),
             reference: "R1".to_owned(),
             position: Point::new(25.4, 25.4),

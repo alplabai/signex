@@ -205,7 +205,7 @@ impl Env {
                     stroke_width: 0.0,
                     unknown_columns: Default::default(),
                 });
-                wire.uuid = Uuid::new_v4();
+                wire.uuid = Uuid::now_v7();
                 wire.start = a;
                 wire.end = b;
                 out.touched

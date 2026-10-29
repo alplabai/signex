@@ -26,7 +26,7 @@ struct World {
 
 fn symbol(reference: &str, x: f64) -> Symbol {
     Symbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         lib_id: "Device:D".to_string(),
         reference: reference.to_string(),
         position: Point::new(x, 0.0),
@@ -47,15 +47,15 @@ fn linked(f: &Fixture, reference: &str, x: f64) -> Symbol {
 /// A part linked to a library that is not mounted.
 fn from_unmounted(reference: &str, x: f64) -> Symbol {
     Symbol {
-        library_id: Some(Uuid::new_v4()),
-        row_id: Some(Uuid::new_v4()),
+        library_id: Some(Uuid::now_v7()),
+        row_id: Some(Uuid::now_v7()),
         ..symbol(reference, x)
     }
 }
 
 fn sheet_of(f: &Fixture, symbols: Vec<Symbol>) -> SchematicSheet {
     let mut sheet = SchematicSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols,
         ..Default::default()
@@ -356,7 +356,7 @@ fn reprefix_overflow_does_not_split_a_part() {
     let f = fixture_of_class("diode");
     // The child (walked first) holds a part of a second row (LED -> `H`); the
     // root holds a diode that must become `V`, but `V` is saturated.
-    let led_row = Uuid::new_v4();
+    let led_row = Uuid::now_v7();
     let mut led = linked(&f, "D5", 0.0);
     led.row_id = Some(led_row);
     let root = vec![linked(&f, "D1", 0.0), linked(&f, "V4294967295", 10.0)];
@@ -559,7 +559,7 @@ fn redo_of_a_reprefix_with_a_dropped_parked_sheet_changes_nothing() {
     let mut child = signex_engine::Engine::new(sheet_of(
         &w.f,
         vec![Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             ..unit(&root_unit, 2)
         }],
     ))

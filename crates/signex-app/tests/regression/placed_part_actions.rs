@@ -650,7 +650,7 @@ fn set_symbol(app: &mut Signex, edit: impl FnOnce(&mut signex_types::schematic::
 fn add_second_unit(app: &mut Signex) {
     let mut d = doc(app).clone();
     let mut unit2 = d.symbols[0].clone();
-    unit2.uuid = Uuid::new_v4();
+    unit2.uuid = Uuid::now_v7();
     unit2.unit = 2;
     unit2.position = Point::new(80.0, 40.0);
     d.symbols.push(unit2);
@@ -702,7 +702,7 @@ fn units_on_another_sheet_of_the_project_refuse_the_change() {
     let other_sheet = join_project_with_a_second_sheet(&mut app);
     // The other sheet holds another unit of ZM2 on the same drawing.
     let mut unit = doc(&app).symbols[0].clone();
-    unit.uuid = Uuid::new_v4();
+    unit.uuid = Uuid::now_v7();
     unit.unit = 2;
     let mut sheet = doc(&app).clone();
     sheet.symbols = vec![unit];
@@ -957,7 +957,7 @@ fn a_child_sheet_that_is_neither_open_nor_a_declared_page_refuses_the_change() {
     let (mut app, _new) = change_setup("ZH1", renumbered(), &[]);
     let mut d = doc(&app).clone();
     d.child_sheets.push(signex_types::schematic::ChildSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         name: "Child".into(),
         filename: "child.snxsch".into(),
         position: Point::new(0.0, 0.0),
@@ -1037,7 +1037,7 @@ fn a_sibling_that_appears_on_another_open_sheet_after_the_preview_refuses_the_co
 
     // Unit 2 of the part shows up on the other open sheet.
     let mut unit2 = doc(&app).symbols[0].clone();
-    unit2.uuid = Uuid::new_v4();
+    unit2.uuid = Uuid::now_v7();
     unit2.unit = 2;
     let mut d = app.document_state.engines[&other_sheet].document().clone();
     d.symbols.push(unit2);
@@ -1060,7 +1060,7 @@ fn a_duplicate_designator_with_the_same_unit_on_another_open_sheet_does_not_refu
     let (mut app, _new) = change_setup("ZD9", renumbered(), &[]);
     let other_sheet = join_project_with_a_second_sheet(&mut app);
     let mut there = doc(&app).clone();
-    there.symbols[0].uuid = Uuid::new_v4();
+    there.symbols[0].uuid = Uuid::now_v7();
     app.document_state.engines.insert(
         other_sheet,
         signex_engine::Engine::new(there).expect("engine"),

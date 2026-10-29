@@ -173,7 +173,7 @@ mod tests {
     fn place_no_connect() -> Command {
         Command::PlaceNoConnect {
             no_connect: NoConnect {
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 position: Point::new(0.0, 0.0),
             },
         }
@@ -202,7 +202,7 @@ mod tests {
         Command::PlaceLabel {
             label: Label {
                 unknown_columns: Default::default(),
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 text: "NET".to_string(),
                 position: Point::new(0.0, 0.0),
                 rotation: 0.0,
@@ -529,7 +529,7 @@ mod snapshot_cost_tests {
     fn place() -> Command {
         Command::PlaceNoConnect {
             no_connect: NoConnect {
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 position: Point::new(0.0, 0.0),
             },
         }

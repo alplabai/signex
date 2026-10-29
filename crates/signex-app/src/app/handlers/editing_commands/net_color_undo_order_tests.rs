@@ -21,10 +21,10 @@ fn app_with_symbol() -> (Signex, uuid::Uuid) {
 
 /// Open a one-symbol schematic tab and make it the active document.
 fn add_doc(app: &mut Signex, name: &str) -> uuid::Uuid {
-    let id = uuid::Uuid::new_v4();
+    let id = uuid::Uuid::now_v7();
     let path = std::path::PathBuf::from(name);
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols: vec![Symbol {
             uuid: id,
@@ -33,11 +33,11 @@ fn add_doc(app: &mut Signex, name: &str) -> uuid::Uuid {
             ..Default::default()
         }],
         junctions: vec![signex_types::schematic::Junction {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             ..Default::default()
         }],
         wires: vec![signex_types::schematic::Wire {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             ..Default::default()
         }],
         ..Default::default()

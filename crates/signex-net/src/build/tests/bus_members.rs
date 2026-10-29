@@ -7,7 +7,7 @@ use signex_types::schematic::Bus;
 fn bus_sheet(labels: &[Option<&str>]) -> SchematicSheet {
     let mut sheet = empty_sheet();
     sheet.buses.push(Bus {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: pt(0.0, 0.0),
         end: pt(0.0, 40.0),
     });
@@ -22,7 +22,7 @@ fn bus_sheet(labels: &[Option<&str>]) -> SchematicSheet {
     for (i, text) in labels.iter().enumerate() {
         let y = 5.0 + 10.0 * i as f64;
         sheet.bus_entries.push(signex_types::schematic::BusEntry {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             position: pt(0.0, y),
             size: (2.54, 2.54),
         });

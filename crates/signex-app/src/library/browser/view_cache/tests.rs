@@ -21,7 +21,7 @@ fn row(pn: &str) -> ComponentRow {
     let now = chrono::Utc::now();
     ComponentRow {
         alternate_symbols: Vec::new(),
-        row_id: Uuid::new_v4(),
+        row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
@@ -56,7 +56,7 @@ fn fixture() -> (LibraryState, PathBuf) {
     state.open_libraries.push(OpenLibrary {
         root: root.clone(),
         display_name: "Cache".into(),
-        library_id: Uuid::new_v4(),
+        library_id: Uuid::now_v7(),
         tables: HashMap::from([(TABLE.to_string(), vec![row("R3"), row("R1"), row("R2")])]),
         cached_components: Vec::new(),
         cached_symbols: Vec::new(),
@@ -222,10 +222,10 @@ fn selecting_a_row_or_editing_a_cell_does_not_rebuild() {
     let before = builds();
 
     let browser = browser_mut(&mut state, &root);
-    browser.selected_row = Some(signex_library::RowId::from_uuid(Uuid::new_v4()));
+    browser.selected_row = Some(signex_library::RowId::from_uuid(Uuid::now_v7()));
     browser.cell_edit.insert(
         (
-            signex_library::RowId::from_uuid(Uuid::new_v4()),
+            signex_library::RowId::from_uuid(Uuid::now_v7()),
             "mpn".into(),
         ),
         "x".into(),

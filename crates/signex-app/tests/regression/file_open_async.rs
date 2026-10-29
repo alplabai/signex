@@ -23,7 +23,7 @@ use tempfile::TempDir;
 /// `signex_types::format::tests::empty_sheet`.
 fn empty_schematic_sheet() -> signex_types::schematic::SchematicSheet {
     signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         version: 1,
         generator: "signex-test".into(),
         generator_version: "0.9".into(),
@@ -218,7 +218,7 @@ fn reopening_an_already_open_schematic_tab_activates_it_instead_of_duplicating()
 fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         unknown: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         version: 1,
         generator: "signex-test".into(),
         thickness: 1.6,
@@ -350,7 +350,7 @@ fn opening_a_board_with_an_unusable_zone_hole_warns_once() {
     };
     let mut board = empty_pcb_board();
     board.zones.push(Zone {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         net: 0,
         net_name: String::new(),
         layer: "TopCopper".into(),

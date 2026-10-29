@@ -108,10 +108,7 @@ fn row_button<'a>(
     muted: iced::Color,
     hover: iced::Color,
 ) -> Element<'a, LibraryMessage> {
-    let short_uuid = {
-        let s = uuid.simple().to_string();
-        if s.len() >= 8 { s[..8].to_string() } else { s }
-    };
+    let short_uuid = signex_types::object_id::short_id(&uuid);
     let ext = match kind {
         PrimitiveKind::Symbol => "snxsym",
         PrimitiveKind::Footprint => "snxfpt",

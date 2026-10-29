@@ -165,7 +165,7 @@ fn a_project_whose_hierarchy_cannot_be_derived_says_so_in_bom_terms() {
     // derived and the BOM falls back to the printed pages. A BOM user must be
     // told child-sheet parts are missing, in BOM terms.
     let _ = crate::diagnostics::init_logging();
-    let dir = std::env::temp_dir().join(format!("signex-bom-noroot-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-bom-noroot-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);
     app.document_state.projects[0].data.schematic_root = Some("gone-root.snxsch".to_string());
     let top = dir.join("top.snxsch");

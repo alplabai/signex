@@ -460,7 +460,7 @@ fn a_late_mount_after_an_edit_lands_as_one_undo_step() {
     use signex_types::schematic::{Point, SelectedItem, SelectedKind, Wire};
     let f = fixture();
     let mut sheet = saved_linked_sheet(&f);
-    let wire = uuid::Uuid::new_v4();
+    let wire = uuid::Uuid::now_v7();
     sheet.wires.push(Wire {
         unknown_columns: Default::default(),
         uuid: wire,

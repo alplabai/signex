@@ -79,7 +79,7 @@ fn scene_cache_rebuilds_on_class_style_or_designator_change() {
     let thick = class_style(NetLineStyle::Solid, Some(1.0), None);
     let no_designators = HashMap::new();
     let mut renamed = HashMap::new();
-    renamed.insert(uuid::Uuid::new_v4(), "R7".to_string());
+    renamed.insert(uuid::Uuid::now_v7(), "R7".to_string());
 
     let mut cache = ContentSceneCache::default();
     let mut request =

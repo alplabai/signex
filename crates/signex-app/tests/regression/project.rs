@@ -1365,11 +1365,11 @@ fn fixture_schematic_with_symbol_and_child_sheet()
     use signex_types::schematic::{ChildSheet, FillType, Point, SchematicSheet, Symbol};
     use std::collections::HashMap;
 
-    let symbol_uuid = uuid::Uuid::new_v4();
-    let sheet_uuid = uuid::Uuid::new_v4();
+    let symbol_uuid = uuid::Uuid::now_v7();
+    let sheet_uuid = uuid::Uuid::now_v7();
 
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols: vec![Symbol {
             unknown_columns: Default::default(),

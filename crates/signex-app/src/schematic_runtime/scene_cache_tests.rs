@@ -5,7 +5,7 @@ use signex_types::theme::{ThemeId, canvas_colors};
 fn sheet_with_wire() -> SchematicRenderSnapshot {
     let mut sheet = empty_snapshot();
     sheet.wires.push(signex_types::schematic::Wire {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(10.0, 10.0),
         end: Point::new(60.0, 10.0),
         stroke_width: 0.15,
@@ -177,7 +177,7 @@ fn a_panned_scene_still_contains_the_wire() {
 fn sheet_with_wire_between(start: (f64, f64), end: (f64, f64)) -> SchematicRenderSnapshot {
     let mut sheet = empty_snapshot();
     sheet.wires.push(signex_types::schematic::Wire {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(start.0, start.1),
         end: Point::new(end.0, end.1),
         stroke_width: 0.15,

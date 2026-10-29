@@ -65,7 +65,7 @@ mod tests {
         let lib: LibSymbol = serde_json::from_str(r#"{"id":"lib:r"}"#).unwrap();
         sheet.lib_symbols.insert(lib.id.clone(), lib);
         let part = Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             lib_id: "lib:r".to_owned(),
             reference: "R7".to_owned(),
             position: Point::new(25.4, 25.4),
@@ -73,14 +73,14 @@ mod tests {
             ..Default::default()
         };
         let wire = Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(25.4, 25.4),
             end: Point::new(38.1, 25.4),
             stroke_width: 0.0,
             unknown_columns: Default::default(),
         };
         let label = Label {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             text: "D0".to_owned(),
             position: Point::new(38.1, 25.4),
             rotation: 0.0,

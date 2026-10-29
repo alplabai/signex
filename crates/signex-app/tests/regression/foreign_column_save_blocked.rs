@@ -29,7 +29,7 @@ fn app_with_over_cap_sheet(
 ) -> Signex {
     // Each junction alone is within the 256 cap; together they are 400.
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         junctions: vec![
             junction_with_columns(first, 0..200),
@@ -75,8 +75,8 @@ fn over_cap_save_names_the_offending_objects_in_messages() {
     let _ = signex_app::diagnostics::init_logging();
     let tmp = TempDir::new().expect("tempdir");
     let path = tmp.path().join("Merged.snxsch");
-    let first = uuid::Uuid::new_v4();
-    let second = uuid::Uuid::new_v4();
+    let first = uuid::Uuid::now_v7();
+    let second = uuid::Uuid::now_v7();
     let mut app = app_with_over_cap_sheet(&path, first, second);
 
     let _ = app.update(Message::File(FileMsg::Save));
@@ -96,8 +96,8 @@ fn save_all_on_exit_names_the_offending_objects_in_messages() {
     let _ = signex_app::diagnostics::init_logging();
     let tmp = TempDir::new().expect("tempdir");
     let path = tmp.path().join("Exit.snxsch");
-    let first = uuid::Uuid::new_v4();
-    let second = uuid::Uuid::new_v4();
+    let first = uuid::Uuid::now_v7();
+    let second = uuid::Uuid::now_v7();
     let mut app = app_with_over_cap_sheet(&path, first, second);
 
     let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));

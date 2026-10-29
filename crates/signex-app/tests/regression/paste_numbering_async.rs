@@ -26,7 +26,7 @@ fn symbol_count(app: &Signex) -> usize {
 
 fn child_ref(filename: &str) -> ChildSheet {
     ChildSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         name: filename.to_owned(),
         filename: filename.to_owned(),
         position: Point::new(0.0, 0.0),
@@ -57,7 +57,7 @@ fn app_with_child_on_disk(
 
 fn child_with_r9() -> String {
     let mut child = SchematicSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         paper_size: "A4".to_owned(),
         ..Default::default()
     };
@@ -265,7 +265,7 @@ fn a_fifty_copy_array_places_every_copy_and_label() {
 fn an_open_project_sheet_counts_with_its_unsaved_edits() {
     let (mut app, dir) = app_with_child_on_disk("child.snxsch", child_with_r9);
     let mut unsaved = SchematicSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         paper_size: "A4".to_owned(),
         ..Default::default()
     };
@@ -316,7 +316,7 @@ fn a_paste_array_of_a_foreign_fragment_brings_its_library_body() {
 fn a_new_request_does_not_strip_an_armed_stamps_project_numbers() {
     let (mut app, _dir) = app_with_child_on_disk("child.snxsch", || {
         let mut child = SchematicSheet {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             paper_size: "A4".to_owned(),
             ..Default::default()
         };

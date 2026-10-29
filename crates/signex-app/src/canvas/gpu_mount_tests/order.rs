@@ -12,7 +12,7 @@ const RED: StrokeColor = StrokeColor {
 
 fn drawing_line(y: f64, width: f64) -> SchDrawing {
     SchDrawing::Line {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(6.0, y),
         end: Point::new(20.0, y),
         width,
@@ -28,7 +28,7 @@ fn drawing_line(y: f64, width: f64) -> SchDrawing {
 /// An opaque red rectangle over `[10, 15] x [y0, y1]`.
 fn red_rect(y0: f64, y1: f64) -> SchDrawing {
     SchDrawing::Rect {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(10.0, y0),
         end: Point::new(15.0, y1),
         width: 0.25,
@@ -46,7 +46,7 @@ fn sheet_of(drawings: Vec<SchDrawing>) -> SchematicSheet {
 
 fn wire_across(y: f64) -> Wire {
     Wire {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(6.0, y),
         end: Point::new(20.0, y),
         stroke_width: 0.4,
@@ -130,7 +130,7 @@ fn a_drawing_rect_sits_under_a_wire_on_gpu_and_cpu() {
 fn a_filled_drawing_circle_has_separate_fill_and_stroke_colours() {
     let mut gpu = gpu();
     let sheet = sheet_of(vec![SchDrawing::Circle {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         center: Point::new(15.0, 12.0),
         radius: 3.0,
         width: 0.5,

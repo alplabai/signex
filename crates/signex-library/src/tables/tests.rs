@@ -64,7 +64,7 @@ fn mk_row(internal_pn: &str, class: &str) -> ComponentRow {
     let updated = created + Duration::hours(1);
     ComponentRow {
         alternate_symbols: Vec::new(),
-        row_id: Uuid::new_v4(),
+        row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(internal_pn),
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
@@ -72,8 +72,8 @@ fn mk_row(internal_pn: &str, class: &str) -> ComponentRow {
         description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Released,
-        symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
-        footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
+        symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
+        footprint_ref: Some(PrimitiveRef::new(lib, Uuid::now_v7())),
         sim_ref: None,
         pin_map_overrides: vec![PinPadOverride::new("EP", "EP1")],
         primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),

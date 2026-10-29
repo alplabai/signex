@@ -21,7 +21,7 @@ fn entry(path: &str, reference: &str) -> SymbolInstance {
 fn a_pasted_symbol_does_not_inherit_the_originals_instance_entries() {
     let path = PathBuf::from("paste-instances.snxsch");
     let engine = signex_engine::Engine::new(SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     })
@@ -40,7 +40,7 @@ fn a_pasted_symbol_does_not_inherit_the_originals_instance_entries() {
     app.document_state.active_path = Some(path);
 
     let copied_symbols = vec![Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: "Device:R".to_string(),
         reference: "R2".to_string(),
         value: "10k".to_string(),

@@ -10,7 +10,7 @@ const DIR: &str = "/w/loose-1447";
 
 fn sheet() -> signex_types::schematic::SchematicSheet {
     signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         ..Default::default()
     }
 }
