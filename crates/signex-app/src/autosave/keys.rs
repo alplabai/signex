@@ -175,12 +175,19 @@ pub(super) fn has_case_variant(document: &Path) -> bool {
             match std::fs::read_dir(dir) {
                 Ok(entries) => {
                     let wanted = lower(name);
+                    let before = next.len();
                     next.extend(
                         entries
                             .flatten()
                             .filter(|e| lower(&e.file_name()) == wanted)
                             .map(|e| prefix.join(e.file_name())),
                     );
+                    // The listing may not show the name as given (a Windows
+                    // 8.3 short name): an entry that exists under it counts.
+                    if next.len() == before && std::fs::symlink_metadata(prefix.join(name)).is_ok()
+                    {
+                        next.push(prefix.join(name));
+                    }
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                 Err(_) => return true,
