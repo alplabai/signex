@@ -280,7 +280,6 @@ pub(super) fn placed_twice() -> (Project, PathBuf) {
 pub(super) const ONLY_B: &str = "ONLYB";
 pub(super) const B_WIRE: u128 = 901;
 pub(super) const B_SYMBOL: u128 = 902;
-pub(super) const B_LABEL: u128 = 900;
 
 impl Project {
     /// Add a second, unrelated project with one open sheet carrying the
