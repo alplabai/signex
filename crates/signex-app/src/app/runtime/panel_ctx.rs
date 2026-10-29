@@ -180,7 +180,7 @@ impl Signex {
 
     /// Fill `lib_symbol_names` / `placed_symbols`: the lists kept from the
     /// previous refresh when the engine is unchanged, else rebuilt (#1383).
-    fn fill_symbol_lists(&mut self, kept: Option<SymbolLists>) {
+    pub(in crate::app) fn fill_symbol_lists(&mut self, kept: Option<SymbolLists>) {
         let (names, placed) = match kept {
             Some(lists) => lists,
             None => {
