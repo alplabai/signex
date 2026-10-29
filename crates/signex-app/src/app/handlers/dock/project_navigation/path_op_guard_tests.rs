@@ -158,7 +158,9 @@ fn a_project_save_is_refused_while_a_delete_under_it_is_pending() {
     let prj = fx.app.document_state.projects[0].path.clone();
     fx.app.document_state.mark_document_dirty(&prj);
 
-    let err = fx.app.begin_project_save(id).err().expect("refused");
+    let Err(err) = fx.app.begin_project_save(id) else {
+        panic!("the save must be refused");
+    };
 
     assert!(format!("{err:#}").contains("delete"), "{err:#}");
 }

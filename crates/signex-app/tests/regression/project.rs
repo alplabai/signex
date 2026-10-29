@@ -487,7 +487,7 @@ fn f10_save_clears_dirty_paths_and_refreshes_panel_ctx() {
     app.document_state.mark_document_dirty(&prj_path);
     assert!(app.document_state.is_document_dirty(&prj_path));
 
-    let _ = app.update(Message::File(FileMsg::Save));
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Save));
 
     // Title strip: dirty_paths empty → "(N unsaved)" suffix gone.
     assert!(
@@ -522,7 +522,7 @@ fn f10_save_persists_snxprj_as_valid_json() {
     }
     app.document_state.mark_document_dirty(&prj_path);
 
-    let _ = app.update(Message::File(FileMsg::Save));
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Save));
 
     // Re-parse the file from disk — assert the mutations landed.
     let reloaded = signex_types::project::parse_project(&prj_path).expect("parse");
@@ -1516,9 +1516,10 @@ fn save_all_writes_dirty_snxprj_and_clears_dirty_marker() {
     );
 
     // Resolve it with Save All.
-    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
-        ProjectCloseChoice::SaveAll,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    );
 
     assert!(
         app.ui_state.app_quit_confirm.is_none(),

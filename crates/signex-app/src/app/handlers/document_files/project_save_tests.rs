@@ -151,6 +151,7 @@ fn a_library_that_cannot_be_created_stays_pending_and_is_reported() {
 
 #[test]
 fn a_completion_for_a_closed_project_changes_nothing() {
+    let _ = crate::diagnostics::init_logging();
     let tmp = tempfile::tempdir().unwrap();
     let mut fx = fixture(tmp.path());
     let needle = dir_needle(tmp.path());
