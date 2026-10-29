@@ -169,6 +169,8 @@ mod history_reload_repair;
 
 #[path = "regression/library_browser_cell_commit.rs"]
 mod library_browser_cell_commit;
+#[path = "regression/library_range_filter.rs"]
+mod library_range_filter;
 #[path = "regression/library_row_base_local.rs"]
 mod library_row_base_local;
 
