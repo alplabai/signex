@@ -20,6 +20,10 @@ use signex_widgets::theme_ext;
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress, LibraryState};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 const PREVIEW_PANE_HEIGHT: f32 = 220.0;
 
 pub fn view<'a>(
@@ -71,16 +75,18 @@ fn header_row<'a>(
         text(state.row.internal_pn.as_str()).size(15).color(text_c),
         Space::new().width(12),
         text(format!("class: {}", state.row.class.as_str()))
-            .size(11)
+            .size(TS.body)
             .color(muted),
         Space::new().width(12),
-        text(format!("{:?}", state.row.state)).size(11).color(muted),
+        text(format!("{:?}", state.row.state))
+            .size(TS.body)
+            .color(muted),
         Space::new().width(Length::Fill),
         text(format!(
             "MPN: {} / {}",
             state.row.primary_mpn.manufacturer, state.row.primary_mpn.mpn
         ))
-        .size(11)
+        .size(TS.body)
         .color(muted),
     ]
     .align_y(iced::Alignment::Center)
@@ -198,13 +204,13 @@ fn render_pane<'a>(
     let border = theme_ext::border_color(tokens);
 
     let header = row![
-        text(label).size(11).color(muted),
+        text(label).size(TS.body).color(muted),
         Space::new().width(Length::Fill),
         open_btn(button_label, open_msg, tokens),
     ]
     .align_y(iced::Alignment::Center);
 
-    let body = container(text(summary).size(11).color(text_c))
+    let body = container(text(summary).size(TS.body).color(text_c))
         .padding(10)
         .width(Length::Fill)
         .height(Length::Fill)
@@ -302,7 +308,7 @@ fn open_btn<'a>(
     let mut btn = button(
         container(
             text(label)
-                .size(11)
+                .size(TS.body)
                 .color(if msg.is_some() { text_c } else { muted }),
         )
         .padding([3, 10]),
@@ -358,7 +364,7 @@ fn pin_map_subsection<'a>(
     let text_c = theme_ext::text_primary(tokens);
 
     let mut col = column![
-        text("Pin Map").size(11).color(muted),
+        text("Pin Map").size(TS.body).color(muted),
         Space::new().height(6),
     ]
     .spacing(0)
@@ -367,7 +373,7 @@ fn pin_map_subsection<'a>(
     let Some(sym) = state.symbol.as_ref() else {
         col = col.push(
             text("Pin map view requires the symbol to be resolved.")
-                .size(11)
+                .size(TS.body)
                 .color(muted),
         );
         return col.into();
@@ -376,7 +382,7 @@ fn pin_map_subsection<'a>(
     if sym.pins.is_empty() {
         col = col.push(
             text("Symbol has no pins yet — open the Symbol Editor to add some.")
-                .size(11)
+                .size(TS.body)
                 .color(muted),
         );
         return col.into();
@@ -386,21 +392,21 @@ fn pin_map_subsection<'a>(
     col = col.push(
         row![
             text("Sym pin")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(1)),
             text("Sym name")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             text("Pad")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(1)),
-            text("").size(10).width(Length::FillPortion(1)),
+            text("").size(TS.caption).width(Length::FillPortion(1)),
         ]
         .align_y(iced::Alignment::Center)
-        .padding([2, 4]),
+        .padding([SP.xs, SP.s]),
     );
 
     for pin in &sym.pins {
@@ -426,15 +432,15 @@ fn pin_map_subsection<'a>(
         col = col.push(
             row![
                 text(pin.number.clone())
-                    .size(11)
+                    .size(TS.body)
                     .color(text_c)
                     .width(Length::FillPortion(1)),
                 text(pin.name.clone())
-                    .size(11)
+                    .size(TS.body)
                     .color(text_c)
                     .width(Length::FillPortion(2)),
                 text(pad_label)
-                    .size(11)
+                    .size(TS.body)
                     .color(text_c)
                     .width(Length::FillPortion(1)),
                 container(override_action_btn(
@@ -446,7 +452,7 @@ fn pin_map_subsection<'a>(
                 .width(Length::FillPortion(1)),
             ]
             .align_y(iced::Alignment::Center)
-            .padding([2, 4]),
+            .padding([SP.xs, SP.s]),
         );
 
         // Inline override editor for the expanded row.
@@ -483,7 +489,7 @@ fn override_action_btn<'a>(
     };
 
     let pin_for_msg = pin_number.clone();
-    button(container(text(label).size(11).color(text_c)).padding([2, 8]))
+    button(container(text(label).size(TS.body).color(text_c)).padding([SP.xs, SP.m]))
         .padding(0)
         .on_press_with(move || LibraryMessage::EditorEvent {
             library_path: lib_path.clone(),
@@ -538,8 +544,8 @@ fn override_editor_row<'a>(
                 value: s,
             },
         })
-        .padding([4, 8])
-        .size(11)
+        .padding([SP.s, SP.m])
+        .size(TS.body)
         .width(Length::Fixed(120.0));
 
     let lib_path_save = address.library_path.clone();
@@ -547,7 +553,7 @@ fn override_editor_row<'a>(
     let pin_for_save = pin_owned.clone();
     let buf_for_save = buf.to_string();
     let save_btn =
-        button(container(text("Save").size(11).color(iced::Color::WHITE)).padding([3, 10]))
+        button(container(text("Save").size(TS.body).color(iced::Color::WHITE)).padding([3, 10]))
             .on_press(LibraryMessage::EditorEvent {
                 library_path: lib_path_save,
                 table: table_save,
@@ -572,7 +578,7 @@ fn override_editor_row<'a>(
 
     let lib_path_cancel = address.library_path.clone();
     let table_cancel = address.table.clone();
-    let cancel_btn = button(container(text("Cancel").size(11).color(text_c)).padding([3, 10]))
+    let cancel_btn = button(container(text("Cancel").size(TS.body).color(text_c)).padding([3, 10]))
         .on_press(LibraryMessage::EditorEvent {
             library_path: lib_path_cancel,
             table: table_cancel,
@@ -595,7 +601,7 @@ fn override_editor_row<'a>(
     let lib_path_remove = address.library_path.clone();
     let table_remove = address.table.clone();
     let pin_for_remove = pin_owned;
-    let remove_btn = button(container(text("Remove").size(11).color(muted)).padding([3, 10]))
+    let remove_btn = button(container(text("Remove").size(TS.body).color(muted)).padding([3, 10]))
         .on_press(LibraryMessage::EditorEvent {
             library_path: lib_path_remove,
             table: table_remove,
@@ -620,7 +626,7 @@ fn override_editor_row<'a>(
     container(
         row![
             text(format!("override pin {pin_number} → "))
-                .size(11)
+                .size(TS.body)
                 .color(muted),
             input,
             Space::new().width(8),
@@ -633,7 +639,7 @@ fn override_editor_row<'a>(
         .align_y(iced::Alignment::Center)
         .spacing(0),
     )
-    .padding([4, 14])
+    .padding([SP.s, 14.0])
     .into()
 }
 
@@ -662,5 +668,5 @@ fn where_used_footer<'a>(
         )
     };
 
-    text(label).size(10).color(muted).into()
+    text(label).size(TS.caption).color(muted).into()
 }

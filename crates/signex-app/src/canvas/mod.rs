@@ -14,10 +14,12 @@ mod drag_layers;
 pub(crate) mod drag_preview;
 mod draw;
 mod erc_marker;
+mod gpu_drag;
 pub(crate) mod gpu_mount;
 pub mod grid;
 mod input;
 mod move_pick;
+mod net_highlight;
 pub mod placement_ghost;
 mod shape_preview;
 mod shift_selection;
@@ -33,9 +35,11 @@ use iced::{Color, Rectangle, Renderer, Theme};
 
 pub use camera::Camera;
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
+mod move_connections;
+pub use move_connections::{FLIP_WIRES_MODIFIER, MoveConnections};
 pub use move_pick::MovePick;
 pub use placement_ghost::PlacementGhost;
-pub use shape_preview::ShapePreviewKind;
+pub use shape_preview::{BoxDirection, MeasureOverlay, ShapePreviewKind};
 pub use special_strings::SpecialStrings;
 
 use crate::schematic_runtime::SchematicSheetExt as _;
@@ -57,6 +61,8 @@ pub struct CanvasState {
     pub ctrl_held: bool,
     /// Whether Shift is currently held (for multi-select add).
     pub shift_held: bool,
+    /// Whether Alt is held (flips wire behaviour for a drag, #1266).
+    pub alt_held: bool,
     /// Drag-to-select: start position in world coordinates.
     select_drag_start: Option<(f64, f64)>,
     /// Drag-to-select: current end position in world coordinates.
@@ -107,9 +113,9 @@ pub struct CanvasSlot {
     /// The static layer and lifted items of a move-drag in flight (#1335);
     /// dropped when the drag ends, is cancelled, or the document changes.
     drag_layers: std::cell::RefCell<drag_layers::DragLayers>,
-    /// Published from the GPU overlay's `update` while a move is in flight;
-    /// see [`gpu_mount::DragOnCpu`].
-    drag_on_cpu: gpu_mount::DragOnCpu,
+    /// The move-drag frame the GPU overlay's `update` last computed, for the
+    /// shaders to read; see [`gpu_drag::PublishedDrag`].
+    published_drag: gpu_drag::PublishedDrag,
     /// The **sole** home of the schematic pan/zoom camera (ADR-0001 §A1: no
     /// shadow copies of widget state). `RefCell` gives interior mutability so
     /// `canvas::Program::update` — which only borrows `&self` — can mutate it,
@@ -129,6 +135,9 @@ pub struct CanvasSlot {
     pub render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
     /// Currently selected items — drives selection overlay rendering.
     pub selected: Vec<signex_types::schematic::SelectedItem>,
+    /// What the net highlight keeps bright on this sheet (#1271); see
+    /// [`CanvasSlot::set_net_highlight`].
+    net_highlight: Option<std::sync::Arc<std::collections::HashSet<uuid::Uuid>>>,
     /// Pending fit target to transfer to CanvasState.
     /// Uses Cell so canvas::Program::update (&self) can consume it.
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
@@ -206,6 +215,14 @@ pub struct CanvasSlot {
     /// Two-click shape anchor + which shape is being drawn. Used by
     /// the rubber-band preview for Line / Rectangle / Circle.
     pub shape_anchor: Option<(signex_types::schematic::Point, ShapePreviewKind)>,
+    /// The last finished Measure-tool result (#1256).
+    pub measure: Option<MeasureOverlay>,
+    /// The next click-click move keeps wires whatever the preference says
+    /// (`drag_keep_connections`, #1266); consumed by the picking press.
+    pub keep_connections_next: bool,
+    /// Whether the move drag in flight keeps wires, written by the canvas
+    /// after each event for the status bar; `None` outside a drag.
+    pub move_behaviour: std::cell::Cell<Option<bool>>,
     /// Test-only: how often the drawn content was invalidated.
     #[cfg(test)]
     pub content_cache_clears: u32,
@@ -240,10 +257,11 @@ impl CanvasSlot {
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             content_scene: std::cell::RefCell::new(Default::default()),
             drag_layers: std::cell::RefCell::new(Default::default()),
-            drag_on_cpu: Default::default(),
+            published_drag: Default::default(),
             camera: std::cell::RefCell::new(Camera::default()),
             render_cache: None,
             selected: Vec::new(),
+            net_highlight: None,
             pending_fit: std::cell::Cell::new(None),
             viewport: std::cell::Cell::new(Rectangle::with_size(iced::Size::ZERO)),
             wire_preview: Vec::new(),
@@ -269,6 +287,9 @@ impl CanvasSlot {
             move_pick: None,
             move_epoch: 0,
             shape_anchor: None,
+            measure: None,
+            keep_connections_next: false,
+            move_behaviour: std::cell::Cell::new(None),
             #[cfg(test)]
             content_cache_clears: 0,
             #[cfg(test)]
@@ -302,7 +323,6 @@ impl CanvasSlot {
         self.content_cache.clear();
         self.content_scene.get_mut().invalidate();
         self.drag_layers.get_mut().clear();
-        self.drag_on_cpu.clear();
     }
 
     /// Current pan/zoom as `(offset_x_px, offset_y_px, scale_px_per_mm)`,
@@ -332,7 +352,10 @@ impl CanvasSlot {
     ) {
         self.render_cache = render_cache;
         self.content_scene.get_mut().invalidate();
-        self.drag_on_cpu.clear();
+        // A drag session and its static layer belong to the document that was
+        // just replaced.
+        self.drag_layers.get_mut().clear();
+        self.published_drag.clear();
     }
 
     #[cfg(test)]
@@ -407,6 +430,8 @@ pub struct CanvasViewPrefs<'a> {
     pub snap_grid_mm: f64,
     /// Wire clicks jump to the nearest pin end, wire end or junction (Shift+E).
     pub snap_hotspots: bool,
+    /// Display unit; the Measure overlay's readout follows it.
+    pub unit: signex_types::coord::Unit,
     /// The Wire tool is the active tool. Only wire clicks snap to hotspots
     /// (a Bus click snaps to the grid), so the hotspot marker and the
     /// rubber-band follow hotspots under this tool alone.
@@ -430,6 +455,9 @@ pub struct CanvasViewPrefs<'a> {
     /// so the canvas never reaches into the project. See
     /// [`crate::schematic_runtime::WireStyling`] for the precedence.
     pub wire_class_styles: &'a crate::schematic_runtime::WireClassStyles,
+    /// The class-style cache's revision for `wire_class_styles`; moves when
+    /// the map does.
+    pub wire_class_revision: u64,
     pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// Content attached to the cursor, for the window whose document is the
     /// session's target sheet only (`None` everywhere else).
@@ -444,6 +472,7 @@ impl CanvasViewPrefs<'_> {
         crate::schematic_runtime::WireStyling {
             color_overrides: self.wire_color_overrides,
             class_styles: self.wire_class_styles,
+            class_revision: self.wire_class_revision,
         }
     }
 }
@@ -498,11 +527,8 @@ impl<'a> SchematicCanvas<'a> {
         let revision = self.render_cache.as_ref().map_or(0, |c| c.revision());
         let mut layers = self.drag_layers.borrow_mut();
         let session = layers.session_for(snap, revision, &self.selected);
-        if self.prefs.move_keeps_wires {
-            let (gx, gy) = self.ghost_delta(dx, dy);
-            if let Some(frame) = state.ghost.ready_frame(revision, &self.selected, gx, gy) {
-                return Some(frame);
-            }
+        if let Some(frame) = self.ready_ghost_frame(state, drag_offset, revision) {
+            return Some(frame);
         }
         Some(drag_layers::DragFrame {
             moving: std::rc::Rc::new(shift_snapshot_for_selection(
@@ -515,9 +541,18 @@ impl<'a> SchematicCanvas<'a> {
         })
     }
 
+    /// Whether a move is in flight: a drag, or a float that is not stale.
+    /// The cheap half of [`Self::drag_delta`], which is `Some` exactly then.
+    fn is_moving(&self, state: &CanvasState) -> bool {
+        state.move_dragging
+            && !self.float_is_stale(state)
+            && state.move_origin.is_some()
+            && state.move_current.is_some()
+    }
+
     /// The snapped drag/float delta, while a move is in flight.
     fn drag_delta(&self, state: &CanvasState) -> Option<(f64, f64)> {
-        if !state.move_dragging || self.float_is_stale(state) {
+        if !self.is_moving(state) {
             return None;
         }
         state
@@ -553,7 +588,7 @@ impl<'a> SchematicCanvas<'a> {
             return;
         };
         let too_big = self.selected.len() > drag_preview::MAX_RUBBER_BAND_GHOST_ITEMS;
-        if !self.prefs.move_keeps_wires || self.selected.is_empty() || too_big {
+        if !self.keeps_wires(state) || self.selected.is_empty() || too_big {
             return;
         }
         if let (Some(snap), Some(cache)) = (self.active_snapshot(), self.render_cache.as_ref()) {
@@ -567,64 +602,6 @@ impl<'a> SchematicCanvas<'a> {
     /// The drag delta the rubber-banded ghost is computed and looked up at.
     fn ghost_delta(&self, dx: f64, dy: f64) -> (f64, f64) {
         drag_preview::ghost_delta(dx, dy, self.prefs.snap_enabled, self.camera().scale)
-    }
-
-    /// Route one input event to its handler.
-    fn dispatch_event(
-        &self,
-        state: &mut CanvasState,
-        event: &Event,
-        bounds: Rectangle,
-        cursor: mouse::Cursor,
-    ) -> Option<canvas::Action<Message>> {
-        // Remember the bounds so menu zoom (no cursor) can find the view centre.
-        self.viewport.set(bounds);
-        // Consume any pending fit-to-content before dispatching the event.
-        if let Some(action) = self.update_pending_fit(bounds) {
-            return Some(action);
-        }
-
-        // Dispatch each input event to its handler, in the original order.
-        match event {
-            Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                let action = self.update_wheel_scrolled(delta, bounds, cursor);
-                // A zoom changes the ghost's step (`ghost_delta`); without
-                // this the drag shows the plain shift until the cursor moves.
-                self.refresh_drag_ghost(state);
-                action
-            }
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                self.update_left_pressed(state, bounds, cursor)
-            }
-            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                self.update_left_released(state)
-            }
-            Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) => {
-                self.update_modifiers_changed(state, mods)
-            }
-            Event::Keyboard(iced::keyboard::Event::KeyPressed {
-                key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
-                ..
-            }) => self.update_escape_pressed(state),
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
-                self.update_right_pressed(state, bounds, cursor)
-            }
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) => {
-                self.update_middle_pressed(state, bounds, cursor)
-            }
-            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right)) => {
-                self.update_right_released(state, bounds, cursor)
-            }
-            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Middle)) => {
-                self.update_middle_released(state)
-            }
-            Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                let action = self.update_cursor_moved(state, bounds, cursor);
-                self.refresh_drag_ghost(state);
-                action
-            }
-            _ => None,
-        }
     }
 
     pub fn new(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Self {
@@ -643,14 +620,16 @@ impl<'a> SchematicCanvas<'a> {
     /// a `UiState` setting read through `prefs`, while `selected` is the
     /// window's own state reached through `Deref`.
     fn auto_focus_set(&self) -> Option<std::collections::HashSet<uuid::Uuid>> {
-        if !self.prefs.auto_focus {
-            return None;
+        let mut set = self
+            .prefs
+            .auto_focus
+            .then(|| self.selected.iter().map(|item| item.uuid).collect());
+        // A net highlight keeps its elements bright the same way.
+        if let Some(bright) = self.net_highlight() {
+            set.get_or_insert_with(std::collections::HashSet::new)
+                .extend(bright.iter().copied());
         }
-        let mut set = std::collections::HashSet::new();
-        for item in &self.selected {
-            set.insert(item.uuid);
-        }
-        Some(set)
+        set
     }
 }
 
@@ -702,15 +681,25 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         // moving items, shifted. With "keep wires" the moving items include
         // the rubber-banded wires computed when the cursor moved
         // (`refresh_drag_ghost`); until then the plain shift stands in.
-        let drag_frame = self.drag_frame(state, drag_offset);
+        //
+        // A GPU-mounted sheet reads the frame `update` published, so the
+        // shaders and this layer agree on what is moving.
+        let drag_frame = match self.mode {
+            ContentMode::Cpu => self.drag_frame(state, drag_offset),
+            ContentMode::GpuOverlay => self.live_drag(),
+        };
         let Some(drag_frame) = drag_frame else {
             if self.drag_layers.borrow().is_active() {
                 self.drag_layers.borrow_mut().clear();
             }
             let snapshot = self.active_snapshot();
 
-            // Layer 2: content (schematic elements)
-            layers.push(self.draw_content(state, renderer, bounds, snapshot, drag_offset));
+            // Layer 2: content (schematic elements). A GPU-mounted sheet has
+            // its content on the shaders, and its rotated texts on a layer
+            // of their own beneath the drag shader.
+            if self.mode == ContentMode::Cpu {
+                layers.push(self.draw_content(state, renderer, bounds, snapshot, drag_offset));
+            }
 
             // Layer 2.5: AutoFocus dim
             if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, snapshot) {
@@ -729,7 +718,16 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         let moving = Some(&*drag_frame.moving);
 
         // Layer 2: content, static layer then moving items on top
-        layers.extend(self.draw_drag_content(renderer, bounds, &drag_frame));
+        match self.mode {
+            ContentMode::Cpu => {
+                layers.extend(self.draw_drag_content(renderer, bounds, &drag_frame))
+            }
+            // The static layer's rotated texts have their own layer below the
+            // drag shader; only the moving ones belong above it.
+            ContentMode::GpuOverlay => {
+                layers.push(self.draw_moving_rotated_texts(renderer, bounds));
+            }
+        }
 
         // Layer 2.5: AutoFocus dim
         if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, moving) {
@@ -780,6 +778,8 @@ pub enum CanvasEvent {
     },
     CursorMoved,
     FitAll,
+    /// Frame the current selection (`zoom_to_selection_area`, #1256).
+    FitSelection,
     /// Recentre on the last reported cursor position, keeping the zoom.
     CenterAtCursor,
     /// Left-click at world coordinates — triggers hit-testing or tool action.
@@ -805,11 +805,15 @@ pub enum CanvasEvent {
         y1: f64,
         x2: f64,
         y2: f64,
+        /// Which way the box was dragged (#1257).
+        direction: BoxDirection,
     },
     /// Drag-move completed — move all selected items by delta (world coords).
     MoveSelected {
         dx: f64,
         dy: f64,
+        /// How this gesture treats wires (#1266).
+        connections: MoveConnections,
     },
     /// Click-click move picked up at this world point (#271).
     MovePicked {
@@ -824,6 +828,8 @@ mod active_bar_hit;
 mod gpu_mount_drag_tests;
 #[cfg(test)]
 mod gpu_mount_tests;
+#[cfg(test)]
+mod rotated_label_pixel_tests;
 
 #[cfg(test)]
 mod tests {
@@ -860,6 +866,7 @@ mod tests {
             snap_enabled: true,
             snap_grid_mm: 1.27,
             snap_hotspots: false,
+            unit: signex_types::coord::Unit::Mm,
             wire_tool_active: false,
             visible_grid_mm: 1.27,
             grid_style: crate::render_config::GridStyle::Dots,
@@ -871,6 +878,7 @@ mod tests {
             window_width: 1400.0,
             wire_color_overrides: overrides,
             wire_class_styles: class_styles,
+            wire_class_revision: 0,
             selection_filters: filters,
             placement: None,
         }

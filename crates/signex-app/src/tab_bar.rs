@@ -7,7 +7,10 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
 
 use crate::app::TabInfo;
-use crate::styles;
+use crate::styles::{self, Spacing, TypeScale};
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 #[derive(Debug, Clone)]
 pub enum TabMessage {
@@ -55,6 +58,7 @@ pub fn view<'a>(
     dragging: Option<usize>,
     visible_paths: &std::collections::HashSet<std::path::PathBuf>,
     dirty_paths: &std::collections::HashSet<std::path::PathBuf>,
+    read_only_paths: &std::collections::HashSet<std::path::PathBuf>,
     tokens: &ThemeTokens,
 ) -> Element<'a, TabMessage> {
     // Tabs sit flush against each other — Altium parity. The active
@@ -116,8 +120,16 @@ pub fn view<'a>(
         if tab_is_dirty(tab, dirty_paths) {
             content = content.push(dirty_dot(tokens));
         }
-        let inner =
-            container(content.push(text(label).size(TAB_FONT_SIZE).color(text_c))).padding([4, 10]);
+        let is_read_only = read_only_paths.contains(&tab.path);
+        if is_read_only {
+            content = content.push(
+                text(READ_ONLY_LABEL)
+                    .size(TAB_FONT_SIZE)
+                    .color(styles::ti(tokens.text_secondary)),
+            );
+        }
+        let inner = container(content.push(text(label).size(TAB_FONT_SIZE).color(text_c)))
+            .padding([SP.s, 10.0]);
         // Cursor: default Pointer on hover so the bar reads as
         // "clickable tabs", switching to Grabbing only while a tab
         // is in flight so the drag-to-reorder / drag-to-undock
@@ -135,9 +147,14 @@ pub fn view<'a>(
             .interaction(cursor)
             .into();
         // The pill shows an ellipsized title; hovering names the full path.
+        let mut tip = tab.path.display().to_string();
+        if is_read_only {
+            tip.push('\n');
+            tip.push_str(READ_ONLY_TOOLTIP);
+        }
         let tab_el: Element<'_, TabMessage> = tooltip(
             tab_el,
-            container(text(tab.path.display().to_string()).size(TAB_FONT_SIZE)).padding([2, 6]),
+            container(text(tip).size(TAB_FONT_SIZE)).padding([SP.xs, 6.0]),
             tooltip::Position::Bottom,
         )
         .style(styles::context_menu(tokens))
@@ -170,6 +187,9 @@ pub fn view<'a>(
                 .width(Length::Fill),
         )
         .width(Length::Fill)
+        // Tabs hang from the top; the baseline below them sits at the
+        // strip's fixed height.
+        .height(Length::Fill)
         .padding(iced::Padding {
             top: 2.0,
             right: 6.0,
@@ -179,12 +199,37 @@ pub fn view<'a>(
         baseline,
     ])
     .width(Length::Fill)
+    .height(TAB_STRIP_HEIGHT)
     .style(styles::toolbar_strip(tokens))
     .into()
 }
 
+/// Height of the document tab strip: two body-text lines for the pill plus
+/// the strip's top padding, 26 px. Both the strip and the empty-window
+/// placeholder take their height from here, so they cannot diverge and the
+/// chrome does not jump when the first tab opens. It is derived from the
+/// default type scale and spacing, the same constants the strip's text and
+/// padding use; the app has no runtime UI scale for it to follow.
+pub const TAB_STRIP_HEIGHT: f32 = TS.body * 2.0 + SP.s;
+
+/// The strip drawn with no document open: same height and background as the
+/// tab strip, nothing in it.
+pub fn placeholder<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
+    container(iced::widget::Space::new())
+        .width(Length::Fill)
+        .height(TAB_STRIP_HEIGHT)
+        .style(styles::toolbar_strip(tokens))
+        .into()
+}
+
+/// Muted marker before the title of a read-only sheet (#1402).
+const READ_ONLY_LABEL: &str = "read-only";
+
+/// Tooltip line saying why a sheet is read-only.
+const READ_ONLY_TOOLTIP: &str = "Read-only: written by a newer Signex. Edit it in that version.";
+
 /// Tab label font size; the dirty dot is sized from it.
-const TAB_FONT_SIZE: f32 = 11.0;
+const TAB_FONT_SIZE: f32 = TS.body;
 
 /// Dirty dot diameter as a fraction of the tab font size.
 const DIRTY_DOT_EM: f32 = 0.6;
@@ -231,6 +276,23 @@ pub(crate) fn dirty_tab_paths(
         }
     }
     out
+}
+
+/// Paths of the schematic tabs whose engine holds a read-only sheet, one
+/// written by a newer Signex (#1402). Derived from the engines on every
+/// view, so it can never disagree with what the gateway refuses.
+pub(crate) fn read_only_tab_paths(
+    tabs: &[TabInfo],
+    engines: &std::collections::HashMap<std::path::PathBuf, signex_engine::Engine>,
+) -> std::collections::HashSet<std::path::PathBuf> {
+    tabs.iter()
+        .filter(|tab| {
+            engines
+                .get(&tab.path)
+                .is_some_and(|engine| engine.document().is_read_only())
+        })
+        .map(|tab| tab.path.clone())
+        .collect()
 }
 
 /// Round dot in the theme's error colour, shown before a dirty tab's title.
@@ -287,12 +349,29 @@ fn pill_fill(tokens: &ThemeTokens, is_active: bool, is_dragging: bool) -> iced::
 #[cfg(test)]
 mod tests {
     use super::{
-        dirty_dot_diameter, dirty_tab_paths, ellipsize_title, reveal_active_tab, reveal_offset,
-        tab_is_dirty,
+        dirty_dot_diameter, dirty_tab_paths, ellipsize_title, read_only_tab_paths,
+        reveal_active_tab, reveal_offset, tab_is_dirty,
     };
     use crate::app::{TabInfo, TabKind};
     use std::collections::HashSet;
     use std::path::PathBuf;
+
+    /// The strip and the no-document placeholder are both exactly
+    /// `TAB_STRIP_HEIGHT` tall, and that is the 26 px they always were.
+    #[test]
+    fn the_strip_and_its_placeholder_both_use_the_height_token() {
+        use iced::Length;
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let fixed = Length::Fixed(super::TAB_STRIP_HEIGHT);
+        assert_eq!(super::TAB_STRIP_HEIGHT, 26.0);
+
+        let placeholder = super::placeholder::<()>(&tokens);
+        assert_eq!(placeholder.as_widget().size().height, fixed);
+
+        let none = HashSet::new();
+        let strip = super::view(&[], 0, None, &none, &none, &none, &tokens);
+        assert_eq!(strip.as_widget().size().height, fixed);
+    }
 
     fn tab(path: &str, dirty: bool) -> TabInfo {
         TabInfo {
@@ -303,6 +382,30 @@ mod tests {
             project_id: None,
             kind: TabKind::Schematic,
         }
+    }
+
+    #[test]
+    fn read_only_tab_paths_lists_only_newer_minor_sheets() {
+        let mut newer = signex_types::schematic::SchematicSheet::default();
+        newer.unknown.newer_minor_source = Some("snxsch/1.7".into());
+        let engines = std::collections::HashMap::from([
+            (
+                PathBuf::from("new.snxsch"),
+                signex_engine::Engine::new(newer).unwrap(),
+            ),
+            (
+                PathBuf::from("cur.snxsch"),
+                signex_engine::Engine::new(Default::default()).unwrap(),
+            ),
+        ]);
+        // `none.snxsch` has no engine (a library editor tab, say).
+        let tabs = [
+            tab("new.snxsch", false),
+            tab("cur.snxsch", false),
+            tab("none.snxsch", false),
+        ];
+        let got = read_only_tab_paths(&tabs, &engines);
+        assert_eq!(got, HashSet::from([PathBuf::from("new.snxsch")]));
     }
 
     #[test]

@@ -109,16 +109,34 @@ pub enum ErcMsg {
     /// Copy this machine's ERC preferences into the active project's
     /// `.snxprj` rule set (written on the next explicit save, #1085).
     StoreRulesInProject,
-    /// "Save as profile": write the project's stored ERC rules to the user's
-    /// profile library as a new file under `name` (a taken name gets a
-    /// numeric suffix; an existing profile is never replaced).
-    ProfileSaveRequested { name: String },
-    /// The profile file was written (or why it was not). On success the
+    /// "Save as profile": open the dialog that asks for a name and version
+    /// (#1608). Writes nothing.
+    ProfileSaveDialogOpened,
+    /// The Save-as dialog's name field changed.
+    ProfileSaveNameChanged(String),
+    /// The Save-as dialog's version field changed.
+    ProfileSaveVersionChanged(String),
+    /// Save in the Save-as dialog: validate, then write unless the name
+    /// exists (then ask first).
+    ProfileSaveSubmitted,
+    /// The user agreed to replace the existing profile of that name.
+    ProfileSaveOverwriteConfirmed,
+    /// Go back from the overwrite question, or close the Save-as dialog.
+    ProfileSaveCancelled,
+    /// The profile file was written, found taken, or failed. On success the
     /// project records the written profile as its provenance.
     ProfileSaved {
         project: crate::app::state::ProjectId,
-        result: std::sync::Arc<Result<crate::rule_profiles::SavedProfile, String>>,
+        result: std::sync::Arc<Result<crate::rule_profiles::SaveOutcome, String>>,
     },
+    /// The `User Default` profile (the machine's rules) was read at launch.
+    /// `Ok(None)`: the machine has none yet.
+    UserDefaultLoaded(std::sync::Arc<Result<Option<signex_types::project::RuleProfile>, String>>),
+    /// A queued profile file write finished; the next one may start. Carries
+    /// the profile the file now holds, for an edit of a library profile.
+    ProfileWriteFinished(std::sync::Arc<Result<crate::app::rule_profile_ui::WriteOutcome, String>>),
+    /// The quit path ran the writes still queued.
+    ProfileWritesFlushed(std::sync::Arc<Result<(), String>>),
     /// "Update from profile": look up the profile the project was seeded
     /// from and show what applying it would change.
     ProfileUpdateRequested,
@@ -453,7 +471,7 @@ pub enum FileMsg {
         sha: String,
         edit_stamp: crate::app::restore_job::EditStamp,
         result: Result<
-            Box<crate::app::restore_job::RestoreJobDocument>,
+            Box<crate::app::restore_job::RestoredFile>,
             crate::app::restore_job::RestoreFailure,
         >,
     },
@@ -533,6 +551,12 @@ pub enum ProjectMsg {
         u64,
         Result<Box<crate::app::state::project_fs::ProjectFsFacts>, String>,
     ),
+    /// The off-thread Navigator hierarchy assembly finished (#1470); `Err`
+    /// is a worker that died. Applied only while its generation is the latest.
+    NavigatorAssembled(
+        u64,
+        Result<Box<crate::app::state::navigator_job::NavigatorAssembly>, String>,
+    ),
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex
     /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.
@@ -573,6 +597,26 @@ pub enum ProjectMsg {
         project_id: crate::app::state::ProjectId,
         path: std::path::PathBuf,
         result: Result<(), String>,
+    },
+    /// The Create Sheet dialog's path field was edited.
+    CreateChildSheetPathChanged(String),
+    /// "Browse..." in the Create Sheet dialog.
+    CreateChildSheetBrowse,
+    /// The native save dialog of "Browse..." answered (`None`: cancelled).
+    CreateChildSheetBrowsed(Option<std::path::PathBuf>),
+    /// The Create Sheet dialog was answered: Create, or Later (`create:
+    /// false`, which also closes the window).
+    CreateChildSheetAnswered { create: bool },
+    /// "Open it" in the Create Sheet dialog, for a path that already exists.
+    CreateChildSheetOpenExisting,
+    /// The off-thread write of a child sheet created from a symbol finished.
+    /// `project_id` is the project owning the parent sheet, if any.
+    ChildSheetCreated {
+        project_id: Option<crate::app::state::ProjectId>,
+        parent: std::path::PathBuf,
+        symbol: uuid::Uuid,
+        path: std::path::PathBuf,
+        result: Result<(), crate::app::contracts::ChildSheetWriteError>,
     },
     /// v0.23 — Async project-git commit completed. The dispatcher
     /// removes the `(project_root, rel_path)` entry from
@@ -635,6 +679,31 @@ pub enum GitCommitFailure {
     Failed(String),
 }
 
+/// What a paste request does once the system clipboard has answered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PasteIntent {
+    /// Attach the copy to the cursor.
+    Paste,
+    /// Place the copy beside the existing content.
+    SmartPaste,
+    /// Open the Paste Array dialog.
+    Array,
+    /// Place the copy just made, beside the original.
+    Duplicate,
+    /// Arm the copy just made as a rubber stamp.
+    Stamp,
+}
+
+/// One paste-family request in flight: what it is for, and the tool state it
+/// was made in. An answer that arrives after the placement epoch or the
+/// active sheet moved on is dropped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PasteRequest {
+    pub intent: PasteIntent,
+    pub epoch: u64,
+    pub path: Option<PathBuf>,
+}
+
 /// Edit-command message family (ADR-0001 D3). Namespaced under
 /// `Message::Edit` and routed to `dispatch_edit_message`.
 #[derive(Debug, Clone)]
@@ -669,6 +738,30 @@ pub enum EditMsg {
     SmartPaste,
     /// Duplicate the current selection in place.
     Duplicate,
+    /// Arm the last label or text note again, with its text stepped (#1253).
+    RepeatLastItem,
+    /// Rubber-stamp copy: copy the selection and keep pasting it on every
+    /// click until Esc or a right-click (#1264).
+    RubberStampCopy,
+    /// Open the Paste Array dialog for the clipboard (#1264).
+    PasteArrayRequested,
+    /// A Paste Array dialog event (#1264).
+    PasteArray(crate::paste_array::PasteArrayMsg),
+    /// The system clipboard answered a paste request (#1263): its text if it
+    /// holds any. A Signex fragment in it replaces the in-app copy.
+    PasteTextRead {
+        request: PasteRequest,
+        text: Option<String>,
+    },
+    /// The project's designator numbers were read off the UI thread (#1263);
+    /// the paste carries on.
+    PasteCountersSeeded {
+        request: PasteRequest,
+        seed: std::sync::Arc<crate::app::handlers::paste::PasteSeed>,
+    },
+    /// Reorder the selected drawings within the sheet's drawing list; the
+    /// selection's circuit elements are ignored (#1583).
+    ArrangeDrawings(signex_engine::DrawingArrange),
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of
@@ -697,4 +790,7 @@ pub enum DrawingFieldEdit {
     ArcEndAngle(f64),
     /// Override the stroke colour; `None` restores the theme default.
     StrokeColor(Option<signex_types::schematic::StrokeColor>),
+    /// Put the drawing behind or above the circuit (#1583). Not a field of
+    /// the drawing itself: it is stored per sheet.
+    Placement(signex_types::schematic::DrawingPlacement),
 }

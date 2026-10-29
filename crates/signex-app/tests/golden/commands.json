@@ -55,6 +55,16 @@
     "category": "modify"
   },
   {
+    "id": "bring_drawings_forward",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "bring_drawings_to_front",
+    "group": "General",
+    "category": "edit"
+  },
+  {
     "id": "bring_to_front",
     "group": "Schematic",
     "category": "modify"
@@ -355,9 +365,19 @@
     "category": "library"
   },
   {
+    "id": "footprint_recompute_courtyard_outline",
+    "group": "ThreeD",
+    "category": "library"
+  },
+  {
     "id": "force_annotate_all_schematics",
     "group": "Schematic",
     "category": "design"
+  },
+  {
+    "id": "go_to_net_partner",
+    "group": "Schematic",
+    "category": "navigation"
   },
   {
     "id": "highlight_net_under_cursor",
@@ -496,6 +516,11 @@
   },
   {
     "id": "paste",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "paste_array",
     "group": "General",
     "category": "edit"
   },
@@ -798,6 +823,16 @@
     "id": "select_node_or_connection_item",
     "group": "General",
     "category": "select"
+  },
+  {
+    "id": "send_drawings_backward",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "send_drawings_to_back",
+    "group": "General",
+    "category": "edit"
   },
   {
     "id": "send_to_back",

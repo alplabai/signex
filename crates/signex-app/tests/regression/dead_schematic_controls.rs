@@ -28,6 +28,7 @@ fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
         mirror_x: false,
         mirror_y: false,
         unit: 1,
+        body_style: Default::default(),
         is_power: false,
         ref_text: None,
         val_text: None,
@@ -71,6 +72,7 @@ fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
         title_block: HashMap::new(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
+        drawing_placements: Default::default(),
         frame: Default::default(),
         font_family: None,
     }

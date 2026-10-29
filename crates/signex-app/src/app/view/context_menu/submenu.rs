@@ -10,21 +10,27 @@
 
 use super::*;
 
-use super::items::{dd_disabled, dd_kb, dd_msg};
+use super::items::{dd_disabled, dd_kb, dd_msg, dd_planned};
 use crate::app::command::active_bar::action_label;
 use crate::icons as ic;
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
 /// Place submenu — wires, buses, ports, power, directives, harness, sheet
-/// symbols, component, and text. Every row is always enabled.
+/// symbols, component, and text. Rows for planned tools are greyed with a
+/// tooltip; every other row is always enabled.
 pub(super) fn place_entries(tid: ThemeId) -> Vec<DropdownEntry<Message>> {
     use crate::active_bar::ActiveBarAction as A;
     // Row text comes from the command table (#271); the literal is the
     // fallback for an action with no id.
     let ab = |icon, label: &'static str, action: A| {
         let text = action_label(&action, label);
-        dd_kb(Some(icon), text, "", ContextAction::ActiveBar(action))
+        if crate::active_bar::is_planned(&action) {
+            // A planned tool is shown but cannot be armed (#1249).
+            dd_planned(Some(icon), text, None)
+        } else {
+            dd_kb(Some(icon), text, "", ContextAction::ActiveBar(action))
+        }
     };
     vec![
         // Wires + buses + entries
@@ -32,6 +38,7 @@ pub(super) fn place_entries(tid: ThemeId) -> Vec<DropdownEntry<Message>> {
         ab(ic::icon_dd_bus(tid), "Bus", A::DrawBus),
         ab(ic::icon_dd_bus_entry(tid), "Bus Entry", A::PlaceBusEntry),
         ab(ic::icon_dd_net_label(tid), "Net Label", A::PlaceNetLabel),
+        ab(ic::icon_dd_junction(tid), "Junction", A::PlaceJunction),
         DropdownEntry::Separator,
         // Ports
         ab(ic::icon_dd_port(tid), "Port", A::PlacePort),
@@ -201,11 +208,29 @@ pub(super) fn align_entries(tid: ThemeId, selected: usize) -> Vec<DropdownEntry<
     ]
 }
 
+/// Arrange submenu — order the selected drawings (#1583). Offered only while
+/// the selection holds a drawing, so every row is live.
+pub(super) fn arrange_entries() -> Vec<DropdownEntry<Message>> {
+    use signex_engine::DrawingArrange as D;
+    [
+        ("Bring to Front", D::ToFront),
+        ("Send to Back", D::ToBack),
+        ("Bring Forward", D::Forward),
+        ("Send Backward", D::Backward),
+    ]
+    .into_iter()
+    .map(|(label, arrange)| dd_kb(None, label, "", ContextAction::ArrangeDrawings(arrange)))
+    .collect()
+}
+
 /// Add New to Project submenu — the master "Add New" picker for the
 /// right-clicked project (resolved as `target`). Schematic / Component
 /// Library / Symbol Library are wired; the rest stay version-badged stubs
 /// until their editors land.
-pub(super) fn add_new_entries(tid: ThemeId, target: Vec<usize>) -> Vec<DropdownEntry<Message>> {
+pub(super) fn add_new_entries(
+    tid: ThemeId,
+    target: signex_widgets::tree_view::TreeKey,
+) -> Vec<DropdownEntry<Message>> {
     use crate::app::ProjectTreeAction as P;
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(12);
 
@@ -235,7 +260,7 @@ pub(super) fn add_new_entries(tid: ThemeId, target: Vec<usize>) -> Vec<DropdownE
             P::AddProjectSymbolLibrary(target.clone()),
         )),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_part_actions(tid)),
         "PCB",
         Some("v2.0"),
@@ -253,23 +278,23 @@ pub(super) fn add_new_entries(tid: ThemeId, target: Vec<usize>) -> Vec<DropdownE
         ));
     }
     v.push(DropdownEntry::Separator);
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_text_string(tid)),
         "Output Job",
         Some("v1.3"),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_text_frame(tid)),
         "Design Notebook",
         Some("v1.4"),
     ));
     v.push(DropdownEntry::Separator);
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_text_string(tid)),
         "Constraint File",
         Some("v3.x"),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_text_string(tid)),
         "VHDL File",
         Some("v3.x"),
@@ -294,6 +319,7 @@ impl Signex {
             ContextSubmenu::Align => {
                 align_entries(tid, self.interaction_state.canvas.selected.len())
             }
+            ContextSubmenu::Arrange => arrange_entries(),
             ContextSubmenu::AddNewToProject => {
                 // The right-clicked project lives at `tree_path[0]` —
                 // resolve it off the captured menu state so the action
@@ -302,13 +328,7 @@ impl Signex {
                     .interaction_state
                     .project_tree_context_menu
                     .as_ref()
-                    .and_then(|m| m.key.as_deref())
-                    .and_then(|key| {
-                        signex_widgets::tree_view::resolve_path(
-                            self.document_state.panel_ctx.project_tree.as_slice(),
-                            key,
-                        )
-                    })
+                    .and_then(|m| m.key.clone())
                     .unwrap_or_default();
                 add_new_entries(tid, target)
             }

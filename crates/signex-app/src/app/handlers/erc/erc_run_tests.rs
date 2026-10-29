@@ -270,6 +270,42 @@ fn erc_navigation_keeps_the_dirty_engine_of_a_tab_less_sheet() {
     assert_eq!(tabs, 1);
 }
 
+/// Quick Fix on a finding whose sheet cannot be opened must not place the
+/// NoConnect on whichever sheet happens to be active (#1367).
+#[test]
+fn quick_fix_refuses_when_the_target_sheet_fails_to_open() {
+    let dir = std::env::temp_dir().join(format!("signex-erc-qf-missing-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).expect("tempdir");
+    let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);
+    let top = dir.join("top.snxsch");
+    open_with(
+        &mut app.document_state,
+        &top,
+        sheet_with_net("R_TOP", "TOP_NET", &[]),
+    );
+    app.document_state.active_path = Some(top.clone());
+    let missing = dir.join("missing.snxsch");
+    app.ui_state.erc_violations_by_path.insert(
+        missing,
+        vec![signex_erc::Violation::new(
+            signex_erc::RuleId::builtin(signex_erc::RuleKind::UnusedPin),
+            signex_erc::RuleKind::UnusedPin,
+            signex_erc::Severity::Warning,
+            "unused pin",
+            Point::new(5.0, 5.0),
+        )],
+    );
+
+    let _ = app.handle_erc_quick_fix(0);
+
+    let placed = app.document_state.engines[&top]
+        .document()
+        .no_connects
+        .len();
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(placed, 0, "NoConnect landed on the active sheet");
+}
+
 // ---- net-level findings (#1364) ----
 
 mod net_level {
@@ -357,9 +393,9 @@ mod net_level {
 
     #[test]
     fn fit_rect_frames_the_box_with_margin_and_a_minimum_size() {
-        let r = super::super::net_focus::fit_rect([0.0, 0.0, 100.0, 50.0]);
+        let r = crate::app::handlers::canvas::fit_view::fit_rect([0.0, 0.0, 100.0, 50.0]);
         assert_eq!((r.x, r.y, r.width, r.height), (-2.0, -2.0, 104.0, 54.0));
-        let dot = super::super::net_focus::fit_rect([5.0, 5.0, 5.0, 5.0]);
+        let dot = crate::app::handlers::canvas::fit_view::fit_rect([5.0, 5.0, 5.0, 5.0]);
         assert_eq!((dot.width, dot.height), (16.0, 16.0));
         assert_eq!((dot.x, dot.y), (-3.0, -3.0));
     }

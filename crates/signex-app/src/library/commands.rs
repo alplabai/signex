@@ -193,26 +193,11 @@ pub fn materialize_pending_library(
         )));
     }
 
-    let stem = spec.display_name.clone();
-    let seed_classes: Vec<signex_library::ClassEntry> = crate::fonts::read_component_classes_pref()
-        .into_iter()
-        .map(|e| signex_library::ClassEntry {
-            key: e.key,
-            label: e.label,
-        })
-        .collect();
-    let manifest = SnxlibManifest {
-        format: FORMAT_TOKEN.into(),
+    let manifest = seed_manifest(
         library_id,
-        library: LibrarySection {
-            name: stem,
-            description: None,
-        },
-        mode: Default::default(),
-        workflow: WorkflowConfig::default(),
-        users: UsersConfig::default(),
-        classes: seed_classes,
-    };
+        spec.display_name.clone(),
+        &state.new_library_defaults,
+    );
     let _adapter = LocalGitAdapter::init(
         &spec.lib_path,
         manifest,
@@ -222,14 +207,7 @@ pub fn materialize_pending_library(
         },
     )?;
 
-    let project_dir = PathBuf::from(&project.dir);
-    let (entry_path, entry_kind) = library_entry_location(&project_dir, &spec.lib_path, fold);
-    project.libraries.push(LibraryEntry {
-        path: entry_path,
-        kind: entry_kind,
-        library_id: Some(library_id),
-        unknown: Default::default(),
-    });
+    register_library_entry(project, &spec.lib_path, library_id, fold);
 
     // No `refresh_components` chaser here (#530). This mount is
     // provably cold and the library is provably empty, so a refresh
@@ -253,6 +231,56 @@ pub fn materialize_pending_library(
     }
 
     Ok(())
+}
+
+/// Manifest for a brand-new library. The class registry is seeded from
+/// the user's `prefs.json::component_classes` so a fresh library starts
+/// with their preferred taxonomy (editable per-library afterwards);
+/// mode/workflow/users stay at their defaults.
+fn seed_manifest(
+    library_id: Uuid,
+    name: String,
+    defaults: &super::state::NewLibraryDefaults,
+) -> SnxlibManifest {
+    let classes = defaults
+        .component_classes
+        .iter()
+        .cloned()
+        .map(|e| signex_library::ClassEntry {
+            key: e.key,
+            label: e.label,
+        })
+        .collect();
+    SnxlibManifest {
+        format: FORMAT_TOKEN.into(),
+        library_id,
+        library: LibrarySection {
+            name,
+            description: None,
+        },
+        mode: Default::default(),
+        workflow: WorkflowConfig::default(),
+        users: UsersConfig::default(),
+        classes,
+    }
+}
+
+/// Register `lib_path` on the project as ProjectLocal or Shared
+/// (decided by `library_entry_location`).
+fn register_library_entry(
+    project: &mut ProjectData,
+    lib_path: &Path,
+    library_id: Uuid,
+    fold: CaseFold,
+) {
+    let project_dir = PathBuf::from(&project.dir);
+    let (path, kind) = library_entry_location(&project_dir, lib_path, fold);
+    project.libraries.push(LibraryEntry {
+        path,
+        kind,
+        library_id: Some(library_id),
+        unknown: Default::default(),
+    });
 }
 
 /// Create a fresh `.snxlib/` library at `lib_path`. The directory's
@@ -287,32 +315,7 @@ pub fn create_library_at(
         .to_string();
 
     let library_id = Uuid::now_v7();
-    // Seed the per-library class registry from the user's
-    // `prefs.json::component_classes` so freshly-created libraries
-    // start with the user's preferred taxonomy. The user can edit
-    // the registry per-library afterwards via the Library
-    // Properties pane (which then writes back to this `.snxlib`).
-    let seed_classes: Vec<signex_library::ClassEntry> = crate::fonts::read_component_classes_pref()
-        .into_iter()
-        .map(|e| signex_library::ClassEntry {
-            key: e.key,
-            label: e.label,
-        })
-        .collect();
-    let manifest = SnxlibManifest {
-        format: FORMAT_TOKEN.into(),
-        library_id,
-        library: LibrarySection {
-            name: stem.clone(),
-            description: None,
-        },
-        // Mode/workflow/users default — Stage 13 will surface the
-        // workflow-mode picker (Personal / Team) at create time.
-        mode: Default::default(),
-        workflow: WorkflowConfig::default(),
-        users: UsersConfig::default(),
-        classes: seed_classes,
-    };
+    let manifest = seed_manifest(library_id, stem, &state.new_library_defaults);
 
     // LFS opt-in (Stage 11): the "Library Options" modal that pops up
     // after the New Library Save-As dialog feeds `use_lfs` here. The
@@ -339,15 +342,7 @@ pub fn create_library_at(
     // with the file already on disk but no LibraryEntry — so the
     // tree never showed the new library and the user had to delete
     // the orphan folder manually.
-    let project_dir = PathBuf::from(&project.dir);
-    let (entry_path, entry_kind) = library_entry_location(&project_dir, &lib_path, fold);
-
-    project.libraries.push(LibraryEntry {
-        path: entry_path,
-        kind: entry_kind,
-        library_id: Some(library_id),
-        unknown: Default::default(),
-    });
+    register_library_entry(project, &lib_path, library_id, fold);
 
     // Best-effort runtime mount. Errors here downgrade to warnings so
     // the entry stays registered and the user can retry from the tree
@@ -630,22 +625,6 @@ fn report_unbound_row(internal_pn: &str, unbound: &[&str]) {
         target: "signex::library",
         "New component {name} has no {} bound. Use Pick Symbol / Pick Footprint in the library browser or Properties panel.",
         unbound.join(" and no "),
-    );
-}
-
-/// Stub: emit `tracing::info!` with the use-site coordinates the
-/// Where-Used handler hands back.
-pub fn jump_to_use_site(site: &signex_library::UseSite) {
-    // `UseSite::version_pinned` is gone in the DBLib model — past
-    // versions of a row are read from `git log` (LocalGit) or the
-    // audit trail (Database) rather than carried inline. The handler
-    // surfaces just the project / sheet / instance triple now.
-    tracing::info!(
-        target: "signex::library",
-        project = %site.project_path.display(),
-        sheet = %site.sheet_path.display(),
-        instance = %site.instance_id,
-        "jump-to-use-site requested (phase-2 follow-up)"
     );
 }
 

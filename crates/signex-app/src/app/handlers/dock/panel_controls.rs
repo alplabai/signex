@@ -153,12 +153,6 @@ impl Signex {
             crate::panels::PanelMsg::PropertiesTab(index) => {
                 self.document_state.panel_ctx.properties_tab = *index;
             }
-            crate::panels::PanelMsg::ComponentFilter(filter) => {
-                self.document_state.panel_ctx.component_filter = filter.clone();
-                // Persisted debounced and off-thread so the next session
-                // opens the panel with the same filter (#859).
-                follow = self.persist_component_filter_soon(filter);
-            }
             crate::panels::PanelMsg::ToggleSection(key) => {
                 let key = key.clone();
                 if !self
@@ -509,12 +503,6 @@ impl Signex {
                 self.document_state.panel_ctx.sheet_color = *color;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
             }
-            crate::panels::PanelMsg::DragComponentsSplit => {
-                self.interaction_state.dragging = Some(DragTarget::ComponentsSplit);
-                self.interaction_state.drag_start_pos = None;
-                self.interaction_state.drag_start_size =
-                    self.document_state.panel_ctx.components_split;
-            }
             crate::panels::PanelMsg::ToggleSelectionFilter(filter) => {
                 follow = self.handle_active_bar_filter_toggle(*filter);
             }
@@ -522,22 +510,22 @@ impl Signex {
                 follow = self.handle_active_bar_all_filters_toggle();
             }
             crate::panels::PanelMsg::AddCustomFilterPreset => {
-                self.handle_add_custom_filter_preset();
+                follow = self.handle_add_custom_filter_preset();
             }
             crate::panels::PanelMsg::RemoveCustomFilterPreset(idx) => {
-                self.handle_remove_custom_filter_preset(*idx);
+                follow = self.handle_remove_custom_filter_preset(*idx);
             }
             crate::panels::PanelMsg::RenameCustomFilterPreset(idx, name) => {
-                self.handle_rename_custom_filter_preset(*idx, name.clone());
+                follow = self.handle_rename_custom_filter_preset(*idx, name.clone());
             }
             crate::panels::PanelMsg::ToggleCustomFilterPresetMember(idx, filter) => {
-                self.handle_toggle_custom_filter_preset_member(*idx, *filter);
+                follow = self.handle_toggle_custom_filter_preset_member(*idx, *filter);
             }
             crate::panels::PanelMsg::CaptureCustomFilterPreset(idx) => {
-                self.handle_capture_custom_filter_preset(*idx);
+                follow = self.handle_capture_custom_filter_preset(*idx);
             }
             crate::panels::PanelMsg::SelectCustomFilterTab(idx) => {
-                self.handle_select_custom_filter_tab(*idx);
+                follow = self.handle_select_custom_filter_tab(*idx);
             }
             _ => return None,
         }

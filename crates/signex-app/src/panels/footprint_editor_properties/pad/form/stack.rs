@@ -14,6 +14,10 @@ use super::super::table::{
     pad_table_input_cell, pad_table_picklist_cell, pad_table_row,
 };
 use super::*;
+use crate::styles::Spacing;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: Spacing = Spacing::DEFAULT;
 
 /// v0.20 — render the "Pad Stack" section: copper shape + size,
 /// hole, per-side paste / mask expansions, tented flags, thermal
@@ -235,7 +239,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         // the hole centre. Only shown for Multi-Layer pads.
         col = col.push(
             container(text("Hole Details").size(9).color(muted))
-                .padding([6, 8])
+                .padding([6.0, SP.m])
                 .width(Length::Fill),
         );
         let tol_p_buf = values

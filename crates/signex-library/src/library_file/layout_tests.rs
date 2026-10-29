@@ -168,7 +168,17 @@ fn a_known_key_takes_over_an_unknown_one_of_the_same_name() {
     let mut file = LibraryFile::parse(&text).unwrap();
     file.manifest.mode = LibraryMode::Database {
         url: "postgres://h/db".into(),
-        auth: "a".into(),
+        auth: "@signex-keychain:a".into(),
+    };
+    assert_eq!(round(&file).manifest.mode, file.manifest.mode);
+}
+
+#[test]
+fn a_raw_auth_token_survives_a_round_trip() {
+    let mut file = LibraryFile::parse(DOC).unwrap();
+    file.manifest.mode = LibraryMode::Database {
+        url: "postgres://h/db".into(),
+        auth: "raw-token".into(),
     };
     assert_eq!(round(&file).manifest.mode, file.manifest.mode);
 }

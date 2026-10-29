@@ -29,7 +29,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use signex_types::schematic::{InstancePath, SchematicSheet};
+use signex_types::schematic::{InstancePath, Point, SchematicSheet};
 use uuid::Uuid;
 
 use crate::app::project_sheets::{lexically_normalize, resolve_child_reference};
@@ -131,6 +131,20 @@ impl SheetHierarchy {
         self.top_level().nth(first)?.descend(rest)
     }
 
+    /// The path of every node the walk placed, for the file-status checks
+    /// that tell when a missing sheet appears or a present one goes (#1618).
+    pub fn node_paths(&self) -> Vec<&Path> {
+        fn collect<'a>(node: &'a SheetNode, out: &mut Vec<&'a Path>) {
+            if node.kind != SheetNodeKind::Rejected {
+                out.push(&node.path);
+            }
+            node.children.iter().for_each(|child| collect(child, out));
+        }
+        let mut out = Vec::new();
+        self.top_level().for_each(|node| collect(node, &mut out));
+        out
+    }
+
     /// Whether `path` is a page the walk starts at (the root or a loose page)
     /// rather than a sheet some symbol places.
     pub fn starts_a_walk(&self, path: &Path) -> bool {
@@ -178,6 +192,51 @@ impl SheetHierarchy {
             node.kind == SheetNodeKind::Present && node.children.iter().all(complete)
         }
         self.top_level().all(complete)
+    }
+
+    /// The designators a search reads at `path`: every placement the walk
+    /// reaches the sheet through, and whether that list is certain to be
+    /// complete (so a designator edit may write `reference` alone).
+    pub fn designator_scope(&self, path: &Path) -> signex_engine::DesignatorScope {
+        let placements = self.placements_of(path);
+        let single = self.is_complete() && placements.len() <= 1;
+        signex_engine::DesignatorScope { placements, single }
+    }
+
+    /// Every loaded sheet occurrence with the placement that reaches it,
+    /// walk order: a child placed twice is two entries, a hierarchical child
+    /// no page list names is one.
+    pub fn occurrences(&self) -> Vec<(InstancePath, &SheetNode)> {
+        fn walk<'a>(
+            node: &'a SheetNode,
+            chain: &mut Vec<Uuid>,
+            out: &mut Vec<(InstancePath, &'a SheetNode)>,
+        ) {
+            chain.extend(node.placed_as);
+            if node.kind == SheetNodeKind::Present {
+                out.push((InstancePath::from_chain(chain.clone()), node));
+            }
+            for child in &node.children {
+                walk(child, chain, out);
+            }
+            if node.placed_as.is_some() {
+                chain.pop();
+            }
+        }
+        let mut out = Vec::new();
+        for node in self.top_level() {
+            walk(node, &mut Vec::new(), &mut out);
+        }
+        out
+    }
+
+    /// The sheet file an occurrence path stands for. The root chain names the
+    /// root sheet (loose pages share it and are not reachable this way).
+    pub fn sheet_path_at(&self, occurrence: &InstancePath) -> Option<PathBuf> {
+        self.occurrences()
+            .into_iter()
+            .find(|(chain, _)| chain == occurrence)
+            .map(|(_, node)| node.path.clone())
     }
 
     /// The placement a tree-row path stands for: the sheet-symbol uuids
@@ -389,6 +448,35 @@ pub(crate) fn parent_sheet(
             })
         })
         .map(|(path, _)| path.clone())
+}
+
+/// The sheet symbol on `parent` that references `child`: its uuid and centre,
+/// for landing the view on it after going up a level.
+pub(crate) fn symbol_referencing(
+    sheets: &HashMap<PathBuf, SchematicSheet>,
+    parent: &Path,
+    child: &Path,
+    fold: CaseFold,
+) -> Option<(Uuid, Point)> {
+    let child_key = normalised_key(child, fold);
+    let dir = parent.parent().unwrap_or_else(|| Path::new(""));
+    sheets
+        .get(parent)?
+        .child_sheets
+        .iter()
+        .find(|cs| {
+            resolve_child_reference(dir, &cs.filename)
+                .is_some_and(|resolved| normalised_key(&resolved, fold) == child_key)
+        })
+        .map(|cs| (cs.uuid, symbol_centre(cs)))
+}
+
+/// The centre of a sheet symbol's body.
+pub(crate) fn symbol_centre(symbol: &signex_types::schematic::ChildSheet) -> Point {
+    Point::new(
+        symbol.position.x + symbol.size.0 / 2.0,
+        symbol.position.y + symbol.size.1 / 2.0,
+    )
 }
 
 /// The sheet whose symbol `placed_as` is, when exactly one holds it. A copied

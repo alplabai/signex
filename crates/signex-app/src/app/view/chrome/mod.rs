@@ -8,6 +8,10 @@
 
 use super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 mod buttons;
 
 impl Signex {
@@ -15,6 +19,9 @@ impl Signex {
     /// title bar with a 36 px strip:
     ///
     /// `[leading controls] [wordmark + menus] [drag] [drag] [trailing controls]`
+    ///
+    /// With the macOS system menu bar installed `menu_row` is `None` and the
+    /// wordmark + menus section is absent.
     ///
     /// Which buttons sit where depends on the platform and the Window
     /// controls preference (`Signex::window_controls_layout`). The search
@@ -26,7 +33,7 @@ impl Signex {
     /// handlers. Double-click on a drag zone toggles maximize.
     pub(super) fn view_main_window_chrome<'a>(
         &self,
-        menu_row: Element<'a, Message>,
+        menu_row: Option<Element<'a, Message>>,
         tokens: &signex_types::theme::ThemeTokens,
     ) -> Element<'a, Message> {
         use iced::widget::{Space, container, mouse_area, row, svg};
@@ -56,11 +63,13 @@ impl Signex {
         // Left-pad the menu row so the wordmark doesn't sit flush against
         // the window edge; Windows-style controls stay flush so their hover
         // boxes touch the corner like in native chrome.
-        let menu_padded = container(menu_row).padding(iced::Padding {
-            top: 0.0,
-            right: 0.0,
-            bottom: 0.0,
-            left: 8.0,
+        let menu_padded = menu_row.map(|row| {
+            container(row).padding(iced::Padding {
+                top: 0.0,
+                right: 0.0,
+                bottom: 0.0,
+                left: 8.0,
+            })
         });
 
         // Shrinks with the window; the palette dropdown reads the same
@@ -86,7 +95,7 @@ impl Signex {
         .on_input(|q| Message::CommandPalette(CommandPaletteMsg::QueryChanged(q)))
         .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
         .padding(iced::Padding::ZERO)
-        .size(11)
+        .size(TS.body)
         .width(Length::Fill)
         .style(
             move |_: &iced::Theme, _status: text_input::Status| text_input::Style {
@@ -108,7 +117,7 @@ impl Signex {
         );
         let search_bar: Element<'_, Message> = container(
             row![search_icon, palette_input]
-                .spacing(8)
+                .spacing(SP.m)
                 .align_y(Alignment::Center),
         )
         .padding(iced::Padding {
@@ -154,15 +163,13 @@ impl Signex {
         // The top layer is a bare container — outside the bar's own
         // bounds it captures nothing, so presses fall straight through
         // to the drag zones below and the whole strip stays draggable.
-        let strip = row![
-            leading_controls,
-            menu_padded,
-            drag_zone(),
-            drag_zone(),
-            trailing_controls
-        ]
-        .width(Length::Fill)
-        .align_y(Alignment::Center);
+        let strip = row![leading_controls]
+            .push(menu_padded)
+            .push(drag_zone())
+            .push(drag_zone())
+            .push(trailing_controls)
+            .width(Length::Fill)
+            .align_y(Alignment::Center);
         // Positioned by left padding rather than centre alignment so it
         // lands on exactly the `x` the geometry helper reports — the
         // dropdown anchors to that same `x`, and the helper stops
@@ -191,10 +198,16 @@ impl Signex {
     pub(in crate::app::view) fn chrome_search_bar_geometry(&self) -> (f32, f32) {
         let fullscreen = self.ui_state.main_window_is_fullscreen();
         let (leading_w, trailing_w) = buttons::extents(&self.window_controls_layout(), fullscreen);
+        let menu_w = if self.native_menu.hides_in_window_menu() {
+            0.0
+        } else {
+            crate::menu_bar::approx_menu_bar_width()
+        };
         crate::app::view::chrome_search_bar_geometry(
             self.ui_state.window_size.0,
             leading_w,
             trailing_w,
+            menu_w,
         )
     }
 
@@ -210,6 +223,10 @@ impl Signex {
                 draft_pcb_gpu_render: ui.preferences_draft_pcb_gpu_render,
                 draft_annotate_undo: ui.preferences_draft_annotate_undo,
                 draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
+                draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,
+                draft_drag_direction_select: ui.preferences_draft_drag_direction_select,
+                draft_increment_step: ui.preferences_draft_increment_step,
+                draft_paste_designators: ui.preferences_draft_paste_designators,
                 draft_window_controls_placement: ui.preferences_draft_window_controls_placement,
                 window_controls_restart_note: self.window_controls_needs_restart(),
                 draft_autosave_enabled: ui.preferences_draft_autosave_enabled,
@@ -221,7 +238,8 @@ impl Signex {
                 custom_name: ui.custom_theme.as_ref().map(|c| c.name.as_str()),
                 theme_status: &ui.preferences_theme_status,
                 dirty: ui.preferences_dirty,
-                erc_overrides: &ui.preferences_draft_erc_severity,
+                profiles: &ui.profile_manager,
+                default_profile: ui.default_rule_profile.as_deref(),
                 distributor_settings: &self.library.settings,
                 panel_tokens: &self.document_state.panel_ctx.tokens,
                 draft_component_classes: &ui.preferences_draft_component_classes,
@@ -240,31 +258,80 @@ impl Signex {
         dialog
     }
 
-    pub(super) fn view_detached_modal(&self, modal: super::state::ModalId) -> Element<'_, Message> {
+    pub(super) fn view_detached_modal(
+        &self,
+        window: iced::window::Id,
+        modal: super::state::ModalId,
+    ) -> Element<'_, Message> {
         use super::state::ModalId;
         match modal {
             ModalId::AnnotateDialog => self.view_annotate_dialog_body(),
             ModalId::ErcDialog => self.view_erc_dialog_body(),
             ModalId::AnnotateResetConfirm => self.view_annotate_reset_confirm_body(),
             ModalId::ReprefixConfirm => self.view_reprefix_confirm_body(),
-            // Stubs — these modals don't yet have extractable bodies; fall
-            // back to a placeholder so the window is non-empty until their
-            // body helpers land.
             ModalId::MoveSelection => self.view_move_selection_body(),
             ModalId::NetColorPalette => self.view_net_color_palette_body(),
             ModalId::ParameterManager => self.view_parameter_manager_body(),
             ModalId::PrintPreview => self.view_print_preview_body(),
             ModalId::BomPreview => self.view_bom_preview_body(),
             ModalId::Preferences => self.view_preferences_body(),
-            ModalId::FindReplace
-            | ModalId::RenameDialog
-            | ModalId::RemoveDialog
-            | ModalId::EnableVersionControl
-            | ModalId::GridProperties
-            | ModalId::SelectionFilterCustom => {
-                iced::widget::container(iced::widget::text("Detached modal"))
-                    .padding(20)
-                    .into()
+            ModalId::FindReplace => crate::find_replace::window_view(
+                &self.ui_state.find_replace,
+                &self.document_state.panel_ctx.tokens,
+            )
+            .map(Message::FindReplaceMsg),
+            ModalId::RenameDialog => self.view_rename_dialog_body(),
+            ModalId::RemoveDialog => self.view_remove_dialog_body(),
+            ModalId::EnableVersionControl => self.view_enable_version_control_dialog_body(),
+            ModalId::GridProperties => self.view_grid_properties_dialog_body(),
+            ModalId::SelectionFilterCustom => self.view_selection_filter_custom_body(),
+            ModalId::About => crate::about_modal::window_view(
+                &self.document_state.panel_ctx.tokens,
+                self.ui_state.theme_id,
+            ),
+            ModalId::KeyboardShortcuts => self.view_keyboard_shortcuts_window(),
+            ModalId::PassiveCalculator => crate::passive_calculator_modal::window_view(
+                &self.document_state.panel_ctx.tokens,
+                self.ui_state.theme_id,
+                &self.ui_state.passive_calculator,
+            ),
+            ModalId::CreateChildSheet => self.view_create_child_sheet_body(),
+            ModalId::LibraryPicker
+            | ModalId::LibraryEditRow
+            | ModalId::LibraryPrimitivePicker
+            | ModalId::LibraryDocumentOptions
+            | ModalId::LibraryCreateOptions
+            | ModalId::LibraryUpdates
+            | ModalId::LibraryCloseConfirm
+            | ModalId::LibraryDeleteConfirm
+            | ModalId::LibraryRecovery
+            | ModalId::NetColorCustom => {
+                // The card centred in its own window: no scrim, and for the
+                // per-browser dialogs the browser that opened this window.
+                let owner = self.ui_state.library_modal_owners.get(&window);
+                match self.library_dialog_card(modal, owner.map(std::path::PathBuf::as_path)) {
+                    Some(card) => iced::widget::container(card)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .center_x(Length::Fill)
+                        .center_y(Length::Fill)
+                        .style(crate::styles::modal_card(
+                            &self.document_state.panel_ctx.tokens,
+                        ))
+                        .into(),
+                    None => iced::widget::Space::new().into(),
+                }
+            }
+            ModalId::ErrorNotice => self.view_error_notice(),
+            ModalId::NetlistIncompletePrompt => self.view_netlist_incomplete_prompt(),
+            ModalId::AutosaveRecovery => match self.document_state.autosave.current_offer() {
+                Some(offer) => self.view_autosave_recovery_window(offer),
+                None => iced::widget::Space::new().into(),
+            },
+            ModalId::ProjectCloseConfirm => self.view_project_close_confirm_body(),
+            ModalId::AppQuitConfirm => self.view_app_quit_confirm_body(),
+            ModalId::FirstRunTour => {
+                crate::first_run_tour::window_view(&self.document_state.panel_ctx.tokens)
             }
         }
     }
@@ -437,7 +504,7 @@ impl Signex {
 #[cfg(test)]
 mod layout_tests {
     use super::*;
-    use crate::layout_probe::{find, lay_out_texts, natural};
+    use crate::layout_probe::{LaidOutText, find, lay_out_texts, natural};
 
     const RESET: &str = "Start a fresh preferences file";
 
@@ -463,5 +530,41 @@ mod layout_tests {
             label.width + 0.5 >= one_line.width,
             "the button is narrower than its label: {label:?}, natural {one_line:?}"
         );
+    }
+
+    fn main_window_app() -> (Signex, iced::window::Id) {
+        let window = iced::window::Id::unique();
+        let (mut app, _task) = Signex::new();
+        app.ui_state.main_window_id = Some(window);
+        app.ui_state.first_run_tour_open = false;
+        (app, window)
+    }
+
+    fn main_window_texts(app: &Signex, window: iced::window::Id) -> Vec<LaidOutText> {
+        lay_out_texts(app.view(window), iced::Size::new(1400.0, 900.0))
+    }
+
+    /// Without a working system menu bar (any other OS, or a failed install
+    /// on macOS) the strip carries the in-window row.
+    #[test]
+    fn the_in_window_menu_row_shows_when_the_system_menu_bar_is_not_in_use() {
+        let (mut app, window) = main_window_app();
+        app.native_menu.mark_failed_for_test();
+        let texts = main_window_texts(&app, window);
+        for root in crate::menu_bar::model::ROOT_TITLES {
+            assert!(texts.iter().any(|t| t.text == root), "no {root} root");
+        }
+    }
+
+    /// On macOS the row is left out from the first frame, before the first
+    /// install, so it does not flash.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_menu_row_is_absent_on_macos_from_the_first_frame() {
+        let (app, window) = main_window_app();
+        let texts = main_window_texts(&app, window);
+        for root in crate::menu_bar::model::ROOT_TITLES {
+            assert!(!texts.iter().any(|t| t.text == root), "{root} still drawn");
+        }
     }
 }

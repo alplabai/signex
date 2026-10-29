@@ -16,7 +16,6 @@ pub enum DragTarget {
     LeftPanel,
     RightPanel,
     BottomPanel,
-    ComponentsSplit,
 }
 
 #[derive(Debug, Clone)]
@@ -133,7 +132,7 @@ pub enum Message {
     /// Print-preview modal — namespaced family (ADR-0001 D3). Routed to
     /// `dispatch_print_preview_message`.
     PrintPreview(PrintPreviewMsg),
-    /// v0.9 Library subsystem message — folded under one variant so
+    /// Library subsystem message — folded under one variant so
     /// the dispatcher can route to `library_dispatch::handle` in one
     /// shot. See `crate::library::LibraryMessage` for the inner
     /// shape.
@@ -154,10 +153,12 @@ impl Message {
 
 mod dialogs;
 mod messages;
+mod net_nav;
 mod state;
 
 pub use dialogs::*;
 pub use messages::*;
+pub use net_nav::NetNavMsg;
 pub use state::*;
 
 #[cfg(test)]

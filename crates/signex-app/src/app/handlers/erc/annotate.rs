@@ -95,11 +95,12 @@ pub(super) fn read_only_sheets(
         .sheets
         .iter()
         .filter(|(path, sheet)| {
-            let unknown = documents
+            documents
                 .engines
                 .get(*path)
-                .map_or(&sheet.unknown, |engine| &engine.document().unknown);
-            unknown.newer_minor_source.is_some()
+                .map_or(sheet.is_read_only(), |engine| {
+                    engine.document().is_read_only()
+                })
         })
         .map(|(path, _)| path.clone())
         .collect()
@@ -348,7 +349,7 @@ impl Signex {
         // `dirty_paths` (#585). The clone is taken first and the engine
         // borrow released, because the gateway needs `&mut self`.
         let reset_sheet = self.document_state.active_engine().and_then(|engine| {
-            if engine.document().unknown.newer_minor_source.is_some() {
+            if engine.document().is_read_only() {
                 return None;
             }
             let mut sheet = engine.document().clone();

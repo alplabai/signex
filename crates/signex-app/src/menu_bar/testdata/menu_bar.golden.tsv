@@ -31,14 +31,19 @@ Edit/Paste	item	Paste	paste	Ctrl+V	Paste	01000000	cmd:paste
 Edit/Paste Special	item	Paste Special	smart_paste	Shift+Ctrl+V	SmartPaste	01000000	cmd:smart_paste
 Edit/Duplicate	item	Duplicate	duplicate	Ctrl+D	Duplicate	01000000	cmd:duplicate
 Edit/Delete	item	Delete	delete_selection	Del	Delete	01000010	cmd:delete_selection
+Edit/Arrange	submenu	Arrange	-	-	-	-	-
+Edit/Arrange/Bring to Front	item	Bring to Front	-	-	BringDrawingsToFront	00000000	cmd:bring_drawings_to_front
+Edit/Arrange/Send to Back	item	Send to Back	-	-	SendDrawingsToBack	00000000	cmd:send_drawings_to_back
+Edit/Arrange/Bring Forward	item	Bring Forward	-	-	BringDrawingsForward	00000000	cmd:bring_drawings_forward
+Edit/Arrange/Send Backward	item	Send Backward	-	-	SendDrawingsBackward	00000000	cmd:send_drawings_backward
 Edit/---	separator	-	-	-	-	-	-
 Edit/Select All	item	Select All	select_all	Ctrl+A	SelectAll	01000000	cmd:select_all
 Edit/---	separator	-	-	-	-	-	-
 Edit/Find	item	Find	find	Ctrl+F	Find	11111111	cmd:find
 Edit/Find and Replace	item	Find and Replace	find_and_replace	Ctrl+H	Replace	11111111	cmd:find_and_replace
 View	menu	View	-	-	-	-	-
-View/Zoom In	stub	Zoom In	zoom_in_at_cursor	Ctrl+=	-	00000000	never
-View/Zoom Out	stub	Zoom Out	zoom_out_at_cursor	Ctrl+-	-	00000000	never
+View/Zoom In	item	Zoom In	zoom_in_at_cursor	Ctrl+=	ZoomIn	11111111	cmd:zoom_in_at_cursor
+View/Zoom Out	item	Zoom Out	zoom_out_at_cursor	Ctrl+-	ZoomOut	11111111	cmd:zoom_out_at_cursor
 View/Fit All	item	Fit All	zoom_to_fit	Home	ZoomFit	01100100	cmd:zoom_to_fit
 View/---	separator	-	-	-	-	-	-
 View/Toggle Grid	item	Toggle Grid	toggle_visible_grid	Shift+Ctrl+G	ToggleGrid	11111111	cmd:toggle_visible_grid
@@ -58,10 +63,11 @@ Place/Bus	item	Bus	place_bus	B	PlaceBus	01000000	cmd:place_bus
 Place/Net Label	item	Net Label	place_net_label	L	PlaceLabel	01000000	cmd:place_net_label
 Place/---	separator	-	-	-	-	-	-
 Place/Component...	item	Component...	open_components_panel	P	PlaceComponent	01000000	cmd:open_components_panel
-Place/Power Port	stub	Power Port	-	-	-	00000000	never
+Place/Power Port	item	Power Port	place_power_symbol	P	PlacePowerPort	01000000	cmd:place_power_symbol
+Place/Junction	item	Junction	place_junction	J	PlaceJunction	01000000	cmd:place_junction
 Place/---	separator	-	-	-	-	-	-
-Place/Text	stub	Text	-	-	-	00000000	never
-Place/No Connect	stub	No Connect	-	-	-	00000000	never
+Place/Text	item	Text	-	-	PlaceText	01000000	sch
+Place/No Connect	item	No Connect	-	-	PlaceNoConnect	01000000	sch
 Place/Sheet Entry	stub	Sheet Entry	-	-	-	00000000	never
 Design	menu	Design	-	-	-	-	-
 Design/Annotation	submenu	Annotation	-	-	-	-	-
@@ -77,7 +83,7 @@ Design/Annotation/Number Schematic Sheets...	stub	Number Schematic Sheets...	-	-
 Design/---	separator	-	-	-	-	-	-
 Design/Electrical Rules Check	item	Electrical Rules Check	run_erc	F8	Erc	01001000	cmd:run_erc
 Design/---	separator	-	-	-	-	-	-
-Design/Generate BOM	stub	Generate BOM	-	-	-	00000000	never
+Design/Generate BOM	item	Generate BOM	-	-	ExportBom	01000000	sch
 Tools	menu	Tools	-	-	-	-	-
 Tools/Assign Footprints	stub	Assign Footprints	-	-	-	00000000	never
 Tools/Library Editor	stub	Library Editor	-	-	-	00000000	never

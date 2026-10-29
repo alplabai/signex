@@ -247,6 +247,7 @@ impl LocalGitAdapter {
                 &repo,
                 removed_rel_path.map(Path::new),
                 Path::new(rel_path),
+                None,
                 &extras,
                 &sig,
                 &commit_message,
@@ -409,6 +410,7 @@ impl LocalGitAdapter {
         };
         // HI-6: atomic write — never half-write the manifest.
         signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
+        self.warn_plain_token_once(&candidate.manifest.mode);
         // Disk now holds the edit, so memory takes it too. Memory and disk
         // stay equal whatever happens next: a failed commit without assets
         // leaves both on the edit, one with assets restores both.

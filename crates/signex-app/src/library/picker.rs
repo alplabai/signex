@@ -22,23 +22,46 @@ use iced::{Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
-use super::messages::{LibraryMessage, PickerMsg};
+use super::messages::{LibraryMessage, PickerMsg, PlacedPartMsg};
 use super::modal_chrome::close_x;
-use super::state::PickerState;
+use super::placed_part::{change_preview_view, datasheet_choice_view};
+use super::state::{PickerMode, PickerState};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 const PICKER_W: f32 = 720.0;
 const PICKER_H: f32 = 480.0;
 
 /// Draws the list `LibraryState::sync_view_caches` last built for the
 /// picker; `view` itself filters and clones nothing.
-pub fn view<'a>(picker: &'a PickerState, tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
+pub fn view<'a>(
+    picker: &'a PickerState,
+    tokens: &'a ThemeTokens,
+    windowed: bool,
+) -> Element<'a, LibraryMessage> {
+    // Change Component and Open Datasheet reuse this modal: their later
+    // stages draw their own card.
+    match &picker.mode {
+        PickerMode::ChangePreview(change) => return change_preview_view(change, tokens, windowed),
+        PickerMode::Datasheets(choice) => return datasheet_choice_view(choice, tokens, windowed),
+        PickerMode::Place | PickerMode::ChangeComponent(_) => {}
+    }
+    let changing = matches!(picker.mode, PickerMode::ChangeComponent(_));
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
 
     let header = container(
         row![
-            text("Place Component").size(14).color(text_c),
+            text(if changing {
+                "Change Component"
+            } else {
+                "Place Component"
+            })
+            .size(TS.heading)
+            .color(text_c),
             Space::new().width(Length::Fill),
             close_x(LibraryMessage::ClosePicker, tokens),
         ]
@@ -50,7 +73,7 @@ pub fn view<'a>(picker: &'a PickerState, tokens: &'a ThemeTokens) -> Element<'a,
     let search = text_input("Search internal PN / MPN / description…", &picker.filter)
         .on_input(|s| LibraryMessage::Picker(PickerMsg::FilterChanged(s)))
         .padding(6)
-        .size(12);
+        .size(TS.label);
 
     let rows = &picker.rows;
 
@@ -59,7 +82,7 @@ pub fn view<'a>(picker: &'a PickerState, tokens: &'a ThemeTokens) -> Element<'a,
         list_col = list_col.push(
             container(
                 text("No components match. Open a library or refine the filter.")
-                    .size(11)
+                    .size(TS.body)
                     .color(muted),
             )
             .padding([14, 14]),
@@ -80,24 +103,24 @@ pub fn view<'a>(picker: &'a PickerState, tokens: &'a ThemeTokens) -> Element<'a,
             let row_widget = button(
                 row![
                     text(summary.internal_pn.as_str())
-                        .size(11)
+                        .size(TS.body)
                         .color(text_c)
                         .width(Length::FillPortion(2)),
                     text(entry.state_label.as_str())
-                        .size(11)
+                        .size(TS.body)
                         .color(muted)
                         .width(Length::Fixed(96.0)),
                     text(summary.mpn.as_str())
-                        .size(11)
+                        .size(TS.body)
                         .color(text_c)
                         .width(Length::FillPortion(3)),
                     text(summary.description.as_str())
-                        .size(11)
+                        .size(TS.body)
                         .color(muted)
                         .width(Length::FillPortion(4)),
                 ]
-                .spacing(8)
-                .padding([3, 8]),
+                .spacing(SP.m)
+                .padding([3.0, SP.m]),
             )
             .padding(0)
             .width(Length::Fill)
@@ -143,25 +166,36 @@ pub fn view<'a>(picker: &'a PickerState, tokens: &'a ThemeTokens) -> Element<'a,
     } else {
         iced::Color::from_rgba(1.0, 1.0, 1.0, 0.4)
     };
-    let mut place_btn = button(container(text("Place").size(11).color(place_fg)).padding([4, 14]))
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(place_bg)),
-            text_color: place_fg,
-            border: Border {
-                width: 0.0,
-                radius: 3.0.into(),
-                ..Border::default()
-            },
-            ..iced::widget::button::Style::default()
-        });
+    let mut place_btn = button(
+        container(
+            text(if changing { "Next" } else { "Place" })
+                .size(TS.body)
+                .color(place_fg),
+        )
+        .padding([SP.s, 14.0]),
+    )
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(place_bg)),
+        text_color: place_fg,
+        border: Border {
+            width: 0.0,
+            radius: 3.0.into(),
+            ..Border::default()
+        },
+        ..iced::widget::button::Style::default()
+    });
     if place_enabled {
-        place_btn = place_btn.on_press(LibraryMessage::Picker(PickerMsg::PlaceSelected));
+        place_btn = place_btn.on_press(if changing {
+            LibraryMessage::PlacedPart(PlacedPartMsg::ChangePartPicked)
+        } else {
+            LibraryMessage::Picker(PickerMsg::PlaceSelected)
+        });
     }
 
     let footer = container(
         row![
             Space::new().width(Length::Fill),
-            button(container(text("Cancel").size(11).color(text_c)).padding([4, 14]))
+            button(container(text("Cancel").size(TS.body).color(text_c)).padding([SP.s, 14.0]))
                 .on_press(LibraryMessage::ClosePicker)
                 .style(move |_: &Theme, _| iced::widget::button::Style {
                     background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -183,14 +217,14 @@ pub fn view<'a>(picker: &'a PickerState, tokens: &'a ThemeTokens) -> Element<'a,
     .padding([10, 14])
     .style(crate::styles::modal_footer_strip(tokens));
 
-    let body_pad = container(column![container(search).padding([6, 12]), body].spacing(0))
+    let body_pad = container(column![container(search).padding([6.0, SP.l]), body].spacing(0))
         .width(Length::Fill)
         .height(Length::Fill);
 
     container(
         column![header, body_pad, footer]
-            .width(Length::Fixed(PICKER_W))
-            .height(Length::Fixed(PICKER_H)),
+            .width(super::card_len(windowed, PICKER_W))
+            .height(super::card_len(windowed, PICKER_H)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

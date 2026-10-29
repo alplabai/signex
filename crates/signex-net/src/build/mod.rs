@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 use signex_types::designator::compare_references;
 use signex_types::net::{Net, NetId, Netlist, Terminal};
 use signex_types::schematic::{
-    InstancePath, Label, LabelType, Point, SchematicSheet, SymbolTransform,
+    InstancePath, Label, LabelType, Point, SchematicSheet, SymbolTransform, instance_pins,
 };
 use uuid::Uuid;
 
@@ -212,10 +212,7 @@ fn power_port_pins_of(sheet: &SchematicSheet, with_flags: bool) -> Vec<(Point, &
             continue;
         };
         let xform = SymbolTransform::from_symbol(sym);
-        for lp in &lib_sym.pins {
-            if lp.unit != 0 && lp.unit != sym.unit {
-                continue;
-            }
+        for lp in instance_pins(&lib_sym, sym) {
             ports.push((xform.apply(lp.pin.position), sym.value.as_str(), sym.uuid));
         }
     }
@@ -551,18 +548,26 @@ pub(crate) fn collect_terminals(
     path: &InstancePath,
     parent: &mut HashMap<Key, Key>,
 ) -> HashMap<Key, Vec<Terminal>> {
+    collect_terminals_at(sheet, path, parent)
+        .into_iter()
+        .map(|(root, found)| (root, found.into_iter().map(|(t, _)| t).collect()))
+        .collect()
+}
+
+/// [`collect_terminals`] with the world position of each pin's tip beside it.
+pub(crate) fn collect_terminals_at(
+    sheet: &SchematicSheet,
+    path: &InstancePath,
+    parent: &mut HashMap<Key, Key>,
+) -> HashMap<Key, Vec<(Terminal, Point)>> {
     let gate = connected_points(sheet);
-    let mut net_terms: HashMap<Key, Vec<Terminal>> = HashMap::new();
+    let mut net_terms: HashMap<Key, Vec<(Terminal, Point)>> = HashMap::new();
     for sym in &sheet.symbols {
         let Some(lib_sym) = sheet.resolve_lib_symbol(sym) else {
             continue;
         };
         let xform = SymbolTransform::from_symbol(sym);
-        for lp in &lib_sym.pins {
-            // Unit 0 = "common to all units"; otherwise the placed unit only.
-            if lp.unit != 0 && lp.unit != sym.unit {
-                continue;
-            }
+        for lp in instance_pins(&lib_sym, sym) {
             let world_pos = xform.apply(lp.pin.position);
             if !gate.contains(&world_pos) {
                 continue;
@@ -574,12 +579,16 @@ pub(crate) fn collect_terminals(
                 lp.pin.name.clone()
             };
             let root = uf_find(parent, pt_key(&world_pos));
-            net_terms.entry(root).or_default().push(Terminal {
+            let terminal = Terminal {
                 symbol: sym.uuid,
                 reference: sym.designator_in(path).to_string(),
                 pin,
                 occurrence: path.clone(),
-            });
+            };
+            net_terms
+                .entry(root)
+                .or_default()
+                .push((terminal, world_pos));
         }
     }
     net_terms

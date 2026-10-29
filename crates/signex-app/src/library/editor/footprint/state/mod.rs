@@ -13,6 +13,7 @@
 //! Submodules:
 //! - [`pad`] — `EditorPad`, `PadStackUi`, `NextPadDefaults`, `PadSide`,
 //!   `CourtyardRect`, `ShapeParamMap`, `AlignOp`.
+//! - `courtyard` — the outline-following courtyard.
 //! - [`mode`] — `EditorMode`, `FpActiveBarMenu`, `PadStackTab`.
 //! - [`context_menu`] — right-click menu state types.
 //! - [`placement`] — `PlacementInput*`, `PlaceArcPending`.
@@ -24,6 +25,9 @@
 
 pub mod conflict;
 pub mod context_menu;
+mod courtyard;
+#[cfg(test)]
+mod courtyard_tests;
 pub mod mode;
 pub mod pad;
 pub mod placement;
@@ -165,16 +169,12 @@ pub struct FootprintEditorState {
     /// `true` when the courtyard polygon should track the pad bbox.
     pub auto_fit_courtyard: bool,
     pub courtyard_mm: Option<CourtyardRect>,
-    /// v0.27 — outline-following courtyard polygon, world mm. Set
-    /// by [`FootprintEditorState::recompute_courtyard_outline`]
-    /// which runs the union-of-pad-bboxes through
-    /// `signex_sketch::geom::polygon_op` (Union) then offsets the
-    /// result by `COURTYARD_SLACK_MM` via `offset_polygon`. Drawn
-    /// in preference to the bbox-based `courtyard_mm` when present.
-    /// Cleared whenever pads are added / moved / removed so the
-    /// stale outline doesn't survive the next mutation; the user
-    /// re-runs the action to refresh.
+    /// Outline-following courtyard polygon, world mm, set by
+    /// `recompute_courtyard_outline`. Read it through `courtyard_outline`,
+    /// which hides it once the pads change.
     pub courtyard_outline_mm: Option<Vec<(f64, f64)>>,
+    /// The pads `courtyard_outline_mm` was computed from.
+    pub(super) courtyard_outline_pads: Vec<[f64; 5]>,
     /// Last known cursor world position in mm.
     pub cursor_mm: Option<(f64, f64)>,
     /// Phase 5.3: which editor mode the user has switched to.
@@ -335,6 +335,7 @@ impl FootprintEditorState {
             auto_fit_courtyard: false,
             courtyard_mm: None,
             courtyard_outline_mm: None,
+            courtyard_outline_pads: Vec::new(),
             cursor_mm: None,
             mode: EditorMode::Normal,
             sketch_solver: signex_sketch::solver::Solver::default(),
@@ -582,91 +583,6 @@ impl FootprintEditorState {
     pub fn toggle_auto_fit(&mut self) {
         self.auto_fit_courtyard = !self.auto_fit_courtyard;
         self.recompute_courtyard();
-    }
-
-    /// v0.27 — outline-following courtyard. Builds a polygon for
-    /// each pad's bbox, unions the lot via the sketch geom module,
-    /// offsets the union by `COURTYARD_SLACK_MM`, and stores the
-    /// result on `courtyard_outline_mm`. Replaces the bbox-based
-    /// `recompute_courtyard` for users who want the courtyard to
-    /// hug the actual pad cluster rather than its enclosing
-    /// rectangle. Returns `true` when a polygon was produced;
-    /// `false` when there are no pads or the boolean union failed.
-    pub fn recompute_courtyard_outline(&mut self) -> bool {
-        use signex_sketch::geom::{BoolOp, CornerStyle, Point2, offset_polygon, polygon_op};
-
-        if self.pads.is_empty() {
-            self.courtyard_outline_mm = None;
-            return false;
-        }
-
-        // Per-pad quad from the ROTATED corners, so a turned pad's
-        // courtyard hugs the copper instead of the box it would
-        // occupy unrotated. Round/Oval/RoundRect/etc. still fall back
-        // to the enclosing quad; a follow-up can mint the shape-
-        // accurate outline (sampled circle for Round, arc-anchor for
-        // RoundRect, etc.).
-        let pad_polys: Vec<Vec<Point2>> = self
-            .pads
-            .iter()
-            .map(|p| {
-                p.rotated_corners_mm()
-                    .iter()
-                    .map(|&(x, y)| Point2::new(x, y))
-                    .collect()
-            })
-            .collect();
-
-        // Union pads pairwise. For disjoint pads polygon_op returns
-        // both rings; we keep them all and offset each individually.
-        // Connected pads collapse into a single ring through the
-        // accumulating union.
-        let mut accumulated: Vec<Vec<Point2>> = vec![pad_polys[0].clone()];
-        for next in &pad_polys[1..] {
-            let mut new_acc: Vec<Vec<Point2>> = Vec::new();
-            let mut consumed = false;
-            for ring in accumulated.drain(..) {
-                let unioned = polygon_op(&ring, next, BoolOp::Union);
-                if unioned.is_empty() {
-                    new_acc.push(ring);
-                } else {
-                    new_acc.extend(unioned);
-                    consumed = true;
-                }
-            }
-            if !consumed {
-                new_acc.push(next.clone());
-            }
-            accumulated = new_acc;
-        }
-
-        // Offset each ring outward by COURTYARD_SLACK_MM with
-        // round corners (matches the Altium-PCB convention of an
-        // arc-cornered courtyard) sampled at 4 segments per
-        // corner — enough to read smooth at typical zooms.
-        let mut offsetted: Vec<Vec<Point2>> = Vec::new();
-        for ring in &accumulated {
-            let off = offset_polygon(
-                ring,
-                COURTYARD_SLACK_MM,
-                CornerStyle::Round { arc_segments: 4 },
-            );
-            if off.len() >= 3 {
-                offsetted.push(off);
-            }
-        }
-
-        if offsetted.is_empty() {
-            self.courtyard_outline_mm = None;
-            return false;
-        }
-        // For now we surface only the first ring — the bake's
-        // `Footprint::courtyard` field carries one polygon. Multi-
-        // ring courtyards (separate pad islands) need a schema
-        // bump; queued for v0.28.
-        let chosen = &offsetted[0];
-        self.courtyard_outline_mm = Some(chosen.iter().map(|p| (p.x, p.y)).collect());
-        true
     }
 
     /// v0.22 Phase D2 — Inverse of `sync_pads_to_primitive`. After a

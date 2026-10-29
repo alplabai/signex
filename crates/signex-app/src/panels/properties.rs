@@ -1,7 +1,12 @@
 //! Properties panel and pre-placement editor views.
 
 use super::*;
+use crate::styles::{Spacing, TypeScale};
 use iced::widget::column;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// Pre-placement configuration data — shown in Properties panel when Tab pressed.
 #[derive(Debug, Clone)]
@@ -36,6 +41,68 @@ pub struct PrePlacementData {
     pub shape_width_mm: f64,
     /// Fill style for shapes that support it (Rect / Circle / Polygon).
     pub shape_fill: signex_types::schematic::FillType,
+}
+
+/// The look of the text a pre-placement form configures; what Repeat last
+/// item carries over to the next copy.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PrePlacementStyle {
+    pub rotation: f64,
+    pub font: String,
+    pub font_size_pt: u32,
+    pub justify_h: signex_types::schematic::HAlign,
+    pub justify_v: signex_types::schematic::VAlign,
+}
+
+impl PrePlacementData {
+    /// Pre-placement data with the one set of defaults every placement tool
+    /// starts from.
+    pub fn new(
+        tool_name: String,
+        kind: PrePlacementKind,
+        label_text: String,
+        cursor_x_mm: f64,
+        cursor_y_mm: f64,
+    ) -> Self {
+        Self {
+            tool_name,
+            kind,
+            label_text,
+            designator: String::new(),
+            rotation: 0.0,
+            font: "Iosevka".to_string(),
+            font_size_pt: 10,
+            justify_h: signex_types::schematic::HAlign::Left,
+            justify_v: Default::default(),
+            bold: false,
+            italic: false,
+            underline: false,
+            cursor_x_mm,
+            cursor_y_mm,
+            shape_width_mm: 0.0,
+            shape_fill: signex_types::schematic::FillType::None,
+        }
+    }
+
+    /// The text look this data configures.
+    pub fn style(&self) -> PrePlacementStyle {
+        PrePlacementStyle {
+            rotation: self.rotation,
+            font: self.font.clone(),
+            font_size_pt: self.font_size_pt,
+            justify_h: self.justify_h,
+            justify_v: self.justify_v,
+        }
+    }
+
+    /// Take over `style`.
+    pub fn set_style(&mut self, style: PrePlacementStyle) {
+        self.rotation = style.rotation;
+        self.font = style.font;
+        self.font_size_pt = style.font_size_pt;
+        self.justify_h = style.justify_h;
+        self.justify_v = style.justify_v;
+    }
 }
 
 /// Stable identifiers for every numeric drawing-field editor so the
@@ -164,12 +231,12 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         };
         return container(
             column![
-                text("Properties").size(12).color(primary),
+                text("Properties").size(TS.label).color(primary),
                 Space::new().height(12.0),
-                text(hint).size(11).color(muted),
+                text(hint).size(TS.body).color(muted),
             ]
-            .spacing(4)
-            .padding(8),
+            .spacing(SP.s)
+            .padding(SP.m),
         )
         .width(Length::Fill)
         .into();
@@ -190,35 +257,35 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if ctx.selection_count > 1 {
         let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
         col = col.push(
-            container(text("Multi-Selection").size(11).color(primary))
-                .padding([6, 8])
+            container(text("Multi-Selection").size(TS.body).color(primary))
+                .padding([6.0, SP.m])
                 .width(Length::Fill),
         );
         col = col.push(thin_sep(border_c));
         col = col.push(
             container(
                 text(format!("{} objects selected", ctx.selection_count))
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted),
             )
-            .padding([4, 8]),
+            .padding([SP.s, SP.m]),
         );
         for (key, value) in &ctx.selection_info {
             col = col.push(
                 container(
                     row![
                         text(key)
-                            .size(10)
+                            .size(TS.caption)
                             .color(muted)
                             .width(Length::FillPortion(2)),
                         text(value)
-                            .size(10)
+                            .size(TS.caption)
                             .color(primary)
                             .width(Length::FillPortion(3)),
                     ]
-                    .spacing(4),
+                    .spacing(SP.s),
                 )
-                .padding([3, 8])
+                .padding([3.0, SP.m])
                 .width(Length::Fill),
             );
         }
@@ -229,8 +296,8 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
     col = col.push(
-        container(text("Document Options").size(11).color(primary))
-            .padding([6, 8])
+        container(text("Document Options").size(TS.body).color(primary))
+            .padding([6.0, SP.m])
             .width(Length::Fill),
     );
 
@@ -260,9 +327,9 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     border_c
                 ),
             ]
-            .spacing(2.0),
+            .spacing(SP.xs),
         )
-        .padding([4, 8]),
+        .padding([SP.s, SP.m]),
     );
     col = col.push(thin_sep(border_c));
 
@@ -284,8 +351,8 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(Space::new().height(8.0));
     col = col.push(thin_sep(border_c));
     col = col.push(
-        container(text("Nothing selected").size(10).color(muted))
-            .padding([6, 8])
+        container(text("Nothing selected").size(TS.caption).color(muted))
+            .padding([6.0, SP.m])
             .width(Length::Fill),
     );
 
@@ -319,16 +386,16 @@ fn view_pre_placement<'a>(
     col = col.push(
         container(
             row![
-                text(tool_name.clone()).size(12).color(primary),
+                text(tool_name.clone()).size(TS.label).color(primary),
                 Space::new().width(Length::Fill),
-                iced::widget::button(text("OK").size(10).color(Color::WHITE))
-                    .padding([2, 10])
+                iced::widget::button(text("OK").size(TS.caption).color(Color::WHITE))
+                    .padding([SP.xs, 10.0])
                     .on_press(PanelMsg::ConfirmPrePlacement)
                     .style(iced::widget::button::primary),
             ]
             .align_y(iced::Alignment::Center),
         )
-        .padding([6, 8])
+        .padding([6.0, SP.m])
         .width(Length::Fill),
     );
 
@@ -453,7 +520,7 @@ fn view_pre_placement<'a>(
                             primary,
                             ctx.theme_id,
                         ))
-                        .padding([4, 8]),
+                        .padding([SP.s, SP.m]),
                     );
                 }
                 c
@@ -498,7 +565,7 @@ fn view_pre_placement<'a>(
         col = col.push(
             container(
                 text("Click to place. No per-instance options.")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted),
             )
             .padding([8, PROPERTY_ROW_PAD_X]),

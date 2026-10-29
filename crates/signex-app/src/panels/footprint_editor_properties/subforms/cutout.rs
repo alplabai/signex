@@ -4,6 +4,11 @@ use iced::widget::{Column, container, row, text, text_input};
 use iced::{Color, Length, Theme};
 
 use super::super::super::{FootprintEditorPanelContext, PanelMsg};
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// v0.16.4 — BoardCutout role sub-form. Edge-radius expression input
 /// + through-vs-partial-depth toggle.
@@ -19,8 +24,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
         return col;
     };
     col = col.push(
-        container(text("Cutout properties").size(10).color(primary))
-            .padding([4, 8])
+        container(text("Cutout properties").size(TS.caption).color(primary))
+            .padding([SP.s, SP.m])
             .width(Length::Fill),
     );
 
@@ -29,12 +34,12 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
         container(
             row![
                 text("Edge radius")
-                    .size(10)
+                    .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(80.0)),
                 text_input("(sharp)", &radius_buf)
-                    .size(10)
-                    .padding(2)
+                    .size(TS.caption)
+                    .padding(SP.xs)
                     .style(move |_: &Theme, _| iced::widget::text_input::Style {
                         background: iced::Background::Color(iced::Color::from_rgba(
                             1.0, 1.0, 1.0, 0.04,
@@ -54,7 +59,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
             .spacing(6)
             .align_y(iced::Alignment::Center),
         )
-        .padding([2, 8])
+        .padding([SP.xs, SP.m])
         .width(Length::Fill),
     );
 

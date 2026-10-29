@@ -20,6 +20,14 @@ fn library_path_for_key(
 }
 
 impl Signex {
+    /// Tab title for a document: its file stem, so `sub/Power.snxsch` reads
+    /// `Power`, the same as `rekey_open_document` titles it after a rename.
+    fn document_title(path: &std::path::Path) -> String {
+        path.file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    }
+
     /// Resolve a project-tree path (indices) to the file path on disk
     /// for the leaf node at that position. Multi-root aware: the first
     /// index picks which project's directory to resolve against, so a
@@ -167,7 +175,7 @@ impl Signex {
         // The file read + parse of a schematic / PCB runs on a worker; the
         // tab is installed by `handle_document_read_finished` (#859).
         if filename.ends_with(".snxsch") {
-            let title = filename.trim_end_matches(".snxsch").to_string();
+            let title = Self::document_title(&file_path);
             // If we parked an engine for this file (closed while dirty),
             // restore it instead of reparsing — Altium parity. Re-parsing
             // would silently discard the user's in-memory edits, which is
@@ -182,7 +190,7 @@ impl Signex {
         }
 
         if filename.ends_with(".snxpcb") {
-            let title = filename.trim_end_matches(".snxpcb").to_string();
+            let title = Self::document_title(&file_path);
             return Ok(self.begin_document_read(file_path, ReadJob::TreePcb { title }));
         }
 
@@ -211,7 +219,9 @@ impl Signex {
 /// filename matching against `entry.path.file_name()` still works.
 /// Returns the original `&str` when no suffix is present (zero-copy).
 fn canonical_tree_label(label: &str) -> &str {
-    label.trim_end_matches("  (missing)")
+    label
+        .trim_end_matches("  (missing)")
+        .trim_end_matches("  (unreadable)")
 }
 
 #[cfg(test)]

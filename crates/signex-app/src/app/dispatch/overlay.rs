@@ -17,6 +17,10 @@ impl Signex {
                 self.ui_state.panel_list_open = false;
                 self.show_panel(kind)
             }
+            OverlayMsg::PanelToggled(kind) => {
+                self.ui_state.panel_list_open = false;
+                self.toggle_panel(kind)
+            }
             OverlayMsg::OpenFind => self.handle_find_replace_open_requested(false),
             OverlayMsg::OpenReplace => self.handle_find_replace_open_requested(true),
             OverlayMsg::CloseKeyboardShortcuts => {
@@ -91,6 +95,9 @@ impl Signex {
             ProjectMsg::FsFactsProbed(generation, facts) => {
                 self.handle_project_fs_probed(generation, facts)
             }
+            ProjectMsg::NavigatorAssembled(generation, assembly) => {
+                self.handle_navigator_assembled(generation, assembly)
+            }
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
             ProjectMsg::Tab(msg) => {
                 self.dispatch_project_tab_message(msg);
@@ -113,6 +120,26 @@ impl Signex {
                 self.handle_add_new_schematic_written(project_id, path, result);
                 Task::none()
             }
+            ProjectMsg::CreateChildSheetPathChanged(text) => {
+                self.handle_create_child_sheet_path_changed(text)
+            }
+            ProjectMsg::CreateChildSheetBrowse => self.handle_create_child_sheet_browse(),
+            ProjectMsg::CreateChildSheetBrowsed(picked) => {
+                self.handle_create_child_sheet_browsed(picked)
+            }
+            ProjectMsg::CreateChildSheetAnswered { create } => {
+                self.handle_create_child_sheet_answered(create)
+            }
+            ProjectMsg::CreateChildSheetOpenExisting => {
+                self.handle_create_child_sheet_open_existing()
+            }
+            ProjectMsg::ChildSheetCreated {
+                project_id,
+                parent,
+                symbol,
+                path,
+                result,
+            } => self.handle_child_sheet_created(project_id, &parent, symbol, path, result),
             ProjectMsg::AddNewSchematicPicked { project_id, path } => {
                 self.handle_add_new_schematic_picked(project_id, path)
             }
@@ -187,7 +214,8 @@ impl Signex {
                     return Task::none();
                 }
                 if self.interaction_state.active_bar_menu.is_none() {
-                    self.interaction_state.context_menu = Some(ContextMenuState { x, y });
+                    let world = self.cursor_world_now();
+                    self.interaction_state.context_menu = Some(ContextMenuState { x, y, world });
                 }
                 Task::none()
             }
@@ -317,7 +345,11 @@ impl Signex {
                 Task::none()
             }
             ContextMenuMsg::Action(action) => {
-                self.interaction_state.context_menu = None;
+                let opened_at = self
+                    .interaction_state
+                    .context_menu
+                    .take()
+                    .and_then(|menu| menu.world);
                 self.interaction_state.context_submenu = None;
                 self.interaction_state.pending_submenu = None;
                 self.interaction_state.submenu_launcher_hovered = None;
@@ -332,6 +364,10 @@ impl Signex {
                         self.open_selected_child_sheet();
                         Task::none()
                     }
+                    ContextAction::CreateChildSheet => match self.selected_child_sheet() {
+                        Some((symbol, _)) => self.create_child_sheet_from_symbol(symbol),
+                        None => Task::none(),
+                    },
                     ContextAction::SyncSheetPins => {
                         self.sync_selected_sheet_pins();
                         // This dispatcher does not run `finish_update`; publish
@@ -350,9 +386,20 @@ impl Signex {
                     }
                     ContextAction::MirrorX => self.dispatch_edit_message(EditMsg::MirrorSelectedY),
                     ContextAction::MirrorY => self.dispatch_edit_message(EditMsg::MirrorSelectedX),
+                    ContextAction::ArrangeDrawings(arrange) => {
+                        self.dispatch_edit_message(EditMsg::ArrangeDrawings(arrange))
+                    }
+                    ContextAction::PlacedPart(action) => {
+                        self.dispatch_library_message(crate::library::LibraryMessage::PlacedPart(
+                            crate::library::PlacedPartMsg::ActionRequested(action),
+                        ))
+                    }
                     ContextAction::ActiveBar(active_bar_action) => {
                         self.handle_active_bar_action(active_bar_action)
                     }
+                    ContextAction::FindSimilar => self.handle_find_similar_message(
+                        crate::find_similar::FindSimilarMsg::OpenRequested { at: opened_at },
+                    ),
                 }
             }
         }
@@ -454,7 +501,17 @@ impl Signex {
                 self.handle_erc_run_finished(generation, &result)
             }
             ErcMsg::StoreRulesInProject => self.handle_store_erc_rules_in_project(),
-            ErcMsg::ProfileSaveRequested { name } => self.handle_profile_save_requested(name),
+            ErcMsg::ProfileSaveDialogOpened => self.handle_profile_save_dialog_opened(),
+            ErcMsg::ProfileSaveNameChanged(name) => self.handle_profile_save_name_changed(name),
+            ErcMsg::ProfileSaveVersionChanged(version) => {
+                self.handle_profile_save_version_changed(version)
+            }
+            ErcMsg::ProfileSaveSubmitted => self.handle_profile_save_submitted(),
+            ErcMsg::ProfileSaveOverwriteConfirmed => self.handle_profile_save_overwrite_confirmed(),
+            ErcMsg::ProfileSaveCancelled => self.handle_profile_save_cancelled(),
+            ErcMsg::UserDefaultLoaded(result) => self.handle_user_default_loaded(&result),
+            ErcMsg::ProfileWriteFinished(result) => self.handle_profile_write_finished(&result),
+            ErcMsg::ProfileWritesFlushed(result) => Self::handle_profile_writes_flushed(&result),
             ErcMsg::ProfileSaved { project, result } => self.handle_profile_saved(project, &result),
             ErcMsg::ProfileUpdateRequested => self.handle_profile_update_requested(),
             ErcMsg::ProfileLoadedForUpdate { project, result } => {
@@ -465,9 +522,7 @@ impl Signex {
             ErcMsg::ProfileDriftChecked { project, result } => {
                 self.handle_profile_drift_checked(project, &result)
             }
-            ErcMsg::DefaultProfileMigrated(result) => {
-                Self::handle_default_profile_migrated(&result)
-            }
+            ErcMsg::DefaultProfileMigrated(result) => self.handle_default_profile_migrated(&result),
             ErcMsg::RulesUndone => {
                 self.undo_project_rules();
                 Task::none()
@@ -482,36 +537,15 @@ impl Signex {
         }
     }
 
-    /// Cycle one pin-matrix cell Error -> Warning -> Info -> Off -> Error and
-    /// persist the result. A pair of pin types is unordered, so the mirrored
-    /// cell is written with it: the dialog then never shows two different
-    /// verdicts for the same pair. A value equal to the baseline drops the
-    /// override instead of storing it.
+    /// Cycle one pin-matrix cell of the project's stored rules, or of the
+    /// machine's rules when the project stores none.
     pub(crate) fn handle_pin_matrix_cell_cycled(&mut self, row: u8, col: u8) -> Task<Message> {
-        use signex_erc::pin_matrix::baseline_cell;
         if self.edit_project_erc_rules(|rules| {
             signex_erc::project_rules::cycle_pin_cell(rules, row, col)
         }) {
             return Task::none();
         }
-        let current = self
-            .ui_state
-            .pin_matrix_overrides
-            .get(&(row, col))
-            .copied()
-            .unwrap_or_else(|| baseline_cell(row, col));
-        let next = current.cycled();
-        for key in [(row, col), (col, row)] {
-            if next == baseline_cell(key.0, key.1) {
-                self.ui_state.pin_matrix_overrides.remove(&key);
-            } else {
-                self.ui_state.pin_matrix_overrides.insert(key, next);
-            }
-        }
-        let overrides = self.ui_state.pin_matrix_overrides.clone();
-        crate::fonts::background_pref_write("pin_matrix", move || {
-            crate::fonts::write_pin_matrix_overrides(&overrides)
-        })
+        self.cycle_machine_pin_cell(row, col)
     }
 
     /// Preferences modal family handler (namespaced, ADR-0001 D3).

@@ -24,11 +24,11 @@ impl Signex {
                     // Kept for re-save, never applied (#1180).
                     crate::diagnostics::log_warning(
                         "This project's rule set cannot be read by this version of Signex; it is \
-                         kept unchanged, and this machine's ERC preferences are used.",
+                         kept unchanged, and this machine's ERC rules (the User Default profile) are used.",
                     );
                 } else {
                     crate::diagnostics::log_info(
-                        "This project has no saved rule set; using this machine's ERC preferences.",
+                        "This project has no saved rule set; using this machine's ERC rules (the User Default profile).",
                     );
                 }
             }
@@ -324,7 +324,15 @@ impl Signex {
             self.ui_state.erc_focus_global_index = Some(clamped);
             return Task::none();
         }
-        self.ensure_sheet_open_and_active(&target.sheet_path);
+        if !self.ensure_sheet_open_and_active(&target.sheet_path) {
+            // The fix would land on whatever sheet is active instead (#1367).
+            self.ui_state.erc_focus_global_index = Some(clamped);
+            crate::diagnostics::log_warning(format!(
+                "ERC quick fix not applied: sheet did not open ({})",
+                target.sheet_path.display()
+            ));
+            return Task::none();
+        }
 
         match target.rule_kind {
             Some(signex_erc::RuleKind::UnusedPin) => {
@@ -368,13 +376,17 @@ impl Signex {
         }
 
         // Ensure the target sheet is open and active before focusing its point.
+        // Navigation only; the reason is already logged.
         self.ensure_sheet_open_and_active(&target.sheet_path);
 
         self.ui_state.erc_focus_global_index = Some(clamped);
         self.focus_erc_entry(&target)
     }
 
-    pub(crate) fn ensure_sheet_open_and_active(&mut self, path: &std::path::Path) {
+    /// Open `path` if needed and make it the active sheet. Returns `true`
+    /// when it is open and active afterwards; every `false` has already
+    /// logged its reason to the Messages panel.
+    pub(crate) fn ensure_sheet_open_and_active(&mut self, path: &std::path::Path) -> bool {
         let path = &self.resolve_held_spelling_now(path.to_path_buf());
         if let Some(index) = self
             .document_state
@@ -387,7 +399,7 @@ impl Signex {
                 self.document_state.active_tab = index;
                 self.sync_active_tab();
             }
-            return;
+            return true;
         }
 
         let is_schematic = path
@@ -396,7 +408,11 @@ impl Signex {
             .map(|e| matches!(e, "snxsch"))
             .unwrap_or(false);
         if !is_schematic {
-            return;
+            crate::diagnostics::log_warning(format!(
+                "Not a schematic sheet, cannot open: {}",
+                path.display()
+            ));
+            return false;
         }
 
         let title = path
@@ -408,26 +424,27 @@ impl Signex {
         if self.path_is_owned_by_open_document(path) {
             self.attach_parked_schematic_tab(path.clone(), title);
             self.sync_active_tab();
-            return;
+            return true;
         }
 
         let Ok(text) = std::fs::read_to_string(path) else {
-            crate::diagnostics::log_info(format!(
-                "ERC navigation: failed to read sheet {}",
+            crate::diagnostics::log_warning(format!(
+                "Sheet could not be read, ERC navigation skipped: {}",
                 path.display()
             ));
-            return;
+            return false;
         };
         let Ok(sheet) = signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
         else {
-            crate::diagnostics::log_info(format!(
-                "ERC navigation: failed to parse sheet {}",
+            crate::diagnostics::log_warning(format!(
+                "Sheet could not be parsed, ERC navigation skipped: {}",
                 path.display()
             ));
-            return;
+            return false;
         };
         self.open_schematic_tab(path.clone(), title, sheet);
         self.sync_active_tab();
+        true
     }
 
     /// Move the viewport to center on a world-space point and optionally
@@ -439,6 +456,18 @@ impl Signex {
         world_y: f64,
         select: Option<signex_types::schematic::SelectedItem>,
     ) -> Task<Message> {
+        self.focus_world_point(world_x, world_y, select);
+        Task::none()
+    }
+
+    /// Select `select` (when given) and stage a fit around `(world_x,
+    /// world_y)`, for callers that return no task.
+    pub(crate) fn focus_world_point(
+        &mut self,
+        world_x: f64,
+        world_y: f64,
+        select: Option<signex_types::schematic::SelectedItem>,
+    ) {
         if let Some(item) = select {
             self.interaction_state.active_canvas_mut().selected = vec![item];
             self.update_selection_info();
@@ -458,7 +487,6 @@ impl Signex {
                 width: half * 2.0,
                 height: half * 2.0,
             }));
-        Task::none()
     }
 
     pub(crate) fn handle_toggle_auto_focus(&mut self) -> Task<Message> {

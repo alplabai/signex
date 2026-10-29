@@ -36,11 +36,19 @@ impl Signex {
         // off to re-bind a perfectly good UUID, so the error arm gets
         // its own wording and a Messages-panel record.
         let symbol_summary = match self.library.set.resolve_symbol(&row.symbol_ref) {
-            Ok(Some(s)) => format!(
-                "Symbol bound — {} pin{}",
-                s.pins.len(),
-                if s.pins.len() == 1 { "" } else { "s" }
-            ),
+            Ok(Some(s)) => {
+                // The alternate (De Morgan) body redraws the same pins, so
+                // counting it too would double them.
+                let pins = s
+                    .pins
+                    .iter()
+                    .filter(|p| p.body_style != signex_library::BODY_ALTERNATE)
+                    .count();
+                format!(
+                    "Symbol bound — {pins} pin{}",
+                    if pins == 1 { "" } else { "s" }
+                )
+            }
             Ok(None) if row.is_symbol_unbound() => "No symbol bound".to_string(),
             Ok(None) => "Symbol unresolved (UUID not in mounted libraries)".to_string(),
             Err(e) => {
@@ -121,6 +129,10 @@ impl Signex {
                 request.exists.push(resolved);
             }
         }
+        request.hierarchy = self.hierarchy_request();
+        request.exists.extend(self.hierarchy_exists_paths());
+        request.exists.sort();
+        request.exists.dedup();
         request
     }
 
@@ -168,7 +180,7 @@ impl Signex {
 
     /// Fill `lib_symbol_names` / `placed_symbols`: the lists kept from the
     /// previous refresh when the engine is unchanged, else rebuilt (#1383).
-    fn fill_symbol_lists(&mut self, kept: Option<SymbolLists>) {
+    pub(in crate::app) fn fill_symbol_lists(&mut self, kept: Option<SymbolLists>) {
         let (names, placed) = match kept {
             Some(lists) => lists,
             None => {
@@ -399,26 +411,15 @@ impl Signex {
                     pcb_file_dirty,
                     pcb_file_active,
                     pcb_file_missing,
-                    sheets: p
-                        .data
-                        .sheets
-                        .iter()
-                        .map(|sheet| {
-                            let (is_open, is_dirty, is_active) = lookup(&sheet.filename);
-                            let missing = !exists(&sheet.filename);
-                            crate::panels::SheetInfo {
-                                name: sheet.name.clone(),
-                                filename: sheet.filename.clone(),
-                                sym_count: sheet.symbols_count,
-                                wire_count: sheet.wires_count,
-                                label_count: sheet.labels_count,
-                                is_open,
-                                is_dirty,
-                                is_active,
-                                missing,
-                            }
-                        })
-                        .collect(),
+                    sheets: super::sheet_tree::project_sheet_rows(
+                        p,
+                        fs_facts,
+                        &super::sheet_tree::RowMarks {
+                            open: &open_paths,
+                            dirty: &dirty_paths,
+                            active: active_path_ref,
+                        },
+                    ),
                     libraries,
                     is_active: Some(p.id) == active_id,
                     is_dirty: dirty_paths.contains(&p.path),
@@ -465,13 +466,6 @@ impl Signex {
 
         let canvas_font_popup_open = self.document_state.panel_ctx.canvas_font_popup_open;
         let properties_tab = self.document_state.panel_ctx.properties_tab;
-        let standard_libraries = self.document_state.panel_ctx.standard_libraries.clone();
-        let active_library = self.document_state.panel_ctx.active_library.clone();
-        let library_symbols = self.document_state.panel_ctx.library_symbols.clone();
-        let selected_component = self.document_state.panel_ctx.selected_component.clone();
-        let selected_pins = self.document_state.panel_ctx.selected_pins.clone();
-        let selected_lib_symbol = self.document_state.panel_ctx.selected_lib_symbol.clone();
-        let components_split = self.document_state.panel_ctx.components_split;
         let selection_count = self.document_state.panel_ctx.selection_count;
         let selected_uuid = self.document_state.panel_ctx.selected_uuid;
         let selected_kind = self.document_state.panel_ctx.selected_kind;
@@ -480,6 +474,7 @@ impl Signex {
         let drawing_edit_buf = self.document_state.panel_ctx.drawing_edit_buf.clone();
         let drawing_edit_buf_for = self.document_state.panel_ctx.drawing_edit_buf_for;
         let selected_drawing = self.document_state.panel_ctx.selected_drawing.clone();
+        let selected_drawing_placement = self.document_state.panel_ctx.selected_drawing_placement;
         let selected_child_sheet = self.document_state.panel_ctx.selected_child_sheet.clone();
         let child_sheet_border_picker_open =
             self.document_state.panel_ctx.child_sheet_border_picker_open;
@@ -539,7 +534,6 @@ impl Signex {
             .clone()
             .filter(|draft| draft.is_live(self.numeric_field_state(draft.key)));
         let title_block_sheet = self.document_state.active_path.clone();
-        let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
         let page_format_mode = self.document_state.panel_ctx.page_format_mode;
@@ -610,13 +604,6 @@ impl Signex {
             canvas_font_popup_open,
             properties_tab,
             net_classes,
-            standard_libraries,
-            active_library,
-            library_symbols,
-            selected_component,
-            selected_pins,
-            selected_lib_symbol,
-            components_split,
             project_tree: kept_project_tree,
             project_tree_builds,
             project_tree_selected: self.document_state.panel_ctx.project_tree_selected.clone(),
@@ -630,6 +617,7 @@ impl Signex {
             drawing_edit_buf,
             drawing_edit_buf_for,
             selected_drawing,
+            selected_drawing_placement,
             selected_child_sheet,
             child_sheet_border_picker_open,
             child_sheet_fill_picker_open,
@@ -644,7 +632,6 @@ impl Signex {
             paper_edge_drafts,
             numeric_draft,
             title_block_sheet,
-            component_filter,
             collapsed_sections,
             pre_placement,
             erc_diagnostics,
@@ -761,25 +748,6 @@ mod tests {
         app.document_state.projects[0].data.pcb_file = Some("b.snxpcb".into());
         app.refresh_panel_ctx();
         assert_eq!(app.document_state.panel_ctx.project_tree_builds, builds + 1);
-    }
-
-    /// #1383: a real engine edit moves the key, so the panel lists show the
-    /// placed symbol instead of the reused (stale) ones.
-    #[test]
-    fn symbol_lists_follow_a_real_edit() {
-        let (mut app, _task) = Signex::new();
-        app.open_schematic_tab(
-            PathBuf::from("snx-1383-edit.snxsch"),
-            "snx-1383-edit".to_string(),
-            signex_types::schematic::SchematicSheet::default(),
-        );
-        app.refresh_panel_ctx();
-        assert!(app.document_state.panel_ctx.placed_symbols.is_empty());
-
-        app.document_state.panel_ctx.selected_component = Some("Device:R".to_string());
-        assert!(app.place_selected_component(10.0, 10.0));
-        app.refresh_panel_ctx();
-        assert_eq!(app.document_state.panel_ctx.placed_symbols.len(), 1);
     }
 
     /// #1098: the probe request must name `<dir>/.git` for the project dir

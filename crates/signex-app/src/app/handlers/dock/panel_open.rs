@@ -34,6 +34,38 @@ impl Signex {
         self.persist_dock_layout_soon()
     }
 
+    /// Whether `kind` is open anywhere: docked, floating, or detached.
+    /// The one answer both the toggle shortcuts and the status-bar
+    /// panel list's check marks read, so they cannot disagree.
+    pub(crate) fn is_panel_open(&self, kind: PanelKind) -> bool {
+        self.document_state.dock.locate(kind).is_some()
+            || self.detached_panel_window(kind).is_some()
+    }
+
+    /// Every panel kind that is open somewhere, in `ALL_PANELS` order.
+    pub(crate) fn open_panels(&self) -> Vec<PanelKind> {
+        crate::panels::ALL_PANELS
+            .iter()
+            .copied()
+            .filter(|&kind| self.is_panel_open(kind))
+            .collect()
+    }
+
+    /// The panel shortcuts' behaviour (#103): open the panel when it is
+    /// closed, close it when it is open and in front, and bring it to
+    /// the front when it is open but hidden behind another tab or a
+    /// collapsed region. A detached panel is a window of its own and is
+    /// only ever raised: this has no way to know whether it has focus.
+    pub(crate) fn toggle_panel(&mut self, kind: PanelKind) -> Task<Message> {
+        let in_front = self.detached_panel_window(kind).is_none()
+            && self.document_state.dock.is_frontmost(kind);
+        if !in_front {
+            return self.show_panel(kind);
+        }
+        self.document_state.dock.close_panel(kind);
+        self.persist_dock_layout_soon()
+    }
+
     /// The OS window hosting `kind` as a detached panel, if any.
     fn detached_panel_window(&self, kind: PanelKind) -> Option<iced::window::Id> {
         self.ui_state

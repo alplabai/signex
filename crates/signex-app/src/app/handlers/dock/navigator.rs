@@ -6,7 +6,23 @@ use signex_widgets::tree_view::{TreeMsg, resolve_path, toggle};
 
 use super::super::super::*;
 use crate::app::project_sheets::assemble_project_sheets;
-use crate::app::sheet_hierarchy::{SheetNodeKind, parent_sheet, parent_sheet_placing};
+use crate::app::sheet_hierarchy::{
+    SheetNodeKind, parent_sheet, parent_sheet_placing, symbol_centre, symbol_referencing,
+};
+
+/// The sheet symbol `symbol` on `parent`, with its centre.
+fn symbol_on(
+    sheets: &std::collections::HashMap<std::path::PathBuf, signex_types::schematic::SchematicSheet>,
+    parent: &std::path::Path,
+    symbol: uuid::Uuid,
+) -> Option<(uuid::Uuid, signex_types::schematic::Point)> {
+    let found = sheets
+        .get(parent)?
+        .child_sheets
+        .iter()
+        .find(|cs| cs.uuid == symbol)?;
+    Some((found.uuid, symbol_centre(found)))
+}
 
 impl Signex {
     /// `None` when `panel_msg` is not a Navigator message, so the dock
@@ -40,6 +56,11 @@ impl Signex {
     /// Single click highlights the row; a second click on it within 500 ms
     /// opens (or focuses) that sheet — the Projects tree's rule.
     fn navigator_row_clicked(&mut self, path: &[usize]) {
+        // A row of the previous hierarchy would record a placement the project
+        // may no longer have; the click is ignored until the rebuild lands.
+        if !self.navigator_is_settled() {
+            return;
+        }
         let navigator = &mut self.document_state.panel_ctx.navigator;
         let Some(node) = navigator.node_at(path) else {
             return;
@@ -48,22 +69,38 @@ impl Signex {
             .hierarchy
             .as_ref()
             .and_then(|hierarchy| hierarchy.placement_at(path));
-        let (sheet_path, kind, label, detail) = (
+        let (sheet_path, kind, label, detail, symbol) = (
             node.path.clone(),
             node.kind,
             node.name.clone(),
             node.detail.clone(),
+            node.placed_as,
         );
+        // The sheet that carries this row's symbol: one level up the tree.
+        let parent_path = path
+            .split_last()
+            .filter(|(_, up)| !up.is_empty())
+            .and_then(|(_, up)| navigator.node_at(up))
+            .map(|parent| parent.path.clone());
         navigator.selected = Some(path.to_vec());
         if !navigator.register_click(path, std::time::Instant::now()) {
             return;
         }
         match kind {
             SheetNodeKind::Present => self.open_sheet_with_placement(sheet_path, placement),
-            SheetNodeKind::Missing => crate::diagnostics::log_warning(format!(
-                "Sheet '{label}' cannot be opened: {} is missing",
-                sheet_path.display()
-            )),
+            SheetNodeKind::Missing => {
+                crate::diagnostics::log_warning(format!(
+                    "Sheet '{label}' cannot be opened: {} is missing",
+                    sheet_path.display()
+                ));
+                // Offer to create it, as the canvas does.
+                if let (Some(symbol), Some(parent)) = (symbol, parent_path)
+                    && (self.active_tab_path().as_deref() == Some(parent.as_path())
+                        || self.open_or_focus_sheet_path(parent))
+                {
+                    self.open_create_child_sheet_dialog(symbol, true);
+                }
+            }
             SheetNodeKind::Unreadable => crate::diagnostics::log_warning(format!(
                 "Sheet '{label}' cannot be opened: {} is unreadable ({})",
                 sheet_path.display(),
@@ -114,17 +151,39 @@ impl Signex {
                 placement.parent(),
             ))
         });
-        match placed_parent {
-            Some((parent, placement)) => self.open_sheet_with_placement(parent, placement),
+        let (parent, symbol) = match placed_parent {
+            Some((parent, placement)) => {
+                let symbol = came_through
+                    .as_ref()
+                    .and_then(|(symbol, _)| symbol_on(&set.sheets, &parent, *symbol));
+                self.open_sheet_with_placement(parent.clone(), placement);
+                (parent, symbol)
+            }
             None => match parent_sheet(&set.sheets, &active, fold) {
                 Some(parent) => {
-                    self.open_or_focus_sheet_path(parent);
+                    let symbol = symbol_referencing(&set.sheets, &parent, &active, fold);
+                    self.open_or_focus_sheet_path(parent.clone());
+                    (parent, symbol)
                 }
-                None => crate::diagnostics::log_warning(format!(
-                    "{} has no parent sheet: it is the project root or no sheet references it",
-                    active.display()
-                )),
+                None => {
+                    crate::diagnostics::log_warning(format!(
+                        "{} has no parent sheet: it is the project root or no sheet references it",
+                        active.display()
+                    ));
+                    return;
+                }
             },
+        };
+        // Land on the sheet symbol that instantiates the sheet just left.
+        let arrived = self.resolve_held_spelling(parent);
+        if let Some((symbol, centre)) = symbol
+            && self.document_state.active_path.as_deref() == Some(arrived.as_path())
+        {
+            let item = signex_types::schematic::SelectedItem::new(
+                symbol,
+                signex_types::schematic::SelectedKind::ChildSheet,
+            );
+            self.focus_world_point(centre.x, centre.y, Some(item));
         }
     }
 }
@@ -192,6 +251,7 @@ mod tests {
 
         app.open_or_focus_sheet_path(leaf.clone());
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         assert_eq!(active_tab(&app), Some(leaf));
         assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Leaf"]);
@@ -206,6 +266,7 @@ mod tests {
         let (mut app, _) = three_level_project(&dir, &[("Back", "root.snxsch")]);
 
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         assert_eq!(
             labels(&app, &[0, 0, 0, 0]),
@@ -218,6 +279,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let (mut app, [_, mid, _]) = three_level_project(&dir, &[]);
         app.refresh_panel_ctx();
+        app.settle_navigator();
         let select = PanelMsg::Navigator(TreeMsg::Select(key_at(&app, &[0, 0])));
 
         let _ = app.handle_dock_navigator_panel_message(&select);
@@ -265,6 +327,26 @@ mod tests {
     }
 
     #[test]
+    fn a_double_click_while_the_hierarchy_rebuilds_opens_nothing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (mut app, [_, mid, _]) = three_level_project(&dir, &[]);
+        app.refresh_panel_ctx();
+        app.settle_navigator();
+
+        // Opening a tab changes what the Navigator is built from.
+        app.open_or_focus_sheet_path(dir.path().join("leaf.snxsch"));
+        app.refresh_panel_ctx();
+        assert!(!app.navigator_is_settled(), "precondition: rebuild pending");
+
+        double_click(&mut app, &[0, 0]);
+
+        assert!(
+            !app.document_state.engines.contains_key(&mid),
+            "the row of the previous hierarchy must not open a sheet"
+        );
+    }
+
+    #[test]
     fn a_dot_dot_reference_opens_the_already_open_tab_not_a_second_engine() {
         let dir = tempfile::tempdir().expect("tempdir");
         let root = write_sheet(dir.path(), "root.snxsch", &[("Mid", "sub/../mid.snxsch")]);
@@ -272,6 +354,7 @@ mod tests {
         let mut app = app_workspace(&dir.path().to_string_lossy(), &["root.snxsch"]);
         app.open_or_focus_sheet_path(mid.clone());
         app.refresh_panel_ctx();
+        app.settle_navigator();
         assert!(root.exists());
 
         double_click(&mut app, &[0, 0]);
@@ -296,6 +379,7 @@ mod tests {
         );
         let mut app = app_workspace(&dir.to_string_lossy(), &["root.snxsch"]);
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         assert_eq!(labels(&app, &[0, 0]), ["root", "Up (rejected)"]);
         assert_eq!(labels(&app, &[0, 1]), ["root", "Abs (rejected)"]);
@@ -315,6 +399,7 @@ mod tests {
         let mut app = app_workspace(&dir.path().to_string_lossy(), &["root.snxsch"]);
 
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Again (cycle)"]);
     }
@@ -327,6 +412,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let (mut app, _top, child) = placed_twice_on_disk(&dir);
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         double_click(&mut app, &[0, 1]);
 
@@ -342,6 +428,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let (mut app, top, child) = placed_twice_on_disk(&dir);
         app.refresh_panel_ctx();
+        app.settle_navigator();
         let engine = app
             .document_state
             .engines
@@ -352,6 +439,7 @@ mod tests {
         document.child_sheets[1].uuid = replacement;
         *engine = signex_engine::Engine::new(document).expect("engine");
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         double_click(&mut app, &[0, 1]);
 

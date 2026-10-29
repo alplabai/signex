@@ -1,8 +1,13 @@
 //! Menu-bar view: renders the declarative [`MenuBarModel`] as iced_aw menus
 //! plus the Signex wordmark. What the menus contain lives in `model/`.
 
-use super::model::{Menu as MenuModel, MenuBarModel, MenuEntry, MenuItem, menu_bar_model};
+use super::model::{
+    ItemState, Menu as MenuModel, MenuBarModel, MenuEntry, MenuItem, menu_bar_model,
+};
 use super::*;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 type MenuItemView = Item<'static, MenuMessage, Theme, iced::Renderer>;
 
@@ -55,7 +60,7 @@ fn render_menu_bar(
             .collect(),
     )
     .spacing(1.0)
-    .padding([1, 4])
+    .padding([1.0, SP.s])
     .close_on_item_click_global(true)
     .close_on_background_click_global(true)
     // `Backdrop` paints `styling.path` behind the active root while its
@@ -143,10 +148,25 @@ fn render_entry(entry: &MenuEntry, mc: MenuColors) -> MenuItemView {
 /// renders greyed out with no press handler.
 fn render_item(item: &MenuItem, mc: MenuColors) -> MenuItemView {
     let shortcut = item.shortcut.as_ref().map(|s| s.text.clone());
-    Item::new(menu_item_btn(
+    let row = menu_item_btn(
         &item.label,
+        item.checked,
         shortcut,
         item.dispatches().cloned(),
         mc,
-    ))
+    );
+    if !matches!(item.state, ItemState::Placeholder) {
+        return Item::new(row);
+    }
+    // A planned feature reads as planned rather than broken (#1251).
+    let hint = container(
+        text(crate::active_bar::PLANNED_TOOLTIP)
+            .size(MENU_SHORTCUT_SIZE)
+            .color(mc.text),
+    )
+    .padding([3, 8])
+    .style(signex_widgets::active_bar_dropdown::tooltip_style(
+        mc.hover, mc.border,
+    ));
+    Item::new(iced::widget::tooltip(row, hint, iced::widget::tooltip::Position::Right).gap(4))
 }

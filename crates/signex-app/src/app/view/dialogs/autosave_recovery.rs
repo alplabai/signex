@@ -11,10 +11,35 @@ use super::widgets::{close_x_button, primary_button, secondary_button, wrap_moda
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 use crate::autosave::{AutosaveMsg, RecoveryChoice, RecoveryOffer, describe_age};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 impl Signex {
     pub(in crate::app::view) fn view_autosave_recovery(
         &self,
         offer: &RecoveryOffer,
+    ) -> Element<'_, Message> {
+        wrap_modal(
+            self.autosave_recovery_card(offer, false),
+            (0.0, 0.0),
+            self.ui_state.window_size,
+            (520.0, 250.0),
+        )
+    }
+
+    /// The prompt as the content of its own OS window (no header, fills it).
+    pub(in crate::app::view) fn view_autosave_recovery_window(
+        &self,
+        offer: &RecoveryOffer,
+    ) -> Element<'_, Message> {
+        self.autosave_recovery_card(offer, true)
+    }
+
+    fn autosave_recovery_card(
+        &self,
+        offer: &RecoveryOffer,
+        windowed: bool,
     ) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
@@ -22,7 +47,7 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
         let later = Message::Autosave(AutosaveMsg::Recovery(RecoveryChoice::Later));
 
-        let header = container(
+        let header_content = container(
             row![
                 text("Recover Unsaved Edits")
                     .size(MODAL_HEADER_TITLE_SIZE)
@@ -35,6 +60,11 @@ impl Signex {
         .padding(MODAL_HEADER_PADDING)
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens));
+        let header: Element<'_, Message> = if windowed {
+            super::widgets::os_title_bar_slot()
+        } else {
+            header_content.into()
+        };
 
         let name = offer
             .path
@@ -47,17 +77,17 @@ impl Signex {
                  saved file.",
                 describe_age(offer.age_secs)
             ))
-            .size(12)
+            .size(TS.label)
             .color(text_c),
         ]
-        .spacing(8);
+        .spacing(SP.m);
         if offer.older_than_file {
             body = body.push(
                 text(format!(
                     "{name} was saved after this copy was written. Restore replaces that \
                      newer saved work in the editor with the older copy."
                 ))
-                .size(12)
+                .size(TS.label)
                 .color(crate::styles::ti(tokens.warning)),
             );
         }
@@ -69,7 +99,7 @@ impl Signex {
                  this file is opened, and pauses autosave for this document for the rest of the \
                  session.",
             )
-            .size(11)
+            .size(TS.body)
             .color(text_muted),
         );
 
@@ -101,15 +131,18 @@ impl Signex {
                 )
                 .padding([14, 14]),
             ]
-            .width(520),
+            .width(if windowed {
+                Length::Fill
+            } else {
+                Length::Fixed(520.0)
+            }),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
-        wrap_modal(
-            dialog.into(),
-            (0.0, 0.0),
-            self.ui_state.window_size,
-            (520.0, 250.0),
-        )
+        if windowed {
+            dialog.width(Length::Fill).height(Length::Fill).into()
+        } else {
+            dialog.into()
+        }
     }
 }

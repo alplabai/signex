@@ -70,6 +70,8 @@ pub(crate) enum OverlayId {
     // Dialogs.
     Preferences,
     FindReplace,
+    FindSimilar,
+    PasteArray,
     KeyboardShortcuts,
     About,
     PassiveCalculator,
@@ -78,6 +80,7 @@ pub(crate) enum OverlayId {
     RenameDialog,
     RemoveDialog,
     ProjectCloseConfirm,
+    CreateChildSheetConfirm,
     AppQuitConfirm,
     EnableVersionControl,
     GridProperties,
@@ -118,7 +121,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 51] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 54] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -143,6 +146,8 @@ pub(crate) const PAINT_ORDER: [OverlayId; 51] = [
     OverlayId::FloatingPanels,
     OverlayId::Preferences,
     OverlayId::FindReplace,
+    OverlayId::FindSimilar,
+    OverlayId::PasteArray,
     OverlayId::KeyboardShortcuts,
     OverlayId::About,
     OverlayId::PassiveCalculator,
@@ -151,6 +156,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 51] = [
     OverlayId::RenameDialog,
     OverlayId::RemoveDialog,
     OverlayId::ProjectCloseConfirm,
+    OverlayId::CreateChildSheetConfirm,
     OverlayId::AppQuitConfirm,
     OverlayId::EnableVersionControl,
     OverlayId::GridProperties,
@@ -243,6 +249,8 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::FloatingPanels
         | OverlayId::Preferences
         | OverlayId::FindReplace
+        | OverlayId::FindSimilar
+        | OverlayId::PasteArray
         | OverlayId::KeyboardShortcuts
         | OverlayId::About
         | OverlayId::PassiveCalculator
@@ -251,6 +259,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::RenameDialog
         | OverlayId::RemoveDialog
         | OverlayId::ProjectCloseConfirm
+        | OverlayId::CreateChildSheetConfirm
         | OverlayId::AppQuitConfirm
         | OverlayId::EnableVersionControl
         | OverlayId::GridProperties
@@ -325,6 +334,8 @@ impl Signex {
             OverlayId::FloatingPanels => layers.extend(self.floating_panels_overlay()),
             OverlayId::Preferences => layers.extend(self.preferences_overlay()),
             OverlayId::FindReplace => layers.extend(self.find_replace_overlay()),
+            OverlayId::FindSimilar => layers.extend(self.find_similar_overlay()),
+            OverlayId::PasteArray => layers.extend(self.paste_array_overlay()),
             OverlayId::KeyboardShortcuts => layers.extend(self.keyboard_shortcuts_overlay()),
             OverlayId::About => layers.extend(self.about_overlay()),
             OverlayId::PassiveCalculator => layers.extend(self.passive_calculator_overlay()),
@@ -333,6 +344,9 @@ impl Signex {
             OverlayId::RenameDialog => layers.extend(self.rename_dialog_overlay()),
             OverlayId::RemoveDialog => layers.extend(self.remove_dialog_overlay()),
             OverlayId::ProjectCloseConfirm => layers.extend(self.project_close_confirm_overlay()),
+            OverlayId::CreateChildSheetConfirm => {
+                layers.extend(self.create_child_sheet_confirm_overlay())
+            }
             OverlayId::AppQuitConfirm => layers.extend(self.app_quit_confirm_overlay()),
             OverlayId::EnableVersionControl => layers.extend(self.enable_version_control_overlay()),
             OverlayId::GridProperties => layers.extend(self.grid_properties_overlay()),

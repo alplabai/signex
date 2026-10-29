@@ -17,8 +17,10 @@
 //!   holds, and a released row is left at its old pin and reported.
 //! - **After the save, not inside it.** `rewrite_file_locked` has released
 //!   the library write lock and committed the primitive file by then. The
-//!   cascade takes the lock itself, once per row, and commits each row on
-//!   its own, as `LocalGitAdapter::save_*` does. Save and cascade are not
+//!   cascade then makes one `update_rows` call: on local git that is one
+//!   locked `.snxlib` write and one commit for every bound row; the database
+//!   backend updates the rows in order and stops at the first failure. Save
+//!   and cascade are not
 //!   one transaction: a cascade failure leaves the saved primitive in
 //!   place, says so, and the next save retries the rows still at the old
 //!   version (a row already at the saved version is skipped).

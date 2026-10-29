@@ -43,6 +43,7 @@ pub(super) fn app_with_wires(wires: Vec<Wire>) -> (Signex, PathBuf) {
         title_block: HashMap::new(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
+        drawing_placements: Default::default(),
         frame: Default::default(),
         font_family: None,
     };
@@ -132,6 +133,7 @@ fn move_picked_selects_only_the_object_under_the_cursor_and_disarms() {
     let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
         dx: 2.54,
         dy: 0.0,
+        connections: Default::default(),
     }));
     assert!(
         (wire_start(&app, &path, a).x - 12.54).abs() < 1e-6,
@@ -413,6 +415,7 @@ fn deliver(
             snap_enabled: false,
             snap_grid_mm: 1.27,
             snap_hotspots: false,
+            unit: signex_types::coord::Unit::Mm,
             wire_tool_active: false,
             visible_grid_mm: 1.27,
             grid_style: signex_app::render_config::GridStyle::Dots,
@@ -423,6 +426,7 @@ fn deliver(
             window_width: 1400.0,
             wire_color_overrides: &overrides,
             wire_class_styles: &class_styles,
+            wire_class_revision: 0,
             selection_filters: &app.interaction_state.selection_filters,
             placement: with_ghost
                 .then(|| app.interaction_state.placement.as_ref().map(|s| &s.ghost))

@@ -2,11 +2,13 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, cmd_item_if, cmd_stub, item, item_if, stub, submenu,
+    cmd, cmd_item, cmd_item_gated, cmd_item_if, item, item_if, panel_item, stub, submenu,
+    unavailable,
 };
 use super::{MenuEntry, MenuMessage};
 use crate::app::command::enablement::cycle_grid_menu_enabled;
-use crate::menu_bar::MenuContext;
+use crate::menu_bar::{MenuContext, enabled};
+use crate::panels::PanelKind;
 
 const SEP: MenuEntry = MenuEntry::Separator;
 
@@ -66,7 +68,7 @@ fn open_recent(ctx: &MenuContext) -> Vec<MenuEntry> {
         })
         .collect();
     if entries.is_empty() {
-        entries.push(stub("No recent projects"));
+        entries.push(unavailable("No recent projects"));
     }
     entries.push(SEP);
     entries.push(item_if(
@@ -126,6 +128,7 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
             cmd("delete_selection", "Delete", "Del"),
             MenuMessage::Delete,
         ),
+        submenu("Arrange", arrange(ctx)),
         SEP,
         cmd_item_gated(
             ctx,
@@ -142,10 +145,50 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
     ]
 }
 
+/// Edit ▸ Arrange: order the selected drawings. Circuit elements in the
+/// selection are ignored, and with no drawing selected the rows are greyed.
+/// No default shortcut, so these are plain rows gated by their commands; a
+/// binding the user adds in the keymap still runs the command.
+fn arrange(ctx: &MenuContext) -> Vec<MenuEntry> {
+    let row = |label: &str, command: &str, action: MenuMessage| {
+        item_if(label, action, enabled(ctx, command))
+    };
+    vec![
+        row(
+            "Bring to Front",
+            "bring_drawings_to_front",
+            MenuMessage::BringDrawingsToFront,
+        ),
+        row(
+            "Send to Back",
+            "send_drawings_to_back",
+            MenuMessage::SendDrawingsToBack,
+        ),
+        row(
+            "Bring Forward",
+            "bring_drawings_forward",
+            MenuMessage::BringDrawingsForward,
+        ),
+        row(
+            "Send Backward",
+            "send_drawings_backward",
+            MenuMessage::SendDrawingsBackward,
+        ),
+    ]
+}
+
 pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        cmd_stub(ctx, cmd("zoom_in_at_cursor", "Zoom In", "Ctrl+=")),
-        cmd_stub(ctx, cmd("zoom_out_at_cursor", "Zoom Out", "Ctrl+-")),
+        cmd_item_gated(
+            ctx,
+            cmd("zoom_in_at_cursor", "Zoom In", "Ctrl+="),
+            MenuMessage::ZoomIn,
+        ),
+        cmd_item_gated(
+            ctx,
+            cmd("zoom_out_at_cursor", "Zoom Out", "Ctrl+-"),
+            MenuMessage::ZoomOut,
+        ),
         cmd_item_gated(
             ctx,
             cmd("zoom_to_fit", "Fit All", "Home"),
@@ -171,13 +214,43 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         SEP,
         // Panels work without an active document (they show an empty
         // state), so these are always available.
-        item("Projects", MenuMessage::OpenProjectsPanel),
-        item("Components", MenuMessage::OpenComponentsPanel),
-        item("Navigator", MenuMessage::OpenNavigatorPanel),
-        item("Properties", MenuMessage::OpenPropertiesPanel),
-        item("ERC", MenuMessage::OpenErcPanel),
-        item("Messages", MenuMessage::OpenMessagesPanel),
-        item("Signal", MenuMessage::OpenSignalPanel),
+        panel_item(
+            ctx,
+            "Projects",
+            PanelKind::Projects,
+            MenuMessage::OpenProjectsPanel,
+        ),
+        panel_item(
+            ctx,
+            "Components",
+            PanelKind::Components,
+            MenuMessage::OpenComponentsPanel,
+        ),
+        panel_item(
+            ctx,
+            "Navigator",
+            PanelKind::Navigator,
+            MenuMessage::OpenNavigatorPanel,
+        ),
+        panel_item(
+            ctx,
+            "Properties",
+            PanelKind::Properties,
+            MenuMessage::OpenPropertiesPanel,
+        ),
+        panel_item(ctx, "ERC", PanelKind::Erc, MenuMessage::OpenErcPanel),
+        panel_item(
+            ctx,
+            "Messages",
+            PanelKind::Messages,
+            MenuMessage::OpenMessagesPanel,
+        ),
+        panel_item(
+            ctx,
+            "Signal",
+            PanelKind::Signal,
+            MenuMessage::OpenSignalPanel,
+        ),
     ]
 }
 
@@ -196,10 +269,23 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
             cmd("open_components_panel", "Component...", "P"),
             MenuMessage::PlaceComponent,
         ),
-        stub("Power Port"),
+        cmd_item_gated(
+            ctx,
+            cmd("place_power_symbol", "Power Port", "P"),
+            MenuMessage::PlacePowerPort,
+        ),
+        cmd_item_gated(
+            ctx,
+            cmd("place_junction", "Junction", "J"),
+            MenuMessage::PlaceJunction,
+        ),
         SEP,
-        stub("Text"),
-        stub("No Connect"),
+        item_if("Text", MenuMessage::PlaceText, ctx.commands.has_schematic),
+        item_if(
+            "No Connect",
+            MenuMessage::PlaceNoConnect,
+            ctx.commands.has_schematic,
+        ),
         stub("Sheet Entry"),
     ]
 }
@@ -214,7 +300,13 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
             MenuMessage::Erc,
         ),
         SEP,
-        stub("Generate BOM"),
+        // The same working BOM dialog File > Export > Bill of Materials
+        // opens (#1251).
+        item_if(
+            "Generate BOM",
+            MenuMessage::ExportBom,
+            ctx.commands.has_schematic,
+        ),
     ]
 }
 

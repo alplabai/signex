@@ -11,6 +11,10 @@ use super::super::widgets::{
 };
 use super::super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 impl Signex {
     pub(in crate::app::view) fn view_reprefix_confirm(&self) -> Element<'_, Message> {
         let dialog = self.view_reprefix_confirm_body_inner(true);
@@ -64,27 +68,31 @@ impl Signex {
             os_title_bar_slot()
         };
 
-        let mut lines = column![].spacing(2);
+        let mut lines = column![].spacing(SP.xs);
         for line in &confirm.change_lines {
-            lines = lines.push(text(line.clone()).size(11).color(text_c));
+            lines = lines.push(text(line.clone()).size(TS.body).color(text_c));
         }
         if confirm.more > 0 {
             lines = lines.push(
                 text(format!("+{} more", confirm.more))
-                    .size(11)
+                    .size(TS.body)
                     .color(text_muted),
             );
         }
-        let mut skips = column![].spacing(2);
+        let mut skips = column![].spacing(SP.xs);
         for line in &confirm.skip_lines {
-            skips = skips.push(text(line.clone()).size(11).color(text_muted));
+            skips = skips.push(text(line.clone()).size(TS.body).color(text_muted));
         }
 
         let dialog = container(
             column![
                 header,
-                container(text(confirm.headline.clone()).size(11).color(text_muted))
-                    .padding([14, 14]),
+                container(
+                    text(confirm.headline.clone())
+                        .size(TS.body)
+                        .color(text_muted)
+                )
+                .padding([14, 14]),
                 container(
                     scrollable(lines)
                         .height(Length::Fixed(220.0))
@@ -112,7 +120,7 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(560),
+            .width(self.dialog_width(crate::app::state::ModalId::ReprefixConfirm, 560.0)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

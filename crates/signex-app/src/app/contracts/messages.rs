@@ -81,6 +81,16 @@ pub enum WindowMsg {
     MinimizeMainWindow,
     ToggleMaximizeMainWindow,
     CloseMainWindow,
+    /// The locked main window (or an undocked tab) was clicked while a
+    /// confirm dialog in its own window is open: raise that dialog.
+    LockedWindowClicked,
+    /// A window gained keyboard focus.
+    WindowFocused(iced::window::Id),
+    /// A window lost keyboard focus.
+    WindowUnfocused(iced::window::Id),
+    /// A row of the macOS system menu bar was chosen; carries the row's
+    /// stable id (`menu_bar::native`). Only the macOS subscription sends it.
+    NativeMenuItemActivated(String),
     /// The Linux startup probe finished: the buttons the desktop lists, or
     /// `None` when it could not be read, or the probe's failure reason.
     ControlsLayoutDetected(Result<Option<crate::chrome::desktop::DesktopButtonLayout>, String>),
@@ -119,6 +129,14 @@ pub enum CommandPaletteMsg {
     /// Execute the currently selected entry. Wired to Enter and to
     /// `text_input::on_submit`.
     ExecuteSelected,
+    /// The project search index finished building off-thread. `generation`
+    /// is the request it answers; an older one is dropped.
+    IndexBuilt {
+        generation: u64,
+        result: std::sync::Arc<
+            Result<std::sync::Arc<crate::app::palette_index::ProjectSearchIndex>, String>,
+        >,
+    },
 }
 
 /// In-canvas text-edit message family (ADR-0001 D3). Namespaced under
@@ -139,6 +157,9 @@ pub enum OverlayMsg {
     TogglePanelList,
     /// Open (dock) a panel of the given kind into the dock.
     OpenPanel(crate::panels::PanelKind),
+    /// A panel shortcut: open the panel, close it when it is open and in
+    /// front, or bring it forward when it is open but hidden.
+    PanelToggled(crate::panels::PanelKind),
     /// Open the Find modal (replace row hidden).
     OpenFind,
     /// Open the Find/Replace modal with the replace row visible.
@@ -206,6 +227,10 @@ pub enum UiMsg {
     /// Nothing to do. Produced by widgets / tasks that must emit a
     /// `Message` but carry no event.
     Noop,
+    /// A background `prefs.json` write finished (#1351). A failed write has
+    /// already logged its error; this republishes the Messages panel so the
+    /// record shows now rather than at the next unrelated message.
+    PrefWriteFinished,
     /// Edit → Undo / Redo clicked in an undocked tab's own menu bar. Runs
     /// the command against that window's document, as its shortcut does
     /// (#1550); every other menu row still arrives as `Message::Menu`.
@@ -275,6 +300,12 @@ pub enum UiMsg {
         window: Option<iced::window::Id>,
         stroke: crate::keymap::KeyStroke,
     },
+    /// The chord timeout elapsed for a complete shortcut that was waiting
+    /// on a longer chord (#1378). `generation` names the wait it belongs to.
+    KeymapChordTimedOut { generation: u64 },
+    /// A pointer press or a window focus change abandoned a pending chord
+    /// (#1378).
+    KeymapChordCancelled,
     /// The background scan of installed font families finished (#510). Text
     /// whose document names a family redraws with it, and open documents
     /// are checked for families this machine lacks.
@@ -289,6 +320,9 @@ pub enum UiMsg {
             >,
         >,
     ),
+    /// Cross-sheet net navigation family (#1270-#1272): partner jumps, sheet
+    /// history, net highlight and the hover insight.
+    NetNav(super::net_nav::NetNavMsg),
 }
 
 /// Move Selection dialog message family (ADR-0001 D3). Namespaced under
@@ -485,19 +519,12 @@ pub enum GridPropertiesMsg {
     /// Esc). Discards in-flight edits.
     Close,
     /// v0.18.11 — Grid Properties modal: text input bound to the
-    /// Step X field. Strings are validated on Apply, not per
-    /// keystroke, so partial input doesn't fight the user.
-    SetStepX(String),
-    /// v0.18.11 — Grid Properties modal: text input bound to the
-    /// Step Y field.
-    SetStepY(String),
-    /// v0.18.11 — Grid Properties modal: toggle the X/Y link.
-    /// When linked, editing Step X mirrors into Step Y.
-    ToggleLink,
+    /// Step field (one value for both axes). Strings are validated on
+    /// Apply, not per keystroke, so partial input doesn't fight the user.
+    SetStep(String),
     /// v0.18.11 — Grid Properties modal: Apply button. Validates +
     /// writes the active footprint editor's `snap_options.grid_step_mm`
-    /// (and Y if/when separate axes ship). v0.18.19: also commits
-    /// fine/coarse display + multiplier.
+    /// and commits fine/coarse display + multiplier.
     Apply,
     /// v0.18.19 — Grid Properties modal: Fine grid display style.
     SetFineDisplay(crate::library::editor::footprint::state::GridDisplay),
@@ -544,4 +571,7 @@ pub enum InputMsg {
     /// sets the mode only when the active tab is a footprint editor, so
     /// the keys don't steal text input on other tabs.
     FootprintModeShortcut(crate::library::editor::footprint::state::EditorMode),
+    /// The "recompute courtyard outline" command (palette, #1473). Acts on
+    /// the active footprint editor tab; a no-op on any other tab.
+    FootprintCourtyardOutlineRequested,
 }

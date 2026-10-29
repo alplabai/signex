@@ -4,6 +4,11 @@ This guide takes you from a downloaded Signex package to a saved schematic
 and an exported PDF. It assumes you have never used an EDA tool and have never
 installed Rust. You do not need either.
 
+<!-- The screenshots in this guide are rendered headlessly, not captured by hand.
+Regenerate assets/screenshots/guide-*.png with:
+cargo test -p signex-app --test guide_screenshots -- --ignored
+(needs a GPU adapter; the test skips itself without one). -->
+
 It describes the application as it is on the `trunk` branch. Where a step
 depends on work that has not shipped yet, the guide says so and links the
 tracking issue. Menu paths are written `Menu ▸ Item`.
@@ -36,12 +41,15 @@ and how to verify a download. This guide does not repeat it.
 
 ## 2. First launch
 
-Start Signex. With no document open you see a start screen with three
+Start Signex. With no document open you see a start screen with four
 buttons:
 
 - **New Project**
 - **Open Project…** (with its keyboard shortcut shown next to it)
+- **Open Sample Project**
 - **Keyboard Shortcuts (F1)**
+
+![The start screen on first launch, with the Welcome to Signex card in the bottom-right corner](../assets/screenshots/guide-first-run.png)
 
 On your very first launch a small card titled **Welcome to Signex** also
 appears in the bottom-right corner of the window. It lists the three gestures
@@ -102,9 +110,10 @@ project that already lives in a shared folder still opens normally.
 
 To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 
-> **Sample project.** A bundled sample project (**Help ▸ Open Sample
-> Project**) is proposed in [#787](https://github.com/alplabai/signex/pull/787)
-> and is not available yet.
+> **Sample project.** **Help ▸ Open Sample Project** (or the button on the
+> start screen) opens a small bundled design, a linear regulator. Signex copies
+> it into your per-user configuration folder the first time, so your edits to it
+> are kept.
 
 ## 4. Canvas basics
 
@@ -170,6 +179,28 @@ never places into it. A sheet written by a newer Signex is read-only in this
 build: Signex says so in the Messages panel and does not attach the part. With
 no schematic open, Signex shows a **Place Failed** notice instead.
 
+### Normal and alternate (De Morgan) bodies
+
+Some library symbols, mostly logic gates, have a second body that draws the
+same part in its De Morgan form. Select a placed symbol and use the **Body**
+row of **Properties**: **Normal** or **Alternate (De Morgan)**. The row is
+read-only, with a tooltip, when the library symbol has no alternate body. A
+symbol that stores Alternate but whose library symbol has none reads
+"Alternate (not in symbol; drawn as Normal)" and can be set back to Normal.
+
+Switching body redraws the symbol, and the netlist, ERC, exports and
+hit-testing all follow the body shown. Pins that are not wired may move.
+Signex refuses the switch, and says why in the **Messages** panel, when a
+wired pin would be lost, moved, or land on a new connection; remove those
+wires first. One **Undo** reverts a switch.
+
+In the symbol editor, the toolbar **Body** buttons (**Normal**, **Alternate**)
+choose which body is shown and which body new pins and shapes are added to.
+**Both bodies** marks the selection as common to both; **This body only**
+pins it to the body shown. Updating a library symbol from its library never
+silently drops a placed symbol's Alternate choice: the update is refused when
+it would disturb a wired pin, and otherwise the choice is kept.
+
 **Datasheets.** A part's Component Preview tab has a **Datasheet** tab that
 holds one or more documents: a datasheet per manufacturer, an errata, an
 application note. Each document is a URL or a pinned PDF, with an optional
@@ -213,6 +244,8 @@ tool.
 
 Once you have placed parts (section 5), connect the wires to their pins.
 
+![A resistor R1 with a wire from its lower pin to the net label SENSE](../assets/screenshots/guide-wired-symbol.png)
+
 ## 7. Label a net
 
 A net label gives a wire a name. Wires with the same net label on the same
@@ -224,6 +257,14 @@ name, joined everywhere in the project) or a sheet entry wired to a pin on the
 parent's sheet symbol. This is fixed; there is no setting for it. ERC warns
 with "Local label name on other sheets" when the same net label name appears on
 more than one sheet.
+
+To follow a net across sheets, select a port, global label, hierarchical label
+or sheet entry and run **Go to net partner on another sheet** from the command
+palette; run it again to cycle through the other ends. The highlight commands
+keep a net bright on every sheet while the rest fades, and step through its pins
+and labels. Resting the pointer on a wire, pin or label shows its net, class and
+pins (Preferences ▸ Schematic ▸ Editing turns it off). See
+[NET_NAVIGATION.md](NET_NAVIGATION.md).
 
 1. Choose **Place ▸ Net Label**, or press `P` then `N` in the default profile
    (`L` in the Classic profile).
@@ -349,6 +390,66 @@ parameter yet, so the key has to be set in the row data directly.
 Parts of the dialog are marked in the dialog itself as not active yet (the
 multi-sheet columns and the parameter-matching checkboxes).
 
+### Find and Replace
+
+**Edit ▸ Find** (`Ctrl+F`) and **Find and Replace** (`Ctrl+H` in the Altium
+profile) search the text of labels, text notes, designators and values. The
+**Scope** row chooses how far the search reaches:
+
+- **Sheet** searches the active sheet only.
+- **Project** searches every sheet of the project, including sheets you have
+  not opened. Results are grouped under the sheet they are on. A sheet that
+  cannot be read, or that was written by a newer Signex and is read-only in
+  this build, is not searched; the dialog says so and the Messages panel names
+  it.
+
+Click a result to open its sheet and zoom to the item. `F3` steps to the next
+result and `Shift+F3` to the previous one (in both profiles), wrapping at the
+ends. A sheet placed more than once shows one designator result per placement,
+labelled "placement 2 of 3".
+
+**Replace Current** and **Replace All** replace only the matched text, not the
+whole field, and match without regard to case. In **Project** scope a Replace
+All is one undo step: `Ctrl+Z` on any of the changed sheets reverts every one of
+them together. If one of those sheets was edited afterwards, the undo is
+refused and the Messages panel names the sheet; undo the newer edit first.
+
+A replace never writes a sheet you have not opened. It loads the sheet, changes
+it in memory and leaves it unsaved, like any other edit, so save it (or discard
+it) when you are ready. The Messages panel logs "Replaced N on M sheets" and
+names them. The text replaced is always read from the sheet as it is when you
+press Replace, never from the search results, so an edit made after the search
+is not overwritten with stale text. If you open, save or close a document, or close the
+project, while a project Replace is still reading the sheets, it is cancelled with a
+Messages line and changes nothing; run it again.
+
+### Search everywhere
+
+The command palette (`Ctrl+Shift+P`) is also the project's search box. Type a
+designator, a net name or a sheet name and the palette lists, besides the
+commands and panels:
+
+- **Designators** from every sheet of the project, including sheets you have
+  not opened. A sheet placed more than once gives one row per placement,
+  labelled "placement 2 of 3".
+- **Nets**, from the project's connectivity. A net's row jumps to one of its
+  terminals.
+- **Sheets**: child sheets that the project's page list does not name, and a
+  row for each placement of a sheet that is placed more than once. A page
+  placed once is already listed as a file.
+
+Choosing a row opens its sheet at that placement, selects the item and zooms
+to where it is now. This only moves the view; nothing in any document changes.
+
+The designator, net and sheet rows come from an index the palette builds in the
+background when it opens, so for a moment after opening it may show only the
+active sheet's designators. The index is rebuilt when documents change, and
+rows from the index of a different project are never shown. If a row points at
+a sheet that has since been renamed or deleted, the Messages panel says it
+could not be opened and nothing else is opened in its place; if the symbol is
+gone but the sheet is still there, the sheet opens and the Messages panel says
+the item is no longer on it.
+
 ## 9. Run ERC
 
 ERC (electrical rules check) scans the design for wiring mistakes, such as
@@ -381,6 +482,12 @@ log, not the ERC results. Read ERC results in the ERC panel.
 Before you run the check the panel shows "No ERC diagnostics yet". Run `F8`
 again after each round of edits.
 
+In the picture below the check has run on the sheet from section 6. The wire
+ends on the lower pin of `R1`, but the upper pin connects to nothing, so the
+**ERC** panel lists one warning, "Unused pin", with an **Add No-Connect** button.
+
+![The ERC panel at the bottom of the window listing one unused-pin warning for R1](../assets/screenshots/guide-erc.png)
+
 ## 10. Save
 
 Press `Ctrl+S` or choose **File ▸ Save**. Signex writes the sheet to its
@@ -389,6 +496,12 @@ greyed out when no schematic is open.
 
 Edits are held in memory until you save. Undo is `Ctrl+Z` and redo is
 `Ctrl+Y`.
+
+A sheet written by a newer Signex opens read-only. Its tab shows a muted
+"read-only" label (the tooltip gives the reason) and a badge sits in the corner
+of the canvas. Edits to it are refused and the tab never turns dirty, so there
+is nothing to lose at save time. Messages says once per opened sheet which file
+was not changed. Open the file in the newer Signex to edit it.
 
 ## 11. Export PDF and BOM
 
@@ -452,30 +565,44 @@ Drawn / Checked / Approved row.
 
 ## Walkthrough: a saved schematic with a wired symbol
 
-This is sections 3 to 10 as one run. Each step names the section with the
-detail. Step 3 cannot be completed from the UI yet; see its note.
+This is sections 3 to 11 as one run, from an empty window to a saved sheet and
+a PDF. Each step names the section with the detail. The shortcuts are those of
+the default Altium profile; the menu path always works.
 
 1. **Create the project.** Choose **File ▸ New Project**, name it in the
-   **New Project** save dialog, and keep the `.snxprj` ending (section 3).
-   Signex creates a folder named after the project; a blank `.snxsch` in it
-   opens in a tab.
+   save dialog, and keep the `.snxprj` ending (section 3). Signex creates a
+   folder named after the project; a blank `.snxsch` in it opens in a tab.
 2. **Find a part.** Open **View ▸ Components** and expand **Stock**
    (section 5). Type in **Filter components…** to find the part.
-3. **Place it.** Intended path: **File ▸ Library ▸ Place Component…**, select
-   the part, press **Place**. *Not working yet:* the **Place** button closes
-   the picker without placing (section 5). Everything below then runs on a
-   sheet without a part.
-4. **Wire it.** Choose **Place ▸ Wire**, click to start, click to bend, and
-   double-click to stop (section 6). End each wire on a pin end of the part.
-5. **Name the net.** Choose **Place ▸ Net Label**, click the wire, press `Esc`,
-   double-click the label, type the name, and press `Enter` (section 7).
+3. **Place it.** Choose **File ▸ Library ▸ Place Component…**, select the
+   part and press **Place** (or press **Place** on the part's row in the
+   Components panel). The part follows the cursor; click to drop it and press
+   `Esc` to let go (section 5).
+4. **Wire it.** Choose **Place ▸ Wire** (or press `P` then `W`, or `Ctrl+W`),
+   click to start, click to bend, and double-click to stop (section 6). End
+   each wire on a pin end of the part.
+5. **Name the net.** Choose **Place ▸ Net Label** (or press `P` then `N`),
+   click the wire, press `Esc`, double-click the label, type the name, and press
+   `Enter` (section 7).
 6. **Annotate.** Press `Alt+A` (**Design ▸ Annotation ▸ Annotate Schematics
    Quietly**) to give every part a unique reference designator (section 8).
+   **Design ▸ Annotation ▸ Annotate Schematics…** shows the proposed changes
+   first.
 7. **Run ERC.** Press `F8`, read the **ERC** panel, and click a row to jump to
    the item (section 9). Fix what it reports, then run it again.
 8. **Save.** Press `Ctrl+S` or choose **File ▸ Save** (section 10). Signex
    writes the sheet to its `.snxsch` file. Close the tab and reopen it with
    **File ▸ Open Recent** to check that the wires and labels came back.
+9. **Export a PDF.** Press `Ctrl+P` or choose **File ▸ Export ▸ PDF…**, check
+   the preview, press **Export PDF** and pick where to save (section 11).
+
+*Not working yet:* **Place ▸ Power Port**, **Text**, **No Connect** and
+**Sheet Entry** are menu placeholders. To mark a pin as intentionally
+unconnected, use **Add No-Connect** in the **ERC** panel (section 9).
+
+This walkthrough has not yet been followed end to end by a person with a fresh
+install; tell us in [Discussions](https://github.com/alplabai/signex/discussions)
+if a step does not match what you see.
 
 ## 12. File types
 
@@ -514,6 +641,8 @@ Shortcuts used in this guide, in the default Altium profile:
 | Run ERC | `F8` |
 | Annotate | `T A` |
 | Annotate quietly | `Alt+A` |
+| Find / Find and Replace | `Ctrl+F` / `Ctrl+H` |
+| Next / previous Find result | `F3` / `Shift+F3` |
 | Toggle visible grid | `Ctrl+Shift+G` |
 | Keyboard shortcut reference | `F1` |
 | Preferences | `Ctrl+,` |

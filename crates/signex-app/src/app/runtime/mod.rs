@@ -1,17 +1,21 @@
 use super::*;
 
+mod body_style_info;
 mod designators;
 #[cfg(test)]
-mod designators_tests;
+pub(crate) mod designators_tests;
 mod footprint_ctx;
 mod footprint_summaries;
 mod history;
 mod label_class_pick;
 mod navigator_ctx;
-mod net_class_styles;
+pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
 mod primitive_dirty;
 mod sheet_frame;
+mod sheet_tree;
+#[cfg(test)]
+pub(crate) mod sheet_tree_tests;
 mod symbol_ctx;
 
 impl Signex {
@@ -64,6 +68,7 @@ impl Signex {
         self.library.note_shown_browser(shown_browser.as_deref());
         self.library.sync_view_caches();
         let class_styles = self.refresh_net_class_styles();
+        let net_nav = self.refresh_net_nav();
         self.sync_label_class_pick();
         self.sync_diagnostics_panel_ctx();
         self.refresh_command_palette_if_stale();
@@ -98,6 +103,7 @@ impl Signex {
             reprefix_window,
             instance_note,
             class_styles,
+            net_nav,
         ])
     }
 
@@ -155,6 +161,9 @@ impl Signex {
         }
 
         self.sync_visible_document_from_active_tab();
+        // The sheet now in view is the history's current one, and the net
+        // highlight follows the tab (#1271, #1272).
+        self.note_sheet_focused();
         // A move armed or floating on the previous tab must not drop here.
         self.cancel_move_pick();
         // A half-placed two-click shape belongs to the tab it was started in.
@@ -204,6 +213,7 @@ impl Signex {
         self.document_state.panel_ctx.selected_uuid = None;
         self.document_state.panel_ctx.selected_kind = None;
         self.document_state.panel_ctx.selected_drawing = None;
+        self.document_state.panel_ctx.selected_drawing_placement = Default::default();
         self.document_state.panel_ctx.selected_child_sheet = None;
 
         if selected.len() != 1 {
@@ -277,6 +287,13 @@ impl Signex {
                         .push(("Library Drift".into(), "Yes".into()));
                 }
             }
+            self.document_state
+                .panel_ctx
+                .selection_info
+                .extend(body_style_info::body_style_info(
+                    engine.document(),
+                    details.selected_uuid,
+                ));
             // The library row's documents for a placed symbol (#1231).
             if details.selected_kind == signex_types::schematic::SelectedKind::Symbol
                 && let Some(symbol) = engine
@@ -304,6 +321,8 @@ impl Signex {
                 signex_types::schematic::SelectedKind::Drawing
             ) {
                 use signex_types::schematic::SchDrawing;
+                self.document_state.panel_ctx.selected_drawing_placement =
+                    engine.document().drawing_placement(details.selected_uuid);
                 self.document_state.panel_ctx.selected_drawing = engine
                     .document()
                     .drawings
@@ -393,6 +412,7 @@ impl Signex {
             snap_enabled: self.ui_state.snap_enabled,
             snap_grid_mm: crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
             snap_hotspots: self.ui_state.snap_hotspots,
+            unit: self.ui_state.unit,
             wire_tool_active: self.interaction_state.current_tool == crate::app::Tool::Wire,
             visible_grid_mm: self.ui_state.visible_grid_mm as f64,
             grid_style: self.ui_state.preferences_draft_grid_style,
@@ -404,6 +424,7 @@ impl Signex {
             window_width: self.ui_state.window_size.0,
             wire_color_overrides: &self.ui_state.wire_color_overrides,
             wire_class_styles: self.ui_state.net_class_styles.styles(),
+            wire_class_revision: self.ui_state.net_class_styles.revision(),
             selection_filters: &self.interaction_state.selection_filters,
             placement: None,
         }

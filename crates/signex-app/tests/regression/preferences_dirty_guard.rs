@@ -232,3 +232,77 @@ fn move_keeps_wires_draft_marks_dirty_and_discard_restores_it() {
     assert!(app.ui_state.preferences_draft_move_keeps_wires);
     assert!(!app.ui_state.preferences_dirty);
 }
+
+/// #1257 — "Select by drag direction" follows the same draft pattern.
+#[test]
+fn drag_direction_select_draft_marks_dirty_and_discard_restores_it() {
+    let (mut app, _t) = Signex::new();
+    app.ui_state.drag_direction_select = true;
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+    assert!(!app.ui_state.preferences_dirty);
+
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DraftDragDirectionSelect(false),
+    )));
+    assert!(app.ui_state.preferences_dirty, "a changed draft is unsaved");
+    assert!(
+        app.ui_state.drag_direction_select,
+        "not committed before Save"
+    );
+
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DiscardAndClose,
+    )));
+    assert!(app.ui_state.preferences_draft_drag_direction_select);
+    assert!(!app.ui_state.preferences_dirty);
+}
+
+/// #1253 / #1263 — "Increment step" and "Designators on paste" follow the
+/// same draft pattern, and a step can never be zero.
+#[test]
+fn increment_step_and_paste_designators_drafts_mark_dirty_commit_on_save_and_discard() {
+    use signex_app::paste_prefs::PasteDesignators;
+
+    let (mut app, _t) = Signex::new();
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+    assert!(!app.ui_state.preferences_dirty);
+
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DraftIncrementStep(5),
+    )));
+    assert!(app.ui_state.preferences_dirty, "a changed step is unsaved");
+    assert_eq!(app.ui_state.increment_step, 1, "not committed before Save");
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DraftPasteDesignators(PasteDesignators::NextFree),
+    )));
+    assert_eq!(app.ui_state.paste_designators, PasteDesignators::Keep);
+
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DiscardAndClose,
+    )));
+    assert_eq!(app.ui_state.preferences_draft_increment_step, 1);
+    assert_eq!(
+        app.ui_state.preferences_draft_paste_designators,
+        PasteDesignators::Keep
+    );
+    assert!(!app.ui_state.preferences_dirty);
+}
+
+#[test]
+fn the_increment_step_draft_is_clamped_and_never_zero() {
+    let (mut app, _t) = Signex::new();
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+    let mut set = |step: i32| {
+        let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+            PrefMsg::DraftIncrementStep(step),
+        )));
+        app.ui_state.preferences_draft_increment_step
+    };
+    assert_eq!(set(-3), -3);
+    assert_eq!(set(0), -1, "zero keeps the direction it came from");
+    assert_eq!(set(500), 100);
+    assert_eq!(set(-500), -100);
+    assert_eq!(set(0), -1);
+    assert_eq!(set(4), 4);
+    assert_eq!(set(0), 1);
+}

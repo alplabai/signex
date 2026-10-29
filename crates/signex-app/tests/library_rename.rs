@@ -429,10 +429,11 @@ fn a_library_rename_while_the_project_file_is_being_written_is_refused_before_mo
     use signex_app::app::{ContextMenuMsg, ProjectTreeAction};
     let mut f = fixture();
     f.app.document_state.dirty_paths.insert(f.prj.clone());
+    let root = vec![f.app.document_state.projects[0].id.to_string()];
     send(
         &mut f.app,
         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-            ProjectTreeAction::OpenProjectOptions(vec![0]),
+            ProjectTreeAction::OpenProjectOptions(root),
         )),
     );
     let _write_in_flight = f.app.update(Message::File(FileMsg::Save));
@@ -476,10 +477,11 @@ fn closing_the_project_after_a_library_rename_prompts_for_the_unsaved_path() {
     // Close Project resolves the sheet references off-thread (#756); run
     // the task body and send its result back as the completion message.
     let project_id = f.app.document_state.projects[0].id;
+    let root = vec![project_id.to_string()];
     send(
         &mut f.app,
         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-            ProjectTreeAction::CloseProject(vec![0]),
+            ProjectTreeAction::CloseProject(root),
         )),
     );
     let result = f.app.resolve_sheet_refs_blocking();

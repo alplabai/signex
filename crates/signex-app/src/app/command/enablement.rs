@@ -43,6 +43,9 @@ pub(crate) struct CommandContext {
     pub has_footprint_editor: bool,
     /// The main window's schematic canvas has a selection.
     pub has_selection: bool,
+    /// The selection holds at least one schematic drawing, which the
+    /// Arrange commands act on (#1583).
+    pub has_drawing_selection: bool,
     /// A wire or polyline draw has uncommitted vertices, which
     /// Backspace / Delete pops even with nothing selected.
     pub drawing: bool,
@@ -60,6 +63,9 @@ pub(crate) struct CommandContext {
 
 /// Whether `command` can act in `ctx`. Unlisted commands are enabled.
 pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
+    if is_planned_command(command) {
+        return false;
+    }
     let editor = ctx.has_symbol_editor || ctx.has_footprint_editor;
     match command.as_str() {
         "save_document" => ctx.has_schematic || editor || ctx.project_dirty,
@@ -67,6 +73,12 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         "undo" => ctx.can_undo,
         "redo" => ctx.can_redo,
         "cut" | "copy" | "duplicate" => ctx.has_selection,
+        // Arrange acts on drawings only; a selection of circuit elements
+        // leaves it nothing to do (#1583).
+        "bring_drawings_to_front"
+        | "send_drawings_to_back"
+        | "bring_drawings_forward"
+        | "send_drawings_backward" => ctx.has_schematic && ctx.has_drawing_selection,
         // E edits the selected object in the schematic and in the
         // footprint / symbol editors, whose selections `has_selection`
         // does not read, so a keystroke must not be dropped there.
@@ -84,13 +96,23 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         | "paste"
         | "smart_paste"
         | "paste_special"
+        | "paste_array"
+        | "repeat_last_item"
+        | "rubber_stamp_copy"
         | "select_all"
         | "place_wire"
         | "place_bus"
         | "place_net_label"
         | "place_local_net_label"
+        | "place_junction"
+        | "place_power_symbol"
+        | "place_global_label"
+        | "place_hierarchical_label"
+        | "place_port"
+        | "place_off_sheet_connector"
         | "open_components_panel"
-        | "place_symbol" => ctx.has_schematic,
+        | "place_symbol"
+        | "measure_distance" => ctx.has_schematic,
         // These assemble the project's sheets, not only the active tab's.
         "annotate_schematic_quietly" | "force_annotate_all_schematics" | "run_erc" => {
             ctx.has_schematic || ctx.has_sheets
@@ -118,7 +140,15 @@ pub(crate) fn cycle_grid_menu_enabled(ctx: &CommandContext) -> bool {
 /// handler so the explanation is not lost (Save As in a PCB tab, #671;
 /// Print with no schematic).
 pub(crate) fn explains_when_unavailable(command: &AppCommandId) -> bool {
-    matches!(command.as_str(), "save_document_as" | "print")
+    matches!(command.as_str(), "save_document_as" | "print") || is_planned_command(command)
+}
+
+/// An Active Bar command whose tool is a planned placeholder (#1249). It is
+/// never enabled, but its keystroke still reaches the handler so the user
+/// is told it is not built yet instead of getting silence.
+pub(crate) fn is_planned_command(command: &AppCommandId) -> bool {
+    super::active_bar::action_for_id(command.as_str())
+        .is_some_and(|action| crate::active_bar::is_planned(&action))
 }
 
 impl Signex {
@@ -158,6 +188,7 @@ impl Signex {
             has_symbol_editor: matches!(active_kind, Some(TabKind::SymbolEditor(_))),
             has_footprint_editor: matches!(active_kind, Some(TabKind::FootprintEditor(_))),
             has_selection: !self.interaction_state.active_canvas().selected.is_empty(),
+            has_drawing_selection: !self.selected_drawing_ids().is_empty(),
             drawing: self.interaction_state.wire_drawing
                 || !self.interaction_state.polyline_points.is_empty(),
             can_undo,
@@ -478,6 +509,21 @@ mod tests {
         assert_eq!(app.interaction_state.current_tool, Tool::Wire);
     }
 
+    /// #1256 - Ctrl+M in a PCB, footprint or empty window does not arm a tool
+    /// the schematic canvas it belongs to is not there to show.
+    #[test]
+    fn measure_distance_needs_a_schematic() {
+        let (mut app, _task) = Signex::new();
+        assert!(!enabled(&app, "measure_distance"));
+        let _ = app.dispatch_command(&id("measure_distance"), CommandArgs::none(), None);
+        assert_eq!(app.interaction_state.current_tool, Tool::Select);
+
+        let mut app = with_schematic();
+        assert!(enabled(&app, "measure_distance"));
+        let _ = app.dispatch_command(&id("measure_distance"), CommandArgs::none(), None);
+        assert_eq!(app.interaction_state.current_tool, Tool::Measure);
+    }
+
     /// Find, the grid toggle and AutoFocus act from any tab, so they stay
     /// enabled although the old menu greyed them without a schematic.
     #[test]
@@ -497,9 +543,31 @@ mod tests {
     /// #907 review: ids that resolve to the same message are the same
     /// command, so they must get the same answer. An alias left to the
     /// default arm would let a second key bypass the gate.
+    /// The placement shortcuts act on a schematic sheet, so each is off
+    /// without one and on with one (the Place menu rows share the gate).
+    #[test]
+    fn schematic_placement_shortcuts_need_a_schematic() {
+        let off = CommandContext::default();
+        let on = CommandContext {
+            has_schematic: true,
+            ..CommandContext::default()
+        };
+        for name in [
+            "place_power_symbol",
+            "place_global_label",
+            "place_hierarchical_label",
+            "place_junction",
+            "place_port",
+            "place_off_sheet_connector",
+        ] {
+            assert!(!is_enabled(&id(name), &off), "{name} without a schematic");
+            assert!(is_enabled(&id(name), &on), "{name} with a schematic");
+        }
+    }
+
     #[test]
     fn ids_that_resolve_to_the_same_message_share_their_enablement() {
-        let facts: [fn(&mut CommandContext); 10] = [
+        let facts: [fn(&mut CommandContext); 11] = [
             |c| c.has_schematic = true,
             |c| c.has_pcb = true,
             |c| c.undocked_has_canvas = true,
@@ -507,6 +575,7 @@ mod tests {
             |c| c.has_symbol_editor = true,
             |c| c.has_footprint_editor = true,
             |c| c.has_selection = true,
+            |c| c.has_drawing_selection = true,
             |c| c.can_undo = true,
             |c| c.can_redo = true,
             |c| c.project_dirty = true,
@@ -695,6 +764,68 @@ mod tests {
         assert!(!enabled(&start, "report_manager_bom"));
         assert!(!enabled(&with_footprint_editor().0, "report_manager_bom"));
         assert!(enabled(&with_schematic(), "report_manager_bom"));
+    }
+
+    /// Command ids of every planned Active Bar tool that has one.
+    fn planned_ids() -> Vec<&'static str> {
+        super::super::active_bar::ACTIVE_BAR_COMMANDS
+            .iter()
+            .filter(|(_, action)| crate::active_bar::is_planned(action))
+            .map(|(command, _)| *command)
+            .collect()
+    }
+
+    #[test]
+    fn planned_tool_commands_are_never_enabled_but_always_explain() {
+        let ids = planned_ids();
+        assert!(ids.contains(&"place_diff_pair"), "{ids:?}");
+        let with_command = crate::active_bar::PLANNED_TOOLS
+            .iter()
+            .filter(|(planned, _)| {
+                super::super::active_bar::ACTIVE_BAR_COMMANDS
+                    .iter()
+                    .any(|(_, action)| action == planned)
+            })
+            .count();
+        assert_eq!(ids.len(), with_command, "{ids:?}");
+        let (app, _t) = Signex::new();
+        for command in ids {
+            assert!(!enabled(&app, command), "{command} must not be enabled");
+            assert!(
+                explains_when_unavailable(&id(command)),
+                "{command} must reach the handler so it can say why"
+            );
+        }
+    }
+
+    #[test]
+    fn the_palette_does_not_list_planned_tools_as_runnable() {
+        let (app, _t) = Signex::new();
+        let listed: Vec<String> = crate::app::command_palette::build_catalog(&app)
+            .into_iter()
+            .filter_map(|entry| match entry.action {
+                crate::app::command_palette::CommandAction::Command(c) => {
+                    Some(c.as_str().to_string())
+                }
+                _ => None,
+            })
+            .collect();
+        for command in planned_ids() {
+            assert!(!listed.iter().any(|l| l == command), "{command} is listed");
+        }
+    }
+
+    #[test]
+    fn a_planned_tool_keystroke_still_logs_the_refusal() {
+        let _ = crate::diagnostics::init_logging();
+        let (mut app, _t) = Signex::new();
+        let _ = app.dispatch_command(&id("place_diff_pair"), CommandArgs::default(), None);
+        assert!(
+            crate::diagnostics::recent_entries().iter().any(|e| e
+                .message
+                .starts_with("Planned, not available yet: Differential Pair")),
+            "the refusal must reach the Messages panel, not be dropped"
+        );
     }
 
     #[test]

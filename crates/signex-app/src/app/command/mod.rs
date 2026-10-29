@@ -1,10 +1,11 @@
-//! Home of the Command Registry (#278). Slice 1 landed the
-//! id→[`crate::app::Message`] bridge (`bridge.rs`). Slice 2 adds the
-//! registry's dispatch entry point ([`Signex::dispatch_command`]) and
-//! its argument type ([`CommandArgs`]). Slice 3 gates it on
-//! [`enablement::is_enabled`], which the menu bar reads too; rewiring
-//! menus/palette onto the registry (slice 4) is not done yet; the
-//! palette still calls `bridge::core_to_message` directly.
+//! Home of the Command Registry (#278): the id->[`crate::app::Message`] bridge
+//! (`bridge.rs`), the dispatch entry point ([`Signex::dispatch_command`]) and
+//! its argument type ([`CommandArgs`]), and the enablement gate
+//! ([`enablement::is_enabled`]) the menu bar reads too. The palette and the
+//! keymap run commands through [`Signex::dispatch_command`]. Of the menu items
+//! only Undo and Redo reach it, and only from an undocked window's menu or the
+//! native menu; the main window's menu emits its own `Message` variants
+//! (`handlers/menu/editing.rs`).
 
 pub(crate) mod active_bar;
 mod args;
@@ -96,6 +97,12 @@ impl Signex {
 }
 
 #[cfg(test)]
+mod arrange_tests;
+
+#[cfg(test)]
+mod shortcut_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::keymap::AppCommandId;
@@ -156,17 +163,17 @@ mod tests {
         assert_eq!(task.units(), 0);
     }
 
-    /// `measure_distance` is a real catalog entry
+    /// `break_wire` is a real catalog entry
     /// (`keymap/catalog`) with no arm in `core_to_message`
     /// yet — it must resolve to a no-op too, not panic.
     #[test]
     fn catalog_id_with_no_bridge_arm_is_a_no_op_and_does_not_panic() {
         let (mut app, _task) = Signex::new();
 
-        let command = AppCommandId::new("measure_distance").unwrap();
+        let command = AppCommandId::new("break_wire").unwrap();
         assert!(
             crate::keymap::metadata_for(&command).is_some(),
-            "test fixture drifted: measure_distance is no longer a catalog id"
+            "test fixture drifted: break_wire is no longer a catalog id"
         );
 
         let task = app.dispatch_command(&command, CommandArgs::none(), None);
@@ -272,40 +279,6 @@ mod tests {
                 "{id} wraps"
             );
         }
-    }
-
-    /// #103 - `find_next` / `find_previous` step the current match, wrap,
-    /// and do nothing without matches.
-    #[test]
-    fn find_commands_step_the_current_match() {
-        use signex_types::schematic::{SelectedItem, SelectedKind};
-        let (mut app, _task) = Signex::new();
-        run(&mut app, "find_next");
-        assert_eq!(app.ui_state.find_replace.selected_index, None, "no matches");
-
-        let uuid = uuid::Uuid::new_v4();
-        app.ui_state.find_replace.matches = (0..3)
-            .map(|_| crate::find_replace::FindMatch {
-                item: SelectedItem::new(uuid, SelectedKind::Label),
-                target: signex_engine::TextTarget::Label(uuid),
-                kind_label: String::new(),
-                text: String::new(),
-            })
-            .collect();
-        run(&mut app, "find_next");
-        assert_eq!(app.ui_state.find_replace.selected_index, Some(0));
-        run(&mut app, "find_previous");
-        assert_eq!(
-            app.ui_state.find_replace.selected_index,
-            Some(2),
-            "wraps back"
-        );
-        run(&mut app, "find_next");
-        assert_eq!(
-            app.ui_state.find_replace.selected_index,
-            Some(0),
-            "wraps forward"
-        );
     }
 
     fn core_message(command: &AppCommandId) -> Message {

@@ -66,6 +66,8 @@ pub fn draw_label_preview(
         parameter_texts: Vec::new(),
         overlays: OverlayInputs::default(),
         erc_markers: Vec::new(),
+        drawings: Vec::new(),
+        drawings_front: Vec::new(),
         wire_color_overrides: HashMap::new(),
         wire_line_styles: HashMap::new(),
     };
@@ -95,7 +97,7 @@ fn flag_local(label: &Label, document_family: Option<&str>) -> ([(f64, f64); 5],
     let size_mm = label
         .font_size
         .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
-    let em_mm = size_mm / 0.72;
+    let em_mm = size_mm / f64::from(signex_gfx::primitive::text::MM_PER_EM);
     // The body is as wide as the text drawn in the label's resolved family.
     let family = resolve_family(label.font_family.as_deref(), document_family);
     let monospace_w = (label.text.chars().count().max(1) as f64) * (em_mm * 0.58);

@@ -39,31 +39,6 @@ impl Signex {
             .clear_overlay_cache();
     }
 
-    fn component_value_from_lib_id(lib_id: &str) -> String {
-        lib_id
-            .rsplit(':')
-            .next()
-            .filter(|value| !value.is_empty())
-            .unwrap_or(lib_id)
-            .to_string()
-    }
-
-    /// Legacy `lib_id` placements know no component class and no row, so the
-    /// standard has nothing to key on: the value's own leading letters decide,
-    /// through the same resolver as a library-row placement. Only the letters
-    /// are handed over: a value starting with `#` or a space has none, and
-    /// falls back to `U`, because this path never builds a power symbol and a
-    /// `#` reference on an ordinary part would drop it out of annotation.
-    fn component_prefix_from_lib_id(&self, lib_id: &str) -> String {
-        let standard = self
-            .document_state
-            .active_document_project()
-            .and_then(|p| p.data.designator_standard());
-        let value = Self::component_value_from_lib_id(lib_id);
-        let letters = signex_types::designator::alphabetic_prefix(&value);
-        signex_types::designator::resolve_prefix(standard, None, None, letters)
-    }
-
     pub(crate) fn increment_designator(reference: &str) -> Option<String> {
         let digit_start = reference
             .char_indices()
@@ -79,167 +54,15 @@ impl Signex {
         ))
     }
 
-    /// The next free `prefix` designator across every open sheet of the
-    /// active project (#1470), so `R5` is not offered on sheet B while sheet
-    /// A already holds it. Sheets of the project that are not open as tabs
-    /// are not read: that needs disk IO, which `update` must not do.
-    pub(crate) fn next_designator_for_prefix(&self, prefix: &str) -> String {
-        let ds = &self.document_state;
-        let active_project = ds
-            .active_path
-            .as_deref()
-            .map(|active| ds.document_project(active));
-        let max_used = ds
-            .engines
-            .iter()
-            .filter(|(path, _)| match active_project {
-                // A loose sheet shares no designators with another document.
-                Some(None) | None => ds.active_path.as_deref() == Some(path.as_path()),
-                Some(Some(owner)) => ds
-                    .document_project(path)
-                    .is_some_and(|p| std::ptr::eq(p, owner)),
-            })
-            .flat_map(|(_, engine)| engine.document().symbols.iter())
-            .filter_map(|symbol| {
-                let reference = symbol.reference.trim();
-                reference.strip_prefix(prefix)?.parse::<u32>().ok()
-            })
-            .max()
-            .unwrap_or(0);
-
-        format!("{prefix}{}", max_used.saturating_add(1))
-    }
-
-    /// [`Self::next_designator_for_prefix`] read from the active engine's
-    /// document instead of the render snapshot. A repeated placement asks
-    /// right after its own commit, and the engine is the copy that is
-    /// current at that moment in every window; naming the sheet keeps the
-    /// answer right when another window's document is the active one.
+    /// The next free `prefix` designator for a part placed on `sheet`,
+    /// numbered against every sheet of its project so a new part never
+    /// collides with another sheet (#1381). Open sheets are read live and
+    /// closed ones from the cached designator scan (`designator_scan.rs`),
+    /// so there is no disk read here; until the first scan lands only open
+    /// sheets count. A free-standing sheet only looks at itself. Annotate
+    /// still does the full renumber.
     pub(crate) fn next_designator_in_sheet(&self, sheet: &std::path::Path, prefix: &str) -> String {
-        let references = self.document_state.engines.get(sheet).map(|engine| {
-            engine
-                .document()
-                .symbols
-                .iter()
-                .map(|s| s.reference.as_str())
-        });
-        next_designator(prefix, references.into_iter().flatten())
-    }
-
-    pub(crate) fn current_component_defaults(&self) -> Option<(String, String)> {
-        let lib_id = self.document_state.panel_ctx.selected_component.as_ref()?;
-        let value = Self::component_value_from_lib_id(lib_id);
-        let designator = self
-            .document_state
-            .panel_ctx
-            .pre_placement
-            .as_ref()
-            .map(|pp| pp.designator.trim().to_string())
-            .filter(|designator| !designator.is_empty())
-            .unwrap_or_else(|| {
-                self.next_designator_for_prefix(&self.component_prefix_from_lib_id(lib_id))
-            });
-        Some((value, designator))
-    }
-
-    pub(crate) fn place_selected_component(&mut self, wx: f64, wy: f64) -> bool {
-        let Some(lib_id) = self.document_state.panel_ctx.selected_component.clone() else {
-            return false;
-        };
-
-        let default_value = Self::component_value_from_lib_id(&lib_id);
-        let reference = self
-            .document_state
-            .panel_ctx
-            .pre_placement
-            .as_ref()
-            .map(|pp| pp.designator.trim().to_string())
-            .filter(|designator| !designator.is_empty())
-            .unwrap_or_else(|| {
-                self.next_designator_for_prefix(&self.component_prefix_from_lib_id(&lib_id))
-            });
-        let value = self
-            .document_state
-            .panel_ctx
-            .pre_placement
-            .as_ref()
-            .map(|pp| pp.label_text.trim().to_string())
-            .filter(|text| !text.is_empty() && text != "NET")
-            .unwrap_or(default_value.clone());
-        let rotation = self
-            .document_state
-            .panel_ctx
-            .pre_placement
-            .as_ref()
-            .map(|pp| pp.rotation)
-            .unwrap_or(0.0);
-
-        let symbol = signex_types::schematic::Symbol {
-            unknown_columns: Default::default(),
-            unknown: Default::default(),
-            uuid: uuid::Uuid::new_v4(),
-            lib_id: lib_id.clone(),
-            reference: reference.clone(),
-            value,
-            footprint: String::new(),
-            datasheet: String::new(),
-            position: signex_types::schematic::Point::new(wx, wy),
-            rotation,
-            mirror_x: false,
-            mirror_y: false,
-            unit: 1,
-            is_power: false,
-            ref_text: Some(signex_types::schematic::TextProp {
-                position: signex_types::schematic::Point::new(wx, wy - 2.54),
-                rotation,
-                font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-                justify_h: signex_types::schematic::HAlign::Center,
-                justify_v: signex_types::schematic::VAlign::default(),
-                hidden: false,
-                font_family: None,
-            }),
-            val_text: Some(signex_types::schematic::TextProp {
-                position: signex_types::schematic::Point::new(wx, wy + 2.54),
-                rotation,
-                font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-                justify_h: signex_types::schematic::HAlign::Center,
-                justify_v: signex_types::schematic::VAlign::default(),
-                hidden: false,
-                font_family: None,
-            }),
-            fields_autoplaced: true,
-            fields_user_placed: false,
-            dnp: false,
-            in_bom: true,
-            on_board: true,
-            exclude_from_sim: false,
-            locked: false,
-            fields: std::collections::HashMap::new(),
-            custom_properties: Vec::new(),
-            pin_uuids: std::collections::HashMap::new(),
-            instances: Vec::new(),
-            // Legacy lib_id-driven place flow has no `.snxlib` identity —
-            // Stage 16 of `v0.9-snxlib-as-file-plan.md` only tags
-            // placements that go through the Library picker
-            // (`handle_place_library_component`). Anything placed via
-            // `selected_component` (Standard-style lib_id) skips drift
-            // tracking by design.
-            library_id: None,
-            row_id: None,
-            library_version: String::new(),
-        };
-        self.apply_engine_command(signex_engine::Command::PlaceSymbol { symbol }, false, false);
-
-        let next_designator = Self::increment_designator(&reference).unwrap_or_else(|| {
-            self.next_designator_for_prefix(&self.component_prefix_from_lib_id(&lib_id))
-        });
-
-        if let Some(ref mut pp) = self.document_state.panel_ctx.pre_placement {
-            pp.label_text = default_value;
-            pp.designator = next_designator;
-        }
-
-        true
+        next_designator(prefix, self.used_designators(sheet).into_iter())
     }
 
     /// Cancel the in-flight placement session and every armed mode.
@@ -337,6 +160,7 @@ impl Signex {
             canvas.arc_points.clear();
             canvas.polyline_points.clear();
             canvas.shape_anchor = None;
+            canvas.measure = None;
             canvas.clear_overlay_cache();
         };
         clear_canvas(&mut self.interaction_state.canvas);
@@ -522,40 +346,43 @@ mod designator_tests {
         );
     }
 
-    fn sheet_holding(reference: &str) -> signex_types::schematic::SchematicSheet {
+    fn sheet_with(references: &[&str]) -> signex_types::schematic::SchematicSheet {
         let mut sheet = signex_types::schematic::SchematicSheet::default();
-        sheet.symbols.push(signex_types::schematic::Symbol {
-            reference: reference.to_string(),
-            ..Default::default()
-        });
+        for reference in references {
+            sheet.symbols.push(signex_types::schematic::Symbol {
+                uuid: uuid::Uuid::new_v4(),
+                reference: (*reference).to_string(),
+                ..Default::default()
+            });
+        }
         sheet
     }
 
-    /// #1470 — the next designator clears every open sheet of the project,
-    /// not only the active one, and ignores a sheet of another project.
+    /// #1381: the suggestion is numbered against the whole project.
     #[test]
-    fn next_designator_spans_the_open_sheets_of_the_active_project() {
+    fn next_designator_is_unique_across_the_project() {
         use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
-        let dir = std::path::PathBuf::from("/w/a");
         let mut app = app_workspace("/w/a", &["a.snxsch", "b.snxsch"]);
-        open_with(
-            &mut app.document_state,
-            &dir.join("a.snxsch"),
-            sheet_holding("R4"),
-        );
-        open_with(
-            &mut app.document_state,
-            &dir.join("b.snxsch"),
-            sheet_holding("R1"),
-        );
-        open_with(
-            &mut app.document_state,
-            &std::path::PathBuf::from("/elsewhere/c.snxsch"),
-            sheet_holding("R9"),
-        );
-        app.document_state.active_path = Some(dir.join("b.snxsch"));
+        let a = std::path::PathBuf::from("/w/a/a.snxsch");
+        let b = std::path::PathBuf::from("/w/a/b.snxsch");
+        open_with(&mut app.document_state, &a, sheet_with(&["C1"]));
+        let on_b: Vec<String> = (1..=7).map(|n| format!("R{n}")).collect();
+        let on_b: Vec<&str> = on_b.iter().map(String::as_str).collect();
+        open_with(&mut app.document_state, &b, sheet_with(&on_b));
 
-        assert_eq!(app.next_designator_for_prefix("R"), "R5");
-        assert_eq!(app.next_designator_for_prefix("C"), "C1");
+        assert_eq!(app.next_designator_in_sheet(&a, "R"), "R8");
+        assert_eq!(app.next_designator_in_sheet(&b, "R"), "R8");
+    }
+
+    #[test]
+    fn a_free_standing_sheet_only_looks_at_itself() {
+        use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
+        let mut app = app_workspace("/w/a", &["a.snxsch"]);
+        let loose = std::path::PathBuf::from("/w/loose/x.snxsch");
+        let other = std::path::PathBuf::from("/w/loose/y.snxsch");
+        open_with(&mut app.document_state, &loose, sheet_with(&["R2"]));
+        open_with(&mut app.document_state, &other, sheet_with(&["R9"]));
+
+        assert_eq!(app.next_designator_in_sheet(&loose, "R"), "R3");
     }
 }

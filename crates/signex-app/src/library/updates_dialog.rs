@@ -47,6 +47,10 @@ use uuid::Uuid;
 use super::messages::LibraryMessage;
 use super::modal_chrome::{primary_btn_if, secondary_btn};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Modal width — wider than the recovery dialogs (520 px) because the
 /// drift list needs room for the ref-designator column + two version
 /// strings + the bump-kind badge.
@@ -221,10 +225,10 @@ impl LibraryUpdatesState {
 pub fn view<'a>(
     state: &'a LibraryUpdatesState,
     tokens: &'a ThemeTokens,
+    windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
 
     let title_label = state
         .schematic_path
@@ -235,9 +239,11 @@ pub fn view<'a>(
 
     let header = container(
         row![
-            text("Library Updates Available").size(14).color(text_c),
+            text("Library Updates Available")
+                .size(TS.heading)
+                .color(text_c),
             Space::new().width(Length::Fill),
-            text(title_label).size(11).color(muted),
+            text(title_label).size(TS.body).color(muted),
         ]
         .align_y(iced::Alignment::Center),
     )
@@ -246,9 +252,9 @@ pub fn view<'a>(
 
     // Build the drift list. Each row is checkbox + ref_des + library
     // name + version pair + bump-kind badge.
-    let mut rows: iced::widget::Column<'a, LibraryMessage> = column![].spacing(2);
+    let mut rows: iced::widget::Column<'a, LibraryMessage> = column![].spacing(SP.xs);
     for entry in &state.entries {
-        let row_view = render_entry_row(entry, text_c, muted, border);
+        let row_view = render_entry_row(entry, text_c, muted, tokens);
         rows = rows.push(row_view);
     }
 
@@ -258,12 +264,12 @@ pub fn view<'a>(
             state.entries.len(),
             if state.entries.len() == 1 { "" } else { "s" }
         ))
-        .size(11)
+        .size(TS.body)
         .color(muted),
         Space::new().height(8),
         scrollable(rows).height(Length::Fixed(LIST_MAX_H)),
     ]
-    .spacing(2);
+    .spacing(SP.xs);
 
     let selected = state.selected_count();
     let update_label = format!("Update Selected Components ({})", selected);
@@ -287,7 +293,8 @@ pub fn view<'a>(
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
-        column![header, container(body).padding([14, 16]), footer].width(Length::Fixed(MODAL_W)),
+        column![header, container(body).padding([14.0, SP.xl]), footer]
+            .width(super::card_len(windowed, MODAL_W)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
@@ -298,7 +305,7 @@ fn render_entry_row<'a>(
     entry: &'a LibraryUpdateEntry,
     text_c: iced::Color,
     muted: iced::Color,
-    _border: iced::Color,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     // Warning glyph for major bumps — leaves room for users to back
     // out before the click. Patch / minor get a neutral dot.
@@ -307,14 +314,14 @@ fn render_entry_row<'a>(
         _ => "  ",
     };
     let badge_color = match entry.bump_kind {
-        BumpKind::Major => iced::Color::from_rgb(0.86, 0.40, 0.36),
-        BumpKind::Minor => iced::Color::from_rgb(0.93, 0.65, 0.30),
-        BumpKind::Patch => iced::Color::from_rgb(0.42, 0.74, 0.42),
+        BumpKind::Major => theme_ext::error_color(tokens),
+        BumpKind::Minor => theme_ext::warning_color(tokens),
+        BumpKind::Patch => theme_ext::success_color(tokens),
     };
 
     let symbol_uuid = entry.symbol_uuid;
     let cb: Element<'a, LibraryMessage> = checkbox(entry.selected)
-        .size(14)
+        .size(TS.heading)
         .on_toggle(move |_| LibraryMessage::LibraryUpdatesToggleSelection(symbol_uuid))
         .into();
 
@@ -324,26 +331,31 @@ fn render_entry_row<'a>(
             Space::new().width(8),
             container(
                 text(format!("{}{}", prefix, entry.ref_des))
-                    .size(12)
+                    .size(TS.label)
                     .color(text_c)
             )
             .width(Length::Fixed(96.0)),
-            container(text(&entry.library_name).size(11).color(muted)).width(Length::Fixed(160.0)),
+            container(text(&entry.library_name).size(TS.body).color(muted))
+                .width(Length::Fixed(160.0)),
             container(
                 text(format!(
                     "{} \u{2192} {}",
                     entry.current_version, entry.latest_version
                 ))
-                .size(11)
+                .size(TS.body)
                 .color(text_c),
             )
             .width(Length::Fill),
-            container(text(entry.bump_kind.label()).size(10).color(badge_color))
-                .width(Length::Fixed(60.0)),
+            container(
+                text(entry.bump_kind.label())
+                    .size(TS.caption)
+                    .color(badge_color)
+            )
+            .width(Length::Fixed(60.0)),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([4, 4])
+    .padding([SP.s, SP.s])
     .into()
 }
 

@@ -8,7 +8,8 @@
 //! generation is no longer the latest for its library, or whose library
 //! was closed meanwhile, is dropped by [`LibraryState::finish_refresh`].
 
-use super::methods::{apply_primitive_listing, listings_complete};
+use super::methods::{apply_primitive_listing, listings_complete, summarize_row};
+use super::table_scan::{TableScan, scan_tables};
 use super::*;
 use crate::library::refresh::RefreshFollowUp;
 
@@ -49,48 +50,42 @@ pub struct RefreshStart {
 }
 
 impl LibrarySnapshot {
+    /// The picker summaries this read produced.
+    #[cfg(test)]
+    pub(super) fn summaries(&self) -> &[ComponentSummary] {
+        &self.summaries
+    }
+
     /// Read the library at `root` through `adapter`. Pure with respect to
     /// app state; safe on any thread.
     pub fn read(adapter: &dyn LibraryAdapter, root: &Path) -> Result<Self, LibraryError> {
         let stamp = signex_library::DiskStamp::of(root).ok();
         let names = adapter.list_tables()?;
-        let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
-        let mut summaries: Vec<ComponentSummary> = Vec::new();
-        let mut pricing: HashMap<Uuid, signex_library::RowPricing> = HashMap::new();
-        for name in names {
-            match adapter.table_pricing(&name) {
-                Ok(cached) => pricing.extend(cached),
-                // To the Messages panel, not only the log: prices silently
-                // missing from the browser look like "never refreshed".
-                Err(e) => crate::diagnostics::log_warning(format!(
+        let TableScan {
+            tables,
+            summaries,
+            pricing,
+        } = scan_tables(
+            adapter,
+            names,
+            summarize_row,
+            // To the Messages panel, not only the log: prices silently
+            // missing from the browser look like "never refreshed".
+            |name, e| {
+                crate::diagnostics::log_warning(format!(
                     "Library {root:?} table {name}: cached prices could not be read ({e}); none are shown.",
                     root = root.display().to_string()
-                )),
-            }
-            match adapter.read_table(&name) {
-                Ok(rows) => {
-                    for row in &rows {
-                        summaries.push(ComponentSummary {
-                            row_id: row.row_id,
-                            internal_pn: row.internal_pn.clone(),
-                            mpn: row.primary_mpn.mpn.clone(),
-                            state: row.state,
-                            description: String::new(),
-                        });
-                    }
-                    tables.insert(name, rows);
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        table = %name,
-                        error = %e,
-                        "refresh_components: read_table failed; entry left empty"
-                    );
-                    tables.insert(name, Vec::new());
-                }
-            }
-        }
+                ))
+            },
+            |name, e| {
+                tracing::warn!(
+                    target: "signex::library",
+                    table = %name,
+                    error = %e,
+                    "refresh_components: read_table failed; entry left empty"
+                )
+            },
+        );
         Ok(Self {
             stamp,
             tables,

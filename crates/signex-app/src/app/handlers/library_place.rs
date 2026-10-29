@@ -109,8 +109,10 @@ impl Signex {
     ) -> Task<Message> {
         if let Err(detail) = self.arm_resolved(&target_sheet, arm_epoch, &library_path, result) {
             self.report_place_failure(&detail);
+            return Task::none();
         }
-        Task::none()
+        // Closed sheets' numbers arrive off-thread; the ghost refreshes then.
+        self.start_designator_scan(&target_sheet)
     }
 
     fn arm_resolved(
@@ -244,7 +246,7 @@ impl Signex {
 }
 
 /// The schematic `Symbol` for a resolved row. Field set mirrors
-/// `place_selected_component`, plus the three library-identity slots.
+/// the placement path, plus the three library-identity slots.
 fn placed_symbol(
     resolved: &ResolvedPlacement,
     reference: String,

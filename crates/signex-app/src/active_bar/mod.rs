@@ -7,10 +7,13 @@ use iced::widget::{button, svg, text};
 use iced::{Background, Border, Color, Element, Theme};
 use signex_types::theme::{ThemeId, ThemeTokens};
 
-use crate::styles;
+use crate::styles::{self, TypeScale};
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
 
 mod dropdown;
 mod layout;
+mod planned;
 
 // Re-exported so `crate::active_bar::view_dropdown` / `dropdown_x_offset`
 // paths (overlays/mod.rs) resolve unchanged after the folder split.
@@ -20,6 +23,7 @@ pub(crate) use layout::{
     BAR_DROPDOWN_GAP_PX, BAR_HEIGHT_PX, BAR_TOP_MARGIN_PX, BAR_ZONE_HEIGHT_PX, bar_left_in_window,
     bar_width_for, menu_at,
 };
+pub use planned::{PLANNED_TOOLS, PLANNED_TOOLTIP, is_planned, planned_name, refusal_line};
 
 /// Whether `action` needs at least one selected item to make sense.
 /// Transform / align / distribute family — Altium greys these out when
@@ -60,14 +64,6 @@ pub fn requires_selection(action: &ActiveBarAction) -> bool {
 pub fn requires_net_color(action: &ActiveBarAction) -> bool {
     use ActiveBarAction::*;
     matches!(action, ClearNetColor | ClearAllNetColors)
-}
-
-/// Whether `action` is a placeholder for a feature that has not landed.
-/// #1248 — Parameter Set used to arm a `LabelType::Net` label, which joins
-/// connectivity; a rule directive must never do that, so the tool stays
-/// greyed out until a non-electrical directive object exists.
-pub fn is_planned(action: &ActiveBarAction) -> bool {
-    matches!(action, ActiveBarAction::PlaceParameterSet)
 }
 
 /// What the Directives group button does on a left click before any
@@ -329,6 +325,7 @@ pub enum ActiveBarAction {
     DrawBus,
     PlaceBusEntry,
     PlaceNetLabel,
+    PlaceJunction,
     // Power
     PlacePowerGND,
     PlacePowerVCC,
@@ -442,6 +439,7 @@ fn action_icon(action: &ActiveBarAction, tid: ThemeId) -> svg::Handle {
         ActiveBarAction::DrawBus => ic::icon_dd_bus(tid),
         ActiveBarAction::PlaceBusEntry => ic::icon_dd_bus_entry(tid),
         ActiveBarAction::PlaceNetLabel => ic::icon_dd_net_label(tid),
+        ActiveBarAction::PlaceJunction => ic::icon_dd_junction(tid),
         // Power
         ActiveBarAction::PlacePowerGND => ic::icon_dd_gnd(tid),
         ActiveBarAction::PlacePowerVCC => ic::icon_dd_vcc(tid),
@@ -493,6 +491,18 @@ fn action_icon(action: &ActiveBarAction, tid: ThemeId) -> svg::Handle {
 }
 
 // ─── View: Active Bar ────────────────────────────────────────
+
+/// Hover text for a bar button: its name, plus the shared "planned" note
+/// when the button's left-click action is a placeholder tool (#1249), so a
+/// greyed Harness button explains itself like the rows in its dropdown.
+fn button_tooltip(left: &ActiveBarMsg, name: &str) -> String {
+    match left {
+        ActiveBarMsg::Action(action) if is_planned(action) => {
+            format!("{name} — {PLANNED_TOOLTIP}")
+        }
+        _ => name.to_string(),
+    }
+}
 
 /// Action behind the draw-mode pill: re-select the tool that is
 /// already active, so a click never flips Bus drawing over to Wire.
@@ -582,7 +592,7 @@ fn bar_items(
         };
         ActiveBarItem::Button(ActiveBarButton {
             icon: ActiveBarIcon::Svg(icon),
-            tooltip: tooltip.to_string(),
+            tooltip: button_tooltip(&left, tooltip),
             enabled,
             selected,
             on_press: Some(left),
@@ -709,7 +719,7 @@ fn bar_items(
         let pill_text = styles::ti(tokens.text);
         let pill_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Pressed);
         let pill: Element<'static, ActiveBarMsg> =
-            button(text(mode_label.to_string()).size(12).color(pill_text))
+            button(text(mode_label.to_string()).size(TS.label).color(pill_text))
                 .padding([5, 7])
                 .on_press(ActiveBarMsg::Action(draw_mode_pill_action(current_tool)))
                 .style(move |_: &Theme, _| button::Style {

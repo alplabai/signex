@@ -15,9 +15,12 @@ pub(super) fn apply(editor: &mut crate::app::FootprintDocument, msg: FootprintEd
         FootprintEditorMsg::ToggleActiveBarMenu(menu) => toggle_active_bar_menu(editor, menu),
         FootprintEditorMsg::CloseActiveBarMenu => close_active_bar_menu(editor),
         FootprintEditorMsg::ActiveBarStub(label) => active_bar_stub(editor, label),
-        FootprintEditorMsg::ApplyFilterPreset(idx) => apply_filter_preset(editor, idx),
+        // Presets live in `interaction_state`, which this router cannot see;
+        // the dispatcher owns both arms (see `apply_filter_preset` /
+        // `capture_filter_preset`). Routed here they only close the menu.
+        FootprintEditorMsg::ApplyFilterPreset(_) => close_active_bar_menu(editor),
         FootprintEditorMsg::ToggleAllFilters => toggle_all_filters(editor),
-        FootprintEditorMsg::CaptureFilterPreset => capture_filter_preset(editor),
+        FootprintEditorMsg::CaptureFilterPreset => close_active_bar_menu(editor),
         FootprintEditorMsg::ActiveBarToggleSnap(flag) => active_bar_toggle_snap(editor, flag),
         FootprintEditorMsg::ActiveBarSetSnappingMode(mode) => {
             active_bar_set_snapping_mode(editor, mode)
@@ -70,12 +73,14 @@ fn active_bar_stub(editor: &mut crate::app::FootprintDocument, label: &'static s
     editor.state.active_bar_menu = None;
 }
 
-// Task 6 — apply footprint filter preset `idx` from the
-// persisted list. Re-read from disk on every apply so a
-// preset captured in a different tab/session is picked up
-// without needing an in-memory refresh.
-fn apply_filter_preset(editor: &mut crate::app::FootprintDocument, idx: usize) {
-    let presets = crate::fonts::read_footprint_filter_presets();
+// Task 6 — apply footprint filter preset `idx` from `presets`, the
+// in-memory list the dispatcher owns (never read from disk here: `update`
+// must not touch IO, and a just-captured preset may not have landed yet).
+pub(crate) fn apply_filter_preset(
+    editor: &mut crate::app::FootprintDocument,
+    presets: &[crate::active_bar::FootprintFilterPreset],
+    idx: usize,
+) {
     if let Some(preset) = presets.get(idx) {
         crate::library::editor::footprint::filter_presets::apply_preset(&mut editor.state, preset);
     }
@@ -93,20 +98,24 @@ fn toggle_all_filters(editor: &mut crate::app::FootprintDocument) {
 }
 
 // Task 6 — minimal capture affordance: snapshot the current
-// filter as a new default-named preset and persist it. No
-// rename UI yet (deferred — see filter_presets.rs). Silently
-// ignores the capture once `CUSTOM_FILTER_PRESET_LIMIT` slots
-// are full rather than evicting an existing preset.
-fn capture_filter_preset(editor: &mut crate::app::FootprintDocument) {
-    let mut presets = crate::fonts::read_footprint_filter_presets();
-    if presets.len() < crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT {
-        let name = format!("Filter {}", presets.len() + 1);
-        let preset =
-            crate::library::editor::footprint::filter_presets::capture_preset(&editor.state, name);
-        presets.push(preset);
-        crate::fonts::write_footprint_filter_presets(&presets);
-    }
+// filter as a new default-named preset. No rename UI yet (deferred — see
+// filter_presets.rs). Returns the full new list for the caller to store and
+// persist, or `None` once `CUSTOM_FILTER_PRESET_LIMIT` slots are full
+// (nothing is evicted). Pure: no disk access.
+pub(crate) fn capture_filter_preset(
+    editor: &mut crate::app::FootprintDocument,
+    presets: &[crate::active_bar::FootprintFilterPreset],
+) -> Option<Vec<crate::active_bar::FootprintFilterPreset>> {
     editor.state.active_bar_menu = None;
+    if presets.len() >= crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT {
+        return None;
+    }
+    let name = format!("Filter {}", presets.len() + 1);
+    let preset =
+        crate::library::editor::footprint::filter_presets::capture_preset(&editor.state, name);
+    let mut next = presets.to_vec();
+    next.push(preset);
+    Some(next)
 }
 
 fn active_bar_toggle_snap(

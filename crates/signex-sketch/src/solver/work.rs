@@ -19,6 +19,7 @@
 //! | Jacobian (accounted as central differences) | `2·n·m` |
 //! | one LM iteration | `(2n + 2)·m + m·n² + n³` |
 //! | row-space projection (undo pass) | `m²·n + m³` |
+//! | redundancy pass, one block of `r` rows over `d` columns | `r·d + 4·d·Σᵢ min(i, d)` |
 
 use crate::error::SolveError;
 
@@ -49,6 +50,24 @@ pub(crate) fn row_space_cost(n: usize, m: usize) -> u64 {
     m.saturating_mul(m)
         .saturating_mul(n)
         .saturating_add(m.saturating_mul(m).saturating_mul(m))
+}
+
+/// Work of the redundancy scan of one block of `rows` Jacobian rows over
+/// `cols` distinct state columns: densifying the rows (`r·d`) and one
+/// two-pass Gram-Schmidt projection per row against the basis kept so far,
+/// `4·b·d` multiply-adds against a basis of `b <= min(i, d)` vectors. This is
+/// the worst case (every row independent), so a block is charged, and refused,
+/// before any of it runs.
+pub(crate) fn redundancy_block_cost(rows: usize, cols: usize) -> u64 {
+    let (r, d) = (rows as u64, cols as u64);
+    // Σ_{i<r} min(i, d): the triangle up to d, then d per further row.
+    let basis_sum = if r <= d {
+        r.saturating_mul(r.saturating_sub(1)) / 2
+    } else {
+        (d.saturating_mul(d.saturating_sub(1)) / 2).saturating_add((r - d).saturating_mul(d))
+    };
+    r.saturating_mul(d)
+        .saturating_add(4u64.saturating_mul(d).saturating_mul(basis_sum))
 }
 
 /// Work units of the DOF analysis after a solve: one Jacobian, its QR
@@ -130,6 +149,17 @@ impl WorkMeter {
         }
         self.spent = total;
         Ok(())
+    }
+
+    /// Charge `cost` work units only if they fit what is left. A refusal
+    /// leaves the pool untouched, unlike [`WorkMeter::charge`]: it is for
+    /// optional, advisory work that may be skipped.
+    pub(crate) fn try_charge(&mut self, cost: u64) -> bool {
+        if cost > self.remaining() {
+            return false;
+        }
+        self.spent += cost;
+        true
     }
 
     /// Record the DOF analysis of a sketch with `n` variables and `m` rows.

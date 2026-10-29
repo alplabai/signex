@@ -36,20 +36,6 @@ pub fn write_first_run_tour_dismissed(dismissed: bool) {
 // Persistent search queries (UX_IMPROVEMENTS_OVER_ALTIUM §1.1)
 // ──────────────────────────────────────────────────────────────────────────
 
-/// Read the last-typed Components-panel filter, if any. Empty string
-/// when missing or malformed — that's the same as a fresh session for
-/// the panel.
-pub fn read_component_filter() -> String {
-    read_component_filter_from(load_prefs_json().as_ref())
-}
-
-pub fn read_component_filter_from(json: Option<&serde_json::Value>) -> String {
-    let Some(json) = json else {
-        return String::new();
-    };
-    json["component_filter"].as_str().unwrap_or("").to_string()
-}
-
 /// Read the persisted per-`.snxlib` Library Browser search queries.
 /// Keyed by the absolute path's display string; entries for libraries
 /// that no longer exist on disk are harmless — they're loaded but only
@@ -79,8 +65,7 @@ pub fn read_library_browser_searches() -> std::collections::HashMap<PathBuf, Str
     out
 }
 
-/// Writes the search boxes (Components filter + per-library Library
-/// Browser queries) into `prefs.json`. The production store of the
+/// Writes the search boxes (per-library Library Browser queries) into `prefs.json`. The production store of the
 /// debounced search-prefs loop; it runs on a background thread via `Task`,
 /// never inside `update` (#859). The change is merged key by key into what
 /// is on disk under the prefs IO lock, so entries this session never
@@ -104,12 +89,6 @@ impl PrefsSearchStore {
 impl crate::persist::DebouncedStore<crate::persist::SearchPrefsChange> for PrefsSearchStore {
     fn write(&self, change: &crate::persist::SearchPrefsChange) -> Result<(), String> {
         try_update_prefs_json(&self.path, "search boxes", |prefs| {
-            if let Some(filter) = &change.component_filter {
-                prefs.insert(
-                    "component_filter".to_string(),
-                    serde_json::Value::String(filter.clone()),
-                );
-            }
             if change.library_searches.is_empty() {
                 return;
             }
@@ -226,6 +205,99 @@ pub fn write_move_keeps_wires_pref(enabled: bool) {
 pub fn write_move_keeps_wires_pref_at(path: &Path, enabled: bool) {
     update_prefs_json(path, "move_keeps_wires", |prefs| {
         prefs.insert("move_keeps_wires".to_string(), serde_json::json!(enabled));
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Net insight on hover
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read "Show net info on hover" (#1270). Defaults to on when the key is
+/// missing or not a boolean.
+pub fn read_net_hover_pref_from(json: Option<&serde_json::Value>) -> bool {
+    json.and_then(|json| json["net_hover_enabled"].as_bool())
+        .unwrap_or(true)
+}
+
+pub fn write_net_hover_pref(enabled: bool) {
+    write_net_hover_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_net_hover_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, "net_hover_enabled", |prefs| {
+        prefs.insert("net_hover_enabled".to_string(), serde_json::json!(enabled));
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Select by drag direction
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read "Select by drag direction" (#1257). Defaults to on when the key is
+/// missing or not a boolean.
+pub fn read_drag_direction_select_pref_at(path: &Path) -> bool {
+    read_drag_direction_select_pref_from(read_prefs_json(path).as_ref())
+}
+
+pub fn read_drag_direction_select_pref_from(json: Option<&serde_json::Value>) -> bool {
+    json.and_then(|json| json["drag_direction_select"].as_bool())
+        .unwrap_or(true)
+}
+
+pub fn write_drag_direction_select_pref(enabled: bool) {
+    write_drag_direction_select_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_drag_direction_select_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, "drag_direction_select", |prefs| {
+        prefs.insert(
+            "drag_direction_select".to_string(),
+            serde_json::json!(enabled),
+        );
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Increment step and designators on paste
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read the "Increment step" (#1253). A missing, non-numeric or zero value is
+/// the default; one outside the allowed range is clamped.
+pub fn read_increment_step_pref_from(json: Option<&serde_json::Value>) -> i32 {
+    json.and_then(|json| json["increment_step"].as_i64())
+        .map(signex_types::text_increment::clamp_step)
+        .unwrap_or(signex_types::text_increment::STEP_DEFAULT)
+}
+
+pub fn write_increment_step_pref(step: i32) {
+    write_increment_step_pref_at(&prefs_path(), step)
+}
+
+pub fn write_increment_step_pref_at(path: &Path, step: i32) {
+    update_prefs_json(path, "increment_step", |prefs| {
+        prefs.insert("increment_step".to_string(), serde_json::json!(step));
+    })
+}
+
+/// Read "Designators on paste" (#1263). A missing or unknown value is Keep.
+pub fn read_paste_designators_pref_from(
+    json: Option<&serde_json::Value>,
+) -> crate::paste_prefs::PasteDesignators {
+    json.and_then(|json| json["paste_designators"].as_str())
+        .map(crate::paste_prefs::PasteDesignators::from_token)
+        .unwrap_or_default()
+}
+
+pub fn write_paste_designators_pref(mode: crate::paste_prefs::PasteDesignators) {
+    write_paste_designators_pref_at(&prefs_path(), mode)
+}
+
+pub fn write_paste_designators_pref_at(path: &Path, mode: crate::paste_prefs::PasteDesignators) {
+    update_prefs_json(path, "paste_designators", |prefs| {
+        prefs.insert(
+            "paste_designators".to_string(),
+            serde_json::Value::String(mode.token().to_string()),
+        );
     })
 }
 

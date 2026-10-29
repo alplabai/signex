@@ -37,16 +37,30 @@ pub struct UiState {
     /// semantics — mutated as the user edits, copied back into
     /// `component_classes` + persisted on Save.
     pub preferences_draft_component_classes: Vec<crate::fonts::ComponentClassEntry>,
-    /// Draft of `erc_severity_override` for Preferences ▸ Electrical Rules:
-    /// edited by the chips, committed + persisted on Save, re-seeded from
-    /// the committed map on Discard.
-    pub preferences_draft_erc_severity:
-        std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    /// What the draft was seeded from. Dirty and Save work on the delta
-    /// between draft and this snapshot, so a change the ERC dialog commits
-    /// while Preferences is open is neither "unsaved" nor reverted by Save.
-    pub preferences_seed_erc_severity:
-        std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    /// Preferences ▸ Rule Profiles (#1608).
+    pub profile_manager: crate::app::state::rule_profile_ui::ProfileManager,
+    /// The boot task is still reading the `User Default` profile into
+    /// `erc_severity_override` / `pin_matrix_overrides`. Edits of the machine's
+    /// rules wait for it: writing the maps back before they hold the file's
+    /// rules would replace them with defaults.
+    pub machine_rules_loading: bool,
+    /// Why the machine's rules are read-only this session: the migration of
+    /// the old preferences into `User Default` was refused (the preferences
+    /// file could not record it, or `User Default` could not be read), so an
+    /// edit now could be overwritten by that migration on a later launch.
+    pub machine_rules_locked: Option<String>,
+    /// Why the machine's rules are not being saved (the `User Default` file
+    /// could not be read or written), shown in the ERC dialog. `None` when
+    /// they are.
+    pub machine_rules_problem: Option<String>,
+    /// The profile new projects start from; `None` means "User Default if
+    /// the machine has one, else Signex Default" (#1608). Persisted in
+    /// `prefs.json`.
+    pub default_rule_profile: Option<String>,
+    /// The open "Save as profile" dialog of the ERC dialog (#1608).
+    pub save_profile_dialog: Option<crate::app::state::rule_profile_ui::SaveProfileDialog>,
+    /// Profile file writes waiting their turn (#1608).
+    pub profile_writes: crate::app::state::rule_profile_ui::ProfileWriteQueue,
     /// Loaded keyboard-shortcut profiles (bundled Altium / Classic
     /// built-ins plus any user profile in the OS config dir). Drives
     /// shortcut dispatch and the Help ▸ Keyboard Shortcuts reference.
@@ -74,6 +88,12 @@ pub struct UiState {
     /// and a `pub` field carrying it would leak a private type out of the
     /// crate's interface. Nothing outside needs to read it.
     pub(crate) keymap_pending_target: Option<crate::app::dispatch::input::InputTarget>,
+    /// Set while the pending chord is a complete shortcut waiting out
+    /// `CHORD_TIMEOUT` for a longer one (#1378). Gates the timer and the
+    /// pointer-cancel subscriptions, so they cost nothing when idle.
+    pub(crate) keymap_chord_wait: Option<crate::app::dispatch::chord::ChordWait>,
+    /// Source of `ChordWait::generation`.
+    pub(crate) keymap_chord_generation: u64,
     pub canvas_font_name: String,
     pub canvas_font_size: f32,
     pub canvas_font_bold: bool,
@@ -137,6 +157,26 @@ pub struct UiState {
     pub move_keeps_wires: bool,
     /// Draft mirror of [`Self::move_keeps_wires`] for the Preferences dialog.
     pub preferences_draft_move_keeps_wires: bool,
+    /// Show the net name, class and pins after a short dwell over a wire, pin
+    /// or label (#1270). On by default.
+    pub net_hover_enabled: bool,
+    /// Draft mirror of [`Self::net_hover_enabled`] for the Preferences dialog.
+    pub preferences_draft_net_hover_enabled: bool,
+    /// Saved "Select by drag direction" preference (#1257): a box drag to
+    /// the right selects what it fully contains, to the left what it touches.
+    /// Off falls back to the global `selection_mode`. Default on.
+    pub drag_direction_select: bool,
+    /// Draft mirror of [`Self::drag_direction_select`] for Preferences.
+    pub preferences_draft_drag_direction_select: bool,
+    /// Saved "Increment step" (#1253): how far a repeated label placement and
+    /// Paste Array move the trailing number of a text. Never zero.
+    pub increment_step: i32,
+    /// Draft mirror of [`Self::increment_step`] for Preferences.
+    pub preferences_draft_increment_step: i32,
+    /// Saved "Designators on paste" (#1263).
+    pub paste_designators: crate::paste_prefs::PasteDesignators,
+    /// Draft mirror of [`Self::paste_designators`] for Preferences.
+    pub preferences_draft_paste_designators: crate::paste_prefs::PasteDesignators,
     /// Saved "Window controls" placement (where min/max/close go).
     pub window_controls_placement: crate::chrome::controls::WindowControlsPlacement,
     /// Draft mirror of [`Self::window_controls_placement`] for Preferences.
@@ -150,6 +190,29 @@ pub struct UiState {
     pub desktop_button_layout: Option<crate::chrome::desktop::DesktopButtonLayout>,
     /// Last known mode of the main window (fullscreen hides the macOS inset).
     pub main_window_mode: iced::window::Mode,
+    /// The window that has keyboard focus, `None` while none of ours does.
+    /// The system menu bar acts on it (docs/MENU_BAR.md, "Native macOS menu").
+    pub focused_window: Option<iced::window::Id>,
+    /// The main window has opened (`MainWindowOpened`): dialogs may open
+    /// their own windows from here on.
+    pub main_window_opened: bool,
+    /// Text inputs were unfocused for the confirm dialog that now locks the
+    /// main window (once per lock).
+    pub lock_unfocused: bool,
+    /// The size each content-sized dialog window was last given.
+    pub modal_window_sizes: std::collections::HashMap<iced::window::Id, (f32, f32)>,
+    /// The quit confirm was refreshed because the unsaved list changed after it
+    /// opened (Discard All discarded nothing); the dialog says so.
+    pub quit_confirm_refreshed: bool,
+    /// How often an Edit Component Details window vanished unanswered, per
+    /// browser; after two it stays in the window so typed text is not lost.
+    pub edit_row_window_vanished: std::collections::HashMap<std::path::PathBuf, u8>,
+    /// How often a recovery prompt's window vanished without being answered;
+    /// after two it stays in the main window instead of reopening.
+    pub recovery_window_vanished: u8,
+    /// Which library browser opened each per-browser dialog window (edit row,
+    /// delete confirm): the window reads and answers for THAT browser.
+    pub library_modal_owners: std::collections::HashMap<iced::window::Id, std::path::PathBuf>,
     /// Logical size of the monitor holding the main window, when known.
     pub main_window_monitor_size: Option<iced::Size>,
     /// Opt-in autosave of recovery copies (#104). Off by default.
@@ -308,6 +371,11 @@ pub struct UiState {
     /// close request that intersects `dirty_paths`. Cleared on any
     /// of the three button choices.
     pub project_close_confirm: Option<crate::app::ProjectCloseConfirmState>,
+    /// "Create the missing sheet?" confirm; `Some` while it is up.
+    pub create_child_sheet_confirm: Option<crate::app::contracts::CreateChildSheetConfirmState>,
+    /// A Create Sheet request from the Projects tree waiting for its parent
+    /// sheet to open: `(parent sheet, missing child file)` (#1618).
+    pub pending_create_sheet: Option<(std::path::PathBuf, std::path::PathBuf)>,
     /// "Exit Signex — Unsaved Edits" confirmation modal. `Some` while
     /// the user is being asked to save / discard / cancel an app-exit
     /// request that intersects `dirty_paths`. Cleared on any of the
@@ -322,6 +390,13 @@ pub struct UiState {
     /// carries the in-flight Step X / Step Y / link buffers so
     /// keystrokes don't immediately mutate the active editor.
     pub grid_properties: Option<crate::app::GridPropertiesState>,
+    /// The Find Similar Objects dialog, while open (#1257).
+    pub find_similar: Option<crate::find_similar::FindSimilarState>,
+    /// Token of the newest Find Similar project search. Lives outside the
+    /// dialog state so a reopened dialog never reuses an old token.
+    pub find_similar_generation: u64,
+    /// The open Paste Array dialog (#1264).
+    pub paste_array: Option<crate::paste_array::PasteArrayState>,
     /// v0.18.14.1 — Custom Selection Filter modal draft. `Some`
     /// while the dialog is visible; the eight-bool draft mirror
     /// commits on Apply, discards on Cancel.
@@ -353,7 +428,10 @@ pub struct UiState {
     /// An "Update from profile" waiting for the user's confirmation, with the
     /// diff it would apply (#1085). Nothing is changed until confirmed.
     pub pending_profile_update: Option<crate::app::state::PendingProfileUpdate>,
-    /// Per-rule severity override — if empty, the rule's default is used.
+    /// The machine's rule set, as the `User Default` profile holds it (#1608):
+    /// per-rule severity overrides, used by a project that stores no rules of
+    /// its own. If empty, each rule's default is used. Loaded from the profile
+    /// at launch and written back to it on every edit.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     /// Net-color overrides keyed by net-label text. Drives the Active-Bar
@@ -533,6 +611,10 @@ impl UiState {
             || self.preferences_draft_pcb_gpu_render != self.pcb_gpu_render
             || self.preferences_draft_annotate_undo != self.annotate_undo
             || self.preferences_draft_move_keeps_wires != self.move_keeps_wires
+            || self.preferences_draft_net_hover_enabled != self.net_hover_enabled
+            || self.preferences_draft_drag_direction_select != self.drag_direction_select
+            || self.preferences_draft_increment_step != self.increment_step
+            || self.preferences_draft_paste_designators != self.paste_designators
             || self.preferences_draft_window_controls_placement != self.window_controls_placement
             || self.preferences_draft_autosave_enabled != self.autosave_enabled
             || self.preferences_draft_symbol_grid_style != self.symbol_grid_style
@@ -546,7 +628,6 @@ impl UiState {
             || self.preferences_draft_ui_scale_percent
                 != crate::ui_scale::scale_to_percent(self.ui_scale)
             || self.preferences_draft_component_classes != self.component_classes
-            || self.preferences_draft_erc_severity != self.preferences_seed_erc_severity
             || self
                 .preferences_keymap_editor
                 .differs_from(&self.keymap_profiles)

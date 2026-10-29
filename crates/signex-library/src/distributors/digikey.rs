@@ -66,6 +66,8 @@ pub enum DigiKeyAuthError {
     Keyring(String),
     #[error("no refresh token stored")]
     NoRefreshToken,
+    #[error("authorization cancelled before the token was stored")]
+    Cancelled,
 }
 
 impl From<DigiKeyAuthError> for DistributorError {
@@ -77,6 +79,7 @@ impl From<DigiKeyAuthError> for DistributorError {
             DigiKeyAuthError::Config(m)
             | DigiKeyAuthError::Request(m)
             | DigiKeyAuthError::Keyring(m) => DistributorError::Auth(m),
+            DigiKeyAuthError::Cancelled => DistributorError::Auth(e.to_string()),
         }
     }
 }
@@ -231,22 +234,96 @@ impl DigiKeyAuth {
         returned_state: &str,
         expected_state: &CsrfToken,
     ) -> Result<String, DigiKeyAuthError> {
+        self.exchange_code_guarded(code, verifier, returned_state, expected_state, &|| true)
+    }
+
+    /// [`Self::exchange_code`] with a last-moment veto over persisting.
+    ///
+    /// `may_persist` is asked once the token endpoint has answered and
+    /// immediately before the refresh token would be written to the
+    /// keyring. Returning `false` yields [`DigiKeyAuthError::Cancelled`]
+    /// and writes nothing — the exchange is a network round trip, so a
+    /// user can cancel while it is in flight.
+    pub fn exchange_code_guarded(
+        &self,
+        code: &str,
+        verifier: PkceCodeVerifier,
+        returned_state: &str,
+        expected_state: &CsrfToken,
+        may_persist: &dyn Fn() -> bool,
+    ) -> Result<String, DigiKeyAuthError> {
+        self.exchange_code_inner(
+            code,
+            verifier,
+            returned_state,
+            expected_state,
+            may_persist,
+            &|refresh| {
+                self.keyring
+                    .set_secret(refresh)
+                    .map_err(|e| DigiKeyAuthError::Keyring(e.to_string()))
+            },
+        )
+    }
+
+    /// [`Self::exchange_code_guarded`] with the refresh-token sink injected,
+    /// so tests can observe persistence without the OS keyring. Compiled only
+    /// with the `test-support` feature: a caller with this entry point could
+    /// bypass the keyring, so it is not part of the shipped API.
+    #[cfg(feature = "test-support")]
+    pub fn exchange_code_into(
+        &self,
+        code: &str,
+        verifier: PkceCodeVerifier,
+        returned_state: &str,
+        expected_state: &CsrfToken,
+        may_persist: &dyn Fn() -> bool,
+        store_refresh: &dyn Fn(&str) -> Result<(), DigiKeyAuthError>,
+    ) -> Result<String, DigiKeyAuthError> {
+        self.exchange_code_inner(
+            code,
+            verifier,
+            returned_state,
+            expected_state,
+            may_persist,
+            store_refresh,
+        )
+    }
+
+    /// Delete the stored refresh token (idempotent). Used to undo a token a
+    /// cancelled OAuth flow managed to store before the cancel landed.
+    pub fn remove_stored_refresh_token() -> Result<(), DigiKeyAuthError> {
+        KeyringStore::for_provider("digikey", "refresh")
+            .and_then(|k| k.delete())
+            .map_err(|e| DigiKeyAuthError::Keyring(e.to_string()))
+    }
+
+    fn exchange_code_inner(
+        &self,
+        code: &str,
+        verifier: PkceCodeVerifier,
+        returned_state: &str,
+        expected_state: &CsrfToken,
+        may_persist: &dyn Fn() -> bool,
+        store_refresh: &dyn Fn(&str) -> Result<(), DigiKeyAuthError>,
+    ) -> Result<String, DigiKeyAuthError> {
         if returned_state != expected_state.secret() {
             return Err(DigiKeyAuthError::Request(
                 "CSRF state mismatch — refusing to exchange OAuth code".into(),
             ));
         }
-        let http = build_http_client();
+        let http = try_build_http_client()?;
         let token = self
             .client
             .exchange_code(AuthorizationCode::new(code.to_string()))
             .set_pkce_verifier(verifier)
             .request(&http)
             .map_err(|e| DigiKeyAuthError::Request(e.to_string()))?;
+        if !may_persist() {
+            return Err(DigiKeyAuthError::Cancelled);
+        }
         if let Some(refresh) = token.refresh_token() {
-            self.keyring
-                .set_secret(refresh.secret())
-                .map_err(|e| DigiKeyAuthError::Keyring(e.to_string()))?;
+            store_refresh(refresh.secret())?;
         }
         Ok(token.access_token().secret().clone())
     }
@@ -276,7 +353,7 @@ impl DigiKeyAuth {
                 Err(KeyringError::Backend(m)) => return Err(DigiKeyAuthError::Keyring(m)),
             }
         };
-        let http = build_http_client();
+        let http = try_build_http_client()?;
         let token = self
             .client
             .exchange_refresh_token(&RefreshToken::new(refresh))
@@ -312,8 +389,25 @@ impl DigiKeyAuth {
     }
 }
 
-fn build_http_client() -> reqwest::blocking::Client {
-    super::http::finish(super::http::client_builder().redirect(reqwest::redirect::Policy::none()))
+/// Client for the OAuth token exchanges. A TLS backend that cannot start
+/// comes back as an error the pricing walk reports, not a panic.
+fn try_build_http_client() -> Result<reqwest::blocking::Client, DigiKeyAuthError> {
+    try_build_http_client_with(build_http_client)
+}
+
+fn try_build_http_client_with(
+    build: impl FnOnce() -> Result<reqwest::blocking::Client, String>,
+) -> Result<reqwest::blocking::Client, DigiKeyAuthError> {
+    build().map_err(|e| DigiKeyAuthError::Config(format!("http client: {e}")))
+}
+
+/// DigiKey's client: no redirects, so a token endpoint cannot bounce the
+/// credentials elsewhere.
+fn build_http_client() -> Result<reqwest::blocking::Client, String> {
+    super::http::client_builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| e.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -324,7 +418,7 @@ pub struct DigiKeyAdapter {
     api_base: String,
     cache: Option<DistributorCache>,
     throttle: Mutex<Option<Instant>>,
-    http: reqwest::blocking::Client,
+    http: super::http::LazyClient,
     auth: AuthSource,
     /// ISO 4217 code sent as `X-DIGIKEY-Locale-Currency`; prices come back
     /// in it.
@@ -351,7 +445,7 @@ impl DigiKeyAdapter {
             api_base: DIGIKEY_API_BASE.into(),
             cache,
             throttle: Mutex::new(None),
-            http: build_http_client(),
+            http: super::http::LazyClient::new(build_http_client),
             auth: AuthSource::Oauth(Box::new(auth)),
             currency: DEFAULT_CURRENCY.into(),
             client_id,
@@ -370,7 +464,7 @@ impl DigiKeyAdapter {
             api_base: api_base.into(),
             cache,
             throttle: Mutex::new(None),
-            http: build_http_client(),
+            http: super::http::LazyClient::new(build_http_client),
             auth: AuthSource::InlineAccessToken(access_token.into()),
             currency: DEFAULT_CURRENCY.into(),
             client_id: None,
@@ -390,7 +484,7 @@ impl DigiKeyAdapter {
             api_base: api_base.into(),
             cache,
             throttle: Mutex::new(None),
-            http: build_http_client(),
+            http: super::http::LazyClient::new(build_http_client),
             auth: AuthSource::Oauth(Box::new(auth)),
             currency: DEFAULT_CURRENCY.into(),
             client_id,
@@ -429,7 +523,7 @@ impl DigiKeyAdapter {
             "Limit": 25,
             "Offset": 0,
         });
-        let resp = self.execute(self.http.post(&url).json(&body))?;
+        let resp = self.execute(self.http.get()?.post(&url).json(&body))?;
         let raw: DigiKeyResponse = resp
             .json()
             .map_err(|e| DistributorError::Backend(format!("decode: {e}")))?;
@@ -443,7 +537,7 @@ impl DigiKeyAdapter {
             self.api_base,
             super::price::encode_path_segment(sku)
         );
-        let resp = self.execute(self.http.get(&url))?;
+        let resp = self.execute(self.http.get()?.get(&url))?;
         let raw: DigiKeyDetailsResponse = resp
             .json()
             .map_err(|e| DistributorError::Backend(format!("decode: {e}")))?;
@@ -759,6 +853,16 @@ fn digikey_path_token(path: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn a_failed_http_client_build_is_a_config_error() {
+        let err = try_build_http_client_with(|| Err("tls init failed".into())).unwrap_err();
+        assert!(
+            matches!(&err, DigiKeyAuthError::Config(m) if m == "http client: tls init failed"),
+            "got {err:?}"
+        );
+    }
 
     #[test]
     fn a_product_url_uses_the_mpn_segment_not_the_numeric_id() {
@@ -777,8 +881,6 @@ mod tests {
         );
         assert_eq!(super::digikey_path_token("/"), None);
     }
-
-    use super::*;
 
     #[test]
     fn name_and_source_are_stable() {

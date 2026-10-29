@@ -11,27 +11,35 @@ use super::*;
 use crate::app::path_ops::{
     FileRenameDone, FileRenameKind, FileRenameRequest, ParentSheets, ReferencePlan, RenameIoError,
 };
+use crate::app::state::library_entry::{entry_resolves_to, with_new_leaf};
 
 /// Point the project's page list, PCB and schematic root at `new_name`.
-/// Returns whether anything changed.
+/// Entries match by resolved path and keep their directory prefix
+/// (`sub/Power.snxsch` becomes `sub/Power2.snxsch`, #1367). Returns whether
+/// anything changed.
 fn repoint_project_entries(
     loaded: &mut crate::app::state::LoadedProject,
-    old: &str,
+    from: &std::path::Path,
     new_name: &str,
 ) -> bool {
+    let fold = loaded.case_fold;
+    let dir = loaded.dir().to_path_buf();
+    let renamed_from = |entry: &str| {
+        entry_resolves_to(&dir, entry, from, fold).then(|| with_new_leaf(entry, new_name))
+    };
     let mut changed = false;
     for entry in loaded.data.sheets.iter_mut() {
-        if entry.filename == old {
-            entry.filename = new_name.to_string();
+        if let Some(new_entry) = renamed_from(&entry.filename) {
+            entry.filename = new_entry;
             changed = true;
         }
     }
-    if loaded.data.pcb_file.as_deref() == Some(old) {
-        loaded.data.pcb_file = Some(new_name.to_string());
+    if let Some(new_entry) = loaded.data.pcb_file.as_deref().and_then(renamed_from) {
+        loaded.data.pcb_file = Some(new_entry);
         changed = true;
     }
-    if loaded.data.schematic_root.as_deref() == Some(old) {
-        loaded.data.schematic_root = Some(new_name.to_string());
+    if let Some(new_entry) = loaded.data.schematic_root.as_deref().and_then(renamed_from) {
+        loaded.data.schematic_root = Some(new_entry);
         changed = true;
     }
     changed
@@ -129,17 +137,12 @@ impl Signex {
         // parent-sheet references are re-pointed through the engine
         // below. Nothing besides the rename itself is written to disk:
         // the touched documents are marked dirty for the user to save.
-        let old_filename = request
-            .from
-            .file_name()
-            .and_then(|s| s.to_str())
-            .map(|s| s.to_string());
         // Mutate the *owning* project's data, not the active project:
         // renaming a sheet of project B while project A is active should
         // still touch B. (#54)
-        if let (Some(old), Some(idx)) = (old_filename.as_ref(), owner_idx)
+        if let Some(idx) = owner_idx
             && let Some(loaded) = self.document_state.projects.get_mut(idx)
-            && repoint_project_entries(loaded, old, new_name)
+            && repoint_project_entries(loaded, &request.from, new_name)
         {
             // The sheet list changed in memory; without the dirty bit
             // `save_active_project_if_dirty` never writes the .snxprj and
@@ -200,13 +203,12 @@ impl Signex {
                 _ => {}
             }
         }
-        if let Some(mut engine) = self.document_state.engines.remove(old_path) {
+        if let Some(mut engine) = self.document_state.remove_engine(old_path) {
             // `Engine::save` writes to its own path; leaving the old one
             // would write the renamed sheet back under its old filename.
             engine.set_path(Some(new_path.to_path_buf()));
             self.document_state
-                .engines
-                .insert(new_path.to_path_buf(), engine);
+                .insert_engine(new_path.to_path_buf(), engine);
         }
         if let Some(mut editor) = self.document_state.symbol_editors.remove(old_path) {
             editor.path = new_path.to_path_buf();

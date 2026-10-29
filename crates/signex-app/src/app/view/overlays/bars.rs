@@ -12,6 +12,10 @@
 use super::*;
 use iced::widget::{column, container, row};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 impl Signex {
     /// True when a modal that must own the entire overlay stack is up —
     /// the error notice, the netlist-incomplete prompt, print preview, or
@@ -43,11 +47,14 @@ impl Signex {
     /// rather than live state. The two must agree term for term or Esc
     /// resolves against a stack that is not on screen.
     pub(crate) fn has_blocking_modal(&self) -> bool {
-        self.document_state.error_notice.is_some()
-            || self.document_state.netlist_incomplete_prompt.is_some()
+        (self.document_state.error_notice.is_some()
+            && !self.modal_detached(crate::app::state::ModalId::ErrorNotice))
+            || (self.document_state.netlist_incomplete_prompt.is_some()
+                && !self.modal_detached(crate::app::state::ModalId::NetlistIncompletePrompt))
             || (self.document_state.preview.is_some()
                 && !self.modal_detached(crate::app::state::ModalId::PrintPreview))
-            || self.ui_state.net_color_custom.show
+            || (self.ui_state.net_color_custom.show
+                && !self.modal_detached(crate::app::state::ModalId::NetColorCustom))
     }
 
     /// Export-error modal — appears when PDF / netlist / BOM export
@@ -55,7 +62,9 @@ impl Signex {
     /// empty schematic). Dismiss via OK button or clicking outside.
     /// Pushes the dismiss backdrop then the error card.
     pub(in crate::app::view) fn error_notice_overlay(&self) -> Vec<Element<'_, Message>> {
-        if self.document_state.error_notice.is_none() {
+        if self.document_state.error_notice.is_none()
+            || self.modal_detached(crate::app::state::ModalId::ErrorNotice)
+        {
             return Vec::new();
         }
         vec![
@@ -71,7 +80,9 @@ impl Signex {
     pub(in crate::app::view) fn netlist_incomplete_prompt_overlay(
         &self,
     ) -> Vec<Element<'_, Message>> {
-        if self.document_state.netlist_incomplete_prompt.is_none() {
+        if self.document_state.netlist_incomplete_prompt.is_none()
+            || self.modal_detached(crate::app::state::ModalId::NetlistIncompletePrompt)
+        {
             return Vec::new();
         }
         vec![
@@ -108,7 +119,9 @@ impl Signex {
     /// precise RGB inputs side-by-side. Pushes the dismiss backdrop
     /// then the picker card.
     pub(in crate::app::view) fn net_color_custom_overlay(&self) -> Vec<Element<'_, Message>> {
-        if !self.ui_state.net_color_custom.show {
+        if !self.ui_state.net_color_custom.show
+            || self.modal_detached(crate::app::state::ModalId::NetColorCustom)
+        {
             return Vec::new();
         }
         vec![
@@ -151,19 +164,19 @@ impl Signex {
                 iced::widget::text(
                     "Editing properties in the panel. Click Resume to keep placing."
                 )
-                .size(11)
+                .size(TS.body)
                 .color(text_c),
                 iced::widget::Space::new().height(6.0),
                 iced::widget::button(
                     iced::widget::text("Resume Placement")
-                        .size(12)
+                        .size(TS.label)
                         .color(iced::Color::WHITE)
                 )
                 .padding([6, 18])
                 .on_press(Message::Tool(ToolMessage::ResumePlacement))
                 .style(iced::widget::button::primary),
             ]
-            .spacing(8)
+            .spacing(SP.m)
             .align_x(iced::Alignment::Center),
         )
         .padding(24)
@@ -528,7 +541,7 @@ impl Signex {
         let (ww, wh) = window;
         let est_menu_w: f32 = crate::library::editor::symbol::context_menu::MENU_WIDTH;
         // Real card height = row count × one row's box + the panel's own
-        // 4px top/bottom padding (`container(col).padding(4)`). One row is
+        // 4px top/bottom padding (`container(col).padding(SP.s)`). One row is
         // a 13pt label in [5, 12] button padding, no icon at this level ≈
         // 28 px — see signex_widgets::active_bar::dropdown::view. The
         // collapsed menu is the stable 6-row top-level set (Place ▸, Join,
@@ -615,7 +628,7 @@ impl Signex {
                             .on_input(|t| Message::TextEdit(TextEditMsg::Changed(t)))
                             .on_submit(Message::TextEdit(TextEditMsg::Submit))
                             .size(font_px)
-                            .padding([1, 2])
+                            .padding([1.0, SP.xs])
                             .width(approx_w)
                             .style(move |_: &iced::Theme, _status: iced::widget::text_input::Status| {
                                 iced::widget::text_input::Style {
@@ -652,31 +665,9 @@ impl Signex {
         let text_muted = crate::styles::ti(document.panel_ctx.tokens.text_secondary);
         let has_sch = document.panel_ctx.has_schematic;
         let has_pcb = document.panel_ctx.has_pcb;
-        // Build a lookup of currently-open panel kinds so each row
-        // can show a ✓ mark. A panel counts as "open" if it lives in
-        // any dock region, floats on top, or owns a detached OS
-        // window.
-        let docked: std::collections::HashSet<crate::panels::PanelKind> = [
-            crate::dock::PanelPosition::Left,
-            crate::dock::PanelPosition::Right,
-            crate::dock::PanelPosition::Bottom,
-        ]
-        .iter()
-        .flat_map(|pos| document.dock.panel_kinds(*pos).to_vec())
-        .collect();
-        let floating: std::collections::HashSet<crate::panels::PanelKind> =
-            document.dock.floating.iter().map(|fp| fp.kind).collect();
-        let detached: std::collections::HashSet<crate::panels::PanelKind> = ui
-            .windows
-            .values()
-            .filter_map(|w| match w {
-                crate::app::state::WindowKind::DetachedPanel(k) => Some(*k),
-                _ => None,
-            })
-            .collect();
-        let is_open = |k: crate::panels::PanelKind| {
-            docked.contains(&k) || floating.contains(&k) || detached.contains(&k)
-        };
+        // A panel counts as "open" if it lives in any dock region,
+        // floats on top, or owns a detached OS window.
+        let is_open = |k: crate::panels::PanelKind| self.is_panel_open(k);
         let panel_items: Vec<Element<'_, Message>> = crate::panels::ALL_PANELS
             .iter()
             .filter(|&&kind| (!kind.needs_schematic() || has_sch) && (!kind.needs_pcb() || has_pcb))
@@ -690,17 +681,17 @@ impl Signex {
                     iced::widget::row![
                         iced::widget::container(
                             iced::widget::text(check.to_string())
-                                .size(11)
+                                .size(TS.body)
                                 .color(text_muted),
                         )
                         .width(Length::Fixed(16.0)),
                         iced::widget::text(kind.label().to_string())
-                            .size(11)
+                            .size(TS.body)
                             .color(text_c),
                     ]
                     .align_y(iced::Alignment::Center),
                 )
-                .padding([4, 12])
+                .padding([SP.s, SP.l])
                 .width(Length::Fill)
                 .on_press(Message::Overlay(OverlayMsg::OpenPanel(kind)))
                 .style(crate::styles::menu_item(&document.panel_ctx.tokens))

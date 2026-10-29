@@ -13,6 +13,7 @@
 
 mod alternate_symbols;
 mod datasheet;
+mod measurement;
 mod parameters;
 mod pin_map;
 mod sim;
@@ -98,12 +99,19 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         EditorMsg::ParamSetText { name, value } => parameters::set_text(state, name, value),
         EditorMsg::ParamSetNumberBuf { name, buf } => parameters::set_number_buf(state, name, buf),
         EditorMsg::ParamCommitNumber { name } => parameters::commit_number(state, name),
-        EditorMsg::ParamSetMeasurementBuf { name, buf } => {
-            parameters::set_measurement_buf(state, name, buf)
+        EditorMsg::ParamSetMeasurementBuf { name, buf, slot } => {
+            measurement::set_measurement_buf(state, name, buf, slot)
         }
         EditorMsg::ParamCommitMeasurement { name, unit } => {
-            parameters::commit_measurement(state, name, unit)
+            measurement::commit_measurement(state, name, unit)
         }
+        EditorMsg::ParamPrefixPicked {
+            name,
+            unit,
+            prefix,
+            slot,
+        } => measurement::pick_prefix(state, name, unit, prefix, slot),
+        EditorMsg::ParamUnitPicked { name, unit } => measurement::pick_unit(state, name, unit),
         EditorMsg::ParamSetBool { name, value } => parameters::set_bool(state, name, value),
         EditorMsg::ParamRemove { name } => parameters::remove(state, name),
         EditorMsg::ParamNewNameChanged(name) => state.new_param_name = name,

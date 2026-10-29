@@ -72,6 +72,12 @@ impl Signex {
                                 String::new(),
                                 String::new(),
                             ),
+                            Tool::Junction => (
+                                PrePlacementKind::Other,
+                                "Junction".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
                             Tool::NoErcDirective => (
                                 PrePlacementKind::Other,
                                 "No ERC".to_string(),
@@ -98,12 +104,10 @@ impl Signex {
                                     )
                                 } else {
                                     // A part on the cursor is the truth for its
-                                    // own form; `selected_component` is the
-                                    // legacy lib_id flow.
+                                    // own form.
                                     let (label, designator) = session_form
                                         .as_ref()
                                         .map(|f| (f.value.clone(), f.designator.clone()))
-                                        .or_else(|| self.current_component_defaults())
                                         .unwrap_or_else(|| ("NET".to_string(), String::new()));
                                     (
                                         PrePlacementKind::Component,
@@ -198,58 +202,25 @@ impl Signex {
                                 .filter(|value| !value.is_empty())
                         })
                         .unwrap_or(default_designator);
+                    let defaults = crate::panels::PrePlacementData::new(
+                        String::new(),
+                        PrePlacementKind::Other,
+                        String::new(),
+                        0.0,
+                        0.0,
+                    );
+                    let prev = self.document_state.panel_ctx.pre_placement.as_ref();
                     let prev_rotation = on_cursor_part
                         .map(|f| f.rotation)
-                        .or_else(|| {
-                            self.document_state
-                                .panel_ctx
-                                .pre_placement
-                                .as_ref()
-                                .map(|pp| pp.rotation)
-                        })
-                        .unwrap_or(0.0);
-                    let prev_font = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.font.clone())
-                        .unwrap_or_else(|| "Iosevka".to_string());
-                    let prev_font_size = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.font_size_pt)
-                        .unwrap_or(10);
-                    let prev_jh = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.justify_h)
-                        .unwrap_or(signex_types::schematic::HAlign::Left);
-                    let prev_jv = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.justify_v)
-                        .unwrap_or_default();
-                    let prev_shape_width = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.shape_width_mm)
-                        .unwrap_or(0.0);
-                    let prev_shape_fill = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.shape_fill)
-                        .unwrap_or(signex_types::schematic::FillType::None);
+                        .or_else(|| prev.map(|pp| pp.rotation))
+                        .unwrap_or(defaults.rotation);
+                    let prev_font = prev.map_or(defaults.font, |pp| pp.font.clone());
+                    let prev_font_size = prev.map_or(defaults.font_size_pt, |pp| pp.font_size_pt);
+                    let prev_jh = prev.map_or(defaults.justify_h, |pp| pp.justify_h);
+                    let prev_jv = prev.map_or(defaults.justify_v, |pp| pp.justify_v);
+                    let prev_shape_width =
+                        prev.map_or(defaults.shape_width_mm, |pp| pp.shape_width_mm);
+                    let prev_shape_fill = prev.map_or(defaults.shape_fill, |pp| pp.shape_fill);
                     self.document_state.panel_ctx.pre_placement =
                         Some(crate::panels::PrePlacementData {
                             tool_name,
@@ -386,6 +357,7 @@ impl Signex {
                     Tool::BusEntry => Some("Bus Entry".to_string()),
                     Tool::Text => Some("Text".to_string()),
                     Tool::NoConnect => Some("No Connect".to_string()),
+                    Tool::Junction => Some("Junction".to_string()),
                     Tool::NoErcDirective => Some("No ERC".to_string()),
                     Tool::Label => Some("Label".to_string()),
                     Tool::Component => Some("Component".to_string()),
@@ -393,6 +365,8 @@ impl Signex {
                     Tool::Rectangle => Some("Rectangle".to_string()),
                     Tool::Circle => Some("Circle".to_string()),
                     Tool::Sheet => Some("Sheet".to_string()),
+                    Tool::SheetEntry => Some("Sheet Entry".to_string()),
+                    Tool::Measure => Some("Measure".to_string()),
                     _ => None,
                 };
                 // Clear every cursor-following ghost so a leftover from a

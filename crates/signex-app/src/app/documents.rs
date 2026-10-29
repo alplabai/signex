@@ -267,6 +267,9 @@ pub struct SymbolDocument {
     /// Zero) render on every part; pins with `part_number == active_part`
     /// render on the active part only.
     pub active_part: u8,
+    /// Which body of a De Morgan symbol the canvas shows and new items are
+    /// stamped with. Items tagged body 0 show on both.
+    pub active_body: signex_types::schematic::BodyStyle,
     pub tool: crate::library::editor::symbol::canvas::SymbolTool,
     pub selected: Option<crate::library::editor::symbol::state::SymbolSelection>,
     pub ai_preview: Option<crate::library::editor::symbol::ai_stub::AiPinoutPreview>,
@@ -360,6 +363,11 @@ pub struct SymbolDocument {
 }
 
 impl SymbolDocument {
+    /// The unit and body the editor currently shows.
+    pub fn view(&self) -> crate::library::editor::symbol::state::PartView {
+        crate::library::editor::symbol::state::PartView::new(self.active_part, self.active_body)
+    }
+
     const DEFAULT_SYMBOL_VIEWPORT_WIDTH: f32 = 800.0;
     const DEFAULT_SYMBOL_VIEWPORT_HEIGHT: f32 = 500.0;
 
@@ -373,6 +381,7 @@ impl SymbolDocument {
             file,
             active_idx: 0,
             active_part: 1,
+            active_body: signex_types::schematic::BodyStyle::Normal,
             tool: crate::library::editor::symbol::canvas::SymbolTool::Select,
             selected: None,
             ai_preview: None,
@@ -876,6 +885,8 @@ pub enum Tool {
     Component,
     Text,
     NoConnect,
+    /// One click drops a junction dot at the snapped point.
+    Junction,
     /// Generic No-ERC directive (Altium's "Place No ERC").
     NoErcDirective,
     BusEntry,
@@ -888,6 +899,10 @@ pub enum Tool {
     Polyline,
     /// Two-click corner-to-corner hierarchical sheet symbol.
     Sheet,
+    /// One click on a sheet symbol's border places an entry (pin) there.
+    SheetEntry,
+    /// Two clicks measure the offset between two points (#1256). Read-only.
+    Measure,
 }
 
 impl std::fmt::Display for Tool {
@@ -900,6 +915,7 @@ impl std::fmt::Display for Tool {
             Tool::Component => write!(f, "Place Component"),
             Tool::Text => write!(f, "Place Text"),
             Tool::NoConnect => write!(f, "Place No Connect"),
+            Tool::Junction => write!(f, "Place Junction"),
             Tool::NoErcDirective => write!(f, "Place No ERC"),
             Tool::BusEntry => write!(f, "Place Bus Entry"),
             Tool::Line => write!(f, "Draw Line"),
@@ -908,6 +924,8 @@ impl std::fmt::Display for Tool {
             Tool::Arc => write!(f, "Draw Arc"),
             Tool::Polyline => write!(f, "Draw Polygon"),
             Tool::Sheet => write!(f, "Place Sheet"),
+            Tool::SheetEntry => write!(f, "Place Sheet Entry"),
+            Tool::Measure => write!(f, "Measure Distance"),
         }
     }
 }

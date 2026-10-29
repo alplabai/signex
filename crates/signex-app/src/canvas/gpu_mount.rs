@@ -1,26 +1,7 @@
-//! The schematic on the GPU path (#199 S2).
-//!
-//! Mounted only when [`crate::feature_flags::SCHEMATIC_GPU_RENDER_ENABLED`] is
-//! on, as three layers bottom to top:
-//!
-//! 1. [`SchematicBackdrop`] — paper, grid and sheet frame. No `update`:
-//!    `stack!` hands every event to every child, so a second handler would
-//!    place two symbols per click.
-//! 2. [`SchematicShaderProgram`] — the sheet content on the GPU. Its scene
-//!    is built here, in `draw`, because only `draw` knows the cull bounds.
-//! 3. The interactive [`SchematicCanvas`] in [`ContentMode::GpuOverlay`] — the
-//!    only layer with `update`. Its content layer draws just the rotated texts
-//!    the GPU glyph atlas cannot (`TextItem::is_axis_aligned`), then dim,
-//!    selection, ghosts, previews and the HUD as ever.
-//!
-//! The PCB's order (interactive canvas at the bottom) is not reused: it would
-//! bury selection and ghosts under the content.
-//!
-//! **A move-drag falls back to the CPU, wholly.** The drag state lives in the
-//! overlay's `Program::State`, which the shader cannot see, so the overlay
-//! draws the sheet itself (the retained static layer plus the moving items,
-//! `drag_layers`) and the shader draws nothing until the drag ends
-//! ([`DragOnCpu`]). Nothing is drawn twice; a GPU drag split is a later slice.
+//! The schematic on the GPU path (#199): a five-layer `stack!`, mounted only
+//! when [`crate::feature_flags::SCHEMATIC_GPU_RENDER_ENABLED`] is on. Layer
+//! order, the move-drag split and the reasons are in
+//! `docs/architecture/schematic-gpu-mount.md`.
 
 use std::sync::Arc;
 
@@ -28,6 +9,7 @@ use iced::widget::{shader, stack};
 use iced::{Element, Length};
 use signex_gfx::scene::Scene;
 
+use super::gpu_drag::{SchematicDragShaderProgram, SchematicStaticTextLayer};
 use super::*;
 use crate::scene_shader::{ScenePrimitive, SchematicSurface};
 
@@ -50,6 +32,12 @@ pub(crate) fn view<'a>(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Elem
         shader(SchematicShaderProgram::new(slot, prefs))
             .width(Length::Fill)
             .height(Length::Fill),
+        canvas(SchematicStaticTextLayer::new(slot, prefs))
+            .width(Length::Fill)
+            .height(Length::Fill),
+        shader(SchematicDragShaderProgram::new(slot, prefs))
+            .width(Length::Fill)
+            .height(Length::Fill),
         canvas(SchematicCanvas::new(slot, prefs).gpu_overlay())
             .width(Length::Fill)
             .height(Length::Fill),
@@ -64,27 +52,33 @@ impl SchematicCanvas<'_> {
         self
     }
 
-    /// The scene the shader draws, with its generation.
-    ///
-    /// Empty (and uncached) while a drag draws on the CPU, and when there is
-    /// nothing to draw. Goes through the same [`ContentSceneCache`] the CPU
-    /// replay uses, so the overlay's rotated-text pass reads the same scene.
-    ///
-    /// [`ContentSceneCache`]: crate::schematic_runtime::ContentSceneCache
-    fn gpu_scene(&self, bounds: Rectangle) -> (Arc<Scene>, Option<u64>) {
-        let empty = || (Arc::new(Scene::default()), None);
-        if self.drag_on_cpu.is_live(self.move_epoch, &self.selected) {
-            return empty();
-        }
-        let Some(snapshot) = self.active_snapshot() else {
-            return empty();
-        };
+    /// The live pan/zoom as the transform the scene is built and replayed with.
+    pub(super) fn screen_transform(&self) -> crate::schematic_runtime::ScreenTransform {
         let cam = self.camera();
-        let transform = crate::schematic_runtime::ScreenTransform {
+        crate::schematic_runtime::ScreenTransform {
             offset_x: cam.offset.x,
             offset_y: cam.offset.y,
             scale: cam.scale,
+        }
+    }
+
+    /// The scene the shader draws, with its generation: the sheet content, or
+    /// during a move-drag its static layer.
+    ///
+    /// Goes through the same [`ContentSceneCache`] the CPU replay uses, so the
+    /// overlay's rotated-text pass reads the same scene.
+    ///
+    /// [`ContentSceneCache`]: crate::schematic_runtime::ContentSceneCache
+    fn gpu_scene(&self, bounds: Rectangle) -> (Arc<Scene>, Option<u64>) {
+        let Some(snapshot) = self.active_snapshot() else {
+            return (empty_scene(), None);
         };
+        let transform = self.screen_transform();
+        let bounds = crate::schematic_runtime::frame_local_bounds(bounds);
+        if let Some(frame) = self.live_drag() {
+            let (scene, generation) = self.drag_static_scene(snapshot, &frame, &transform, bounds);
+            return (scene.unwrap_or_else(empty_scene), generation);
+        }
         let focus_set = self.auto_focus_set();
         let mut cache = self.content_scene.borrow_mut();
         let scene = cache
@@ -92,135 +86,22 @@ impl SchematicCanvas<'_> {
                 snapshot,
                 &transform,
                 &self.prefs.canvas_colors,
-                crate::schematic_runtime::frame_local_bounds(bounds),
+                bounds,
                 focus_set.as_ref(),
                 self.scene_overrides(),
             )
             .cloned();
         match scene {
             Some(scene) => (scene, cache.generation()),
-            None => empty(),
+            None => (empty_scene(), None),
         }
     }
 }
 
-/// What the overlay last saw of a move gesture, for the shader to read.
-///
-/// The drag state lives in the overlay's `Program::State`, which the shader
-/// cannot reach, so `update` leaves a mark here. A click-click float can be
-/// ended by an app message (Delete, Undo) that no canvas event announces, so
-/// the mark keeps what the overlay judges staleness by, the move epoch and the
-/// selection, and [`Self::is_live`] re-judges at draw time instead of trusting
-/// the last event.
-#[derive(Default)]
-pub(crate) struct DragOnCpu(std::cell::RefCell<Option<Mark>>);
-
-struct Mark {
-    /// `Some` for a click-click float: the epoch and selection it was seen with.
-    float: Option<(u64, super::move_pick::SelectionSet)>,
-}
-
-/// What `update` saw of the move gesture.
-pub(super) enum Gesture<'a> {
-    Idle,
-    Drag,
-    Float {
-        epoch: u64,
-        selected: &'a [signex_types::schematic::SelectedItem],
-    },
-}
-
-impl DragOnCpu {
-    /// Whether the overlay is drawing a drag the shader must stand aside for.
-    pub(super) fn is_live(
-        &self,
-        move_epoch: u64,
-        selected: &[signex_types::schematic::SelectedItem],
-    ) -> bool {
-        match &*self.0.borrow() {
-            None => false,
-            Some(Mark { float: None }) => true,
-            Some(Mark {
-                float: Some((epoch, set)),
-            }) => *epoch == move_epoch && super::move_pick::same_selection(set, selected),
-        }
-    }
-
-    pub(super) fn publish(&self, gesture: Gesture<'_>) {
-        let mut mark = self.0.borrow_mut();
-        *mark = match gesture {
-            Gesture::Idle => None,
-            Gesture::Drag => Some(Mark { float: None }),
-            Gesture::Float { epoch, selected } => {
-                let unchanged = matches!(&*mark, Some(Mark { float: Some((e, set)) })
-                    if *e == epoch && super::move_pick::same_selection(set, selected));
-                if unchanged {
-                    return;
-                }
-                Some(Mark {
-                    float: Some((epoch, selected.iter().cloned().collect())),
-                })
-            }
-        };
-    }
-
-    /// Forget the gesture: the canvas it belonged to is gone or reloaded.
-    pub(super) fn clear(&self) {
-        *self.0.borrow_mut() = None;
-    }
-}
-
-impl SchematicCanvas<'_> {
-    /// Leave the shader a mark of the move gesture after `action`'s event, and
-    /// make sure a redraw follows when that turned it on or off.
-    ///
-    /// An event that only captures (Esc) requests no redraw, and the shader
-    /// returning would otherwise stay unseen until the mouse moves.
-    // iced forwards every event here, `RedrawRequested` before each draw
-    // included, so the mark is re-judged right before the shader reads it.
-    pub(super) fn publish_drag(
-        &self,
-        state: &CanvasState,
-        action: Option<canvas::Action<Message>>,
-    ) -> Option<canvas::Action<Message>> {
-        let was_live = self.drag_on_cpu.is_live(self.move_epoch, &self.selected);
-        let gesture = if self.drag_delta(state).is_none() {
-            Gesture::Idle
-        } else if state.is_floating() {
-            Gesture::Float {
-                epoch: self.move_epoch,
-                selected: &self.selected,
-            }
-        } else {
-            Gesture::Drag
-        };
-        self.drag_on_cpu.publish(gesture);
-        if was_live == self.drag_on_cpu.is_live(self.move_epoch, &self.selected) {
-            return action;
-        }
-        Some(with_redraw(action))
-    }
-}
-
-/// `action` with a redraw guaranteed, keeping its message and capture.
-///
-/// The action's own redraw request is dropped for `NextFrame`: this is only
-/// reached when the gesture just flipped, and the next frame is the soonest the
-/// shader can show it, so a later `RedrawRequest::At` would only delay that.
-fn with_redraw(action: Option<canvas::Action<Message>>) -> canvas::Action<Message> {
-    let Some(action) = action else {
-        return canvas::Action::request_redraw();
-    };
-    let (message, _, status) = action.into_inner();
-    let rebuilt = match message {
-        Some(message) => canvas::Action::publish(message),
-        None => canvas::Action::request_redraw(),
-    };
-    if status == iced::event::Status::Captured {
-        rebuilt.and_capture()
-    } else {
-        rebuilt
-    }
+/// A shared empty scene, so an idle layer allocates nothing per frame.
+pub(super) fn empty_scene() -> Arc<Scene> {
+    static EMPTY: std::sync::OnceLock<Arc<Scene>> = std::sync::OnceLock::new();
+    Arc::clone(EMPTY.get_or_init(Default::default))
 }
 
 /// Paper, grid and sheet frame, and nothing that reacts to input.

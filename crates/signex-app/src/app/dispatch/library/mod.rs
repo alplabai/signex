@@ -54,17 +54,22 @@ mod pricing_tests;
 mod primitive_picker;
 mod read_only;
 mod recovery;
+#[cfg(test)]
+mod recovery_read_only_tests;
 mod refresh;
 mod registration;
 mod rename_guard;
 mod settings;
 #[cfg(test)]
+mod settings_tests;
+#[cfg(test)]
 mod stale_row_tests;
 mod updates;
+mod use_site;
 
 use recovery::{
     handle_recovery_broken_binding, handle_recovery_git_missing, handle_recovery_library_missing,
-    handle_recovery_library_missing_locate_result, route_open_error,
+    handle_recovery_library_missing_locate_result, open_error_notice, route_open_error,
 };
 
 impl Signex {
@@ -171,10 +176,7 @@ impl Signex {
             } => self.handle_editor_event(EditorAddress::new(library_path, table, row_id), msg),
             LibraryMessage::Picker(msg) => self.handle_picker_message(msg),
             LibraryMessage::Settings(msg) => self.handle_library_settings_message(msg),
-            LibraryMessage::JumpToUseSite(site) => {
-                commands::jump_to_use_site(&site);
-                Task::none()
-            }
+            LibraryMessage::JumpToUseSite(site) => self.handle_jump_to_use_site(site),
             LibraryMessage::Noop => Task::none(),
 
             LibraryMessage::ConfirmCloseLibrary {
@@ -204,6 +206,11 @@ impl Signex {
                 library_path,
                 result,
             ),
+            LibraryMessage::DesignatorsScanned { generation, result } => {
+                self.apply_designator_scan(generation, &result);
+                Task::none()
+            }
+            LibraryMessage::PlacedPart(msg) => self.dispatch_placed_part_message(msg),
             LibraryMessage::SymbolChoiceResolved {
                 target_sheet,
                 engine_instance,

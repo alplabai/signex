@@ -35,9 +35,12 @@ pub mod diagnostics;
 pub mod dock;
 pub mod feature_flags;
 pub mod find_replace;
+pub mod find_similar;
 pub mod first_run_tour;
 pub mod fonts;
 pub mod icons;
+pub mod paste_array;
+pub mod paste_prefs;
 // Crate-internal: `IgnoreResult` is an in-tree convention, not part of
 // this crate's API surface, so the module stays private.
 mod ignore;

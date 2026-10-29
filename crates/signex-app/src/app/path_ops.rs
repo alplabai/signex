@@ -279,6 +279,10 @@ pub struct ReferencePlan {
     /// Project sheets that could not be read or parsed, so whether they
     /// reference the renamed file is unknown. Reported, never skipped silently.
     pub unchecked: Vec<String>,
+    /// Parents of a rewrite that are read-only (written by a newer Signex),
+    /// so the engine would refuse the re-point. The rename must not start
+    /// when this is non-empty: the file would move and the reference stay.
+    pub read_only_parents: Vec<PathBuf>,
 }
 
 /// Which file the rename moves.

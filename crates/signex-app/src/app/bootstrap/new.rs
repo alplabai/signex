@@ -33,9 +33,11 @@ impl Signex {
         // Before any document opens, so no open races a half-finished move.
         // Synchronous on purpose: boot runs before the event loop, so no open
         // message can be handled until it returns, which a Task could not
-        // promise. The work is bounded (`pending_move::MAX_ENTRIES_PER_PASS`),
-        // but a recovery folder on a slow network home directory can still
-        // delay the first frame.
+        // promise. The work is bounded (`pending_move::MAX_ENTRIES_PER_PASS`)
+        // and touches only the recovery folder and the two document paths of
+        // each entry (pure key arithmetic plus a `stat`); it never probes a
+        // document's folder for its case rule. A recovery folder on a slow
+        // network home directory can still delay the first frame.
         app.autosave_finish_pending_moves();
         // The installed-font probe walks the system font directories, so it
         // runs off the update thread; until it lands, named families render
@@ -45,6 +47,7 @@ impl Signex {
         });
         // The old prefs.json rules become the user's default profile; here,
         // not in `new`, so a test app never writes a profile library.
+        app.ui_state.machine_rules_loading = crate::rule_profiles::profiles_dir().is_some();
         let profile_migration = Self::migrate_default_profile_task();
         let controls_probe = Self::detect_window_controls_task();
         (
@@ -110,7 +113,6 @@ impl Signex {
             crate::dock::DockLayoutSnapshot::capture(&dock),
         );
 
-        let initial_component_filter = crate::fonts::read_component_filter_from(prefs);
         let search_prefs = crate::persist::SearchPrefsSync::new(std::sync::Arc::new(
             crate::fonts::PrefsSearchStore::user_prefs(),
         ));
@@ -129,6 +131,7 @@ impl Signex {
         // Reading twice would be harmless today but invites the two to be
         // seeded from different parses of a file edited mid-launch.
         let symbol_grid_size_mm = crate::fonts::read_symbol_grid_size_mm_pref_from(prefs);
+        let component_classes = crate::fonts::read_component_classes_pref_from(prefs);
         let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref_from(prefs);
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref_from(prefs);
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref_from(prefs);
@@ -136,23 +139,18 @@ impl Signex {
             crate::fonts::read_ui_scale_pref_from(prefs, &crate::fonts::prefs_file_path());
         let annotate_undo = crate::fonts::read_annotate_undo_pref_from(prefs);
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
+        let net_hover_enabled = crate::fonts::read_net_hover_pref_from(prefs);
+        let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
+        let increment_step = crate::fonts::read_increment_step_pref_from(prefs);
+        let paste_designators = crate::fonts::read_paste_designators_pref_from(prefs);
         let window_controls_placement =
             crate::fonts::read_window_controls_placement_pref_from(prefs);
         let autosave_enabled = crate::fonts::read_autosave_enabled_pref_from(prefs);
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
-        let erc_severity_boot = crate::fonts::read_erc_severity_overrides_from(prefs);
+        let default_rule_profile = crate::fonts::read_default_rule_profile_pref_from(prefs);
         let grid_size_mm = crate::fonts::read_grid_size_mm_pref_from(prefs)
             .unwrap_or(crate::canvas::grid::GRID_SIZES_MM[1]);
-        let standard_lib_dir = helpers::find_standard_symbols_dir();
-        let mut standard_libraries = standard_lib_dir
-            .as_deref()
-            .map(helpers::list_standard_libraries)
-            .unwrap_or_default();
-        if !standard_libraries.is_empty() {
-            standard_libraries.insert(0, helpers::ALL_LIBRARIES.to_string());
-        }
-
         // Keyboard shortcut profiles: prefer the user's saved set from
         // the OS config dir, else fall back to the bundled Altium /
         // Classic built-ins (which must always parse). The active
@@ -243,14 +241,14 @@ impl Signex {
                 visible_grid_mm: 1.27,
                 snap_hotspots: true,
                 ui_font_name: crate::fonts::read_ui_font_pref_from(prefs),
-                component_classes: crate::fonts::read_component_classes_pref_from(prefs),
-                preferences_draft_component_classes: crate::fonts::read_component_classes_pref_from(
-                    prefs,
-                ),
+                component_classes: component_classes.clone(),
+                preferences_draft_component_classes: component_classes.clone(),
                 keymap_profiles,
                 active_keymap,
                 keymap_pending_sequence: Vec::new(),
                 keymap_pending_target: None,
+                keymap_chord_wait: None,
+                keymap_chord_generation: 0,
                 canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
                 canvas_font_size: 11.0,
                 canvas_font_bold: false,
@@ -291,11 +289,27 @@ impl Signex {
                 preferences_draft_annotate_undo: annotate_undo,
                 move_keeps_wires,
                 preferences_draft_move_keeps_wires: move_keeps_wires,
+                net_hover_enabled,
+                preferences_draft_net_hover_enabled: net_hover_enabled,
+                drag_direction_select,
+                preferences_draft_drag_direction_select: drag_direction_select,
+                increment_step,
+                preferences_draft_increment_step: increment_step,
+                paste_designators,
+                preferences_draft_paste_designators: paste_designators,
                 window_controls_placement,
                 preferences_draft_window_controls_placement: window_controls_placement,
                 window_controls_placement_at_boot: window_controls_placement,
                 desktop_button_layout: None,
                 main_window_mode: iced::window::Mode::Windowed,
+                focused_window: None,
+                main_window_opened: false,
+                lock_unfocused: false,
+                modal_window_sizes: Default::default(),
+                quit_confirm_refreshed: false,
+                edit_row_window_vanished: Default::default(),
+                recovery_window_vanished: 0,
+                library_modal_owners: Default::default(),
                 main_window_monitor_size: None,
                 autosave_enabled,
                 preferences_draft_autosave_enabled: autosave_enabled,
@@ -325,9 +339,14 @@ impl Signex {
                 rename_dialog: None,
                 remove_dialog: None,
                 project_close_confirm: None,
+                create_child_sheet_confirm: None,
+                pending_create_sheet: None,
                 app_quit_confirm: None,
                 enable_version_control: None,
                 grid_properties: None,
+                find_similar: None,
+                find_similar_generation: 0,
+                paste_array: None,
                 selection_filter_custom: None,
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),
@@ -337,9 +356,16 @@ impl Signex {
                 erc_run_rule_set: None,
                 pending_profile_update: None,
                 erc_running: false,
-                erc_severity_override: erc_severity_boot.clone(),
-                preferences_draft_erc_severity: erc_severity_boot.clone(),
-                preferences_seed_erc_severity: erc_severity_boot,
+                // The machine's rules live in the `User Default` profile; the
+                // boot task loads them (`ErcMsg::UserDefaultLoaded`).
+                erc_severity_override: std::collections::HashMap::new(),
+                profile_manager: Default::default(),
+                default_rule_profile,
+                machine_rules_loading: false,
+                machine_rules_problem: None,
+                machine_rules_locked: None,
+                save_profile_dialog: None,
+                profile_writes: Default::default(),
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,
                 annotate_dialog_open: false,
@@ -359,7 +385,7 @@ impl Signex {
                 parameter_manager_open: false,
                 reorder_picker: None,
                 move_pick: None,
-                pin_matrix_overrides: crate::fonts::read_pin_matrix_overrides_from(prefs),
+                pin_matrix_overrides: std::collections::HashMap::new(),
                 annotate_locked: std::collections::HashSet::new(),
                 annotate_preview: Default::default(),
                 reprefix_generation: 0,
@@ -385,8 +411,11 @@ impl Signex {
                     crate::autosave::default_recovery_dir(),
                 ),
                 project_fs: Default::default(),
+                navigator_job: Default::default(),
+                ownership: Default::default(),
                 erc_fallback_noted: Default::default(),
                 profile_drift_noted: Default::default(),
+                read_only_refusal_noted: Default::default(),
                 rules_history: Default::default(),
                 missing_fonts: Default::default(),
                 tabs: vec![],
@@ -407,6 +436,8 @@ impl Signex {
                 net_class_picks: std::collections::HashMap::new(),
                 next_project_id: 0,
                 next_undo_group: 0,
+                documents_epoch: 0,
+                designator_cache: Default::default(),
                 next_pcb_revision: 0,
                 pcb_revisions: std::collections::HashMap::new(),
                 undo_groups: std::collections::HashMap::new(),
@@ -444,13 +475,6 @@ impl Signex {
 
                     properties_tab: 0,
                     net_classes: Default::default(),
-                    standard_libraries,
-                    active_library: None,
-                    library_symbols: vec![],
-                    selected_component: None,
-                    selected_pins: vec![],
-                    selected_lib_symbol: None,
-                    components_split: 250.0,
                     project_tree: vec![],
                     project_tree_builds: 0,
                     project_tree_selected: None,
@@ -464,6 +488,7 @@ impl Signex {
                     drawing_edit_buf: std::collections::HashMap::new(),
                     drawing_edit_buf_for: None,
                     selected_drawing: None,
+                    selected_drawing_placement: Default::default(),
                     selected_child_sheet: None,
                     child_sheet_border_picker_open: false,
                     child_sheet_fill_picker_open: false,
@@ -478,7 +503,6 @@ impl Signex {
                     paper_edge_drafts: Vec::new(),
                     numeric_draft: None,
                     title_block_sheet: None,
-                    component_filter: initial_component_filter,
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
                     erc_diagnostics: Vec::new(),
@@ -506,18 +530,18 @@ impl Signex {
                     document_font_family: None,
                 },
                 history: crate::panels::history::HistoryPanelState::default(),
-                standard_lib_dir,
-                loaded_lib: std::collections::HashMap::new(),
                 preview: None,
                 page_setup_memory: Default::default(),
                 tab_placements: Default::default(),
+                net_nav: Default::default(),
                 raster_queue: Default::default(),
                 error_notice: None,
                 netlist_incomplete_prompt: None,
                 bom_preview: None,
                 pending_git_commits: Vec::new(),
                 inflight_git_commits: std::collections::HashSet::new(),
-                requeued_git_commits: std::collections::HashMap::new(),
+                unbound_git_commits: std::collections::HashSet::new(),
+                git_commit_sequences: std::collections::HashMap::new(),
                 active_git_repos: std::collections::HashSet::new(),
                 paused_git_projects: std::collections::HashSet::new(),
                 pending_opens: Default::default(),
@@ -571,6 +595,8 @@ impl Signex {
                 last_tool: std::collections::HashMap::new(),
                 pending_power: None,
                 placement: None,
+                last_placement: None,
+                paste_counters: None,
                 placement_epoch: 0,
                 pending_port: None,
                 bus_entry_size: signex_types::schematic::SCHEMATIC_BUS_ENTRY_DEFAULT_SIZE,
@@ -578,7 +604,16 @@ impl Signex {
                 hover_started_at: None,
                 hover_screen_pos: None,
             },
-            library: crate::library::LibraryState::default(),
+            library: crate::library::LibraryState {
+                // The values parsed above, not a second read of `prefs.json`.
+                new_library_defaults: crate::library::NewLibraryDefaults {
+                    grid_size_mm: symbol_grid_size_mm,
+                    pin_selection: symbol_pin_selection,
+                    component_classes,
+                },
+                ..Default::default()
+            },
+            native_menu: Default::default(),
         };
         // The PCB canvas starts from the loaded grid state, not its own
         // defaults, so the first frame honours a saved "grid off" (#682).
@@ -586,14 +621,33 @@ impl Signex {
             app.ui_state.grid_visible,
             app.ui_state.visible_grid_mm as f64,
         );
-        // v0.9 Stage 9: load + mount globally-configured libraries
-        // before the first frame so the Components Panel's Global
-        // section is populated from the get-go.
-        app.library.global_libraries =
-            crate::panels::components_panel::global_prefs::load_and_mount_all(&mut app.library);
-        // #328 — the bundled stock library is mounted every launch, not
-        // user-configured; a missing one warns and leaves the section empty.
-        crate::panels::components_panel::stock::mount_stock(&mut app.library);
+        // v0.9 Stage 9: the globally-configured libraries and the bundled
+        // stock library (#328) are mounted off the UI thread (#1470): the
+        // config list and the stock path probe are cheap, but every manifest
+        // and table read runs in a Task, so the first frame is not blocked.
+        // Each lands as `LibraryMessage::MountFinished`; a missing library
+        // warns and stays empty.
+        app.library.global_libraries = crate::panels::components_panel::global_prefs::load();
+        let configured: Vec<std::path::PathBuf> = app
+            .library
+            .global_libraries
+            .iter()
+            .map(|entry| entry.path.clone())
+            .collect();
+        // The stock library registers first, so a global entry or project
+        // library naming the same file finds it already pending and read-only.
+        let stock_path = crate::panels::components_panel::stock::register_stock(&mut app.library);
+        let global_paths: Vec<std::path::PathBuf> = configured
+            .into_iter()
+            .filter(|path| {
+                app.library
+                    .request_mount(path, crate::library::mount::MountIntent::Silent)
+                    == crate::library::mount::MountRequest::Spawn
+            })
+            .collect();
+        let mount_task = iced::Task::batch([crate::library::mount::spawn_pending_mounts(
+            stock_path.into_iter().chain(global_paths).collect(),
+        )]);
         // #630 — seed the two render surfaces that consume a grid style
         // from the saved preferences. Everything else the old
         // `render_config` global carried (canvas font/size/style) had no
@@ -614,7 +668,10 @@ impl Signex {
             .is_native(),
         ));
         app.ui_state.main_window_id = Some(main_id);
-        let boot_task = open_task.map(|id| Message::Window(WindowMsg::MainWindowOpened(id)));
+        let boot_task = iced::Task::batch([
+            open_task.map(|id| Message::Window(WindowMsg::MainWindowOpened(id))),
+            mount_task,
+        ]);
         (app, boot_task)
     }
 }
@@ -654,6 +711,7 @@ fn native_title_bar(_native: bool) -> iced::window::settings::PlatformSpecific {
 #[cfg(test)]
 mod tests {
     use super::main_window_settings;
+    use crate::app::Signex;
 
     #[test]
     fn the_main_window_routes_close_requests_through_the_app() {
@@ -662,5 +720,15 @@ mod tests {
             assert!(!s.exit_on_close_request, "native={native}");
             assert_eq!(s.decorations, native);
         }
+    }
+
+    /// #1470 — startup mounts nothing before the first frame: the stock and
+    /// global libraries come in as Tasks, so `new()` returns with every
+    /// library still unmounted (and no install-directory probe ran).
+    #[test]
+    fn bootstrap_returns_before_any_library_is_mounted() {
+        let (app, _boot) = Signex::new();
+        assert!(app.library.open_libraries.is_empty());
+        assert!(app.library.stock_library.is_none());
     }
 }

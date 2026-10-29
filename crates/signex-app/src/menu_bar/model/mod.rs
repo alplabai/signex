@@ -38,13 +38,17 @@ pub struct MenuItem {
     pub label: String,
     pub shortcut: Option<Shortcut>,
     pub state: ItemState,
+    /// `Some` for a toggle row (a panel): whether its check mark shows.
+    pub checked: Option<bool>,
 }
 
-/// A placeholder has no handler yet; a live row has one and is greyed out
+/// A placeholder is a planned feature with no handler yet (greyed, "planned"
+/// tooltip); an unavailable row is greyed informational text; a live row has one and is greyed out
 /// unless enabled in the current context.
 #[derive(Debug, Clone)]
 pub enum ItemState {
     Placeholder,
+    Unavailable,
     Live {
         action: MenuMessage,
         is_enabled: bool,

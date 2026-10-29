@@ -24,6 +24,11 @@ pub struct SketchData {
     pub arrays: Vec<Array>,
     #[serde(default)]
     pub parameters: ParameterTable,
+    /// Tokens of the footprint fields an earlier bake produced; see
+    /// [`crate::baked_kinds`]. Absent when empty, so a file the sketch never
+    /// baked re-saves byte-identical. Unknown tokens are kept as read.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub baked_kinds: Vec<String>,
 }
 
 /// What [`SketchData::remove_entity_cascade`] took out of the sketch.
