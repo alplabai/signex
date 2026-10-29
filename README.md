@@ -63,7 +63,7 @@ board.
   Signex 365 cloud PLM
 
 > **Status:** Early development, heading for the first release candidate.
-> **v0.15.0** (2026-07-23) is the latest tagged release; **v1.0.0-rc.1**, the
+> **v0.15.0** (2026-07-23) is the latest tagged release; **v1.0.0-rc.2**, the
 > first release candidate of the **v1.0.0 Community Preview** (schematic-only),
 > is next. `trunk` already carries work past v0.15.0 that no release contains
 > yet: a stock library with placeable parts, typed component values with a
@@ -214,7 +214,7 @@ signex/
 ## Download
 
 Before downloading, check the [hardware requirements](#hardware-requirements).
-These packages are published for every release from `v1.0.0-rc.1` on. Release candidates such as `v1.0.0-rc.1` are
+These packages are published for every release from `v1.0.0-rc.2` on. Release candidates such as `v1.0.0-rc.2` are
 published as GitHub **pre-releases**, which the `releases/latest` link skips:
 open the [Releases page](https://github.com/alplabai/signex/releases) to get
 one. The latest stable release, `v0.15.0`, carries a smaller set (x86_64 Linux
@@ -226,13 +226,13 @@ glibc 2.39.
 | Windows | `signex-setup-<arch>-<version>.exe` | x86_64, ARM64 (`aarch64`) | Run for a guided installation |
 | Windows | `signex-windows-<arch>-<version>.zip` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
 | macOS | `signex-macos-universal-<version>.dmg` | Apple silicon and Intel | Open and drag Signex to Applications |
-| Linux | `signex_<version>_<arch>.deb` | x86_64 (`amd64`), ARM64 (`arm64`) | Debian or Ubuntu (glibc 2.35 or newer from `v1.0.0-rc.1` on): `sudo apt install ./signex_<version>_<arch>.deb` |
+| Linux | `signex_<version>_<arch>.deb` | x86_64 (`amd64`), ARM64 (`arm64`) | Debian or Ubuntu (glibc 2.35 or newer from `v1.0.0-rc.2` on): `sudo apt install ./signex_<version>_<arch>.deb` |
 | Linux | `Signex-<version>-<arch>.AppImage` | x86_64, ARM64 (`aarch64`) | Most distributions: make executable with `chmod +x`, then run |
 | Linux | `signex-linux-<arch>-<version>.tar.gz` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
 | All | `signex-<version>.cdx.json` | n/a | CycloneDX SBOM: the `signex` binary's dependencies for every platform (a superset of any one build), with version and licence |
 | All | `SHA256SUMS.txt` | n/a | SHA-256 checksums of every file above |
 
-From `v1.0.0-rc.1` on, the Linux packages (`.deb`, AppImage, tarball) are built on Ubuntu 22.04 and
+From `v1.0.0-rc.2` on, the Linux packages (`.deb`, AppImage, tarball) are built on Ubuntu 22.04 and
 need **glibc 2.35 or newer**, so they run on Ubuntu 22.04, Debian 12 and later
 distributions. Check yours with `ldd --version`.
 
@@ -342,7 +342,7 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings  # Lint
 | Footprint Editor — `.snxfpt` pad + parametric-sketch editor, Newton-LM solver (19 constraints), Align/Distribute/Move/Fill/Text tooling | v0.14 | Done |
 | Editor Fixes — footprint/symbol editor correctness, order-independent netlist, crash-safe persistence, pinned toolchain | v0.15 | Done |
 | Command Registry & Symbol Units | v0.16 | In progress |
-| **Community Preview** — schematic-only editor | **v1.0** | Release candidate `v1.0.0-rc.1` next |
+| **Community Preview** — schematic-only editor | **v1.0** | Release candidate `v1.0.0-rc.2` next |
 | PCB Viewer — GPU rendering, layers, cross-probe | v2.0 | |
 | PCB Routing + DRC + Output | v2.1–v2.2 | |
 | **Community Release** — full schematic + PCB editor | **v2.2** | |

@@ -295,3 +295,30 @@ fn a_commit_that_adds_the_ignore_block_names_it_in_its_message() {
     let message = head.message().unwrap();
     assert!(message.contains("also commits: .gitignore"), "{message}");
 }
+
+/// #1734 creates pending libraries off the update loop and finishes a
+/// left-behind one with `complete_init`; its first commit carries the
+/// managed block too (both go through `commit_initial`).
+#[test]
+fn a_completed_init_commits_the_managed_ignore_block() {
+    crate::git_identity::test_identity::install();
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("Left").join("Left.snxlib");
+    drop(LocalGitAdapter::init(&file, manifest("Left"), LibraryInitOptions::default()).unwrap());
+    let root = file.parent().unwrap().to_path_buf();
+    fs::write(root.join(".gitignore"), "mine\n").unwrap();
+
+    LocalGitAdapter::complete_init(
+        &file,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+
+    let text = fs::read_to_string(root.join(".gitignore")).unwrap();
+    assert!(carries_the_block(&text), "{text}");
+    assert!(text.lines().any(|line| line == "mine"), "{text}");
+    assert_eq!(head_blob(&root, ".gitignore").unwrap(), text.as_bytes());
+}

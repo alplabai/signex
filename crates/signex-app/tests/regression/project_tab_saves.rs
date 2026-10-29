@@ -12,6 +12,23 @@ use signex_app::persist::{AtomicFileSink, DocumentSaves, DocumentSink};
 use crate::project_tab_support::{edit_description, fixture, is_dirty, on_disk, open_tab};
 use crate::settle_support::{settle, settle_task};
 
+/// The messages `task` emits, undelivered.
+fn outputs(task: iced::Task<Message>) -> Vec<Message> {
+    let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+        return Vec::new();
+    };
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(async {
+        let mut out = Vec::new();
+        while let Some(action) = futures::StreamExt::next(&mut stream).await {
+            if let iced_runtime::Action::Output(message) = action {
+                out.push(message);
+            }
+        }
+        out
+    })
+}
+
 /// Fails every write: the disk-full case.
 struct FailingSink(&'static str);
 
@@ -21,56 +38,44 @@ impl DocumentSink for FailingSink {
     }
 }
 
-/// Ctrl+S twice with an edit between, then the edit reverted so memory equals
-/// the FIRST snapshot again. Returns both tasks.
-fn two_overlapping_saves(
-    f: &mut crate::project_tab_support::Fixture,
-) -> (iced::Task<Message>, iced::Task<Message>) {
-    open_tab(&mut f.app);
-    edit_description(&mut f.app, "a");
-    let first = f.app.update(Message::File(FileMsg::Save));
-    edit_description(&mut f.app, "ab");
-    let second = f.app.update(Message::File(FileMsg::Save));
-    edit_description(&mut f.app, "a");
-    (first, second)
-}
-
 #[test]
-fn an_older_write_finishing_first_cannot_clear_the_marker_of_a_newer_one() {
-    let mut f = fixture();
-    let (first, second) = two_overlapping_saves(&mut f);
-
-    // The first completion arrives while memory equals its bytes again.
-    settle_task(&mut f.app, first);
-    assert!(
-        is_dirty(&f),
-        "a newer write is still owed; nothing is clean"
-    );
-
-    settle_task(&mut f.app, second);
-    assert_eq!(on_disk(&f.prj).description.as_deref(), Some("ab"));
-    assert!(
-        is_dirty(&f),
-        "disk holds \"ab\" but memory is \"a\": the marker must stay"
-    );
-}
-
-#[test]
-fn a_superseded_older_write_leaves_the_newest_to_decide() {
+fn a_second_save_while_one_runs_waits_and_writes_the_newer_bytes_after_it() {
     let mut f = fixture();
     open_tab(&mut f.app);
     edit_description(&mut f.app, "a");
     let first = f.app.update(Message::File(FileMsg::Save));
     edit_description(&mut f.app, "ab");
+    // One writer per file: this queues a follow-up instead of a second job.
     let second = f.app.update(Message::File(FileMsg::Save));
-
-    // The newer job reaches the sink first, so the older one is skipped.
     settle_task(&mut f.app, second);
-    assert!(!is_dirty(&f), "the newest write matches memory");
+    assert!(
+        f.app.document_state.document_saves.is_saving(&f.prj),
+        "the first write is still the only one running"
+    );
+
+    // The first completion finds memory ahead of its bytes: still dirty, and
+    // the queued follow-up (run by `settle_task`) writes the newer ones.
     settle_task(&mut f.app, first);
 
     assert_eq!(on_disk(&f.prj).description.as_deref(), Some("ab"));
-    assert!(!is_dirty(&f), "the skipped write changes nothing");
+    assert!(!is_dirty(&f), "the follow-up matches memory");
+}
+
+#[test]
+fn an_older_write_finishing_cannot_clear_the_marker_of_edits_made_after_it_began() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "a");
+    let first = f.app.update(Message::File(FileMsg::Save));
+    edit_description(&mut f.app, "ab");
+
+    // Completion delivered without the follow-up, to look at the state alone.
+    for message in outputs(first) {
+        drop(f.app.update(message));
+    }
+
+    assert_eq!(on_disk(&f.prj).description.as_deref(), Some("a"));
+    assert!(is_dirty(&f), "disk holds \"a\" but memory is \"ab\"");
 }
 
 #[test]
@@ -119,7 +124,7 @@ impl DocumentSink for FailingWhenContains {
 }
 
 #[test]
-fn a_late_failure_of_an_older_write_raises_no_save_failure() {
+fn a_failed_write_is_recorded_and_the_queued_save_that_follows_clears_it() {
     let mut f = fixture();
     open_tab(&mut f.app);
     f.app.document_state.document_saves =
@@ -127,26 +132,28 @@ fn a_late_failure_of_an_older_write_raises_no_save_failure() {
     edit_description(&mut f.app, "doomed");
     let older = f.app.update(Message::File(FileMsg::Save));
     edit_description(&mut f.app, "kept");
-    let newer = f.app.update(Message::File(FileMsg::Save));
+    let queued = f.app.update(Message::File(FileMsg::Save));
+    settle_task(&mut f.app, queued);
 
-    // The older write fails after the newer one began.
+    // The first write fails; the follow-up carries the newer bytes.
     settle_task(&mut f.app, older);
+
+    assert_eq!(on_disk(&f.prj).description.as_deref(), Some("kept"));
+    assert!(!is_dirty(&f), "the follow-up decides");
     assert!(
         f.app
             .document_state
             .document_saves
             .failure(&f.prj)
             .is_none(),
-        "a stale failure must not be recorded for Save All"
+        "a later success forgets the failure"
     );
+    // Kept on purpose: the first write really failed, so its Save Failed
+    // card stays until the user dismisses it.
     assert!(
-        f.app.document_state.error_notice.is_none(),
-        "a stale failure must not raise the Save Failed card"
+        f.app.document_state.error_notice.is_some(),
+        "the card of the failed write is still shown"
     );
-
-    settle_task(&mut f.app, newer);
-    assert_eq!(on_disk(&f.prj).description.as_deref(), Some("kept"));
-    assert!(!is_dirty(&f), "the newest write decides");
 }
 
 #[test]

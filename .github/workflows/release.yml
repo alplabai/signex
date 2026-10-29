@@ -108,8 +108,20 @@ jobs:
             libxkbcommon-dev libwayland-dev libvulkan-dev \
             libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
             mesa-vulkan-drivers
+      # Same runner as ci.yml's `test · workspace`: nextest runs every test in
+      # its own process. `cargo test` runs a binary's tests as threads of one
+      # process, and the wgpu/lavapipe canvas tests in signex-app crash with
+      # SIGSEGV when they share a process (v1.0.0-rc.1's release run).
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
       - name: Test
-        run: cargo test --workspace
+        env:
+          SIGNEX_REQUIRE_LAVAPIPE: "1"
+        run: cargo nextest run --workspace --profile ci
+      # nextest does not run doctests.
+      - name: Doctests
+        run: cargo test --workspace --doc
 
   # Compiles with cargo (so every dependency build.rs runs here) and holds NO
   # signing material. Windows/macOS legs only hand the unsigned binary to the

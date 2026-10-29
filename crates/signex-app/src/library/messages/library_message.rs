@@ -74,7 +74,7 @@ pub enum LibraryMessage {
     /// `commands::register_pending_library` and stashes the spec on
     /// `LoadedProject.pending_libraries`. The actual `.snxlib/`
     /// directory + git scaffolding are deferred to project save
-    /// (`commands::materialize_pending_library`), per the
+    /// (`commands::create_pending_library`), per the
     /// "wait for explicit user save" invariant.
     LibraryCreateOptionsConfirm,
     /// "Library Options" modal — Cancel button (or Esc). Drops the

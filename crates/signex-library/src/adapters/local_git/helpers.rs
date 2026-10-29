@@ -636,6 +636,95 @@ pub(super) fn write_lfs_attributes(root_dir: &Path) -> Result<(), LibraryError> 
     Ok(())
 }
 
+/// Make `.gitattributes` carry the LFS rules, adding only the missing ones
+/// to a file that exists. True when the file changed.
+pub(super) fn ensure_lfs_attributes(root_dir: &Path) -> Result<bool, LibraryError> {
+    let path = root_dir.join(GITATTRIBUTES_FILE);
+    if !path.exists() {
+        write_lfs_attributes(root_dir)?;
+        return Ok(true);
+    }
+    let mut text = fs::read_to_string(&path)?;
+    let mut changed = false;
+    for ext in LFS_EXTENSIONS {
+        let rule = format!("*.{ext} filter=lfs diff=lfs merge=lfs -text");
+        if !text.lines().any(|line| line.trim() == rule) {
+            if !text.is_empty() && !text.ends_with('\n') {
+                text.push('\n');
+            }
+            text.push_str(&rule);
+            text.push('\n');
+            changed = true;
+        }
+    }
+    if changed {
+        signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
+    }
+    Ok(changed)
+}
+
+/// Record the library's own commit: `parent`'s tree (empty without one) plus
+/// the `.snxlib`, the managed `.gitignore` block (written here, keeping any
+/// user lines, #1729) and, for LFS, `.gitattributes`, built in memory so nothing
+/// else staged in the repo can be swept in. `init` passes no parent, as it
+/// always has; only the LFS top-up of a library's own first commit passes one.
+/// The repo's index gains just those entries, after the commit succeeded.
+pub(super) fn commit_initial(
+    repo: &git2::Repository,
+    file_path: &Path,
+    use_lfs: bool,
+    parent: Option<&git2::Commit>,
+) -> Result<(), LibraryError> {
+    let backend =
+        |what: &'static str| move |e: git2::Error| LibraryError::Backend(format!("{what}: {e}"));
+    let (sig_name, sig_email) = identity_for_repo(repo)?;
+    let sig = git2::Signature::now(&sig_name, &sig_email).map_err(backend("git signature"))?;
+    let root_dir = parent_dir(file_path)?;
+    super::ignore_rules::write_ignore_rules(&root_dir)?;
+    let mut names = vec![
+        file_name_str(file_path)?,
+        super::ignore_rules::GITIGNORE_FILE.to_string(),
+    ];
+    if use_lfs {
+        names.push(GITATTRIBUTES_FILE.to_string());
+    }
+    let base = parent
+        .map(git2::Commit::tree)
+        .transpose()
+        .map_err(backend("git parent tree"))?;
+    let mut builder = repo
+        .treebuilder(base.as_ref())
+        .map_err(backend("git tree builder"))?;
+    for name in &names {
+        let blob = repo
+            .blob(&fs::read(root_dir.join(name))?)
+            .map_err(backend("git blob"))?;
+        builder
+            .insert(name, blob, 0o100644)
+            .map_err(backend("git tree insert"))?;
+    }
+    let tree_oid = builder.write().map_err(backend("git write tree"))?;
+    let tree = repo.find_tree(tree_oid).map_err(backend("git find tree"))?;
+    let parents: Vec<&git2::Commit> = parent.into_iter().collect();
+    repo.commit(
+        Some("HEAD"),
+        &sig,
+        &sig,
+        "chore: initialise library",
+        &tree,
+        &parents,
+    )
+    .map_err(backend("git initial commit"))?;
+    let mut index = repo.index().map_err(backend("git index"))?;
+    for name in &names {
+        index
+            .add_path(Path::new(name))
+            .map_err(backend("git add"))?;
+    }
+    index.write().map_err(backend("git index write"))?;
+    Ok(())
+}
+
 /// Slugify a human-facing name into a safe filename component.
 /// Lowercased, ASCII-only, runs of non-alphanumeric chars collapsed to
 /// `-`. Empty result falls back to `"untitled"`.

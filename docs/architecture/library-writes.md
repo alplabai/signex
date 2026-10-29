@@ -92,8 +92,10 @@ Signex-maintained and merged back on the next write; the user's own rules
 go outside it. The rule lives in the `.gitignore` the user can read, not
 in a hidden filter by file extension.
 
-- **New library with version control.** The block is written before
-  `git init` and staged in the first commit, beside `.gitattributes`.
+- **New library with version control.** `commit_initial` writes the
+  block and records it in the library's first commit, beside
+  `.gitattributes`; `init` and `complete_init` (a left-behind pending
+  library) both go through it.
 - **Enable Version Control.** Library scope stages the block too; project
   scope also gets the managed `.gitattributes` block.
 - **Older library repositories.** Opening a library writes nothing: an

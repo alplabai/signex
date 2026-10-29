@@ -201,6 +201,14 @@ impl DocumentSaveJob {
         Arc::clone(&self.bytes)
     }
 
+    /// Replace the bytes this job writes. For a write whose content only
+    /// exists once its worker has prepared it (a project file that lists
+    /// libraries created first); the sequence was taken when it began.
+    pub fn with_bytes(mut self, bytes: Vec<u8>) -> Self {
+        self.bytes = Arc::new(bytes);
+        self
+    }
+
     /// This write's place in the ledger's order; pass it back to
     /// [`DocumentSaves::is_newest_begun`] when the completion arrives.
     pub fn sequence(&self) -> u64 {
