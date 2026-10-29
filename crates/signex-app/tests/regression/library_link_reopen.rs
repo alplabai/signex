@@ -8,7 +8,7 @@ use crate::library_place_symbol::{Fixture, app_with_library, doc, fixture, place
 use crate::library_symbol_drift::{add_pin, edit_library_symbol};
 use signex_app::app::{FileMsg, Message, Signex};
 use signex_types::schematic::SchematicSheet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const PLACED: usize = 3;
 const STALE: &str = "0.0.1";
@@ -214,8 +214,8 @@ fn finish_mount(app: &mut Signex, f: &Fixture) {
     }));
 }
 
-fn is_dirty(app: &Signex, path: &PathBuf) -> bool {
-    app.document_state.is_document_dirty(&path)
+fn is_dirty(app: &Signex, path: &Path) -> bool {
+    app.document_state.is_document_dirty(path)
 }
 
 #[test]

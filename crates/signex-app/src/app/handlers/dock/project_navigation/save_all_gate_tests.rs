@@ -72,7 +72,7 @@ fn assert_refused(app: &Signex, still_dirty: &[&Path]) {
     );
     for path in still_dirty {
         assert!(
-            app.document_state.is_document_dirty(*path),
+            app.document_state.is_document_dirty(path),
             "{} must stay dirty so a retry or Discard All can act on it",
             path.display()
         );

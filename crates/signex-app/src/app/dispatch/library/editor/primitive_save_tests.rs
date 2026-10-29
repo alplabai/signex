@@ -230,7 +230,7 @@ fn assert_replaced_editor_untouched(app: &Signex, path: &Path, name: &str) {
         "its dirty marker stays"
     );
     assert!(
-        app.document_state.is_document_dirty(&path),
+        app.document_state.is_document_dirty(path),
         "its tab stays dirty"
     );
 }

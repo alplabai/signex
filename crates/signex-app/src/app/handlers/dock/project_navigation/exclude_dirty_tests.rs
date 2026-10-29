@@ -232,7 +232,7 @@ fn hold_differing_case_variants(app: &mut Signex, dir: &Path) -> (PathBuf, PathB
         let mut engine = signex_engine::Engine::new(sheet).expect("engine");
         engine.set_path(Some(path.clone()));
         app.document_state.engines.insert(path.clone(), engine);
-        app.document_state.mark_document_dirty(&path);
+        app.document_state.mark_document_dirty(path);
     }
     (upper, lower)
 }
@@ -309,7 +309,7 @@ fn an_exclude_save_in_an_undecided_folder_names_the_kept_spelling() {
                 .expect("engine");
         engine.set_path(Some(path.clone()));
         app.document_state.engines.insert(path.clone(), engine);
-        app.document_state.mark_document_dirty(&path);
+        app.document_state.mark_document_dirty(path);
     }
     app.ui_state.remove_dialog = Some(RemoveDialogState {
         target_path: upper.clone(),

@@ -288,28 +288,27 @@ impl Signex {
         // Excluding a document (or a library / folder holding documents) with
         // unsaved edits asks first (#738): the modal stays open and moves to
         // its Save / Discard / Cancel stage.
-        if choice == RemoveChoice::ExcludeFromProject {
-            if let Some(dialog) = self.ui_state.remove_dialog.clone()
-                && self.has_unsaved_edits(&dialog.target_path, self.dialog_fold(&dialog))
-            {
-                let Some(dialog) = self.repointed_dialog(&dialog) else {
-                    self.ui_state.remove_dialog = None;
-                    self.refresh_panel_ctx();
-                    return iced::Task::none();
-                };
-                if self.discard_blocked_by_other_project(&dialog) {
-                    crate::diagnostics::log_warning(format!(
-                        "{} has unsaved edits and another open project also uses it: \
-                         Discard is not offered, only Save or Cancel.",
-                        dialog.display_name
-                    ));
-                    self.refresh_panel_ctx();
-                }
-                if let Some(dialog) = self.ui_state.remove_dialog.as_mut() {
-                    dialog.unsaved_prompt = true;
-                }
+        if choice == RemoveChoice::ExcludeFromProject
+            && let Some(dialog) = self.ui_state.remove_dialog.clone()
+            && self.has_unsaved_edits(&dialog.target_path, self.dialog_fold(&dialog))
+        {
+            let Some(dialog) = self.repointed_dialog(&dialog) else {
+                self.ui_state.remove_dialog = None;
+                self.refresh_panel_ctx();
                 return iced::Task::none();
+            };
+            if self.discard_blocked_by_other_project(&dialog) {
+                crate::diagnostics::log_warning(format!(
+                    "{} has unsaved edits and another open project also uses it: \
+                     Discard is not offered, only Save or Cancel.",
+                    dialog.display_name
+                ));
+                self.refresh_panel_ctx();
             }
+            if let Some(dialog) = self.ui_state.remove_dialog.as_mut() {
+                dialog.unsaved_prompt = true;
+            }
+            return iced::Task::none();
         }
 
         // An open still reading a file being deleted would land on a path

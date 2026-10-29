@@ -145,7 +145,7 @@ fn app_with_dirty_variants(dir: &Path, edit_second: bool) -> (Signex, PathBuf, P
             ..Default::default()
         };
         app.open_schematic_tab(path.clone(), "Lib".to_string(), sheet);
-        app.document_state.mark_document_dirty(&path);
+        app.document_state.mark_document_dirty(path);
     }
     app.activate_tab_for_path(&upper);
     (app, upper, lower)

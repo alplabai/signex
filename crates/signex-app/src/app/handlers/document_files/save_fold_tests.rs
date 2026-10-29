@@ -60,7 +60,7 @@ fn folding_app_with_two_spellings() -> (Signex, Arc<Recorder>, tempfile::TempDir
         app.document_state
             .engines
             .insert(path.clone(), engine_at(path, paper));
-        app.document_state.mark_document_dirty(&path);
+        app.document_state.mark_document_dirty(path);
     }
     (app, recorder, tmp, upper, lower)
 }

@@ -379,7 +379,7 @@ impl Signex {
     ) -> Option<(Vec<std::path::PathBuf>, String)> {
         let kept: Vec<_> = held
             .iter()
-            .filter(|p| p.as_path() != target && self.document_state.is_document_dirty(*p))
+            .filter(|p| p.as_path() != target && self.document_state.is_document_dirty(p))
             .cloned()
             .collect();
         if kept.is_empty() {
@@ -837,7 +837,7 @@ mod tests {
             let mut engine = signex_engine::Engine::new(sheet).expect("engine");
             engine.set_path(Some(path.clone()));
             app.document_state.engines.insert(path.clone(), engine);
-            app.document_state.mark_document_dirty(&path);
+            app.document_state.mark_document_dirty(path);
         }
         (app, upper, lower)
     }

@@ -219,7 +219,7 @@ impl Signex {
         }
         let result = result?;
         if result.changed {
-            self.document_state.mark_document_dirty(&parent);
+            self.document_state.mark_document_dirty(parent);
             if self.document_state.active_path.as_ref() == Some(parent) {
                 self.sync_canvas_from_visible_schematic(
                     crate::schematic_runtime::RenderInvalidation::CHILD_SHEETS,

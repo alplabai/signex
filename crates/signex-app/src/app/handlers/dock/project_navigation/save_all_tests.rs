@@ -347,7 +347,7 @@ pub(super) fn app_with_two_engine_variants(
         let mut engine = signex_engine::Engine::new(sheet).expect("engine");
         engine.set_path(Some(path.clone()));
         app.document_state.engines.insert(path.clone(), engine);
-        app.document_state.mark_document_dirty(&path);
+        app.document_state.mark_document_dirty(path);
     }
     (app, upper, lower)
 }
@@ -446,7 +446,7 @@ fn loose_identical_variants(dir: &Path) -> (Signex, PathBuf, PathBuf) {
         let mut engine = signex_engine::Engine::new(Default::default()).expect("engine");
         engine.set_path(Some(path.clone()));
         app.document_state.engines.insert(path.clone(), engine);
-        app.document_state.mark_document_dirty(&path);
+        app.document_state.mark_document_dirty(path);
     }
     (app, upper, lower)
 }
@@ -626,7 +626,7 @@ fn an_undecided_project_keeps_the_other_spelling_dirty_too() {
         let mut engine = signex_engine::Engine::new(Default::default()).expect("engine");
         engine.set_path(Some(path.clone()));
         app.document_state.engines.insert(path.clone(), engine);
-        app.document_state.mark_document_dirty(&path);
+        app.document_state.mark_document_dirty(path);
     }
     let sink = record_writes(&mut app);
 

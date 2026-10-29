@@ -66,7 +66,7 @@ impl Signex {
         held: &'a [std::path::PathBuf],
     ) -> &'a std::path::PathBuf {
         held.iter()
-            .find(|path| self.document_state.is_document_dirty(*path))
+            .find(|path| self.document_state.is_document_dirty(path))
             .unwrap_or(&held[0])
     }
 
@@ -286,7 +286,7 @@ impl Signex {
         let mut failed: Vec<(String, String)> = Vec::new();
         for path in paths
             .iter()
-            .filter(|path| self.document_state.is_document_dirty(*path))
+            .filter(|path| self.document_state.is_document_dirty(path))
         {
             let reason = self
                 .document_state
