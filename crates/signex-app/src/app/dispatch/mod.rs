@@ -6,6 +6,8 @@ pub(crate) mod chord;
 mod command_palette;
 mod document;
 mod escape;
+#[cfg(test)]
+mod grid_properties_tests;
 pub(crate) mod input;
 mod keyboard;
 mod keymap;

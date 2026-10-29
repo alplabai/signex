@@ -56,9 +56,7 @@ fn open(app: &mut Signex, modal: ModalId) {
         }
         ModalId::GridProperties => {
             ui.grid_properties = Some(GridPropertiesState {
-                step_x_mm: "1".into(),
-                step_y_mm: "1".into(),
-                link_xy: true,
+                step_mm: "1".into(),
                 fine_display: Default::default(),
                 coarse_display: Default::default(),
                 multiplier: 5,
