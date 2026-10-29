@@ -187,6 +187,9 @@ pub fn view<'a>(
                 .width(Length::Fill),
         )
         .width(Length::Fill)
+        // Tabs hang from the top; the baseline below them sits at the
+        // strip's fixed height.
+        .height(Length::Fill)
         .padding(iced::Padding {
             top: 2.0,
             right: 6.0,
@@ -196,14 +199,17 @@ pub fn view<'a>(
         baseline,
     ])
     .width(Length::Fill)
+    .height(TAB_STRIP_HEIGHT)
     .style(styles::toolbar_strip(tokens))
     .into()
 }
 
-/// Height of the document tab strip's row: two body-text lines for the pill
-/// plus the strip's top padding. 26 px at the default scale, and it follows
-/// the type scale with the strip. The empty-window placeholder takes its
-/// height from here so the chrome does not jump when the first tab opens.
+/// Height of the document tab strip: two body-text lines for the pill plus
+/// the strip's top padding, 26 px. Both the strip and the empty-window
+/// placeholder take their height from here, so they cannot diverge and the
+/// chrome does not jump when the first tab opens. It is derived from the
+/// default type scale and spacing, the same constants the strip's text and
+/// padding use; the app has no runtime UI scale for it to follow.
 pub const TAB_STRIP_HEIGHT: f32 = TS.body * 2.0 + SP.s;
 
 /// The strip drawn with no document open: same height and background as the
@@ -350,12 +356,21 @@ mod tests {
     use std::collections::HashSet;
     use std::path::PathBuf;
 
+    /// The strip and the no-document placeholder are both exactly
+    /// `TAB_STRIP_HEIGHT` tall, and that is the 26 px they always were.
     #[test]
-    fn the_placeholder_height_is_the_tab_strip_height_token() {
-        // The window with no document open keeps the 26 px it always had at
-        // the default scale, now derived from the strip's own metrics.
+    fn the_strip_and_its_placeholder_both_use_the_height_token() {
+        use iced::Length;
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let fixed = Length::Fixed(super::TAB_STRIP_HEIGHT);
         assert_eq!(super::TAB_STRIP_HEIGHT, 26.0);
-        assert_eq!(super::TAB_STRIP_HEIGHT, super::TS.body * 2.0 + super::SP.s);
+
+        let placeholder = super::placeholder::<()>(&tokens);
+        assert_eq!(placeholder.as_widget().size().height, fixed);
+
+        let none = HashSet::new();
+        let strip = super::view(&[], 0, None, &none, &none, &none, &tokens);
+        assert_eq!(strip.as_widget().size().height, fixed);
     }
 
     fn tab(path: &str, dirty: bool) -> TabInfo {

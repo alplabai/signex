@@ -124,18 +124,11 @@ impl Signex {
         })
     }
 
-    /// `typed`, or the first designator stepped from it that no symbol on
-    /// `sheet` uses, so a typed `R1` never makes a second `R1`.
-    fn free_designator_from(&self, sheet: &Path, typed: &str) -> String {
-        let Some(engine) = self.document_state.engines.get(sheet) else {
-            return typed.to_owned();
-        };
-        let used: std::collections::HashSet<&str> = engine
-            .document()
-            .symbols
-            .iter()
-            .map(|s| s.reference.as_str())
-            .collect();
+    /// `typed`, or the first designator stepped from it that no symbol in
+    /// `sheet`'s project uses, so a typed `R1` never makes a second `R1`.
+    pub(crate) fn free_designator_from(&self, sheet: &Path, typed: &str) -> String {
+        let used: std::collections::HashSet<&str> =
+            self.used_designators(sheet).into_iter().collect();
         let mut candidate = typed.to_owned();
         while used.contains(candidate.as_str()) {
             match Self::increment_designator(&candidate) {

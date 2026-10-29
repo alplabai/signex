@@ -54,59 +54,15 @@ impl Signex {
         ))
     }
 
-    /// The next free `prefix` designator for a part placed on `sheet`.
-    ///
-    /// A sheet that belongs to a project is numbered against the whole
-    /// project, so a new part never collides with another sheet (#1381):
-    /// the open sheets' engines answer for themselves (the current copy,
-    /// right after a commit), and a sheet nobody has open is read from the
-    /// project search index when that index is current. No disk is read
-    /// here. A free-standing sheet only looks at itself. Annotate still
-    /// does the full renumber.
+    /// The next free `prefix` designator for a part placed on `sheet`,
+    /// numbered against every sheet of its project so a new part never
+    /// collides with another sheet (#1381). Open sheets are read live and
+    /// closed ones from the cached designator scan (`designator_scan.rs`),
+    /// so there is no disk read here; until the first scan lands only open
+    /// sheets count. A free-standing sheet only looks at itself. Annotate
+    /// still does the full renumber.
     pub(crate) fn next_designator_in_sheet(&self, sheet: &std::path::Path, prefix: &str) -> String {
-        let documents = &self.document_state;
-        let Some(project) = documents.document_project(sheet) else {
-            let references = documents.engines.get(sheet).map(|engine| {
-                engine
-                    .document()
-                    .symbols
-                    .iter()
-                    .map(|s| s.reference.as_str())
-            });
-            return next_designator(prefix, references.into_iter().flatten());
-        };
-        let open = documents
-            .engines
-            .iter()
-            .filter(|(path, _)| {
-                documents
-                    .document_project(path)
-                    .is_some_and(|owner| owner.id == project.id)
-            })
-            .flat_map(|(_, engine)| {
-                engine
-                    .document()
-                    .symbols
-                    .iter()
-                    .map(|s| s.reference.as_str())
-            });
-        let current = crate::app::palette_index::index_stamp(documents);
-        let closed = self
-            .ui_state
-            .command_palette
-            .index
-            .as_deref()
-            .filter(|index| index.stamp == current)
-            .into_iter()
-            .flat_map(|index| index.designators.iter())
-            .filter(|d| {
-                !documents.engines.contains_key(&d.path)
-                    && documents
-                        .document_project(&d.path)
-                        .is_some_and(|owner| owner.id == project.id)
-            })
-            .map(|d| d.designator.as_str());
-        next_designator(prefix, open.chain(closed))
+        next_designator(prefix, self.used_designators(sheet).into_iter())
     }
 
     /// Cancel the in-flight placement session and every armed mode.
