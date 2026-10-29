@@ -11,8 +11,8 @@
 //! symbol's pin from a move or turn, since the symbol stays and the wire
 //! would drag off its pin.
 //!
-//! Left open on purpose: `SetSymbolLocked` and `SetItemLocked` (the way
-//! out), `SetSymbolDnp`,
+//! Left open on purpose (full list: `docs/architecture/snxsch-object-lock.md`):
+//! `SetSymbolLocked` and `SetItemLocked` (the way out), `SetSymbolDnp`,
 //! font family, library-symbol replacement and annotation (which has its
 //! own designator lock, `scope.locked`).
 

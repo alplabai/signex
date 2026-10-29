@@ -34,11 +34,21 @@ pub(crate) fn snap_hairline(p0: Point, p1: Point, width: f32) -> (Point, Point, 
     let snapped_width = width.round().max(1.0);
     if (p0.y - p1.y).abs() < AXIS_EPS {
         let y = snap_centre(p0.y, snapped_width);
-        return (Point::new(p0.x, y), Point::new(p1.x, y), snapped_width);
+        // The ends snap like a centre line, so a vertical leg that meets this
+        // one at an elbow is centred on exactly the x this one ends at.
+        let (x0, x1) = (
+            snap_centre(p0.x, snapped_width),
+            snap_centre(p1.x, snapped_width),
+        );
+        return (Point::new(x0, y), Point::new(x1, y), snapped_width);
     }
     if (p0.x - p1.x).abs() < AXIS_EPS {
         let x = snap_centre(p0.x, snapped_width);
-        return (Point::new(x, p0.y), Point::new(x, p1.y), snapped_width);
+        let (y0, y1) = (
+            snap_centre(p0.y, snapped_width),
+            snap_centre(p1.y, snapped_width),
+        );
+        return (Point::new(x, y0), Point::new(x, y1), snapped_width);
     }
     (p0, p1, width)
 }
@@ -81,6 +91,19 @@ mod tests {
             assert_eq!(hw, vw);
             assert_eq!(thickness_px(h0.y, hw), 2, "horizontal at phase {phase}");
             assert_eq!(thickness_px(v0.x, vw), 2, "vertical at phase {phase}");
+        }
+    }
+
+    /// At an elbow the horizontal leg ends where the vertical leg is centred,
+    /// so the round caps meet with no notch or overhang.
+    #[test]
+    fn the_legs_of_an_elbow_meet_on_the_same_pixel_grid_point() {
+        for phase in 0..20 {
+            let corner = Point::new(50.0 + phase as f32 * 0.05, 20.0 + phase as f32 * 0.07);
+            let (_, h1, hw) = snap_hairline(Point::new(10.3, corner.y), corner, 1.9);
+            let (v0, _, vw) = snap_hairline(corner, Point::new(corner.x, 80.2), 1.9);
+            assert_eq!(hw, vw);
+            assert_eq!(h1, v0, "the corner at phase {phase}");
         }
     }
 

@@ -43,3 +43,27 @@ Merging collinear wires never folds a locked wire away, and a wire the rubber
 band adds is created unlocked. A move that would drag a locked wire along (a
 symbol, sheet symbol or sheet pin with a locked wire on its pin, with wires
 following) is refused or skipped.
+
+## Commands the lock leaves open
+
+On purpose, as for symbols:
+
+- `SetSymbolLocked` and `SetItemLocked`: the way out of the lock.
+- `SetTextFontFamily` on a locked label or text note: the font family is a
+  display choice, as it is for a locked symbol's text.
+- `ReorderObjects`, `ArrangeDrawings` and `SetDrawingPlacement` on a locked
+  drawing: they change only paint order (front/back, above/behind the
+  circuit), never geometry or content.
+
+Everything that moves, turns, mirrors, deletes or edits the content of a locked
+object is refused (or skipped, for a group edit) by `Engine::execute` and
+`Engine::without_locked`.
+
+## Placement and the rubber band
+
+A paste ghost is turned on a scratch engine that ignores locks, and the result
+keeps every lock. Pasted wires are placed as copied
+(`Command::PlaceWireSegmentAsIs`), so a split in the copy is not folded back.
+The rubber band never slides a locked elbow leg (it bends on a new leg
+instead) and never re-cuts a locked wire when it clears an overlap; an overlap
+with a locked wire stays as it is.
