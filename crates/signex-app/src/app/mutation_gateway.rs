@@ -83,7 +83,7 @@ impl Signex {
 
     /// `commands` without what the lock would refuse (see
     /// `Engine::without_locked`), and the references skipped.
-    fn without_locked_items(
+    pub(crate) fn without_locked_items(
         engine: &signex_engine::Engine,
         commands: Vec<signex_engine::Command>,
     ) -> (Vec<signex_engine::Command>, Vec<String>) {

@@ -256,16 +256,28 @@ impl Engine {
             .collect()
     }
 
-    /// Whether `item` is a symbol, sheet symbol or sheet pin at a pin where a locked wire ends, so the
-    /// rubber band would drag that wire.
+    /// Whether `item` is a part, sheet symbol, sheet pin or bus a locked wire
+    /// ends on (at a pin, or at the far end of a bus entry it carries), so
+    /// the rubber band would drag that wire.
     fn held_by_locked_wire(&self, item: &SelectedItem, ends: &HashSet<Key>) -> bool {
-        matches!(
-            item.kind,
-            SelectedKind::Symbol | SelectedKind::ChildSheet | SelectedKind::SheetPin
-        ) && !ends.is_empty()
-            && crate::moved_pin_tips(&self.document, std::slice::from_ref(item))
+        if ends.is_empty() {
+            return false;
+        }
+        match item.kind {
+            // A dragged bus carries the far end of each entry on it, and the
+            // wires attached there follow.
+            SelectedKind::Bus => self
+                .bus_followers(&[(*item, 0.0, 0.0)], true)
+                .far_ends
                 .iter()
-                .any(|tip| ends.contains(&tip.old_key()))
+                .any(|(key, ..)| ends.contains(key)),
+            SelectedKind::Symbol | SelectedKind::ChildSheet | SelectedKind::SheetPin => {
+                crate::moved_pin_tips(&self.document, std::slice::from_ref(item))
+                    .iter()
+                    .any(|tip| ends.contains(&tip.old_key()))
+            }
+            _ => false,
+        }
     }
 
     /// The symbols `cmd` would move with the wires on their pins following
@@ -298,8 +310,17 @@ impl Engine {
             .symbols
             .iter()
             .find(|s| s.uuid == id)
-            .map_or_else(|| id.to_string(), |s| s.reference.clone());
-        format!("{reference} (a wire on its pin is locked)")
+            .map_or_else(
+                || {
+                    if self.document.buses.iter().any(|b| b.uuid == id) {
+                        "bus".to_string()
+                    } else {
+                        id.to_string()
+                    }
+                },
+                |s| s.reference.clone(),
+            );
+        format!("{reference} (a wire attached to it is locked)")
     }
 
     /// Where each pin of a locked symbol sits, with the symbol's reference.

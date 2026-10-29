@@ -8,7 +8,12 @@ use super::*;
 /// Whether anything of `snapshot` is locked, i.e. the layer has a padlock
 /// to draw even with nothing selected.
 pub fn has_locked_item(snapshot: &SchematicRenderSnapshot) -> bool {
-    !locked_items(snapshot).is_empty()
+    // Runs on every draw: look, don't collect.
+    snapshot.symbols.iter().any(|s| s.locked)
+        || snapshot.wires.iter().any(|w| w.locked)
+        || snapshot.labels.iter().any(|l| l.locked)
+        || snapshot.text_notes.iter().any(|n| n.locked)
+        || snapshot.drawings.iter().any(|d| d.is_locked())
 }
 
 /// Every locked object of `snapshot`, as the selection items its bounds are

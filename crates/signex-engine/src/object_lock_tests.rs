@@ -598,3 +598,59 @@ fn moving_off_a_locked_wire_leaves_nothing_that_joins_nets_later() {
         .any(|(_, pins)| pins.iter().any(|(u, _)| *u == r2) && pins.iter().any(|(u, _)| *u == r3));
     assert!(!joined, "R2 and R3 stay in separate nets");
 }
+
+/// Bus (0,0)-(0,50) with an entry at (0,10) whose far end (2.54, 12.54) holds
+/// the start of a locked wire.
+fn bus_with_a_locked_wire_on_an_entry() -> (Engine, SelectedItem) {
+    use signex_types::schematic::{Bus, BusEntry};
+    let mut sheet = SchematicSheet::default();
+    let bus = Uuid::new_v4();
+    sheet.buses.push(Bus {
+        uuid: bus,
+        start: Point::new(0.0, 0.0),
+        end: Point::new(0.0, 50.0),
+    });
+    sheet.bus_entries.push(BusEntry {
+        uuid: Uuid::new_v4(),
+        position: Point::new(0.0, 10.0),
+        size: (2.54, 2.54),
+    });
+    crate::rubber_band_tests::add_wire(&mut sheet, (2.54, 12.54), (20.0, 12.54));
+    sheet.wires[0].locked = true;
+    (
+        Engine::new(sheet).expect("engine"),
+        SelectedItem::new(bus, SelectedKind::Bus),
+    )
+}
+
+#[test]
+fn a_bus_whose_entry_far_end_holds_a_locked_wire_does_not_drag_it() {
+    let (mut engine, bus) = bus_with_a_locked_wire_on_an_entry();
+    let wire_before = engine.document().wires[0].clone();
+    let drag = Command::MoveSelection {
+        items: vec![bus],
+        dx: 5.0,
+        dy: 0.0,
+        keep_wires: true,
+    };
+
+    assert!(matches!(
+        engine.execute(drag.clone()),
+        Err(EngineError::ItemLocked { .. })
+    ));
+    let (pruned, skipped) = engine.without_locked(drag);
+    assert!(pruned.is_none(), "the bus is skipped");
+    assert_eq!(skipped.len(), 1);
+    assert!(skipped[0].starts_with("bus"), "{skipped:?}");
+    assert_eq!(engine.document().wires[0], wire_before);
+
+    // Without the wires following, the bus moves and the wire stays.
+    let plain = Command::MoveSelection {
+        items: vec![bus],
+        dx: 5.0,
+        dy: 0.0,
+        keep_wires: false,
+    };
+    assert!(engine.execute(plain).is_ok_and(|r| r.changed));
+    assert_eq!(engine.document().wires[0], wire_before);
+}

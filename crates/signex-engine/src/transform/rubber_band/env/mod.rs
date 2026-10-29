@@ -285,3 +285,39 @@ impl Env {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod collides_tests {
+    use super::*;
+    use signex_types::schematic::SchematicSheet;
+
+    fn env_with(locked: bool) -> Env {
+        let sheet = SchematicSheet {
+            wires: vec![Wire {
+                uuid: Uuid::new_v4(),
+                start: Point::new(0.0, 0.0),
+                end: Point::new(10.0, 0.0),
+                locked,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        Env::new(
+            &sheet,
+            HashSet::new(),
+            HashSet::new(),
+            HashSet::new(),
+            Policy::default(),
+        )
+    }
+
+    /// A route along a wire is rejected only when that wire is locked (the
+    /// ends of the route are allowed, so nothing else is in the way).
+    #[test]
+    fn a_route_along_a_locked_wire_collides_and_along_a_free_one_does_not() {
+        let seg = (Point::new(2.0, 0.0), Point::new(8.0, 0.0));
+        let allowed = [key(&seg.0), key(&seg.1)];
+        assert!(env_with(true).collides(seg, &allowed, &[]));
+        assert!(!env_with(false).collides(seg, &allowed, &[]));
+    }
+}

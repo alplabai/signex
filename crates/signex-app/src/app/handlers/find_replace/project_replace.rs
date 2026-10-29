@@ -235,6 +235,10 @@ impl Signex {
 
             let (commands, hits, dropped) = live_replacement(engine, job, prep, &path, &listed);
             left_alone += dropped;
+            // A locked label or note is skipped and named, as the active
+            // sheet's Replace does, instead of failing the whole run.
+            let (commands, skipped) = Self::without_locked_items(engine, commands);
+            Self::report_locked_skips(&skipped);
             let outcome = engine.execute_batch_grouped(commands, Some(group));
             for warning in engine.take_warnings() {
                 crate::diagnostics::log_warning(warning);

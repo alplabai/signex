@@ -257,7 +257,9 @@ pub enum Command {
     },
     /// Split one wire in two at `at`, which must lie strictly inside it; the
     /// first half keeps the wire's id, the second gets a new one. A point
-    /// off the wire, or at one of its ends, changes nothing. Connectivity is
+    /// off the wire, or at one of its ends, changes nothing; a spot holding a
+    /// pin, bus end, bus entry or another wire's end is refused
+    /// (`EngineError::BreakWireBlocked`), since the new end would join it. Connectivity is
     /// unchanged and no merge pass runs, so the halves stay apart.
     BreakWire {
         wire: Uuid,

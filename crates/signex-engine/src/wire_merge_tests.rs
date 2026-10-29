@@ -580,3 +580,41 @@ fn wires_of_different_net_colours_are_not_folded_and_equal_ones_are() {
         );
     }
 }
+
+#[test]
+fn break_wire_is_refused_where_a_pin_tip_rests_on_the_wire() {
+    let mut sheet = SchematicSheet::default();
+    let wire = add_wire(&mut sheet, (0.0, 10.0), (20.0, 10.0));
+    // R1's pin 1 tip is at (8, 10), on the wire's side and not connected.
+    add_resistor(&mut sheet, "R1", pt(13.0, 10.0));
+    add_resistor(&mut sheet, "R2", pt(25.0, 10.0));
+    let before = net_shape(&sheet);
+    let mut engine = Engine::new(sheet).expect("engine");
+
+    let refused = engine.execute(Command::BreakWire {
+        wire,
+        at: pt(8.0, 10.0),
+    });
+
+    assert!(matches!(refused, Err(EngineError::BreakWireBlocked)));
+    assert_eq!(engine.document().wires.len(), 1);
+    assert_eq!(net_shape(engine.document()), before);
+}
+
+#[test]
+fn break_wire_is_refused_where_another_wire_ends_on_the_side() {
+    let mut sheet = SchematicSheet::default();
+    let wire = add_wire(&mut sheet, (0.0, 10.0), (20.0, 10.0));
+    add_wire(&mut sheet, (8.0, 10.0), (8.0, 30.0));
+    let before = net_shape(&sheet);
+    let mut engine = Engine::new(sheet).expect("engine");
+
+    let refused = engine.execute(Command::BreakWire {
+        wire,
+        at: pt(8.0, 10.0),
+    });
+
+    assert!(matches!(refused, Err(EngineError::BreakWireBlocked)));
+    assert_eq!(engine.document().wires.len(), 2);
+    assert_eq!(net_shape(engine.document()), before);
+}

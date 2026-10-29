@@ -176,11 +176,19 @@ impl Engine {
     /// no-connects, no-ERC directives, bus ends and bus entries.
     fn occupied_points(&self) -> HashSet<Key> {
         let doc = &self.document;
-        let mut points: HashSet<Key> = HashSet::new();
+        let mut points = self.connection_points();
         points.extend(doc.junctions.iter().map(|j| pt_key(&j.position)));
         points.extend(doc.labels.iter().map(|l| pt_key(&l.position)));
         points.extend(doc.no_connects.iter().map(|n| pt_key(&n.position)));
         points.extend(doc.no_erc_directives.iter().map(|n| pt_key(&n.position)));
+        points
+    }
+
+    /// Where a pin, sheet pin, bus end or bus-entry end sits: a point a new
+    /// wire end would join to the net of that element.
+    pub(crate) fn connection_points(&self) -> HashSet<Key> {
+        let doc = &self.document;
+        let mut points: HashSet<Key> = HashSet::new();
         for bus in &doc.buses {
             points.extend([pt_key(&bus.start), pt_key(&bus.end)]);
         }
