@@ -9,17 +9,36 @@ use std::sync::{Mutex, Once, PoisonError};
 use iced::futures::channel::mpsc::UnboundedSender;
 
 use muda::accelerator::{Accelerator as KeyEquivalent, CMD_OR_CTRL, Code};
-use muda::{Menu, MenuId, MenuItem, PredefinedMenuItem, Submenu};
+use muda::{CheckMenuItem, Menu, MenuId, MenuItem, PredefinedMenuItem, Submenu};
 
-use super::state::{MenuInputs, NativeMenuState, Refresh, plan_refresh};
+use super::state::{ItemChange, MenuInputs, NativeMenuState, Refresh, plan_refresh};
 use super::{Accelerator, NativeBuild, NativeMenu, NativeMenuSpec, NativeNode, Predefined};
 use crate::diagnostics::{log_info, log_warning};
 
 /// The installed menu and the item handles enablement updates go through.
+enum Handle {
+    Plain(MenuItem),
+    Check(CheckMenuItem),
+}
+
+impl Handle {
+    fn apply(&self, change: &ItemChange) {
+        match self {
+            Self::Plain(item) => item.set_enabled(change.enabled),
+            Self::Check(item) => {
+                item.set_enabled(change.enabled);
+                if let Some(checked) = change.checked {
+                    item.set_checked(checked);
+                }
+            }
+        }
+    }
+}
+
 pub(super) struct Shell {
     /// Owns the NSMenu; dropping it releases the items.
     menu: Menu,
-    items: HashMap<String, MenuItem>,
+    items: HashMap<String, Handle>,
 }
 
 impl Shell {
@@ -35,22 +54,32 @@ impl Shell {
     }
 }
 
-fn submenu(
-    menu: &NativeMenu,
-    items: &mut HashMap<String, MenuItem>,
-) -> Result<Submenu, muda::Error> {
+fn submenu(menu: &NativeMenu, items: &mut HashMap<String, Handle>) -> Result<Submenu, muda::Error> {
     let sub = Submenu::new(&menu.title, true);
     for node in &menu.nodes {
         match node {
             NativeNode::Item(item) => {
-                let native = MenuItem::with_id(
-                    MenuId::new(&item.id),
-                    &item.label,
-                    item.enabled,
-                    item.accelerator.map(key_equivalent),
-                );
-                sub.append(&native)?;
-                items.insert(item.id.clone(), native);
+                let id = MenuId::new(&item.id);
+                let accelerator = item.accelerator.map(key_equivalent);
+                let handle = match item.checked {
+                    Some(checked) => {
+                        let native = CheckMenuItem::with_id(
+                            id,
+                            &item.label,
+                            item.enabled,
+                            checked,
+                            accelerator,
+                        );
+                        sub.append(&native)?;
+                        Handle::Check(native)
+                    }
+                    None => {
+                        let native = MenuItem::with_id(id, &item.label, item.enabled, accelerator);
+                        sub.append(&native)?;
+                        Handle::Plain(native)
+                    }
+                };
+                items.insert(item.id.clone(), handle);
             }
             NativeNode::Predefined(kind) => sub.append(&predefined(*kind))?,
             NativeNode::Submenu(inner) => sub.append(&submenu(inner, items)?)?,
@@ -90,9 +119,9 @@ impl NativeMenuState {
         match (refresh, self.shell.as_ref()) {
             (Refresh::Unchanged, _) => {}
             (Refresh::Enablement(changes), Some(shell)) => {
-                for (id, enabled) in changes {
-                    if let Some(item) = shell.items.get(&id) {
-                        item.set_enabled(enabled);
+                for change in &changes {
+                    if let Some(item) = shell.items.get(&change.id) {
+                        item.apply(change);
                     }
                 }
             }

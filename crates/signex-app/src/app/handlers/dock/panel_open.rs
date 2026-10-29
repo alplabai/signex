@@ -42,6 +42,15 @@ impl Signex {
             || self.detached_panel_window(kind).is_some()
     }
 
+    /// Every panel kind that is open somewhere, in `ALL_PANELS` order.
+    pub(crate) fn open_panels(&self) -> Vec<PanelKind> {
+        crate::panels::ALL_PANELS
+            .iter()
+            .copied()
+            .filter(|&kind| self.is_panel_open(kind))
+            .collect()
+    }
+
     /// The panel shortcuts' behaviour (#103): open the panel when it is
     /// closed, close it when it is open and in front, and bring it to
     /// the front when it is open but hidden behind another tab or a

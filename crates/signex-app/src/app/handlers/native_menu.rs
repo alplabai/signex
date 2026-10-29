@@ -46,6 +46,18 @@ impl Signex {
         }
         match self.native_menu.actions.get(id).cloned() {
             Some(action) => {
+                if matches!(
+                    action,
+                    MenuMessage::OpenProjectsPanel
+                        | MenuMessage::OpenComponentsPanel
+                        | MenuMessage::OpenNavigatorPanel
+                        | MenuMessage::OpenPropertiesPanel
+                        | MenuMessage::OpenErcPanel
+                        | MenuMessage::OpenMessagesPanel
+                        | MenuMessage::OpenSignalPanel
+                ) {
+                    self.native_menu.invalidate();
+                }
                 let message = self.native_menu_message(action);
                 self.dispatch_update(message)
             }
@@ -71,6 +83,7 @@ impl Signex {
             self.command_context(self.native_menu_window()),
             self.ui_state.recent_projects.entries(),
             self.has_locking_confirm_modal(),
+            self.open_panels(),
         );
         if !self.native_menu.needs_sync(&inputs) {
             return;
@@ -78,6 +91,7 @@ impl Signex {
         let ctx = MenuContext {
             commands: inputs.commands(),
             recent_projects: inputs.recent(),
+            open_panels: inputs.open_panels().to_vec(),
             ..MenuContext::default()
         };
         let built = build(&menu_bar_model(&ctx), inputs.locked());
