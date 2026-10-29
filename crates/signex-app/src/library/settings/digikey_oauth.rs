@@ -385,6 +385,8 @@ fn is_idle_read(req_line: &Result<String, std::io::Error>) -> bool {
     }
 }
 
+/// Runs the exchange first, then writes the page, so the browser text
+/// matches the outcome (#1537).
 fn finish_callback<E>(
     mut stream: std::net::TcpStream,
     cancel: &CancelHandle,
@@ -865,6 +867,52 @@ mod tests {
             .expect("a blocking read waits for the late bytes");
         assert_eq!(&buf, b"hello");
         drop(writer.join().expect("writer"));
+    }
+
+    /// Sends `GOOD_REQUEST`, runs the callback with `exchange`, and returns
+    /// the outcome plus the page the browser received.
+    fn page_for<E>(cancel: &CancelHandle, exchange: E) -> (Outcome, String)
+    where
+        E: FnOnce(&str, &str, &dyn Fn() -> bool) -> Result<String, DigiKeyAuthError>,
+    {
+        use std::io::{Read, Write};
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let mut client =
+            std::net::TcpStream::connect(listener.local_addr().expect("addr")).expect("connect");
+        client
+            .write_all(GOOD_REQUEST.as_bytes())
+            .expect("send request");
+        let (stream, _) = listener.accept().expect("accept");
+        let outcome = handle_callback(stream, cancel, ACCEPTED_STREAM_IO_TIMEOUT, exchange)
+            .expect("a redirect is a final outcome");
+        let mut page = String::new();
+        client.read_to_string(&mut page).expect("read page");
+        (outcome, page)
+    }
+
+    #[test]
+    fn the_browser_page_says_connected_only_for_a_connected_outcome() {
+        let (outcome, page) = page_for(&CancelHandle::new(), |_, _, _| Ok("access".into()));
+        assert!(
+            matches!(outcome, Outcome::Connected { .. }),
+            "got {outcome:?}"
+        );
+        assert!(page.contains("DigiKey connected"), "page: {page}");
+
+        let (outcome, page) = page_for(&CancelHandle::new(), |_, _, _| {
+            Err(DigiKeyAuthError::Request("token endpoint refused".into()))
+        });
+        assert!(matches!(outcome, Outcome::Failed { .. }), "got {outcome:?}");
+        assert!(page.contains("was not connected"), "page: {page}");
+        assert!(!page.contains("DigiKey connected"), "page: {page}");
+
+        let cancel = CancelHandle::new();
+        let (outcome, page) = page_for(&cancel, |_, _, _| {
+            cancel.cancel();
+            Err(DigiKeyAuthError::Cancelled)
+        });
+        assert!(matches!(outcome, Outcome::Cancelled), "got {outcome:?}");
+        assert!(page.contains("was not connected"), "page: {page}");
     }
 
     #[test]
