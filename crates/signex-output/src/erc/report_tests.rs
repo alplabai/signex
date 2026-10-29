@@ -50,6 +50,7 @@ fn options(format: ErcReportFormat) -> ErcReportOptions {
             date: "2026-10-29".into(),
             status: ErcReportWaiverStatus::Active,
             waived_count: 1,
+            severity: Some(ErcReportSeverity::Warning),
         }],
         ..ErcReportOptions::default()
     }
@@ -155,4 +156,26 @@ fn the_format_follows_the_extension() {
     assert_eq!(f("r.csv"), ErcReportFormat::Csv);
     assert_eq!(f("r.txt"), ErcReportFormat::Text);
     assert_eq!(f("r"), ErcReportFormat::Text);
+}
+
+#[test]
+fn a_severity_filter_applies_to_waivers_and_the_waived_count_alike() {
+    let mut opts = options(ErcReportFormat::Json);
+    opts.waivers.push(ErcReportWaiver {
+        kind: ErcReportWaiverKind::PerNet,
+        rule_id: "user::r".into(),
+        subject: "net VBUS".into(),
+        reason: String::new(),
+        author: String::new(),
+        date: String::new(),
+        status: ErcReportWaiverStatus::Active,
+        waived_count: 2,
+        severity: None,
+    });
+    let all = report::build(&select_rows(&opts).expect("rows"), &opts);
+    assert_eq!((all.waivers.len(), all.summary.waived), (2, 3));
+    opts.min_severity = Some(ErcReportSeverity::Error);
+    let errors = report::build(&select_rows(&opts).expect("rows"), &opts);
+    assert_eq!(errors.summary.total, 2);
+    assert_eq!((errors.waivers.len(), errors.summary.waived), (0, 0));
 }

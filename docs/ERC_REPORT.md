@@ -36,7 +36,7 @@ keys they do not know.
       "sheets": [
         {
           "sheet": "power.snxsch",
-          "sheet_path": "/path/to/project/power.snxsch",
+          "sheet_path": "sheets/power.snxsch",
           "violations": [
             { "rule": "Power port short", "message": "...", "x_mm": 25.4, "y_mm": 12.7 }
           ]
@@ -53,7 +53,8 @@ keys they do not know.
       "author": "A. Designer",
       "date": "2026-10-29",
       "status": "active",
-      "waived_count": 1
+      "waived_count": 1,
+      "severity": "Warning"
     }
   ]
 }
@@ -66,11 +67,11 @@ keys they do not know.
 | `rule_set` | object or `null` | The rule set the run used: `profile` (string or `null`) and `sha256` of the applied rules. |
 | `summary.errors` / `warnings` / `info` | integer | Reported findings per severity. |
 | `summary.total` | integer | All reported findings. |
-| `summary.waived` | integer | Findings hidden by waivers; they are not in `groups`. |
+| `summary.waived` | integer | Findings hidden by the listed waivers; they are not in `groups`. |
 | `groups[]` | array | One entry per severity that has findings, `Error` first. |
 | `groups[].severity` | string | `"Error"`, `"Warning"` or `"Info"`. |
 | `groups[].sheets[]` | array | Sheets in first-seen order. |
-| `sheet` / `sheet_path` | string | File name and full path of the sheet. |
+| `sheet` / `sheet_path` | string | File name of the sheet, and its path relative to the project folder (absolute only for a sheet outside it). |
 | `violations[].rule` | string | Rule name as the panel shows it. |
 | `violations[].message` | string | The finding's text. |
 | `violations[].x_mm` / `y_mm` | number | Location on the sheet, in mm. |
@@ -80,5 +81,10 @@ keys they do not know.
 | `waivers[].reason` / `author` / `date` | string | Empty for a per-net waiver, which records none. |
 | `waivers[].status` | string | `"active"`, `"lapsed"` (an involved object changed, so the finding is reported again), `"unmatched"` or `"incomplete"` (no reason or author; ignored). |
 | `waivers[].waived_count` | integer | Findings it hid in this run. |
+| `waivers[].severity` | string or `null` | Severity of the finding it hid (`"Error"`, `"Warning"`, `"Info"`); `null` when unknown (per-net waivers, or nothing hidden). |
+
+The app exports every finding, so no severity filter applies. A report made
+with a minimum severity lists only findings and waivers at or above it, and
+`summary.waived` counts only the waivers listed.
 
 For CI, a non-zero `summary.errors` is the usual failure condition.

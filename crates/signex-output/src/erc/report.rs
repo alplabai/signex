@@ -24,6 +24,9 @@ pub struct ErcReportWaiver {
     pub status: ErcReportWaiverStatus,
     /// Findings it hid in the run the report was made from.
     pub waived_count: usize,
+    /// Severity of the finding it hid, when known. A report filtered by a
+    /// minimum severity lists only waivers whose finding passes the filter.
+    pub severity: Option<ErcReportSeverity>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -80,7 +83,8 @@ pub struct ReportSummary {
     pub warnings: usize,
     pub info: usize,
     pub total: usize,
-    /// Findings hidden by waivers (not in `groups`).
+    /// Findings hidden by the listed waivers (not in `groups`); the same
+    /// minimum-severity filter as the findings applies.
     pub waived: usize,
 }
 
@@ -93,6 +97,8 @@ pub struct SeverityGroup {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SheetGroup {
     pub sheet: String,
+    /// The sheet's path as the caller gives it; the app passes it relative
+    /// to the project folder.
     pub sheet_path: String,
     pub violations: Vec<ReportViolation>,
 }
@@ -120,7 +126,21 @@ pub fn build(rows: &[&ErcReportRow], opts: &ErcReportOptions) -> ErcReport {
         warnings: count(ErcReportSeverity::Warning),
         info: count(ErcReportSeverity::Info),
         total: rows.len(),
-        waived: opts.waivers.iter().map(|w| w.waived_count).sum(),
+        waived: 0,
+    };
+    let waivers: Vec<ErcReportWaiver> = opts
+        .waivers
+        .iter()
+        .filter(|w| match (opts.min_severity, w.severity) {
+            (None, _) => true,
+            (Some(min), Some(sev)) => sev >= min,
+            (Some(_), None) => false,
+        })
+        .cloned()
+        .collect();
+    let summary = ReportSummary {
+        waived: waivers.iter().map(|w| w.waived_count).sum(),
+        ..summary
     };
     let groups = SEVERITY_ORDER
         .iter()
@@ -139,7 +159,7 @@ pub fn build(rows: &[&ErcReportRow], opts: &ErcReportOptions) -> ErcReport {
         rule_set: opts.rule_set.as_ref().map(rule_set),
         summary,
         groups,
-        waivers: opts.waivers.clone(),
+        waivers,
     }
 }
 

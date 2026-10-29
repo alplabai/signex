@@ -22,7 +22,7 @@ use crate::{ExportContext, Exporter};
 
 /// Severity of one report row, ordered `Info < Warning < Error` so a minimum
 /// severity filter is a plain comparison.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub enum ErcReportSeverity {
     Info,
     Warning,
