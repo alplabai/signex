@@ -66,6 +66,7 @@ impl Signex {
                     row = %row_id,
                     "browser delete: row removed"
                 );
+                self.library.writes.forget(&library_path, row_id);
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                     if state.selected_row == Some(row_id) {
                         state.selected_row = None;

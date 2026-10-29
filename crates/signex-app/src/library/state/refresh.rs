@@ -235,29 +235,17 @@ impl LibraryState {
         }
     }
 
-    /// Show an edit this app just saved, ahead of the re-read: `apply`
-    /// changes the cached row (only the fields that were edited, so a row
-    /// that other writes moved on meanwhile keeps their changes) and it
-    /// takes the new base `revision`.
-    pub fn patch_cached_row_with(
-        &mut self,
-        root: &Path,
-        table: &str,
-        row_id: RowId,
-        revision: Option<u64>,
-        apply: impl FnOnce(&mut ComponentRow),
-    ) {
+    /// Show the row a write stored, ahead of the re-read: the cached row is
+    /// replaced whole, revision included, so the copy and its revision
+    /// always describe the same stored row.
+    pub fn replace_cached_row(&mut self, root: &Path, table: &str, row: ComponentRow) {
         self.touch_data();
         let cached = self
             .library_at_mut(root)
             .and_then(|lib| lib.tables.get_mut(table))
-            .and_then(|rows| {
-                rows.iter_mut()
-                    .find(|r| RowId::from_uuid(r.row_id) == row_id)
-            });
-        if let Some(row) = cached {
-            apply(row);
-            row.server_revision = revision;
+            .and_then(|rows| rows.iter_mut().find(|r| r.row_id == row.row_id));
+        if let Some(slot) = cached {
+            *slot = row;
         }
     }
 

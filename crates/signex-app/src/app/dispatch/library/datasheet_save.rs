@@ -133,14 +133,40 @@ impl Signex {
             return Ok(Task::none());
         }
         if state.staged_assets_in_use().is_empty() {
-            return self.start_plain_row_save(address);
+            return self.start_plain_row_save(address, None);
         }
         self.start_staged_store(address, None)
     }
 
+    /// The row's part of a Save All (quit, project close, close library).
+    /// `Ok(None)` means it is settled already (gone); `Ok(Some(task))`
+    /// writes it on a worker, after its staged PDFs when it pins any, and
+    /// records a failure for the Save All's settle step. Refused while
+    /// another save or a primitive bind of the row runs.
+    pub(crate) fn begin_save_row_in_batch(
+        &mut self,
+        address: &EditorAddress,
+        batch: u64,
+    ) -> anyhow::Result<Option<Task<Message>>> {
+        let Some(state) = self.library.editors.get(address) else {
+            return Ok(None);
+        };
+        if state.saving_row.is_some() || state.binding_primitive {
+            anyhow::bail!("this row is still being saved; try again in a moment");
+        }
+        if state.staged_assets_in_use().is_empty() {
+            return self.start_plain_row_save(address, Some(batch)).map(Some);
+        }
+        self.start_staged_store(address, Some(batch)).map(Some)
+    }
+
     /// Save a row that pins no staged PDF: mark it saving and write it on a
-    /// worker. `row_saved` settles it.
-    fn start_plain_row_save(&mut self, address: &EditorAddress) -> anyhow::Result<Task<Message>> {
+    /// worker. `preview_row_saved` settles it.
+    fn start_plain_row_save(
+        &mut self,
+        address: &EditorAddress,
+        batch: Option<u64>,
+    ) -> anyhow::Result<Task<Message>> {
         let generation = self.document_state.document_saves.mint_generation();
         let Some(state) = self.library.editors.get_mut(address) else {
             return Ok(Task::none());
@@ -152,29 +178,7 @@ impl Signex {
         state.saving_row = Some(state.row.clone());
         state.saving_generation = generation;
         state.saving_batch = None;
-        self.begin_row_write(address, &[])
-    }
-
-    /// The row's part of a Save All (quit, project close, close library).
-    /// `Ok(None)` means it is settled already (saved at once, or gone);
-    /// `Ok(Some(task))` writes its staged PDFs on a worker and then saves
-    /// it, recording a failure for the Save All's settle step. Refused,
-    /// as before, while another save of the row runs.
-    pub(crate) fn begin_save_row_in_batch(
-        &mut self,
-        address: &EditorAddress,
-        batch: u64,
-    ) -> anyhow::Result<Option<Task<Message>>> {
-        let Some(state) = self.library.editors.get(address) else {
-            return Ok(None);
-        };
-        if state.saving_row.is_some() {
-            anyhow::bail!("this row is still being saved; try again in a moment");
-        }
-        if state.staged_assets_in_use().is_empty() {
-            return self.try_save_row(address).map(|()| None);
-        }
-        self.start_staged_store(address, Some(batch)).map(Some)
+        self.begin_row_write(address, &[], batch)
     }
 
     /// Check the library can take the staged PDFs, mark the row as saving
@@ -270,27 +274,22 @@ impl Signex {
                 }
             })
             .map_err(anyhow::Error::msg);
-        let Some(batch) = batch else {
-            // The Save button: the row is written on a worker too.
-            let started = stored.and_then(|written| self.begin_row_write(address, &written));
-            return started.unwrap_or_else(|e| {
-                self.report_save_row_failure(&e);
-                Task::none()
-            });
-        };
-        // A Save All is waiting on this row: it needs the outcome now.
-        let saved = stored.and_then(|written| self.commit_row(address, &written));
-        let Err(e) = saved else {
-            return Task::none();
-        };
-        // Its settle step reports the failure and keeps the window / library
-        // open.
-        let label = self.library.editor_label(address);
-        crate::diagnostics::log_error(&format!("Save All: could not save {label}"), &e);
-        self.library
-            .batch_row_failures
-            .insert((batch, address.clone()), (label, format!("{e:#}")));
-        Task::none()
+        let started = stored.and_then(|written| self.begin_row_write(address, &written, batch));
+        started.unwrap_or_else(|e| {
+            match batch {
+                // A Save All is waiting on this row: its settle step
+                // reports the failure and keeps the window / library open.
+                Some(batch) => {
+                    let label = self.library.editor_label(address);
+                    crate::diagnostics::log_error(&format!("Save All: could not save {label}"), &e);
+                    self.library
+                        .batch_row_failures
+                        .insert((batch, address.clone()), (label, format!("{e:#}")));
+                }
+                None => self.report_save_row_failure(&e),
+            }
+            Task::none()
+        })
     }
 }
 

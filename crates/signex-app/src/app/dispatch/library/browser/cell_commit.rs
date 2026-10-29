@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::library::refresh::RefreshFollowUp;
-use crate::library::writes::{RowEdit, RowPatch, WriteFailure, WriteKind, row_edit_task};
+use crate::library::writes::{RowEdit, RowPatch, RowStart, WriteFailure, WriteKind, row_edit_task};
 
 impl Signex {
     /// Commit a per-cell inline edit to the row. Re-hashes + persists.
@@ -133,8 +133,9 @@ impl Signex {
         let edit = RowEdit {
             table,
             row_id,
-            row,
+            start: RowStart::Full(Box::new(row)),
             patch: Some(patch),
+            assets: Vec::new(),
             message: "edit cell",
         };
         row_edit_task(&mut self.library, &library_path, kind, edit)
@@ -153,6 +154,7 @@ impl Signex {
             column,
             typed,
             saved,
+            written,
         } = cell;
         let key = (row_id, column.clone());
         let revision = match outcome {
@@ -182,11 +184,17 @@ impl Signex {
         // The re-read lands later; show the saved row (new revision
         // included) right away so the cell does not flash its old value and
         // a second commit starts from the saved revision.
-        let edited = *saved;
-        self.library
-            .patch_cached_row_with(&library_path, &table, row_id, revision, |cached| {
-                apply_column(&column, &edited, cached)
-            });
+        // Cache the row the worker actually wrote: after a rebase it holds
+        // this app's earlier writes too, and the revision covers all of them.
+        // Patching only this column would stamp that revision on a copy
+        // that lacks the rest, and a later write from the cache would pass
+        // the base check and drop the earlier one.
+        match written {
+            Some(row) => self.library.replace_cached_row(&library_path, &table, *row),
+            None => self
+                .library
+                .patch_cached_row(&library_path, &table, *saved, revision),
+        }
         self.refresh_library_task(&library_path, RefreshFollowUp::CleanEditors(vec![row_id]))
     }
 }
@@ -198,6 +206,8 @@ pub(in crate::app::dispatch::library) struct SavedCell {
     pub column: String,
     pub typed: String,
     pub saved: Box<signex_library::ComponentRow>,
+    /// The row the worker wrote, as stored.
+    pub written: Option<Box<signex_library::ComponentRow>>,
 }
 
 /// Copy the field `column` names from the edited row `from` into `to`.

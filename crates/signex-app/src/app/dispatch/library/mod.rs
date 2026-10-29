@@ -284,7 +284,11 @@ impl Signex {
                 path,
                 generation,
                 snapshot,
-            } => self.handle_refresh_finished(path, generation, snapshot),
+            } => {
+                let task = self.handle_refresh_finished(path, generation, snapshot);
+                self.close_libraries_whose_writes_are_done();
+                task
+            }
             LibraryMessage::WriteFinished(done) => self.handle_write_finished(*done),
             LibraryMessage::BrowserSelectTable {
                 library_path,

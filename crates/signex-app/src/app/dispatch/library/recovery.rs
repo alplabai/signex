@@ -228,6 +228,10 @@ pub(super) fn handle_recovery_git_missing(
             }
             // A re-init already running on this library: wait for it.
             if app.library.writes.pending(&path) > 0 {
+                crate::diagnostics::log_info(
+                    "Re-init was ignored: this library is still being written (a re-init already running, or an edit); click it again once that has finished.",
+                );
+                app.sync_diagnostics_panel_ctx();
                 return Task::none();
             }
             // `git init` and the first commit run on a worker (#893).

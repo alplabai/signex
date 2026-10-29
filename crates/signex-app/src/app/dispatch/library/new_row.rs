@@ -32,12 +32,10 @@ impl Signex {
         } = match built {
             Ok(new) => new,
             Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    table = %table,
-                    error = %e,
-                    "could not build a new component row"
-                );
+                crate::diagnostics::log_warning(format!(
+                    "New component was not added to table {table}: {e}"
+                ));
+                self.sync_diagnostics_panel_ctx();
                 return Task::none();
             }
         };
@@ -70,13 +68,12 @@ impl Signex {
             then,
         } = created;
         if let Err(failure) = outcome {
-            tracing::warn!(
-                target: "signex::library",
-                library = %library_path.display(),
-                table = %table,
-                error = %failure.reason,
-                "could not append a row to the library table"
-            );
+            crate::diagnostics::log_warning(format!(
+                "New component was not added to table {table}: {} ({})",
+                failure.reason,
+                library_path.display()
+            ));
+            self.sync_diagnostics_panel_ctx();
             return Task::none();
         }
         commands::report_unbound_row(&internal_pn, &unbound);

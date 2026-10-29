@@ -8,7 +8,7 @@
 use super::*;
 use crate::library::refresh::RefreshFollowUp;
 use crate::library::state::SavingSnapshot;
-use crate::library::writes::{RowEdit, WriteFailure, WriteKind, row_edit_task};
+use crate::library::writes::{RowEdit, RowStart, WriteFailure, WriteKind, row_edit_task};
 
 impl Signex {
     /// Save `draft` (the modal's draft after its pending parameter and tag
@@ -45,8 +45,9 @@ impl Signex {
         let edit = RowEdit {
             table,
             row_id,
-            row: written,
+            start: RowStart::Full(Box::new(written)),
             patch: None,
+            assets: Vec::new(),
             message: "edit row",
         };
         row_edit_task(&mut self.library, library_path, kind, edit)

@@ -160,40 +160,87 @@ impl Drop for Turn {
     }
 }
 
+type Gates = Arc<Mutex<HashMap<PathBuf, Arc<WriteGate>>>>;
+
 /// The write gate of every library, keyed by its `.snxlib` path.
 #[derive(Default)]
 pub struct LibraryWrites {
-    gates: HashMap<PathBuf, Arc<WriteGate>>,
+    gates: Gates,
+}
+
+/// Waits for every library's writes, including the ones that start after
+/// the waiter was made. Holds the gates, not the Model, so a worker can use it.
+#[derive(Clone)]
+pub struct IdleWaiter {
+    gates: Gates,
+}
+
+fn lock_gates(gates: &Gates) -> MutexGuard<'_, HashMap<PathBuf, Arc<WriteGate>>> {
+    gates
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+impl IdleWaiter {
+    /// Wait until no library has a write or read pending, at most `limit`.
+    /// `true` when everything is idle.
+    pub fn wait_all_idle(&self, limit: Duration) -> bool {
+        let deadline = Instant::now() + limit;
+        loop {
+            let busy: Vec<Arc<WriteGate>> = lock_gates(&self.gates)
+                .values()
+                .filter(|gate| gate.pending() > 0)
+                .cloned()
+                .collect();
+            if busy.is_empty() {
+                return true;
+            }
+            for gate in busy {
+                let left = deadline.saturating_duration_since(Instant::now());
+                if !gate.wait_idle(left) {
+                    return false;
+                }
+            }
+        }
+    }
 }
 
 impl LibraryWrites {
     /// The next place in the write order of the library at `root`.
     pub fn turn(&mut self, root: &Path) -> Turn {
-        let gate = self.gates.entry(root.to_path_buf()).or_default();
+        let mut gates = lock_gates(&self.gates);
+        let gate = gates.entry(root.to_path_buf()).or_default();
         Turn::take(gate)
+    }
+
+    fn gate(&self, root: &Path) -> Option<Arc<WriteGate>> {
+        lock_gates(&self.gates).get(root).cloned()
     }
 
     /// Writes of the library at `root` that have not finished.
     pub fn pending(&self, root: &Path) -> u64 {
-        self.gates.get(root).map_or(0, |gate| gate.pending())
+        self.gate(root).map_or(0, |gate| gate.pending())
     }
 
-    /// Wait (bounded) for the library at `root` to finish its writes. `true`
-    /// when it has none left.
-    pub fn wait_idle(&self, root: &Path, limit: Duration) -> bool {
-        self.gates
-            .get(root)
-            .is_none_or(|gate| gate.wait_idle(limit))
+    /// `row` of the library at `root` was deleted.
+    pub fn forget(&self, root: &Path, row: signex_library::RowId) {
+        if let Some(gate) = self.gate(root) {
+            gate.own.forget(row);
+        }
     }
 
-    /// The gates of every library that has unfinished work, to wait on from
-    /// a worker (the quit path).
-    pub fn busy_gates(&self) -> Vec<Arc<WriteGate>> {
-        self.gates
+    /// A waiter for every library's writes, for the quit path.
+    pub fn idle_waiter(&self) -> IdleWaiter {
+        IdleWaiter {
+            gates: Arc::clone(&self.gates),
+        }
+    }
+
+    /// Whether any library has unfinished work.
+    pub fn any_pending(&self) -> bool {
+        lock_gates(&self.gates)
             .values()
-            .filter(|gate| gate.pending() > 0)
-            .cloned()
-            .collect()
+            .any(|gate| gate.pending() > 0)
     }
 }
 
@@ -238,7 +285,27 @@ mod tests {
         third.wait();
         assert_eq!(writes.pending(root), 1);
         drop(third);
-        assert!(writes.wait_idle(root, Duration::from_millis(10)));
+        assert!(
+            writes
+                .idle_waiter()
+                .wait_all_idle(Duration::from_millis(10))
+        );
+    }
+
+    #[test]
+    fn the_waiter_sees_writes_that_start_after_it_was_made() {
+        let mut writes = LibraryWrites::default();
+        let waiter = writes.idle_waiter();
+        // A library that had no gate when the waiter was made.
+        let late = writes.turn(Path::new("late.snxlib"));
+        let releaser = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(200));
+            drop(late);
+        });
+        let started = Instant::now();
+        assert!(waiter.wait_all_idle(Duration::from_secs(5)));
+        assert!(started.elapsed() >= Duration::from_millis(150));
+        releaser.join().unwrap();
     }
 
     #[test]
@@ -246,8 +313,16 @@ mod tests {
         let mut writes = LibraryWrites::default();
         let root = Path::new("a.snxlib");
         let held = writes.turn(root);
-        assert!(!writes.wait_idle(root, Duration::from_millis(30)));
+        assert!(
+            !writes
+                .idle_waiter()
+                .wait_all_idle(Duration::from_millis(30))
+        );
         drop(held);
-        assert!(writes.wait_idle(root, Duration::from_millis(30)));
+        assert!(
+            writes
+                .idle_waiter()
+                .wait_all_idle(Duration::from_millis(30))
+        );
     }
 }

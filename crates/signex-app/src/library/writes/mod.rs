@@ -1,33 +1,14 @@
-//! Library mutations off the UI thread (#893 part 1).
-//!
-//! `update` used to call `adapter.update_row` / `delete_row` /
-//! `create_empty_table` ... itself. Each of those takes the library's
-//! cross-process write lock (up to [`signex_library::WRITE_LOCK_WAIT`], 5 s,
-//! when another Signex process holds it), rewrites a file and makes a git
-//! commit, so the whole window froze for the duration.
-//!
-//! Now `update` snapshots what the write needs, hands it to [`write_task`]
-//! and returns. The adapter call runs on the blocking pool, and its result
-//! comes back as [`LibraryMessage::WriteFinished`], which `update` applies:
-//! refresh the caches, close the form, or show the refusal in Messages.
-//!
-//! **Ordering (chosen: queue per library, not reject).** Each write takes a
-//! numbered [`gate::Turn`] on its library while `update` still has it, and the
-//! worker waits for its number. Rejecting while a write is in flight would
-//! drop the second of two quick edits and make the user retype it; queueing
-//! keeps both, in order. A queued edit still carries the row revision the
-//! user saw, so the adapter refuses it as stale (`RowChanged`) if an earlier
-//! write moved that row on: it is reported, never applied over the top.
-//!
-//! The forms that start a write keep the user's input until the result is
-//! in (ADR-0003 D2/D3): an edit made while the write runs stays in the form
-//! and is not mistaken for the saved copy.
+//! Library mutations off the UI thread (#893): `update` snapshots the
+//! inputs, [`write_task`] / [`row_edit_task`] run the adapter call on the
+//! blocking pool, and the result returns as
+//! [`LibraryMessage::WriteFinished`]. Design, ordering and the rebase rule:
+//! `docs/architecture/library-writes.md`.
 
 pub mod gate;
 #[cfg(test)]
 pub(crate) mod test_support;
 
-pub use gate::{LibraryWrites, OwnRevisions, Turn, WriteGate};
+pub use gate::{IdleWaiter, LibraryWrites, OwnRevisions, Turn, WriteGate};
 
 use std::path::{Path, PathBuf};
 
@@ -38,8 +19,6 @@ use super::messages::LibraryMessage;
 use super::state::{EditorAddress, LibraryState};
 use crate::app::Message;
 
-/// How long a library close waits for the writes of that library.
-pub const CLOSE_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
 /// How long quit waits for the writes still running.
 pub const QUIT_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
 
@@ -91,6 +70,9 @@ pub enum WriteKind {
         /// The editor's save generation, so a result for an editor closed
         /// and reopened meanwhile settles nothing.
         generation: u64,
+        /// The Save All this save belongs to, whose settle step needs its
+        /// outcome.
+        batch: Option<u64>,
         saved: Box<PreviewRowSave>,
     },
 }
@@ -147,6 +129,15 @@ pub struct WriteDone {
     pub library_path: PathBuf,
     pub kind: WriteKind,
     pub outcome: WriteOutcome,
+    /// The row a row edit wrote, as stored (after any rebase), carrying the
+    /// revision the write produced.
+    pub row: Option<Box<ComponentRow>>,
+}
+
+/// What a write hands back besides its outcome.
+struct Written {
+    revision: Option<u64>,
+    row: Option<ComponentRow>,
 }
 
 /// Run `write` against the library at `root` on the blocking pool, after
@@ -163,28 +154,44 @@ pub fn write_task<F>(
 where
     F: FnOnce(&dyn LibraryAdapter) -> Result<Option<u64>, LibraryError> + Send + 'static,
 {
-    spawn(state, root, kind, move |adapter, _turn| write(adapter))
+    spawn(state, root, kind, move |adapter, _turn| {
+        write(adapter).map(|revision| Written {
+            revision,
+            row: None,
+        })
+    })
 }
 
 /// A change to one field group of a row, applied to whatever copy of the
 /// row the write finds stored.
 pub type RowPatch = Box<dyn FnOnce(&mut ComponentRow) + Send>;
 
+/// Where a row edit starts from.
+pub enum RowStart {
+    /// The row as the user's copy has it, with the change applied: written
+    /// as it is when nothing of this app's own wrote the row meanwhile.
+    Full(Box<ComponentRow>),
+    /// The stored row, with `patch` applied and the base revision the
+    /// user's copy was read at.
+    FromStored { base_revision: Option<u64> },
+}
+
 /// A row edit that survives this app's own earlier writes to the row.
 pub struct RowEdit {
     pub table: String,
     pub row_id: RowId,
-    /// The row as the user's copy has it, with the change applied: written
-    /// as it is when nothing of this app's own wrote the row meanwhile.
-    pub row: ComponentRow,
+    pub start: RowStart,
     /// Just the change. When an earlier write of this app moved the row on
     /// since the user's copy was read, it is applied on top of the row that
     /// write produced. `None` for an edit that replaces the whole row.
     pub patch: Option<RowPatch>,
+    /// Library-relative paths of pinned PDFs committed with the row.
+    pub assets: Vec<String>,
     pub message: &'static str,
 }
 
-/// [`write_task`] for a row edit; see [`RowEdit`].
+/// [`write_task`] for a row edit; see [`RowEdit`]. Every row write of this
+/// app goes through here, so the ledger of own revisions stays complete.
 pub fn row_edit_task(
     state: &mut LibraryState,
     root: &Path,
@@ -196,33 +203,63 @@ pub fn row_edit_task(
         let RowEdit {
             table,
             row_id,
-            row,
+            start,
             patch,
+            assets,
             message,
         } = edit;
-        let mut to_write = row;
-        if let Some(patch) = patch
-            && let Some(own_revision) = own.of(row_id)
-            && let Ok(mut stored) = adapter.read_row(&table, row_id)
-            && stored.server_revision == own_revision
-            && stored.server_revision != to_write.server_revision
-        {
-            // The row is exactly as this app last wrote it: nobody else has
-            // touched it, so the edit goes on top of that copy.
-            patch(&mut stored);
-            stored.content_hash = signex_library::hash_row_content(&stored)
+        let own_revision = own.of(row_id);
+        let hash = |row: &mut ComponentRow| -> Result<(), LibraryError> {
+            row.content_hash = signex_library::hash_row_content(row)
                 .map_err(|e| LibraryError::Backend(format!("hash row content: {e}")))?;
-            to_write = stored;
-        }
-        let revision = adapter.update_row(&table, to_write, message)?;
+            Ok(())
+        };
+        let to_write = match start {
+            RowStart::Full(row) => {
+                let mut to_write = *row;
+                if let Some(patch) = patch
+                    && let Some(own_revision) = own_revision
+                    && let Ok(mut stored) = adapter.read_row(&table, row_id)
+                    && stored.server_revision == own_revision
+                    && stored.server_revision != to_write.server_revision
+                {
+                    // The row is exactly as this app last wrote it: nobody
+                    // else has touched it, so the edit goes on top of that
+                    // copy.
+                    patch(&mut stored);
+                    hash(&mut stored)?;
+                    to_write = stored;
+                }
+                to_write
+            }
+            RowStart::FromStored { base_revision } => {
+                let mut stored = adapter.read_row(&table, row_id)?;
+                if let Some(patch) = patch {
+                    patch(&mut stored);
+                }
+                // The edit keeps the base the user's copy had, so a row
+                // that moved on (even by this app's own write, which the
+                // copy does not hold) is refused as stale.
+                stored.server_revision = base_revision;
+                hash(&mut stored)?;
+                stored
+            }
+        };
+        let revision =
+            adapter.update_row_with_assets(&table, to_write.clone(), message, &assets)?;
         own.record(row_id, revision);
-        Ok(revision)
+        let mut written = to_write;
+        written.server_revision = revision;
+        Ok(Written {
+            revision,
+            row: Some(written),
+        })
     })
 }
 
 fn spawn<F>(state: &mut LibraryState, root: &Path, kind: WriteKind, run: F) -> Task<Message>
 where
-    F: FnOnce(&dyn LibraryAdapter, &Turn) -> Result<Option<u64>, LibraryError> + Send + 'static,
+    F: FnOnce(&dyn LibraryAdapter, &Turn) -> Result<Written, LibraryError> + Send + 'static,
 {
     let path = root.to_path_buf();
     let adapter = state
@@ -230,7 +267,7 @@ where
         .and_then(|lib| state.set.get_shared(lib.library_id));
     let Some(adapter) = adapter else {
         let error = LibraryError::NotFound(root.display().to_string());
-        return Task::done(finished(path, kind, Err(WriteFailure::of(&error))));
+        return Task::done(finished(path, kind, Err(WriteFailure::of(&error)), None));
     };
     let turn = state.writes.turn(root);
     let done_path = path.clone();
@@ -239,23 +276,35 @@ where
         async move {
             tokio::task::spawn_blocking(move || {
                 turn.wait();
-                run(adapter.as_ref(), &turn).map_err(|e| WriteFailure::of(&e))
+                match run(adapter.as_ref(), &turn) {
+                    Ok(written) => (Ok(written.revision), written.row.map(Box::new)),
+                    Err(e) => (Err(WriteFailure::of(&e)), None),
+                }
             })
             .await
             .unwrap_or_else(|join_error| {
-                Err(WriteFailure::other(format!(
-                    "the library write task failed: {join_error}"
-                )))
+                (
+                    Err(WriteFailure::other(format!(
+                        "the library write task failed: {join_error}"
+                    ))),
+                    None,
+                )
             })
         },
-        move |outcome| finished(done_path.clone(), done_kind.clone(), outcome),
+        move |(outcome, row)| finished(done_path.clone(), done_kind.clone(), outcome, row),
     )
 }
 
-fn finished(library_path: PathBuf, kind: WriteKind, outcome: WriteOutcome) -> Message {
+fn finished(
+    library_path: PathBuf,
+    kind: WriteKind,
+    outcome: WriteOutcome,
+    row: Option<Box<ComponentRow>>,
+) -> Message {
     Message::Library(LibraryMessage::WriteFinished(Box::new(WriteDone {
         library_path,
         kind,
         outcome,
+        row,
     })))
 }

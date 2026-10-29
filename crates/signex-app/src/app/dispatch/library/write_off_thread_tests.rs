@@ -37,7 +37,13 @@ struct Fixture {
 fn fixture() -> Fixture {
     signex_library::git_identity::test_identity::install();
     let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("Lib").join("Lib.snxlib");
+    // A long path, like a macOS or Windows temp dir: the Messages panel cuts
+    // a line at 160 characters, and the reason must survive that.
+    let file = dir
+        .path()
+        .join("a-long-directory-name-like-a-windows-temp-folder")
+        .join("Lib")
+        .join("Lib.snxlib");
     let library_id = Uuid::now_v7();
     let manifest = SnxlibManifest {
         format: FORMAT_TOKEN.into(),
@@ -609,20 +615,30 @@ fn quit_waits_for_a_library_write_in_flight() {
 }
 
 #[test]
-fn closing_a_library_waits_for_its_write_in_flight() {
+fn closing_a_library_never_unmounts_under_a_running_write() {
     let mut f = fixture();
     let in_flight = f.app.library.writes.turn(&f.file);
-    let releaser = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(400));
-        drop(in_flight);
-    });
-    let started = Instant::now();
     f.app.library.close_library(&f.file);
     assert!(
-        started.elapsed() >= Duration::from_millis(350),
-        "close returned while a write was in flight"
+        f.app.library.library_at(&f.file).is_some(),
+        "the library stays mounted while its write runs"
     );
-    releaser.join().unwrap();
+    assert!(f.app.library.closes_ready().is_empty());
+    drop(in_flight);
+    f.app.close_libraries_whose_writes_are_done();
+    assert!(
+        f.app.library.library_at(&f.file).is_none(),
+        "and goes once the write is done"
+    );
+}
+
+#[test]
+fn a_close_does_not_block_update() {
+    let mut f = fixture();
+    let _held = f.app.library.writes.turn(&f.file);
+    let started = Instant::now();
+    f.app.library.close_library(&f.file);
+    assert!(started.elapsed() < Duration::from_millis(500));
 }
 
 // ── A failed write leaves the UI on the disk's truth ────────────────────
@@ -681,6 +697,7 @@ fn the_write_finished_message_is_a_library_message() {
 
 #[test]
 fn the_git_reinit_of_a_library_runs_off_the_ui_thread() {
+    let _ = crate::diagnostics::init_logging();
     use crate::library::recovery::{GitMissingChoice, RecoveryDialog};
     signex_library::git_identity::test_identity::install();
     let dir = tempfile::tempdir().unwrap();
@@ -742,4 +759,121 @@ fn the_git_reinit_of_a_library_runs_off_the_ui_thread() {
     }
     assert!(git_dir.exists(), "the worker ran `git init`");
     assert!(ran.library.recovery.is_none());
+}
+
+fn bind_footprint(f: &mut Fixture, row: usize, primitive: PrimitiveRef) -> Task<Message> {
+    let address = f.address(row);
+    f.app
+        .apply_primitive_pick_to_browser_row(address, PrimitiveKind::Footprint, primitive)
+}
+
+#[test]
+fn a_rebased_cell_write_caches_the_row_it_wrote_so_a_later_write_keeps_the_bind() {
+    let mut f = fixture();
+    let primitive = PrimitiveRef::new(f.library_id, Uuid::now_v7());
+    // A bind, then a cell edit of the same row built before the bind landed:
+    // the cell edit is rebased onto the bind.
+    let bind = bind_footprint(&mut f, 0, primitive);
+    let x = commit_cell(&mut f, 0, "internal_pn", "X-EDIT");
+    run_write(&mut f.app, Task::batch([bind, x]));
+    // The re-read has not landed. A third edit is built from the cache.
+    let y = commit_cell(&mut f, 0, "mpn", "Y-EDIT");
+    run_write(&mut f.app, y);
+
+    let stored = stored_row(&f, 0);
+    assert_eq!(stored.footprint_ref, Some(primitive), "the bind survives");
+    assert_eq!(stored.internal_pn.as_str(), "X-EDIT");
+    assert_eq!(stored.primary_mpn.mpn, "Y-EDIT");
+}
+
+fn description_dirty_preview(f: &mut Fixture, row: usize, text: &str) -> EditorAddress {
+    let address = f.open_preview(row);
+    let state = f.app.library.editors.get_mut(&address).unwrap();
+    state.row.description = text.into();
+    state.dirty = true;
+    address
+}
+
+#[test]
+fn a_save_all_ahead_of_a_cell_edit_loses_neither() {
+    let mut f = fixture();
+    let address = description_dirty_preview(&mut f, 0, "from the preview");
+    let save = f
+        .app
+        .begin_save_row_in_batch(&address, 1)
+        .expect("starts")
+        .expect("a task");
+    let cell = commit_cell(&mut f, 0, "mpn", "CELL-MPN");
+    run_write(&mut f.app, Task::batch([save, cell]));
+    let stored = stored_row(&f, 0);
+    assert_eq!(stored.description, "from the preview");
+    assert_eq!(
+        stored.primary_mpn.mpn, "CELL-MPN",
+        "the cell edit was not refused"
+    );
+    assert!(f.app.library.batch_row_failures.is_empty());
+}
+
+#[test]
+fn a_save_all_behind_a_cell_edit_is_refused_visibly_and_keeps_the_draft() {
+    let mut f = fixture();
+    let address = description_dirty_preview(&mut f, 0, "from the preview");
+    let cell = commit_cell(&mut f, 0, "mpn", "CELL-MPN");
+    let save = f
+        .app
+        .begin_save_row_in_batch(&address, 1)
+        .expect("starts")
+        .expect("a task");
+    run_write(&mut f.app, Task::batch([cell, save]));
+    let stored = stored_row(&f, 0);
+    assert_eq!(stored.primary_mpn.mpn, "CELL-MPN", "the cell edit landed");
+    assert_ne!(stored.description, "from the preview");
+    let editor = f.app.library.editors.get(&address).unwrap();
+    assert!(editor.dirty, "the draft stays for the user");
+    assert_eq!(
+        f.app.library.batch_row_failures.len(),
+        1,
+        "and Save All names it"
+    );
+}
+
+#[test]
+fn a_bind_and_a_save_all_of_one_preview_end_up_consistent() {
+    let mut f = fixture();
+    let address = description_dirty_preview(&mut f, 0, "from the preview");
+    let primitive = PrimitiveRef::new(f.library_id, Uuid::now_v7());
+    let bind =
+        f.app
+            .apply_primitive_pick_to_preview(address.clone(), PrimitiveKind::Footprint, primitive);
+    // A Save All while the bind is in flight is refused, not raced.
+    assert!(f.app.begin_save_row_in_batch(&address, 1).is_err());
+    run_write(&mut f.app, bind);
+    let save = f
+        .app
+        .begin_save_row_in_batch(&address, 2)
+        .expect("starts")
+        .expect("a task");
+    run_write(&mut f.app, save);
+    let stored = stored_row(&f, 0);
+    assert_eq!(stored.footprint_ref, Some(primitive));
+    assert_eq!(stored.description, "from the preview");
+    assert!(!f.app.library.editors.get(&address).unwrap().dirty);
+    assert!(!f.app.library.editors.get(&address).unwrap().stale_base);
+}
+
+#[test]
+fn a_failed_new_component_insert_reaches_messages() {
+    let _ = crate::diagnostics::init_logging();
+    let mut f = fixture();
+    let _held = hold_write_lock(&f.file);
+    let task = f
+        .app
+        .handle_browser_add_component(f.file.clone(), Some(TABLE.into()));
+    finish(&mut f.app, task);
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|entry| entry.message.contains("New component was not added")),
+        "the failed insert must be in Messages"
+    );
 }

@@ -259,6 +259,12 @@ impl Signex {
                     .to_string(),
             );
         }
+        if self.library.writes.pending(old_path) > 0 {
+            return Some(
+                "A library edit is still being written; rename the library once it has finished."
+                    .to_string(),
+            );
+        }
         if self.library.pending_mounts.contains_key(old_path) {
             return Some("This library is still opening. Try again in a moment.".to_string());
         }

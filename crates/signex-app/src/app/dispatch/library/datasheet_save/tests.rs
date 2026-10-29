@@ -468,7 +468,7 @@ fn a_second_save_and_a_reload_wait_for_the_running_save() {
         "reload did not replace the copy being saved"
     );
     // Save All / quit does not race the worker either.
-    assert!(app.try_save_row(&address).is_err());
+    assert!(app.begin_save_row_in_batch(&address, 1).is_err());
 }
 
 #[test]

@@ -606,6 +606,8 @@ pub struct LibraryState {
     /// The write order of each library (#893): library mutations run on
     /// workers, one library at a time, in the order the user made them.
     pub writes: super::writes::LibraryWrites,
+    /// Libraries whose close waits for their writes to finish.
+    pub closing: std::collections::HashSet<PathBuf>,
     /// "Now" as `view` may use it, for the age of cached prices. `view` is
     /// pure and cannot ask the clock, so `update` sets this on the poll tick
     /// and whenever a library's caches are refreshed.

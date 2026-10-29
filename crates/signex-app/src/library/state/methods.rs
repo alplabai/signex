@@ -87,6 +87,7 @@ impl Default for LibraryState {
             external_poll_failure_reported: false,
             pricing_refresh: None,
             writes: Default::default(),
+            closing: Default::default(),
             clock: chrono::Utc::now(),
             refresh_generations: HashMap::new(),
             refresh_generation_counter: 0,
@@ -314,25 +315,29 @@ impl LibraryState {
         }
     }
 
+    /// Libraries whose close was deferred and whose writes are all done.
+    pub fn closes_ready(&self) -> Vec<PathBuf> {
+        self.closing
+            .iter()
+            .filter(|root| self.writes.pending(root) == 0)
+            .cloned()
+            .collect()
+    }
+
     /// Drop the library backing `root` — unmounts from `set` and drops
     /// every editor pointing at it. (TODO(v0.9): unsaved-edits prompt
     /// is wired from the dispatcher via `dirty_editors_for_library`.)
     pub fn close_library(&mut self, root: &Path) {
         // A pricing walk of this library must not write after it is closed.
         self.cancel_pricing_refresh_of(&[root.to_path_buf()]);
-        // A write a worker still has in hand finishes before the library
-        // goes (ADR-0003 D2: a boundary waits for owed write-type work, it
-        // cannot cancel it). A write is short; the wait is bounded.
-        if !self
-            .writes
-            .wait_idle(root, super::super::writes::CLOSE_WAIT)
-        {
-            crate::diagnostics::log_warning(format!(
-                "Closing {}: a library write was still running after {} s; closed anyway.",
-                root.display(),
-                super::super::writes::CLOSE_WAIT.as_secs()
-            ));
+        // Never unmount under a running write (ADR-0003 D2): the close
+        // waits, without blocking, and `closes_ready` finishes it once the
+        // library's writes are done.
+        if self.writes.pending(root) > 0 {
+            self.closing.insert(root.to_path_buf());
+            return;
         }
+        self.closing.remove(root);
         // Cancel any mount still being prepared off-thread for this path
         // (#99 part 2c). `pending_mounts` doubles as the cancellation
         // tombstone: `take_mount_intent` returns `None` for a path that

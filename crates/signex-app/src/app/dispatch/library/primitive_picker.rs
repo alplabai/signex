@@ -8,9 +8,7 @@
 use super::*;
 use crate::library::refresh::RefreshFollowUp;
 use crate::library::resolve::{ResolvedKind, report_read_failure};
-use crate::library::writes::{
-    RowEdit, RowPatch, WriteFailure, WriteKind, row_edit_task, write_task,
-};
+use crate::library::writes::{RowEdit, RowPatch, RowStart, WriteFailure, WriteKind, row_edit_task};
 
 impl Signex {
     /// Open the Symbol/Footprint primitive picker modal. `target`
@@ -215,8 +213,9 @@ impl Signex {
         let edit = RowEdit {
             table,
             row_id,
-            row,
+            start: RowStart::Full(Box::new(row)),
             patch: Some(patch),
+            assets: Vec::new(),
             message: commit_msg,
         };
         row_edit_task(&mut self.library, &library_path, kind_done, edit)
@@ -316,20 +315,20 @@ impl Signex {
         let msg = bind_message(kind);
         let library_path = address.library_path.clone();
         let done = WriteKind::PreviewRowBound { address, kind };
-        write_task(&mut self.library, &library_path, done, move |adapter| {
-            adapter.read_row(&table, row_id).and_then(|mut stored| {
-                match kind {
-                    PrimitiveKind::Symbol => stored.bind_default_symbol(primitive_ref),
-                    PrimitiveKind::Footprint => stored.footprint_ref = Some(primitive_ref),
-                    _ => stored.sim_ref = Some(primitive_ref),
-                }
-                stored.server_revision = base_revision;
-                stored.refresh_content_hash().map_err(|e| {
-                    signex_library::LibraryError::Backend(format!("hash row content: {e}"))
-                })?;
-                adapter.update_row(&table, stored, msg)
-            })
-        })
+        let patch: RowPatch = Box::new(move |stored| match kind {
+            PrimitiveKind::Symbol => stored.bind_default_symbol(primitive_ref),
+            PrimitiveKind::Footprint => stored.footprint_ref = Some(primitive_ref),
+            _ => stored.sim_ref = Some(primitive_ref),
+        });
+        let edit = RowEdit {
+            table,
+            row_id,
+            start: RowStart::FromStored { base_revision },
+            patch: Some(patch),
+            assets: Vec::new(),
+            message: msg,
+        };
+        row_edit_task(&mut self.library, &library_path, done, edit)
     }
 
     /// The Component Preview's primitive bind finished.
