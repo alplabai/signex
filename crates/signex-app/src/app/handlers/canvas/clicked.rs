@@ -236,26 +236,7 @@ impl Signex {
         // and returns to normal selection — same convention as most
         // IDEs (Escape cancels, click elsewhere confirms).
         if let Some(state) = self.interaction_state.editing_text.take() {
-            if state.text != state.original_text {
-                let cmd = match state.kind {
-                    signex_types::schematic::SelectedKind::Label => {
-                        Some(signex_engine::Command::UpdateText {
-                            target: signex_engine::TextTarget::Label(state.uuid),
-                            value: state.text,
-                        })
-                    }
-                    signex_types::schematic::SelectedKind::TextNote => {
-                        Some(signex_engine::Command::UpdateText {
-                            target: signex_engine::TextTarget::TextNote(state.uuid),
-                            value: state.text,
-                        })
-                    }
-                    _ => None,
-                };
-                if let Some(cmd) = cmd {
-                    self.apply_engine_command(cmd, false, true);
-                }
-            }
+            self.commit_text_edit(state);
             return Task::none();
         }
         let (wx, wy) = if self.interaction_state.current_tool == Tool::Wire {
