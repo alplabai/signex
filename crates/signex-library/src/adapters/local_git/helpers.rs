@@ -658,44 +658,49 @@ pub(super) fn ensure_lfs_attributes(root_dir: &Path) -> Result<bool, LibraryErro
         }
     }
     if changed {
-        fs::write(&path, text)?;
+        signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
     }
     Ok(changed)
 }
 
-/// Stage the `.snxlib` (and `.gitattributes` for LFS) and record the
-/// library's initial commit, on top of HEAD when the repo already has one.
+/// Record the library's own commit: `parent`'s tree (empty without one) plus
+/// the `.snxlib` and, for LFS, `.gitattributes`, built in memory so nothing
+/// else staged in the repo can be swept in. `init` passes no parent, as it
+/// always has; only the LFS top-up of a library's own first commit passes one.
+/// The repo's index gains just those entries, after the commit succeeded.
 pub(super) fn commit_initial(
     repo: &git2::Repository,
     file_path: &Path,
     use_lfs: bool,
+    parent: Option<&git2::Commit>,
 ) -> Result<(), LibraryError> {
+    let backend =
+        |what: &'static str| move |e: git2::Error| LibraryError::Backend(format!("{what}: {e}"));
     let (sig_name, sig_email) = identity_for_repo(repo)?;
-    let sig = git2::Signature::now(&sig_name, &sig_email)
-        .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
-    let mut index = repo
-        .index()
-        .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
-    let snxlib_rel = file_name_str(file_path)?;
-    index
-        .add_path(Path::new(&snxlib_rel))
-        .map_err(|e| LibraryError::Backend(format!("git add snxlib: {e}")))?;
+    let sig = git2::Signature::now(&sig_name, &sig_email).map_err(backend("git signature"))?;
+    let root_dir = parent_dir(file_path)?;
+    let mut names = vec![file_name_str(file_path)?];
     if use_lfs {
-        index
-            .add_path(Path::new(GITATTRIBUTES_FILE))
-            .map_err(|e| LibraryError::Backend(format!("git add gitattributes: {e}")))?;
+        names.push(GITATTRIBUTES_FILE.to_string());
     }
-    index
-        .write()
-        .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
-    let tree_oid = index
-        .write_tree()
-        .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
-    let tree = repo
-        .find_tree(tree_oid)
-        .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
-    let parent = repo.head().ok().and_then(|head| head.peel_to_commit().ok());
-    let parents: Vec<&git2::Commit> = parent.iter().collect();
+    let base = parent
+        .map(git2::Commit::tree)
+        .transpose()
+        .map_err(backend("git parent tree"))?;
+    let mut builder = repo
+        .treebuilder(base.as_ref())
+        .map_err(backend("git tree builder"))?;
+    for name in &names {
+        let blob = repo
+            .blob(&fs::read(root_dir.join(name))?)
+            .map_err(backend("git blob"))?;
+        builder
+            .insert(name, blob, 0o100644)
+            .map_err(backend("git tree insert"))?;
+    }
+    let tree_oid = builder.write().map_err(backend("git write tree"))?;
+    let tree = repo.find_tree(tree_oid).map_err(backend("git find tree"))?;
+    let parents: Vec<&git2::Commit> = parent.into_iter().collect();
     repo.commit(
         Some("HEAD"),
         &sig,
@@ -704,7 +709,14 @@ pub(super) fn commit_initial(
         &tree,
         &parents,
     )
-    .map_err(|e| LibraryError::Backend(format!("git initial commit: {e}")))?;
+    .map_err(backend("git initial commit"))?;
+    let mut index = repo.index().map_err(backend("git index"))?;
+    for name in &names {
+        index
+            .add_path(Path::new(name))
+            .map_err(backend("git add"))?;
+    }
+    index.write().map_err(backend("git index write"))?;
     Ok(())
 }
 

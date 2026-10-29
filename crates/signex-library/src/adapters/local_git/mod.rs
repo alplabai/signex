@@ -192,7 +192,7 @@ impl LocalGitAdapter {
 
             let repo = git2::Repository::init(&root_dir)
                 .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
-            commit_initial(&repo, &file_path, opts.use_lfs)?;
+            commit_initial(&repo, &file_path, opts.use_lfs, None)?;
         }
 
         let manifest_synth = synthesize_manifest(&library_file.manifest);
@@ -220,6 +220,11 @@ impl LocalGitAdapter {
     /// missing or has no commit, or whose LFS rules are missing. Only what
     /// `opts` asks for is touched; with `enable_git` off nothing is. Never
     /// creates the `.snxlib` itself.
+    ///
+    /// Refuses when the directory is a repository that has history but does
+    /// not track this `.snxlib` (the project's own repo, say): the library's
+    /// commit must never land in, or sweep up, another repo's work. A parent
+    /// is used only to add LFS rules on top of the library's own first commit.
     pub fn complete_init(
         file_path: impl AsRef<Path>,
         opts: LibraryInitOptions,
@@ -230,14 +235,27 @@ impl LocalGitAdapter {
             return Ok(());
         }
         let root_dir = parent_dir(&file_path)?;
-        let wrote_attributes = opts.use_lfs && ensure_lfs_attributes(&root_dir)?;
         let repo = git2::Repository::init(&root_dir)
             .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
-        let has_commit = repo.head().is_ok_and(|head| head.peel_to_commit().is_ok());
-        if wrote_attributes || !has_commit {
-            commit_initial(&repo, &file_path, opts.use_lfs)?;
+        let head = repo.head().ok().and_then(|head| head.peel_to_commit().ok());
+        if let Some(head) = &head {
+            let name = file_name_str(&file_path)?;
+            let tracked = head.tree().is_ok_and(|tree| tree.get_name(&name).is_some());
+            if !tracked {
+                return Err(LibraryError::Conflict(format!(
+                    "{} is a git repository that does not track this library",
+                    root_dir.display()
+                )));
+            }
         }
-        Ok(())
+        let wrote_attributes = opts.use_lfs && ensure_lfs_attributes(&root_dir)?;
+        match &head {
+            None => commit_initial(&repo, &file_path, opts.use_lfs, None),
+            Some(head) if wrote_attributes => {
+                commit_initial(&repo, &file_path, opts.use_lfs, Some(head))
+            }
+            Some(_) => Ok(()),
+        }
     }
 
     /// Open an existing library by `.snxlib` file path. The file's

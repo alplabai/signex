@@ -103,8 +103,11 @@ libraries it lists, and a single completion then holds both outcomes for one
    file has the same `library_id`, so a save lost between the init and the
    file write is finished by the retry. It adopts it only after
    `LocalGitAdapter::complete_init` has made the version control match the
-   request (git repo with a commit, LFS rules); if that fails the library
-   stays pending and the refusal names the partly created library.
+   request (git repo with a commit, LFS rules). Its commit holds only the
+   `.snxlib` and `.gitattributes`, built in memory, and is refused when the
+   directory is a repository with history that does not track the library (the
+   project's own); if anything fails the library stays pending and the refusal
+   names the partly created library.
 2. A library that could not be created stays pending and is reported (Messages
    panel and the Save Failed card); the file is still written without it and
    the project stays modified.
