@@ -38,7 +38,7 @@ For the whole flow in one pass, see the
 Follow the [Download section of the README](../README.md#download). It lists
 the package for each platform, the first-launch warnings on Windows and macOS,
 and how to verify a download. This guide does not repeat it. A release
-candidate such as `v1.0.0-rc.2` is a GitHub pre-release: get it from the
+candidate such as `v1.0.0-rc.1` is a GitHub pre-release: get it from the
 [Releases page](https://github.com/alplabai/signex/releases), because the
 "latest release" link skips pre-releases.
 
