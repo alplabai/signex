@@ -3,11 +3,12 @@
 
 use signex_app::app::{EditMsg, Message, Signex};
 use signex_app::paste_array::PasteArrayMsg;
+use signex_app::paste_prefs::PasteDesignators;
 use signex_types::schematic::{ChildSheet, Point, SelectedItem, SelectedKind};
 use uuid::Uuid;
 
 use crate::paste_support::sheet::{app_with_sheet, part, populated_sheet, references, select};
-use crate::paste_support::written_text;
+use crate::paste_support::{reads_clipboard, written_text};
 
 fn child_sheet() -> ChildSheet {
     ChildSheet {
@@ -129,4 +130,62 @@ fn paste_array_checks_the_item_cap_against_the_copy_it_places() {
     }
     assert_eq!(references(&app).len(), before, "nothing was placed");
     assert!(app.ui_state.paste_array.is_some(), "the dialog stays open");
+}
+
+#[test]
+fn a_keep_mode_array_does_not_read_the_projects_numbers() {
+    let mut app = app_with_sheet(populated_sheet());
+    app.ui_state.paste_designators = PasteDesignators::Keep;
+    select(&mut app, &[("R1", 1)], false);
+    let _ = app.update(Message::Edit(EditMsg::Copy));
+    let task = app.update(Message::Edit(EditMsg::PasteArrayRequested));
+    assert!(
+        reads_clipboard(task),
+        "the first step is the clipboard read"
+    );
+}
+
+fn seeded_message(task: iced::Task<Message>) -> Option<Message> {
+    crate::library_place_symbol::run(task)
+        .into_iter()
+        .find(|m| matches!(m, Message::Edit(EditMsg::PasteCountersSeeded { .. })))
+}
+
+#[test]
+fn choosing_next_free_in_the_dialog_reads_the_numbers_and_ok_waits_for_them() {
+    let mut app = app_with_sheet(populated_sheet());
+    app.ui_state.paste_designators = PasteDesignators::Keep;
+    select(&mut app, &[("R1", 1)], false);
+    let _ = app.update(Message::Edit(EditMsg::Copy));
+    crate::paste_stamp_array::open_array(&mut app);
+    let dialog = |m| Message::Edit(EditMsg::PasteArray(m));
+
+    let task = app.update(dialog(PasteArrayMsg::DesignatorsChosen(
+        PasteDesignators::NextFree,
+    )));
+    let seeded = seeded_message(task).expect("choosing Next free reads the numbers");
+
+    let before = references(&app).len();
+    let _ = app.update(dialog(PasteArrayMsg::ApplyPressed));
+    assert_eq!(references(&app).len(), before, "OK waits for the numbers");
+    assert!(app.ui_state.paste_array.is_some());
+
+    let _ = app.update(seeded);
+    let _ = app.update(dialog(PasteArrayMsg::ApplyPressed));
+    assert_eq!(references(&app)[before..], ["R4", "R5"]);
+}
+
+#[test]
+fn choosing_keep_or_reset_in_the_dialog_reads_nothing() {
+    let mut app = app_with_sheet(populated_sheet());
+    app.ui_state.paste_designators = PasteDesignators::Keep;
+    select(&mut app, &[("R1", 1)], false);
+    let _ = app.update(Message::Edit(EditMsg::Copy));
+    crate::paste_stamp_array::open_array(&mut app);
+    for mode in [PasteDesignators::Reset, PasteDesignators::Keep] {
+        let task = app.update(Message::Edit(EditMsg::PasteArray(
+            PasteArrayMsg::DesignatorsChosen(mode),
+        )));
+        assert!(seeded_message(task).is_none());
+    }
 }

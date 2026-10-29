@@ -306,9 +306,30 @@ impl ProjectSheetPlan {
     }
 }
 
-/// The plan for `source`'s project. Every open engine is snapshotted, so a
-/// sheet the hierarchy walk reaches that is open (declared or not) counts
-/// with its unsaved edits; only sheets that are not open are read from disk.
+/// The open sheets that belong to `source`'s project (declared pages and
+/// hierarchy children); for a loose document, the open sheets no project
+/// owns. Tabs of other projects are none of the job's business and are not
+/// cloned.
+fn open_paths_of_project_of(document_state: &DocumentState, source: &Path) -> Vec<PathBuf> {
+    let Some(project) = document_state.document_project(source) else {
+        return document_state.unowned_engine_paths();
+    };
+    let id = project.id;
+    document_state
+        .engines
+        .keys()
+        .filter(|path| {
+            document_state
+                .document_project(path)
+                .is_some_and(|owner| owner.id == id)
+        })
+        .cloned()
+        .collect()
+}
+
+/// The plan for `source`'s project. The open sheets of that project are
+/// snapshotted, so a sheet the hierarchy walk reaches that is open (declared
+/// or not) counts with its unsaved edits; every other sheet is read from disk.
 pub(crate) fn plan_project_sheets_for(
     document_state: &DocumentState,
     source: &Path,
@@ -318,7 +339,10 @@ pub(crate) fn plan_project_sheets_for(
     let pages = project_pages(project);
     let root = resolve_netlist_root_for(document_state, source);
     ProjectSheetPlan {
-        open: open_sheets_snapshot(document_state),
+        open: open_sheets_snapshot_of(
+            document_state,
+            &open_paths_of_project_of(document_state, source),
+        ),
         pages,
         root,
         fold,
@@ -1366,6 +1390,103 @@ mod tests {
             graph.sheets[&key("top.snxsch")].uuid,
             Uuid::from_u128(0x0BAD),
             "/other sorts before /proj, so it wins when no root is named"
+        );
+    }
+    fn project_of(
+        id: crate::app::state::ProjectId,
+        dir: &str,
+        sheets: &[&str],
+    ) -> crate::app::state::LoadedProject {
+        crate::app::state::LoadedProject {
+            id,
+            path: PathBuf::from(dir).join("p.snxprj"),
+            data: signex_types::project::ProjectData {
+                description: None,
+                name: dir.to_owned(),
+                dir: dir.to_owned(),
+                schematic_root: sheets.first().map(|s| (*s).to_owned()),
+                pcb_file: None,
+                sheets: sheets
+                    .iter()
+                    .map(|name| signex_types::project::SheetEntry {
+                        name: (*name).to_owned(),
+                        filename: (*name).to_owned(),
+                        symbols_count: 0,
+                        wires_count: 0,
+                        labels_count: 0,
+                        unknown: Default::default(),
+                    })
+                    .collect(),
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: Vec::new(),
+                enable_git: false,
+                net_classes: Vec::new(),
+                rules: None,
+                annotation: None,
+                parameters: Default::default(),
+                unknown: Default::default(),
+            },
+            pending_libraries: HashMap::new(),
+            case_fold: Default::default(),
+            case_probed: false,
+            case_decided: false,
+        }
+    }
+
+    fn open_engine(app: &mut crate::app::Signex, path: &str) {
+        let sheet = SchematicSheet {
+            uuid: Uuid::new_v4(),
+            paper_size: "A4".to_owned(),
+            ..Default::default()
+        };
+        app.document_state.engines.insert(
+            PathBuf::from(path),
+            signex_engine::Engine::new(sheet).expect("engine"),
+        );
+    }
+
+    #[test]
+    fn a_project_plan_snapshots_only_its_own_open_sheets() {
+        let (mut app, _task) = crate::app::Signex::new();
+        let (p1, p2) = (
+            app.document_state.mint_project_id(),
+            app.document_state.mint_project_id(),
+        );
+        app.document_state
+            .projects
+            .push(project_of(p1, "/p1", &["a.snxsch", "b.snxsch"]));
+        app.document_state
+            .projects
+            .push(project_of(p2, "/p2", &["c.snxsch"]));
+        for path in [
+            "/p1/a.snxsch",
+            "/p1/b.snxsch",
+            "/p2/c.snxsch",
+            "/loose/d.snxsch",
+        ] {
+            open_engine(&mut app, path);
+        }
+
+        let plan = plan_project_sheets_for(&app.document_state, Path::new("/p1/a.snxsch"));
+        let mut open: Vec<_> = plan.open.keys().cloned().collect();
+        open.sort();
+        assert_eq!(
+            open,
+            [PathBuf::from("/p1/a.snxsch"), PathBuf::from("/p1/b.snxsch")]
+        );
+
+        open_engine(&mut app, "/loose/e.snxsch");
+        let loose = plan_project_sheets_for(&app.document_state, Path::new("/loose/d.snxsch"));
+        let mut open: Vec<_> = loose.open.keys().cloned().collect();
+        open.sort();
+        assert_eq!(
+            open,
+            [
+                PathBuf::from("/loose/d.snxsch"),
+                PathBuf::from("/loose/e.snxsch")
+            ],
+            "a loose document clones the loose tabs, not a project's"
         );
     }
 }

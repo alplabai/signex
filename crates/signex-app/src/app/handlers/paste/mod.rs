@@ -69,6 +69,7 @@ impl Signex {
                 self.arm_paste_session(PlacementKind::Stamp);
                 self.finish_update()
             }
+            PasteIntent::ArraySeed => self.finish_update(),
         }
     }
 
@@ -77,6 +78,11 @@ impl Signex {
         request: PasteRequest,
         seed: &PasteSeed,
     ) -> Task<Message> {
+        if request.intent == PasteIntent::ArraySeed
+            && let Some(dialog) = self.ui_state.paste_array.as_mut()
+        {
+            dialog.seed_pending = false;
+        }
         if self.paste_request_is_stale(&request) {
             return self.finish_update();
         }
@@ -104,8 +110,11 @@ impl Signex {
     /// Whether the sheet or the tool state moved on since `request` was made
     /// (Esc, another tool, a tab switch); said once in the Messages panel.
     fn paste_request_is_stale(&self, request: &PasteRequest) -> bool {
-        let stale = request.epoch != self.interaction_state.placement_epoch
-            || request.path != self.document_state.active_path;
+        // The numbers for an open dialog stay good across tool changes: only
+        // the sheet matters (the dialog closes when it changes).
+        let tool_moved = request.intent != PasteIntent::ArraySeed
+            && request.epoch != self.interaction_state.placement_epoch;
+        let stale = tool_moved || request.path != self.document_state.active_path;
         if stale {
             crate::diagnostics::log_info(
                 "Paste cancelled: the tool or the sheet changed before the paste was ready.",

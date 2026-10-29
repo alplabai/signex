@@ -4,8 +4,9 @@ use iced::Task;
 use signex_engine::Command;
 use signex_types::schematic::Point;
 
-use crate::app::{Message, Signex};
+use crate::app::{Message, PasteIntent, PasteRequest, Signex};
 use crate::paste_array::{PasteArrayInput, PasteArrayMsg, PasteArrayState};
+use crate::paste_prefs::PasteDesignators;
 
 /// Width of the copy in the default X spacing is padded by this many grid
 /// pitches so neighbouring copies do not touch.
@@ -46,18 +47,39 @@ impl Signex {
 
     pub(crate) fn handle_paste_array_message(&mut self, msg: PasteArrayMsg) -> Task<Message> {
         self.close_paste_array_if_sheet_changed();
+        let mut seeding = Task::none();
         if let Some(state) = self.ui_state.paste_array.as_mut() {
             match msg {
                 PasteArrayMsg::CountChanged(text) => state.count = text,
                 PasteArrayMsg::XSpacingChanged(text) => state.x_spacing = text,
                 PasteArrayMsg::YSpacingChanged(text) => state.y_spacing = text,
                 PasteArrayMsg::StepChanged(text) => state.step = text,
-                PasteArrayMsg::DesignatorsChosen(mode) => state.designators = mode,
+                PasteArrayMsg::DesignatorsChosen(mode) => {
+                    state.designators = mode;
+                    if mode == PasteDesignators::NextFree {
+                        seeding = self.seed_paste_array();
+                    }
+                }
                 PasteArrayMsg::ApplyPressed => self.apply_paste_array(),
                 PasteArrayMsg::Closed => self.ui_state.paste_array = None,
             }
         }
-        self.finish_update()
+        Task::batch([seeding, self.finish_update()])
+    }
+
+    /// Read the project's numbers for a dialog that just chose Next free;
+    /// OK waits for them.
+    fn seed_paste_array(&mut self) -> Task<Message> {
+        let request = PasteRequest {
+            intent: PasteIntent::ArraySeed,
+            epoch: self.interaction_state.placement_epoch,
+            path: self.document_state.active_path.clone(),
+        };
+        let task = self.paste_seed_task(&request);
+        if let (Some(_), Some(dialog)) = (&task, self.ui_state.paste_array.as_mut()) {
+            dialog.seed_pending = true;
+        }
+        task.unwrap_or_else(Task::none)
     }
 
     /// Close the dialog when the active sheet is not the one it was opened
@@ -93,6 +115,12 @@ impl Signex {
         let Some(state) = self.ui_state.paste_array.as_ref() else {
             return;
         };
+        if state.seed_pending && state.designators == PasteDesignators::NextFree {
+            crate::diagnostics::log_warning(
+                "Paste Array: the project's designators are still being read; press OK again in a moment.",
+            );
+            return;
+        }
         let input = match state.input() {
             Ok(input) => input,
             Err(reason) => {

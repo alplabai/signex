@@ -25,9 +25,10 @@ pub struct PasteSeed {
 impl Signex {
     /// The task that reads the numbers `request` will hand out from, or
     /// `None` when its numbering needs none (Keep and Reset) or there is no
-    /// sheet. Paste Array always reads them: its dialog can choose Next free.
+    /// sheet. Paste Array reads them only when its dialog opens on Next free;
+    /// a later choice of Next free asks for them with `ArraySeed`.
     pub(crate) fn paste_seed_task(&self, request: &PasteRequest) -> Option<Task<Message>> {
-        let needs = request.intent == PasteIntent::Array
+        let needs = request.intent == PasteIntent::ArraySeed
             || self.ui_state.paste_designators == PasteDesignators::NextFree;
         if !needs {
             return None;

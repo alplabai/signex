@@ -31,6 +31,8 @@ pub struct PasteArrayState {
     pub unit: Unit,
     /// The sheet the dialog was opened on; OK places on that sheet only.
     pub origin: Option<PathBuf>,
+    /// The project's numbers are being read for a Next free choice; OK waits.
+    pub seed_pending: bool,
 }
 
 /// A dialog whose fields all parse.
@@ -64,6 +66,7 @@ impl PasteArrayState {
             items_per_copy,
             unit,
             origin,
+            seed_pending: false,
         }
     }
 
