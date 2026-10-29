@@ -64,6 +64,7 @@ Place/Net Label	item	Net Label	place_net_label	L	PlaceLabel	01000000	cmd:place_n
 Place/---	separator	-	-	-	-	-	-
 Place/Component...	item	Component...	open_components_panel	P	PlaceComponent	01000000	cmd:open_components_panel
 Place/Power Port	item	Power Port	place_power_symbol	P	PlacePowerPort	01000000	cmd:place_power_symbol
+Place/Junction	item	Junction	place_junction	J	PlaceJunction	01000000	cmd:place_junction
 Place/---	separator	-	-	-	-	-	-
 Place/Text	item	Text	-	-	PlaceText	01000000	sch
 Place/No Connect	item	No Connect	-	-	PlaceNoConnect	01000000	sch
