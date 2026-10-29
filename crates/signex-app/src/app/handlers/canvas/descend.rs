@@ -40,9 +40,16 @@ impl Signex {
         // spelling the hierarchy resolved.
         let path = self.resolve_held_spelling_now(path);
         if self.open_or_focus_sheet_path(path.clone()) {
+            let switched = self.document_state.tab_placements.get(&path) != placement.as_ref();
             self.document_state.tab_placements.record(&path, placement);
+            // Jumping within the shown placement keeps an open edit's text.
+            if switched {
+                self.close_text_edit("the sheet is shown through another placement now");
+            }
             // The canvas draws the designators of the placement just recorded.
             self.refresh_canvas_designators();
+            // The net highlight is per placement: show it for this one.
+            self.sync_net_highlight_to_canvases();
         }
     }
 

@@ -88,7 +88,7 @@ fn a_successful_resolve_moves_the_anchor_to_a_member_that_still_exists() {
         .expect("VCC survives");
     assert_eq!(h.name, "VCC");
     assert_ne!(
-        h.anchor.1,
+        h.anchor.id,
         id(ROOT_VCC_WIRE),
         "the deleted wire is no anchor"
     );

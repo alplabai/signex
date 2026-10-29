@@ -221,17 +221,29 @@ pub(super) fn logged(fragments: &[&str]) -> bool {
 pub(super) const TWICE_A: u128 = 700;
 pub(super) const TWICE_B: u128 = 701;
 pub(super) const TWICE_LABEL: u128 = 710;
+pub(super) const TWICE_ENTRY_A: u128 = 720;
 pub(super) const TWICE_ENTRY_B: u128 = 721;
+pub(super) const TWICE_X: u128 = 712;
 
 /// `root` places `child` twice (A and B); each entry is wired to its own
 /// parent net, so each placement is its own net. Returns the project with
 /// both sheets open and root focused, and the child's path.
 pub(super) fn placed_twice() -> (Project, PathBuf) {
+    placed_twice_at(20.0, 40.0)
+}
+
+/// [`placed_twice`] with B's sheet entry above A's, so the nets of B sort
+/// first while A is the smaller placement.
+pub(super) fn placed_twice_b_first() -> (Project, PathBuf) {
+    placed_twice_at(40.0, 20.0)
+}
+
+fn placed_twice_at(a_y: f64, b_y: f64) -> (Project, PathBuf) {
     let _ = crate::diagnostics::init_logging();
     let dir = tempfile::tempdir().expect("tempdir");
     let pt = Point::new;
     let mut root = sheet_with_net("R1", "ROOT_ONLY", &["child.snxsch", "child.snxsch"]);
-    for (i, (symbol, name, y)) in [(TWICE_A, "A", 20.0), (TWICE_B, "B", 40.0)]
+    for (i, (symbol, name, y)) in [(TWICE_A, "A", a_y), (TWICE_B, "B", b_y)]
         .into_iter()
         .enumerate()
     {
@@ -251,6 +263,14 @@ pub(super) fn placed_twice() -> (Project, PathBuf) {
             .push(wire(pt(0.0, y), pt(5.0, y), 800 + i as u128));
     }
     let mut child = sheet_with_net("R9", "CHILD_ONLY", &[]);
+    // Only pinless nets on the child: the index meets its placements in sort order.
+    child.symbols.clear();
+    child.labels.clear();
+    child.wires.clear();
+    child.wires.push(wire(pt(0.0, 90.0), pt(10.0, 90.0), 812));
+    child
+        .labels
+        .push(label("X", pt(0.0, 90.0), LabelType::Net, TWICE_X));
     child.wires.push(wire(pt(0.0, 70.0), pt(10.0, 70.0), 811));
     child.labels.push(label(
         "SIG",
@@ -344,6 +364,92 @@ pub(super) fn ring_project() -> Project {
         root: root_path,
         mid: child_path.clone(),
         third: child_path,
+        _dir: dir,
+    }
+}
+
+/// A project whose root page does not parse, with one valid sheet open.
+/// Returns the project, the root's path and the open sheet's global label.
+pub(super) fn failing_root_project() -> (Project, PathBuf, u128) {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let label = 950;
+    let mut x = sheet_with_net("RX", "VCC", &[]);
+    x.labels[0].uuid = id(label);
+    let x_path = write(dir.path(), "x.snxsch", x);
+    let root_path = dir.path().join("root.snxsch");
+    std::fs::write(&root_path, "not a schematic").expect("write root");
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["root.snxsch", "x.snxsch"]);
+    assert!(app.open_or_focus_sheet_path(x_path.clone()));
+    let project = Project {
+        app,
+        root: root_path.clone(),
+        mid: x_path.clone(),
+        third: x_path,
+        _dir: dir,
+    };
+    (project, root_path, label)
+}
+
+impl Project {
+    /// Rewrite `root.snxsch` as a valid sheet placing `x.snxsch`.
+    pub fn fix_root(&self, root: &std::path::Path) {
+        let valid = sheet_with_net("RR", "VCC", &["x.snxsch"]);
+        let text = SnxSchematic::new(valid).write_string().expect("encode");
+        std::fs::write(root, text).expect("fix root");
+    }
+}
+
+pub(super) const U1: u128 = 900;
+pub(super) const U1_R1: u128 = 901;
+pub(super) const U1_R2: u128 = 902;
+pub(super) const U1_R9_WIRE: u128 = 999;
+
+/// One sheet: `U1` with pins 1 (0,0) and 2 (0,10), each wired to its own
+/// resistor, and an unrelated `R9` net far left that sorts before them.
+pub(super) fn multi_pin_project() -> Project {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let pt = Point::new;
+    let mut sheet = sheet_with_net("R1", "UNUSED", &[]);
+    let r_symbol = sheet.symbols[0].clone();
+    let mut u_lib = sheet.lib_symbols["Device:R"].clone();
+    u_lib.id = "Device:U".to_string();
+    let mut second = u_lib.pins[0].clone();
+    second.pin.number = "2".to_string();
+    second.pin.position = pt(0.0, -10.0);
+    u_lib.pins.push(second);
+    sheet.lib_symbols.insert("Device:U".to_string(), u_lib);
+    sheet.symbols.clear();
+    sheet.labels.clear();
+    sheet.wires.clear();
+    let mut place = |n: u128, reference: &str, lib: &str, at: Point| {
+        let mut s = r_symbol.clone();
+        s.uuid = id(n);
+        s.reference = reference.to_string();
+        s.lib_id = lib.to_string();
+        s.position = at;
+        sheet.symbols.push(s);
+    };
+    place(U1, "U1", "Device:U", pt(0.0, 0.0));
+    place(U1_R1, "R1", "Device:R", pt(5.0, 0.0));
+    place(U1_R2, "R2", "Device:R", pt(5.0, 10.0));
+    place(903, "R9", "Device:R", pt(-45.0, 0.0));
+    for (n, a, b) in [
+        (910, pt(0.0, 0.0), pt(5.0, 0.0)),
+        (911, pt(0.0, 10.0), pt(5.0, 10.0)),
+        (U1_R9_WIRE, pt(-50.0, 0.0), pt(-45.0, 0.0)),
+    ] {
+        sheet.wires.push(wire(a, b, n));
+    }
+    let path = write(dir.path(), "u.snxsch", sheet);
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["u.snxsch"]);
+    assert!(app.open_or_focus_sheet_path(path.clone()));
+    Project {
+        app,
+        root: path.clone(),
+        mid: path.clone(),
+        third: path,
         _dir: dir,
     }
 }

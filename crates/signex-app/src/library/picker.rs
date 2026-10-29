@@ -25,6 +25,7 @@ use signex_widgets::theme_ext;
 use super::messages::{LibraryMessage, PickerMsg, PlacedPartMsg};
 use super::modal_chrome::close_x;
 use super::placed_part::{change_preview_view, datasheet_choice_view};
+use super::range_filter::range_filter_bar;
 use super::state::{PickerMode, PickerState};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -217,7 +218,19 @@ pub fn view<'a>(
     .padding([10, 14])
     .style(crate::styles::modal_footer_strip(tokens));
 
-    let body_pad = container(column![container(search).padding([6.0, SP.l]), body].spacing(0))
+    // Range filters on the measurement columns (#1572, phase 4).
+    let range_bar = range_filter_bar(
+        &picker.range_filters,
+        picker.rows.filter_columns(),
+        picker.rows.range_excluded(),
+        tokens,
+        |msg| LibraryMessage::Picker(PickerMsg::RangeFilter(msg)),
+    );
+    let mut top = column![container(search).padding([6.0, SP.l])].spacing(0);
+    if let Some(bar) = range_bar {
+        top = top.push(container(bar).padding([0.0, SP.l]));
+    }
+    let body_pad = container(column![top, body].spacing(0))
         .width(Length::Fill)
         .height(Length::Fill);
 

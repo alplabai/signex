@@ -11,6 +11,8 @@ pub(crate) use child_sheet_path::relative_within;
 mod clicked;
 mod descend;
 mod double_clicked;
+mod field_edit;
+pub(crate) use field_edit::editor_placeholder;
 pub(crate) mod fit_view;
 mod layout_drag;
 mod measure_tool;

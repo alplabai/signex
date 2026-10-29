@@ -128,7 +128,11 @@ fn a_cleared_highlight_after_an_edit_that_removes_the_net_says_so() {
         .highlight
         .as_mut()
         .expect("highlight")
-        .anchor = (signex_net::SheetKey::new("nowhere"), id(404));
+        .anchor = signex_net::NetAnchor::new(
+        signex_net::SheetKey::new("nowhere"),
+        id(404),
+        signex_types::schematic::InstancePath::root(),
+    );
     p.send_settled(NetNavMsg::HighlightStepRequested { forward: true });
     assert!(p.app.document_state.net_nav.highlight.is_none());
     assert!(p.bright().is_none());

@@ -19,6 +19,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
+use super::range_filter::range_filter_bar;
 use super::state::{LibraryBrowserState, LibraryState, LifecycleFilter, OpenLibrary};
 
 mod action_row;
@@ -197,16 +198,35 @@ pub fn view<'a>(
     // of the children were fixed-width.
     let body = row![left].width(Length::Fill).height(Length::Fill);
 
-    let right = column![
-        header,
-        container(body)
-            .padding(SP.m)
-            .width(Length::Fill)
-            .height(Length::Fill)
-    ]
-    .spacing(0)
-    .width(Length::Fill)
-    .height(Length::Fill);
+    // Range filters on the measurement columns (#1572, phase 4).
+    let range_bar = range_filter_bar(
+        &browser.range_filters,
+        &cache.filter_columns,
+        &cache.range_excluded,
+        tokens,
+        {
+            let library_path = library_path.to_path_buf();
+            move |msg| LibraryMessage::BrowserRangeFilter {
+                library_path: library_path.clone(),
+                msg,
+            }
+        },
+    )
+    .map(|bar| container(bar).padding([4, 10]));
+
+    let mut right = column![header].spacing(0);
+    if let Some(bar) = range_bar {
+        right = right.push(bar);
+    }
+    let right = right
+        .push(
+            container(body)
+                .padding(SP.m)
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill);
 
     let border_c = theme_ext::border_color(tokens);
     let separator = container(Space::new())
