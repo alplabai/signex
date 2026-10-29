@@ -491,3 +491,24 @@ fn a_command_whose_project_is_out_of_view_when_its_index_lands_does_not_run() {
     );
     assert!(crate::diagnostics::logged_count(NOT_READY) > before);
 }
+
+#[test]
+fn a_command_whose_project_was_closed_under_the_same_sheet_is_dropped_with_a_line() {
+    use crate::app::runtime::net_class_styles::plan_projects;
+    let mut p = project();
+    p.select(ROOT_VCC, SelectedKind::Label);
+    p.send(NetNavMsg::PartnerJumpRequested);
+    let planned = plan_projects(&p.app.document_state).remove(0);
+    let (a, key) = (planned.project, planned.key);
+    // The sheet and the selection are unchanged; only the project is gone.
+    p.app.document_state.projects.retain(|x| x.id != a);
+    let before = crate::diagnostics::logged_count(NOT_READY);
+
+    let _follow_up = p.app.apply_net_index(&empty_outcome(a, key));
+
+    assert!(p.app.document_state.net_nav.pending.is_none());
+    assert!(
+        crate::diagnostics::logged_count(NOT_READY) > before,
+        "dropped with its own line"
+    );
+}
