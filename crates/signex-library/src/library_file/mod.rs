@@ -348,7 +348,10 @@ impl From<LibraryFileError> for LibraryError {
     /// channel so callers can `?` through `LibraryAdapter` methods without
     /// matching on the inner enum.
     fn from(value: LibraryFileError) -> Self {
-        LibraryError::Backend(value.to_string())
+        match value {
+            LibraryFileError::TomlSer(_) => LibraryError::Backend(value.to_string()),
+            _ => LibraryError::InvalidData(value.to_string()),
+        }
     }
 }
 

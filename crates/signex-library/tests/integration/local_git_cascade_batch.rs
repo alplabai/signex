@@ -389,3 +389,42 @@ fn a_write_failure_leaves_no_partial_cascade() {
         cascade_after_saves(&adapter, &[save_of(lib, symbol)], WorkflowMode::Personal).unwrap();
     assert_eq!(again.auto_bumped.len(), 4);
 }
+
+/// A malformed stored row makes the scan fail with an error a retry cannot
+/// fix; an IO error can be retried.
+#[test]
+fn a_malformed_row_fails_the_scan_with_a_permanent_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, lib) = init(&dir);
+    let symbol = Uuid::now_v7();
+    seed_bound(&adapter, lib, symbol, 2);
+    let file = dir.path().join("Lib").join("Lib.snxlib");
+    let mut lf =
+        signex_library::LibraryFile::parse(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    std::sync::Arc::make_mut(&mut lf.tables.get_mut(TABLE).unwrap().rows[0])
+        .cells
+        .insert("row_id".into(), "not-a-uuid".into());
+    std::fs::write(&file, lf.write().unwrap()).unwrap();
+
+    let err =
+        cascade_after_saves(&adapter, &[save_of(lib, symbol)], WorkflowMode::Personal).unwrap_err();
+    assert!(signex_library::retry_cannot_fix(&err), "{err}");
+    assert!(!signex_library::retry_cannot_fix(
+        &signex_library::adapter::LibraryError::Io(std::io::Error::other("disk full"))
+    ));
+}
+
+/// Opening a library whose format token this build does not read is a
+/// permanent refusal.
+#[test]
+fn an_unsupported_format_token_is_a_permanent_open_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_adapter, _lib) = init(&dir);
+    let file = dir.path().join("Lib").join("Lib.snxlib");
+    let text = std::fs::read_to_string(&file).unwrap();
+    std::fs::write(&file, text.replacen("snxlib/2", "snxlib/99", 1)).unwrap();
+    let Err(err) = LocalGitAdapter::open(&file) else {
+        panic!("a library in an unknown format must be refused");
+    };
+    assert!(signex_library::retry_cannot_fix(&err), "{err}");
+}

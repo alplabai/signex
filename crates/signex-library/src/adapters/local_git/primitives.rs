@@ -423,6 +423,8 @@ impl LocalGitAdapter {
         } else {
             Some((std::fs::read(&self.file_path)?, guard.clone()))
         };
+        // Built before the write: nothing after it may fail or panic.
+        let message = message();
         // HI-6: atomic write — never half-write the manifest.
         signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
         self.warn_plain_token_once(&candidate.manifest.mode);
@@ -439,7 +441,7 @@ impl LocalGitAdapter {
             );
         }
         if let Err(commit_err) =
-            self.commit_change_with(None, &rel, asset_rel_paths, &message(), fallback)
+            self.commit_change_with(None, &rel, asset_rel_paths, &message, fallback)
         {
             let Some((previous, previous_file)) = previous else {
                 self.record_commit_warning(&commit_err);

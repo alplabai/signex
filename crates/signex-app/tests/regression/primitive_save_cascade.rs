@@ -7,7 +7,8 @@
 //! the same write, and then moves the rows onto that version.
 
 use signex_app::app::{
-    FileMsg, FootprintDocument, Message, Signex, SymbolDocument, TabInfo, TabKind,
+    ContextMenuMsg, FileMsg, FootprintDocument, Message, Signex, SymbolDocument, TabContextAction,
+    TabInfo, TabKind,
 };
 use signex_library::adapter::LibraryAdapter;
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
@@ -427,26 +428,40 @@ fn a_released_row_in_team_mode_is_left_behind_and_reported() {
     );
 }
 
-/// Make the library folder read-only so the `.snxlib` write of a cascade
-/// fails while the primitive's own file (in `symbols/`) still saves.
-/// `None` when the process can write anyway (running as root).
+/// The library folder made read-only so the `.snxlib` write of a cascade
+/// fails while the primitive's own file (in `symbols/`) still saves. Puts
+/// the mode back when dropped, so a failing test leaves no 0555 folder.
 #[cfg(unix)]
-fn lock_library_folder(f: &Fixture) -> Option<(PathBuf, std::fs::Permissions)> {
-    use std::os::unix::fs::PermissionsExt;
-    let folder = f.library_file.parent().unwrap().to_path_buf();
-    let writable = std::fs::metadata(&folder).unwrap().permissions();
-    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o555)).unwrap();
-    let probe = folder.join("probe");
-    if std::fs::File::create(&probe).is_ok() {
-        std::fs::remove_file(&probe).unwrap();
-        std::fs::set_permissions(&folder, writable).unwrap();
-        return None;
+struct LockedFolder(PathBuf, std::fs::Permissions);
+
+#[cfg(unix)]
+impl LockedFolder {
+    /// `None` when the process can write anyway (running as root).
+    fn new(f: &Fixture) -> Option<Self> {
+        use std::os::unix::fs::PermissionsExt;
+        let folder = f.library_file.parent().unwrap().to_path_buf();
+        let writable = std::fs::metadata(&folder).unwrap().permissions();
+        let locked = Self(folder.clone(), writable);
+        std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let probe = folder.join("probe");
+        if std::fs::File::create(&probe).is_ok() {
+            std::fs::remove_file(&probe).unwrap();
+            return None;
+        }
+        Some(locked)
     }
-    Some((folder, writable))
+}
+
+#[cfg(unix)]
+impl Drop for LockedFolder {
+    fn drop(&mut self) {
+        std::fs::set_permissions(&self.0, self.1.clone()).unwrap();
+    }
 }
 
 /// A cascade that failed on a retryable error is run again by the next
 /// Save, even though the symbol has no new edit and its file is unchanged.
+/// Until it is, the editor counts as unsaved: tab dot, close prompt, quit.
 #[cfg(unix)]
 #[test]
 fn a_failed_cascade_is_retried_by_the_next_save_without_edits() {
@@ -455,12 +470,12 @@ fn a_failed_cascade_is_retried_by_the_next_save_without_edits() {
         ..PERSONAL
     });
     edit_a(&mut f);
-    let Some((folder, writable)) = lock_library_folder(&f) else {
+    let Some(locked) = LockedFolder::new(&f) else {
         eprintln!("skipped: the library folder is still writable (running as root?)");
         return;
     };
     save(&mut f.app);
-    std::fs::set_permissions(&folder, writable).unwrap();
+    drop(locked);
 
     assert_eq!(
         symbol_on_disk(&f).symbols[0].version,
@@ -472,9 +487,19 @@ fn a_failed_cascade_is_retried_by_the_next_save_without_edits() {
         "0.0.1",
         "the cascade did not"
     );
-    assert!(logged(
-        "Save again to retry: 1 of 1 rows still at the old version"
-    ));
+    assert!(logged("rows still at the old version") && logged("; MSG-RETRY-SYM saved"));
+
+    // The rows are still owed: the editor, its tab and the dirty set say so.
+    let owed = |f: &Fixture| {
+        let editor = &f.app.document_state.symbol_editors[&f.symbol_path];
+        (
+            editor.dirty,
+            f.app.document_state.dirty_paths.contains(&f.symbol_path),
+            f.app.document_state.tabs.iter().any(|t| t.dirty),
+            editor.cascade_owed.len(),
+        )
+    };
+    assert_eq!(owed(&f), (true, true, true, 1));
 
     // Save again, nothing edited.
     save(&mut f.app);
@@ -486,8 +511,104 @@ fn a_failed_cascade_is_retried_by_the_next_save_without_edits() {
         "0.0.2",
         "not bumped again"
     );
+    assert_eq!(
+        f.app.document_state.symbol_editors[&f.symbol_path]
+            .cascade_owed
+            .len(),
+        0,
+        "nothing is owed after the retry landed"
+    );
+    assert!(
+        !f.app.document_state.dirty_paths.contains(&f.symbol_path),
+        "and the editor is clean"
+    );
+}
 
-    // And it is not owed any more: one more Save changes nothing.
+fn owed_count(f: &Fixture) -> usize {
+    f.app.document_state.symbol_editors[&f.symbol_path]
+        .cascade_owed
+        .len()
+}
+
+/// A malformed stored row cannot be fixed by saving again: the advice says
+/// what to do, nothing is owed, and the next Save does not loop.
+#[test]
+fn a_malformed_row_gets_permanent_advice_and_is_not_owed() {
+    let mut f = fixture_with(Setup {
+        name: "MSG-BAD-ROW-SYM",
+        ..PERSONAL
+    });
+    let mut lf =
+        signex_library::LibraryFile::parse(&std::fs::read_to_string(&f.library_file).unwrap())
+            .unwrap();
+    let table = lf.tables.get_mut("R").unwrap();
+    std::sync::Arc::make_mut(&mut table.rows[1])
+        .cells
+        .insert("row_id".into(), "not-a-uuid".into());
+    std::fs::write(&f.library_file, lf.write().unwrap()).unwrap();
+
+    edit_a(&mut f);
     save(&mut f.app);
-    assert_eq!(row_on_disk(&f.library_file, f.users).version, "0.0.2");
+    assert!(logged("Check the library, then re-bind its rows by hand"));
+    assert!(logged("; MSG-BAD-ROW-SYM saved"));
+    assert_eq!(
+        owed_count(&f),
+        0,
+        "a retry cannot fix it, so nothing is owed"
+    );
+    assert!(!f.app.document_state.dirty_paths.contains(&f.symbol_path));
+
+    // Another Save has nothing to retry and changes nothing more.
+    let version = symbol_on_disk(&f).symbols[0].version.clone();
+    save(&mut f.app);
+    assert_eq!(owed_count(&f), 0);
+    assert_eq!(symbol_on_disk(&f).symbols[0].version, version);
+}
+
+/// A `.snxlib` of a format this build does not read: opening it fails every
+/// time, so the advice is permanent and no retry is owed.
+#[test]
+fn a_library_in_an_unreadable_format_gets_permanent_advice() {
+    let mut f = fixture_with(Setup {
+        name: "MSG-BAD-FMT-SYM",
+        ..PERSONAL
+    });
+    let text = std::fs::read_to_string(&f.library_file).unwrap();
+    std::fs::write(&f.library_file, text.replacen("snxlib/2", "snxlib/99", 1)).unwrap();
+
+    edit_a(&mut f);
+    save(&mut f.app);
+    assert!(logged("Fix or replace the library file"));
+    assert_eq!(owed_count(&f), 0);
+}
+
+/// A save whose cascade failed leaves rows owed; closing the tab must not
+/// silently drop that: the editor is parked, not discarded.
+#[cfg(unix)]
+#[test]
+fn closing_a_tab_that_still_owes_rows_keeps_the_editor() {
+    let mut f = fixture_with(Setup {
+        name: "MSG-CLOSE-OWED-SYM",
+        ..PERSONAL
+    });
+    edit_a(&mut f);
+    let Some(locked) = LockedFolder::new(&f) else {
+        eprintln!("skipped: the library folder is still writable (running as root?)");
+        return;
+    };
+    save(&mut f.app);
+    drop(locked);
+    assert!(f.app.document_state.tabs.iter().any(|t| t.dirty));
+
+    let tabs = f.app.document_state.tabs.len();
+    let _ = f.app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::Close(tabs - 1),
+    )));
+    assert!(
+        f.app
+            .document_state
+            .symbol_editors
+            .contains_key(&f.symbol_path),
+        "a close must not discard the editor that still owes rows"
+    );
 }

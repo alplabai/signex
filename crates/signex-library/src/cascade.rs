@@ -321,13 +321,13 @@ pub fn retry_cannot_fix(error: &LibraryError) -> bool {
         | LibraryError::Conflict(_)
         | LibraryError::Unauthorized(_)
         | LibraryError::VersionControlRefused(_)
-        | LibraryError::ReadOnly { .. } => true,
-        LibraryError::Backend(text) => {
-            text.contains("schema mismatch") || text.contains("nothing was written")
-        }
+        | LibraryError::ReadOnly { .. }
+        | LibraryError::InvalidData(_) => true,
+        LibraryError::NotAttempted { permanent, .. } => *permanent,
         LibraryError::Io(_)
         | LibraryError::RowChanged { .. }
-        | LibraryError::PrimitiveChanged { .. } => false,
+        | LibraryError::PrimitiveChanged { .. }
+        | LibraryError::Backend(_) => false,
     }
 }
 
@@ -706,14 +706,18 @@ mod tests {
             assert!(!retry_cannot_fix(&E::RowChanged {
                 current_revision: 1
             }));
-            assert!(!retry_cannot_fix(&E::Backend("disk full".into())));
+            assert!(!retry_cannot_fix(&E::Backend("lock held elsewhere".into())));
             assert!(retry_cannot_fix(&E::NotFound("row".into())));
-            assert!(retry_cannot_fix(&E::Backend(
-                "row X: bad parameter; nothing was written".into()
-            )));
-            assert!(retry_cannot_fix(&E::Backend(
-                "table \"R\" schema mismatch: x".into()
-            )));
+            assert!(retry_cannot_fix(&E::InvalidData("row_id: bad".into())));
+            let cause = |permanent| E::NotAttempted {
+                cause: "x".into(),
+                permanent,
+            };
+            assert!(
+                !retry_cannot_fix(&cause(false)),
+                "inherits a retryable cause"
+            );
+            assert!(retry_cannot_fix(&cause(true)), "inherits a permanent cause");
         }
 
         #[test]

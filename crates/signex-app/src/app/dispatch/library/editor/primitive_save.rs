@@ -408,8 +408,33 @@ impl Signex {
                     editor.dirty
                 }),
         };
-        if edited_since == Some(false) {
+        // Rows a failed cascade left behind are an unsaved obligation: the
+        // tab dot, the close prompt and the quit guard cover it, and the
+        // prompt's Save is the retry.
+        if edited_since.is_some() && !owed.is_empty() {
+            self.mark_primitive_owes_cascade(path);
+        } else if edited_since == Some(false) {
             self.mark_primitive_clean(path);
+        }
+    }
+
+    /// The file at `path` is saved but its rows are not all moved: keep the
+    /// editor, its tab and the dirty set marked unsaved.
+    fn mark_primitive_owes_cascade(&mut self, path: &std::path::Path) {
+        if let Some(editor) = self.document_state.symbol_editors.get_mut(path) {
+            editor.dirty = true;
+        }
+        if let Some(editor) = self.document_state.footprint_editors.get_mut(path) {
+            editor.dirty = true;
+        }
+        self.document_state.dirty_paths.insert(path.to_path_buf());
+        for tab in self
+            .document_state
+            .tabs
+            .iter_mut()
+            .filter(|tab| tab.path == path)
+        {
+            tab.dirty = true;
         }
     }
 

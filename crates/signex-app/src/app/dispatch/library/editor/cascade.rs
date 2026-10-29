@@ -77,7 +77,14 @@ pub(super) enum SaveLibrary {
     /// Not mounted here; opened for this save.
     Opened(Box<LocalGitAdapter>),
     /// A library holds the file but it could not be opened.
-    Unavailable { library: PathBuf, reason: String },
+    Unavailable {
+        library: PathBuf,
+        reason: String,
+        /// Opening can only fail again until the file is fixed (a format
+        /// this build does not read, a malformed file), so a retry is not
+        /// owed.
+        permanent: bool,
+    },
 }
 
 impl SaveLibrary {
@@ -91,6 +98,7 @@ impl SaveLibrary {
                 Err(e) => Self::Unavailable {
                     library: library.to_path_buf(),
                     reason: e.to_string(),
+                    permanent: signex_library::retry_cannot_fix(&e),
                 },
             };
         }
@@ -100,6 +108,7 @@ impl SaveLibrary {
         match LocalGitAdapter::open(&library) {
             Ok(adapter) => Self::Opened(Box::new(adapter)),
             Err(e) => Self::Unavailable {
+                permanent: signex_library::retry_cannot_fix(&e),
                 library,
                 reason: e.to_string(),
             },
@@ -261,12 +270,21 @@ pub(super) fn cascade_after_container_save(
     };
     let lines = match library {
         SaveLibrary::None => return outcome,
-        SaveLibrary::Unavailable { library, reason } => {
-            owes_all(&mut outcome);
+        SaveLibrary::Unavailable {
+            library,
+            reason,
+            permanent,
+        } => {
+            let advice = if *permanent {
+                "Fix or replace the library file, then re-bind its rows by hand"
+            } else {
+                owes_all(&mut outcome);
+                "Save again once the library opens"
+            };
             vec![(
                 Level::Warn,
                 cut(format!(
-                    "Save again once the library opens ({reason}); {label} saved, rows not updated: {}",
+                    "{advice} ({reason}); {label} saved, rows not updated: {}",
                     library.display()
                 )),
             )]
