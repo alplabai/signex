@@ -228,3 +228,54 @@ fn an_empty_designator_is_accepted_as_properties_does() {
     type_and_submit(&mut app, "");
     assert_eq!(doc(&app).symbols[0].reference, "");
 }
+
+#[test]
+fn a_command_keeps_the_text_typed_in_an_open_editor() {
+    let mut app = app();
+    select(&mut app, &[(0, SelectedKind::Symbol)]);
+    request(&mut app, TextEditTarget::Designator);
+    let _ = app.update(Message::TextEdit(TextEditMsg::Changed("R77".into())));
+    hover(&mut app, (R2_AT.0, R2_AT.1 + 5.0));
+    request(&mut app, TextEditTarget::Value);
+    assert_eq!(
+        doc(&app).symbols[0].reference,
+        "R77",
+        "typed text committed"
+    );
+    assert_eq!(
+        editing(&app),
+        Some((SelectedKind::SymbolValField, "22k".into()))
+    );
+}
+
+#[test]
+fn undo_closes_an_open_editor_instead_of_leaving_stale_text() {
+    let mut app = app();
+    select(&mut app, &[(0, SelectedKind::Symbol)]);
+    request(&mut app, TextEditTarget::Value);
+    type_and_submit(&mut app, "1M");
+    request(&mut app, TextEditTarget::Value);
+    let _ = app.update(Message::TextEdit(TextEditMsg::Changed("9M".into())));
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert!(app.interaction_state.editing_text.is_none());
+    assert_eq!(doc(&app).symbols[0].value, "10k");
+    assert!(logged(&["In-place edit discarded", "undone"]));
+}
+
+#[test]
+fn a_commit_whose_object_is_gone_says_so_in_messages() {
+    let mut app = app();
+    select(&mut app, &[(0, SelectedKind::Symbol)]);
+    request(&mut app, TextEditTarget::Value);
+    let _ = app.update(Message::TextEdit(TextEditMsg::Changed("3k3".into())));
+    let gone = doc(&app).symbols[0].uuid;
+    app.document_state
+        .active_engine_mut()
+        .unwrap()
+        .execute(signex_engine::Command::DeleteSelection {
+            items: vec![SelectedItem::new(gone, SelectedKind::Symbol)],
+        })
+        .unwrap();
+    let _ = app.update(Message::TextEdit(TextEditMsg::Submit));
+    assert!(logged(&["In-place edit discarded", "no longer exists"]));
+}

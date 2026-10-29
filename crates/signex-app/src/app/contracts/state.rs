@@ -74,6 +74,11 @@ pub struct TextEditState {
     /// screen coords at render time so the inline editor tracks pan/zoom.
     pub world_x: f64,
     pub world_y: f64,
+    /// The sheet the editor opened on and, for a designator, the placement
+    /// it showed. A commit that finds either changed is refused: it would
+    /// write to a different copy than the one the user typed into.
+    pub sheet: Option<std::path::PathBuf>,
+    pub placement: Option<signex_types::schematic::InstancePath>,
 }
 
 #[derive(Debug, Clone)]

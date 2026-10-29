@@ -121,7 +121,6 @@ fn label_and_wire_groups_compare_lengths_with_a_tolerance() {
     sheet.wires = vec![wire(0.0), wire(0.25)];
     let groups = selection_groups(&sheet, &pick(&sheet));
     let labels = groups.labels.unwrap();
-    assert_eq!(labels.text, Shared::Mixed);
     assert_eq!(labels.font_size_mm, Shared::Same(1.27));
     assert_eq!(labels.justify, Shared::Same(HAlign::Left));
     assert_eq!(groups.wires.unwrap().width_mm, Shared::Mixed);
@@ -172,7 +171,6 @@ fn flags_parameters_labels_and_wires_all_apply() {
         MultiEdit::LabelFontSizeMm(2.54),
         MultiEdit::LabelJustify(HAlign::Right),
         MultiEdit::LabelRotationDegrees(90.0),
-        MultiEdit::LabelText("NET".into()),
         MultiEdit::WireWidthMm(0.5),
     ] {
         let commands = edit_commands(engine.document(), &items, &edit);
@@ -189,11 +187,7 @@ fn flags_parameters_labels_and_wires_all_apply() {
             .iter()
             .all(|s| s.fields.get("MPN").map(String::as_str) == Some("Z"))
     );
-    assert!(
-        doc.labels
-            .iter()
-            .all(|l| l.text == "NET" && l.justify == HAlign::Right)
-    );
+    assert!(doc.labels.iter().all(|l| l.justify == HAlign::Right));
     assert!(
         doc.labels
             .iter()
@@ -240,4 +234,56 @@ fn an_unchanged_flag_records_no_history() {
         })
         .unwrap();
     assert!(!same.changed && !engine.can_undo());
+}
+
+#[test]
+fn an_empty_parameter_value_removes_it_from_every_part() {
+    let mut sheet = test_sheet();
+    sheet.symbols = vec![symbol("R1", ""), symbol("R2", "")];
+    for s in &mut sheet.symbols {
+        s.fields.insert("MPN".into(), "X".into());
+    }
+    let items = pick(&sheet);
+    let mut engine = Engine::new(sheet).unwrap();
+    let edit = MultiEdit::SymbolParameter {
+        key: "MPN".into(),
+        value: String::new(),
+    };
+    let commands = edit_commands(engine.document(), &items, &edit);
+    engine.execute_batch(commands).unwrap();
+    assert!(
+        engine
+            .document()
+            .symbols
+            .iter()
+            .all(|s| !s.fields.contains_key("MPN"))
+    );
+}
+
+#[test]
+fn flags_apply_to_a_locked_part_but_a_value_edit_is_refused() {
+    let mut sheet = test_sheet();
+    sheet.symbols = vec![symbol("R1", "1k")];
+    sheet.symbols[0].locked = true;
+    let id = sheet.symbols[0].uuid;
+    let mut engine = Engine::new(sheet).unwrap();
+    engine
+        .execute(Command::SetSymbolFlag {
+            symbol_id: id,
+            flag: SymbolFlag::OnBoard,
+            value: false,
+        })
+        .unwrap();
+    engine
+        .execute(Command::SetSymbolDnp {
+            symbol_id: id,
+            dnp: true,
+        })
+        .unwrap();
+    assert!(engine.document().symbols[0].dnp && !engine.document().symbols[0].on_board);
+    let refused = engine.execute(Command::UpdateText {
+        target: TextTarget::SymbolValue(id),
+        value: "2k".into(),
+    });
+    assert!(refused.is_err());
 }

@@ -41,6 +41,7 @@ impl Signex {
         let path = self.resolve_held_spelling_now(path);
         if self.open_or_focus_sheet_path(path.clone()) {
             self.document_state.tab_placements.record(&path, placement);
+            self.close_text_edit("the sheet is shown through another placement now");
             // The canvas draws the designators of the placement just recorded.
             self.refresh_canvas_designators();
         }

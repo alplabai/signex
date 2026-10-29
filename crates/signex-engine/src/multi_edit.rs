@@ -6,6 +6,10 @@
 //! otherwise. [`edit_commands`] turns one edit into the commands that apply it
 //! to every object of its group; the caller runs them as one batch, so one
 //! undo reverts the whole change.
+//!
+//! Two things are deliberately not here, because renaming nets in bulk is not
+//! a property edit and would merge nets without a warning: a power port's
+//! value, and a label's text.
 
 use std::collections::BTreeSet;
 
@@ -73,7 +77,6 @@ pub struct SymbolGroup {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LabelGroup {
     pub count: usize,
-    pub text: Shared<String>,
     pub font_size_mm: Shared<f64>,
     pub justify: Shared<HAlign>,
     pub rotation_degrees: Shared<f64>,
@@ -112,7 +115,6 @@ pub enum MultiEdit {
         key: String,
         value: String,
     },
-    LabelText(String),
     LabelFontSizeMm(f64),
     LabelJustify(HAlign),
     LabelRotationDegrees(f64),
@@ -180,7 +182,6 @@ pub fn selection_groups(sheet: &SchematicSheet, items: &[SelectedItem]) -> Selec
         symbols: symbol_group(&selected_symbols(sheet, items)),
         labels: (!labels.is_empty()).then(|| LabelGroup {
             count: labels.len(),
-            text: fold_eq(labels.iter().map(|l| l.text.clone())),
             font_size_mm: fold_f64(labels.iter().map(|l| l.font_size)),
             justify: fold_eq(labels.iter().map(|l| l.justify)),
             rotation_degrees: fold_f64(labels.iter().map(|l| l.rotation)),
@@ -242,12 +243,6 @@ pub fn edit_commands(
                 symbol_id,
                 key: key.clone(),
                 value: value.clone(),
-            })
-            .collect(),
-        MultiEdit::LabelText(text) => label_ids()
-            .map(|id| Command::UpdateText {
-                target: TextTarget::Label(id),
-                value: text.clone(),
             })
             .collect(),
         MultiEdit::LabelFontSizeMm(mm) => label_props(label_ids(), Some(*mm), None, None),

@@ -79,19 +79,73 @@ fn typing_alone_changes_nothing_until_enter() {
 #[test]
 fn a_label_edit_leaves_parts_and_wires_alone() {
     let mut app = all_kinds();
-    type_and_submit(&mut app, MultiField::LabelText, "NET1");
+    send(
+        &mut app,
+        MultiEditMsg::Picked(MultiEdit::LabelRotationDegrees(90.0)),
+    );
     send(
         &mut app,
         MultiEditMsg::Picked(MultiEdit::LabelJustify(HAlign::Right)),
     );
+    type_and_submit(&mut app, MultiField::LabelFontPt, "12");
+    let doc = doc(&app);
+    assert!(
+        doc.labels
+            .iter()
+            .all(|l| l.justify == HAlign::Right && l.rotation == 90.0)
+    );
+    assert!(doc.labels.iter().all(|l| l.font_size > 1.5));
+    let texts: Vec<_> = doc.labels.iter().map(|l| l.text.as_str()).collect();
+    assert_eq!(texts, ["A", "B"], "bulk label text would merge nets");
+    assert_eq!(doc.wires[1].stroke_width, 0.3);
+}
+
+#[test]
+fn an_empty_parameter_removes_it_from_every_part() {
+    let mut app = all_kinds();
+    let ids: Vec<_> = doc(&app).symbols.iter().map(|s| s.uuid).collect();
+    for id in ids {
+        app.document_state
+            .active_engine_mut()
+            .unwrap()
+            .execute(signex_engine::Command::SetSymbolField {
+                symbol_id: id,
+                key: "MPN".into(),
+                value: "X".into(),
+            })
+            .unwrap();
+    }
+    select_everything(&mut app);
+    type_and_submit(&mut app, MultiField::SymbolParameter("MPN".into()), "");
     assert!(
         doc(&app)
-            .labels
+            .symbols
             .iter()
-            .all(|l| l.text == "NET1" && l.justify == HAlign::Right)
+            .all(|s| !s.fields.contains_key("MPN"))
     );
-    assert_eq!(values(&app), ["10k", "22k", "10k"]);
-    assert_eq!(doc(&app).wires[1].stroke_width, 0.3);
+}
+
+#[test]
+fn flags_apply_to_a_locked_part_while_value_edits_skip_it() {
+    let mut app = all_kinds();
+    let locked = doc(&app).symbols[1].uuid;
+    app.document_state
+        .active_engine_mut()
+        .unwrap()
+        .execute(signex_engine::Command::SetSymbolLocked {
+            symbol_id: locked,
+            locked: true,
+        })
+        .unwrap();
+    select_everything(&mut app);
+    send(&mut app, MultiEditMsg::Picked(MultiEdit::SymbolDnp(true)));
+    send(
+        &mut app,
+        MultiEditMsg::Picked(MultiEdit::SymbolOnBoard(false)),
+    );
+    assert!(doc(&app).symbols.iter().all(|s| s.dnp && !s.on_board));
+    type_and_submit(&mut app, MultiField::SymbolValue, "5k");
+    assert_eq!(values(&app), ["5k", "22k", "5k"]);
 }
 
 #[test]

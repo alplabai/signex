@@ -69,6 +69,7 @@ impl Signex {
             return false;
         };
         let sheet = engine.document();
+        let sheet_path = self.document_state.active_path.clone();
         let state = |text: String, at: signex_types::schematic::Point| TextEditState {
             uuid: item.uuid,
             kind: item.kind,
@@ -76,6 +77,11 @@ impl Signex {
             text,
             world_x: at.x,
             world_y: at.y,
+            sheet: sheet_path.clone(),
+            placement: sheet_path
+                .as_deref()
+                .filter(|_| item.kind == SelectedKind::SymbolRefField)
+                .and_then(|p| self.shown_placement(p)),
         };
         let opened = match item.kind {
             SelectedKind::Label => sheet
@@ -155,6 +161,10 @@ impl Signex {
             crate::diagnostics::log_warning(reason);
             return Task::none();
         }
+        // Text already typed in an open editor is kept, as a canvas click does.
+        if let Some(open) = self.interaction_state.editing_text.take() {
+            self.commit_text_edit(open);
+        }
         let opened = self
             .text_edit_item(target)
             .is_some_and(|item| self.begin_text_edit(item));
@@ -187,6 +197,10 @@ impl Signex {
         if state.text == state.original_text {
             return;
         }
+        if let Some(why) = self.stale_text_edit(&state) {
+            crate::diagnostics::log_warning(format!("In-place edit discarded: {why}"));
+            return;
+        }
         let uuid = state.uuid;
         let text_command = |target| signex_engine::Command::UpdateText {
             target,
@@ -206,5 +220,36 @@ impl Signex {
             _ => return,
         };
         self.apply_engine_commands(commands, true, true);
+    }
+
+    /// Why `state` can no longer be committed, if it cannot: its sheet or
+    /// placement is not the one in view, or its object is gone.
+    fn stale_text_edit(&self, state: &TextEditState) -> Option<&'static str> {
+        let active = self.document_state.active_path.as_deref();
+        if state.sheet.as_deref() != active {
+            return Some("another sheet is in view now");
+        }
+        if state.kind == SelectedKind::SymbolRefField
+            && active.and_then(|p| self.shown_placement(p)) != state.placement
+        {
+            return Some("the sheet is shown through another placement now");
+        }
+        let sheet = self.document_state.active_engine()?.document();
+        let exists = match state.kind {
+            SelectedKind::Label => sheet.labels.iter().any(|l| l.uuid == state.uuid),
+            SelectedKind::TextNote => sheet.text_notes.iter().any(|t| t.uuid == state.uuid),
+            _ => sheet.symbols.iter().any(|s| s.uuid == state.uuid),
+        };
+        (!exists).then_some("the object no longer exists")
+    }
+
+    /// Close the editor when the document under it changed (undo, redo, a
+    /// placement switch), saying so when typed text is dropped.
+    pub(crate) fn close_text_edit(&mut self, why: &str) {
+        if let Some(state) = self.interaction_state.editing_text.take()
+            && state.text != state.original_text
+        {
+            crate::diagnostics::log_warning(format!("In-place edit discarded: {why}"));
+        }
     }
 }

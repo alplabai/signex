@@ -21,9 +21,7 @@ pub enum MultiField {
     SymbolValue,
     SymbolFootprint,
     SymbolParameter(String),
-    LabelText,
     LabelFontPt,
-    LabelRotation,
     WireWidth,
 }
 
@@ -34,9 +32,7 @@ impl MultiField {
             Self::SymbolValue => "Value".into(),
             Self::SymbolFootprint => "Footprint".into(),
             Self::SymbolParameter(key) => format!("Parameter {key}"),
-            Self::LabelText => "Label text".into(),
             Self::LabelFontPt => "Label font size".into(),
-            Self::LabelRotation => "Label rotation".into(),
             Self::WireWidth => "Wire width".into(),
         }
     }
@@ -76,7 +72,6 @@ pub fn edit_from_text(field: &MultiField, typed: &str) -> Result<MultiEdit, Stri
             key: key.clone(),
             value: typed.to_owned(),
         },
-        MultiField::LabelText => MultiEdit::LabelText(typed.to_owned()),
         MultiField::LabelFontPt => {
             let pt = non_negative("Label font size")?;
             if pt <= 0.0 {
@@ -84,7 +79,6 @@ pub fn edit_from_text(field: &MultiField, typed: &str) -> Result<MultiEdit, Stri
             }
             MultiEdit::LabelFontSizeMm(pt * SCHEMATIC_PT_TO_MM)
         }
-        MultiField::LabelRotation => MultiEdit::LabelRotationDegrees(number()?),
         MultiField::WireWidth => MultiEdit::WireWidthMm(non_negative("Wire width")?),
     })
 }
@@ -253,6 +247,51 @@ fn justify_row<'a>(
     .into()
 }
 
+/// The four turns a label offers, as in the single-label panel; a mixed
+/// selection shows none chosen.
+const LABEL_TURNS: [f64; 4] = [0.0, 90.0, 180.0, 270.0];
+
+fn rotation_row<'a>(
+    shared: &Shared<f64>,
+    muted: Color,
+    ctx: &PanelContext,
+    border_c: Color,
+) -> Element<'a, PanelMsg> {
+    let hover = crate::styles::ti(ctx.tokens.hover);
+    let accent = crate::styles::ti(ctx.tokens.accent);
+    let text_inactive = crate::styles::ti(ctx.tokens.text_secondary);
+    let buttons = LABEL_TURNS.map(|deg| {
+        seg_btn(
+            &format!("{deg:.0}"),
+            shared.same().is_some_and(|v| (v - deg).abs() < 1e-6),
+            PanelMsg::MultiEdit(MultiEditMsg::Picked(MultiEdit::LabelRotationDegrees(deg))),
+            accent,
+            Color::WHITE,
+            text_inactive,
+            hover,
+            border_c,
+        )
+    });
+    let label = if matches!(shared, Shared::Mixed) {
+        format!("Rotation {MIXED}")
+    } else {
+        "Rotation".to_owned()
+    };
+    container(
+        row![
+            property_label(label, muted),
+            row(buttons)
+                .spacing(SP.xs)
+                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
+        ]
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .into()
+}
+
 /// The multi-selection Properties body.
 pub fn view_multi_selection<'a>(
     ctx: &'a PanelContext,
@@ -327,7 +366,6 @@ pub fn view_multi_selection<'a>(
             primary,
             border_c,
         ));
-        col = col.push(view.string_row("Text", MultiField::LabelText, &g.text, muted));
         col = col.push(view.number_row(
             "Size (pt)",
             MultiField::LabelFontPt,
@@ -336,13 +374,7 @@ pub fn view_multi_selection<'a>(
             muted,
         ));
         col = col.push(justify_row(&g.justify, muted, ctx, border_c));
-        col = col.push(view.number_row(
-            "Rotation",
-            MultiField::LabelRotation,
-            &g.rotation_degrees,
-            1.0,
-            muted,
-        ));
+        col = col.push(rotation_row(&g.rotation_degrees, muted, ctx, border_c));
     }
     if let Some(g) = &ctx.multi_groups.wires {
         col = col.push(section_hdr(
@@ -401,15 +433,11 @@ mod tests {
     }
 
     #[test]
-    fn wire_width_refuses_negative_and_rotation_takes_any_number() {
+    fn wire_width_refuses_negative_and_zero_is_the_default() {
         assert!(edit_from_text(&MultiField::WireWidth, "-0.1").is_err());
         assert_eq!(
             edit_from_text(&MultiField::WireWidth, "0").unwrap(),
             MultiEdit::WireWidthMm(0.0)
-        );
-        assert_eq!(
-            edit_from_text(&MultiField::LabelRotation, "-90").unwrap(),
-            MultiEdit::LabelRotationDegrees(-90.0)
         );
     }
 }
